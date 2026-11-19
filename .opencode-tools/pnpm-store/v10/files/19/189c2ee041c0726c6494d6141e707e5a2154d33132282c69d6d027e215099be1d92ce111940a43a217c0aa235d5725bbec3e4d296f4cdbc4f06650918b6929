@@ -1,0 +1,12 @@
+"use strict";
+
+const EventImpl = require("./Event-impl").implementation;
+
+const ProgressEventInit = require("../../../generated/idl/ProgressEventInit");
+
+class ProgressEventImpl extends EventImpl {}
+ProgressEventImpl.defaultInit = ProgressEventInit.convert(undefined, undefined);
+
+module.exports = {
+  implementation: ProgressEventImpl,
+};

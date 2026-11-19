@@ -1,0 +1,15 @@
+export declare const getPackageNameFromModuleSpecifier: (specifier: string) => string | undefined;
+export declare const getPackageNameFromFilePath: (value: string) => string;
+export declare const getPackageNameFromSpecifier: (specifier: string) => string | undefined;
+export declare const isStartsLikePackageName: (specifier: string) => boolean;
+export declare const stripVersionFromSpecifier: (specifier: string) => string;
+export declare const isInNodeModulesBin: (value: string) => boolean;
+export declare const isRelativeNodeModulesBin: (value: string) => boolean;
+export declare const extractBinary: (command: string) => string;
+export declare const isValidBinary: (str: string) => boolean;
+export declare const isBuiltin: (specifier: string) => boolean;
+export declare const isDefinitelyTyped: (packageName: string) => boolean;
+export declare const getDefinitelyTypedFor: (packageName: string) => string;
+export declare const getPackageFromDefinitelyTyped: (typedDependency: string) => string;
+export declare const sanitizeSpecifier: (specifier: string) => string;
+export declare const getSubpathImport: (specifier: string) => string | undefined;

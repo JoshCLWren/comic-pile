@@ -1,0 +1,222 @@
+import { existsSync } from 'node:fs';
+import { DEFAULT_EXTENSIONS, DTS_EXTENSIONS, IS_DTS } from '../constants.js';
+import { isFile } from '../util/fs.js';
+import { getPackageNameFromFilePath, getPackageNameFromModuleSpecifier, isBuiltin, sanitizeSpecifier, } from '../util/modules.js';
+import { expandPackageTarget, getPackageTargetPaths, toPackagePath } from '../util/package-json.js';
+import { timerify } from '../util/Performance.js';
+import { dirname, extname, isAbsolute, isInNodeModules, join, toPosix } from '../util/path.js';
+import { _createSyncModuleResolver, _resolveModuleSync, resolvePackageManifestPath } from '../util/resolve.js';
+function pickStringTarget(value) {
+    if (typeof value === 'string')
+        return value;
+    if (!value || typeof value !== 'object')
+        return;
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const target = pickStringTarget(item);
+            if (target)
+                return target;
+        }
+        return;
+    }
+    const obj = value;
+    for (const key of Object.keys(obj)) {
+        if (key !== 'default' && key !== 'node' && key !== 'import' && key !== 'require')
+            continue;
+        const v = pickStringTarget(obj[key]);
+        if (v)
+            return v;
+    }
+    for (const v of Object.values(obj)) {
+        const s = pickStringTarget(v);
+        if (s)
+            return s;
+    }
+}
+const moduleResolutionCaches = [];
+export function clearModuleResolutionCaches() {
+    for (const cache of moduleResolutionCaches)
+        cache.clear();
+}
+function getAttributedPackageName(specifier, containingFile, resolvedFileName) {
+    const packageName = getPackageNameFromFilePath(resolvedFileName);
+    const specifierPackageName = getPackageNameFromModuleSpecifier(specifier);
+    if (!specifierPackageName || specifierPackageName === packageName)
+        return packageName;
+    const manifestPath = resolvePackageManifestPath(specifierPackageName, dirname(containingFile));
+    if (!manifestPath)
+        return packageName;
+    const packageRoot = dirname(manifestPath);
+    return resolvedFileName.startsWith(`${packageRoot}/`) ? specifierPackageName : packageName;
+}
+function compilePathMappings(scopedPaths) {
+    if (!scopedPaths)
+        return undefined;
+    const mappings = [];
+    for (const { scope, paths } of scopedPaths) {
+        for (const key in paths) {
+            const starIndex = key.indexOf('*');
+            if (starIndex >= 0) {
+                mappings.push({ prefix: key.slice(0, starIndex), wildcard: true, values: paths[key], scope });
+            }
+            else {
+                mappings.push({ prefix: key, wildcard: false, values: paths[key], scope });
+            }
+        }
+    }
+    if (mappings.length === 0)
+        return undefined;
+    mappings.sort((a, b) => b.scope.length - a.scope.length);
+    return mappings;
+}
+function compileRootDirs(scopedRootDirs) {
+    if (!scopedRootDirs)
+        return undefined;
+    const scoped = scopedRootDirs.filter(({ rootDirs }) => rootDirs.length > 1);
+    if (scoped.length === 0)
+        return undefined;
+    scoped.sort((a, b) => b.scope.length - a.scope.length);
+    return scoped;
+}
+export function createGlobAliasResolver(scopedPaths) {
+    const mappings = compilePathMappings(scopedPaths);
+    return (pattern, dir) => {
+        if (!mappings)
+            return [pattern];
+        const isNegated = pattern[0] === '!';
+        const specifier = isNegated ? pattern.slice(1) : pattern;
+        let best;
+        for (const mapping of mappings) {
+            const { prefix, wildcard, scope } = mapping;
+            if (dir !== scope && !dir.startsWith(`${scope}/`))
+                continue;
+            const matches = wildcard
+                ? specifier.startsWith(prefix)
+                : specifier === prefix || specifier.startsWith(`${prefix}/`);
+            if (!matches)
+                continue;
+            if (!best ||
+                scope.length > best.scope.length ||
+                (scope.length === best.scope.length && prefix.length > best.prefix.length))
+                best = mapping;
+        }
+        if (!best)
+            return [pattern];
+        const captured = specifier.slice(best.prefix.length);
+        const resolved = [];
+        for (const value of best.values) {
+            const starIdx = value.indexOf('*');
+            const mapped = toPosix(starIdx >= 0 ? value.slice(0, starIdx) + captured + value.slice(starIdx + 1) : value + captured);
+            resolved.push(isNegated ? `!${mapped}` : mapped);
+        }
+        return resolved;
+    };
+}
+export function createCustomModuleResolver(compilerOptions, customCompilerExtensions, toSourceFilePath, findWorkspacePackageTarget, tsConfigFile) {
+    const customCompilerExtensionsSet = new Set(customCompilerExtensions);
+    const moduleExtensions = new Set([...DEFAULT_EXTENSIONS, ...customCompilerExtensions, '.json', '.jsonc']);
+    const hasCustomExts = customCompilerExtensionsSet.size > 0;
+    const extensions = [...DEFAULT_EXTENSIONS, ...customCompilerExtensions, ...DTS_EXTENSIONS, '.json', '.jsonc'];
+    const sourceExtensions = [...DEFAULT_EXTENSIONS, ...customCompilerExtensions];
+    const resolveSync = hasCustomExts || tsConfigFile ? _createSyncModuleResolver(extensions, tsConfigFile) : _resolveModuleSync;
+    const pathMappings = compilePathMappings(compilerOptions.scopedPaths);
+    const rootDirMappings = compileRootDirs(compilerOptions.scopedRootDirs);
+    function toSourcePath(resolvedFileName) {
+        if (!hasCustomExts || !customCompilerExtensionsSet.has(extname(resolvedFileName))) {
+            return toSourceFilePath(resolvedFileName, sourceExtensions) || resolvedFileName;
+        }
+        return resolvedFileName;
+    }
+    const isModuleFile = (filePath) => !IS_DTS.test(filePath) && moduleExtensions.has(extname(filePath)) && isFile(filePath);
+    function toResult(specifier, containingFile, resolvedFileName) {
+        const mapped = toSourcePath(resolvedFileName);
+        const isExternalLibraryImport = mapped === resolvedFileName && isInNodeModules(resolvedFileName);
+        return {
+            resolvedFileName: mapped,
+            isExternalLibraryImport,
+            packageName: isExternalLibraryImport
+                ? getAttributedPackageName(specifier, containingFile, resolvedFileName)
+                : undefined,
+        };
+    }
+    const cache = new Map();
+    moduleResolutionCaches.push(cache);
+    function resolveModuleName(name, containingFile) {
+        const dir = dirname(containingFile);
+        let byName = cache.get(dir);
+        if (byName) {
+            if (byName.has(name))
+                return byName.get(name);
+        }
+        else {
+            byName = new Map();
+            cache.set(dir, byName);
+        }
+        const result = resolveModuleNameUncached(name, containingFile);
+        byName.set(name, result);
+        return result;
+    }
+    function resolveModuleNameUncached(name, containingFile) {
+        const specifier = sanitizeSpecifier(name);
+        if (isBuiltin(specifier))
+            return undefined;
+        const resolvedFileName = resolveSync(specifier, containingFile);
+        if (resolvedFileName)
+            return toResult(specifier, containingFile, resolvedFileName);
+        if (pathMappings) {
+            const dir = dirname(containingFile);
+            for (const { prefix, wildcard, values, scope } of pathMappings) {
+                if (dir !== scope && !dir.startsWith(`${scope}/`))
+                    continue;
+                if (wildcard ? specifier.startsWith(prefix) : specifier === prefix) {
+                    const captured = wildcard ? specifier.slice(prefix.length) : '';
+                    for (const value of values) {
+                        const starIdx = value.indexOf('*');
+                        const mapped = starIdx >= 0 ? value.slice(0, starIdx) + captured + value.slice(starIdx + 1) : value;
+                        const resolved = resolveSync(mapped, containingFile);
+                        if (resolved)
+                            return toResult(specifier, containingFile, resolved);
+                    }
+                }
+            }
+        }
+        if (rootDirMappings && !isAbsolute(specifier)) {
+            const dir = dirname(containingFile);
+            for (const { scope, rootDirs } of rootDirMappings) {
+                if (dir !== scope && !dir.startsWith(`${scope}/`))
+                    continue;
+                for (const rootDir of rootDirs) {
+                    if (dir !== rootDir && !dir.startsWith(`${rootDir}/`))
+                        continue;
+                    const relPath = dir === rootDir ? '' : dir.slice(rootDir.length + 1);
+                    for (const targetRoot of rootDirs) {
+                        if (targetRoot === rootDir)
+                            continue;
+                        const resolved = resolveSync(join(targetRoot, relPath, specifier), containingFile);
+                        if (resolved)
+                            return toResult(specifier, containingFile, resolved);
+                    }
+                }
+            }
+        }
+        const workspaceTarget = findWorkspacePackageTarget?.(specifier, containingFile);
+        if (workspaceTarget) {
+            const target = expandPackageTarget(pickStringTarget(workspaceTarget.target), workspaceTarget.patternMatch);
+            if (target) {
+                const targetPath = toPackagePath(workspaceTarget.dir, target);
+                const sourcePath = targetPath && toSourceFilePath(targetPath, sourceExtensions);
+                if (sourcePath)
+                    return toResult(specifier, containingFile, sourcePath);
+            }
+            for (const targetPath of getPackageTargetPaths(workspaceTarget.target, workspaceTarget.dir, workspaceTarget.patternMatch, false)) {
+                if (isModuleFile(targetPath))
+                    return toResult(specifier, containingFile, targetPath);
+            }
+        }
+        const candidate = isAbsolute(specifier) ? specifier : join(dirname(containingFile), specifier);
+        if (existsSync(candidate)) {
+            return { resolvedFileName: candidate, isExternalLibraryImport: false };
+        }
+    }
+    return timerify(resolveModuleName);
+}

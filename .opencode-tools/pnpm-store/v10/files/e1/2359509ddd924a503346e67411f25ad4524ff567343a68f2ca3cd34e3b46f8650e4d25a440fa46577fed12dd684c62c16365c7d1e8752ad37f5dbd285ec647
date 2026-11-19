@@ -1,0 +1,565 @@
+import { parseSync, rawTransferSupported, visitorKeys, } from 'oxc-parser';
+import { DEFAULT_EXTENSIONS, FIX_FLAGS, SCRIPT_INTERPOLATION, SYMBOL_TYPE } from '../constants.js';
+import { extname } from '../util/path.js';
+import { timerify } from '../util/Performance.js';
+import { EMPTY_TAGS } from './visitors/jsdoc.js';
+const defaultParseOptions = {
+    sourceType: 'unambiguous',
+    experimentalRawTransfer: process.env.KNIP_DISABLE_RAW_TRANSFER !== '1' && rawTransferSupported(),
+};
+const parseFile = (filePath, sourceText) => {
+    const ext = extname(filePath);
+    const parseFileName = DEFAULT_EXTENSIONS.has(ext) ? filePath : `${filePath}.ts`;
+    return parseSync(parseFileName, sourceText, defaultParseOptions);
+};
+export const _parseFile = timerify(parseFile);
+export const isAmbientDeclarationFile = (filePath, sourceText) => {
+    try {
+        return _parseFile(filePath, sourceText).module.staticExports.length === 0;
+    }
+    catch {
+        return false;
+    }
+};
+export const buildLineStarts = (sourceText) => {
+    const starts = [0];
+    let index = sourceText.indexOf('\n');
+    while (index !== -1) {
+        starts.push(index + 1);
+        index = sourceText.indexOf('\n', index + 1);
+    }
+    return starts;
+};
+export const getLineAndCol = (lineStarts, pos) => {
+    let lo = 0;
+    let hi = lineStarts.length - 1;
+    while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (lineStarts[mid] <= pos)
+            lo = mid;
+        else
+            hi = mid - 1;
+    }
+    return { line: lo + 1, col: pos - lineStarts[lo] + 1 };
+};
+const isQuoteOrBacktick = (ch) => ch === 39 || ch === 34 || ch === 96;
+export const stripQuotes = (name) => {
+    const length = name.length;
+    if (length >= 2 && name.charCodeAt(0) === name.charCodeAt(length - 1) && isQuoteOrBacktick(name.charCodeAt(0)))
+        return name.substring(1, length - 1);
+    return name;
+};
+export const isStringLiteral = (node) => node?.type === 'StringLiteral' ||
+    (node?.type === 'Literal' && typeof node.value === 'string') ||
+    (node?.type === 'TemplateLiteral' && node.quasis?.length === 1 && node.expressions?.length === 0);
+export const getStringValue = (node) => {
+    if (node?.type === 'StringLiteral')
+        return node.value;
+    if (node?.type === 'Literal' && typeof node.value === 'string')
+        return node.value;
+    if (node?.type === 'TemplateLiteral' && node.quasis?.length === 1 && node.expressions?.length === 0)
+        return node.quasis[0].value?.cooked ?? node.quasis[0].value?.raw;
+    return undefined;
+};
+export const getScriptFromTemplate = (template) => {
+    const { quasis } = template;
+    let script = quasis[0].value.raw;
+    for (let i = 1; i < quasis.length; i++)
+        script += SCRIPT_INTERPOLATION + quasis[i].value.raw;
+    return script;
+};
+export const getScriptFromArg = (arg) => isStringLiteral(arg) ? getStringValue(arg) : arg?.type === 'TemplateLiteral' ? getScriptFromTemplate(arg) : undefined;
+const SAFE_SCRIPT_ARG = /^[\w@.,:/=+~-]+$/;
+export const getSafeScriptFromArgs = (executable, argsArray) => {
+    if (!isStringLiteral(executable))
+        return undefined;
+    const value = getStringValue(executable);
+    if (!value || !SAFE_SCRIPT_ARG.test(value))
+        return undefined;
+    const parts = [value];
+    if (argsArray?.type === 'ArrayExpression') {
+        for (const element of argsArray.elements) {
+            if (element?.type === 'SpreadElement')
+                continue;
+            const arg = getStringValue(element);
+            parts.push(arg && SAFE_SCRIPT_ARG.test(arg) ? arg : SCRIPT_INTERPOLATION);
+        }
+    }
+    return parts.join(' ');
+};
+export const shouldCountRefs = (ignoreExportsUsedInFile, type) => ignoreExportsUsedInFile === true ||
+    (typeof ignoreExportsUsedInFile === 'object' && type !== 'unknown' && ignoreExportsUsedInFile[type]);
+export function extractNamespaceMembers(decl, options, lineStarts, getJSDocTags, prefix) {
+    if (!decl.body || decl.body.type !== 'TSModuleBlock')
+        return [];
+    const members = [];
+    const addMember = (name, pos, stmtStart, stmtEnd, isFixable = true) => {
+        const fullName = prefix ? `${prefix}.${name}` : name;
+        const tags = getJSDocTags(stmtStart);
+        const existing = members.find(m => m.identifier === fullName);
+        if (existing) {
+            if (tags.size) {
+                if (existing.jsDocTags === EMPTY_TAGS)
+                    existing.jsDocTags = new Set(tags);
+                else
+                    for (const t of tags)
+                        existing.jsDocTags.add(t);
+            }
+            return;
+        }
+        const { line, col } = getLineAndCol(lineStarts, pos);
+        const fix = options.isFixExports && isFixable
+            ? [stmtStart, stmtEnd, FIX_FLAGS.OBJECT_BINDING | FIX_FLAGS.WITH_NEWLINE]
+            : undefined;
+        members.push({
+            identifier: fullName,
+            type: SYMBOL_TYPE.MEMBER,
+            pos,
+            line,
+            col,
+            fix,
+            hasRefsInFile: false,
+            jsDocTags: tags,
+            flags: 0,
+        });
+    };
+    for (const stmt of decl.body.body) {
+        if (stmt.type !== 'ExportNamedDeclaration' || !stmt.declaration)
+            continue;
+        const d = stmt.declaration;
+        if (d.type === 'VariableDeclaration') {
+            for (const declarator of d.declarations) {
+                if (declarator.id.type === 'Identifier') {
+                    addMember(declarator.id.name, declarator.id.start, stmt.start, stmt.end, d.declarations.length === 1);
+                }
+            }
+        }
+        else if (d.type === 'TSModuleDeclaration' && d.kind !== 'global' && d.id.type === 'Identifier') {
+            const nestedPrefix = prefix ? `${prefix}.${d.id.name}` : d.id.name;
+            const nested = extractNamespaceMembers(d, options, lineStarts, getJSDocTags, nestedPrefix);
+            for (const m of nested)
+                members.push(m);
+        }
+        else if (d.id && 'name' in d.id) {
+            addMember(d.id.name, d.id.start, stmt.start, stmt.end);
+        }
+    }
+    if (!prefix && members.length > 0)
+        markNamespaceMemberRefs(decl.body.body, members);
+    return members;
+}
+const noNames = new Set();
+const addBindingNames = (pattern, names) => {
+    if (!pattern)
+        return;
+    if (pattern.type === 'Identifier')
+        names.add(pattern.name);
+    else if (pattern.type === 'ObjectPattern')
+        for (const p of pattern.properties)
+            addBindingNames(p.value ?? p.argument, names);
+    else if (pattern.type === 'ArrayPattern')
+        for (const el of pattern.elements)
+            addBindingNames(el, names);
+    else if (pattern.type === 'AssignmentPattern')
+        addBindingNames(pattern.left, names);
+    else if (pattern.type === 'RestElement')
+        addBindingNames(pattern.argument, names);
+};
+const addDeclaredNames = (statements, names) => {
+    for (const stmt of statements) {
+        if (stmt.type === 'VariableDeclaration')
+            for (const d of stmt.declarations)
+                addBindingNames(d.id, names);
+        else if (stmt.type !== 'ExpressionStatement' && stmt.id?.type === 'Identifier')
+            names.add(stmt.id.name);
+    }
+};
+const addVarNames = (node, names) => {
+    if (!node)
+        return;
+    switch (node.type) {
+        case 'VariableDeclaration':
+            if (node.kind === 'var')
+                for (const d of node.declarations)
+                    addBindingNames(d.id, names);
+            return;
+        case 'BlockStatement':
+            for (const stmt of node.body)
+                addVarNames(stmt, names);
+            return;
+        case 'IfStatement':
+            addVarNames(node.consequent, names);
+            addVarNames(node.alternate, names);
+            return;
+        case 'ForStatement':
+            addVarNames(node.init, names);
+            addVarNames(node.body, names);
+            return;
+        case 'ForInStatement':
+        case 'ForOfStatement':
+            addVarNames(node.left, names);
+            addVarNames(node.body, names);
+            return;
+        case 'WhileStatement':
+        case 'DoWhileStatement':
+        case 'LabeledStatement':
+            addVarNames(node.body, names);
+            return;
+        case 'TryStatement':
+            addVarNames(node.block, names);
+            addVarNames(node.handler?.body, names);
+            addVarNames(node.finalizer, names);
+            return;
+        case 'SwitchStatement':
+            for (const c of node.cases)
+                for (const stmt of c.consequent)
+                    addVarNames(stmt, names);
+            return;
+    }
+};
+const getShadowedNames = (node) => {
+    switch (node.type) {
+        case 'BlockStatement':
+        case 'StaticBlock': {
+            const names = new Set();
+            addDeclaredNames(node.body, names);
+            return names;
+        }
+        case 'SwitchStatement': {
+            const names = new Set();
+            for (const c of node.cases)
+                addDeclaredNames(c.consequent, names);
+            return names;
+        }
+        case 'ForStatement':
+        case 'ForInStatement':
+        case 'ForOfStatement': {
+            const init = node.init ?? node.left;
+            if (init?.type !== 'VariableDeclaration')
+                return;
+            const names = new Set();
+            addDeclaredNames([init], names);
+            return names;
+        }
+        case 'CatchClause': {
+            const names = new Set();
+            addBindingNames(node.param, names);
+            return names;
+        }
+        case 'ClassExpression':
+            return node.id?.type === 'Identifier' ? new Set([node.id.name]) : undefined;
+    }
+    const params = node.params;
+    if (!params || node.type === 'TSTypeParameterDeclaration')
+        return;
+    const names = new Set();
+    for (const param of Array.isArray(params) ? params : (params.items ?? [])) {
+        addBindingNames(param.type === 'TSParameterProperty' ? param.parameter : param, names);
+    }
+    if (node.type === 'FunctionExpression' && node.id?.type === 'Identifier')
+        names.add(node.id.name);
+    if (node.body?.type === 'BlockStatement')
+        addVarNames(node.body, names);
+    return names;
+};
+const markNamespaceMemberRefs = (body, members) => {
+    const byIdentifier = new Map();
+    for (const member of members)
+        byIdentifier.set(member.identifier, member);
+    const scopes = [];
+    const addRef = (name, path) => {
+        for (let i = scopes.length - 1; i >= 0; i--) {
+            const scope = scopes[i];
+            if (!scope.names.has(name))
+                continue;
+            if (scope.isShadow)
+                return;
+            let id = scope.prefix ? `${scope.prefix}.${name}` : name;
+            for (let j = 0; j <= path.length; j++) {
+                if (!scope.own.has(id)) {
+                    const member = byIdentifier.get(id);
+                    if (member)
+                        member.hasRefsInFile = true;
+                }
+                if (j < path.length)
+                    id = `${id}.${path[j]}`;
+            }
+            return;
+        }
+    };
+    const visitBinding = (node) => {
+        if (!node)
+            return;
+        switch (node.type) {
+            case 'Identifier':
+                visit(node.typeAnnotation);
+                return;
+            case 'ObjectPattern':
+                for (const p of node.properties) {
+                    if (p.type === 'RestElement')
+                        visitBinding(p);
+                    else {
+                        if (p.computed)
+                            visit(p.key);
+                        visitBinding(p.value);
+                    }
+                }
+                visit(node.typeAnnotation);
+                return;
+            case 'ArrayPattern':
+                for (const el of node.elements)
+                    visitBinding(el);
+                visit(node.typeAnnotation);
+                return;
+            case 'AssignmentPattern':
+                visitBinding(node.left);
+                visit(node.right);
+                return;
+            case 'RestElement':
+                visitBinding(node.argument);
+                visit(node.typeAnnotation);
+                return;
+            case 'TSParameterProperty':
+                visit(node.decorators);
+                visitBinding(node.parameter);
+                return;
+        }
+        visit(node);
+    };
+    const visit = (node) => {
+        if (!node)
+            return;
+        if (Array.isArray(node)) {
+            for (const item of node)
+                visit(item);
+            return;
+        }
+        const type = node.type;
+        if (!type)
+            return;
+        if (type === 'Identifier') {
+            addRef(node.name, []);
+            visit(node.typeAnnotation);
+            return;
+        }
+        if (type === 'JSXIdentifier') {
+            addRef(node.name, []);
+            return;
+        }
+        if (type === 'JSXMemberExpression') {
+            visit(node.object);
+            return;
+        }
+        if (type === 'JSXAttribute') {
+            visit(node.value);
+            return;
+        }
+        if (type === 'TSModuleDeclaration' && node.body?.type === 'TSModuleBlock') {
+            visitNamespace(node.body.body, node.id.type === 'Identifier' ? node.id.name : undefined);
+            return;
+        }
+        if (type === 'MemberExpression' || type === 'TSQualifiedName') {
+            const path = [];
+            let object = node;
+            while ((object.type === 'MemberExpression' && !object.computed && object.property.type === 'Identifier') ||
+                (object.type === 'TSQualifiedName' && object.right.type === 'Identifier')) {
+                path.unshift(object.type === 'MemberExpression' ? object.property.name : object.right.name);
+                object = object.type === 'MemberExpression' ? object.object : object.left;
+            }
+            if (path.length > 0) {
+                if (object.type === 'Identifier')
+                    addRef(object.name, path);
+                else
+                    visit(object);
+                return;
+            }
+        }
+        const keys = visitorKeys[type];
+        if (!keys)
+            return;
+        const shadowed = getShadowedNames(node);
+        const shadow = shadowed && shadowed.size > 0 ? { prefix: '', names: shadowed, own: noNames, isShadow: true } : undefined;
+        if (shadow)
+            scopes.push(shadow);
+        for (const key of keys) {
+            const val = node[key];
+            if (!val || key === 'label')
+                continue;
+            if (key === 'key' && !node.computed)
+                continue;
+            if (key === 'id' || (key === 'name' && type === 'TSTypeParameter') || key.startsWith('param')) {
+                if (Array.isArray(val))
+                    for (const item of val)
+                        visitBinding(item);
+                else
+                    visitBinding(val);
+            }
+            else
+                visit(val);
+        }
+        if (shadow)
+            scopes.pop();
+    };
+    const visitNamespace = (statements, name) => {
+        const parent = scopes.at(-1);
+        const prefix = !parent ? '' : parent.prefix ? `${parent.prefix}.${name}` : (name ?? '');
+        const scope = { prefix, names: new Set(), own: new Set() };
+        for (const stmt of statements) {
+            const d = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt;
+            if (d?.type === 'VariableDeclaration')
+                for (const v of d.declarations)
+                    addBindingNames(v.id, scope.names);
+            else if (d?.id?.type === 'Identifier')
+                scope.names.add(d.id.name);
+        }
+        scopes.push(scope);
+        for (const stmt of statements) {
+            const d = stmt.type === 'ExportNamedDeclaration' && stmt.declaration ? stmt.declaration : stmt;
+            if (d.type === 'VariableDeclaration') {
+                for (const declarator of d.declarations) {
+                    const names = new Set();
+                    addBindingNames(declarator.id, names);
+                    scope.own = new Set();
+                    for (const n of names)
+                        scope.own.add(prefix ? `${prefix}.${n}` : n);
+                    visitBinding(declarator.id);
+                    visit(declarator.init);
+                }
+            }
+            else {
+                scope.own = new Set();
+                if (d.id?.type === 'Identifier')
+                    scope.own.add(prefix ? `${prefix}.${d.id.name}` : d.id.name);
+                visit(d);
+            }
+        }
+        scopes.pop();
+    };
+    visitNamespace(body);
+};
+export const collectAugmentationRefs = (node) => {
+    if (!node.body || node.body.type !== 'TSModuleBlock')
+        return [];
+    const body = node.body.body;
+    const declared = new Set();
+    for (const stmt of body) {
+        const decl = stmt.type === 'ExportNamedDeclaration' && stmt.declaration ? stmt.declaration : stmt;
+        if ('id' in decl && decl.id?.type === 'Identifier')
+            declared.add(decl.id.name);
+        else if (decl.type === 'VariableDeclaration')
+            for (const d of decl.declarations)
+                if (d.id.type === 'Identifier')
+                    declared.add(d.id.name);
+    }
+    const refs = [];
+    const seen = new Set();
+    const add = (ref) => {
+        if (ref?.type === 'Identifier' && !declared.has(ref.name) && !seen.has(ref.name)) {
+            seen.add(ref.name);
+            refs.push(ref.name);
+        }
+    };
+    const visit = (n) => {
+        const type = n?.type;
+        if (!type)
+            return;
+        if (type === 'TSTypeReference')
+            add(n.typeName);
+        else if (type === 'TSInterfaceHeritage')
+            add(n.expression);
+        const keys = visitorKeys[type];
+        if (!keys)
+            return;
+        for (const key of keys) {
+            const val = n[key];
+            if (!val)
+                continue;
+            if (Array.isArray(val)) {
+                for (const item of val)
+                    if (item)
+                        visit(item);
+            }
+            else
+                visit(val);
+        }
+    };
+    for (const stmt of body)
+        visit(stmt);
+    return refs;
+};
+export function extractEnumMembers(decl, options, lineStarts, getJSDocTags) {
+    if (!decl.body?.members)
+        return [];
+    const members = decl.body.members.map((member) => {
+        const name = member.id.type === 'Identifier'
+            ? member.id.name
+            : member.id.type === 'Literal'
+                ? member.id.raw
+                    ? stripQuotes(member.id.raw)
+                    : member.id.value
+                : '';
+        const pos = member.id.start;
+        const { line, col } = getLineAndCol(lineStarts, pos);
+        const fix = options.isFixExports
+            ? [member.start, member.end, FIX_FLAGS.OBJECT_BINDING | FIX_FLAGS.WITH_NEWLINE]
+            : undefined;
+        const jsDocTags = getJSDocTags(member.start);
+        return {
+            identifier: name,
+            type: SYMBOL_TYPE.MEMBER,
+            pos,
+            line,
+            col,
+            fix,
+            hasRefsInFile: name === '',
+            jsDocTags,
+            flags: 0,
+        };
+    });
+    markEnumMemberRefs(decl.body.members, members);
+    return members;
+}
+const markEnumMemberRefs = (enumMembers, members) => {
+    let byIdentifier;
+    const visit = (node) => {
+        const type = node?.type;
+        if (!type)
+            return;
+        if (type === 'Identifier') {
+            const member = byIdentifier?.get(node.name);
+            if (member)
+                member.hasRefsInFile = true;
+            return;
+        }
+        if (type === 'MemberExpression' && !node.computed) {
+            visit(node.object);
+            return;
+        }
+        const keys = visitorKeys[type];
+        if (!keys)
+            return;
+        for (const key of keys) {
+            const val = node[key];
+            if (!val)
+                continue;
+            if (Array.isArray(val)) {
+                for (const item of val)
+                    if (item)
+                        visit(item);
+            }
+            else
+                visit(val);
+        }
+    };
+    for (const member of enumMembers) {
+        const initializer = member.initializer;
+        if (!initializer || initializer.type === 'Literal')
+            continue;
+        if (!byIdentifier) {
+            byIdentifier = new Map();
+            for (const m of members)
+                byIdentifier.set(m.identifier, m);
+        }
+        visit(initializer);
+    }
+};

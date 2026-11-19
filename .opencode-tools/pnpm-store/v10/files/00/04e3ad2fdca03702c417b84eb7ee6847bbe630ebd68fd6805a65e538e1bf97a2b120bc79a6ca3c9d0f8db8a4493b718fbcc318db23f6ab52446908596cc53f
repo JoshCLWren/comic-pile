@@ -1,0 +1,116 @@
+import { blockCommentMatcher, lineCommentMatcher, scriptExtractor } from '../../compilers/compilers.js';
+import { findImportedCalls, findProperty, getStringValues, resolveObjectArg } from '../../typescript/ast-helpers.js';
+import { getStringValue } from '../../typescript/ast-nodes.js';
+import { isFile, loadFile } from '../../util/fs.js';
+import { toEntryPath } from '../../util/input.js';
+import { dirname, isInternal, join, toAbsolute } from '../../util/path.js';
+import { getDependenciesFromConfig } from '../babel/index.js';
+import { toProviderInput } from '../mdx/index.js';
+const babelPluginSources = ['@rolldown/plugin-babel', '@vitejs/plugin-react', 'vite-plugin-babel'];
+const isBabelWrappingPlugin = (path) => babelPluginSources.some(source => path === source || path.startsWith(`${source}/`));
+export const getBabelInputs = (program) => {
+    const inputs = [];
+    for (const call of findImportedCalls(program, isBabelWrappingPlugin)) {
+        const options = call.arguments?.[0];
+        const plugins = [];
+        const presets = [];
+        for (const config of [options, findProperty(options, 'babel'), findProperty(options, 'babelConfig')]) {
+            plugins.push(...getStringValues(findProperty(config, 'plugins')));
+            presets.push(...getStringValues(findProperty(config, 'presets')));
+        }
+        inputs.push(...getDependenciesFromConfig({ plugins, presets }));
+    }
+    return inputs;
+};
+export const getMdxInputs = (program, dir) => {
+    const inputs = [];
+    for (const call of findImportedCalls(program, '@mdx-js/rollup')) {
+        const provider = getStringValue(findProperty(call.arguments?.[0], 'providerImportSource'));
+        if (provider && !isInternal(provider))
+            inputs.push(toProviderInput(provider, dir));
+    }
+    return inputs;
+};
+const moduleTypePattern = /\btype\s*=\s*["']?module["']?/i;
+const srcAttrPattern = /\bsrc\s*=\s*["']([^"']+)["']/i;
+const importSpecPattern = /\bimport\b(?:\s*\(\s*|(?:[\w$*,{}\s]*\bfrom\b)?\s*)(['"])([^'"]+)\1/g;
+const isFilePath = (specifier) => specifier.startsWith('/') || specifier.startsWith('./') || specifier.startsWith('../');
+const getScriptSources = (html, htmlDir, rootDir, publicDir) => {
+    const sources = [];
+    const resolveSource = (src) => (src.startsWith('/') ? join(rootDir, src) : toAbsolute(src, htmlDir));
+    for (const [, attrs, body] of html.matchAll(scriptExtractor)) {
+        const srcMatch = attrs.match(srcAttrPattern);
+        if (srcMatch) {
+            const src = srcMatch[1].trim();
+            if (!src || /^(?:[\w+.-]+:|\/\/)/.test(src))
+                continue;
+            if (publicDir && src.startsWith('/')) {
+                const publicPath = join(publicDir, src.split(/[?#]/, 1)[0]);
+                if (publicPath.startsWith(join(publicDir, '/')) && isFile(publicPath)) {
+                    sources.push(publicPath);
+                    continue;
+                }
+            }
+            if (moduleTypePattern.test(attrs))
+                sources.push(resolveSource(src));
+            continue;
+        }
+        if (moduleTypePattern.test(attrs) && body) {
+            const code = body.replace(blockCommentMatcher, '').replace(lineCommentMatcher, '');
+            for (const importMatch of code.matchAll(importSpecPattern)) {
+                const specifier = importMatch[2];
+                if (isFilePath(specifier))
+                    sources.push(resolveSource(specifier));
+            }
+        }
+    }
+    return sources;
+};
+export const getHtmlScriptEntries = async (htmlPath, rootDir = dirname(htmlPath), publicDir) => {
+    if (!isFile(htmlPath))
+        return [];
+    const html = await loadFile(htmlPath);
+    return getScriptSources(html, dirname(htmlPath), rootDir, publicDir).map(src => toEntryPath(src, { production: true }));
+};
+export const getIndexHtmlEntries = (rootDir, publicDir) => getHtmlScriptEntries(join(rootDir, 'index.html'), rootDir, publicDir);
+export const getVitePluginDirs = (program, specifiers, key) => {
+    let dirs;
+    for (const call of findImportedCalls(program, specifiers)) {
+        const value = findProperty(call.arguments?.[0], key);
+        if (!value)
+            continue;
+        const collected = [];
+        const single = getStringValue(value);
+        if (single !== undefined)
+            collected.push(single);
+        else if (value.type === 'ArrayExpression') {
+            for (const element of value.elements ?? []) {
+                const str = getStringValue(element);
+                if (str !== undefined)
+                    collected.push(str);
+                else if (element?.type === 'ObjectExpression') {
+                    const dir = getStringValue(findProperty(element, 'dir'));
+                    if (dir !== undefined)
+                        collected.push(dir);
+                }
+            }
+        }
+        if (collected.length > 0)
+            dirs = collected;
+    }
+    return dirs;
+};
+const unwrapExpression = (node) => node.type === 'TSSatisfiesExpression' || node.type === 'TSAsExpression' || node.type === 'ParenthesizedExpression'
+    ? unwrapExpression(node.expression)
+    : node;
+export const getViteRoot = (program, cwd) => {
+    for (const node of program.body) {
+        if (node.type !== 'ExportDefaultDeclaration')
+            continue;
+        const declaration = unwrapExpression(node.declaration);
+        const arg = declaration.type === 'CallExpression' ? declaration.arguments[0] : declaration;
+        const config = resolveObjectArg(arg && arg.type !== 'SpreadElement' ? unwrapExpression(arg) : undefined);
+        return toAbsolute(getStringValue(findProperty(config, 'root')) ?? '.', cwd);
+    }
+    return cwd;
+};

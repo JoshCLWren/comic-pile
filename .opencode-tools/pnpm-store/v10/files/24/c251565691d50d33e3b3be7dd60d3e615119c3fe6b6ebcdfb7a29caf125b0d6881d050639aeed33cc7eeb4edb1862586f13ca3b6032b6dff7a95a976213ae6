@@ -1,0 +1,399 @@
+import { ALIAS_TAG, FIX_FLAGS, IMPORT_FLAGS, IMPORT_STAR, SYMBOL_TYPE } from '../../constants.js';
+import { addNsValue, addValue } from '../../util/module-graph.js';
+import { extractEnumMembers, extractNamespaceMembers, getStringValue, isStringLiteral } from '../ast-nodes.js';
+import { EMPTY_TAGS } from './jsdoc.js';
+const getName = (n) => (n?.type === 'Identifier' ? n.name : undefined);
+const addLocalToExport = (s, local, exported) => {
+    const set = s.localToExports.get(local);
+    if (set)
+        set.add(exported);
+    else
+        s.localToExports.set(local, new Set([exported]));
+};
+const hasExplicitFunctionReturnType = (node) => !!node &&
+    (node.type === 'ArrowFunctionExpression' ||
+        node.type === 'FunctionExpression' ||
+        node.type === 'FunctionDeclaration') &&
+    Boolean(node.returnType);
+export function handleExportNamed(node, s) {
+    if (s.skipExports || s.isInNamespace(node))
+        return;
+    if (node.source) {
+        const declTags = s.getJSDocTags(node.start);
+        for (const spec of node.specifiers) {
+            const exportedName = getName(spec.exported) ?? getName(spec.local);
+            if (exportedName) {
+                const isType = node.exportKind === 'type' || spec.exportKind === 'type';
+                const type = isType ? SYMBOL_TYPE.TYPE : SYMBOL_TYPE.UNKNOWN;
+                const fix = (s.options.isFixExports && !isType) || (s.options.isFixTypes && isType)
+                    ? [spec.start, spec.end, FIX_FLAGS.OBJECT_BINDING | FIX_FLAGS.EMPTY_DECLARATION]
+                    : undefined;
+                const specTags = s.getJSDocTags(spec.start);
+                const tags = specTags.size ? new Set([...declTags, ...specTags]) : declTags;
+                s.addExport(exportedName, type, spec.exported?.start ?? spec.start, [], fix, true, tags, exportedName, true);
+            }
+        }
+        return;
+    }
+    const decl = node.declaration;
+    if (decl) {
+        const exportStart = node.start;
+        if (decl.type === 'VariableDeclaration') {
+            for (const declarator of decl.declarations) {
+                if (declarator.id.type === 'ObjectPattern') {
+                    for (const p of declarator.id.properties) {
+                        if (p.type === 'RestElement' && p.argument?.type === 'Identifier') {
+                            const name = p.argument.name;
+                            s.addExport(name, SYMBOL_TYPE.UNKNOWN, p.argument.start, [], undefined, false, s.getJSDocTags(exportStart));
+                            if (declarator.init)
+                                s.collectRefsInType(declarator.init, name, false);
+                            s.destructuredExports.add(name);
+                        }
+                        else if (p.value?.type === 'Identifier') {
+                            const name = p.value.name;
+                            s.addExport(name, SYMBOL_TYPE.UNKNOWN, p.value.start, [], undefined, false, s.getJSDocTags(exportStart));
+                            if (declarator.init)
+                                s.collectRefsInType(declarator.init, name, false);
+                            s.destructuredExports.add(name);
+                        }
+                        else if (p.value?.type === 'AssignmentPattern' && p.value.left?.type === 'Identifier') {
+                            const name = p.value.left.name;
+                            s.addExport(name, SYMBOL_TYPE.UNKNOWN, p.value.left.start, [], undefined, false, s.getJSDocTags(exportStart));
+                            if (declarator.init)
+                                s.collectRefsInType(declarator.init, name, false);
+                            s.destructuredExports.add(name);
+                        }
+                    }
+                }
+                else if (declarator.id.type === 'ArrayPattern') {
+                    for (const el of declarator.id.elements) {
+                        if (el?.type === 'Identifier') {
+                            s.addExport(el.name, SYMBOL_TYPE.UNKNOWN, el.start, [], undefined, false, s.getJSDocTags(exportStart));
+                            if (declarator.init)
+                                s.collectRefsInType(declarator.init, el.name, false);
+                            s.destructuredExports.add(el.name);
+                        }
+                        else if (el?.type === 'RestElement' && el.argument?.type === 'Identifier') {
+                            s.addExport(el.argument.name, SYMBOL_TYPE.UNKNOWN, el.argument.start, [], undefined, false, s.getJSDocTags(exportStart));
+                            if (declarator.init)
+                                s.collectRefsInType(declarator.init, el.argument.name, false);
+                            s.destructuredExports.add(el.argument.name);
+                        }
+                    }
+                }
+                else if (declarator.id.type === 'Identifier') {
+                    const name = declarator.id.name;
+                    const fix = decl.declarations.length === 1 ? s.getFix(exportStart, exportStart + 7) : undefined;
+                    const jsDocTags = s.getJSDocTags(exportStart);
+                    let isReExport = false;
+                    if (declarator.init?.type === 'Identifier') {
+                        const _import = s.localImportMap.get(declarator.init.name);
+                        if (_import) {
+                            isReExport = true;
+                            const internalImport = s.internal.get(_import.filePath);
+                            if (internalImport) {
+                                if (_import.isNamespace) {
+                                    addValue(internalImport.reExportNs, name, s.filePath);
+                                }
+                                else if (_import.importedName !== name) {
+                                    addNsValue(internalImport.reExportAs, _import.importedName, name, s.filePath);
+                                }
+                                else {
+                                    addValue(internalImport.reExport, _import.importedName, s.filePath);
+                                }
+                            }
+                        }
+                    }
+                    if (declarator.init?.type === 'ObjectExpression') {
+                        const findSpreads = (obj, path) => {
+                            for (const prop of obj.properties) {
+                                if (prop.type === 'SpreadElement' && prop.argument?.type === 'Identifier') {
+                                    const _import = s.localImportMap.get(prop.argument.name);
+                                    if (_import) {
+                                        isReExport = true;
+                                        const internalImport = s.internal.get(_import.filePath);
+                                        if (internalImport) {
+                                            addNsValue(internalImport.reExportAs, prop.argument.name, path.join('.'), s.filePath);
+                                        }
+                                        s.accessedAliases.add(name);
+                                    }
+                                }
+                                else if (prop.type === 'Property' && prop.value?.type === 'ObjectExpression') {
+                                    const key = prop.key?.type === 'Identifier'
+                                        ? prop.key.name
+                                        : prop.key?.type === 'Literal' && typeof prop.key.value === 'string'
+                                            ? prop.key.value
+                                            : undefined;
+                                    if (key)
+                                        findSpreads(prop.value, [...path, key]);
+                                }
+                            }
+                        };
+                        findSpreads(declarator.init, [name]);
+                    }
+                    s.addExport(name, SYMBOL_TYPE.UNKNOWN, declarator.id.start, [], fix, isReExport, jsDocTags);
+                    if (declarator.id.typeAnnotation) {
+                        s.collectRefsInType(declarator.id.typeAnnotation, name, true);
+                    }
+                    else if (declarator.init) {
+                        s.collectRefsInType(declarator.init, name, hasExplicitFunctionReturnType(declarator.init));
+                    }
+                    if (!jsDocTags.has(ALIAS_TAG) && !isReExport && declarator.init?.type === 'Identifier') {
+                        s.exportAliases.push({ local: declarator.init.name, symbol: name, pos: declarator.id.start });
+                    }
+                }
+            }
+        }
+        else if ((decl.type === 'FunctionDeclaration' || decl.type === 'TSDeclareFunction') && decl.id) {
+            const fix = s.getFix(exportStart, exportStart + 7);
+            s.addExport(decl.id.name, SYMBOL_TYPE.FUNCTION, decl.id.start, [], fix, false, s.getJSDocTags(exportStart));
+            s.collectRefsInType(decl, decl.id.name, hasExplicitFunctionReturnType(decl));
+        }
+        else if (decl.type === 'ClassDeclaration' && decl.id) {
+            const fix = s.getFix(exportStart, exportStart + 7);
+            s.addExport(decl.id.name, SYMBOL_TYPE.CLASS, decl.id.start, [], fix, false, s.getJSDocTags(exportStart));
+            s.collectRefsInType(decl, decl.id.name, true);
+        }
+        else if (decl.type === 'TSTypeAliasDeclaration') {
+            const fix = s.getTypeFix(exportStart, exportStart + 7);
+            s.addExport(decl.id.name, SYMBOL_TYPE.TYPE, decl.id.start, [], fix, false, s.getJSDocTags(exportStart));
+            s.collectRefsInType(decl.typeAnnotation, decl.id.name, false);
+        }
+        else if (decl.type === 'TSInterfaceDeclaration') {
+            const fix = s.getTypeFix(exportStart, exportStart + 7);
+            s.addExport(decl.id.name, SYMBOL_TYPE.INTERFACE, decl.id.start, [], fix, false, s.getJSDocTags(exportStart));
+            s.collectRefsInType(decl.body, decl.id.name, false);
+            for (const ext of decl.extends ?? []) {
+                if (ext.expression?.type === 'Identifier')
+                    s.addRefInExport(ext.expression.name, decl.id.name);
+            }
+        }
+        else if (decl.type === 'TSEnumDeclaration') {
+            const members = extractEnumMembers(decl, s.options, s.lineStarts, s.getJSDocTags);
+            const fix = s.getTypeFix(exportStart, exportStart + 7);
+            s.addExport(decl.id.name, SYMBOL_TYPE.ENUM, decl.id.start, members, fix, false, s.getJSDocTags(exportStart));
+        }
+        else if (decl.type === 'TSModuleDeclaration' && decl.kind !== 'global' && decl.id.type === 'Identifier') {
+            const members = extractNamespaceMembers(decl, s.options, s.lineStarts, s.getJSDocTags);
+            const fix = s.getFix(exportStart, exportStart + 7);
+            s.addExport(decl.id.name, SYMBOL_TYPE.NAMESPACE, decl.id.start, members, fix, false, s.getJSDocTags(exportStart));
+        }
+    }
+    if (node.specifiers && !node.source) {
+        for (const spec of node.specifiers) {
+            const exportedName = getName(spec.exported) ?? getName(spec.local);
+            const localName = getName(spec.local);
+            const isType = node.exportKind === 'type' || spec.exportKind === 'type';
+            const type = isType ? SYMBOL_TYPE.TYPE : SYMBOL_TYPE.UNKNOWN;
+            const fix = (s.options.isFixExports && !isType) || (s.options.isFixTypes && isType)
+                ? [spec.start, spec.end, FIX_FLAGS.OBJECT_BINDING | FIX_FLAGS.EMPTY_DECLARATION]
+                : undefined;
+            const _import = localName ? s.localImportMap.get(localName) : undefined;
+            const isReExport = !!_import;
+            const isBindingReExport = !!_import && !_import.isDynamicImport;
+            if (_import) {
+                const internalImport = s.internal.get(_import.filePath);
+                if (internalImport) {
+                    if (_import.isNamespace) {
+                        addValue(internalImport.reExportNs, exportedName, s.filePath);
+                    }
+                    else if (_import.importedName !== exportedName) {
+                        addNsValue(internalImport.reExportAs, _import.importedName, exportedName, s.filePath);
+                    }
+                    else {
+                        addValue(internalImport.reExport, _import.importedName, s.filePath);
+                    }
+                }
+            }
+            s.addExport(exportedName, type, spec.exported?.start ?? spec.start, [], fix, isReExport, s.getJSDocTags(node.start), localName, isBindingReExport);
+            if (exportedName)
+                s.specifierExportNames.add(exportedName);
+            if (localName && exportedName)
+                addLocalToExport(s, localName, exportedName);
+        }
+    }
+}
+export function handleExportDefault(node, s) {
+    if (s.skipExports || s.isInNamespace(node))
+        return;
+    const decl = node.declaration;
+    const isNamedDeclaration = (decl.type === 'ClassDeclaration' || decl.type === 'FunctionDeclaration') && decl.id;
+    const start = decl.type === 'ClassDeclaration' ? Math.min(node.start, decl.decorators[0]?.start ?? node.start) : node.start;
+    const fix = s.options.isFixExports
+        ? isNamedDeclaration
+            ? [node.start, decl.start, FIX_FLAGS.NONE]
+            : [start, node.end + 1, FIX_FLAGS.NONE]
+        : undefined;
+    let type = SYMBOL_TYPE.UNKNOWN;
+    let pos = decl.start;
+    let members = [];
+    let binding = 'default';
+    if (decl.type === 'FunctionDeclaration' || decl.type === 'TSDeclareFunction') {
+        type = SYMBOL_TYPE.FUNCTION;
+        pos = decl.id?.start ?? decl.start;
+        binding = decl.id?.name ?? binding;
+        s.collectRefsInType(decl, 'default', hasExplicitFunctionReturnType(decl));
+    }
+    else if (decl.type === 'ClassDeclaration') {
+        type = SYMBOL_TYPE.CLASS;
+        pos = decl.id?.start ?? decl.start;
+        binding = decl.id?.name ?? binding;
+        members = [];
+        s.collectRefsInType(decl, 'default', true);
+        if (decl.id)
+            addLocalToExport(s, decl.id.name, 'default');
+    }
+    else if (decl.type === 'TSInterfaceDeclaration') {
+        type = SYMBOL_TYPE.INTERFACE;
+        pos = decl.id.start;
+        binding = decl.id.name;
+        s.collectRefsInType(decl.body, 'default', false);
+    }
+    else if (decl.type === 'Identifier') {
+        type = s.localDeclarationTypes.get(decl.name) ?? SYMBOL_TYPE.UNKNOWN;
+        pos = decl.start;
+        addLocalToExport(s, decl.name, 'default');
+        const _import = s.localImportMap.get(decl.name);
+        if (_import) {
+            const internalImport = s.internal.get(_import.filePath);
+            if (internalImport) {
+                if (_import.isNamespace) {
+                    addValue(internalImport.reExportNs, 'default', s.filePath);
+                }
+                else if (_import.importedName !== 'default') {
+                    addNsValue(internalImport.reExportAs, _import.importedName, 'default', s.filePath);
+                }
+                else {
+                    addValue(internalImport.reExport, 'default', s.filePath);
+                }
+            }
+        }
+        if (!_import && !s.getJSDocTags(node.start).has(ALIAS_TAG)) {
+            s.exportAliases.push({ local: decl.name, symbol: 'default', pos: decl.start });
+        }
+    }
+    s.addExport('default', type, pos, members, fix, false, s.getJSDocTags(node.start), binding);
+}
+export function handleExportAssignment(node, s) {
+    if (s.skipExports || s.isInNamespace(node))
+        return;
+    const expr = node.expression;
+    if (expr.type === 'Identifier') {
+        const _import = s.localImportMap.get(expr.name);
+        if (_import) {
+            const internalImport = s.internal.get(_import.filePath);
+            if (internalImport) {
+                addNsValue(internalImport.reExportAs, expr.name, 'default', s.filePath);
+                internalImport.refs.add(expr.name);
+            }
+            s.addExport('default', SYMBOL_TYPE.UNKNOWN, expr.start, [], undefined, true, s.getJSDocTags(node.start));
+        }
+        else {
+            s.addExport('default', SYMBOL_TYPE.UNKNOWN, expr.start, [], undefined, false, s.getJSDocTags(node.start));
+        }
+    }
+    else {
+        s.addExport('default', SYMBOL_TYPE.UNKNOWN, expr.start, [], undefined, false, s.getJSDocTags(node.start));
+    }
+}
+export function handleExpressionStatement(node, s) {
+    if (node.expression.type === 'Identifier') {
+        if (s.destructuredExports.has(node.expression.name))
+            s.bareExprRefs.add(node.expression.name);
+    }
+    if (!s.isJS)
+        return;
+    const expr = node.expression;
+    if (expr.type !== 'AssignmentExpression' || expr.operator !== '=')
+        return;
+    const left = expr.left;
+    if (left.type !== 'MemberExpression')
+        return;
+    if ((left.object.type === 'Identifier' && left.object.name === 'exports') ||
+        (left.object.type === 'MemberExpression' &&
+            !left.object.computed &&
+            left.object.object.type === 'Identifier' &&
+            left.object.object.name === 'module' &&
+            left.object.property.name === 'exports')) {
+        let exportName;
+        if (!left.computed && left.property.type === 'Identifier') {
+            exportName = left.property.name;
+        }
+        else if (left.computed && isStringLiteral(left.property)) {
+            exportName = getStringValue(left.property);
+        }
+        if (exportName) {
+            const right = expr.right;
+            let isReExport = false;
+            if (right.type === 'MemberExpression' &&
+                right.object.type === 'CallExpression' &&
+                right.object.callee.type === 'Identifier' &&
+                right.object.callee.name === 'require' &&
+                right.object.arguments.length === 1 &&
+                isStringLiteral(right.object.arguments[0])) {
+                const specifier = getStringValue(right.object.arguments[0]);
+                let memberName;
+                if (!right.computed && right.property.type === 'Identifier')
+                    memberName = right.property.name;
+                else if (right.computed && isStringLiteral(right.property))
+                    memberName = getStringValue(right.property);
+                if (memberName) {
+                    const alias = exportName !== memberName ? exportName : undefined;
+                    s.addImport(specifier, memberName, alias, undefined, right.object.arguments[0].start, IMPORT_FLAGS.RE_EXPORT);
+                    s.handledImportExpressions.add(right.object.start);
+                    isReExport = true;
+                }
+            }
+            if (!s.skipExports) {
+                const fix = s.options.isFixExports ? [node.start, node.end, FIX_FLAGS.NONE] : undefined;
+                s.addExport(exportName, SYMBOL_TYPE.UNKNOWN, left.property.start, [], fix, isReExport, EMPTY_TAGS);
+            }
+        }
+        return;
+    }
+    if (!left.computed &&
+        left.object.type === 'Identifier' &&
+        left.object.name === 'module' &&
+        left.property.name === 'exports') {
+        const right = expr.right;
+        if (right.type === 'ObjectExpression') {
+            if (s.skipExports)
+                return;
+            const props = right.properties;
+            const allShorthand = props.length > 0 && props.every(p => p.type === 'Property' && p.shorthand);
+            if (allShorthand) {
+                for (const prop of props) {
+                    if (prop.type === 'Property' && prop.key.type === 'Identifier') {
+                        const fix = s.options.isFixExports ? [prop.start, prop.end, FIX_FLAGS.OBJECT_BINDING] : undefined;
+                        s.addExport(prop.key.name, SYMBOL_TYPE.UNKNOWN, prop.key.start, [], fix, false, EMPTY_TAGS);
+                    }
+                }
+            }
+            else {
+                s.addExport('default', SYMBOL_TYPE.UNKNOWN, right.start, [], undefined, false, EMPTY_TAGS);
+            }
+            for (const prop of props) {
+                if (prop.type === 'SpreadElement' &&
+                    prop.argument.type === 'CallExpression' &&
+                    prop.argument.callee.type === 'Identifier' &&
+                    prop.argument.callee.name === 'require' &&
+                    isStringLiteral(prop.argument.arguments[0])) {
+                    const specifier = getStringValue(prop.argument.arguments[0]);
+                    s.addImport(specifier, IMPORT_STAR, undefined, undefined, prop.argument.arguments[0].start, IMPORT_FLAGS.RE_EXPORT);
+                }
+            }
+        }
+        else if (right.type === 'CallExpression' &&
+            right.callee.type === 'Identifier' &&
+            right.callee.name === 'require') {
+            if (isStringLiteral(right.arguments[0])) {
+                const specifier = getStringValue(right.arguments[0]);
+                s.addImport(specifier, IMPORT_STAR, undefined, undefined, right.arguments[0].start, IMPORT_FLAGS.RE_EXPORT);
+            }
+        }
+        else if (!s.skipExports) {
+            s.addExport('default', SYMBOL_TYPE.UNKNOWN, right.start, [], undefined, false, EMPTY_TAGS);
+        }
+        return;
+    }
+}

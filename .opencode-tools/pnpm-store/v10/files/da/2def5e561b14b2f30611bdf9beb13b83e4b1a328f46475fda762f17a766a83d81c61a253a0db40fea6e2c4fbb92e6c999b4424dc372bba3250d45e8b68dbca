@@ -1,0 +1,15 @@
+export interface IOptions {
+    allowIcannDomains: boolean;
+    allowPrivateDomains: boolean;
+    detectIp: boolean;
+    detectSpecialUse: boolean;
+    extraSuffixes: {
+        icann?: readonly string[];
+        private?: readonly string[];
+    } | null;
+    extractHostname: boolean;
+    mixedInputs: boolean;
+    validHosts: string[] | null;
+    validateHostname: boolean;
+}
+export declare function setDefaults(options?: Partial<IOptions>): IOptions;

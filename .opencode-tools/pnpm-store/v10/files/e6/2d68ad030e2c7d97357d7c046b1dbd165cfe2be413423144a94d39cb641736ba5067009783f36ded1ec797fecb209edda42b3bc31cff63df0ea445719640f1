@@ -1,0 +1,39 @@
+import { t as Interceptor } from "./interceptor-dtJZ_9QT.js";
+import { t as BatchInterceptor } from "./batch-interceptor-CPjFK2td.js";
+import { n as HttpRequestEventMap } from "./http-CB9rQ7i_.js";
+import { ClientRequestInterceptor } from "./interceptors/ClientRequest/index.js";
+import { XMLHttpRequestInterceptor } from "./interceptors/XMLHttpRequest/node.js";
+import { FetchInterceptor } from "./interceptors/fetch/node.js";
+import { ChildProcess } from "node:child_process";
+//#region src/remote-http-interceptor.d.ts
+export interface SerializedRequest {
+  id: string;
+  url: string;
+  method: string;
+  headers: Array<[string, string]>;
+  credentials: RequestCredentials;
+  body: string | null;
+}
+export interface SerializedResponse {
+  status: number;
+  statusText: string;
+  headers: Array<[string, string]>;
+  body: string | null;
+}
+export declare class RemoteHttpInterceptor extends BatchInterceptor<[ClientRequestInterceptor, XMLHttpRequestInterceptor, FetchInterceptor]> {
+  constructor();
+  protected setup(): void;
+}
+export declare function requestReviver(key: string, value: any): any;
+export interface RemoveResolverOptions {
+  process: ChildProcess;
+}
+export declare class RemoteHttpResolver extends Interceptor<HttpRequestEventMap> {
+  static symbol: symbol;
+  private process;
+  constructor(options: RemoveResolverOptions);
+  protected predicate(): boolean;
+  protected setup(): void;
+}
+//#endregion
+//# sourceMappingURL=remote-http-interceptor.d.ts.map

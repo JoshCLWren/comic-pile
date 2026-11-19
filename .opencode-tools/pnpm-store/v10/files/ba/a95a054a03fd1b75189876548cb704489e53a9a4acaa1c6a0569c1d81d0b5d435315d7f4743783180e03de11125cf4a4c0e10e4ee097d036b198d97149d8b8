@@ -1,0 +1,14 @@
+import type { ModuleGraph } from '../types/module-graph.ts';
+import type { UsageResult } from './operations/get-usage.ts';
+import type { DefinitionResult } from './operations/resolve-definition.ts';
+import type { ExportTableCache } from './operations/resolve-export-origins.ts';
+export declare const getTopologyGeneration: (graph: ModuleGraph) => number;
+export declare const invalidateCache: (graph: ModuleGraph, topologyUnchanged?: boolean) => void;
+export declare const getCachedDefinition: (graph: ModuleGraph, filePath: string, identifier: string) => DefinitionResult | null | undefined;
+export declare const setCachedDefinition: (graph: ModuleGraph, filePath: string, identifier: string, result: DefinitionResult | null) => void;
+export declare const getCachedUsage: (graph: ModuleGraph, filePath: string, identifier: string) => UsageResult | undefined;
+export declare const setCachedUsage: (graph: ModuleGraph, filePath: string, identifier: string, result: UsageResult) => void;
+export declare const getCachedExportedIdentifiers: (graph: ModuleGraph, filePath: string) => Map<string, boolean> | undefined;
+export declare const setCachedExportedIdentifiers: (graph: ModuleGraph, filePath: string, result: Map<string, boolean>) => void;
+export declare const getCachedExportTable: (graph: ModuleGraph, filePath: string) => ExportTableCache | undefined;
+export declare const setCachedExportTable: (graph: ModuleGraph, filePath: string, table: ExportTableCache) => void;

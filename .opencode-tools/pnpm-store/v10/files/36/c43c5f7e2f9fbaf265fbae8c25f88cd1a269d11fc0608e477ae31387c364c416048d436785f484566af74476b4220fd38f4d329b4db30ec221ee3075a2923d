@@ -1,0 +1,114 @@
+import { Visitor, type Class, type Function as FunctionNode, type Program, type Span, type TSInterfaceDeclaration, type VariableDeclarator } from 'oxc-parser';
+import type { PluginVisitorObject } from '../../types/config.ts';
+import type { GetImportsAndExportsOptions } from '../../types/config.ts';
+import type { Fix } from '../../types/exports.ts';
+import type { IssueSymbol, SymbolType } from '../../types/issues.ts';
+import type { Export, ExportMember, ImportMap, ImportMaps } from '../../types/module-graph.ts';
+import { type ResolveModule } from '../ast-nodes.ts';
+export type LocalImport = {
+    importedName: string;
+    filePath: string;
+    isNamespace: boolean;
+    isDynamicImport?: boolean;
+    scope?: [number, number];
+};
+export type LocalImportRef = {
+    id: string;
+    import: LocalImport;
+};
+interface WalkContext {
+    lineStarts: number[];
+    skipExports: boolean;
+    options: GetImportsAndExportsOptions;
+    exports: Map<string, Export>;
+    aliasedExports: Map<string, IssueSymbol[]>;
+    specifierExportNames: Set<string>;
+    scripts: Set<string>;
+    addImport: (specifier: string, identifier: string | undefined, alias: string | undefined, namespace: string | undefined, pos: number, modifiers: number, specifierPos?: number, jsDocTags?: Set<string>) => void;
+    addNsMemberRefs: (internalImport: ImportMaps, namespace: string, member: string | string[]) => void;
+    addImportAlias: (aliasName: string, id: string, _import: LocalImport) => void;
+    internal: ImportMap;
+    localImportMap: Map<string, LocalImport>;
+    localDeclarationTypes: Map<string, SymbolType>;
+    importAliases: Map<string, Set<LocalImportRef>>;
+    referencedInExport: Map<string, Set<string>>;
+    skipBareExprRefs: boolean;
+    localRefs: Set<string> | undefined;
+    destructuredExports: Set<string>;
+    hasNodeModuleImport: boolean;
+    hasWorkerThreadsImport: boolean;
+    hasChildProcessImport: boolean;
+    childProcessNamespaces: ReadonlySet<string>;
+    childProcessMethods: ReadonlyMap<string, string>;
+    registeredCustomElements: Set<string>;
+    hasPathJoinImport: boolean;
+    hasPathResolveImport: boolean;
+    resolveModule: ResolveModule;
+    programFiles: Set<string>;
+    entryFiles: Set<string>;
+    handledImportExpressions: Set<number>;
+    caughtImportExpressions: Set<number>;
+    visitor: Visitor;
+    getJSDocTags: (nodeStart: number) => Set<string>;
+}
+export interface WalkState extends WalkContext {
+    filePath: string;
+    sourceText: string;
+    isJS: boolean;
+    isModuleFile: boolean;
+    handledImportExpressions: Set<number>;
+    caughtTryBlockEnds: number[];
+    functionCaughtTryBlockEnds: number[][];
+    bareExprRefs: Set<string>;
+    accessedAliases: Set<string>;
+    nsContainers: Map<string, Map<string, LocalImportRef>>;
+    accessedNsContainers: Set<string>;
+    chainedMemberExprs: WeakSet<object>;
+    currentVarDeclStart: number;
+    nsRanges: [number, number][];
+    memberRefsInFile: string[];
+    importedRefs: Set<string> | undefined;
+    scopeDepth: number;
+    scopeStarts: number[];
+    scopeEnds: number[];
+    shadowScopes: Map<string, [number, number][]>;
+    scopedImports: {
+        name: string;
+        end: number;
+        prev: LocalImport | undefined;
+    }[];
+    localDeclarations: Map<string, FunctionNode | Class | VariableDeclarator>;
+    exportAliases: {
+        local: string;
+        symbol: string;
+        pos: number;
+    }[];
+    localInterfaces: Map<string, TSInterfaceDeclaration | null>;
+    pendingCallRefs: Array<{
+        name: string;
+        exportName: string;
+        seen: Set<string>;
+        kind: 'callee' | 'argument';
+    }>;
+    pendingMemberCallRefs: Array<{
+        objectName: string;
+        propertyName: string;
+        exportName: string;
+        seen: Set<string>;
+    }>;
+    localToExports: Map<string, Set<string>>;
+    customElementRegistries: Set<string>;
+    classNameStack: string[];
+    staticBlockDepth: number;
+    addExport: (identifier: string, type: SymbolType, pos: number, members: ExportMember[], fix: Fix, isReExport: boolean, jsDocTags: Set<string>, binding?: string, isBindingReExport?: boolean) => void;
+    getFix: (start: number, end: number, flags?: number) => Fix;
+    getTypeFix: (start: number, end: number) => Fix;
+    collectRefsInType: (node: any, exportName: string, signatureOnly: boolean) => void;
+    addRefInExport: (name: string, exportName: string) => void;
+    isInNamespace: (node: Span) => boolean;
+}
+export declare const isShadowed: (name: string, pos: number) => boolean;
+export declare function buildVisitor(pluginVisitorObjects: PluginVisitorObject[], includeLocalRefs?: boolean): Visitor;
+declare function walkAST(program: Program, sourceText: string, filePath: string, hasModuleSyntax: boolean, ctx: WalkContext): Set<string> | undefined;
+export declare const _walkAST: typeof walkAST;
+export {};

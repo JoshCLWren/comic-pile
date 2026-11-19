@@ -1,0 +1,124 @@
+import { IMPORT_STAR } from '../constants.js';
+import { getAmbiguousStarExport } from '../graph-explorer/operations/get-ambiguous-star-export.js';
+import st from '../util/colors.js';
+import { toRelative } from '../util/path.js';
+import { toRegexOrString } from '../util/regex.js';
+import { compareStrings } from '../util/string.js';
+import { Table } from '../util/table.js';
+import { formatTrace } from '../util/trace.js';
+export default ({ graph, explorer, options, workspaceFilePathFilter, issues }) => {
+    if (options.traceDependency) {
+        const pattern = toRegexOrString(options.traceDependency);
+        const toRel = (path) => toRelative(path, options.cwd);
+        const table = new Table({ truncate: { filePath: 'start' } });
+        const seen = new Set();
+        for (const [packageName, { imports }] of explorer.getDependencyUsage(pattern)) {
+            const filtered = imports.filter(i => workspaceFilePathFilter(i.filePath));
+            filtered.sort((a, b) => compareStrings(a.filePath, b.filePath) || (a.line ?? 0) - (b.line ?? 0));
+            for (const _import of filtered) {
+                const pos = _import.line ? `:${_import.line}:${_import.col}` : '';
+                const key = `${_import.filePath}${pos}:${packageName}`;
+                if (seen.has(key))
+                    continue;
+                seen.add(key);
+                table.row();
+                table.cell('filePath', st.whiteBright(`${toRel(_import.filePath)}${pos}`));
+                table.cell('package', st.cyanBright(packageName));
+            }
+        }
+        const rows = table.toRows();
+        if (rows.length === 0)
+            console.log(`No imports found matching ${st.cyanBright(options.traceDependency)}`);
+        else
+            for (const line of rows)
+                console.log(line);
+    }
+    else {
+        let nodes = explorer.buildExportsTree({ filePath: options.traceFile, identifier: options.traceExport });
+        const traceFile = options.traceFile;
+        const traceExport = options.traceExport;
+        const dotIndex = traceExport?.indexOf('.') ?? -1;
+        const resolvedTraceExport = dotIndex === -1 ? traceExport : traceExport?.slice(0, dotIndex);
+        const resolution = traceFile && resolvedTraceExport ? explorer.resolveExportOrigins(traceFile, resolvedTraceExport) : undefined;
+        const collision = resolution && resolvedTraceExport ? getAmbiguousStarExport(resolution, resolvedTraceExport) : undefined;
+        const toRel = (path) => toRelative(path, options.cwd);
+        if (collision) {
+            collision.origins.sort((a, b) => compareStrings(a.filePath, b.filePath));
+            console.log(`${toRel(traceFile ?? '')}:${st.cyanBright(resolvedTraceExport ?? '')} [ambiguous]`);
+            for (let i = 0; i < collision.origins.length; i++) {
+                const origin = collision.origins[i];
+                const connector = i === collision.origins.length - 1 ? '└──' : '├──';
+                console.log(`${st.dim(connector)} ${toRel(origin.filePath)}:${st.cyanBright(origin.identifier)}`);
+            }
+            return;
+        }
+        if (nodes.length === 0 && resolution && !resolution.hasExplicitExport && resolution.origins.length === 1) {
+            const [origin] = resolution.origins;
+            const originFile = graph.get(origin.filePath);
+            if (originFile && origin.identifier !== IMPORT_STAR && origin.identifier !== 'default') {
+                for (const [exportId, exp] of originFile.exports) {
+                    if (exp.binding !== origin.identifier)
+                        continue;
+                    nodes.push(...explorer.buildExportsTree({ filePath: origin.filePath, identifier: exportId }));
+                }
+            }
+        }
+        if (nodes.length === 0 && options.traceExport?.includes('.')) {
+            const nsName = options.traceExport.substring(0, options.traceExport.indexOf('.'));
+            nodes = explorer.buildExportsTree({ filePath: options.traceFile, identifier: nsName });
+        }
+        if (nodes.length === 0 && options.traceExport) {
+            const query = options.traceExport;
+            const member = query.slice(query.lastIndexOf('.') + 1);
+            const seen = new Set();
+            for (const [filePath, file] of graph) {
+                if (options.traceFile && filePath !== options.traceFile)
+                    continue;
+                for (const [exportId, exp] of file.exports) {
+                    const key = `${filePath}:${exportId}`;
+                    if (seen.has(key))
+                        continue;
+                    if (exp.members.some(m => m.identifier === query || m.identifier === member || m.identifier.endsWith(`.${member}`))) {
+                        seen.add(key);
+                        nodes.push(...explorer.buildExportsTree({ filePath, identifier: exportId }));
+                    }
+                }
+            }
+        }
+        nodes.sort((a, b) => compareStrings(a.filePath, b.filePath) || compareStrings(a.identifier, b.identifier));
+        if (nodes.length === 0) {
+            if (options.traceFile && !graph.has(options.traceFile)) {
+                console.log(`File not found in module graph: ${toRel(options.traceFile)}`);
+            }
+            else {
+                const what = options.traceExport ? `export ${st.cyanBright(options.traceExport)}` : 'exports';
+                const where = options.traceFile ? ` in ${toRel(options.traceFile)}` : '';
+                console.log(`No ${what} found${where}`);
+            }
+            return;
+        }
+        const reportedExports = new Set();
+        for (const type of ['exports', 'types', 'nsExports', 'nsTypes'])
+            for (const byFile of Object.values(issues[type]))
+                for (const issue of Object.values(byFile))
+                    reportedExports.add(`${issue.filePath}:${issue.symbol}`);
+        const reportedMembers = new Set();
+        for (const type of ['enumMembers', 'namespaceMembers'])
+            for (const byFile of Object.values(issues[type]))
+                for (const issue of Object.values(byFile))
+                    reportedMembers.add(`${issue.filePath}:${issue.parentSymbol}.${issue.symbol}`);
+        const isReferenced = (node) => !reportedExports.has(`${node.filePath}:${node.identifier}`);
+        for (const node of nodes) {
+            const exp = graph.get(node.filePath)?.exports.get(node.identifier);
+            let memberStatuses;
+            if (exp && exp.members.length > 0) {
+                memberStatuses = [];
+                for (const m of exp.members) {
+                    const referenced = !reportedMembers.has(`${node.filePath}:${node.identifier}.${m.identifier}`);
+                    memberStatuses.push({ identifier: m.identifier, referenced });
+                }
+            }
+            console.log(formatTrace(node, toRel, isReferenced(node), memberStatuses));
+        }
+    }
+};

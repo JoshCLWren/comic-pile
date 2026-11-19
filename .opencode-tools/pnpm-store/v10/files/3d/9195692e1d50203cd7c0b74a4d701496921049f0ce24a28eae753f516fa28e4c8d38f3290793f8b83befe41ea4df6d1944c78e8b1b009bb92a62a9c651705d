@@ -1,0 +1,269 @@
+"use strict";
+
+const { legacyHookDecode } = require("@exodus/bytes/encoding.js");
+const { parseURL, serializeURL } = require("whatwg-url");
+const sniffHTMLEncoding = require("html-encoding-sniffer");
+const { computedMIMEType } = require("whatwg-mimetype");
+const DOMException = require("../../../generated/idl/DOMException");
+
+const window = require("../../browser/Window");
+const HTMLElementImpl = require("./HTMLElement-impl").implementation;
+const { evaluateJavaScriptURL } = require("../window/navigation");
+const { createElement } = require("../helpers/create-element");
+const { fireAnEvent } = require("../helpers/events");
+const { HTML_NS } = require("../helpers/namespaces");
+const { getAttributeValue } = require("../attributes");
+const { fetchCollected } = require("../../browser/resources/jsdom-dispatcher");
+const { reportResourceError } = require("../helpers/resource-errors");
+const { linkAbortController } = require("../helpers/abort-controller");
+const selectorHelpers = require("../css/helpers/selectors.js");
+
+async function fetchFrame(serializedURL, frame, document, contentDoc) {
+  if (!document._defaultView._settings.loadSubresources) {
+    return;
+  }
+  const controller = new AbortController();
+  const unlink = linkAbortController(controller, document._fetchSignal, contentDoc._fetchSignal);
+  const { signal } = controller;
+  const stopDelayingLoadEvent = document._delayLoadEvent();
+  try {
+    const response = await fetchCollected(document._defaultView._settings.dispatcher, {
+      url: serializedURL,
+      headers: { Referer: document.URL },
+      signal,
+      element: frame,
+    });
+    signal.throwIfAborted();
+    const data = response.body;
+    const contentType = computedMIMEType(data, {
+      contentTypeHeader: response.headers["content-type"],
+    });
+    const xml = contentType.isXML();
+    const transportLayerEncodingLabel = contentType.parameters.get("charset");
+
+    if (xml) {
+      contentDoc._parsingMode = "xml";
+    }
+    contentDoc.contentType = contentType.essence;
+
+    contentDoc._encoding = sniffHTMLEncoding(data, {
+      xml,
+      transportLayerEncodingLabel,
+      // half-assed implementation of
+      // https://html.spec.whatwg.org/multipage/parsing.html#determining-the-character-encoding step 6
+      defaultEncoding: xml ? "UTF-8" : document._encoding,
+    });
+
+    const html = legacyHookDecode(data, contentDoc._encoding);
+
+    const parsingSession = contentDoc._startParsingSession({ onError: reportParsingError });
+    try {
+      parsingSession.parse(html);
+    } catch (error) {
+      reportParsingError(error);
+      parsingSession.finish();
+    }
+
+    function reportParsingError(error) {
+      if (
+        DOMException.is(error) &&
+        error.name === "SyntaxError" &&
+        contentDoc._parsingMode === "xml"
+      ) {
+        // As defined (https://html.spec.whatwg.org/#read-xml) parsing error in XML document may be reported inline by
+        // mutating the document.
+        const element = contentDoc.createElementNS(
+          "http://www.mozilla.org/newlayout/xml/parsererror.xml",
+          "parsererror",
+        );
+        element.textContent = error.message;
+
+        while (contentDoc.childNodes.length > 0) {
+          contentDoc.removeChild(contentDoc.lastChild);
+        }
+        contentDoc.appendChild(element);
+      } else {
+        parsingSession.abort();
+        reportFetchError(error);
+      }
+    }
+  } catch (error) {
+    reportFetchError(error);
+  } finally {
+    unlink();
+    stopDelayingLoadEvent();
+  }
+
+  function reportFetchError(error) {
+    if (!signal.aborted) {
+      fireAnEvent("error", frame);
+      reportResourceError(frame, serializedURL, error);
+    }
+  }
+}
+
+function loadFrame(frame, initialInsertion = false) {
+  if (frame._ownerDocument._isDestroyed) {
+    return;
+  }
+  if (frame._contentDocument) {
+    if (frame._contentDocument._defaultView) {
+      frame._contentDocument._defaultView.close();
+    } else {
+      delete frame._contentDocument;
+    }
+  }
+
+  const parentDoc = frame._ownerDocument;
+  const parent = parentDoc._defaultView;
+
+  // https://html.spec.whatwg.org/#process-the-iframe-attributes
+  let url;
+  const srcAttribute = getAttributeValue(frame, "src");
+  if (srcAttribute === "") {
+    url = parseURL("about:blank");
+  } else {
+    url =
+      parseURL(srcAttribute, { baseURL: parentDoc.baseURL() || undefined }) ||
+      parseURL("about:blank");
+  }
+  const serializedURL = serializeURL(url);
+  const isAboutBlank = url.scheme === "about" && url.path === "blank";
+
+  const wnd = window.createWindow({
+    settings: parent._settings,
+    documentOptions: {
+      parsingMode: "html",
+      url: url.scheme === "javascript" ? parentDoc.URL : serializedURL,
+      parentOrigin: parentDoc._origin,
+      referrer: parentDoc.URL,
+      encoding: parentDoc._encoding,
+    },
+    commonForOrigin: parent._commonForOrigin,
+  });
+
+  const contentDoc = (frame._contentDocument = wnd._document);
+  parentDoc._childDocuments.add(contentDoc);
+  contentDoc._parentDocument = parentDoc;
+  const contentWindow = contentDoc._defaultView;
+  contentWindow._parent = parent;
+  contentWindow._top = parent.top;
+  contentWindow._frameElement = frame;
+
+  if (parentDoc._origin === contentDoc._origin) {
+    contentWindow._currentOriginData.windowsInSameOrigin.push(contentWindow);
+  }
+
+  refreshAccessors(parentDoc);
+
+  if (initialInsertion && isAboutBlank) {
+    // https://html.spec.whatwg.org/multipage/document-lifecycle.html#populate-with-html/head/body
+    const html = createElement(contentDoc, "html", HTML_NS);
+    const head = createElement(contentDoc, "head", HTML_NS);
+    const body = createElement(contentDoc, "body", HTML_NS);
+    contentDoc.appendChild(html);
+    html.appendChild(head);
+    html.appendChild(body);
+    contentDoc.readyState = "complete";
+
+    // https://html.spec.whatwg.org/multipage/iframe-embed-object.html#process-the-iframe-attributes
+    contentDoc._runIframeLoadEventSteps();
+  } else if (isAboutBlank || url.scheme === "javascript") {
+    const parsingSession = contentDoc._startParsingSession();
+    parsingSession.parse("<html><head></head><body></body></html>");
+    if (url.scheme === "javascript") {
+      const result = evaluateJavaScriptURL(contentWindow, url);
+      if (typeof result === "string") {
+        contentDoc.body.textContent = result;
+      }
+    }
+  } else {
+    fetchFrame(serializedURL, frame, parentDoc, contentDoc);
+  }
+}
+
+function refreshAccessors(document) {
+  const { _defaultView } = document;
+
+  if (!_defaultView) {
+    return;
+  }
+
+  const frameElements = selectorHelpers.query(document, "iframe,frame", false);
+  const frames = [];
+  for (const frame of frameElements) {
+    if (frame.contentWindow !== null) {
+      frames.push(frame);
+    }
+  }
+
+  // delete accessors for all frames
+  for (let i = 0; i < _defaultView._length; ++i) {
+    delete _defaultView[i];
+  }
+
+  _defaultView._length = frames.length;
+  for (let i = 0; i < frames.length; ++i) {
+    const frame = frames[i];
+    Object.defineProperty(_defaultView, i, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        return frame.contentWindow;
+      },
+    });
+  }
+}
+
+class HTMLFrameElementImpl extends HTMLElementImpl {
+  constructor(globalObject, args, privateData) {
+    super(globalObject, args, privateData);
+    this._contentDocument = null;
+  }
+  _attributeChangeSteps(localName, oldValue, value, namespace) {
+    super._attributeChangeSteps(localName, oldValue, value, namespace);
+    if (namespace === null && localName === "src") {
+      // iframe should never load in a document without a Window
+      // (e.g. implementation.createHTMLDocument)
+      if (this.isConnected && this._ownerDocument._defaultView) {
+        loadFrame(this);
+      }
+    }
+  }
+
+  _removingSteps(isSubtreeRoot, oldAncestor) {
+    super._removingSteps(isSubtreeRoot, oldAncestor);
+
+    if (this.contentWindow) {
+      // TODO: this is not really correct behavior, because jsdom's window.close() is very aggressive and is meant for
+      // killing off the whole jsdom, not just moving the Window to a no-browsing-context state.
+      //
+      // If we revise this in the future, be sure to also invalidate the base URL cache.
+
+      this.contentWindow.close();
+    }
+
+    refreshAccessors(this._ownerDocument);
+  }
+
+  // https://html.spec.whatwg.org/multipage/iframe-embed-object.html#the-iframe-element
+  // For `frame`, follow https://github.com/whatwg/html/pull/12925: create its child navigable in
+  // post-connection steps, including when connected inside a shadow tree.
+  _postConnectionSteps() {
+    if (this._ownerDocument._defaultView) {
+      loadFrame(this, true);
+    }
+  }
+
+  get contentDocument() {
+    return this._contentDocument;
+  }
+
+  get contentWindow() {
+    return this.contentDocument ? this.contentDocument._defaultView : null;
+  }
+}
+
+module.exports = {
+  implementation: HTMLFrameElementImpl,
+};

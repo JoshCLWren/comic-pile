@@ -1,0 +1,67 @@
+import type { UnusedIgnorePattern } from './configuration-hints.ts';
+import type { IgnoreIssues } from './types/config.ts';
+import type { ConfigurationHint, Issue, TagHint } from './types/issues.ts';
+import type { MainOptions } from './util/create-options.ts';
+import type { WorkspaceFilePathFilter } from './util/workspace-file-filter.ts';
+type IgnorePatternEntry = {
+    pattern: string;
+    id: string;
+    workspaceName?: string;
+    configKey?: string;
+};
+export type CollectorIssues = ReturnType<IssueCollector['getIssues']>;
+export declare class IssueCollector {
+    private cwd;
+    private rules;
+    private workspaceFilter;
+    private issues;
+    private counters;
+    private referencedFiles;
+    private configurationHintCandidates;
+    private configurationHints;
+    private tagHints;
+    private hasConfigLoadErrors;
+    private ignorePatterns;
+    private ignoreFilesPatterns;
+    private isMatch;
+    private isFileMatch;
+    private issueMatchers;
+    private isTrackUnusedIgnorePatterns;
+    private unusedIgnorePatterns;
+    private unusedIgnoreFilesPatterns;
+    private selectedWorkspaces;
+    constructor(options: MainOptions);
+    setWorkspaceFilter(workspaceFilePathFilter: WorkspaceFilePathFilter | undefined): void;
+    setSelectedWorkspaces(selectedWorkspaces: Set<string> | undefined): void;
+    private collectIgnorePatterns;
+    addIgnorePatterns(entries: IgnorePatternEntry[]): void;
+    addIgnoreFilesPatterns(entries: IgnorePatternEntry[]): void;
+    private markUsedPatterns;
+    setIgnoreIssues(ignoreIssues?: IgnoreIssues): void;
+    private shouldIgnoreIssue;
+    addFileCounts({ processed, unused }: {
+        processed: number;
+        unused: number;
+    }): void;
+    addReferencedFile(filePath: string): void;
+    addFilesIssues(filePaths: string[]): void;
+    addIssue(issue: Issue): true | undefined;
+    addConfigurationHint(issue: ConfigurationHint): void;
+    getConfigurationHintCandidates(): MapIterator<ConfigurationHint>;
+    setConfigurationHints(hints: ConfigurationHint[]): void;
+    addTagHint(issue: TagHint): void;
+    addConfigLoadError(): void;
+    purge(): Set<string>;
+    getIssues(): {
+        issues: import("./types/issues.ts").Issues;
+        counters: import("./types/issues.ts").Counters;
+        tagHints: Set<TagHint>;
+        configurationHints: ConfigurationHint[];
+        hasConfigLoadErrors: boolean;
+    };
+    getUnusedIgnorePatterns(): UnusedIgnorePattern[];
+    private retainedIssues;
+    retainIssue(issue: Issue): void;
+    getRetainedIssues(): Issue[];
+}
+export {};

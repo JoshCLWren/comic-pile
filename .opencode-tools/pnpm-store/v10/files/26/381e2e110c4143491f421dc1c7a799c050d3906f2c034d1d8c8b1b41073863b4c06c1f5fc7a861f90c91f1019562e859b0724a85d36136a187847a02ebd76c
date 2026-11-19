@@ -1,0 +1,88 @@
+import parseArgs, {} from '../util/parse-args.js';
+import { toBinary } from '../util/input.js';
+export const toCommandBinary = (binary, { optionalBinaries }, inputOptions = {}) => toBinary(binary, optionalBinaries ? { ...inputOptions, optional: true } : inputOptions);
+export const npmBooleanFlags = [
+    'color',
+    'd',
+    'dangerously-allow-all-scripts',
+    'dd',
+    'ddd',
+    'force',
+    'global',
+    'ignore-scripts',
+    'include-workspace-root',
+    'legacy-peer-deps',
+    'no',
+    'offline',
+    'prefer-offline',
+    'prefer-online',
+    'progress',
+    'quiet',
+    'silent',
+    'strict-allow-scripts',
+    'timing',
+    'verbose',
+    'workspaces',
+    'yes',
+];
+export const npmBooleanAliases = {
+    force: 'f',
+    global: 'g',
+    'include-workspace-root': 'iwr',
+    quiet: 'q',
+    silent: 's',
+    workspaces: 'ws',
+    yes: 'y',
+};
+const valueOf = (arg) => (typeof arg === 'string' ? arg : arg.value);
+export const nodeLoadersArgs = { import: ['r', 'experimental-loader', 'require', 'loader'] };
+const isGlobLikeMatch = /(^!|[*+\\(|{^$])/;
+export const isGlobLike = (value) => isGlobLikeMatch.test(value);
+export const argsFrom = (args, from) => {
+    const index = args.findIndex(arg => valueOf(arg) === from);
+    return index === -1 ? [] : args.slice(index);
+};
+export const spawningArgs = (parsed, args) => {
+    const index = parsed.positionalIndices?.[0];
+    return index === undefined ? (parsed['--'] ?? []) : args.slice(index);
+};
+export const argsAfter = (args, token) => {
+    const index = args.findIndex(arg => valueOf(arg) === token);
+    return index === -1 ? [] : args.slice(index + 1).filter(arg => valueOf(arg) !== '--');
+};
+export const toWordArgs = (values, words) => {
+    const args = [];
+    let cursor = 0;
+    for (const value of values) {
+        const str = String(value);
+        let match = -1;
+        for (let index = cursor; index < words.length; index++) {
+            if (words[index].value === str) {
+                match = index;
+                break;
+            }
+        }
+        if (match === -1)
+            args.push(str);
+        else {
+            args.push(words[match]);
+            cursor = match + 1;
+        }
+    }
+    return args;
+};
+export const expandScript = (name, forwardedArgs, scripts, options, opts = {}) => {
+    const source = scripts?.[name];
+    if (!source || forwardedArgs.length === 0)
+        return;
+    const expandedScripts = options.expandedScripts ?? new Set();
+    if (expandedScripts.has(name))
+        return;
+    expandedScripts.add(name);
+    const cwd = options.manifestDir ?? options.cwd;
+    return options.fromArgs([source, ...forwardedArgs], { cwd, manifestDir: undefined, ...opts, expandedScripts });
+};
+export const parseNodeArgs = (args) => parseArgs(args, {
+    string: ['r'],
+    alias: { require: ['r', 'loader', 'experimental-loader', 'test-reporter', 'watch', 'import'] },
+});

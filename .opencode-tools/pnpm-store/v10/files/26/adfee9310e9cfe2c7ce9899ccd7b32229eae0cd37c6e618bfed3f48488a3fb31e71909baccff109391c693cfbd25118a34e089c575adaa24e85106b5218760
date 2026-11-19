@@ -1,0 +1,197 @@
+import type { Program, VisitorObject } from 'oxc-parser';
+import type { Word } from 'unbash';
+import type { Compiler, HasDependency, RawCompilers } from '../compilers/types.ts';
+import type { ParsedCLIArgs } from '../util/cli-arguments.ts';
+import type { Input } from '../util/input.ts';
+import type { Manifest } from '../util/package-json.ts';
+import type { Args } from './args.ts';
+import type { RawConfiguration } from './configuration.ts';
+import type { IssueType, SymbolType } from './issues.ts';
+import type { Tags } from './options.ts';
+import type { PluginName } from './PluginNames.ts';
+import type { PackageJson } from './package-json.ts';
+export interface GetInputsFromScriptsOptions extends BaseOptions {
+    isForwardedArgs?: boolean;
+    optionalBinaries?: boolean;
+    containingFilePath: string;
+    expandedScripts?: Set<string>;
+    manifestDir?: string;
+}
+export type GetInputsFromScripts<T = GetInputsFromScriptsOptions> = (npmScripts: string | string[] | Set<string>, options: T) => Input[];
+export type GetInputsFromScriptsPartial = (npmScripts: string | string[] | Set<string>, options?: Partial<GetInputsFromScriptsOptions>) => Input[];
+export interface ScriptCommand {
+    binary: string;
+    args: string[];
+}
+export type GetScriptCommands = (script: string, cwd?: string) => ScriptCommand[];
+export type ScriptArg = string | Word;
+export type FromArgs = (args: ScriptArg[], options?: Partial<GetInputsFromScriptsOptions>) => Input[];
+export interface BinaryResolverOptions extends GetInputsFromScriptsOptions {
+    fromArgs: FromArgs;
+}
+export type BinaryResolver = (binary: string, words: Word[], options: BinaryResolverOptions) => Input[];
+export type { RawConfiguration, RawPluginConfiguration, WorkspaceProjectConfig } from './configuration.ts';
+export type RawConfigurationOrFn = RawConfiguration | ((options: ParsedCLIArgs) => RawConfiguration | Promise<RawConfiguration>);
+export type IgnorePatterns = (string | RegExp)[];
+type IgnorableExport = Exclude<SymbolType, 'unknown'>;
+export type IgnoreExportsUsedInFile = boolean | {
+    [K in IgnorableExport]?: boolean | undefined;
+};
+export type IgnoreIssues = Record<string, IssueType[]>;
+export type CyclesConfig = {
+    allow?: string[][] | undefined;
+    dynamicImports?: boolean | undefined;
+};
+export type GetImportsAndExportsOptions = {
+    skipTypeOnly: boolean;
+    isFixExports: boolean;
+    isFixTypes: boolean;
+    isReportExports: boolean;
+    tags: Tags;
+};
+export interface Configuration {
+    ignore: NormalizedGlob;
+    ignoreBinaries: IgnorePatterns;
+    ignoreGlobalBinaries: boolean;
+    ignoreDependencies: IgnorePatterns;
+    ignoreExportsUsedInFile: IgnoreExportsUsedInFile;
+    ignoreFiles: NormalizedGlob;
+    cycles: CyclesConfig;
+    ignoreIssues: IgnoreIssues;
+    ignoreMembers: IgnorePatterns;
+    ignoreUnresolved: IgnorePatterns;
+    ignoreWorkspaces: string[];
+    isIncludeEntryExports: boolean;
+    isIncludeSubpathExports: boolean;
+    compilers: RawCompilers;
+    rootPluginConfigs: Partial<PluginsConfiguration>;
+}
+type NormalizedGlob = string[];
+export type EnsuredPluginConfiguration = {
+    config: NormalizedGlob | null;
+    entry: NormalizedGlob | null;
+    project: NormalizedGlob | null;
+};
+interface BaseWorkspaceConfiguration {
+    entry: NormalizedGlob;
+    project: NormalizedGlob;
+    paths: Record<string, string[]>;
+    ignore: NormalizedGlob;
+    ignoreFiles: NormalizedGlob;
+    ignoreGlobalBinaries: boolean;
+    ignoreExportsUsedInFile: IgnoreExportsUsedInFile;
+    isIncludeEntryExports: boolean;
+    isIncludeSubpathExports: boolean;
+}
+type PluginConfiguration = EnsuredPluginConfiguration | boolean;
+export type PluginsConfiguration = Record<PluginName, PluginConfiguration>;
+export interface WorkspaceConfiguration extends BaseWorkspaceConfiguration, Partial<PluginsConfiguration> {
+}
+interface BaseOptions {
+    rootCwd: string;
+    cwd: string;
+    manifest: Manifest;
+    rootManifest: Manifest | undefined;
+    getManifest: (dir: string) => Manifest | undefined;
+}
+type IsPluginEnabledOptions = {
+    cwd: string;
+    manifest: Manifest;
+    dependencies: Set<string>;
+    config: WorkspaceConfiguration;
+    getScriptCommands: GetScriptCommands;
+};
+export type IsPluginEnabled = (options: IsPluginEnabledOptions) => boolean | Promise<boolean>;
+export interface PluginOptions extends BaseOptions {
+    pluginName: PluginName;
+    config: EnsuredPluginConfiguration;
+    configFileDir: string;
+    configFileName: string;
+    configFilePath: string;
+    isResolvedConfigFile: boolean;
+    isProduction: boolean;
+    enabledPlugins: string[];
+    getInputsFromScripts: GetInputsFromScriptsPartial;
+    getScriptCommands: GetScriptCommands;
+}
+type PluginSetup = () => Promise<void> | void;
+export type IsLoadConfig = (options: PluginOptions, dependencies: Set<string>) => boolean;
+export type ParseConfig = (source: string) => unknown | Promise<unknown>;
+export type ResolveConfig<T = any> = (config: T, options: PluginOptions) => Promise<Input[]> | Input[];
+export type Resolve = (options: PluginOptions) => Promise<Input[]> | Input[];
+export type SourceMap = {
+    srcDir: string;
+    outDir: string;
+};
+interface ResolveSourceMapOptions {
+    cwd: string;
+    manifest: Manifest;
+    dependencies: Set<string>;
+    rootCwd: string;
+    rootManifest: Manifest | undefined;
+}
+export type ResolveSourceMap = (options: ResolveSourceMapOptions) => Promise<SourceMap[]> | SourceMap[];
+export type HandleInput = (input: Input) => string | undefined;
+type RegisterCompilerInput = {
+    extension: string;
+    compiler: Compiler;
+};
+export type RegisterCompiler = (input: RegisterCompilerInput) => void;
+export type ResolveFromAST = (program: Program, options: PluginOptions & {
+    readFile: (filePath: string) => string;
+}) => Input[];
+type RegisterCompilersOptions = {
+    cwd: string;
+    dependencies: Set<string>;
+    hasDependency: HasDependency;
+    registerCompiler: RegisterCompiler;
+};
+export type RegisterCompilers = (options: RegisterCompilersOptions) => Promise<void> | void;
+export type PluginVisitorContext = {
+    filePath: string;
+    sourceText: string;
+    addScript: (script: string) => void;
+    addImport: (specifier: string, pos: number, modifiers: number) => void;
+    markImportExpressionHandled: (pos: number) => void;
+    addImportGlob: (patterns: string[], options?: {
+        base?: string;
+        cwd?: string;
+        filter?: RegExp;
+        analyzeExports?: boolean;
+    }) => void;
+    markExportRegistered: (name: string) => void;
+};
+export type PluginVisitorObject = VisitorObject;
+export type RegisterVisitorsOptions = {
+    ctx: PluginVisitorContext;
+    registerVisitor: (visitor: PluginVisitorObject) => void;
+    registeredPlugins: Set<string>;
+};
+export type RegisterVisitors = (options: RegisterVisitorsOptions) => void;
+export interface Plugin {
+    title: string;
+    args?: Args;
+    packageJsonPath?: string | ((manifest: PackageJson) => unknown);
+    enablers?: IgnorePatterns | string;
+    isEnabled?: IsPluginEnabled;
+    isRootOnly?: boolean;
+    config?: string[] | ((options: {
+        cwd: string;
+    }) => string[]);
+    entry?: string[];
+    production?: string[];
+    project?: string[];
+    setup?: PluginSetup;
+    isLoadConfig?: IsLoadConfig;
+    isLoadConfigOptional?: boolean;
+    parseConfig?: ParseConfig;
+    resolveConfig?: ResolveConfig;
+    resolve?: Resolve;
+    resolveSourceMap?: ResolveSourceMap;
+    resolveFromAST?: ResolveFromAST;
+    isFilterTransitiveDependencies?: boolean;
+    registerCompilers?: RegisterCompilers;
+    registerVisitors?: RegisterVisitors;
+}
+export type PluginMap = Record<PluginName, Plugin>;
+export type Entries = [PluginName, Plugin][];

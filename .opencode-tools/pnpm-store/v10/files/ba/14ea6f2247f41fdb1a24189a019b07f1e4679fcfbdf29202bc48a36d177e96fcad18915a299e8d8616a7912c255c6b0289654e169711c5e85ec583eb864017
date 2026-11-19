@@ -1,0 +1,68 @@
+import parseArgs from '../../util/parse-args.js';
+import { isBinary, toBinary, toModule, toDependency } from '../../util/input.js';
+import { extractBinary, isValidBinary, stripVersionFromSpecifier } from '../../util/modules.js';
+import { isInternal } from '../../util/path.js';
+import { argsAfter, expandScript, npmBooleanAliases, npmBooleanFlags } from '../util.js';
+const runCommands = new Set(['run', 'run-script', 'rum', 'urn']);
+const lifecycleScripts = new Map([
+    ['start', 'start'],
+    ['stop', 'stop'],
+    ['restart', 'restart'],
+    ['test', 'test'],
+    ['t', 'test'],
+    ['tst', 'test'],
+]);
+export const resolve = (_binary, words, options) => {
+    const { fromArgs, manifest } = options;
+    const parsed = parseArgs(words, {
+        isStorePositions: true,
+        boolean: [...npmBooleanFlags, 'parseable'],
+        string: ['package', 'call'],
+        alias: { ...npmBooleanAliases, parseable: 'p', call: 'c' },
+        '--': true,
+    });
+    const [command, script] = parsed._;
+    if (command === 'exec' || command === 'x') {
+        const packages = parsed.package ? [parsed.package].flat() : [];
+        const packageInputs = packages.map(specifier => isInternal(specifier)
+            ? toModule(specifier, { optional: true, dir: options.cwd })
+            : toDependency(stripVersionFromSpecifier(specifier), { optional: true }));
+        const separator = words.findIndex(word => word.value === '--');
+        const args = parsed.positionalIndices.slice(1).map(index => words[index]);
+        if (separator !== -1)
+            args.push(...words.slice(separator + 1));
+        const call = Array.isArray(parsed.call) ? parsed.call.at(-1) : parsed.call;
+        if (call)
+            return packages.length ? packageInputs : fromArgs([call]);
+        const specifier = args[0]?.value;
+        if (!specifier)
+            return packageInputs;
+        const npmWords = separator === -1 ? words : words.slice(0, separator);
+        const noInstall = parsed.no || npmWords.some(word => word.value === '--yes=false' || word.value === '--no-yes');
+        const inputOptions = noInstall && packages.length === 0 ? undefined : { optional: true };
+        const isPackage = packages.length === 0 && specifier.includes('@') && !isInternal(specifier);
+        if (isPackage && specifier.startsWith('@')) {
+            return [toDependency(stripVersionFromSpecifier(specifier), inputOptions)];
+        }
+        const inputs = fromArgs([args.map(word => word.text).join(' ')]);
+        const first = inputs[0];
+        if (first && isBinary(first) && first.specifier === extractBinary(specifier)) {
+            if (isPackage)
+                inputs[0] = toDependency(stripVersionFromSpecifier(specifier), inputOptions);
+            else if (inputOptions)
+                first.optional = true;
+        }
+        else if (isPackage || (!isInternal(specifier) && !specifier.includes('/') && isValidBinary(specifier))) {
+            inputs.unshift(isPackage
+                ? toDependency(stripVersionFromSpecifier(specifier), inputOptions)
+                : toBinary(extractBinary(specifier), inputOptions));
+        }
+        return [...packageInputs, ...inputs];
+    }
+    const _childArgs = parsed['--'] && parsed['--'].length > 0 ? fromArgs(argsAfter(words, '--'), { isForwardedArgs: true }) : [];
+    const name = runCommands.has(command) ? script : lifecycleScripts.get(command);
+    if (name && manifest.scriptNames.has(name)) {
+        return expandScript(name, argsAfter(words, '--'), manifest.scripts, options) ?? _childArgs;
+    }
+    return [];
+};
