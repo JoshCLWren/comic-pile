@@ -1140,13 +1140,353 @@ pub async fn preview_reading_graph(
 }
 
 // ============================================================================
-// Helper for not_found
+// Helper functions
 // ============================================================================
 
 use axum::http::StatusCode;
 
+/// Helper function for not_found
 impl ApiError {
     fn not_found(message: String) -> Self {
         ApiError::NotFound(message)
+    }
+}
+
+fn empty_counts() -> serde_json::Map<String, serde_json::Value> {
+    [
+        ("already_confirmed", 0i64),
+        ("safe_exact_match", 0i64),
+        ("needs_review_ambiguous", 0i64),
+        ("needs_review_conflict", 0i64),
+        ("unresolved", 0i64),
+        ("excluded_special", 0i64),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), serde_json::json!(v)))
+    .collect()
+}
+
+/// Normalize an issue number for classification purposes
+fn normalize_issue_number(value: &str) -> String {
+    let stripped = value.trim().strip_suffix('.').unwrap_or(value.trim());
+    if !stripped.is_empty() && stripped.bytes().all(|b| b.is_ascii_digit()) {
+        return stripped.to_string();
+    }
+    let groups: Vec<&str> = stripped.split(',').collect();
+    if groups.len() > 1
+        && (1..=3).contains(&groups[0].len())
+        && groups[0].bytes().all(|b| b.is_ascii_digit())
+        && groups[1..]
+            .iter()
+            .all(|g| g.len() == 3 && g.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return groups.join("");
+    }
+    String::new()
+}
+
+fn is_special_issue(issue_number: &str) -> bool {
+    let stripped = issue_number.trim().to_lowercase();
+    if stripped.is_empty() {
+        return true;
+    }
+    if stripped.chars().all(|c| matches!(c, 'i' | 'v' | 'x')) {
+        return false;
+    }
+    let words = [
+        "annual",
+        "special",
+        "hc",
+        "tpb",
+        "gn",
+        "omnibus",
+        "deluxe",
+        "absolute",
+        "hardcover",
+        "trade paperback",
+        "graphic novel",
+    ];
+    let tokens: Vec<&str> = stripped
+        .split(|c: char| !c.is_alphabetic())
+        .filter(|x| !x.is_empty())
+        .collect();
+    if words.iter().any(|w| {
+        if w.contains(' ') {
+            stripped.contains(w)
+        } else {
+            tokens.contains(w)
+        }
+    }) {
+        return true;
+    }
+    if !stripped.bytes().any(|c| c.is_ascii_digit()) {
+        return true;
+    }
+    // Python treats a nonnumeric trailing decimal suffix as special.
+    stripped
+        .rsplit_once('.')
+        .is_some_and(|(_, tail)| !tail.is_empty() && !tail.bytes().any(|c| c.is_ascii_digit()))
+}
+
+fn is_ambiguous_issue(issue_number: &str) -> bool {
+    normalize_issue_number(issue_number).is_empty()
+}
+
+/// Classify rows and update counts
+fn classify_rows(
+    issues: &[serde_json::Value],
+    provider: &str,
+    _scope_mode: &str,
+) -> (Vec<serde_json::Value>, serde_json::Map<String, serde_json::Value>) {
+    let mut counts = empty_counts();
+    let mut candidates: Vec<serde_json::Value> = Vec::new();
+    let mut normalized_counts: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+
+    // First pass: collect unique issues by issue_id, tracking precedence for conflicts
+    let mut seen_issue_ids: std::collections::HashMap<i64, serde_json::Value> = std::collections::HashMap::new();
+
+    for row in issues {
+        if let Some(issue_id) = row.get("issue_id").and_then(|v| v.as_i64()) {
+            if let Some(existing) = seen_issue_ids.get_mut(&issue_id) {
+                // Compare precedence: lower is better
+                let existing_rank = row_precedence_key(existing, provider);
+                let new_rank = row_precedence_key(row, provider);
+                if new_rank < existing_rank {
+                    *existing = row.clone();
+                }
+            } else {
+                seen_issue_ids.insert(issue_id, row.clone());
+            }
+        }
+    }
+
+    // Compute normalized issue number counts for duplicate detection
+    for row in seen_issue_ids.values() {
+        if row.get("_is_origin").and_then(|v| v.as_bool()) == Some(true) {
+            continue;
+        }
+        let num = row.get("issue_number").and_then(|v| v.as_str()).unwrap_or("");
+        if !is_special_issue(num) && !is_ambiguous_issue(num) {
+            let normalized = normalize_issue_number(num);
+            if !normalized.is_empty() {
+                *normalized_counts.entry(normalized).or_default() += 1;
+            }
+        }
+    }
+
+    let mut result = Vec::new();
+
+    for (id, mut row) in seen_issue_ids {
+        let issue_number = row.get("issue_number").and_then(|v| v.as_str()).unwrap_or("");
+        let status = row.get("current_mapping_status").and_then(|v| v.as_str());
+
+        // Check for conflict (confirmed to different provider)
+        let conflicting = status == Some("confirmed")
+            && row.get("provider").and_then(|v| v.as_str()) != Some(provider);
+
+        // Calculate classification
+        let normalized = normalize_issue_number(issue_number);
+        let origin_normalized = normalize_issue_number(
+            &row.get("_is_origin")
+                .and_then(|v| v.as_bool())
+                .map(|_| "")
+                .unwrap_or(issue_number),
+        );
+
+        let classification = if is_special_issue(issue_number) {
+            "excluded_special"
+        } else if conflicting {
+            "needs_review_conflict"
+        } else if is_ambiguous_issue(issue_number) {
+            "needs_review_ambiguous"
+        } else if status == Some("confirmed") {
+            "already_confirmed"
+        } else if status == Some("candidate") {
+            "unresolved"
+        } else if !normalized.is_empty() && normalized_counts.get(&normalized) == Some(&1) {
+            "safe_exact_match"
+        } else {
+            let sibling_roster = row.get("_sibling_roster").and_then(|v| v.as_str());
+            match sibling_roster {
+                Some("unique") => "safe_exact_match",
+                Some("duplicate") => "needs_review_ambiguous",
+                _ => "unresolved",
+            }
+        };
+
+        let classification = classification;
+
+        // Update counts
+        if let Some(count) = counts.get_mut(classification) {
+            if let Some(int_val) = count.as_i64() {
+                *count = serde_json::json!(int_val + 1);
+            }
+        }
+
+        // Add row_id, classification, proposed_mapping, default_selected
+        let prefix = if row.get("_roster_only").and_then(|v| v.as_bool()).unwrap_or(false) {
+            "roster:"
+        } else {
+            "issue:"
+        };
+        let row_id = format!("{}{}", prefix, id);
+
+        let as_object = row.as_object_mut().unwrap_or(&mut serde_json::Map::new());
+        as_object.insert("row_id".to_string(), serde_json::json!(row_id));
+        as_object.insert("classification".to_string(), serde_json::json!(classification));
+        as_object.insert("proposed_mapping".to_string(), serde_json::json!(classification == "safe_exact_match" || classification == "already_confirmed"));
+        as_object.insert("default_selected".to_string(), serde_json::json!(classification == "safe_exact_match"));
+
+        result.push(row);
+    }
+
+    (result, counts)
+}
+
+fn row_precedence_key(row: &serde_json::Value, _provider: &str) -> (u8, u8, u8, String, String) {
+    let status = row.get("current_mapping_status").and_then(|v| v.as_str()).unwrap_or("");
+    let rank = match status {
+        "confirmed" => 0u8,
+        "candidate" => 1,
+        "unresolved" => 2,
+        "rejected" => 3,
+        _ => 4,
+    };
+    (
+        u8::from(row.get("thread_id").is_none_or(|v| v.is_null())),
+        u8::from(row.get("_sibling_roster").and_then(|v| v.as_str()) != Some("unique")),
+        rank,
+        row.get("external_id").and_then(|v| v.as_str()).unwrap_or("").to_owned(),
+        row.get("issue_number")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_owned(),
+    )
+}
+
+/// Compute state digest matching Python's format
+fn compute_state_digest(
+    provider: &str,
+    provider_series_external_id: &str,
+    origin_issue_id: i32,
+    scope_key: Option<&str>,
+    scope_basis: &str,
+    rows: &[serde_json::Value],
+    scope_mode: &str,
+) -> String {
+    let sha256_hex = |bytes: &[u8]| -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    };
+
+    let mut parts = vec![
+        format!("mode={scope_mode}"),
+        format!("provider={provider}"),
+        format!("series={provider_series_external_id}"),
+        format!("origin={origin_issue_id}"),
+        format!("scope={}", scope_key.unwrap_or("")),
+        format!("basis={scope_basis}"),
+    ];
+
+    for row in rows {
+        let row_id = match row.get("issue_id") {
+            Some(serde_json::Value::Null) | None => "issue:None".to_string(),
+            Some(v) => match v.as_i64() {
+                Some(id) => format!("issue:{id}"),
+                None => format!("issue:{}", v.as_str().unwrap_or("None")),
+            },
+        };
+        let issue_number = row.get("issue_number").and_then(|v| v.as_str()).unwrap_or("");
+        let classification = row.get("classification").and_then(|v| v.as_str()).unwrap_or("");
+        let current_mapping_status = match row.get("current_mapping_status") {
+            Some(serde_json::Value::Null) | None => String::new(),
+            Some(v) => v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
+                if v.is_null() {
+                    String::new()
+                } else {
+                    v.to_string().trim_matches('"').to_string()
+                }
+            }),
+        };
+        let rprovider = row.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+        let external_id = row.get("external_id").and_then(|v| v.as_str()).unwrap_or("");
+        let thread_id = match row.get("thread_id") {
+            Some(serde_json::Value::Null) | None => String::new(),
+            Some(v) => {
+                if let Some(i) = v.as_i64() {
+                    i.to_string()
+                } else if let Some(s) = v.as_str() {
+                    s.to_string()
+                } else {
+                    String::new()
+                }
+            }
+        };
+        let meta_refresh = row.get("metadata_refresh_required").and_then(|v| v.as_bool()).unwrap_or(false);
+        let meta_str = if meta_refresh { "True" } else { "False" };
+        parts.push(format!("{row_id}|{issue_number}|{classification}|{current_mapping_status}|{rprovider}|{external_id}|{thread_id}|{meta_str}"));
+    }
+
+    let content = parts.join("\n");
+    let mut hasher = Sha256::new();
+    hasher.update(content.as_bytes());
+    sha256_hex(&hasher.finalize())
+}
+
+/// Generate a preview token compatible with Python's implementation
+fn generate_preview_token(secret: &str, payload: &serde_json::Value) -> Result<String, ApiError> {
+    // Canonical JSON matching Python json.dumps(obj, sort_keys=True, separators=(', ', ': '))
+    let canonical = canonical_json(payload);
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|_| ApiError::Internal("signature unavailable".to_string()))?;
+    mac.update(canonical.as_bytes());
+    let signature = sha256_hex(&mac.finalize().into_bytes());
+
+    let token_data = serde_json::json!({
+        "payload": payload,
+        "signature": signature,
+    });
+
+    serde_json::to_string(&token_data)
+        .map_err(|_| ApiError::Internal("token serialization failed".to_string()))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Canonical JSON matching Python json.dumps(obj, sort_keys=True) default separators.
+/// Python's default separators are (', ', ': ').
+fn canonical_json(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Null => "null".to_string(),
+        serde_json::Value::Bool(b) => if *b { "true" } else { "false" }.to_string(),
+        serde_json::Value::Number(n) => n.to_string(),
+        serde_json::Value::String(s) => {
+            let encoded = serde_json::to_string(s).unwrap_or_default();
+            let mut ascii = String::with_capacity(encoded.len());
+            for ch in encoded.chars() {
+                if ch.is_ascii() {
+                    ascii.push(ch);
+                } else {
+                    for unit in ch.encode_utf16(&mut [0; 2]) {
+                        ascii.push_str(&format!("\\u{unit:04x}"));
+                    }
+                }
+            }
+            ascii
+        }
+        serde_json::Value::Array(a) => {
+            let items: Vec<String> = a.iter().map(canonical_json).collect();
+            format!("[{}]", items.join(", "))
+        }
+        serde_json::Value::Object(m) => {
+            let mut keys: Vec<&String> = m.keys().collect();
+            keys.sort();
+            let items: Vec<String> = keys
+                .into_iter()
+                .map(|k| format!("{}: {}", canonical_json(&serde_json::Value::String(k.clone())), canonical_json(&m[k])))
+                .collect();
+            format!("{{{}}}", items.join(", "))
+        }
     }
 }
