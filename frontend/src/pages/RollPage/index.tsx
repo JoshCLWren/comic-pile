@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { queryKeys } from '../../query/queryKeys'
+import type { ThreadListItem, ThreadListResponse } from '../../types'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import {
@@ -341,24 +343,36 @@ export default function RollPage() {
   })
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
-  // Snoozed bootstrap summaries carry only series identity. Resolve their
-  // representative covers in one bounded paginated thread-list scan, never
-  // a request per row, only when the shelf is expanded.
+  // Snoozed bootstrap summaries have no owned issue id. Reuse cached
+  // series projections, then at most one bounded Queue page; never scan an
+  // arbitrary number of pages just to paint a shelf thumbnail.
   const snoozedCoverQuery = useQuery({
-    queryKey: ['roll', 'snoozed-series-covers', snoozedThreads.map((thread) => thread.id).sort((a, b) => a - b)],
+    queryKey: queryKeys.roll.snoozedSeriesCovers(snoozedThreads.map((thread) => thread.id)),
     queryFn: async (): Promise<Record<number, string | null>> => {
       const remaining = new Set(snoozedThreads.map((thread) => thread.id))
       const covers: Record<number, string | null> = {}
-      let pageToken: string | null = null
-      do {
-        const page = await threadsApi.list({ page_size: 200 }, pageToken)
-        for (const thread of page.threads) {
+      const applyThreads = (threads: ThreadListItem[]) => {
+        for (const thread of threads) {
           if (!remaining.has(thread.id)) continue
           covers[thread.id] = thread.series_cover_image_url ?? null
           remaining.delete(thread.id)
         }
-        pageToken = page.next_page_token ?? null
-      } while (pageToken && remaining.size > 0)
+      }
+
+      // Planner and Queue may have already read exactly these series.
+      applyThreads(queryClient.getQueryData<ThreadListItem[]>(queryKeys.thread.list()) ?? [])
+      const loadedQueuePages = queryClient.getQueriesData<InfiniteData<ThreadListResponse>>({
+        queryKey: queryKeys.queue.pages(),
+      })
+      for (const [, pageData] of loadedQueuePages) {
+        for (const page of pageData?.pages ?? []) applyThreads(page.threads)
+      }
+      if (remaining.size > 0) {
+        const page = await threadsApi.list({ page_size: 200 })
+        applyThreads(page.threads)
+      }
+      // A series not found in loaded or first-page data keeps the shared
+      // no-cover placeholder; loading the entire graph is not warranted.
       return covers
     },
     enabled: state.snoozedExpanded && snoozedThreads.length > 0 && !state.isRatingView,
