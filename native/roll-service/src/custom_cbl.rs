@@ -1,21 +1,15 @@
-//! Custom CBL (Reading List) authoring endpoints on /api/v1/custom-cbls paths.
+//! Reading List authoring operations on /api/v2/reading-lists paths.
 //!
-//! These endpoints mirror the Python custom-cbls surface with identical wire
-//! contracts. They reuse the same database tables and authorization logic as
-//! the /api/v2/reading-lists endpoints but expose the v1 API paths and
-//! response shapes expected by existing clients.
+//! Issue search, export, Reading Plan application and overlap decisions.
+//! They share tables and authorization logic with the canonical
+//! `reading_list` resource handlers.
 
 use crate::{
     auth::AuthenticatedUser,
     cbl_catalog::{ValidationErrorItem, ValidationErrorResponse},
-    db, option_inputs, reading_blocker_projection,
+    db, option_inputs,
     reading_constraints::ValidatedReadingInputs,
-    reading_eligibility,
     reading_graph::custom_cbl_cycle_conflict,
-    reading_list::{
-        ReadingListBlockerExplanation, ReadingListDependency, ReadingListReader,
-        ReadingListReaderEntry,
-    },
     ApiError, AppState,
 };
 use axum::{
@@ -183,6 +177,7 @@ async fn lock_reader(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError>
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_name(name: &str) -> Result<String, ApiError> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > 200 {
@@ -193,6 +188,7 @@ fn validate_name(name: &str) -> Result<String, ApiError> {
     Ok(name.to_string())
 }
 
+#[allow(dead_code)]
 fn validate_mode(mode: Option<&str>) -> Result<String, ApiError> {
     match mode.unwrap_or("loose") {
         "strict" => Ok("strict".to_string()),
@@ -203,6 +199,7 @@ fn validate_mode(mode: Option<&str>) -> Result<String, ApiError> {
     }
 }
 
+#[allow(dead_code)]
 async fn owned_issue_ids(
     tx: &Transaction<'_>,
     user_id: i32,
@@ -258,6 +255,7 @@ async fn load_entries(
         .collect())
 }
 
+#[allow(dead_code)]
 async fn load_list(
     conn: &deadpool_postgres::Object,
     list_id: i32,
@@ -288,6 +286,7 @@ async fn load_list(
     }))
 }
 
+#[allow(dead_code)]
 fn list_item_from_row(
     row: (i32, String, Option<String>, String, String, i32),
 ) -> CustomCBLListItem {
@@ -301,6 +300,7 @@ fn list_item_from_row(
     }
 }
 
+#[allow(dead_code)]
 fn response_from_row(
     row: (i32, String, Option<String>, String, String, String, i32),
     user_id: i32,
@@ -323,6 +323,7 @@ fn response_from_row(
     }
 }
 
+#[allow(dead_code)]
 async fn graph_preflight(
     tx: &Transaction<'_>,
     user: &AuthenticatedUser,
@@ -344,6 +345,7 @@ async fn graph_preflight(
 /// skipped Issues inside those Threads are reported even though execution
 /// ignores them. The same bounded snapshot feeds the cycle preflight, so no
 /// extra round trip is needed here.
+#[allow(dead_code)]
 fn strict_coverage_warnings(
     inputs: &option_inputs::OptionInputs,
     entries: &[CustomCBLEntryResponse],
@@ -443,6 +445,7 @@ fn strict_coverage_warnings(
     warnings
 }
 
+#[allow(dead_code)]
 fn stored_requirements(mode: &str, entries: &[CustomCBLEntryResponse]) -> BTreeMap<i32, Vec<i32>> {
     let mut results = BTreeMap::new();
     let mut earlier = Vec::<i32>::new();
@@ -476,6 +479,7 @@ fn stored_requirements(mode: &str, entries: &[CustomCBLEntryResponse]) -> BTreeM
     results
 }
 
+#[allow(dead_code)]
 fn predecessor_changes(
     before: &BTreeMap<i32, Vec<i32>>,
     after: &BTreeMap<i32, Vec<i32>>,
@@ -507,6 +511,7 @@ fn predecessor_changes(
         .collect()
 }
 
+#[allow(dead_code)]
 fn confirmed_changes_match(
     actual: &[CustomCBLPredecessorChange],
     confirmed: &[CustomCBLPredecessorChange],
@@ -525,6 +530,7 @@ fn confirmed_changes_match(
     left == right
 }
 
+#[allow(dead_code)]
 fn normalize_checkpoint_targets(
     issue_ids: &[i32],
     checkpoint_issue_ids: Option<&Vec<i32>>,
@@ -598,6 +604,7 @@ fn normalize_checkpoint_targets(
     Ok(targets)
 }
 
+#[allow(dead_code)]
 fn invalid_checkpoint_targets() -> ApiError {
     ApiError::structured(
         StatusCode::UNPROCESSABLE_ENTITY,
@@ -605,6 +612,7 @@ fn invalid_checkpoint_targets() -> ApiError {
     )
 }
 
+#[allow(dead_code)]
 fn issue_not_owned(issue_ids: &[i32], owned: &BTreeSet<i32>) -> ApiError {
     let missing: Vec<i32> = issue_ids
         .iter()
@@ -1000,152 +1008,7 @@ fn guard_version(current: &str, expected: Option<&str>) -> Result<(), ApiError> 
 // Handlers
 // ========================================================================
 
-/// `GET /api/v1/custom-cbls`
-pub async fn list_custom_cbls(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-) -> Result<Json<Vec<CustomCBLListItem>>, ApiError> {
-    let conn = db::checkout(&state).await?;
-    let rows = conn
-        .query(
-            "SELECT l.id, l.name, l.description, l.mode, l.updated_at::text,
-                    (SELECT count(*)::int FROM custom_cbl_entries e WHERE e.list_id=l.id)
-             FROM custom_cbl_lists l
-             WHERE l.user_id=$1
-              ORDER BY l.updated_at DESC, l.id DESC",
-            &[&user.id()],
-        )
-        .await
-        .map_err(db::query_error)?;
-    Ok(Json(
-        rows.iter()
-            .map(|row| {
-                list_item_from_row((
-                    row.get(0),
-                    row.get(1),
-                    row.get(2),
-                    row.get(3),
-                    row.get(4),
-                    row.get(5),
-                ))
-            })
-            .collect(),
-    ))
-}
-
-/// `POST /api/v1/custom-cbls`
-pub async fn create_custom_cbl(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    Json(request): Json<CustomCBLWrite>,
-) -> Result<(StatusCode, Json<CustomCBLResponse>), ApiError> {
-    if request.confirmed_predecessor_changes.is_some() {
-        return Err(ApiError::Unprocessable(
-            "reading_list_confirmation_put_only".to_string(),
-        ));
-    }
-    let name = validate_name(&request.name)?;
-    let mode = validate_mode(request.mode.as_deref())?;
-    let mut conn = db::checkout(&state).await?;
-    let tx = conn
-        .build_transaction()
-        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
-        .start()
-        .await
-        .map_err(db::query_error)?;
-    lock_reader(&tx, user.id()).await?;
-
-    let unique: BTreeSet<i32> = request.issue_ids.iter().copied().collect();
-    if unique.len() != request.issue_ids.len() {
-        tx.rollback().await.map_err(db::query_error)?;
-        return Err(ApiError::BadRequest("issue_ids must be unique".to_string()));
-    }
-    let owned = owned_issue_ids(&tx, user.id(), &request.issue_ids).await?;
-    if owned.len() != request.issue_ids.len() {
-        tx.rollback().await.map_err(db::query_error)?;
-        return Err(issue_not_owned(&request.issue_ids, &owned));
-    }
-
-    let row = tx
-        .query_one(
-            "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at)
-             VALUES ($1,$2,$3,$4,NOW(),NOW())
-             RETURNING id, created_at::text, updated_at::text",
-            &[
-                &user.id(),
-                &name,
-                &request.description,
-                &mode,
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let list_id: i32 = row.get(0);
-    let checkpoint_targets = normalize_checkpoint_targets(
-        &request.issue_ids,
-        request.checkpoint_issue_ids.as_ref(),
-        request.checkpoint_targets.as_ref(),
-        &[],
-    )?;
-    for (position, issue_id) in request.issue_ids.iter().enumerate() {
-        let intent = request
-            .entry_intents
-            .as_ref()
-            .and_then(|intents| intents.get(issue_id));
-        let gate = intent.map(|value| value.gate.as_str()).unwrap_or("none");
-        if !matches!(gate, "none" | "hold" | "after_previous") {
-            tx.rollback().await.map_err(db::query_error)?;
-            return Err(ApiError::BadRequest("Invalid gate".to_string()));
-        }
-        let skipped = intent.is_some_and(|value| value.skipped);
-        let targets = checkpoint_targets
-            .get(issue_id)
-            .cloned()
-            .unwrap_or_default();
-        tx.execute(
-            "INSERT INTO custom_cbl_entries
-               (list_id, issue_id, position, created_at, is_checkpoint,
-                checkpoint_target_issue_ids, gate, skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[
-                &list_id,
-                issue_id,
-                &(position as i32),
-                &checkpoint_targets.contains_key(issue_id),
-                &serde_json::to_string(&targets).map_err(|e| {
-                    tracing::debug!(
-                        error_kind = crate::error_kind(&e),
-                        "preserved underlying error before mapping"
-                    );
-                    ApiError::Internal("Invalid checkpoint".to_string())
-                })?,
-                &gate,
-                &skipped,
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
-    }
-
-    let inputs = graph_preflight(&tx, &user).await?;
-    let entries = load_entries(&tx, list_id).await?;
-    let warnings = strict_coverage_warnings(&inputs, &entries, &mode);
-    let list_row = (
-        list_id,
-        name.clone(),
-        request.description.clone(),
-        mode.clone(),
-        row.get(1),
-        row.get(2),
-        entries.len() as i32,
-    );
-    tx.commit().await.map_err(db::query_error)?;
-
-    let response = response_from_row(list_row, user.id(), entries, Vec::new(), warnings);
-    Ok((StatusCode::CREATED, Json(response)))
-}
-
-/// `GET /api/v1/custom-cbls/issue-search`
+/// `GET /api/v2/reading-lists/issue-candidates`
 pub async fn search_custom_cbl_issues(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1331,26 +1194,7 @@ fn parse_search_limit(
     }
 }
 
-/// `GET /api/v1/custom-cbls/{list_id}`
-pub async fn get_custom_cbl(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    Path(list_id): Path<i32>,
-) -> Result<Json<CustomCBLResponse>, ApiError> {
-    let conn = db::checkout(&state).await?;
-    let Some(row) = load_list(&conn, list_id, user.id()).await? else {
-        return Err(ApiError::NotFound("Reading List not found".to_string()));
-    };
-    let entries = load_entries_conn(&conn, list_id).await?;
-    Ok(Json(response_from_row(
-        row,
-        user.id(),
-        entries,
-        Vec::new(),
-        Vec::new(),
-    )))
-}
-
+#[allow(dead_code)]
 async fn load_entries_conn(
     conn: &deadpool_postgres::Object,
     list_id: i32,
@@ -1390,183 +1234,7 @@ async fn load_entries_conn(
         .collect())
 }
 
-/// `PUT /api/v1/custom-cbls/{list_id}`
-pub async fn update_custom_cbl(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    Path(list_id): Path<i32>,
-    Json(request): Json<CustomCBLWrite>,
-) -> Result<Response, ApiError> {
-    let name = validate_name(&request.name)?;
-    let mut conn = db::checkout(&state).await?;
-    let tx = conn
-        .build_transaction()
-        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
-        .start()
-        .await
-        .map_err(db::query_error)?;
-    lock_reader(&tx, user.id()).await?;
-    let row = tx
-        .query_opt(
-            "SELECT name,description,mode,created_at::text FROM custom_cbl_lists
-             WHERE id=$1 AND user_id=$2 FOR UPDATE",
-            &[&list_id, &user.id()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
-    let current_mode: String = row.get(2);
-    let mode = validate_mode(request.mode.as_deref().or(Some(&current_mode)))?;
-    let old_entries = load_entries(&tx, list_id).await?;
-    let old_requirements = stored_requirements(&current_mode, &old_entries);
-    let old_by_issue: BTreeMap<i32, CustomCBLEntryResponse> = old_entries
-        .iter()
-        .cloned()
-        .map(|entry| (entry.issue_id, entry))
-        .collect();
-
-    let unique: BTreeSet<i32> = request.issue_ids.iter().copied().collect();
-    if unique.len() != request.issue_ids.len() {
-        return Err(ApiError::BadRequest("issue_ids must be unique".into()));
-    }
-    let owned = owned_issue_ids(&tx, user.id(), &request.issue_ids).await?;
-    if owned != unique {
-        return Err(issue_not_owned(&request.issue_ids, &owned));
-    }
-    let checkpoint_targets = normalize_checkpoint_targets(
-        &request.issue_ids,
-        request.checkpoint_issue_ids.as_ref(),
-        request.checkpoint_targets.as_ref(),
-        &old_entries,
-    )?;
-    tx.execute(
-        "UPDATE custom_cbl_lists
-         SET name=$3,description=$4,mode=$5,updated_at=NOW()
-         WHERE id=$1 AND user_id=$2",
-        &[&list_id, &user.id(), &name, &request.description, &mode],
-    )
-    .await
-    .map_err(db::query_error)?;
-    tx.execute(
-        "DELETE FROM custom_cbl_entries WHERE list_id=$1",
-        &[&list_id],
-    )
-    .await
-    .map_err(db::query_error)?;
-
-    for (position, issue_id) in request.issue_ids.iter().enumerate() {
-        let old = old_by_issue.get(issue_id);
-        let intent = request
-            .entry_intents
-            .as_ref()
-            .and_then(|intents| intents.get(issue_id));
-        let gate = intent
-            .map(|entry| entry.gate.as_str())
-            .or_else(|| old.map(|entry| entry.gate.as_str()))
-            .unwrap_or("none");
-        if !matches!(gate, "none" | "hold" | "after_previous") {
-            return Err(ApiError::BadRequest("Invalid gate".into()));
-        }
-        let skipped = intent
-            .map(|entry| entry.skipped)
-            .or_else(|| old.map(|entry| entry.skipped))
-            .unwrap_or(false);
-        let targets = checkpoint_targets
-            .get(issue_id)
-            .cloned()
-            .unwrap_or_default();
-        let targets_json = serde_json::to_string(&targets).map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            ApiError::Internal("Invalid checkpoint".into())
-        })?;
-        tx.execute(
-            "INSERT INTO custom_cbl_entries
-             (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[&list_id, issue_id, &(position as i32), &(!targets.is_empty()),
-              &targets_json, &gate, &skipped],
-        )
-        .await
-        .map_err(db::query_error)?;
-    }
-
-    let inputs = graph_preflight(&tx, &user).await?;
-    let entries = load_entries(&tx, list_id).await?;
-    let new_requirements = stored_requirements(&mode, &entries);
-    let labels: BTreeMap<i32, String> = old_entries
-        .iter()
-        .chain(entries.iter())
-        .map(|entry| {
-            (
-                entry.issue_id,
-                format!("{} #{}", entry.series_name, entry.issue_number),
-            )
-        })
-        .collect();
-    let changes = predecessor_changes(&old_requirements, &new_requirements, &labels);
-    let confirmation: Vec<CustomCBLPredecessorChange> = request
-        .confirmed_predecessor_changes
-        .as_ref()
-        .map_or(Ok(Vec::new()), |value| {
-            serde_json::from_value(value.clone()).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                ApiError::Unprocessable("Invalid predecessor confirmation".into())
-            })
-        })?;
-    if !changes.is_empty() && !confirmed_changes_match(&changes, &confirmation) {
-        return Ok((
-            StatusCode::CONFLICT,
-            Json(json!({
-                "detail": {
-                    "code": "reading_list_predecessor_confirmation_required",
-                    "predecessor_changes": changes
-                }
-            })),
-        )
-            .into_response());
-    }
-
-    let warnings = strict_coverage_warnings(&inputs, &entries, &mode);
-    let list_row = (
-        list_id,
-        name,
-        request.description,
-        mode,
-        row.get(3),
-        String::new(),
-        entries.len() as i32,
-    );
-    let mut json = serde_json::to_value(response_from_row(
-        list_row,
-        user.id(),
-        entries,
-        changes,
-        warnings,
-    ))
-    .map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        ApiError::Internal("Reading List serialization failed".into())
-    })?;
-    tx.commit().await.map_err(db::query_error)?;
-    // The metadata timestamp is selected after commit so clients get the
-    // actual persisted optimistic token rather than a manufactured clock.
-    let conn = db::checkout(&state).await?;
-    if let Some(row) = load_list(&conn, list_id, user.id()).await? {
-        json["updated_at"] = serde_json::json!(row.5);
-    }
-    Ok((StatusCode::OK, Json(json)).into_response())
-}
-
-/// `GET /api/v1/custom-cbls/{list_id}/export`
+/// `GET /api/v2/reading-lists/{list_id}/export`
 pub async fn export_custom_cbl(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1608,150 +1276,6 @@ pub async fn export_custom_cbl(
             );
             ApiError::Internal("Custom CBL export response failed".into())
         })
-}
-
-/// `GET /api/v1/custom-cbls/{list_id}/reader`
-pub async fn read_custom_cbl(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    Path(list_id): Path<i32>,
-) -> Result<Json<ReadingListReader>, ApiError> {
-    let conn = db::checkout(&state).await?;
-    let Some(row) = load_list(&conn, list_id, user.id()).await? else {
-        return Err(ApiError::NotFound("Reading List not found".to_string()));
-    };
-    let entries = load_entries_conn(&conn, list_id).await?;
-    drop(conn);
-
-    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
-    let evaluated = reading_eligibility::evaluate(&validated)?;
-    let inputs = validated.inputs();
-    let titles: BTreeMap<i32, String> = inputs
-        .core
-        .threads
-        .iter()
-        .map(|thread| (thread.id, thread.title.clone()))
-        .collect();
-    let numbers: BTreeMap<i32, String> = inputs
-        .core
-        .issues
-        .iter()
-        .map(|issue| (issue.id, issue.issue_number.clone()))
-        .collect();
-    let thread_of: BTreeMap<i32, i32> = inputs
-        .core
-        .issues
-        .iter()
-        .map(|issue| (issue.id, issue.thread_id))
-        .collect();
-    let list_names: BTreeMap<i32, String> = inputs
-        .lists
-        .iter()
-        .map(|list| (list.list_id, list.name.clone()))
-        .collect();
-    let excluded = &inputs.excluded_issue_ids;
-
-    let mut projected = vec![];
-    for entry in entries {
-        let availability;
-        let mut explanation = None;
-        if entry.status == "read" {
-            availability = "read".into();
-        } else if excluded.contains(&entry.issue_id) {
-            availability = "excluded".into();
-        } else if let Some(state) = evaluated.get(&entry.thread_id) {
-            if entry.issue_id != state.next_issue_id.unwrap_or_default() {
-                availability = "later".into();
-            } else {
-                availability = if state.eligible {
-                    "available"
-                } else {
-                    "blocked"
-                }
-                .into();
-                let mut reasons = vec![];
-                let mut dependencies = vec![];
-                for gate in
-                    reading_blocker_projection::describe_blocker_gates(state.blockers.clone())
-                {
-                    let origin = match gate.blocker.kind.as_str() {
-                        "prerequisite" => {
-                            if gate.blocker.origin.as_deref() == Some("reader") {
-                                "Reader prerequisite".to_string()
-                            } else {
-                                "Converted prerequisite".to_string()
-                            }
-                        }
-                        kind => {
-                            let label = match kind {
-                                "strict_order" => "Strict order",
-                                "hold" => "Hold",
-                                "after_previous" => "Wait for previous",
-                                "reading_cycle" => "Reading constraint cycle",
-                                other => other,
-                            };
-                            let list = gate
-                                .blocker
-                                .list_id
-                                .and_then(|id| list_names.get(&id))
-                                .map(String::as_str)
-                                .unwrap_or("Reading List");
-                            format!("{label} in {list}")
-                        }
-                    };
-                    for issue_id in gate.described_issue_ids {
-                        let series = thread_of
-                            .get(&issue_id)
-                            .and_then(|id| titles.get(id))
-                            .cloned()
-                            .unwrap_or_else(|| "Required series".to_string());
-                        let number = numbers.get(&issue_id).cloned().unwrap_or_default();
-                        let label = format!("{origin}: waiting on {series} #{number}");
-                        reasons.push(label.clone());
-                        dependencies.push(ReadingListDependency {
-                            thread_id: *thread_of.get(&issue_id).unwrap_or(&0),
-                            thread_title: series,
-                            issue_number: number,
-                            label,
-                            issue_id: Some(issue_id),
-                        });
-                    }
-                }
-                if state.next_issue_id.is_none() {
-                    reasons.push("No available unread issue".to_string());
-                }
-                explanation = Some(ReadingListBlockerExplanation {
-                    is_blocked: !state.eligible,
-                    blocking_reasons: reasons,
-                    blocking_dependencies: dependencies,
-                });
-            }
-        } else {
-            availability = "inactive".into();
-        }
-        projected.push(ReadingListReaderEntry {
-            id: entry.id,
-            position: entry.position,
-            issue_id: entry.issue_id,
-            thread_id: entry.thread_id,
-            series_name: entry.series_name,
-            issue_number: entry.issue_number,
-            status: entry.status,
-            is_checkpoint: entry.is_checkpoint,
-            gate: entry.gate,
-            skipped: entry.skipped,
-            checkpoint_target_issue_ids: entry.checkpoint_target_issue_ids,
-            availability,
-            explanation,
-        });
-    }
-    Ok(Json(ReadingListReader {
-        list_id: row.0,
-        name: row.1,
-        mode: row.3,
-        execution_mode: "option_e".to_string(),
-        entries: projected,
-    }))
 }
 
 /// Validate every merged node reference before the plan document is written.
@@ -2021,31 +1545,13 @@ fn node_lane(node: &serde_json::Value) -> &str {
     node.get("lane_id").and_then(|v| v.as_str()).unwrap_or("")
 }
 
-/// `POST /api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply`
-///
-/// The Axum router cannot express a parameter sharing a segment with the
-/// `:apply` literal, so it captures `{plan_action}` and this handler enforces
-/// the exact colon-action suffix before doing any work. Anything else keeps
-/// the Python semantics: no `:apply` suffix is a 404, a non-integer plan id is
-/// a 422.
+/// `POST /api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications`
 pub async fn apply_custom_cbl(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path((list_id, plan_action)): Path<(i32, String)>,
+    Path((list_id, plan_id)): Path<(i32, i32)>,
     Json(request): Json<CustomCBLApplyRequest>,
 ) -> Result<Json<CustomCBLApplyResponse>, ApiError> {
-    let plan_id: i32 = match plan_action.strip_suffix(":apply") {
-        Some(raw) => raw.parse::<i32>().map_err(|_| {
-            ApiError::Unprocessable(format!(
-                "Input should be a valid integer, unable to parse string as an integer: \"{raw}\""
-            ))
-        })?,
-        None => {
-            return Err(ApiError::NotFound(
-                "Reading Plan application endpoint must end with ':apply'".to_string(),
-            ))
-        }
-    };
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -2454,7 +1960,7 @@ pub async fn apply_custom_cbl(
     }))
 }
 
-/// `GET /api/v1/custom-cbls/{list_id}/overlap-decisions`
+/// `GET /api/v2/reading-lists/{list_id}/overlap-decisions`
 pub async fn get_overlap_decisions(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -2493,7 +1999,7 @@ pub async fn get_overlap_decisions(
     }))
 }
 
-/// `PUT /api/v1/custom-cbls/{list_id}/overlap-decisions`
+/// `PUT /api/v2/reading-lists/{list_id}/overlap-decisions`
 pub async fn save_overlap_decision(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -2681,7 +2187,7 @@ pub async fn save_overlap_decision(
     }))
 }
 
-/// `DELETE /api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}`
+/// `DELETE /api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}`
 pub async fn delete_overlap_decision(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -2783,43 +2289,11 @@ pub struct DeleteOverlapParams {
 // These describe the live handlers above; they are not mounted anywhere.
 // ========================================================================
 
-/// Documentation-only operation for the custom CBL list.
-#[utoipa::path(
-    get,
-    path = "/api/v1/custom-cbls",
-    tag = "custom-cbls",
-    responses(
-        (status = 200, description = "Editable custom CBL lists owned by the reader", body = Vec<CustomCBLListItem>),
-        (status = 401, description = "Not authenticated"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn list_custom_cbls_documentation() {}
-
-/// Documentation-only operation for custom CBL creation.
-#[utoipa::path(
-    post,
-    path = "/api/v1/custom-cbls",
-    tag = "custom-cbls",
-    request_body = CustomCBLWrite,
-    responses(
-        (status = 201, description = "Custom CBL created from real issues", body = CustomCBLResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 422, description = "Request body failed validation"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn create_custom_cbl_documentation() {}
-
 /// Documentation-only operation for custom CBL issue search.
 #[utoipa::path(
     get,
-    path = "/api/v1/custom-cbls/issue-search",
-    tag = "custom-cbls",
+    path = "/api/v2/reading-lists/issue-candidates",
+    tag = "reading-lists",
     params(
         ("q" = Option<String>, Query, description = "Case-insensitive title or issue-number filter, max 200 characters"),
         ("limit" = Option<i32>, Query, description = "Maximum results, 1-100 (default 30)")
@@ -2835,47 +2309,11 @@ pub fn create_custom_cbl_documentation() {}
 #[allow(dead_code)]
 pub fn search_custom_cbl_issues_documentation() {}
 
-/// Documentation-only operation for one custom CBL.
-#[utoipa::path(
-    get,
-    path = "/api/v1/custom-cbls/{list_id}",
-    tag = "custom-cbls",
-    params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
-    responses(
-        (status = 200, description = "The owned custom CBL", body = CustomCBLResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Reading List not found"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn get_custom_cbl_documentation() {}
-
-/// Documentation-only operation for custom CBL replacement.
-#[utoipa::path(
-    put,
-    path = "/api/v1/custom-cbls/{list_id}",
-    tag = "custom-cbls",
-    params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
-    request_body = CustomCBLWrite,
-    responses(
-        (status = 200, description = "The updated custom CBL", body = CustomCBLResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Reading List not found"),
-        (status = 422, description = "Request body failed validation"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn update_custom_cbl_documentation() {}
-
 /// Documentation-only operation for custom CBL export.
 #[utoipa::path(
     get,
-    path = "/api/v1/custom-cbls/{list_id}/export",
-    tag = "custom-cbls",
+    path = "/api/v2/reading-lists/{list_id}/export",
+    tag = "reading-lists",
     params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
     responses(
         (status = 200, description = "Portable .cbl XML document", content((String = "application/xml"))),
@@ -2888,28 +2326,11 @@ pub fn update_custom_cbl_documentation() {}
 #[allow(dead_code)]
 pub fn export_custom_cbl_documentation() {}
 
-/// Documentation-only operation for the custom CBL reader.
-#[utoipa::path(
-    get,
-    path = "/api/v1/custom-cbls/{list_id}/reader",
-    tag = "custom-cbls",
-    params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
-    responses(
-        (status = 200, description = "Reader with canonical availability", body = ReadingListReader),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Reading List not found"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn read_custom_cbl_documentation() {}
-
 /// Documentation-only operation for overlap decisions read.
 #[utoipa::path(
     get,
-    path = "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-    tag = "custom-cbls",
+    path = "/api/v2/reading-lists/{list_id}/overlap-decisions",
+    tag = "reading-lists",
     params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
     responses(
         (status = 200, description = "Saved overlap decisions and version token", body = OverlapDecisionSetResponse),
@@ -2925,8 +2346,8 @@ pub fn get_overlap_decisions_documentation() {}
 /// Documentation-only operation for overlap decision save.
 #[utoipa::path(
     put,
-    path = "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-    tag = "custom-cbls",
+    path = "/api/v2/reading-lists/{list_id}/overlap-decisions",
+    tag = "reading-lists",
     params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
     request_body = OverlapDecisionWrite,
     responses(
@@ -2945,8 +2366,8 @@ pub fn save_overlap_decision_documentation() {}
 /// Documentation-only operation for overlap decision removal.
 #[utoipa::path(
     delete,
-    path = "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
-    tag = "custom-cbls",
+    path = "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
+    tag = "reading-lists",
     params(
         ("list_id" = i32, Path, description = "Owned custom CBL identifier"),
         ("decision_id" = i32, Path, description = "Overlap decision identifier"),
@@ -2968,8 +2389,8 @@ pub fn delete_overlap_decision_documentation() {}
 /// Documentation-only operation for Reading Plan application.
 #[utoipa::path(
     post,
-    path = "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
-    tag = "custom-cbls",
+    path = "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
+    tag = "reading-lists",
     params(
         ("list_id" = i32, Path, description = "Owned custom CBL identifier"),
         ("plan_id" = i32, Path, description = "Continuity plan identifier")
@@ -2997,13 +2418,8 @@ pub fn apply_custom_cbl_documentation() {}
         description = "Generated contract for operations served by the native Rust router at the original custom-CBL URLs."
     ),
     paths(
-        list_custom_cbls_documentation,
-        create_custom_cbl_documentation,
         search_custom_cbl_issues_documentation,
-        get_custom_cbl_documentation,
-        update_custom_cbl_documentation,
         export_custom_cbl_documentation,
-        read_custom_cbl_documentation,
         get_overlap_decisions_documentation,
         save_overlap_decision_documentation,
         delete_overlap_decision_documentation,

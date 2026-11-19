@@ -1,5 +1,5 @@
 //! Authenticated series-mapping commit (same-path Rust cutover for #4846).
-//! Preserves the Python wire contract: POST /api/v1/catalog/series-mappings/commit.
+//! Preserves the Python wire contract: POST /api/v2/series-mapping-commits.
 //! Preview token verification and plan/state-digest revalidation must remain
 //! compatible with the Python preview implementation until #4842 migrates preview.
 
@@ -246,7 +246,7 @@ async fn replay_receipt(
 /// OpenAPI path documentation for the series-mapping commit endpoint.
 #[utoipa::path(
     post,
-    path = "/api/v1/catalog/series-mappings/commit",
+    path = "/api/v2/series-mapping-commits",
     request_body = CommitRequest,
     responses(
         (status = 200, description = "Commit result", body = CommitResponse),

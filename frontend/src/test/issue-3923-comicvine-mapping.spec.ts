@@ -37,7 +37,7 @@ for (const width of [390, 1280]) {
           reason: null }],
       } })
     })
-    await page.route('**/api/v1/catalog/series-mappings/commit', async (route) => {
+    await page.route('**/api/v2/series-mapping-commits', async (route) => {
       // SAFETY: this test owns the approval flow and asserts its row IDs before using the body.
       const body = route.request().postDataJSON() as { approved_row_ids: string[]; idempotency_key: string }
       expect(body.approved_row_ids).toEqual([`issue:${originId}`])

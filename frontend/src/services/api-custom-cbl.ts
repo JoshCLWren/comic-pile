@@ -108,16 +108,16 @@ export function createCustomCBLApi(client: HttpClient) {
       client.put<CustomCBL>(`/v2/reading-lists/${listId}`, payload),
     delete: (listId: number) => client.delete<void>(`/v2/reading-lists/${listId}`),
     searchIssues: (query: string, limit = 30) =>
-      client.get<CustomCBLIssueSearchResult[]>('/v1/custom-cbls/issue-search', {
+      client.get<CustomCBLIssueSearchResult[]>('/v2/reading-lists/issue-candidates', {
         params: { q: query, limit },
       }),
     apply: (listId: number, planId: number, laneId?: string | null) =>
       client.post<CustomCBLApplyResult>(
-        `/v1/custom-cbls/${listId}/reading-plans/${planId}:apply`,
+        `/v2/reading-lists/${listId}/reading-plans/${planId}/applications`,
         { lane_id: laneId ?? null },
       ),
     exportXml: (listId: number) =>
-      client.get<string>(`/v1/custom-cbls/${listId}/export`, { responseType: 'text' }),
+      client.get<string>(`/v2/reading-lists/${listId}/export`, { responseType: 'text' }),
   }
 }
 
