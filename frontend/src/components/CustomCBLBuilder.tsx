@@ -557,9 +557,16 @@ export default function CustomCBLBuilder({
     focusListStart()
   }
 
-  const searchResults = (issueQuery.trim() === submittedIssueQuery ? issueSearchQuery.data ?? [] : []).filter(
-    (candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id),
-  )
+  const searchResults = (issueQuery.trim() === submittedIssueQuery ? issueSearchQuery.data ?? [] : [])
+    .filter((candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id))
+    .sort((a, b) => a.series_name.localeCompare(b.series_name) || a.thread_id - b.thread_id)
+
+  // Show the series ID only when results hold several same-named series.
+  const ambiguousSeriesNames = useMemo(() => {
+    const ids = new Map<string, Set<number>>()
+    searchResults.forEach((c) => ids.set(c.series_name.toLocaleLowerCase(), (ids.get(c.series_name.toLocaleLowerCase()) ?? new Set<number>()).add(c.thread_id)))
+    return new Set([...ids].flatMap(([name, set]) => (set.size > 1 ? [name] : [])))
+  }, [searchResults])
 
   const create = (event: FormEvent) => {
     event.preventDefault()
@@ -855,7 +862,7 @@ export default function CustomCBLBuilder({
                 <div ref={issueSearchResults} className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-[var(--theme-border)] p-2" aria-label="Custom CBL issue search results">
                   {searchResults.map((candidate) => (
                     <button key={candidate.issue_id} onKeyDown={(event) => focusSearchResult(event)} type="button" onClick={() => addIssue(candidate)} disabled={disabled || isPending} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)] disabled:opacity-50">
-                      <span>{candidate.series_name} #{candidate.issue_number}</span><span className="text-xs text-[var(--theme-text-dim)]">Add</span>
+                      <span>{candidate.series_name} #{candidate.issue_number}{ambiguousSeriesNames.has(candidate.series_name.toLocaleLowerCase()) && <span className="ml-2 text-xs text-[var(--theme-text-dim)]">Series ID {candidate.thread_id}</span>}</span><span className="text-xs text-[var(--theme-text-dim)]">Add</span>
                     </button>
                   ))}
                 </div>
@@ -1021,6 +1028,12 @@ export default function CustomCBLBuilder({
                           Retry source search
                         </button>
                       </div>
+                    )}
+
+                    {cblSourcesQuery.isSuccess && !cblSourcesQuery.isFetching && cblSourcesQuery.data.length === 0 && (
+                      <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+                        No active global CBL sources match &ldquo;{cblSubmittedQuery}&rdquo;.
+                      </p>
                     )}
 
                     {(cblSourcesQuery.data?.length ?? 0) > 0 && (
