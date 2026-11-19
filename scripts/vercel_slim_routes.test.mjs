@@ -10,7 +10,7 @@ const json = file => JSON.parse(readFileSync(file, 'utf8'));
 
 function resolve(routes, method, path) {
   for (const route of routes) {
-    if (typeof route.src !== 'string') continue;
+    if (Object.prototype.toString.call(route.src) !== '[object String]') continue;
     if (!new RegExp(`^(?:${route.src})$`).test(path)) continue;
     if (route.methods && route.methods.length && !route.methods.includes(method)) continue;
     return route.dest;

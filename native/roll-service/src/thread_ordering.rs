@@ -393,7 +393,7 @@ async fn blocking_details(
     user: AuthenticatedUser,
     thread_ids: &[i32],
 ) -> Result<Vec<(i32, BlockingExplanation)>, ApiError> {
-    if crate::queue::option_e_enabled() {
+    if state.option_e {
         return option_e_explanations(state, user, thread_ids).await;
     }
     let connection = db::checkout(state).await?;
@@ -780,7 +780,7 @@ pub async fn get_thread_connected_threads(
     let connection = db::checkout(&state).await?;
     require_owned_thread(&**connection, user, thread_id).await?;
 
-    let reader_only = crate::queue::option_e_enabled();
+    let reader_only = state.option_e;
     let blocking = dependency_rows(
         &connection
             .query(CONNECTED_BLOCKING_SQL, &[&thread_id, &reader_only])

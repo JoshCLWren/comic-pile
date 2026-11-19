@@ -371,7 +371,7 @@ export function testCoversModule(testSource, module, routeTable) {
 export function checkNativeRouteDbTests(root, allowlist = ALLOWLIST) {
   for (const [module, entry] of allowlist) {
     if (!entry || !['genuine', 'gap'].includes(entry.kind)
-      || typeof entry.reason !== 'string' || entry.reason.trim().length < 20) {
+      || Object.prototype.toString.call(entry.reason) !== '[object String]' || entry.reason.trim().length < 20) {
       throw new Error(`Invalid allowlist entry for ${module}: need a kind and a concrete reason`);
     }
     if (entry.kind === 'gap' && !entry.reason.includes('TODO')) {
