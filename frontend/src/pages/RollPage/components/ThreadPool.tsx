@@ -283,6 +283,7 @@ export function ThreadPool({
                     threadTitle={thread.title}
                     issueNumber=""
                     variant="compact"
+                    imageClassName="h-full w-full object-cover"
                   />
                   <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
                   <button
