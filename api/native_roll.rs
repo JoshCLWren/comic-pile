@@ -279,6 +279,22 @@ fn app() -> Router {
             "/api/v1/catalog/series-mappings/commit",
             post(native_dispatch),
         )
+        .route(
+            "/api/v1/catalog/series-mappings/preview",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+            post(native_dispatch),
+        )
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
         .route("/api/v2/roll/die-state", get(native_dispatch))
@@ -398,10 +414,6 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
-        .route(
-            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
-            get(native_dispatch),
-        )
         .route("/api/v1/issue-identity/cbl-sources", get(native_dispatch))
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
