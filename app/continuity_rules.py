@@ -9,7 +9,7 @@ from app.models.continuity_rule import ContinuityRule
 from app.models.dependency_group import DependencyGroup
 from app.models.issue import Issue
 from app.models.thread import Thread
-from app.schemas.continuity_rule import ContinuityNodeType, ContinuityRuleCreate
+from app.schemas.continuity_rule import ContinuityNodeType
 
 
 async def _would_create_cycle(
