@@ -400,6 +400,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v2/creators/(?!compare$|discoveries$|summaries$|team\\-chemistry$)[^/]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v2/issues/[0-9]+$",
       "methods": [
         "PATCH"
@@ -414,9 +421,90 @@
       "dest": "/api/native_issue.rs"
     },
     {
+      "src": "^/api/v1/comicvine/issues/[^/]+/identity$",
+      "methods": [
+        "GET",
+        "DELETE",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/comicvine/issues/[^/]+/identity:confirm$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/comicvine/issues/[^/]+/identity:replace$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:correct$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:corrections$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:refresh$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:revert$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
       "src": "^/api/v1/comicvine/issues:import$",
       "methods": [
         "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/comicvine/resolve$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/comicvine/search/series$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/comicvine/series/[^/]+/issues$",
+      "methods": [
+        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
