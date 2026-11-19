@@ -6,6 +6,7 @@ pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
 pub mod catalog_commit;
+pub mod catalog_preview;
 pub mod cbl_catalog;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
