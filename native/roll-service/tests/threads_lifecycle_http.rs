@@ -2194,7 +2194,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
 // PUT /api/v1/threads/{thread_id}/test-backdate
 // ---------------------------------------------------------------------------
 
-static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static TEST_ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 struct EnvRestore(Option<std::ffi::OsString>);
 impl Drop for EnvRestore {
@@ -2209,7 +2209,7 @@ impl Drop for EnvRestore {
 
 #[tokio::test]
 async fn test_backdate_thread_for_testing_updates_activity_and_returns_thread() {
-    let _env_guard = TEST_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = TEST_ENV_LOCK.lock().await;
     let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
     std::env::set_var("TEST_ENVIRONMENT", "true");
     let ctx = setup("lcbackdate").await;
@@ -2251,7 +2251,7 @@ async fn test_backdate_thread_for_testing_updates_activity_and_returns_thread() 
 
 #[tokio::test]
 async fn test_backdate_thread_for_testing_forbidden_without_test_environment() {
-    let _env_guard = TEST_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = TEST_ENV_LOCK.lock().await;
     let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
     std::env::remove_var("TEST_ENVIRONMENT");
     let ctx = setup("lcbackdateforbid").await;
@@ -2274,7 +2274,7 @@ async fn test_backdate_thread_for_testing_forbidden_without_test_environment() {
 
 #[tokio::test]
 async fn test_backdate_thread_for_testing_not_found_for_other_user() {
-    let _env_guard = TEST_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = TEST_ENV_LOCK.lock().await;
     let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
     std::env::set_var("TEST_ENVIRONMENT", "true");
     let ctx = setup("lcbackdatenotfound").await;
@@ -2295,7 +2295,7 @@ async fn test_backdate_thread_for_testing_not_found_for_other_user() {
 
 #[tokio::test]
 async fn test_backdate_thread_for_testing_validates_days_ago() {
-    let _env_guard = TEST_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _env_guard = TEST_ENV_LOCK.lock().await;
     let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
     std::env::set_var("TEST_ENVIRONMENT", "true");
     let ctx = setup("lcbackdatevalidate").await;
