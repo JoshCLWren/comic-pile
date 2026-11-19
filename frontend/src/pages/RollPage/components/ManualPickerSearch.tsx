@@ -211,6 +211,7 @@ export function ManualPickerSearch({
                     threadTitle={option.threadTitle ?? option.label}
                     issueNumber=""
                     variant="compact"
+                    imageClassName="h-full w-full object-cover"
                     altText=""
                   />
                   <span className="min-w-0 block font-bold">{option.label}</span>
