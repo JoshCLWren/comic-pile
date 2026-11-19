@@ -10,7 +10,7 @@
     "generate:api-types": "cd .. && python scripts/generate_openapi_types.py",
     "check:api-types": "cd .. && python scripts/generate_openapi_types.py --check",
     "lint": "eslint .",
-    "lint:anti-slop": "cd .. && oxlint --config .oxlintrc.json --ignore-pattern '.github/**'",
+    "lint:anti-slop": "cd .. && pnpm run lint:anti-slop",
     "typecheck": "tsc -P tsconfig.json --noEmit && tsc -P tsconfig.test.json --noEmit",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
     "preview": "vite preview",
