@@ -12,7 +12,7 @@
 
 **Issue search (owner issue #4725):** Searching the Reading List editor for an issue (e.g. `Mutant X #1`) lists each canonical issue once; the database already forbids a duplicate issue number within one series, so the only look-alike rows are distinct series sharing a title. Those stay separate rows (the editor groups them by series) and show a `Series ID` label so they can be told apart. Search deliberately remains click/Enter-driven ("Find issues"): live as-you-type suggestions are not offered, to avoid one request per keystroke against the issue table; revisit only with debounced, cancelled requests. Each result now displays the exact owned issue cover from one bounded batch, or the shared placeholder. Adding a result does not commit an unsaved list or mutate reading state; keyboard focus and duplicate-series disambiguation remain correct.
 
-## MQA-LIST-002: Strict means earlier remaining entries first
+**Continuity editor cover check (#5433):** Create a plan containing an issue step, a whole-series step, and a crossover checkpoint. The editor shows a shared confirmed issue cover for the exact issue and a shared representative series cover for the series. Unmapped items show the shared placeholder, while a synthetic crossover checkpoint does not fabricate an issue cover. Reordering, convergence gates, and Save remain unchanged.\n\n## MQA-LIST-002: Strict means earlier remaining entries first
 
 **Setup:** Strict QA list interleaving multiple series and a curated later annual.
 
