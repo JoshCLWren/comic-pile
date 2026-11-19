@@ -34,25 +34,28 @@ def decide(
     protected=None,
     merged_names=None,
     lease_signals=None,
+    retired_issues=None,
     default_branch="main",
 ):
     """Run branch decisions against deterministic fixtures."""
-    open_pr_heads = open_pr_heads or {}
+    pr_records = open_pr_heads or {}
     live_worktrees = set(live_worktrees or set())
     protected = set(protected or set())
     merged_names = set(merged_names or set())
     lease_signals = lease_signals or {}
+    retired_issues = set(retired_issues or set())
 
     return prune.decide_branches(
         branches,
         default_branch=default_branch,
         protected_names=protected,
-        open_pr_heads=open_pr_heads,
+        pr_records=pr_records,
         live_worktree_refs=live_worktrees,
         now=NOW,
         age_days=14,
         is_merged=lambda b: b.name in merged_names,
         lease_lookup=lambda issue: lease_signals.get(issue),
+        retirement_lookup=lambda issue: issue in retired_issues,
     )
 
 
@@ -273,3 +276,94 @@ def test_local_acp_branch_resolves_issue_for_lease_check():
     assert d.linked_issue == 3802
     assert not d.eligible
     assert any("active local lease" in r for r in d.reasons)
+
+
+def test_preserves_no_progress_retired_branch_even_if_old_and_merged():
+    """Never delete a branch whose issue records no-progress retirement."""
+    decisions = decide(
+        [branch("factory/12-5001-retired")],
+        merged_names={"factory/12-5001-retired"},
+        retired_issues={5001},
+    )
+    d = by_name(decisions)["factory/12-5001-retired"]
+    assert not d.eligible
+    assert any("preserved by no-progress retirement" in r for r in d.reasons)
+
+
+def test_recently_closed_pr_waits_full_period_even_with_old_commit():
+    """A PR closed today does not make a month-old commit immediately deletable."""
+    old_commit = NOW - timedelta(days=30)
+    decisions = decide(
+        [branch("factory/46-5100-abandoned", age=old_commit)],
+        open_pr_heads={
+            "factory/46-5100-abandoned": [
+                {"number": 700, "state": "CLOSED", "closedAt": (NOW - timedelta(days=2)).isoformat()},
+            ]
+        },
+    )
+    d = by_name(decisions)["factory/46-5100-abandoned"]
+    assert not d.eligible
+    assert any("waiting period since merge/abandonment not met" in r for r in d.reasons)
+
+
+def test_recently_merged_pr_waits_full_period_even_with_old_commit():
+    """The wait starts at merge time, not at the last commit on the branch."""
+    old_commit = NOW - timedelta(days=45)
+    decisions = decide(
+        [branch("factory/46-5101-merged", age=old_commit)],
+        open_pr_heads={
+            "factory/46-5101-merged": [
+                {"number": 701, "state": "MERGED", "mergedAt": (NOW - timedelta(days=3)).isoformat()},
+            ]
+        },
+        merged_names={"factory/46-5101-merged"},
+    )
+    d = by_name(decisions)["factory/46-5101-merged"]
+    assert not d.eligible
+    assert any("waiting period since merge/abandonment not met" in r for r in d.reasons)
+
+
+def test_settled_pr_without_date_fails_closed():
+    """A settled PR with no parseable date cannot establish the wait; keep the branch."""
+    decisions = decide(
+        [branch("factory/46-5102-nodate")],
+        open_pr_heads={
+            "factory/46-5102-nodate": [{"number": 702, "state": "CLOSED"}]
+        },
+    )
+    d = by_name(decisions)["factory/46-5102-nodate"]
+    assert not d.eligible
+    assert any("waiting period since merge/abandonment cannot be established" in r for r in d.reasons)
+
+
+def test_old_closed_pr_after_full_wait_is_eligible():
+    """A branch abandoned for more than 14 days after PR close stays eligible."""
+    old_commit = NOW - timedelta(days=40)
+    decisions = decide(
+        [branch("factory/46-5103-oldabandoned", age=old_commit)],
+        open_pr_heads={
+            "factory/46-5103-oldabandoned": [
+                {"number": 703, "state": "CLOSED", "closedAt": (NOW - timedelta(days=30)).isoformat()},
+            ]
+        },
+    )
+    d = by_name(decisions)["factory/46-5103-oldabandoned"]
+    assert d.eligible
+    assert d.merged is False
+
+
+def test_open_pr_still_protects_branch_with_old_closed_pr():
+    """An open PR protects a branch even when an older settled PR exists."""
+    decisions = decide(
+        [branch("factory/46-5104-reopened")],
+        open_pr_heads={
+            "factory/46-5104-reopened": [
+                {"number": 704, "state": "OPEN"},
+                {"number": 703, "state": "CLOSED", "closedAt": (NOW - timedelta(days=30)).isoformat()},
+            ]
+        },
+    )
+    d = by_name(decisions)["factory/46-5104-reopened"]
+    assert not d.eligible
+    assert d.open_pr is True
+    assert "open PR exists" in d.reasons

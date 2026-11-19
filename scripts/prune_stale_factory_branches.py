@@ -25,6 +25,10 @@ STALE_BRANCH_PREFIXES = ("factory/", "local-factory/", "local/", "backup/")
 RELEASE_PREFIX = "release/"
 CHECKPOINT_PREFIX = "factory/work-checkpoints/"
 DEFAULT_AGE_DAYS = 14
+# Written by .github/scripts/factory_no_progress_retirement.py onto the linked
+# issue when an attempt is retired. Policy says "Never delete the branch" for
+# retired work, so a branch linked to such an issue is kept out of cleanup.
+RETIRE_MARKER = "comic-pile-factory-no-progress-retired-v1"
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -208,27 +212,31 @@ def is_ancestor(repo_root: Path, ancestor_ref: str, descendant_ref: str) -> bool
     return proc.returncode == 0
 
 
-def fetch_open_pr_heads(repo: str) -> dict[str, list[dict[str, object]]]:
-    """Fetch open PR heads grouped by branch name.
+def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
+    """Fetch open and closed PR heads grouped by branch name.
 
-    Raises on lookup failure so cleanup cannot proceed with incomplete safety data.
+    Raises on lookup failure so cleanup cannot proceed with incomplete safety
+    data. ``state``, ``mergedAt`` and ``closedAt`` are included so the
+    post-merge/abandonment waiting period is measured from the real event rather
+    than from the last commit on the branch.
     """
     proc = run([
-        "gh", "pr", "list", "--repo", repo, "--state", "open", "--limit", "500",
-        "--json", "number,headRefName,isDraft,updatedAt,labels,title,url",
+        "gh", "pr", "list", "--repo", repo, "--state", "all", "--limit", "500",
+        "--json",
+        "number,headRefName,state,isDraft,mergedAt,closedAt,updatedAt,labels,title,url",
     ], check=False)
     if proc.returncode != 0:
-        raise RuntimeError(f"unable to list open PRs: {proc.stderr.strip() or proc.stdout.strip()}")
+        raise RuntimeError(f"unable to list PRs: {proc.stderr.strip() or proc.stdout.strip()}")
     try:
         prs = json.loads(proc.stdout or "[]")
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"unable to parse open PR list: {exc}") from exc
+        raise RuntimeError(f"unable to parse PR list: {exc}") from exc
     if not isinstance(prs, list):
-        raise RuntimeError("open PR list response was not a list")
+        raise RuntimeError("PR list response was not a list")
     by_head: dict[str, list[dict[str, object]]] = {}
     for pr in prs:
         if not isinstance(pr, dict):
-            raise RuntimeError("open PR list contained a non-object entry")
+            raise RuntimeError("PR list contained a non-object entry")
         head_obj = pr.get("headRefName")
         head = head_obj if isinstance(head_obj, str) else ""
         if not head:
@@ -303,6 +311,36 @@ def fetch_issue_signal(repo: str, issue_number: int) -> LeaseSignal | None:
     )
 
 
+def fetch_issue_retired(repo: str, issue_number: int) -> bool:
+    """Return whether an issue carries a no-progress retirement marker.
+
+    Raises on lookup failure so cleanup fails closed: a branch tied to a
+    retired attempt must never be deleted, and an unreadable comment list must
+    not be treated as "not retired".
+    """
+    proc = run([
+        "gh", "api", f"repos/{repo}/issues/{issue_number}/comments",
+        "--paginate", "--slurp", "--per_page", "100",
+    ], check=False)
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise RuntimeError(f"unable to read comments for issue #{issue_number}: {detail}")
+    try:
+        pages = json.loads(proc.stdout or "[]")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"unable to parse comments for issue #{issue_number}: {exc}") from exc
+    if not isinstance(pages, list):
+        raise RuntimeError(f"issue #{issue_number} comments response was not a list")
+    for page in pages:
+        if not isinstance(page, list):
+            raise RuntimeError(f"issue #{issue_number} comments page was not a list")
+        for comment in page:
+            body = comment.get("body") if isinstance(comment, dict) else None
+            if isinstance(body, str) and RETIRE_MARKER in body:
+                return True
+    return False
+
+
 def active_lease(signal: LeaseSignal | None, now: datetime) -> tuple[bool, str | None]:
     """Return whether a linked target has an active, unexpired factory lease."""
     if signal is None:
@@ -348,23 +386,60 @@ def unexpired_handoff(
     return True, "checkpoint branch requires explicit incorporated-retirement proof"
 
 
+def _pr_state(pr: Mapping[str, object]) -> str:
+    """Return a normalized PR state, defaulting to OPEN when absent."""
+    return str(pr.get("state") or "OPEN").upper()
+
+
+def _waiting_period_start(
+    branch: BranchInfo, prs: Sequence[Mapping[str, object]]
+) -> datetime | None:
+    """Return the date from which the post-merge/abandonment wait begins.
+
+    - A settled PR (MERGED/CLOSED) starts the clock at its merge/close event.
+    - A settled PR with no parseable date yields None (fail closed).
+    - A branch with no PR history uses its last commit as the abandonment
+      proxy; there is no PR event to measure from.
+    """
+    settled = [pr for pr in prs if _pr_state(pr) != "OPEN"]
+    settled_dates: list[datetime] = []
+    for pr in settled:
+        for key in ("mergedAt", "merged_at", "closedAt", "closed_at"):
+            value = pr.get(key)
+            if isinstance(value, str):
+                parsed = parse_iso8601(value)
+            elif isinstance(value, datetime):
+                parsed = value
+            else:
+                parsed = None
+            if parsed is not None:
+                settled_dates.append(parsed)
+                break
+    if settled and not settled_dates:
+        return None
+    if settled_dates:
+        return max(settled_dates)
+    return branch.committed_at
+
+
 def evaluate_branch(
     branch: BranchInfo,
     *,
     default_branch: str,
     protected_names: set[str],
-    open_pr_heads: Mapping[str, Sequence[Mapping[str, object]]],
+    pr_records: Mapping[str, Sequence[Mapping[str, object]]],
     live_worktree_refs: set[str],
     now: datetime,
     age_days: int,
     is_merged: Callable[[BranchInfo], bool],
     lease_lookup: Callable[[int], LeaseSignal | None],
+    retirement_lookup: Callable[[int], bool],
 ) -> Decision:
     """Evaluate one branch and return a pruning decision."""
     age = (now - branch.committed_at).total_seconds() / 86400.0
     issue = linked_issue_number(branch.name)
-    open_prs = list(open_pr_heads.get(branch.name, ()))
-    open_pr = len(open_prs) > 0
+    prs = list(pr_records.get(branch.name, ()))
+    open_pr = any(_pr_state(pr) == "OPEN" for pr in prs)
     category = "factory/local/backup" if is_stale_scope_branch(branch.name) else "other"
 
     reasons: list[str] = []
@@ -380,7 +455,7 @@ def evaluate_branch(
         reasons.append("outside factory/local/backup scope")
 
     leased = False
-    handoff_blocked = False
+    retired = False
     signal: LeaseSignal | None = None
     if issue is not None:
         try:
@@ -391,6 +466,13 @@ def evaluate_branch(
             leased, lease_reason = active_lease(signal, now)
             if leased and lease_reason:
                 reasons.append(lease_reason)
+        try:
+            retired = retirement_lookup(issue)
+        except Exception as exc:
+            reasons.append(f"unable to verify retirement state: {exc}")
+        if retired:
+            reasons.append("preserved by no-progress retirement; policy forbids deletion")
+
     handoff_blocked, handoff_reason = unexpired_handoff(branch, signal, now)
     if handoff_blocked and handoff_reason:
         reasons.append(handoff_reason)
@@ -402,17 +484,25 @@ def evaluate_branch(
         except Exception as exc:
             reasons.append(f"unable to verify merged state: {exc}")
 
+    # The >14-day waiting period starts at the PR merge/close event, not at the
+    # last commit. A branch whose PR closed today is not abandonable today even
+    # when its last commit is a month old. If a settled PR has no usable date,
+    # the waiting period cannot be established and the branch is kept.
+    waiting_since = _waiting_period_start(branch, prs)
+    if waiting_since is None:
+        reasons.append("waiting period since merge/abandonment cannot be established")
+    else:
+        wait_days = (now - waiting_since).total_seconds() / 86400.0
+        if wait_days < age_days:
+            reasons.append(
+                f"waiting period since merge/abandonment not met ({wait_days:.1f}d < {age_days}d)"
+            )
+
     if age < age_days:
         reasons.append(f"younger than {age_days} days")
 
-    if not merged and age >= age_days:
-        # "merged or abandoned for more than 14 days"
-        reasons.append(
-            "age threshold met and branch is not merged; treated as abandoned candidate only with other safety checks"
-        )
-
-    # Eligible only when it matches scope, has no hard protections, and is
-    # merged-or-abandoned and older than threshold.
+    # Eligible only when scope matches, no hard protection applies, the branch
+    # is old enough, and the post-merge/abandonment wait is established/elapsed.
     hard_protections = (
         any(
             r in reasons
@@ -422,23 +512,32 @@ def evaluate_branch(
                 "open PR exists",
                 "checked out in live local worktree",
                 "outside factory/local/backup scope",
+                "preserved by no-progress retirement; policy forbids deletion",
+                "waiting period since merge/abandonment cannot be established",
             )
         )
         or leased
+        or retired
         or handoff_blocked
-        or any(r.startswith("unable to verify") for r in reasons)
+        or any(
+            r.startswith("waiting period since merge/abandonment not met")
+            or r.startswith("unable to verify")
+            for r in reasons
+        )
     )
 
     stale_enough = age >= age_days
-    eligible = (not hard_protections) and stale_enough and (merged or True)
-    # "merged or abandoned for more than 14 days": abandoned means no open PR,
-    # not protected, old enough, and not actively leased/handoff-blocked.
+    eligible = (not hard_protections) and stale_enough and waiting_since is not None
     if eligible:
+        wait_days = (now - waiting_since).total_seconds() / 86400.0
         return Decision(
             branch=branch.name,
             sha=branch.sha,
             action="delete",
-            reasons=(f"eligible: {'merged' if merged else 'abandoned'} for {age:.1f} days",),
+            reasons=(
+                f"eligible: {'merged' if merged else 'abandoned'}; "
+                f"commit age {age:.1f}d, wait since merge/abandonment {wait_days:.1f}d",
+            ),
             category=category,
             age_days=round(age, 2),
             merged=merged,
@@ -447,13 +546,9 @@ def evaluate_branch(
         )
 
     # Normalize skip reasons: keep the most relevant ones.
-    filtered = [r for r in reasons if not r.startswith("age threshold met and branch is not merged")]
+    filtered = [r for r in reasons if r not in ("age threshold met and branch is not merged",)]
     if not filtered:
         filtered = ["not eligible"]
-    if stale_enough and (merged or not open_pr) and hard_protections:
-        pass
-    elif not stale_enough and "younger than" not in " ".join(filtered):
-        filtered.append(f"younger than {age_days} days")
     return Decision(
         branch=branch.name,
         sha=branch.sha,
@@ -530,12 +625,13 @@ def decide_branches(
     *,
     default_branch: str,
     protected_names: set[str],
-    open_pr_heads: Mapping[str, Sequence[Mapping[str, object]]],
+    pr_records: Mapping[str, Sequence[Mapping[str, object]]],
     live_worktree_refs: set[str],
     now: datetime,
     age_days: int = DEFAULT_AGE_DAYS,
     is_merged: Callable[[BranchInfo], bool],
     lease_lookup: Callable[[int], LeaseSignal | None],
+    retirement_lookup: Callable[[int], bool],
 ) -> list[Decision]:
     """Evaluate all branches and return pruning decisions."""
     return [
@@ -543,12 +639,13 @@ def decide_branches(
             branch,
             default_branch=default_branch,
             protected_names=protected_names,
-            open_pr_heads=open_pr_heads,
+            pr_records=pr_records,
             live_worktree_refs=live_worktree_refs,
             now=now,
             age_days=age_days,
             is_merged=is_merged,
             lease_lookup=lease_lookup,
+            retirement_lookup=retirement_lookup,
         )
         for branch in branches
     ]
@@ -597,7 +694,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # branch can be reported deletable or deleted.
     protected = fetch_protected_branches(args.repo)
     protected.update({default_branch, "main", "master", "gh-pages"})
-    open_pr_heads = fetch_open_pr_heads(args.repo)
+    pr_records = fetch_pr_records(args.repo)
     live_refs = local_worktree_branches(repo_root)
 
     lease_cache: dict[int, LeaseSignal | None] = {}
@@ -608,6 +705,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         lease_cache[issue_number] = fetch_issue_signal(args.repo, issue_number)
         return lease_cache[issue_number]
 
+    retirement_cache: dict[int, bool] = {}
+
+    def retirement_lookup(issue_number: int) -> bool:
+        if issue_number not in retirement_cache:
+            retirement_cache[issue_number] = fetch_issue_retired(args.repo, issue_number)
+        return retirement_cache[issue_number]
+
     def is_merged(branch: BranchInfo) -> bool:
         return is_ancestor(repo_root, f"{remote}/{branch.name}", f"{remote}/{default_branch}")
 
@@ -615,12 +719,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         branches,
         default_branch=default_branch,
         protected_names=protected,
-        open_pr_heads=open_pr_heads,
+        pr_records=pr_records,
         live_worktree_refs=live_refs,
         now=now,
         age_days=args.age_days,
         is_merged=is_merged,
         lease_lookup=lease_lookup,
+        retirement_lookup=retirement_lookup,
     )
 
     mode = "apply" if args.apply else "dry-run"
