@@ -181,7 +181,7 @@ def mark_issue_read(token: str, thread_id: int, issue_number: str) -> bool:
 
     try:
         response = requests.post(
-            f"{API_BASE}/api/v1/issues/{issue_id}:markRead",
+            f"{API_BASE}/api/v2/issues/{issue_id}/read-markers",
             headers={"Authorization": f"Bearer {token}"},
             timeout=REQUESTS_TIMEOUT,
         )
