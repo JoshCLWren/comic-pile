@@ -629,7 +629,7 @@ struct OverlapContext {
 }
 
 fn series_refs_for_volumes(
-    issue_meta: &HashMap<i32, IssueMeta>,
+    _issue_meta: &HashMap<i32, IssueMeta>,
     thread_names: &HashMap<i32, String>,
     volume_by_thread: &HashMap<i32, Option<String>>,
     thread_volumes: &std::collections::BTreeMap<i32, String>,
@@ -899,7 +899,7 @@ fn build_issue_references(
                         blockers.push(ReadingGraphBlocker {
                             kind: blocker.kind.clone(),
                             list_id: blocker.list_id,
-                            waiting_on_issue_ids: waiting,
+                            waiting_on_issue_ids: waiting.clone(),
                             gate_issue_id: blocker.gate_issue_id,
                             explanation: format!("{description}: waiting on {:?}", waiting),
                         });
