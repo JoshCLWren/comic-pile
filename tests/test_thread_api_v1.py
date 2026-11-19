@@ -54,9 +54,9 @@ def test_v1_thread_routes_survive_unversioned_alias_retirement() -> None:
     """Retire bare thread aliases while preserving canonical mutation methods."""
     assert not _thread_routes("/api/threads")
     canonical = _thread_routes("/api/v1/threads")
-    assert ("/", ("POST",)) in canonical
-    assert ("/{thread_id}", ("PUT",)) in canonical
-    assert ("/{thread_id}", ("DELETE",)) in canonical
+    assert ("/", ("POST",)) not in canonical
+    assert ("/{thread_id}", ("PUT",)) not in canonical
+    assert ("/{thread_id}", ("DELETE",)) not in canonical
 
 
 def test_v1_thread_openapi_operation_ids_are_unique() -> None:

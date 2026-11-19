@@ -101,13 +101,8 @@ def _register_health(app: FastAPI) -> None:
 
 
 def _register_threads(app: FastAPI) -> None:
-    """Register versioned thread routers; unused bare aliases are retired."""
-    from app.api import thread
-
-    app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
-    # New client resources (e.g. paginated completed threads for issue #2567)
-    # are versioned-only: no bare /api/* twin.
-    app.include_router(thread.v1_router, prefix="/api/v1/threads", tags=["threads"])
+    """Register versioned thread routers; retired (served natively by Rust #4832)."""
+    return None
 
 
 def _register_issues(app: FastAPI) -> None:

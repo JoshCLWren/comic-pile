@@ -999,5 +999,93 @@
     ],
     "module": "app.api.issue",
     "name": "reorder_issues"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.thread",
+    "name": "list_stale_threads",
+    "path": "/api/v1/threads/stale"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.thread",
+    "name": "list_excluded_threads",
+    "path": "/api/v1/threads/excluded/threads"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "check_potential_duplicates",
+    "path": "/api/v1/threads/check-duplicates"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "create_thread",
+    "path": "/api/v1/threads/"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "module": "app.api.thread",
+    "name": "update_thread",
+    "path": "/api/v1/threads/{thread_id}"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "module": "app.api.thread",
+    "name": "delete_thread",
+    "path": "/api/v1/threads/{thread_id}"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "exclude_thread",
+    "path": "/api/v1/threads/{thread_id}/exclude"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "restore_thread",
+    "path": "/api/v1/threads/{thread_id}/restore"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "reactivate_thread",
+    "path": "/api/v1/threads/reactivate"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "set_pending_thread",
+    "path": "/api/v1/threads/{thread_id}/set-pending"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "module": "app.api.thread",
+    "name": "backdate_thread_for_testing",
+    "path": "/api/v1/threads/{thread_id}/test-backdate"
   }
 ]

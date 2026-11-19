@@ -52,9 +52,8 @@ def test_native_operations_have_no_shadow_python_handlers() -> None:
     # retired on main, plus five thread-issue operations removed here
     # (POST issues, reorder, migrateToIssues, migrateToIssuesSimple,
     # setCurrentIssue). Creators remains on Python.
-    assert len(_retired_operations()) == 124
+    assert len(_retired_operations()) == 135
     _assert_no_shadow_python_handlers(operations)
-    assert ("POST", "/api/v1/threads/") in operations
     assert ("GET", "/api/v2/reading-boundaries/{thread_id}") not in operations
 
 
