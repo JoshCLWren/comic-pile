@@ -12,7 +12,7 @@
 use crate::{
     auth::AuthenticatedUser,
     comicvine_repair::{provider_issue, provider_response, ProviderFailure},
-    db, ApiError, AppState,
+    db, outbound::OutboundHttp, ApiError, AppState,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -1085,12 +1085,12 @@ pub async fn import_series(
         ));
     };
     let volume_id = request.comicvine_volume_id;
-    let volume = provider_response(&format!("volume/4050-{volume_id}"), "", &key)
+    let volume = provider_response(&state.outbound, &format!("volume/4050-{volume_id}"), "", &key)
         .await
         .map_err(map_provider_failure)?;
     let series_name = volume_name(&volume)
         .ok_or_else(|| ApiError::ServiceUnavailable("provider_invalid_payload".to_owned()))?;
-    let rows = provider_roster(volume_id, &key).await?;
+    let rows = provider_roster(&state.outbound, volume_id, &key).await?;
     if rows.is_empty() {
         return Err(bad_request("ComicVine series has no issues"));
     }
@@ -1392,6 +1392,7 @@ fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
 
 /// `GET /api/v2/comicvine/search/series`.
 pub async fn search_series(
+    State(state): State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<ComicVineSeriesSearchResponse>, ApiError> {
@@ -1425,7 +1426,7 @@ pub async fn search_series(
          &field_list=id,name,publisher,start_year,count_of_issues,site_detail_url,image",
         encode_query(query.q.trim())
     );
-    let payload = provider_response("search", &extra, &key)
+    let payload = provider_response(&state.outbound, "search", &extra, &key)
         .await
         .map_err(map_provider_failure)?;
     let results: Vec<ComicVineSeriesResult> = payload
@@ -1452,6 +1453,7 @@ pub async fn search_series(
 
 /// `GET /api/v2/comicvine/series/{comicvine_volume_id}/issues`.
 pub async fn series_issues(
+    State(state): State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Path(comicvine_volume_id): Path<i32>,
     Query(query): Query<SeriesIssuesQuery>,
@@ -1468,12 +1470,12 @@ pub async fn series_issues(
             issues: Vec::new(),
         }));
     };
-    let roster = provider_roster(comicvine_volume_id, &key)
+    let roster = provider_roster(&state.outbound, comicvine_volume_id, &key)
         .await
         .unwrap_or_default();
     let issues: Vec<ComicVineIssueCandidate> = roster.iter().filter_map(issue_candidate).collect();
     if series_name.is_empty() {
-        series_name = provider_issue_volume(comicvine_volume_id, &key)
+        series_name = provider_issue_volume(&state.outbound, comicvine_volume_id, &key)
             .await
             .unwrap_or_else(|| format!("Volume {comicvine_volume_id}"));
     }
