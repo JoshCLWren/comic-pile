@@ -9,6 +9,8 @@
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
+    routing::get as route_get,
+    Router,
 };
 use comicpile_roll_service::{config::Config, router, AppState};
 use serde_json::{json, Value};
@@ -157,6 +159,17 @@ fn authed(method: &str, path: &str, token: &str, csrf: &str, body: Option<Value>
 
 type Conn = deadpool_postgres::Object;
 
+async fn issue(conn: &Conn, thread_id: i32, number: &str, position: i32, status: &str) -> i32 {
+    conn.query_one(
+        "INSERT INTO issues (thread_id, issue_number, status, created_at, position) \
+         VALUES ($1, $2, $3, NOW(), $4) RETURNING id",
+        &[&thread_id, &number, &status, &position],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
 /// Seed several issues in one set-based insert (no SQL inside loops),
 /// returning their ids ordered by position.
 async fn seed_issues(conn: &Conn, thread_id: i32, numbers: &[&str], status: &str) -> Vec<i32> {
@@ -189,6 +202,29 @@ async fn frontier(conn: &Conn, thread_id: i32, issue_id: i32) {
 
 fn post(path: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Body> {
     authed("POST", path, token, csrf, body)
+}
+
+fn get(path: &str, token: &str, csrf: &str) -> Request<Body> {
+    authed("GET", path, token, csrf, None)
+}
+
+async fn send_router(router: Router, request: Request<Body>) -> (StatusCode, Value) {
+    let response = router.oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+fn creators_test_router(state: &Arc<AppState>) -> Router {
+    Router::new()
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            route_get(comicpile_roll_service::thread_issues::list_thread_issue_creators),
+        )
+        .with_state(state.clone())
 }
 
 async fn plain_thread(
@@ -245,6 +281,22 @@ async fn every_operation_requires_authentication() {
             "{method} {path} -> {status}"
         );
     }
+
+    // Creators endpoint is not mounted on the public Rust router (vercel routes to
+    // Python), but the retained handler must still require authentication.
+    let (status, _) = send_router(
+        creators_test_router(&state),
+        Request::builder()
+            .method("GET")
+            .uri("/api/v1/threads/1/issues/creators")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN,
+        "GET /api/v1/threads/1/issues/creators -> {status}"
+    );
 }
 
 #[tokio::test]
@@ -570,6 +622,67 @@ async fn reorder_rewrites_positions_and_validates() {
         .map(|r| r.0)
         .collect();
     assert_eq!(order, vec!["3", "1", "2"]);
+}
+
+#[tokio::test]
+async fn creators_are_bulk_read_merged_and_owner_scoped() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tiss-creators").await;
+    let (other_token, other_csrf, _other_user) =
+        register_extra_user(&state, "tiss-creators-other").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread = plain_thread(&conn, user_id, "Credits", 2, 1).await;
+    let mapped = issue(&conn, thread, "1", 1, "unread").await;
+    let _unmapped = issue(&conn, thread, "2", 2, "unread").await;
+    let identity: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'issue', 'cv-1', $1::text::json, NOW(), NOW()) RETURNING id",
+            &[&json!({"person_credits": [
+                {"id": 7, "name": "Writer", "role": "writer, cover"},
+                {"id": 7, "name": "Writer", "role": "inker"},
+                {"name": "Anon", "role": "colorist"}
+            ]}).to_string()],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) \
+         VALUES ($1, $2, 'confirmed', 'test', 1.0, NOW(), NOW(), '{}'::json)",
+        &[&mapped, &identity],
+    )
+    .await
+    .unwrap();
+    let path = format!("/api/v1/threads/{thread}/issues/creators");
+    let router = creators_test_router(&state);
+    let (status, body) = send_router(router.clone(), get(&path, &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["thread_id"], thread);
+    assert_eq!(body["issues"].as_array().unwrap().len(), 1);
+    assert_eq!(body["issues"][0]["issue_id"], mapped);
+    assert_eq!(
+        body["issues"][0]["creators"],
+        json!([
+            {"creator_id": 7, "name": "Writer", "roles": ["writer", "cover", "inker"]},
+            {"creator_id": null, "name": "Anon", "roles": ["colorist"]}
+        ])
+    );
+    let (status, body) = send_router(router.clone(), get(&path, &other_token, &other_csrf)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["detail"], format!("Thread {thread} not found"));
+    let (status, _) = send_router(
+        router.clone(),
+        get("/api/v1/threads/987654/issues/creators", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, body) = send_router(
+        router,
+        get("/api/v1/threads/abc/issues/creators", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["detail"], "Validation failed");
 }
 
 #[tokio::test]
