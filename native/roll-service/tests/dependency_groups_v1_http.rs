@@ -152,7 +152,7 @@ async fn reading_order_groups_http_crud_matches_python_wire_contract() {
     let (token, csrf, user_id) = register_and_login(&state, "rog-crud").await;
 
     // Auth is enforced at the same-path ingress.
-    let (status, _) = send(
+    let (status, _, _) = send(
         &state,
         Request::builder()
             .method("GET")
@@ -312,7 +312,9 @@ async fn reading_order_groups_http_crud_matches_python_wire_contract() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{detail}");
-    let detail_members = detail["memberships"].as_array().expect("detail memberships");
+    let detail_members = detail["memberships"]
+        .as_array()
+        .expect("detail memberships");
     assert_eq!(detail_members.len(), 1, "{detail}");
     assert_eq!(detail_members[0]["membership"]["id"], member_id);
     assert_eq!(
@@ -405,12 +407,7 @@ async fn reading_order_groups_are_owner_scoped_over_http() {
             body,
         )
         .await;
-        let expected = if method == "DELETE" {
-            StatusCode::NOT_FOUND
-        } else {
-            StatusCode::NOT_FOUND
-        };
-        assert_eq!(status, expected, "{method}: {body_out}");
+        assert_eq!(status, StatusCode::NOT_FOUND, "{method}: {body_out}");
     }
 
     // User B's list stays empty; user A still sees the group.
@@ -484,7 +481,13 @@ async fn reading_order_groups_issue_range_and_order_validation_over_http() {
     .await;
     assert_eq!(status, StatusCode::OK, "{again}");
     assert_eq!(again["added_issue_ids"], json!([]), "{again}");
-    assert_eq!(again["already_present_issue_ids"].as_array().expect("present").len(), 2);
+    assert_eq!(
+        again["already_present_issue_ids"]
+            .as_array()
+            .expect("present")
+            .len(),
+        2
+    );
 
     // Inverted range -> 422 like the Python service.
     let (status, inverted) = authed_json(
