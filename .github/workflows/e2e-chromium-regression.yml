@@ -125,7 +125,8 @@ jobs:
 
       - name: Apply migrations
         # DATABASE_URL / TEST_DATABASE_URL come from the shared top-level env.
-        run: .venv/bin/alembic upgrade head
+        # Refinery runner (#5431); Alembic is frozen.
+        run: CARGO_TARGET_DIR=native/roll-service/target cargo run --release --locked -p comicpile-migrate -- up
 
       - name: Start backend and native v2 ingress
         run: |

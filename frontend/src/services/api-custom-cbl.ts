@@ -107,6 +107,17 @@ export function createCustomCBLApi(client: HttpClient) {
     update: (listId: number, payload: CustomCBLWrite) =>
       client.put<CustomCBL>(`/v2/reading-lists/${listId}`, payload),
     delete: (listId: number) => client.delete<void>(`/v2/reading-lists/${listId}`),
+    /**
+     * Batched, owner-scoped lookup of which requested threads appear in any
+     * other reading list, scoped to the provided thread IDs.
+     */
+    checkThreadMemberships: (threadIds: number[], excludeListId?: number) => {
+      const payload =
+        excludeListId == null
+          ? { thread_ids: threadIds }
+          : { thread_ids: threadIds, exclude_list_id: excludeListId }
+      return client.post<{ thread_ids: number[] }>('/v2/reading-lists/memberships:check', payload)
+    },
     searchIssues: (query: string, limit = 30) =>
       client.get<CustomCBLIssueSearchResult[]>('/v2/reading-lists/issue-candidates', {
         params: { q: query, limit },

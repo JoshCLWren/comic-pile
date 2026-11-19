@@ -1320,23 +1320,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** OpenAPI documentation for the versioned metrics alias. */
-        get: operations["get_v1_metrics_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/reading-mode": {
         parameters: {
             query?: never;
@@ -1614,8 +1597,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for the mounted releases list handler. */
-        get: operations["releases_list"];
+        get?: never;
         /** Documentation-only operation for the mounted releases publish handler. */
         put: operations["releases_publish"];
         post?: never;
@@ -1670,90 +1652,6 @@ export interface paths {
         put?: never;
         /** Documentation-only operation for the mounted releases retract handler. */
         post: operations["releases_retract"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roll/dismiss-pending": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["dismiss_pending_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sessions/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for the versioned list. */
-        get: operations["list_sessions_v1_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sessions/{session_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for the versioned mounted read. */
-        get: operations["get_session_v1_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sessions/{session_id}/details": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for the versioned details. */
-        get: operations["get_session_details_v1_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sessions/{session_id}/snapshots": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** OpenAPI declaration for both legacy and versioned same-path aliases. */
-        get: operations["list_session_snapshots_documentation"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3361,6 +3259,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/reading-sessions/{session_id}/details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for the v2 session details. */
+        get: operations["get_session_details_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-sessions/{session_id}/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** OpenAPI declaration for the v2 session snapshots read. */
+        get: operations["list_session_snapshots_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for the mounted releases list handler. */
+        get: operations["releases_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/roll/bootstrap": {
         parameters: {
             query?: never;
@@ -3421,6 +3370,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/roll/dismiss-pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["dismiss_pending_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/roll/eligible-issue-ids": {
         parameters: {
             query?: never;
@@ -3458,6 +3423,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/roll/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 manual pick. */
+        post: operations["override_roll_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/roll/reset": {
         parameters: {
             query?: never;
@@ -3469,6 +3451,23 @@ export interface paths {
         put?: never;
         /** Documentation-only operation for the mounted v2 Roll reset command. */
         post: operations["reset_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/roll/switch-prerequisite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 prerequisite switch. */
+        post: operations["switch_prerequisite_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6671,6 +6670,35 @@ export interface components {
             /** Format: int32 */
             reading_order_id: number;
         };
+        /** @description Response body: the Python `RollResponse` projection for a manual pick. */
+        NativeRollResponse: {
+            /** Format: int32 */
+            die_size: number;
+            explanation?: string | null;
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            offset: number;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** Format: int32 */
+            result: number;
+            /** Format: int32 */
+            snoozed_count: number;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
         NativeSeriesMappingPreviewCounts: {
             /** Format: int64 */
             already_confirmed: number;
@@ -7100,6 +7128,15 @@ export interface components {
              * @description Canonical queue-entry identity: the owned Thread id.
              */
             thread_id: number;
+        };
+        /** @description Bulk exclusion provenance attached to an excluded queue thread (#5435). */
+        QueueExclusionGroupRef: {
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            source_id: number;
+            source_kind: string;
+            source_name: string;
         };
         /** @description Queue-order (shuffle) creation request. */
         QueueOrderRequest: {
@@ -8256,6 +8293,36 @@ export interface components {
             /** Format: int32 */
             total_issues?: number | null;
         };
+        /** @description Request body for the manual override. */
+        RollOverrideRequest: {
+            /**
+             * Format: int32
+             * @description Reader-selected thread identifier.
+             */
+            thread_id: number;
+        };
+        /** @description Request body for accepting one current recovery recommendation. */
+        RollPrerequisiteSwitchRequest: {
+            /**
+             * Format: int32
+             * @description Recommended continuity-node identifier.
+             */
+            node_id: number;
+            /** @description Recommended continuity-node type. Only concrete issues are accepted. */
+            node_type: string;
+        };
+        /** @description Durable active-target state after accepting a recovery recommendation. */
+        RollPrerequisiteSwitchResponse: {
+            changed: boolean;
+            /** Format: int32 */
+            original_thread_id: number;
+            /** Format: int32 */
+            target_issue_id: number;
+            target_issue_number: string;
+            /** Format: int32 */
+            target_thread_id: number;
+            target_thread_title: string;
+        };
         /**
          * RollResponse
          * @description Schema for roll response.
@@ -8587,42 +8654,6 @@ export interface components {
             predicted_bandwidth?: string | null;
             source?: string | null;
         };
-        /** @description Wire shape of Python `SessionResponse` for `get_session`. */
-        SessionDetailResponse: {
-            active_thread?: components["schemas"]["SessionActiveThread"] | null;
-            bandwidth?: components["schemas"]["SessionBandwidthState"] | null;
-            correction?: unknown;
-            /** Format: int32 */
-            current_die: number;
-            ended_at?: string | null;
-            has_restore_point: boolean;
-            /** Format: int32 */
-            id: number;
-            intent?: components["schemas"]["SessionIntentState"] | null;
-            ladder_path: string;
-            /** Format: int32 */
-            last_rolled_result?: number | null;
-            /** Format: int32 */
-            manual_die?: number | null;
-            /** Format: int32 */
-            pending_thread_id?: number | null;
-            reading_bandwidth?: string | null;
-            reading_intent?: string | null;
-            reading_mode_source?: string | null;
-            reading_mode_suggested: boolean;
-            skipped_thread_ids: number[];
-            skipped_threads: components["schemas"]["SessionThreadSummary"][];
-            /** Format: int32 */
-            snapshot_count: number;
-            snoozed_thread_ids: number[];
-            snoozed_threads: components["schemas"]["SessionThreadSummary"][];
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-            timezone?: string | null;
-            /** Format: int32 */
-            user_id: number;
-        };
         /** @description Full session details response with events and narrative summary. */
         SessionDetailsResponse: {
             /** Format: int32 */
@@ -8663,11 +8694,6 @@ export interface components {
             timestamp: string;
             type: string;
         };
-        /** @description Paginated session history list response. */
-        SessionHistoryListResponse: {
-            next_page_token?: string | null;
-            sessions: components["schemas"]["SessionListItemResponse"][];
-        };
         /** @description Canonical intent state. */
         SessionIntentState: {
             active_intent?: string | null;
@@ -8676,41 +8702,6 @@ export interface components {
             mode_version?: string | null;
             predicted_intent?: string | null;
             source?: string | null;
-        };
-        /** @description List-item session response (history list endpoint). */
-        SessionListItemResponse: {
-            active_thread?: components["schemas"]["SessionActiveThread"] | null;
-            /** Format: int32 */
-            current_die: number;
-            ended_at?: string | null;
-            has_restore_point: boolean;
-            /** Format: int32 */
-            id: number;
-            ladder_path: string;
-            /** Format: int32 */
-            last_rolled_result?: number | null;
-            /** Format: int32 */
-            manual_die?: number | null;
-            reading_bandwidth?: string | null;
-            reading_intent?: string | null;
-            reading_mode_source?: string | null;
-            reading_mode_suggested: boolean;
-            /** Format: int32 */
-            snapshot_count: number;
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-            /** Format: int32 */
-            user_id: number;
-        };
-        /** @description Query parameters for session history pagination. */
-        SessionListParams: {
-            /**
-             * Format: int32
-             * @default 50
-             */
-            page_size: number | null;
-            page_token?: string | null;
         };
         SessionSnapshotItem: {
             created_at: string;
@@ -9132,6 +9123,7 @@ export interface components {
             manual_creator_credits: unknown;
             next_unread_issue_number?: string | null;
             notes?: string | null;
+            queue_exclusion_group?: components["schemas"]["QueueExclusionGroupRef"] | null;
             /** Format: int32 */
             queue_position: number;
             /**
@@ -12203,26 +12195,6 @@ export interface operations {
             };
         };
     };
-    get_v1_metrics_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Simple application startup metrics */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StartupMetricsResponse"];
-                };
-            };
-        };
-    };
     get_reading_mode_documentation: {
         parameters: {
             query?: never;
@@ -13161,37 +13133,6 @@ export interface operations {
             };
         };
     };
-    releases_list: {
-        parameters: {
-            query?: {
-                /** @description Maximum releases to return (1-100, default 20) */
-                limit?: number;
-                /** @description Number of matching releases to skip (default 0) */
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReleaseListResponse"];
-                };
-            };
-            /** @description Invalid pagination */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     releases_publish: {
         parameters: {
             query?: never;
@@ -13366,186 +13307,6 @@ export interface operations {
             };
             /** @description Release writer authorization is not configured */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    dismiss_pending_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content. Pending thread cleared. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    list_sessions_v1_documentation: {
-        parameters: {
-            query?: {
-                page_size?: number;
-                page_token?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Paginated session history */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionHistoryListResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_session_v1_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned reading session */
-                session_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Single session */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionDetailResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_session_details_v1_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned reading session */
-                session_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Session details with events */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionDetailsResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    list_session_snapshots_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned reading session */
-                session_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Session restore snapshots */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionSnapshotsResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Session not found */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17782,6 +17543,118 @@ export interface operations {
             };
         };
     };
+    get_session_details_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned reading session */
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session details with events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionDetailsResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_session_snapshots_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned reading session */
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session restore snapshots */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionSnapshotsResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    releases_list: {
+        parameters: {
+            query?: {
+                /** @description Maximum releases to return (1-100, default 20) */
+                limit?: number;
+                /** @description Number of matching releases to skip (default 0) */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseListResponse"];
+                };
+            };
+            /** @description Invalid pagination */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     bootstrap_documentation: {
         parameters: {
             query?: {
@@ -17912,6 +17785,24 @@ export interface operations {
             };
         };
     };
+    dismiss_pending_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content. Pending thread cleared. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     eligible_issue_ids_documentation: {
         parameters: {
             query?: {
@@ -18029,6 +17920,58 @@ export interface operations {
             };
         };
     };
+    override_roll_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollOverrideRequest"];
+            };
+        };
+        responses: {
+            /** @description Manually selected thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeRollResponse"];
+                };
+            };
+            /** @description Thread is skipped or on snooze backoff */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread was not found for this reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread is blocked or not active */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     reset_documentation: {
         parameters: {
             query?: never;
@@ -18074,6 +18017,58 @@ export interface operations {
             };
             /** @description Database temporarily unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    switch_prerequisite_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollPrerequisiteSwitchRequest"];
+            };
+        };
+        responses: {
+            /** @description Durable active target after accepting the prerequisite */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollPrerequisiteSwitchResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Selected issue was not found for this reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No pending roll, or the guidance is stale */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported continuity-node type */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

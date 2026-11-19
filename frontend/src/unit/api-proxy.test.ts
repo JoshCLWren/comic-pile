@@ -78,7 +78,13 @@ describe('development API routing', () => {
     })
     const native = echo('native')
     const python = echo('python')
-    const proxy = createApiProxy(ingress.routes, {
+    const syntheticPythonRoute = {
+      src: '^/api/v1/__mixed-runtime-proxy-fixture$',
+      methods: ['POST', 'OPTIONS'],
+      dest: '/api/index.py',
+    }
+    const routes = [syntheticPythonRoute, ...ingress.routes]
+    const proxy = createApiProxy(routes, {
       native: await listen(native),
       python: await listen(python),
     })
@@ -90,18 +96,11 @@ describe('development API routing', () => {
     const gateway = createHttpServer(vite.middlewares)
     try {
       const base = await listen(gateway)
-      // One native route and one still-Python route per the current ingress
-      // source (vercel.json). Pick a concrete POST path that resolves to Python
-      // so the assertion stays valid across route migrations/regenerations.
-      const pythonCandidates = [
-        '/api/v1/comicvine/series:import',
-        '/api/v1/continuity-plans/1/reading-orders/project-preview',
-        '/api/v1/issue-identity/cbl/1/reading-graph-preview',
-        '/api/v1/reading-order-groups/',
-      ]
-      const pythonPath = pythonCandidates.find((path) => resolve('POST', path) === 'python')
-      if (!pythonPath) throw new Error('No Python POST route found in ingress for mixed-runtime proxy test')
-      expect(resolve('POST', pythonPath)).toBe('python')
+      // One native route and one deterministic Python fixture. The fixture keeps
+      // this mixed-runtime forwarding test independent of live Python route
+      // migrations.
+      const pythonPath = '/api/v1/__mixed-runtime-proxy-fixture'
+      expect(createApiDestinationResolver(routes)('POST', pythonPath)).toBe('python')
       const results = await Promise.all(Array.from({ length: 12 }, async (_, index) => {
         const path = index % 2 === 0 ? '/api/v2/auth/login' : pythonPath
         const response = await fetch(`${base}${path}?request=${index}`, {

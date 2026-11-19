@@ -9507,6 +9507,102 @@
         ],
         "type": "object"
       },
+      "NativeRollResponse": {
+        "description": "Response body: the Python `RollResponse` projection for a manual pick.",
+        "properties": {
+          "die_size": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "next_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "queue_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "snoozed_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "die_size",
+          "result",
+          "offset",
+          "snoozed_count"
+        ],
+        "type": "object"
+      },
       "NativeSeriesMappingPreviewCounts": {
         "properties": {
           "already_confirmed": {
@@ -10818,6 +10914,32 @@
           "thread_id",
           "position",
           "ordering_version"
+        ],
+        "type": "object"
+      },
+      "QueueExclusionGroupRef": {
+        "description": "Bulk exclusion provenance attached to an excluded queue thread (#5435).",
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_kind": {
+            "type": "string"
+          },
+          "source_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_kind",
+          "source_id",
+          "source_name"
         ],
         "type": "object"
       },
@@ -14424,6 +14546,75 @@
         ],
         "type": "object"
       },
+      "RollOverrideRequest": {
+        "description": "Request body for the manual override.",
+        "properties": {
+          "thread_id": {
+            "description": "Reader-selected thread identifier.",
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id"
+        ],
+        "type": "object"
+      },
+      "RollPrerequisiteSwitchRequest": {
+        "additionalProperties": false,
+        "description": "Request body for accepting one current recovery recommendation.",
+        "properties": {
+          "node_id": {
+            "description": "Recommended continuity-node identifier.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "node_type": {
+            "description": "Recommended continuity-node type. Only concrete issues are accepted.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_type",
+          "node_id"
+        ],
+        "type": "object"
+      },
+      "RollPrerequisiteSwitchResponse": {
+        "description": "Durable active-target state after accepting a recovery recommendation.",
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "original_thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_issue_number": {
+            "type": "string"
+          },
+          "target_thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "original_thread_id",
+          "target_thread_id",
+          "target_thread_title",
+          "target_issue_id",
+          "target_issue_number",
+          "changed"
+        ],
+        "type": "object"
+      },
       "RollResponse": {
         "description": "Schema for roll response.",
         "properties": {
@@ -15162,167 +15353,6 @@
         },
         "type": "object"
       },
-      "SessionDetailResponse": {
-        "description": "Wire shape of Python `SessionResponse` for `get_session`.",
-        "properties": {
-          "active_thread": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SessionActiveThread"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "bandwidth": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SessionBandwidthState"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "correction": {},
-          "current_die": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "has_restore_point": {
-            "type": "boolean"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "intent": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SessionIntentState"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "ladder_path": {
-            "type": "string"
-          },
-          "last_rolled_result": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "manual_die": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "pending_thread_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "reading_bandwidth": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_intent": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_suggested": {
-            "type": "boolean"
-          },
-          "skipped_thread_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "skipped_threads": {
-            "items": {
-              "$ref": "#/components/schemas/SessionThreadSummary"
-            },
-            "type": "array"
-          },
-          "snapshot_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "snoozed_thread_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "snoozed_threads": {
-            "items": {
-              "$ref": "#/components/schemas/SessionThreadSummary"
-            },
-            "type": "array"
-          },
-          "start_die": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "started_at": {
-            "type": "string"
-          },
-          "timezone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "user_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "started_at",
-          "start_die",
-          "user_id",
-          "ladder_path",
-          "current_die",
-          "has_restore_point",
-          "snapshot_count",
-          "snoozed_thread_ids",
-          "snoozed_threads",
-          "skipped_thread_ids",
-          "skipped_threads",
-          "reading_mode_suggested"
-        ],
-        "type": "object"
-      },
       "SessionDetailsResponse": {
         "description": "Full session details response with events and narrative summary.",
         "properties": {
@@ -15476,27 +15506,6 @@
         ],
         "type": "object"
       },
-      "SessionHistoryListResponse": {
-        "description": "Paginated session history list response.",
-        "properties": {
-          "next_page_token": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sessions": {
-            "items": {
-              "$ref": "#/components/schemas/SessionListItemResponse"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "sessions"
-        ],
-        "type": "object"
-      },
       "SessionIntentState": {
         "description": "Canonical intent state.",
         "properties": {
@@ -15526,125 +15535,6 @@
             ]
           },
           "source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "SessionListItemResponse": {
-        "description": "List-item session response (history list endpoint).",
-        "properties": {
-          "active_thread": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SessionActiveThread"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "current_die": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "has_restore_point": {
-            "type": "boolean"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "ladder_path": {
-            "type": "string"
-          },
-          "last_rolled_result": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "manual_die": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "reading_bandwidth": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_intent": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_suggested": {
-            "type": "boolean"
-          },
-          "snapshot_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "start_die": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "started_at": {
-            "type": "string"
-          },
-          "user_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "started_at",
-          "start_die",
-          "user_id",
-          "ladder_path",
-          "current_die",
-          "has_restore_point",
-          "snapshot_count",
-          "reading_mode_suggested"
-        ],
-        "type": "object"
-      },
-      "SessionListParams": {
-        "description": "Query parameters for session history pagination.",
-        "properties": {
-          "page_size": {
-            "default": 50,
-            "format": "int32",
-            "maximum": 200,
-            "minimum": 1,
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "page_token": {
             "type": [
               "string",
               "null"
@@ -16961,6 +16851,17 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "queue_exclusion_group": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/QueueExclusionGroupRef",
+                "description": "Present when this excluded thread was removed as part of a bulk action."
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "queue_position": {
@@ -21589,27 +21490,6 @@
         ]
       }
     },
-    "/api/v1/metrics": {
-      "get": {
-        "operationId": "get_v1_metrics_documentation",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StartupMetricsResponse"
-                }
-              }
-            },
-            "description": "Simple application startup metrics"
-          }
-        },
-        "summary": "OpenAPI documentation for the versioned metrics alias.",
-        "tags": [
-          "metrics"
-        ]
-      }
-    },
     "/api/v1/reading-mode": {
       "get": {
         "operationId": "get_reading_mode_documentation",
@@ -22537,49 +22417,6 @@
       }
     },
     "/api/v1/releases/": {
-      "get": {
-        "operationId": "releases_list",
-        "parameters": [
-          {
-            "description": "Maximum releases to return (1-100, default 20)",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Number of matching releases to skip (default 0)",
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReleaseListResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Invalid pagination"
-          }
-        },
-        "summary": "Documentation-only operation for the mounted releases list handler.",
-        "tags": [
-          "releases"
-        ]
-      },
       "put": {
         "operationId": "releases_publish",
         "parameters": [
@@ -22780,213 +22617,6 @@
         "summary": "Documentation-only operation for the mounted releases retract handler.",
         "tags": [
           "releases"
-        ]
-      }
-    },
-    "/api/v1/roll/dismiss-pending": {
-      "post": {
-        "operationId": "dismiss_pending_documentation",
-        "responses": {
-          "204": {
-            "description": "No Content. Pending thread cleared."
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "roll"
-        ]
-      }
-    },
-    "/api/v1/sessions/": {
-      "get": {
-        "operationId": "list_sessions_v1_documentation",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_token",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionHistoryListResponse"
-                }
-              }
-            },
-            "description": "Paginated session history"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for the versioned list.",
-        "tags": [
-          "sessions"
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}": {
-      "get": {
-        "operationId": "get_session_v1_documentation",
-        "parameters": [
-          {
-            "description": "Owned reading session",
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionDetailResponse"
-                }
-              }
-            },
-            "description": "Single session"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for the versioned mounted read.",
-        "tags": [
-          "sessions"
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}/details": {
-      "get": {
-        "operationId": "get_session_details_v1_documentation",
-        "parameters": [
-          {
-            "description": "Owned reading session",
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionDetailsResponse"
-                }
-              }
-            },
-            "description": "Session details with events"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for the versioned details.",
-        "tags": [
-          "sessions"
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}/snapshots": {
-      "get": {
-        "operationId": "list_session_snapshots_documentation",
-        "parameters": [
-          {
-            "description": "Owned reading session",
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionSnapshotsResponse"
-                }
-              }
-            },
-            "description": "Session restore snapshots"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "OpenAPI declaration for both legacy and versioned same-path aliases.",
-        "tags": [
-          "sessions"
         ]
       }
     },
@@ -28035,6 +27665,142 @@
         ]
       }
     },
+    "/api/v2/reading-sessions/{session_id}/details": {
+      "get": {
+        "operationId": "get_session_details_documentation",
+        "parameters": [
+          {
+            "description": "Owned reading session",
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetailsResponse"
+                }
+              }
+            },
+            "description": "Session details with events"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the v2 session details.",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/v2/reading-sessions/{session_id}/snapshots": {
+      "get": {
+        "operationId": "list_session_snapshots_documentation",
+        "parameters": [
+          {
+            "description": "Owned reading session",
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSnapshotsResponse"
+                }
+              }
+            },
+            "description": "Session restore snapshots"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "OpenAPI declaration for the v2 session snapshots read.",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/v2/releases": {
+      "get": {
+        "operationId": "releases_list",
+        "parameters": [
+          {
+            "description": "Maximum releases to return (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of matching releases to skip (default 0)",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid pagination"
+          }
+        },
+        "summary": "Documentation-only operation for the mounted releases list handler.",
+        "tags": [
+          "releases"
+        ]
+      }
+    },
     "/api/v2/roll/bootstrap": {
       "get": {
         "description": "The published response is the actual handler DTO, so known session,\npending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and\ntimezone fields stay in the live contract. Stored tag records, recovery\nnodes and mode-guidance JSON remain explicitly extensible.",
@@ -28163,6 +27929,24 @@
         ]
       }
     },
+    "/api/v2/roll/dismiss-pending": {
+      "post": {
+        "operationId": "dismiss_pending_documentation",
+        "responses": {
+          "204": {
+            "description": "No Content. Pending thread cleared."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "roll"
+        ]
+      }
+    },
     "/api/v2/roll/eligible-issue-ids": {
       "get": {
         "description": "The ordered eligible issue identifiers for the current die. Temporary snoozes are passed as a query parameter and applied exactly as the offer does.",
@@ -28267,6 +28051,54 @@
         ]
       }
     },
+    "/api/v2/roll/override": {
+      "post": {
+        "operationId": "override_roll_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollOverrideRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeRollResponse"
+                }
+              }
+            },
+            "description": "Manually selected thread"
+          },
+          "400": {
+            "description": "Thread is skipped or on snooze backoff"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread was not found for this reader"
+          },
+          "422": {
+            "description": "Thread is blocked or not active"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 manual pick.",
+        "tags": [
+          "roll"
+        ]
+      }
+    },
     "/api/v2/roll/reset": {
       "post": {
         "operationId": "reset_documentation",
@@ -28310,6 +28142,54 @@
           }
         ],
         "summary": "Documentation-only operation for the mounted v2 Roll reset command.",
+        "tags": [
+          "roll"
+        ]
+      }
+    },
+    "/api/v2/roll/switch-prerequisite": {
+      "post": {
+        "operationId": "switch_prerequisite_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollPrerequisiteSwitchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollPrerequisiteSwitchResponse"
+                }
+              }
+            },
+            "description": "Durable active target after accepting the prerequisite"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Selected issue was not found for this reader"
+          },
+          "409": {
+            "description": "No pending roll, or the guidance is stale"
+          },
+          "422": {
+            "description": "Unsupported continuity-node type"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 prerequisite switch.",
         "tags": [
           "roll"
         ]

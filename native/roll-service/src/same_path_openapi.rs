@@ -8,8 +8,6 @@ use utoipa::OpenApi;
     crate::reading_mode::set_reading_mode_documentation,
     crate::reading_mode::dismiss_reading_mode_suggestion_documentation,
     crate::reading_mode::suggest_reading_mode_documentation,
-    crate::dismiss_pending::dismiss_pending_documentation,
-    crate::dismiss_pending::dismiss_pending_legacy_documentation,
     crate::tags::list_tags_documentation,
     crate::tags::create_tag_documentation,
     crate::tags::effective_issue_documentation,
@@ -24,11 +22,6 @@ use utoipa::OpenApi;
     crate::tags::bulk_unassign_tag_documentation,
     crate::tags::unassign_tag_documentation,
     crate::tags::usage_tag_documentation,
-    crate::session_history::list_session_snapshots_documentation,
-    crate::session_list::list_sessions_documentation,
-    crate::session_list::list_sessions_v1_documentation,
-    crate::session_details::get_session_details_documentation,
-    crate::session_details::get_session_details_v1_documentation,
     crate::undo_snapshots::list_undo_snapshots_documentation,
     crate::undo_snapshots::list_undo_snapshots_v1_documentation,
     crate::undo_apply::undo_to_snapshot_documentation,
@@ -86,9 +79,6 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::bug_reports::BugReportsApi::openapi())
         .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
         .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
-        .merge_from(crate::session_detail::SessionDetailApi::openapi())
-        .merge_from(crate::session_list::SessionListApi::openapi())
-        .merge_from(crate::session_details::SessionDetailsApi::openapi())
         .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())
         .merge_from(crate::undo_apply::UndoApplyApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
@@ -137,10 +127,6 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         (
             "/api/v2/threads/{thread_id}/issue-dependencies",
             "/api/v1/threads/{thread_id}/issue-dependencies",
-        ),
-        (
-            "/api/v1/sessions/{session_id}/snapshots",
-            "/api/sessions/{session_id}/snapshots",
         ),
     ] {
         if let Some(item) = document.paths.paths.get(source).cloned() {

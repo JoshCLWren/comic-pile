@@ -1,8 +1,8 @@
-//! Native same-path session details read (#4839, parent #4335).
+//! Native resource-shaped session details read (#4839, parent #4335).
 //!
-//! Migrates `GET /api/sessions/{session_id}/details` and
-//! `GET /api/v1/sessions/{session_id}/details` to the native Rust router with
-//! identical method/path and wire contract.
+//! Serves `GET /api/v2/reading-sessions/{session_id}/details` from the native
+//! Rust router with the same wire contract as the retired v1/unversioned
+//! session details paths.
 //!
 //! Wire parity with Python `get_session_details` (`app/api/session.py`):
 //!
@@ -214,7 +214,7 @@ fn session_mode_description(event: &serde_json::Value) -> String {
     }
 }
 
-/// `GET /api/sessions/{session_id}/details` and `GET /api/v1/sessions/{session_id}/details`.
+/// `GET /api/v2/reading-sessions/{session_id}/details`.
 pub async fn get_session_details(
     Path(session_id): Path<i32>,
     user: AuthenticatedUser,
@@ -746,10 +746,10 @@ pub async fn get_session_details(
     }))
 }
 
-/// Documentation-only operation for the unversioned details.
+/// Documentation-only operation for the v2 session details.
 #[utoipa::path(
     get,
-    path = "/api/sessions/{session_id}/details",
+    path = "/api/v2/reading-sessions/{session_id}/details",
     tag = "sessions",
     params(("session_id" = i32, Path, description = "Owned reading session")),
     responses(
@@ -763,77 +763,22 @@ pub async fn get_session_details(
 #[allow(dead_code)]
 pub fn get_session_details_documentation() {}
 
-/// Documentation-only operation for the versioned details.
-#[utoipa::path(
-    get,
-    path = "/api/v1/sessions/{session_id}/details",
-    tag = "sessions",
-    params(("session_id" = i32, Path, description = "Owned reading session")),
-    responses(
-        (status = 200, description = "Session details with events", body = SessionDetailsResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Session not found"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn get_session_details_v1_documentation() {}
-
-/// OpenAPI document for the session details same-path surface.
-#[derive(utoipa::OpenApi)]
-#[openapi(
-    paths(
-        get_session_details_documentation,
-        get_session_details_v1_documentation
-    ),
-    components(schemas(
-        SessionEventDetail,
-        SessionDetailsResponse
-    )),
-    modifiers(&SessionDetailsSecurityAddon)
-)]
-pub struct SessionDetailsApi;
-
-struct SessionDetailsSecurityAddon;
-
-impl utoipa::Modify for SessionDetailsSecurityAddon {
-    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        if let Some(components) = openapi.components.as_mut() {
-            components.add_security_scheme(
-                "HTTPBearer",
-                utoipa::openapi::security::SecurityScheme::Http(
-                    utoipa::openapi::security::Http::new(
-                        utoipa::openapi::security::HttpAuthScheme::Bearer,
-                    ),
-                ),
-            );
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{db, test_support};
-    use utoipa::OpenApi;
 
     #[test]
-    fn session_details_openapi_covers_both_same_paths() {
-        let document = serde_json::to_value(SessionDetailsApi::openapi()).expect("openapi");
+    fn session_details_openapi_covers_the_v2_path() {
+        let document = serde_json::to_value(crate::openapi::canonical_openapi()).expect("openapi");
         let paths = document["paths"].as_object().expect("paths");
-        assert!(paths.contains_key("/api/sessions/{session_id}/details"));
-        assert!(paths.contains_key("/api/v1/sessions/{session_id}/details"));
-        for path in [
-            "/api/sessions/{session_id}/details",
-            "/api/v1/sessions/{session_id}/details",
-        ] {
-            let operation = &document["paths"][path]["get"];
-            assert!(operation["operationId"].is_string());
-            assert!(operation["responses"]["200"].as_object().is_some());
-            assert!(operation["responses"]["404"].as_object().is_some());
-            assert!(operation["security"].is_array());
-        }
+        assert!(paths.contains_key("/api/v2/reading-sessions/{session_id}/details"));
+        assert!(!paths.contains_key("/api/v1/sessions/{session_id}/details"));
+        let operation = &document["paths"]["/api/v2/reading-sessions/{session_id}/details"]["get"];
+        assert!(operation["operationId"].is_string());
+        assert!(operation["responses"]["200"].as_object().is_some());
+        assert!(operation["responses"]["404"].as_object().is_some());
+        assert!(operation["security"].is_array());
         assert!(document["components"]["schemas"]["SessionDetailsResponse"].is_object());
         let event_schema = &document["components"]["schemas"]["SessionEventDetail"];
         let props = event_schema["properties"]

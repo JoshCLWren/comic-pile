@@ -34,6 +34,16 @@
     },
     {
       "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/reading-lists/memberships:check",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/memberships:check$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5435
+    },
+    {
+      "bucket": "operations",
       "method": "DELETE",
       "path": "/api/v2/reading-lists/{list_id}",
       "dest": "/api/native_roll.rs",
