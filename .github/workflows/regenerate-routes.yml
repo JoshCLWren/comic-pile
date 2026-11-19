@@ -146,7 +146,7 @@ jobs:
           # dispatch production on exit. Normally CI is still running and a
           # separate pull_request_target/closed job handles the eventual merge.
           # shellcheck source=/dev/null
-          source .github/scripts/factory-dispatch-production-deploy.sh
+          source .github/scripts/dispatch-production-deploy.sh
           dispatch_deploy_after_merges() {
             if [[ "$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)" == 'MERGED' ]]; then
               GH_TOKEN="$DEPLOY_TOKEN" factory_dispatch_production_deploy "Route regeneration PR #$pr merged"
@@ -180,5 +180,5 @@ jobs:
           set -euo pipefail
           # The event is already merged. Never run code from the PR head.
           # shellcheck source=/dev/null
-          source .github/scripts/factory-dispatch-production-deploy.sh
+          source .github/scripts/dispatch-production-deploy.sh
           factory_dispatch_production_deploy "Route regeneration PR #${PR_NUMBER} merged"

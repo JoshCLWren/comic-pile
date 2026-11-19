@@ -1,6 +1,4 @@
-//! Native cutover of the manual Roll pick:
-//! `POST /api/v1/roll/override` and its shared-handler alias
-//! `POST /api/roll/override`.
+//! Native cutover of the manual Roll pick: `POST /api/v2/roll/override`.
 //!
 //! The Python handler chain (`app/api/roll.py:override_roll` ->
 //! `RollService.execute_override`) is the behavioral oracle. This module keeps
@@ -594,10 +592,10 @@ pub async fn override_roll(
     )))
 }
 
-/// Documentation-only operation for the mounted v1 manual pick.
+/// Documentation-only operation for the mounted v2 manual pick.
 #[utoipa::path(
     post,
-    path = "/api/v1/roll/override",
+    path = "/api/v2/roll/override",
     tag = "roll",
     request_body = RollOverrideRequest,
     responses(
@@ -611,24 +609,6 @@ pub async fn override_roll(
 )]
 #[allow(dead_code)]
 pub fn override_roll_documentation() {}
-
-/// Also mount the legacy-handler alias.
-#[utoipa::path(
-    post,
-    path = "/api/roll/override",
-    tag = "roll",
-    request_body = RollOverrideRequest,
-    responses(
-        (status = 200, description = "Manually selected thread", body = RollResponse),
-        (status = 400, description = "Thread is skipped or on snooze backoff"),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Thread was not found for this reader"),
-        (status = 422, description = "Thread is blocked or not active")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn override_roll_legacy_documentation() {}
 
 #[cfg(test)]
 mod tests {
@@ -745,7 +725,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/v1/roll/override")
+                    .uri("/api/v2/roll/override")
                     .header("content-type", "application/json")
                     .header("cookie", "csrf_token=synthetic-test-csrf")
                     .header("x-csrf-token", "synthetic-test-csrf")

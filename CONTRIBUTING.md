@@ -123,11 +123,11 @@ React components live in `frontend/src/` with JSX syntax. Style with Tailwind CS
 ### Database Migrations
 
 ```bash
-# Create a new migration
-alembic revision --autogenerate -m "description"
+# Create a new migration: append native/migrate/migrations/V<n>__description.sql
+# (Alembic is frozen; never edit an applied migration)
 
-# Run migrations
-make migrate  # or: alembic upgrade head
+# Run migrations (refinery runner, comicpile-migrate)
+make migrate  # or: cargo run --locked -p comicpile-migrate -- up
 ```
 
 ## Code quality standards

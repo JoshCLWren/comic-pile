@@ -27,8 +27,8 @@ export function createSessionApi(client: HttpClient) {
       return response
     },
     get: (id: number) => client.get<SessionSummary>(`/v1/sessions/${id}`),
-    getDetails: (id: number | string) => client.get<SessionDetails>(`/v1/sessions/${id}/details`),
-    getSnapshots: (id: number | string) => client.get<SessionSnapshotsResponse>(`/v1/sessions/${id}/snapshots`),
+    getDetails: (id: number | string) => client.get<SessionDetails>(`/v2/reading-sessions/${id}/details`),
+    getSnapshots: (id: number | string) => client.get<SessionSnapshotsResponse>(`/v2/reading-sessions/${id}/snapshots`),
   }
 }
 

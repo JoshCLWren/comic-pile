@@ -31,6 +31,8 @@ import {
 interface CustomCBLBuilderProps {
   planId?: number
   initialListId?: number
+  /** When true, keep the editor bound to initialListId and prevent switching lists. */
+  lockListSelection?: boolean
   disabled?: boolean
   onApplied?: (plan: ContinuityPlan) => void
   onPendingChange?: (pending: boolean) => void
@@ -65,6 +67,7 @@ class StaleReadingListUndoError extends Error {
 export default function CustomCBLBuilder({
   planId,
   initialListId,
+  lockListSelection = false,
   disabled = false,
   onApplied,
   onPendingChange,
@@ -592,6 +595,7 @@ export default function CustomCBLBuilder({
     setMessage(null)
   }
   const chooseList = (value: string) => {
+    if (lockListSelection) return
     createMutation.reset()
     const next = value ? Number(value) : null
     if (next === selectedId) return
@@ -720,8 +724,14 @@ export default function CustomCBLBuilder({
           {(listsQuery.data?.length ?? 0) > 0 && (
             <label className="block text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
               Custom CBL
-              <select aria-label="Custom CBL" value={selectedId ?? ''} onChange={(event) => chooseList(event.target.value)} disabled={disabled || isPending} className="mt-1 min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)] disabled:opacity-50">
-                <option value="">Choose a custom CBL</option>
+              <select
+                aria-label="Custom CBL"
+                value={selectedId ?? ''}
+                onChange={(event) => chooseList(event.target.value)}
+                disabled={disabled || isPending || lockListSelection}
+                className="mt-1 min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)] disabled:opacity-50"
+              >
+                {!lockListSelection && <option value="">Choose a custom CBL</option>}
                 {(listsQuery.data ?? []).map((list) => <option key={list.id} value={list.id}>{list.name} · {list.issue_count} issues · {list.mode}</option>)}
               </select>
             </label>
@@ -1098,9 +1108,7 @@ export default function CustomCBLBuilder({
           <p className="text-sm text-[var(--theme-text-muted)]">This edit changes which issues wait on which. Review the new waits, then confirm to save. Cancel keeps the saved list exactly as it is.</p>
           <ul className="space-y-2" aria-label="Waiting changes">
             {(confirmationChanges ?? []).map((change) => (
-              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
-                {describePredecessorChange(change)}
-              </li>
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
             ))}
           </ul>
           <div className="flex flex-wrap justify-end gap-2">
@@ -1118,9 +1126,7 @@ export default function CustomCBLBuilder({
           <p className="text-sm text-[var(--theme-text-muted)]">Replacing this Reading List changes which issues wait on which. Review the new waits, then confirm the same replacement review. Cancel leaves the saved list exactly as it is.</p>
           <ul className="space-y-2" aria-label="Replacement waiting changes">
             {(replaceConfirmation?.changes ?? []).map((change) => (
-              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
-                {describePredecessorChange(change)}
-              </li>
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
             ))}
           </ul>
           <div className="flex flex-wrap justify-end gap-2">
@@ -1150,9 +1156,7 @@ export default function CustomCBLBuilder({
           <p className="text-sm text-[var(--theme-text-muted)]">Restoring the previous list changes which issues wait on which. Review the restored waits, then confirm. Cancel keeps the replaced list exactly as it is.</p>
           <ul className="space-y-2" aria-label="Undo waiting changes">
             {(undoConfirmation ?? []).map((change) => (
-              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
-                {describePredecessorChange(change)}
-              </li>
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
             ))}
           </ul>
           <div className="flex flex-wrap justify-end gap-2">

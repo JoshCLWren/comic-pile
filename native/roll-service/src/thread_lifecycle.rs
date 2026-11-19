@@ -1288,7 +1288,7 @@ async fn exclude_once(
         }
         tx.execute(
             "UPDATE threads SET status = 'excluded', queue_position = 0,
-                queue_position_is_manual = false
+                queue_position_is_manual = false, queue_exclusion_group_id = NULL
          WHERE id = $1",
             &[&thread.id],
         )
@@ -1371,7 +1371,7 @@ async fn restore_once(
         };
         tx.execute(
             "UPDATE threads SET status = $2, queue_position = $3,
-                queue_position_is_manual = false
+                queue_position_is_manual = false, queue_exclusion_group_id = NULL
          WHERE id = $1",
             &[&thread.id, &status, &position],
         )

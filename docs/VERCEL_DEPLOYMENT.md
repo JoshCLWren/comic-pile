@@ -23,7 +23,7 @@ so on its own a factory merge could leave production hours behind `main` (PR #38
 
 `workflow_dispatch` is the one event `GITHUB_TOKEN` may raise. Only two paths merge factory PRs in
 production, Factory Ready Merge Drain and the Fixed Model Factory Dispatcher's ready drain. Both call
-`factory_dispatch_production_deploy` from `.github/scripts/factory-dispatch-production-deploy.sh`,
+`factory_dispatch_production_deploy` from `.github/scripts/dispatch-production-deploy.sh`,
 which runs `gh workflow run deploy-production.yml --ref main -f source=factory-merge`:
 
 - Each drain dispatches once per run, after the last merge (an `EXIT` trap, so a later loop failure
@@ -34,17 +34,17 @@ which runs `gh workflow run deploy-production.yml --ref main -f source=factory-m
   pattern). If every attempt fails, it only warns; the merge stands and the next trigger deploys the
   same `main`. Both jobs run with `actions: write`. `FACTORY_DEPLOY_DISPATCH=off` disables the
   dispatch for an incident.
-- The worker wrappers (`free-model-factory-worker-primitives.sh`, `nvidia-factory-worker.sh`,
-  `omniroute-factory-worker.sh`) do not merge in production. Workers hand finished PRs to the
-  merge controller. `validate-free-model-factories.py` forbids `gh pr merge "$NUMBER"` in the live
-  `free-model-factory-worker.sh`, which sources the primitives only up to `ensure_owner_label`, so
+- The worker wrappers ([free-model-factory-worker-primitives.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/free-model-factory-worker-primitives.sh), [nvidia-factory-worker.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/nvidia-factory-worker.sh),
+  [omniroute-factory-worker.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/omniroute-factory-worker.sh)) do not merge in production. Workers hand finished PRs to the
+  merge controller. [validate-free-model-factories.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/validate-free-model-factories.py) forbids `gh pr merge "$NUMBER"` in the live
+  [free-model-factory-worker.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/free-model-factory-worker.sh), which sources the primitives only up to `ensure_owner_label`, so
   the primitives' standalone merge loop never runs. The NVIDIA and OmniRoute wrappers are not called
   by any workflow. Their `gh pr merge` blocks and the dispatch call after each one are dead code. The
   dispatch calls stay in so the guard test below keeps passing, and they would do the right thing if
   one of those paths were revived.
-- `tests/test_factory_deploy_dispatch_after_merge.py` finds every `gh pr merge` or merge-API call <!-- docs-path-check: ignore -->
+- [tests/test_factory_deploy_dispatch_after_merge.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/tests/test_factory_deploy_dispatch_after_merge.py) finds every `gh pr merge` or merge-API call
   under `.github/` and `scripts/` and fails when one does not dispatch the deploy. The only
-  exemption is `scripts/opencode_pipeline.sh`, which merges locally with the operator's token, so
+  exemption is [scripts/opencode_pipeline.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/scripts/opencode_pipeline.sh), which merges locally with the operator's token, so
   its push event deploys normally.
 
 Dispatched runs are named `Deploy Production [source=<source>] <reason>` (`run-name`), so the
