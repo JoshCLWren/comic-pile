@@ -38,10 +38,11 @@
 
 use crate::{
     auth::AuthenticatedUser, db, option_inputs, reading_blocker_projection, reading_eligibility,
-    ApiError, AppState,
+    thread_issues, ApiError, AppState,
 };
 use axum::{
     extract::{rejection::PathRejection, Path, State},
+    response::{IntoResponse, Response},
     Json,
 };
 use serde::{ser::SerializeMap, Serialize, Serializer};
@@ -188,7 +189,7 @@ fn parse_thread_id(raw: Result<Path<String>, PathRejection>) -> Result<i32, ApiE
 }
 
 /// Accept the decimal integers pydantic's lax int parser accepts for a path value.
-fn parse_int_text(raw: &str) -> Option<i32> {
+pub(crate) fn parse_int_text(raw: &str) -> Option<i32> {
     let trimmed = raw.trim();
     let digits = trimmed
         .strip_prefix(['+', '-'])
@@ -408,10 +409,22 @@ pub async fn post_thread_action(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     segment: Result<Path<String>, PathRejection>,
-) -> Result<Json<BlockingExplanation>, ApiError> {
+    body: axum::body::Bytes,
+) -> Result<Response, ApiError> {
     let Path(segment) = segment.map_err(|_| validation_failed())?;
     match segment.split_once(':') {
-        Some((raw_id, "getBlockingInfo")) => get_thread_blocking_info(&state, user, raw_id).await,
+        Some((raw_id, "getBlockingInfo")) => get_thread_blocking_info(&state, user, raw_id)
+            .await
+            .map(IntoResponse::into_response),
+        Some((raw_id, "migrateToIssues")) => {
+            thread_issues::migrate_to_issues(&state, user, raw_id, &body).await
+        }
+        Some((raw_id, "migrateToIssuesSimple")) => {
+            thread_issues::migrate_to_issues_simple(&state, user, raw_id, &body).await
+        }
+        Some((raw_id, "setCurrentIssue")) => {
+            thread_issues::set_current_issue(&state, user, raw_id, &body).await
+        }
         _ => Err(ApiError::NotFound("Not Found".to_string())),
     }
 }
