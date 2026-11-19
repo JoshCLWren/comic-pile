@@ -74,7 +74,7 @@ See `.env.example` for additional optional settings (access-token lifetime, logg
 
 ### 3. Start PostgreSQL and bootstrap
 
-`make setup` starts the local PostgreSQL container, waits for it to be ready, installs Python and frontend dependencies, runs Alembic migrations, and seeds deterministic demo data:
+`make setup` starts the local PostgreSQL container, waits for it to be ready, installs Python and frontend dependencies, runs the refinery migration runner (`native/migrate`), and seeds deterministic demo data:
 
 ```bash
 make setup
@@ -175,7 +175,7 @@ The application accepts standard `postgresql://` or `postgres://` connection str
 make dev        # frontend + API development servers
 make dev-api    # API only
 make dev-native # native Rust Roll/auth service on :8010 for /api/v2/* routes
-make migrate    # run Alembic migrations
+make migrate    # run migrations (refinery runner, native/migrate)
 make seed       # seed local sample data
 make lint       # repository lint/type checks
 make verify     # complete local verification suite

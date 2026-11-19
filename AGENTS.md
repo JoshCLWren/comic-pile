@@ -544,8 +544,8 @@ in `frontend/src/query/` (see `queryKeys.ts`, `queryClient.ts`, `cacheEffects.ts
 ## Database Migrations
 
 ```bash
-alembic revision --autogenerate -m "description"  # Create migration
-make migrate  # Run migrations (or: alembic upgrade head)
+# Create migration: append native/migrate/migrations/V<n>__description.sql (Alembic is frozen)
+make migrate  # Run migrations (or: cargo run --locked -p comicpile-migrate -- up)
 ```
 
 ## Greptile Review Rules

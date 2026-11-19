@@ -234,9 +234,9 @@ seed:  ## Seed database with sample data (python -m scripts.seed_data)
 seed-dev:  ## Reset the local demo user and queue with deterministic data
 	@python scripts/seed_dev_db.py
 
-migrate:  ## Run database migrations (alembic upgrade head)
+migrate:  ## Run database migrations (refinery runner, native/migrate)
 	@echo "Running database migrations..."
-	@alembic upgrade head
+	@cargo run --locked -p comicpile-migrate -- up
 
 roll-test-schema:  ## Regenerate native/migrate/migrations/V1__baseline.sql from Alembic head
 	@uv run python scripts/export_roll_test_schema.py --database-url "$(DATABASE_URL)"
