@@ -245,8 +245,8 @@ async fn every_operation_requires_authentication_and_csrf() {
 
 #[tokio::test]
 async fn identity_confirm_replace_remove_flow_matches_python() {
-    set_key(false);
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-identity").await;
+    set_key(false);
     let conn = state.pool.get().await.unwrap();
     let t = thread(&conn, user_id, "Saga").await;
     let i = issue(&conn, t, "1", 1).await;
@@ -468,8 +468,8 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
 
 #[tokio::test]
 async fn identity_mutations_are_owner_scoped() {
-    set_key(false);
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-owner").await;
+    set_key(false);
     let (other_token, other_csrf, other_id) = register_extra_user(&state, "cvv2-other").await;
     let conn = state.pool.get().await.unwrap();
     let t = thread(&conn, user_id, "Mine").await;
@@ -520,8 +520,8 @@ async fn identity_mutations_are_owner_scoped() {
 
 #[tokio::test]
 async fn concurrent_confirms_leave_exactly_one_confirmed_identity() {
-    set_key(false);
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-race").await;
+    set_key(false);
     let conn = state.pool.get().await.unwrap();
     let t = thread(&conn, user_id, "Race").await;
     let i = issue(&conn, t, "1", 1).await;
@@ -572,8 +572,8 @@ async fn concurrent_confirms_leave_exactly_one_confirmed_identity() {
 
 #[tokio::test]
 async fn metadata_corrections_apply_list_revert() {
-    set_key(false);
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-corr").await;
+    set_key(false);
     let conn = state.pool.get().await.unwrap();
     let t = thread(&conn, user_id, "Corr").await;
     let i = issue(&conn, t, "1", 1).await;
@@ -676,8 +676,8 @@ async fn metadata_corrections_apply_list_revert() {
 
 #[tokio::test]
 async fn import_issue_creates_thread_identity_and_reading_order_slot() {
-    set_key(false);
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-impissue").await;
+    set_key(false);
     let (other_token, other_csrf, _) = register_extra_user(&state, "cvv2-impother").await;
     let conn = state.pool.get().await.unwrap();
     let order: i32 = conn
@@ -806,8 +806,8 @@ fn roster_row(id: i64, number: &str, volume: i64) -> Value {
 
 #[tokio::test]
 async fn import_series_adopts_roster_and_reuses_on_retry() {
-    set_key(true);
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-series").await;
+    set_key(true);
     let conn = state.pool.get().await.unwrap();
 
     provider_ok(
@@ -1144,8 +1144,8 @@ async fn import_series_error_contract_and_reading_order() {
 
 #[tokio::test]
 async fn import_series_orders_numbered_issues_naturally_and_marks_all_read() {
-    set_key(true);
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-natural").await;
+    set_key(true);
     let conn = state.pool.get().await.unwrap();
     provider_ok(&state, json!({"results": {"id": 77, "name": "Natural"}}));
     provider_ok(
@@ -1356,8 +1356,8 @@ async fn search_resolve_and_series_issues_use_the_faked_provider() {
 /// metadata (the source of the Queue row's volume label).
 #[tokio::test]
 async fn identity_removal_and_readd_leave_thread_series_metadata_untouched() {
-    set_key(false);
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-5487").await;
+    set_key(false);
     let conn = state.pool.get().await.unwrap();
     let t = thread(&conn, user_id, "Superman").await;
     let i = issue(&conn, t, "4", 1).await;
