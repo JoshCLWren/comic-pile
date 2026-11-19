@@ -96,7 +96,11 @@ pub struct DiagnosticScreen {
     pub width: i128,
     #[serde(deserialize_with = "deserialize_lax_i128")]
     pub height: i128,
-    #[serde(rename = "pixelRatio", deserialize_with = "deserialize_lax_f64")]
+    #[serde(
+        rename = "pixelRatio",
+        alias = "pixel_ratio",
+        deserialize_with = "deserialize_lax_f64"
+    )]
     pub pixel_ratio: f64,
 }
 
@@ -123,12 +127,14 @@ pub struct DiagnosticScroll {
 pub struct DiagnosticPerformance {
     #[serde(
         rename = "domContentLoaded",
+        alias = "dom_content_loaded",
         default,
         deserialize_with = "deserialize_lax_opt_f64"
     )]
     pub dom_content_loaded: Option<f64>,
     #[serde(
         rename = "loadComplete",
+        alias = "load_complete",
         default,
         deserialize_with = "deserialize_lax_opt_f64"
     )]
@@ -147,7 +153,7 @@ pub struct DiagnosticError {
 pub struct BugReportDiagnostics {
     pub timestamp: String,
     pub url: String,
-    #[serde(rename = "userAgent")]
+    #[serde(rename = "userAgent", alias = "user_agent")]
     pub user_agent: String,
     pub screen: DiagnosticScreen,
     pub viewport: DiagnosticViewport,
