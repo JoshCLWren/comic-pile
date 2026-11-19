@@ -40,6 +40,17 @@ export interface BootstrapRequest {
 
 export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
 
+export interface ComicvineSeriesIssuesRequest {
+  path: {
+    comicvine_volume_id: number
+  }
+  query: {
+    series_name: string
+  }
+}
+
+export type ComicvineSeriesIssuesResponse = components['schemas']['NativeComicVineSeriesIssuesResponse']
+
 export interface CommitRequest {
   body: components['schemas']['CommitRequest']
 }
@@ -701,7 +712,6 @@ export interface ResetPasswordRequest {
 
 export type ResetPasswordResponse = components['schemas']['PasswordResetResponse']
 
-<<<<<<< HEAD
 export interface ResolveInputRequest {
   query: {
     input: string
@@ -719,18 +729,6 @@ export interface RevertCorrectionRequest {
 
 export type RevertCorrectionResponse = components['schemas']['NativeMetadataCorrectionsResponse']
 
-export type SearchResponse = components['schemas']['IdentityInboxSearchResponse']
-
-export interface SearchSeriesRequest {
-  query: {
-    q: string
-    limit: number
-    offset: number
-  }
-}
-
-export type SearchSeriesResponse = components['schemas']['NativeComicVineSeriesSearchResponse']
-=======
 export interface RoleRequest {
   path: {
     creator_key: string
@@ -746,6 +744,16 @@ export type RoleResponse = components['schemas']['CreatorMetricDrilldown']
 
 export type SearchResponse = components['schemas']['IdentityInboxSearchResponse']
 
+export interface SearchSeriesRequest {
+  query: {
+    q: string
+    limit: number
+    offset: number
+  }
+}
+
+export type SearchSeriesResponse = components['schemas']['NativeComicVineSeriesSearchResponse']
+
 export interface SeriesRequest {
   path: {
     creator_key: string
@@ -758,7 +766,6 @@ export interface SeriesRequest {
 }
 
 export type SeriesResponse = components['schemas']['CreatorMetricDrilldown']
->>>>>>> origin/main
 
 export interface SeriesImportStatusRequest {
   path: {
@@ -768,7 +775,6 @@ export interface SeriesImportStatusRequest {
 
 export type SeriesImportStatusResponse = components['schemas']['SeriesImportStatusResponse']
 
-<<<<<<< HEAD
 export interface SeriesImportStatusV2Request {
   path: {
     comicvine_volume_id: number
@@ -777,17 +783,6 @@ export interface SeriesImportStatusV2Request {
 
 export type SeriesImportStatusV2Response = components['schemas']['SeriesImportStatusResponse']
 
-export interface SeriesIssuesRequest {
-  path: {
-    comicvine_volume_id: number
-  }
-  query: {
-    series_name: string
-  }
-}
-
-export type SeriesIssuesResponse = components['schemas']['NativeComicVineSeriesIssuesResponse']
-=======
 export interface SeriesIssuesRequest {
   path: {
     creator_key: string
@@ -800,7 +795,6 @@ export interface SeriesIssuesRequest {
 }
 
 export type SeriesIssuesResponse = components['schemas']['CreatorSeriesIssueListResponse']
->>>>>>> origin/main
 
 export interface SkipRequest {
   path: {
@@ -850,6 +844,7 @@ export type UpdateReadingListResponse = components['schemas']['ReadingList']
 export interface NativeV2Client {
   applyCorrection(args: ApplyCorrectionRequest): Promise<ApplyCorrectionResponse>
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
+  comicvineSeriesIssues(args: ComicvineSeriesIssuesRequest): Promise<ComicvineSeriesIssuesResponse>
   commit(args: CommitRequest): Promise<CommitResponse>
   compare(args?: CompareRequest): Promise<CompareResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
@@ -942,19 +937,14 @@ export interface NativeV2Client {
   replaceIdentity(args: ReplaceIdentityRequest): Promise<ReplaceIdentityResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
-<<<<<<< HEAD
   resolveInput(args: ResolveInputRequest): Promise<ResolveInputResponse>
   revertCorrection(args: RevertCorrectionRequest): Promise<RevertCorrectionResponse>
-  search(): Promise<SearchResponse>
-  searchSeries(args: SearchSeriesRequest): Promise<SearchSeriesResponse>
-  seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
-  seriesImportStatusV2(args: SeriesImportStatusV2Request): Promise<SeriesImportStatusV2Response>
-=======
   role(args: RoleRequest): Promise<RoleResponse>
   search(): Promise<SearchResponse>
+  searchSeries(args: SearchSeriesRequest): Promise<SearchSeriesResponse>
   series(args: SeriesRequest): Promise<SeriesResponse>
   seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
->>>>>>> origin/main
+  seriesImportStatusV2(args: SeriesImportStatusV2Request): Promise<SeriesImportStatusV2Response>
   seriesIssues(args: SeriesIssuesRequest): Promise<SeriesIssuesResponse>
   skip(args: SkipRequest): Promise<SkipResponse>
   summaries(args?: SummariesRequest): Promise<SummariesResponse>
@@ -975,6 +965,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     bootstrap(args: BootstrapRequest = {}) {
       return client.get<BootstrapResponse>(
         "/v2/roll/bootstrap",
+        { params: compactQuery(args.query) },
+      )
+    },
+    comicvineSeriesIssues(args: ComicvineSeriesIssuesRequest) {
+      return client.get<ComicvineSeriesIssuesResponse>(
+        `/v2/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/issues`,
         { params: compactQuery(args.query) },
       )
     },
@@ -1457,7 +1453,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-<<<<<<< HEAD
     resolveInput(args: ResolveInputRequest) {
       return client.get<ResolveInputResponse>(
         "/v2/comicvine/resolve",
@@ -1470,13 +1465,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-    search() {
-      return client.get<SearchResponse>("/v1/identity-inbox/search/issues")
-    },
-    searchSeries(args: SearchSeriesRequest) {
-      return client.get<SearchSeriesResponse>(
-        "/v2/comicvine/search/series",
-=======
     role(args: RoleRequest) {
       return client.get<RoleResponse>(
         `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/metrics/role-stats/${encodeURIComponent(String(args.path.role))}`,
@@ -1486,10 +1474,15 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     search() {
       return client.get<SearchResponse>("/v1/identity-inbox/search/issues")
     },
+    searchSeries(args: SearchSeriesRequest) {
+      return client.get<SearchSeriesResponse>(
+        "/v2/comicvine/search/series",
+        { params: compactQuery(args.query) },
+      )
+    },
     series(args: SeriesRequest) {
       return client.get<SeriesResponse>(
         `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/metrics/series-stats/${encodeURIComponent(String(args.path.series_key))}`,
->>>>>>> origin/main
         { params: compactQuery(args.query) },
       )
     },
@@ -1498,7 +1491,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v1/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
       )
     },
-<<<<<<< HEAD
     seriesImportStatusV2(args: SeriesImportStatusV2Request) {
       return client.get<SeriesImportStatusV2Response>(
         `/v2/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
@@ -1506,12 +1498,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     seriesIssues(args: SeriesIssuesRequest) {
       return client.get<SeriesIssuesResponse>(
-        `/v2/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/issues`,
-=======
-    seriesIssues(args: SeriesIssuesRequest) {
-      return client.get<SeriesIssuesResponse>(
         `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/series/${encodeURIComponent(String(args.path.series_key))}/issues`,
->>>>>>> origin/main
         { params: compactQuery(args.query) },
       )
     },

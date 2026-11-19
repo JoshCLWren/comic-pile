@@ -3231,7 +3231,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["series_issues_documentation"];
+        get: operations["comicvine_series_issues_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -18447,7 +18447,7 @@ export interface operations {
             };
         };
     };
-    series_issues_documentation: {
+    comicvine_series_issues_documentation: {
         parameters: {
             query: {
                 /** @description Pre-fetched series name */
