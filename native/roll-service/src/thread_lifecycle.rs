@@ -1865,10 +1865,15 @@ pub async fn backdate_thread_for_testing(
         )));
     }
 
+    let user_id = user.id();
     let thread_id = thread_id.unwrap_or_default();
     let days_ago = days_ago.unwrap_or_default();
     let updated_id = with_tx!(&state, tx, db::tx_error, {
-        let thread = find_owned(&tx, user.id(), thread_id, true).await?;
+        // Match every sibling lifecycle writer: take the per-reader queue
+        // advisory lock before the thread row lock (`find_owned(.., true)`),
+        // never the reverse (#5398/#5419 lock-order rule).
+        acquire_queue_lock(&tx, user_id).await?;
+        let thread = find_owned(&tx, user_id, thread_id, true).await?;
         tx.execute(
             "UPDATE threads SET last_activity_at = NOW() - ($2::bigint * INTERVAL '1 day')
              WHERE id = $1",

@@ -28,6 +28,36 @@ fn unique_suffix() -> u128 {
         .as_nanos()
 }
 
+/// Queue advisory-lock namespace mirrored from `queue::QUEUE_LOCK_NAMESPACE`.
+const QUEUE_LOCK_NAMESPACE: i32 = 699001;
+type Conn = deadpool_postgres::Object;
+
+/// Number of sessions currently waiting on this reader's queue advisory lock.
+async fn queue_lock_waiters(conn: &Conn, user_id: i32) -> i64 {
+    conn.query_one(
+        "SELECT count(*) FROM pg_locks
+         WHERE locktype = 'advisory' AND NOT granted
+           AND classid::int = $1 AND objid::int = $2",
+        &[&QUEUE_LOCK_NAMESPACE, &user_id],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
+/// Block until exactly `expected` sessions wait on the queue lock. This reads
+/// database state, never sleeps as synchronization; the bound only fails a
+/// hung run.
+async fn wait_for_queue_lock_waiters(conn: &Conn, user_id: i32, expected: i64) {
+    for _ in 0..3000 {
+        if queue_lock_waiters(conn, user_id).await == expected {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    panic!("expected {expected} queue-lock waiters");
+}
+
 struct Ctx {
     state: Arc<AppState>,
     token: String,
@@ -37,12 +67,18 @@ struct Ctx {
 }
 
 async fn setup(prefix: &str) -> Ctx {
+    setup_with_pool(prefix, "2").await
+}
+
+/// Same fixture as `setup`, with a larger pool for deterministic multi-writer
+/// lock tests (a lock holder plus two in-flight requests need three sockets).
+async fn setup_with_pool(prefix: &str, pool_size: &str) -> Ctx {
     let url = comicpile_roll_service::test_support::database_url().await;
     let state = Arc::new(test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-thread-lifecycle-secret".into()),
-            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_owned()),
             _ => None,
         })
         .unwrap(),
@@ -2283,7 +2319,47 @@ async fn test_backdate_thread_for_testing_updates_activity_and_returns_thread() 
     .await;
 
     assert_eq!(status, StatusCode::OK, "{body:?}");
+    // Golden success body measured from the frozen Python route
+    // (`app/services/thread_service.py::backdate_thread_for_testing` ->
+    // `thread_to_response`, schema `app/schemas/thread.py::ThreadResponse`).
+    // Python always emits all 18 fields, including explicit null/[]/false
+    // values; a changed response shape must fail here.
+    assert_eq!(
+        keys(&body),
+        vec![
+            "blocking_reasons",
+            "created_at",
+            "format",
+            "id",
+            "is_blocked",
+            "is_test",
+            "issues_remaining",
+            "last_activity_at",
+            "last_rating",
+            "manual_creator_credits",
+            "next_unread_issue_id",
+            "next_unread_issue_number",
+            "notes",
+            "queue_position",
+            "reading_progress",
+            "status",
+            "title",
+            "total_issues"
+        ]
+    );
     assert_eq!(body["id"], thread);
+    assert_eq!(body["title"], "Test");
+    assert_eq!(body["format"], "Comic");
+    assert_eq!(body["status"], "active");
+    assert_eq!(body["queue_position"], 1);
+    assert_eq!(body["issues_remaining"], 2);
+    assert_eq!(body["is_blocked"], false);
+    assert_eq!(body["is_test"], false);
+    assert_eq!(body["last_rating"], Value::Null);
+    assert_eq!(body["notes"], Value::Null);
+    assert_eq!(body["manual_creator_credits"], json!([]));
+    assert_eq!(body["blocking_reasons"], json!([]));
+    assert!(body["created_at"].as_str().unwrap().ends_with('Z'));
     assert!(body["last_activity_at"].is_string(), "{body:?}");
 
     let activity: chrono::DateTime<chrono::Utc> = ctx
@@ -2359,30 +2435,126 @@ async fn test_backdate_thread_for_testing_validates_days_ago() {
     let ctx = setup("lcbackdatevalidate").await;
     let thread = seed_thread(&ctx, ctx.user_id, "Test", "active", 1, 2).await;
 
-    let (status, _body) = call(
-        &ctx,
-        "PUT",
-        &format!("/api/v1/threads/{thread}/test-backdate"),
-        None,
-    )
-    .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // Golden 422 responses measured from the frozen Python route. FastAPI
+    // raises RequestValidationError for `days_ago: int = Query(..., ge=1,
+    // le=3650)` and `app/exception_handlers.py::validation_exception_handler`
+    // returns `{"detail": "Validation failed"}` in production (the stable
+    // contract), adding `errors`/`body` in dev/test. Assert both so a changed
+    // error envelope cannot pass on status code alone.
+    let production = std::env::var("ENVIRONMENT").as_deref() == Ok("production");
+    let assert_rejection = |status: StatusCode, body: &Value, error: Value| {
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
+        assert_eq!(body["detail"], "Validation failed", "{body:?}");
+        if !production {
+            assert_eq!(
+                body["errors"],
+                json!([error]),
+                "Python-measured validation errors"
+            );
+            assert_eq!(body["body"], Value::Null, "Python-measured request body");
+        }
+    };
+    let path = format!("/api/v1/threads/{thread}/test-backdate");
 
-    let (status, _body) = call(
-        &ctx,
-        "PUT",
-        &format!("/api/v1/threads/{thread}/test-backdate?days_ago=0"),
-        None,
-    )
-    .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, body) = call(&ctx, "PUT", &path, None).await;
+    assert_rejection(
+        status,
+        &body,
+        json!({"field": "query.days_ago", "message": "Field required", "type": "missing"}),
+    );
 
-    let (status, _body) = call(
-        &ctx,
-        "PUT",
-        &format!("/api/v1/threads/{thread}/test-backdate?days_ago=3651"),
-        None,
+    let (status, body) = call(&ctx, "PUT", &format!("{path}?days_ago=0"), None).await;
+    assert_rejection(
+        status,
+        &body,
+        json!({"field": "query.days_ago", "message": "Input should be greater than or equal to 1", "type": "greater_than_equal"}),
+    );
+
+    let (status, body) = call(&ctx, "PUT", &format!("{path}?days_ago=3651"), None).await;
+    assert_rejection(
+        status,
+        &body,
+        json!({"field": "query.days_ago", "message": "Input should be less than or equal to 3650", "type": "less_than_equal"}),
+    );
+}
+
+/// A changed writer must serialize on the per-reader queue advisory lock
+/// before touching the thread row. Force a deterministic interleaving with the
+/// sibling `exclude` writer: a holder keeps the queue lock, both requests park
+/// on it, then it is released. Without the queue lock, backdate would grab the
+/// thread row first and either deadlock (40P01) or never queue, so this test
+/// fails rather than passing on a lucky serial schedule.
+#[tokio::test]
+async fn test_backdate_and_exclude_do_not_deadlock() {
+    let _env_guard = TEST_ENV_LOCK.lock().await;
+    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    std::env::set_var("TEST_ENVIRONMENT", "true");
+    let ctx = setup_with_pool("lcbackdateexdead", "8").await;
+    let mut holder = ctx.state.pool.get().await.unwrap();
+    let conn = ctx.state.pool.get().await.unwrap();
+    let id = seed_thread(&ctx, ctx.user_id, "Contended", "active", 1, 5).await;
+
+    let hold = holder.transaction().await.unwrap();
+    hold.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&QUEUE_LOCK_NAMESPACE, &ctx.user_id],
     )
-    .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    .await
+    .unwrap();
+
+    let backdate = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "PUT",
+                    &format!("/api/v1/threads/{id}/test-backdate?days_ago=5"),
+                    &token,
+                    &csrf,
+                    None,
+                ),
+            )
+            .await
+        })
+    };
+    wait_for_queue_lock_waiters(&conn, ctx.user_id, 1).await;
+    let exclude = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "POST",
+                    &format!("/api/v1/threads/{id}/exclude"),
+                    &token,
+                    &csrf,
+                    None,
+                ),
+            )
+            .await
+        })
+    };
+    wait_for_queue_lock_waiters(&conn, ctx.user_id, 2).await;
+    hold.commit().await.unwrap();
+
+    let (b, e) = tokio::join!(backdate, exclude);
+    let (b_status, b_body) = b.expect("backdate task");
+    let (e_status, e_body) = e.expect("exclude task");
+    assert_ne!(
+        b_status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "backdate deadlocked or errored: {b_status} {b_body:?}"
+    );
+    assert_eq!(b_status, StatusCode::OK, "backdate: {b_status} {b_body:?}");
+    assert_ne!(
+        e_status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "exclude deadlocked or errored: {e_status} {e_body:?}"
+    );
+    assert_eq!(e_status, StatusCode::OK, "exclude: {e_status} {e_body:?}");
 }
