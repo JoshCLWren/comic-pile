@@ -550,7 +550,7 @@ pub async fn preview_series_mapping(
 
         // Check if origin has confirmed mapping to this series
         let origin_confirmed = origin_mapping_status.as_deref() == Some("confirmed")
-            && origin_mapping_provider.as_deref().map(|p| p.to_lowercase()) == Some(provider.as_str());
+            && origin_mapping_provider.as_deref().map(|p| p.to_lowercase()) == Some(provider.clone());
         let linked_thread = if let Some(tid) = origin_thread_id {
             let rows = pool
                 .query(
@@ -723,9 +723,10 @@ fn build_preview_response(
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
         })
-        .filter(|s| !s.is_empty());
+        .filter(|s| !s.is_empty())
+        .collect();
 
-    let state_digest = compute_state_digest(provider, provider_series_external_id, origin_issue_id, &scope_key, scope_basis, &classified_rows, scope_mode);
+    let state_digest = compute_state_digest(provider, provider_series_external_id, origin_issue_id, scope_key.as_deref(), scope_basis, &classified_rows, scope_mode);
 
     // Generate preview token if scope is available
     let expires_at = if scope_status == "available" { issued_at + 600.0 } else { 0.0 };
@@ -1018,17 +1019,17 @@ pub async fn preview_plan_projection(
             .collect();
         sorted_nodes.sort_by(|a, b| {
             lane_orders
-                .get(&a.get("lane_id").and_then(|v| v.as_str()).unwrap_or(""))
+                .get(a.get("lane_id").and_then(|v| v.as_str()).unwrap_or(""))
                 .copied()
                 .unwrap_or(0)
                 .cmp(
                     &lane_orders
-                        .get(&b.get("lane_id").and_then(|v| v.as_str()).unwrap_or(""))
+                        .get(b.get("lane_id").and_then(|v| v.as_str()).unwrap_or(""))
                         .copied()
                         .unwrap_or(0),
                 )
                 .then(a.get("position").and_then(|v| v.as_i64()).unwrap_or(0).cmp(&b.get("position").and_then(|v| v.as_i64()).unwrap_or(0)))
-                .then(a.get("id").cmp(&b.get("id")))
+                .then(a.get("id").and_then(|v| v.as_str()).cmp(&b.get("id").and_then(|v| v.as_str())))
         });
 
         for node in sorted_nodes {
