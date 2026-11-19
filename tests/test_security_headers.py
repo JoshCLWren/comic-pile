@@ -36,26 +36,6 @@ async def test_security_headers_present(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_security_headers_on_api_endpoint(auth_client: AsyncClient) -> None:
-    """Test that security headers are present on API endpoints."""
-    response = await auth_client.get("/api/v1/threads/stale")
-    assert response.status_code == 200
-
-    expected_headers = [
-        "Content-Security-Policy",
-        "Strict-Transport-Security",
-        "X-Content-Type-Options",
-        "X-Frame-Options",
-        "X-XSS-Protection",
-        "Referrer-Policy",
-        "Permissions-Policy",
-    ]
-
-    for header in expected_headers:
-        assert header in response.headers, f"Security header {header} missing from response"
-
-
-@pytest.mark.asyncio
 async def test_csp_restrictive(client: AsyncClient) -> None:
     """Test that CSP header is properly configured to prevent XSS."""
     response = await client.get("/health")

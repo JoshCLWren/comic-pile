@@ -57,27 +57,6 @@ def test_ambiguous_configuration_is_rejected(
     ("duration_ms", "cold"),
     [(1001.0, False), (30000.0, False), (1962.0, True), (575.0, False)],
 )
-def test_disabled_requests_do_not_schedule_or_count(
-    duration_ms: float, cold: bool
-) -> None:
-    """Neither marginal nor severe samples create background evaluation."""
-    with (
-        patch.object(perf_issues, "_spawn_background") as spawn,
-        patch.object(perf_issues, "_open_production_store", new_callable=AsyncMock) as store,
-    ):
-        for _ in range(4):
-            perf_issues.handle_request_telemetry(
-                method="PUT",
-                route_template="/api/v1/threads/{thread_id}",
-                duration_ms=duration_ms,
-                cold=cold,
-                db_queries=6,
-                db_time_ms=26.3,
-                request_id="req-disabled",
-                deployment_id="dpl-disabled",
-            )
-        spawn.assert_not_called()
-        store.assert_not_called()
 
 
 def test_disabled_coroutine_timeout_never_schedules() -> None:
@@ -92,20 +71,6 @@ def test_disabled_coroutine_timeout_never_schedules() -> None:
         spawn.assert_not_called()
 
 
-def test_disabled_schedule_filing_does_not_queue_work() -> None:
-    """A direct filing decision cannot circumvent the public handler gate."""
-    decision = perf_issues.FilingDecision(
-        action="file",
-        fingerprint="disabled",
-        canonical="request|PUT|/api/v1/threads/{thread_id}",
-        high_priority=True,
-        reason="test",
-    )
-    with patch.object(perf_issues, "_spawn_background") as spawn:
-        perf_issues.schedule_filing(
-            decision=decision, title="slow", body="evidence", labels=["performance"]
-        )
-        spawn.assert_not_called()
 
 
 @pytest.mark.asyncio

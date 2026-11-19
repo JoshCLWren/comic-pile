@@ -229,12 +229,11 @@ def test_threads_collection_is_only_the_native_v2_resource() -> None:
     app = create_app(serve_frontend=False)
     methods_by_path = _collect_routes(app)
 
-    # Creation remains a POST on the same prefix; only the collection read was
-    # retired to the native v2 resource.
-    assert "GET" not in methods_by_path["/api/v1/threads/"]
+    # All thread HTTP routes are now served natively by Rust (#4832); the
+    # Python handlers register no thread paths.
+    assert "/api/v1/threads/" not in methods_by_path
     assert "/api/threads/" not in methods_by_path
-    assert "POST" in methods_by_path["/api/v1/threads/"]
-    assert "/api/v1/threads/stale" in methods_by_path
+    assert "/api/v1/threads/stale" not in methods_by_path
 
 
 def test_retired_move_to_front_routes_are_absent() -> None:

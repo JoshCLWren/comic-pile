@@ -387,31 +387,6 @@ async def test_empty_and_fully_excluded_queues_have_valid_live_sort_sql(
     assert excluded.threads[0].is_blocked is True
 
 
-async def test_read_now_rejects_canonical_blocked_and_session_skipped_threads(
-    option_e: None,
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Read now cannot offer an issue the rating guard would reject."""
-    user = await get_or_create_user_async(async_db)
-    first, first_issues = await _series(async_db, user.id, "Required first", 1)
-    blocked, blocked_issues = await _series(async_db, user.id, "Wait for first", 2)
-    reading_list = CustomCBLList(user_id=user.id, name="Read now order", mode="strict")
-    async_db.add(reading_list)
-    await async_db.flush()
-    async_db.add_all(
-        [
-            CustomCBLEntry(list_id=reading_list.id, issue_id=first_issues[0].id, position=1),
-            CustomCBLEntry(list_id=reading_list.id, issue_id=blocked_issues[0].id, position=2),
-            ReadingSession(user_id=user.id, skipped_thread_ids=[first.id]),
-        ]
-    )
-    thread_ids = [first.id, blocked.id]
-    await async_db.commit()
-    for thread_id in thread_ids:
-        selected = await auth_client.post(f"/api/v1/threads/{thread_id}/set-pending")
-        assert selected.status_code == 400, selected.text
-    assert await async_db.scalar(select(Event.id).where(Event.selection_method == "manual")) is None
 
 
 async def test_option_e_roll_pool_never_reaggregates_unread_issues(
@@ -458,45 +433,3 @@ async def test_option_e_roll_pool_never_reaggregates_unread_issues(
     assert "count(" not in sql
 
 
-async def test_plan_read_now_guards_exact_issue_without_retargeting_on_stale_offer(
-    option_e: None,
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """A reading plan must never silently select a newer issue from the same series."""
-    from sqlalchemy import func
-
-    user = await get_or_create_user_async(async_db)
-    thread, issues = await _series(async_db, user.id, "Reading plan selection", 1)
-    thread_id, first_id, second_id = thread.id, issues[0].id, issues[1].id
-    await async_db.commit()
-
-    path = f"/api/v1/threads/{thread_id}/set-pending"
-    wrong = await auth_client.post(path, json={"expected_issue_id": second_id})
-    assert wrong.status_code == 409
-    assert "Refresh the reading plan" in wrong.json()["detail"]
-    assert await async_db.scalar(select(func.count(Event.id)).where(Event.type == "roll")) == 0
-
-    selected = await auth_client.post(path, json={"expected_issue_id": first_id})
-    assert selected.status_code == 200, selected.text
-    assert selected.json()["issue_id"] == first_id
-    assert selected.json()["result"] == 0  # Manual selection, not an invented die roll.
-    session = await async_db.scalar(select(ReadingSession).where(ReadingSession.user_id == user.id))
-    assert session is not None
-    assert session.pending_thread_id == thread_id
-    assert session.pending_issue_id == first_id
-
-    # The plan was open while the first issue became read elsewhere.
-    first = await async_db.get(Issue, first_id)
-    assert first is not None
-    first.status = "read"
-    await async_db.commit()
-
-    stale = await auth_client.post(path, json={"expected_issue_id": first_id})
-    assert stale.status_code == 409, stale.text
-    assert "Refresh the reading plan" in stale.json()["detail"]
-    await async_db.refresh(session)
-    assert session.pending_thread_id == thread_id
-    assert session.pending_issue_id == first_id  # No mutation on stale selection.
-    assert await async_db.scalar(select(func.count(Event.id)).where(Event.type == "roll")) == 1
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == second_id)) == "unread"

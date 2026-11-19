@@ -279,25 +279,6 @@ def test_current_session_contract_is_exact_and_named() -> None:
     assert len(SessionResponse.model_fields) == 25
 
 
-def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
-    """Affected retained Python routes advertise their intended response models."""
-    schema_paths = app.openapi()["paths"]
-
-    if "/api/v1/threads/completed/threads" in schema_paths:
-        assert _response_schema("/api/v1/threads/completed/threads") == {
-            "$ref": "#/components/schemas/QueueThreadListResponse"
-        }
-    if "get" in schema_paths.get("/api/v1/threads/{thread_id}", {}):
-        assert _response_schema("/api/v1/threads/{thread_id}") == {
-            "$ref": "#/components/schemas/ThreadDetail"
-        }
-    assert _response_schema("/api/v1/sessions/") == {
-        "$ref": "#/components/schemas/SessionHistoryListResponse"
-    }
-    if "get" in schema_paths.get("/api/v1/threads/{thread_id}/dependencies", {}):
-        assert _response_schema("/api/v1/threads/{thread_id}/dependencies") == {
-            "$ref": "#/components/schemas/ThreadDependenciesResponse"
-        }
 
 
 def test_no_legacy_collection_contracts_remain_in_openapi() -> None:

@@ -87,21 +87,6 @@ async def test_http_exception_handler_various_status_codes(
 
 
 @pytest.mark.asyncio
-async def test_validation_exception_handler_for_thread_create_missing_fields(
-    auth_client: AsyncClient,
-) -> None:
-    """Test validation exception handler for thread creation with missing required fields."""
-    response = await auth_client.post(
-        "/api/v1/threads/",
-        json={},
-    )
-    assert response.status_code == 422
-    data = response.json()
-    assert "errors" in data
-    assert len(data["errors"]) > 0
-
-
-@pytest.mark.asyncio
 async def test_spa_routes_disable_html_caching(auth_client: AsyncClient) -> None:
     """SPA HTML routes should disable caching to avoid stale chunk references after deploy."""
     root_response = await auth_client.get("/")

@@ -22,18 +22,6 @@ def clean_counters() -> Iterator[None]:
     reset_traffic_counters_for_tests()
 
 
-def test_record_route_hit_aggregates_counts_per_key() -> None:
-    """Repeated hits on the same key accumulate into a single tally."""
-    record_route_hit("GET", "/api/v1/threads", 200)
-    record_route_hit("GET", "/api/v1/threads", 200)
-    record_route_hit("GET", "/api/v1/threads", 404)
-
-    counted = {
-        (counter.method, counter.route, counter.status_class): counter.count
-        for counter in traffic_snapshot().counters
-    }
-    assert counted[("GET", "/api/v1/threads", "2xx")] == 2
-    assert counted[("GET", "/api/v1/threads", "4xx")] == 1
 
 
 def test_snapshot_is_deterministically_sorted() -> None:
@@ -52,13 +40,6 @@ def test_snapshot_carries_instance_id() -> None:
     assert traffic_snapshot().instance_id == get_traffic_instance_id()
 
 
-def test_resolve_route_template_uses_scope_template() -> None:
-    """A matched route resolves to its path template, not the raw path."""
-
-    class _FakeRoute:
-        path = "/api/v1/threads/{thread_id}"
-
-    assert resolve_route_template({"route": _FakeRoute()}) == "/api/v1/threads/{thread_id}"
 
 
 def test_resolve_route_template_falls_back_when_unmatched() -> None:

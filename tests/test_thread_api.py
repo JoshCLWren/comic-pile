@@ -12,62 +12,6 @@ from tests.conftest import get_or_create_user_async
 
 
 @pytest.mark.asyncio
-async def test_reactivate_thread_uses_max_numeric_issue_number(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Reactivation appends regular issue numbers after the highest numeric issue."""
-    user = await get_or_create_user_async(async_db)
-
-    thread = Thread(
-        title="Completed Thread",
-        format="Comic",
-        issues_remaining=0,
-        queue_position=4,
-        status="completed",
-        user_id=user.id,
-        total_issues=11,
-        reading_progress="completed",
-        next_unread_issue_id=None,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.flush()
-
-    for position, issue_number in enumerate(
-        [*(str(i) for i in range(1, 11)), "Annual 1"],
-        start=1,
-    ):
-        async_db.add(
-            Issue(
-                thread_id=thread.id,
-                issue_number=issue_number,
-                position=position,
-                status="read",
-                read_at=datetime.now(UTC),
-            )
-        )
-    await async_db.commit()
-
-    response = await auth_client.post(
-        "/api/v1/threads/reactivate",
-        json={"thread_id": thread.id, "issues_to_add": 2},
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["total_issues"] == 13
-    assert data["issues_remaining"] == 2
-    assert data["next_unread_issue_number"] == "11"
-
-    result = await async_db.execute(
-        select(Issue)
-        .where(Issue.thread_id == thread.id)
-        .order_by(Issue.position, Issue.id)
-    )
-    issues = result.scalars().all()
-
-    assert [issue.issue_number for issue in issues[-2:]] == ["11", "12"]
-    assert [issue.position for issue in issues[-2:]] == [12, 13]
 
 
 
@@ -87,62 +31,9 @@ async def test_reactivate_thread_uses_max_numeric_issue_number(
 
 
 @pytest.mark.asyncio
-async def test_create_thread_without_total_issues_maintains_backward_compat(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Creating thread without total_issues uses old system (backward compat)."""
-    response = await auth_client.post(
-        "/api/v1/threads/",
-        json={
-            "title": "Old Style Thread",
-            "format": "Comic",
-            "issues_remaining": 10,
-        },
-    )
-
-    assert response.status_code == 201
-    data = response.json()
-    assert data["title"] == "Old Style Thread"
-    assert data["issues_remaining"] == 10
-    assert data["total_issues"] is None
-    assert data["reading_progress"] is None
-
-    thread = await async_db.get(Thread, data["id"])
-    assert thread is not None
-    assert thread.issues_remaining == 10
-    assert thread.total_issues is None
-    assert not thread.uses_issue_tracking()
 
 
 @pytest.mark.asyncio
-async def test_create_thread_with_total_issues_enables_tracking(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Creating thread with total_issues enables issue tracking."""
-    response = await auth_client.post(
-        "/api/v1/threads/",
-        json={
-            "title": "New Style Thread",
-            "format": "Comic",
-            "issues_remaining": 10,
-            "total_issues": 25,
-        },
-    )
-
-    assert response.status_code == 201
-    data = response.json()
-    assert data["title"] == "New Style Thread"
-    assert data["total_issues"] == 25
-    assert data["reading_progress"] is None
-
-    thread = await async_db.get(Thread, data["id"])
-    assert thread is not None
-    assert thread.total_issues == 25
-    assert thread.uses_issue_tracking()
-
-    result = await async_db.execute(select(Issue).where(Issue.thread_id == thread.id))
-    issues = result.scalars().all()
-    assert len(issues) == 0
 
 
 @pytest.mark.asyncio
@@ -241,139 +132,15 @@ async def test_thread_update_schema_rejects_whitespace_title() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stale_endpoint_excludes_blocked_threads(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Blocked stale threads should not appear in the stale endpoint."""
-    user = await get_or_create_user_async(async_db)
-    now = datetime.now(UTC)
-    stale_date = now - timedelta(days=60)
-
-    blocked_thread = Thread(
-        title="Blocked Stale Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        last_activity_at=stale_date,
-        is_blocked=True,
-        created_at=now,
-    )
-    async_db.add(blocked_thread)
-    await async_db.commit()
-
-    response = await auth_client.get("/api/v1/threads/stale?days=30")
-    assert response.status_code == 200
-    data = response.json()
-    thread_ids = {t["id"] for t in data}
-    assert blocked_thread.id not in thread_ids
 
 
 @pytest.mark.asyncio
-async def test_stale_endpoint_includes_unblocked_stale_threads(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Unblocked stale threads should appear in the stale endpoint."""
-    user = await get_or_create_user_async(async_db)
-    now = datetime.now(UTC)
-    stale_date = now - timedelta(days=60)
-
-    unblocked_thread = Thread(
-        title="Unblocked Stale Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        last_activity_at=stale_date,
-        is_blocked=False,
-        created_at=now,
-    )
-    async_db.add(unblocked_thread)
-    await async_db.commit()
-
-    response = await auth_client.get("/api/v1/threads/stale?days=30")
-    assert response.status_code == 200
-    data = response.json()
-    thread_ids = {t["id"] for t in data}
-    assert unblocked_thread.id in thread_ids
 
 
 @pytest.mark.asyncio
-async def test_stale_endpoint_excludes_snoozed_threads(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Stale endpoint excludes threads that are currently snoozed in the session."""
-    user = await get_or_create_user_async(async_db)
-    now = datetime.now(UTC)
-    stale_date = now - timedelta(days=60)
-
-    stale_thread = Thread(
-        title="Stale Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        last_activity_at=stale_date,
-        created_at=now,
-    )
-    snoozed_stale_thread = Thread(
-        title="Snoozed Stale Thread",
-        format="Comic",
-        issues_remaining=3,
-        queue_position=2,
-        status="active",
-        user_id=user.id,
-        last_activity_at=stale_date,
-        created_at=now,
-    )
-    async_db.add_all([stale_thread, snoozed_stale_thread])
-    await async_db.flush()
-
-    session = ReadingSession(
-        user_id=user.id,
-        started_at=now,
-        snoozed_thread_ids=[snoozed_stale_thread.id],
-    )
-    async_db.add(session)
-    await async_db.commit()
-
-    response = await auth_client.get("/api/v1/threads/stale?days=30")
-    assert response.status_code == 200
-    data = response.json()
-    thread_ids = {t["id"] for t in data}
-    assert stale_thread.id in thread_ids
-    assert snoozed_stale_thread.id not in thread_ids
 
 
 @pytest.mark.asyncio
-async def test_stale_endpoint_bounded_by_page_size(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Stale endpoint respects page_size bound at the database."""
-    user = await get_or_create_user_async(async_db)
-    now = datetime.now(UTC)
-    stale_date = now - timedelta(days=60)
-    for i in range(3):
-        async_db.add(
-            Thread(
-                title=f"Stale {i}",
-                format="Comic",
-                issues_remaining=1,
-                queue_position=1,
-                status="active",
-                user_id=user.id,
-                last_activity_at=stale_date,
-                is_blocked=False,
-                created_at=now,
-            )
-        )
-    await async_db.commit()
-    response = await auth_client.get("/api/v1/threads/stale?days=30&page_size=2")
-    assert response.status_code == 200
-    assert len(response.json()) <= 2
 
 
 @pytest.mark.asyncio
@@ -590,152 +357,12 @@ async def test_bulk_issues_remaining_no_n_plus_one(
 
 
 @pytest.mark.asyncio
-async def test_create_thread_normalizes_format_variants(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Thread creation normalizes Comic/Comics/digital to canonical forms."""
-    cases = [
-        ("Comic", "Comic"),
-        ("Comics", "Comic"),
-        ("comic", "Comic"),
-        ("comics", "Comic"),
-        ("digital", "Digital"),
-        ("Digital", "Digital"),
-        ("Trade Paperback", "Trade Paperback"),
-    ]
-
-    for raw, expected in cases:
-        response = await auth_client.post(
-            "/api/v1/threads/",
-            json={"title": f"Thread {raw}", "format": raw, "issues_remaining": 1},
-        )
-        assert response.status_code == 201, f"Failed for {raw}: {response.text}"
-        data = response.json()
-        assert data["format"] == expected, f"Expected {expected} for {raw}, got {data['format']}"
-
-        result = await async_db.execute(
-            select(Thread).where(Thread.id == data["id"])
-        )
-        db_thread = result.scalar_one()
-        assert db_thread.format == expected, f"DB format mismatch for {raw}"
 
 
 @pytest.mark.asyncio
-async def test_update_thread_normalizes_format_variants(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Thread update normalizes Comic/Comics/digital to canonical forms."""
-    user = await get_or_create_user_async(async_db)
-
-    thread = Thread(
-        title="Format Test",
-        format="Comic",
-        issues_remaining=1,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    cases = [
-        ("Comics", "Comic"),
-        ("comics", "Comic"),
-        ("digital", "Digital"),
-        ("Manga", "Manga"),
-    ]
-
-    for raw, expected in cases:
-        response = await auth_client.put(
-            f"/api/v1/threads/{thread.id}",
-            json={"format": raw},
-        )
-        assert response.status_code == 200, f"Failed for {raw}: {response.text}"
-        data = response.json()
-        assert data["format"] == expected, f"Expected {expected} for {raw}, got {data['format']}"
-
-        await async_db.refresh(thread)
-        assert thread.format == expected, f"DB format mismatch for {raw}"
 
 
 @pytest.mark.asyncio
-async def test_update_thread_clears_notes_when_field_is_sent(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """A cleared Notes field persists as no notes (issue #3629).
-
-    Notes use explicit-presence semantics: sending an emptied string or an
-    explicit ``null`` clears the stored note, while leaving the field out of the
-    request keeps the existing note untouched.
-    """
-    user = await get_or_create_user_async(async_db)
-
-    thread = Thread(
-        title="Notes Test",
-        format="Comic",
-        issues_remaining=1,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        notes="Read the tie-in first",
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    # An emptied Notes field must clear the stored note instead of being treated
-    # as "leave unchanged".
-    response = await auth_client.put(
-        f"/api/v1/threads/{thread.id}",
-        json={"title": "Notes Test", "format": "Comic", "notes": ""},
-    )
-    assert response.status_code == 200, response.text
-    assert response.json()["notes"] is None
-
-    await async_db.refresh(thread)
-    assert thread.notes is None
-
-    # A whitespace-only value is also "no notes".
-    thread.notes = "Keep the annual out of the run"
-    await async_db.commit()
-    response = await auth_client.put(
-        f"/api/v1/threads/{thread.id}",
-        json={"notes": "   "},
-    )
-    assert response.status_code == 200, response.text
-    assert response.json()["notes"] is None
-
-    await async_db.refresh(thread)
-    assert thread.notes is None
-
-    # An explicit null clears too.
-    thread.notes = "Has notes again"
-    await async_db.commit()
-    response = await auth_client.put(
-        f"/api/v1/threads/{thread.id}",
-        json={"notes": None},
-    )
-    assert response.status_code == 200, response.text
-    assert response.json()["notes"] is None
-
-    await async_db.refresh(thread)
-    assert thread.notes is None
-
-    # Omitting the field leaves the existing note in place.
-    thread.notes = "Preserve me"
-    await async_db.commit()
-    response = await auth_client.put(
-        f"/api/v1/threads/{thread.id}",
-        json={"title": "Renamed Notes Test"},
-    )
-    assert response.status_code == 200, response.text
-    assert response.json()["notes"] == "Preserve me"
-
-    await async_db.refresh(thread)
-    assert thread.notes == "Preserve me"
 
 
 @pytest.mark.asyncio

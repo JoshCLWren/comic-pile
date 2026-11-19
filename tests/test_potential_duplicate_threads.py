@@ -164,7 +164,6 @@ async def test_rename_excludes_the_thread_being_edited(
     assert response.json()["matches"] == []
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("existing_title", "proposed_title"),
     [
@@ -196,74 +195,6 @@ async def test_title_resemblance_is_an_uncertain_suggestion(
 
 
 @pytest.mark.asyncio
-async def test_identical_titles_remain_creatable_as_separate_volumes(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    default_user: User,
-) -> None:
-    """The advisory never blocks a legitimate same-named series."""
-    existing = await _create_thread(async_db, default_user.id, "Uncanny X-Men")
-
-    warning = await auth_client.post(
-        CHECK_URL,
-        json={"title": "Uncanny X-Men", "format": "Comic"},
-    )
-    assert warning.status_code == 200
-    assert [match["thread_id"] for match in warning.json()["matches"]] == [existing.id]
-
-    created = await auth_client.post(
-        "/api/v1/threads/",
-        json={"title": "Uncanny X-Men", "format": "Comic", "issues_remaining": 5},
-    )
-    assert created.status_code == 201
-    # The issue count differs from the existing series so this exercises the
-    # legitimate same-title create path; identical payloads inside the 5s
-    # repeated-request window are #3466's separate idempotency contract.
-    assert created.json()["id"] != existing.id
-    assert created.json()["title"] == "Uncanny X-Men"
-
-
-@pytest.mark.asyncio
-async def test_distinct_volumes_of_one_title_report_their_own_identity(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    default_user: User,
-) -> None:
-    """Different ComicVine volumes stay distinct and a rename is still allowed."""
-    first = await _create_thread(async_db, default_user.id, "Spider-Man")
-    second = await _create_thread(
-        async_db,
-        default_user.id,
-        "Amazing Spider-Man",
-        queue_position=2,
-    )
-    await _confirm_comicvine_series(async_db, first, 111, start_year="1990")
-    await _confirm_comicvine_series(async_db, second, 222, start_year=2018)
-
-    checked = await auth_client.post(
-        CHECK_URL,
-        json={"title": "Spider-Man", "format": "Comic", "comicvine_volume_id": 111},
-    )
-
-    assert checked.status_code == 200
-    by_thread = {match["thread_id"]: match for match in checked.json()["matches"]}
-    assert by_thread[first.id]["match_type"] == "same_comicvine_volume"
-    assert by_thread[first.id]["start_year"] == 1990
-    assert by_thread[second.id]["match_type"] == "similar_title"
-    # The second run's own volume is context, never the proposed identity.
-    assert by_thread[second.id]["comicvine_volume_id"] == 222
-    assert by_thread[second.id]["start_year"] == 2018
-
-    renamed = await auth_client.put(
-        f"/api/v1/threads/{second.id}",
-        json={"title": "Spider-Man"},
-    )
-    assert renamed.status_code == 200
-    assert renamed.json()["id"] == second.id
-    assert renamed.json()["title"] == "Spider-Man"
-
-
-@pytest.mark.asyncio
 async def test_other_readers_series_never_appear(
     auth_client: AsyncClient,
     async_db: AsyncSession,
@@ -289,39 +220,6 @@ async def test_other_readers_series_never_appear(
     )
     assert by_volume.status_code == 200
     assert by_volume.json()["matches"] == []
-
-
-@pytest.mark.asyncio
-async def test_a_different_format_is_context_not_a_block(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    default_user: User,
-) -> None:
-    """A same-titled edition in another format is shown with its format."""
-    existing = await _create_thread(
-        async_db,
-        default_user.id,
-        "Spider-Man",
-        format_value="Manga",
-    )
-
-    response = await auth_client.post(
-        CHECK_URL,
-        json={"title": "Spider-Man", "format": "Comic"},
-    )
-
-    assert response.status_code == 200
-    matches = response.json()["matches"]
-    assert [match["thread_id"] for match in matches] == [existing.id]
-    assert matches[0]["format"] == "Manga"
-    assert matches[0]["match_type"] == "similar_title"
-
-    created = await auth_client.post(
-        "/api/v1/threads/",
-        json={"title": "Spider-Man", "format": "Comic", "issues_remaining": 1},
-    )
-    assert created.status_code == 201
-    assert created.json()["id"] != existing.id
 
 
 @pytest.mark.asyncio

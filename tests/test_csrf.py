@@ -30,29 +30,6 @@ THREAD_PAYLOAD = {
 
 
 @pytest.mark.asyncio
-async def test_protected_endpoint_requires_csrf_token(auth_client: AsyncClient) -> None:
-    """Protected mutating endpoints reject requests without a CSRF token."""
-    auth_client.headers.pop(CSRF_HEADER_NAME, None)
-    auth_client.cookies.delete(CSRF_COOKIE_NAME)
-
-    response = await auth_client.post("/api/v1/threads/", json=THREAD_PAYLOAD)
-
-    assert response.status_code == 403
-    assert response.json() == {"detail": "CSRF token missing or invalid"}
-
-
-@pytest.mark.asyncio
-async def test_protected_endpoint_rejects_mismatched_csrf_token(auth_client: AsyncClient) -> None:
-    """Protected mutating endpoints reject mismatched CSRF header values."""
-    auth_client.headers[CSRF_HEADER_NAME] = "different-token"
-
-    response = await auth_client.post("/api/v1/threads/", json=THREAD_PAYLOAD)
-
-    assert response.status_code == 403
-    assert response.json() == {"detail": "CSRF token missing or invalid"}
-
-
-@pytest.mark.asyncio
 async def test_safe_methods_do_not_require_csrf_token(auth_client: AsyncClient) -> None:
     """Safe methods keep working without CSRF tokens."""
     auth_client.headers.pop(CSRF_HEADER_NAME, None)
