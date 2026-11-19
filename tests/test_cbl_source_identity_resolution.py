@@ -50,23 +50,22 @@ async def _thread_with_numbers(
     )
     db.add(thread)
     await db.flush()
-    issues: list[Issue] = []
-    next_unread: int | None = None
-    for position, number in enumerate(numbers, start=1):
-        status = "read" if position <= read_through else "unread"
-        issue = Issue(
+    issues = [
+        Issue(
             thread_id=thread.id,
             issue_number=number,
             position=position,
-            status=status,
-            read_at=datetime.now(UTC) if status == "read" else None,
+            status="read" if position <= read_through else "unread",
+            read_at=datetime.now(UTC) if position <= read_through else None,
         )
-        db.add(issue)
-        await db.flush()
-        issues.append(issue)
-        if status == "unread" and next_unread is None:
-            next_unread = issue.id
-    thread.next_unread_issue_id = next_unread
+        for position, number in enumerate(numbers, start=1)
+    ]
+    db.add_all(issues)
+    await db.flush()
+    thread.next_unread_issue_id = next(
+        (issue.id for issue in issues if issue.status == "unread"),
+        None,
+    )
     await db.flush()
     return thread, issues
 
