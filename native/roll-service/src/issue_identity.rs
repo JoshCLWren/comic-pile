@@ -3279,7 +3279,63 @@ async fn load_owned_issue_fallback_index<E: DbExec>(
             issue_norm: normalize_title_number(&inum),
         });
     }
-    Ok(OwnedIssueFallbackIndex { rows: out })
+    let issue_ids: Vec<i32> = out.iter().map(|row| row.id).collect();
+    let thread_ids: Vec<i32> = out
+        .iter()
+        .map(|row| row.thread_id)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let confirmed_issue_ids = if issue_ids.is_empty() {
+        HashSet::new()
+    } else {
+        tx.run_query(
+            r#"
+        SELECT m.issue_id
+        FROM issue_external_identity_mappings m
+        JOIN external_identities ei ON ei.id = m.external_identity_id
+        WHERE m.issue_id = ANY($1::int[])
+          AND m.status = 'confirmed'
+          AND ei.provider = 'comicvine'
+          AND ei.entity_type = 'issue'
+        "#,
+            &[&issue_ids],
+        )
+        .await
+        .map_err(|e| tx_db_error(e, ""))?
+        .iter()
+        .map(|row| row.get(0))
+        .collect()
+    };
+    let mut confirmed_series: HashMap<i32, HashSet<String>> = HashMap::new();
+    if !thread_ids.is_empty() {
+        let rows = tx
+            .run_query(
+                r#"
+        SELECT tesm.thread_id, ei.external_id
+        FROM thread_external_series_mappings tesm
+        JOIN external_identities ei ON ei.id = tesm.external_identity_id
+        WHERE tesm.thread_id = ANY($1::int[])
+          AND tesm.status = 'confirmed'
+          AND ei.provider = 'comicvine'
+          AND ei.entity_type = 'series'
+        "#,
+                &[&thread_ids],
+            )
+            .await
+            .map_err(|e| tx_db_error(e, ""))?;
+        for row in rows {
+            confirmed_series
+                .entry(row.get(0))
+                .or_default()
+                .insert(row.get::<_, String>(1));
+        }
+    }
+    Ok(OwnedIssueFallbackIndex {
+        rows: out,
+        confirmed_issue_ids,
+        confirmed_series,
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
