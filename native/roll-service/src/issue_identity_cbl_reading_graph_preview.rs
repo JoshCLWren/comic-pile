@@ -14,7 +14,9 @@
 use crate::{
     auth::AuthenticatedUser,
     db,
-    issue_identity::{load_active_cbl_list_meta, reconcile_entries_for_adoption, sha256_hex},
+    issue_identity::{
+        load_active_cbl_list_meta, reconcile_entries_for_adoption_positions, sha256_hex,
+    },
     option_inputs::{self, normalize_volume, OptionInputs, ReadingEntry},
     preview_validation::{parse_body_object, parse_path_int, validation_failed},
     reading_blocker_projection::{describe_blocker_gates, DescribedBlockerGate},
@@ -842,6 +844,7 @@ async fn load(
     state: &AppState,
     user: AuthenticatedUser,
     list_id: i64,
+    included_positions: &[i64],
 ) -> Result<Loaded, PreviewError> {
     let not_found = || {
         structured_error(
@@ -866,7 +869,11 @@ async fn load(
         Err(ApiError::NotFound(_)) => return Err(not_found()),
         Err(error) => return Err(error.into()),
     };
-    let entries = reconcile_entries_for_adoption(&tx, user.id(), &meta).await?;
+    // Reconcile only the selected positions: the generic adoption helper walks
+    // the entire source list and issues per-entry lookups, which would turn a
+    // short preview selection into a full-list fan-out (#5342 review).
+    let entries =
+        reconcile_entries_for_adoption_positions(&tx, user.id(), &meta, included_positions).await?;
     let inputs = option_inputs::load_inputs_in_transaction(&tx, user).await?;
     let keys: BTreeSet<String> = inputs.thread_volumes.values().cloned().collect();
     let volume_years = load_volume_years(&tx, &keys).await?;
@@ -908,7 +915,7 @@ pub async fn preview_cbl_reading_graph_handler(
 ) -> Result<Json<ReadingGraphPreview>, PreviewError> {
     let list_id = parse_path_int(list_id)?;
     let request = parse_request(&body)?;
-    let loaded = load(&state, user, list_id).await?;
+    let loaded = load(&state, user, list_id, &request.included_positions).await?;
     build_preview(&loaded, user.id(), list_id, &request).map(Json)
 }
 
@@ -1309,6 +1316,60 @@ mod tests {
         assert_eq!(
             metadata_year(&serde_json::json!({"year": 5, "volume_year": 2001})),
             Some(2001)
+        );
+    }
+
+    /// A short preview selection must not reconcile every row in a long source
+    /// list: the generic helper issues per-entry lookups, while this caller
+    /// filters positions in SQL before any of that work (#5342 review).
+    #[tokio::test]
+    async fn preview_reconciles_only_selected_source_positions() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("test connection");
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO users (id, username) VALUES (9001, 'graph-preview-reader');
+                INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+                VALUES (1, 'cbl-test', 'rev', now(), now(), now());
+                INSERT INTO cbl_source_lists
+                    (id, source_id, source_path, name, declared_issue_count,
+                     content_hash, revision_sha, active, created_at, updated_at)
+                VALUES (1, 1, 'lists/test.json', 'Test list', 3,
+                        'hash', 'rev', true, now(), now());
+                INSERT INTO cbl_source_entries
+                    (id, list_id, position, series_name, issue_number, created_at)
+                VALUES (1, 1, 1, 'Series', '1', now()),
+                       (2, 1, 2, 'Series', '2', now()),
+                       (3, 1, 3, 'Series', '3', now());
+                "#,
+            )
+            .await
+            .expect("seed CBL source list");
+        let meta = crate::issue_identity::load_active_cbl_list_meta(&connection, 1)
+            .await
+            .expect("list meta");
+
+        let all = crate::issue_identity::reconcile_entries_for_adoption(&connection, 9001, &meta)
+            .await
+            .expect("all rows");
+        assert_eq!(all.len(), 3);
+
+        let selected = crate::issue_identity::reconcile_entries_for_adoption_positions(
+            &connection,
+            9001,
+            &meta,
+            &[2],
+        )
+        .await
+        .expect("selected rows");
+        assert_eq!(selected.len(), 1);
+        assert_eq!(
+            selected[0].get("cbl_position").and_then(Value::as_i64),
+            Some(2)
         );
     }
 

@@ -2937,9 +2937,58 @@ pub(crate) async fn reconcile_entries_for_adoption<E: DbExec>(
     user_id: i32,
     list_meta: &CblListMeta,
 ) -> Result<Vec<serde_json::Map<String, JsonValue>>, ApiError> {
-    let rows = tx
-        .run_query(
-            r#"
+    reconcile_entries_impl(tx, user_id, list_meta, None).await
+}
+
+/// Reconcile only the requested source positions. Read-only preview callers use
+/// this variant so a short selection from a long list cannot fan out per-entry
+/// lookups across every row in the source list (#5342 review).
+pub(crate) async fn reconcile_entries_for_adoption_positions<E: DbExec>(
+    tx: &E,
+    user_id: i32,
+    list_meta: &CblListMeta,
+    positions: &[i64],
+) -> Result<Vec<serde_json::Map<String, JsonValue>>, ApiError> {
+    // `cbl_source_entries.position` is int4; out-of-domain positions match no
+    // row and are reported as unknown by the caller's own position validation.
+    let positions: Vec<i32> = positions
+        .iter()
+        .filter_map(|position| i32::try_from(*position).ok())
+        .collect();
+    if positions.is_empty() {
+        return Ok(Vec::new());
+    }
+    reconcile_entries_impl(tx, user_id, list_meta, Some(&positions)).await
+}
+
+async fn reconcile_entries_impl<E: DbExec>(
+    tx: &E,
+    user_id: i32,
+    list_meta: &CblListMeta,
+    positions: Option<&[i32]>,
+) -> Result<Vec<serde_json::Map<String, JsonValue>>, ApiError> {
+    let rows = match positions {
+        Some(positions) => tx
+            .run_query(
+                r#"
+        SELECT cse.id, cse.position, cse.series_name, cse.issue_number,
+               ei.external_id AS comicvine_issue_id,
+               cse.external_issue_identity_id, cse.external_series_identity_id,
+               ev.provider AS series_provider, ev.external_id AS series_external_id,
+               cse.volume_year, cse.publication_year
+        FROM cbl_source_entries cse
+        LEFT JOIN external_identities ei ON ei.id = cse.external_issue_identity_id
+        LEFT JOIN external_identities ev ON ev.id = cse.external_series_identity_id
+        WHERE cse.list_id = $1 AND cse.position = ANY($2::int[])
+        ORDER BY cse.position ASC, cse.id ASC
+        "#,
+                &[&list_meta.id, &positions],
+            )
+            .await
+            .map_err(|e| tx_db_error(e, ""))?,
+        None => tx
+            .run_query(
+                r#"
         SELECT cse.id, cse.position, cse.series_name, cse.issue_number,
                ei.external_id AS comicvine_issue_id,
                cse.external_issue_identity_id, cse.external_series_identity_id,
@@ -2951,10 +3000,11 @@ pub(crate) async fn reconcile_entries_for_adoption<E: DbExec>(
         WHERE cse.list_id = $1
         ORDER BY cse.position ASC, cse.id ASC
         "#,
-            &[&list_meta.id],
-        )
-        .await
-        .map_err(|e| tx_db_error(e, ""))?;
+                &[&list_meta.id],
+            )
+            .await
+            .map_err(|e| tx_db_error(e, ""))?,
+    };
     let fallback_index = load_owned_issue_fallback_index(tx, user_id).await?;
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
