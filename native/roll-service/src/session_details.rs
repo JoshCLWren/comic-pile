@@ -774,13 +774,11 @@ mod tests {
         let paths = document["paths"].as_object().expect("paths");
         assert!(paths.contains_key("/api/v2/reading-sessions/{session_id}/details"));
         assert!(!paths.contains_key("/api/v1/sessions/{session_id}/details"));
-        for path in ["/api/v2/reading-sessions/{session_id}/details"] {
-            let operation = &document["paths"][path]["get"];
-            assert!(operation["operationId"].is_string());
-            assert!(operation["responses"]["200"].as_object().is_some());
-            assert!(operation["responses"]["404"].as_object().is_some());
-            assert!(operation["security"].is_array());
-        }
+        let operation = &document["paths"]["/api/v2/reading-sessions/{session_id}/details"]["get"];
+        assert!(operation["operationId"].is_string());
+        assert!(operation["responses"]["200"].as_object().is_some());
+        assert!(operation["responses"]["404"].as_object().is_some());
+        assert!(operation["security"].is_array());
         assert!(document["components"]["schemas"]["SessionDetailsResponse"].is_object());
         let event_schema = &document["components"]["schemas"]["SessionEventDetail"];
         let props = event_schema["properties"]
