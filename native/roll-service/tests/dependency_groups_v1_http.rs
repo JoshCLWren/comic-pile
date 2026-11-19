@@ -119,8 +119,8 @@ async fn seed_thread_with_issues(
     let conn = db::checkout(state).await.expect("seed connection");
     let thread_id: i32 = conn
         .query_one(
-            "INSERT INTO threads (title, format, issues_remaining, queue_position, status, user_id) \
-             VALUES ($1, 'Comic', $2, 1, 'active', $3) RETURNING id",
+            "INSERT INTO threads (title, format, issues_remaining, queue_position, status, user_id, total_issues) \
+             VALUES ($1, 'Comic', $2, 1, 'active', $3, $2) RETURNING id",
             &[&title, &(numbers.len() as i32), &user_id],
         )
         .await
