@@ -57,36 +57,36 @@ impl IntoResponse for PreviewError {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
-pub struct ReadingOrderProjectionRequest {
+pub struct ReadingOrderProjectPreviewRequest {
     pub reading_order_id: i64,
 }
 
-/// Parse the body like `ReadingOrderProjectionRequest` (`reading_order_id: int > 0`).
+/// Parse the body like `ReadingOrderProjectPreviewRequest` (`reading_order_id: int > 0`).
 /// Any rejection is the production `{"detail": "Validation failed"}` 422.
-fn parse_request(body: &[u8]) -> Result<ReadingOrderProjectionRequest, ApiError> {
+fn parse_request(body: &[u8]) -> Result<ReadingOrderProjectPreviewRequest, ApiError> {
     let map = parse_body_object(body)?;
     let reading_order_id = required_int(&map, "reading_order_id")?;
     if reading_order_id < 1 {
         return Err(validation_failed());
     }
-    Ok(ReadingOrderProjectionRequest { reading_order_id })
+    Ok(ReadingOrderProjectPreviewRequest { reading_order_id })
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct ReadingOrderProjectionPreview {
+pub struct ReadingOrderProjectPreviewResponse {
     pub plan_id: i64,
     pub plan_name: String,
     pub plan_ordering_mode: String,
     pub reading_order_id: i64,
     pub reading_order_name: String,
-    pub entries: Vec<ReadingOrderProjectionEntry>,
-    pub conflicts: Vec<ReadingOrderProjectionConflict>,
+    pub entries: Vec<ReadingOrderProjectPreviewEntry>,
+    pub conflicts: Vec<ReadingOrderProjectPreviewConflict>,
     pub total_positions: i64,
     pub dropped_node_ids: Vec<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct ReadingOrderProjectionEntry {
+pub struct ReadingOrderProjectPreviewEntry {
     pub thread_id: i64,
     pub thread_title: Option<String>,
     pub position: i64,
@@ -95,7 +95,7 @@ pub struct ReadingOrderProjectionEntry {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct ReadingOrderProjectionConflict {
+pub struct ReadingOrderProjectPreviewConflict {
     pub code: String,
     pub message: String,
     pub node_id: String,
@@ -244,10 +244,10 @@ fn flatten(
     post,
     path = "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
     operation_id = "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
-    request_body = ReadingOrderProjectionRequest,
+    request_body = ReadingOrderProjectPreviewRequest,
     params(("plan_id" = i64, Path, description = "Continuity plan id")),
     responses(
-        (status = 200, description = "Deterministic projection preview", body = ReadingOrderProjectionPreview),
+        (status = 200, description = "Deterministic projection preview", body = ReadingOrderProjectPreviewResponse),
         (status = 401, description = "Unauthorized"),
         (status = 404, description = "Plan or reading order not found"),
         (status = 409, description = "Malformed plan"),
@@ -263,7 +263,7 @@ pub async fn preview_plan_projection_handler(
     user: AuthenticatedUser,
     plan_id: Result<Path<String>, PathRejection>,
     body: Bytes,
-) -> Result<Json<ReadingOrderProjectionPreview>, PreviewError> {
+) -> Result<Json<ReadingOrderProjectPreviewResponse>, PreviewError> {
     let plan_id = parse_path_int(plan_id)?;
     let request = parse_request(&body)?;
     let connection = db::checkout(&state).await?;
@@ -351,7 +351,7 @@ pub async fn preview_plan_projection_handler(
     let mut thread_positions: HashMap<i64, Vec<i64>> = HashMap::new();
     for node in &ordered_nodes {
         if node.node_type != "thread" {
-            conflicts.push(ReadingOrderProjectionConflict {
+            conflicts.push(ReadingOrderProjectPreviewConflict {
                 code: "non_thread_node".to_string(),
                 message: format!(
                     "Reading order projection only supports thread nodes; {} node {:?} cannot be projected.",
@@ -371,7 +371,7 @@ pub async fn preview_plan_projection_handler(
             if !seen.insert(node.ref_id) {
                 let mut positions = thread_positions[&node.ref_id].clone();
                 positions.sort_unstable();
-                conflicts.push(ReadingOrderProjectionConflict {
+                conflicts.push(ReadingOrderProjectPreviewConflict {
                     code: "duplicate_thread".to_string(),
                     message: format!(
                         "Thread {} appears multiple times in the plan; deduplicate node positions before projection.",
@@ -383,7 +383,7 @@ pub async fn preview_plan_projection_handler(
                 });
             }
         } else {
-            conflicts.push(ReadingOrderProjectionConflict {
+            conflicts.push(ReadingOrderProjectPreviewConflict {
                 code: "missing_thread".to_string(),
                 message: format!(
                     "Thread {} from node {:?} is not owned by the user.",
@@ -408,7 +408,7 @@ pub async fn preview_plan_projection_handler(
                 Some(prior) if *prior != position => "updated",
                 Some(_) => "existing",
             };
-            entries.push(ReadingOrderProjectionEntry {
+            entries.push(ReadingOrderProjectPreviewEntry {
                 thread_id: node.ref_id,
                 thread_title: thread_titles.get(&node.ref_id).and_then(Clone::clone),
                 position,
@@ -423,7 +423,7 @@ pub async fn preview_plan_projection_handler(
         (Vec::new(), existing_rows.len() as i64)
     };
 
-    Ok(Json(ReadingOrderProjectionPreview {
+    Ok(Json(ReadingOrderProjectPreviewResponse {
         plan_id,
         plan_name,
         plan_ordering_mode: ordering_mode,
@@ -439,6 +439,33 @@ pub async fn preview_plan_projection_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `continuity_plans` registers `ReadingOrderProjectionRequest` with
+    /// `deny_unknown_fields` and i32 ids. Reusing those names would publish that
+    /// incompatible schema for this preview instead of this handler's i64,
+    /// extra-field-tolerant Python-parity contract (#5342 review).
+    #[test]
+    fn published_preview_schema_uses_distinct_names_and_wire_types() {
+        let document =
+            serde_json::to_value(crate::same_path_openapi::same_path_openapi()).expect("OpenAPI");
+        let operation = &document["paths"]
+            ["/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview"]["post"];
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ReadingOrderProjectPreviewRequest"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ReadingOrderProjectPreviewResponse"
+        );
+        let request = &document["components"]["schemas"]["ReadingOrderProjectPreviewRequest"];
+        assert_eq!(request["properties"]["reading_order_id"]["format"], "int64");
+        assert!(request.get("additionalProperties").is_none());
+        // The commit endpoint keeps its own, incompatible schema.
+        assert!(document["components"]["schemas"]
+            .get("ReadingOrderProjectionRequest")
+            .is_some());
+    }
 
     #[test]
     fn request_requires_positive_reading_order_id() {

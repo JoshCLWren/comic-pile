@@ -1822,7 +1822,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
               }
             }
           },
@@ -1834,7 +1834,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectionPreview"
+                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
                 }
               }
             }
@@ -16525,6 +16525,140 @@
             "items": {
               "$ref": "#/components/schemas/ReadingOrderSummary"
             }
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewConflict": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "node_id",
+          "existing_positions"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "existing_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "message": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewEntry": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "position",
+          "source"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_node_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewRequest": {
+        "type": "object",
+        "required": [
+          "reading_order_id"
+        ],
+        "properties": {
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewResponse": {
+        "type": "object",
+        "required": [
+          "plan_id",
+          "plan_name",
+          "plan_ordering_mode",
+          "reading_order_id",
+          "reading_order_name",
+          "entries",
+          "conflicts",
+          "total_positions",
+          "dropped_node_ids"
+        ],
+        "properties": {
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectPreviewConflict"
+            }
+          },
+          "dropped_node_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectPreviewEntry"
+            }
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "plan_name": {
+            "type": "string"
+          },
+          "plan_ordering_mode": {
+            "type": "string"
+          },
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reading_order_name": {
+            "type": "string"
+          },
+          "total_positions": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

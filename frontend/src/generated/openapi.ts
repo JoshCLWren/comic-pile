@@ -8204,6 +8204,41 @@ export interface components {
         ReadingOrderListResponse: {
             reading_orders: components["schemas"]["ReadingOrderSummary"][];
         };
+        ReadingOrderProjectPreviewConflict: {
+            code: string;
+            existing_positions: number[];
+            message: string;
+            node_id: string;
+            /** Format: int64 */
+            thread_id?: number | null;
+        };
+        ReadingOrderProjectPreviewEntry: {
+            /** Format: int64 */
+            position: number;
+            source: string;
+            source_node_id?: string | null;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title?: string | null;
+        };
+        ReadingOrderProjectPreviewRequest: {
+            /** Format: int64 */
+            reading_order_id: number;
+        };
+        ReadingOrderProjectPreviewResponse: {
+            conflicts: components["schemas"]["ReadingOrderProjectPreviewConflict"][];
+            dropped_node_ids: string[];
+            entries: components["schemas"]["ReadingOrderProjectPreviewEntry"][];
+            /** Format: int64 */
+            plan_id: number;
+            plan_name: string;
+            plan_ordering_mode: string;
+            /** Format: int64 */
+            reading_order_id: number;
+            reading_order_name: string;
+            /** Format: int64 */
+            total_positions: number;
+        };
         /**
          * ReadingOrderProjectionConflict
          * @description A single conflict blocking a projection.
@@ -11167,7 +11202,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeReadingOrderProjectionRequest"];
+                "application/json": components["schemas"]["ReadingOrderProjectPreviewRequest"];
             };
         };
         responses: {
@@ -11177,7 +11212,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReadingOrderProjectionPreview"];
+                    "application/json": components["schemas"]["ReadingOrderProjectPreviewResponse"];
                 };
             };
             /** @description Unauthorized */

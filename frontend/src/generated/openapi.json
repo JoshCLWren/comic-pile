@@ -13803,6 +13803,140 @@
         ],
         "type": "object"
       },
+      "ReadingOrderProjectPreviewConflict": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "existing_positions": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "node_id",
+          "existing_positions"
+        ],
+        "type": "object"
+      },
+      "ReadingOrderProjectPreviewEntry": {
+        "properties": {
+          "position": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_node_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "position",
+          "source"
+        ],
+        "type": "object"
+      },
+      "ReadingOrderProjectPreviewRequest": {
+        "properties": {
+          "reading_order_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reading_order_id"
+        ],
+        "type": "object"
+      },
+      "ReadingOrderProjectPreviewResponse": {
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectPreviewConflict"
+            },
+            "type": "array"
+          },
+          "dropped_node_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectPreviewEntry"
+            },
+            "type": "array"
+          },
+          "plan_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "plan_name": {
+            "type": "string"
+          },
+          "plan_ordering_mode": {
+            "type": "string"
+          },
+          "reading_order_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reading_order_name": {
+            "type": "string"
+          },
+          "total_positions": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "plan_ordering_mode",
+          "reading_order_id",
+          "reading_order_name",
+          "entries",
+          "conflicts",
+          "total_positions",
+          "dropped_node_ids"
+        ],
+        "type": "object"
+      },
       "ReadingOrderProjectionConflict": {
         "description": "A single conflict blocking a projection.",
         "properties": {
@@ -20370,7 +20504,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeReadingOrderProjectionRequest"
+                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
               }
             }
           },
@@ -20381,7 +20515,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeReadingOrderProjectionPreview"
+                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
                 }
               }
             },
