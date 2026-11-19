@@ -679,10 +679,10 @@ def test_new_family_fragment_merges_without_touching_other_family() -> None:
     """One family's fragment merge never alters another family's routes."""
     inventory = load_json(INVENTORY_PATH)
     fragments = _load_route_fragments(FRAGMENT_DIR)
-    sessions = next(f for f in fragments if f.name == "threads")
+    activity = next(f for f in fragments if f.name == "activity")
     creators = next(f for f in fragments if f.name == "creators")
 
-    merged_threads_only = _merge_route_fragments(inventory, [sessions])
+    merged_activity_only = _merge_route_fragments(inventory, [activity])
     merged_full = _merge_route_fragments(inventory, fragments)
 
     def _method_path_set(
@@ -707,12 +707,12 @@ def test_new_family_fragment_merges_without_touching_other_family() -> None:
 
     creators_keys = {(str(op["method"]), str(op["path"])) for op in creators.operations if not op.get("exclude_from_inventory")}
     # Merging sessions alone must not remove or alter any creators route.
-    assert _method_path_set(merged_threads_only, creators_keys) == creators_keys
+    assert _method_path_set(merged_activity_only, creators_keys) == creators_keys
     assert _method_path_set(merged_full, creators_keys) == creators_keys
-    threads_keys = {(str(op["method"]), str(op["path"])) for op in sessions.operations if not op.get("exclude_from_inventory")}
-    assert threads_keys
-    assert threads_keys.isdisjoint(creators_keys)
-    assert _method_path_set(merged_threads_only, threads_keys) == threads_keys
+    activity_keys = {(str(op["method"]), str(op["path"])) for op in activity.operations if not op.get("exclude_from_inventory")}
+    assert activity_keys
+    assert activity_keys.isdisjoint(creators_keys)
+    assert _method_path_set(merged_activity_only, activity_keys) == activity_keys
 
 
 def test_generators_are_idempotent() -> None:
