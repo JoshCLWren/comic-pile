@@ -895,6 +895,102 @@ mod tests {
         }
     }
 
+    fn assert_structured(error: ApiError, status: StatusCode, code: &str) -> Value {
+        assert_eq!(error.status(), status, "{error}");
+        let detail = error
+            .structured_detail()
+            .expect("domain errors keep the Python structured detail object")
+            .clone();
+        assert_eq!(detail["code"], code, "{detail}");
+        detail
+    }
+
+    #[test]
+    fn invalid_payloads_use_the_house_validation_envelope() {
+        // Pydantic field constraints and model_validator failures are all the
+        // production FastAPI 422 body, never a 400 with an internal message.
+        let mut cases = Vec::new();
+        let mut case = request("item_read");
+        case.source_type = "thread".to_string();
+        cases.push(case);
+        let mut case = request("item_read");
+        case.source_id = 0;
+        cases.push(case);
+        let mut case = request("item_read");
+        case.satisfaction_type = "unknown".to_string();
+        cases.push(case);
+        // converged requires at least one convergence target.
+        cases.push(request("converged"));
+        // checkpoint requires checkpoint_issue_id.
+        cases.push(request("checkpoint"));
+        let mut case = request("item_read");
+        case.checkpoint_issue_id = Some(30);
+        cases.push(case);
+        let mut case = request("item_read");
+        case.note = Some("x".repeat(MAX_NOTE_CHARS + 1));
+        cases.push(case);
+        let mut case = request("selected_members_read");
+        case.selected_member_issue_ids = vec![7; MAX_REQUEST_ITEMS + 1];
+        cases.push(case);
+        let mut case = request("item_read");
+        case.source_id = 20;
+        case.target_id = 20;
+        cases.push(case);
+
+        for case in cases {
+            let error = validate_request(&case).expect_err("invalid payload must be rejected");
+            assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY, "{error}");
+            assert_eq!(error.detail(), "Validation failed");
+            assert!(error.structured_detail().is_none());
+        }
+    }
+
+    #[test]
+    fn structurally_valid_payloads_pass_request_validation() {
+        validate_request(&request("item_read")).expect("item_read is valid");
+        let mut checkpoint = request("checkpoint");
+        checkpoint.checkpoint_issue_id = Some(30);
+        validate_request(&checkpoint).expect("checkpoint is valid");
+        let mut converged = request("converged");
+        converged.convergence_targets = vec![ConvergenceTarget {
+            node_type: "issue".to_string(),
+            id: 30,
+        }];
+        validate_request(&converged).expect("converged is valid");
+        let mut members = request("selected_members_read");
+        members.selected_member_issue_ids = vec![30];
+        validate_request(&members).expect("selected members are valid");
+    }
+
+    #[test]
+    fn cycle_conflict_keeps_the_python_structured_detail() {
+        let detail = assert_structured(
+            cycle_conflict(&ContinuityRuleRequest {
+                source_id: 3001,
+                target_id: 3002,
+                ..request("item_read")
+            }),
+            StatusCode::CONFLICT,
+            "continuity_cycle",
+        );
+        assert_eq!(detail["source"], json!({"type": "issue", "id": 3001}));
+        assert_eq!(detail["target"], json!({"type": "issue", "id": 3002}));
+    }
+
+    #[test]
+    fn cbl_collision_keeps_the_python_message() {
+        let detail = assert_structured(
+            cbl_collision_conflict(42, 2),
+            StatusCode::CONFLICT,
+            "continuity_cbl_collision",
+        );
+        assert_eq!(
+            detail["message"],
+            "Rule 42 collides with historical cbl-order rows on 2 pair(s); \
+             resolve the overlap before saving"
+        );
+    }
+
     #[tokio::test]
     async fn create_writes_continuity_rule_and_dependency_to_disposable_postgres() {
         let (state, user, _guard) = database_fixture().await;
@@ -914,6 +1010,142 @@ mod tests {
         assert_eq!(response.user_id, user.id());
         assert_eq!(response.source_id, 3001);
         assert_eq!(response.target_id, 3002);
+        assert_eq!(response.convergence_targets, Vec::new());
+        assert!(response.created_at.contains('T'), "{}", response.created_at);
+        assert!(response.created_at.ends_with('Z'), "{}", response.created_at);
+        assert_eq!(response.created_at, response.updated_at);
+    }
+
+    #[tokio::test]
+    async fn invalid_body_returns_the_house_422_at_the_handler_boundary() {
+        let (state, user, _guard) = database_fixture().await;
+        let error = create(
+            State(state),
+            user,
+            Json(ContinuityRuleRequest {
+                source_id: 3001,
+                target_id: 3002,
+                satisfaction_type: "not-a-satisfaction".to_string(),
+                ..request("item_read")
+            }),
+        )
+        .await
+        .expect_err("invalid satisfaction type is rejected");
+
+        assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(error.detail(), "Validation failed");
+    }
+
+    #[tokio::test]
+    async fn duplicate_rule_returns_the_structured_exists_conflict() {
+        let (state, user, _guard) = database_fixture().await;
+        let body = || {
+            Json(ContinuityRuleRequest {
+                source_id: 3001,
+                target_id: 3002,
+                ..request("item_read")
+            })
+        };
+        create(State(state.clone()), user, body())
+            .await
+            .expect("first create");
+        let error = create(State(state), user, body())
+            .await
+            .expect_err("duplicate edge is rejected");
+        assert_structured(error, StatusCode::CONFLICT, "continuity_rule_exists");
+    }
+
+    #[tokio::test]
+    async fn cycle_returns_the_structured_cycle_conflict() {
+        let (state, user, _guard) = database_fixture().await;
+        create(
+            State(state.clone()),
+            user,
+            Json(ContinuityRuleRequest {
+                source_id: 3001,
+                target_id: 3002,
+                ..request("item_read")
+            }),
+        )
+        .await
+        .expect("first create");
+        let error = create(
+            State(state),
+            user,
+            Json(ContinuityRuleRequest {
+                source_id: 3002,
+                target_id: 3001,
+                ..request("item_read")
+            }),
+        )
+        .await
+        .expect_err("reverse edge completes a cycle");
+        assert_structured(error, StatusCode::CONFLICT, "continuity_cycle");
+    }
+
+    #[tokio::test]
+    async fn non_compilable_rule_returns_the_structured_bad_request() {
+        let (state, user, _guard) = database_fixture().await;
+        let error = create(
+            State(state),
+            user,
+            Json(ContinuityRuleRequest {
+                source_id: 3001,
+                target_id: 3002,
+                selected_member_issue_ids: vec![3001],
+                ..request("selected_members_read")
+            }),
+        )
+        .await
+        .expect_err("member-list rule has no canonical edges");
+        let detail = assert_structured(
+            error,
+            StatusCode::BAD_REQUEST,
+            "continuity_rule_not_compilable",
+        );
+        assert!(
+            detail["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("does not compile to canonical edges")),
+            "{detail}"
+        );
+    }
+
+    #[tokio::test]
+    async fn historical_cbl_order_row_returns_the_structured_collision() {
+        let (state, user, _guard) = database_fixture().await;
+        let connection = db::checkout(&state).await.expect("collision connection");
+        connection
+            .batch_execute(
+                "INSERT INTO dependencies (created_at, source_issue_id, target_issue_id, note)
+                 VALUES (NOW(), 3001, 3002, 'cbl-order:legacy-materialization');",
+            )
+            .await
+            .expect("seed inert cbl-order row");
+        drop(connection);
+
+        let error = create(
+            State(state),
+            user,
+            Json(ContinuityRuleRequest {
+                source_id: 3001,
+                target_id: 3002,
+                ..request("item_read")
+            }),
+        )
+        .await
+        .expect_err("inert cbl-order row cannot be silently shadowed");
+        let detail = assert_structured(
+            error,
+            StatusCode::CONFLICT,
+            "continuity_cbl_collision",
+        );
+        assert!(
+            detail["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("collides with historical cbl-order rows")),
+            "{detail}"
+        );
     }
 
     #[tokio::test]
