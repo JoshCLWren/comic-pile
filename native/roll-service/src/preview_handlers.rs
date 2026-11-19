@@ -19,13 +19,14 @@ use axum::{
     Json,
 };
 use chrono::{DateTime, SecondsFormat, Utc};
-use h2::{Hmac, Mac};
-use hmac::digest::KeyInit;
-use serde::{Deserialize, Serialize};
+use hmac::{digest::KeyInit, Hmac, Mac};
 use sha2::{Digest, Sha256};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio_postgres::Transaction;
 use utoipa::ToSchema;
+
+type HmacSha256 = Hmac<Sha256>;
 
 // Re-export types that match Python schemas
 pub type ReadingGraphChoiceId = String;
@@ -1436,63 +1437,4 @@ fn compute_state_digest(
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     sha256_hex(&hasher.finalize())
-}
-
-/// Generate a preview token compatible with Python's implementation
-fn generate_preview_token(secret: &str, payload: &serde_json::Value) -> Result<String, ApiError> {
-    // Canonical JSON matching Python json.dumps(obj, sort_keys=True, separators=(', ', ': '))
-    let canonical = canonical_json(payload);
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .map_err(|_| ApiError::Internal("signature unavailable".to_string()))?;
-    mac.update(canonical.as_bytes());
-    let signature = sha256_hex(&mac.finalize().into_bytes());
-
-    let token_data = serde_json::json!({
-        "payload": payload,
-        "signature": signature,
-    });
-
-    serde_json::to_string(&token_data)
-        .map_err(|_| ApiError::Internal("token serialization failed".to_string()))
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
-/// Canonical JSON matching Python json.dumps(obj, sort_keys=True) default separators.
-/// Python's default separators are (', ', ': ').
-fn canonical_json(value: &serde_json::Value) -> String {
-    match value {
-        serde_json::Value::Null => "null".to_string(),
-        serde_json::Value::Bool(b) => if *b { "true" } else { "false" }.to_string(),
-        serde_json::Value::Number(n) => n.to_string(),
-        serde_json::Value::String(s) => {
-            let encoded = serde_json::to_string(s).unwrap_or_default();
-            let mut ascii = String::with_capacity(encoded.len());
-            for ch in encoded.chars() {
-                if ch.is_ascii() {
-                    ascii.push(ch);
-                } else {
-                    for unit in ch.encode_utf16(&mut [0; 2]) {
-                        ascii.push_str(&format!("\\u{unit:04x}"));
-                    }
-                }
-            }
-            ascii
-        }
-        serde_json::Value::Array(a) => {
-            let items: Vec<String> = a.iter().map(canonical_json).collect();
-            format!("[{}]", items.join(", "))
-        }
-        serde_json::Value::Object(m) => {
-            let mut keys: Vec<&String> = m.keys().collect();
-            keys.sort();
-            let items: Vec<String> = keys
-                .into_iter()
-                .map(|k| format!("{}: {}", canonical_json(&serde_json::Value::String(k.clone())), canonical_json(&m[k])))
-                .collect();
-            format!("{{{}}}", items.join(", "))
-        }
-    }
 }
