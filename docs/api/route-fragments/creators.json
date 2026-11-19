@@ -6,8 +6,8 @@
     "^/api/v1/threads/[^/]+/issues/creators$"
   ],
   "defaults": {
-    "runtime": "python-fastapi",
-    "status": "transitional",
+    "runtime": "native-rust",
+    "status": "native",
     "owning_issue": null,
     "consumers": [
       "frontend/src/services/api-creators.ts",
@@ -38,11 +38,83 @@
     {
       "bucket": "v1_operations",
       "method": "GET",
+      "path": "/api/v1/creators/compare",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/compare$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/discoveries",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/discoveries$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/team-chemistry",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/team\\-chemistry$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/(?!compare$|discoveries$|summaries$|team\\-chemistry$)[^/]+$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/[^/]+/series/[^/]+/issues$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/[^/]+/metrics/[^/]+$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/[^/]+/metrics/rating\\-distribution/[^/]+$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/[^/]+/metrics/role\\-stats/[^/]+$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/[^/]+/metrics/series\\-stats/[^/]+$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues/creators",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/threads/[^/]+/issues/creators$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4832,
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
@@ -60,7 +132,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/creators$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4836
     },
     {
@@ -70,7 +142,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/creators/summaries$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4836
     },
     {
@@ -80,7 +152,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/creators/compare$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4836
     },
     {
@@ -90,7 +162,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/creators/discoveries$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4836
     },
     {
@@ -100,7 +172,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/creators/team\\-chemistry$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4836
     },
     {
@@ -110,7 +182,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/creators/[^/]+/series/[^/]+/issues$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4836
     },
     {
@@ -120,7 +192,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/creators/[^/]+/metrics/rating\\-distribution/[^/]+$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4836
     },
     {
@@ -130,7 +202,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/creators/[^/]+/metrics/role\\-stats/[^/]+$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4836
     },
     {
@@ -140,7 +212,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/creators/[^/]+/metrics/series\\-stats/[^/]+$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4836
     },
     {
@@ -150,7 +222,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/creators/[^/]+/metrics/[^/]+$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4836
     },
     {
@@ -160,7 +232,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/creators/(?!compare$|discoveries$|summaries$|team\\-chemistry$)[^/]+$",
       "runtime": "native-rust",
-      "status": "target",
+      "status": "native",
       "owning_issue": 4836
     }
   ]

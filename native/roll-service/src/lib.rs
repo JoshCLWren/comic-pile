@@ -1110,9 +1110,36 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/threads/{thread_id}/issue-order",
             put(issue_mutation::reorder_issues),
         )
-        .route("/api/v1/creators", get(creators::list_creators))
-        .route("/api/v1/creators/", get(creators::list_creators))
-        .route("/api/v1/creators/summaries", get(creators::get_summaries))
+        // Creator API: v1 routes now dispatch to native Rust v2 handlers (#4836)
+        // All browser-called routes are now native Rust, eliminating Python fallback.
+        .route("/api/v1/creators", get(creators_v2::list_creators))
+        .route("/api/v1/creators/", get(creators_v2::list_creators))
+        .route("/api/v1/creators/summaries", get(creators_v2::get_summaries))
+        .route("/api/v1/creators/compare", get(creators_v2::get_comparison))
+        .route("/api/v1/creators/discoveries", get(creators_v2::get_discoveries))
+        .route("/api/v1/creators/team-chemistry", get(creators_v2::get_team_chemistry))
+        .route("/api/v1/creators/{creator_key}", get(creators_v2::get_detail))
+        .route(
+            "/api/v1/creators/{creator_key}/series/{series_key}/issues",
+            get(creators_v2::get_series_issues),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/{metric_type}",
+            get(creators_v2::get_metric_drilldown),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+            get(creators_v2::get_rating_distribution_drilldown),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
+            get(creators_v2::get_role_drilldown),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
+            get(creators_v2::get_series_drilldown),
+        )
+        // v2 routes (can be called by clients, but v1 is preferred by browsers)
         .route("/api/v2/creators", get(creators_v2::list_creators))
         .route(
             "/api/v2/creators/summaries",
