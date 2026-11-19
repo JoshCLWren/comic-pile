@@ -199,6 +199,7 @@ describe('LastReadStrip', () => {
       'https://example.test/saga-5.jpg',
     )
     expect(screen.getByTestId('last-read-cover')).toBeVisible()
+    expect(screen.getByRole('img', { name: 'Saga 5 cover' })).toHaveClass('object-cover')
   })
 
   it('copies the title and issue string', async () => {
