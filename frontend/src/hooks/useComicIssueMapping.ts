@@ -4,6 +4,7 @@ import type { ComicVineIssueCandidate, IssueIdentityResponse } from '../services
 import { queryClient } from '../query/queryClient'
 import {
   applyComicVineCorrectionOptimistically,
+  invalidateAfterIssueMappingChange,
   invalidateComicVineIssueIdentity,
   invalidateComicVineIssueIntelligenceMany,
 } from '../query/cacheEffects'
@@ -95,10 +96,12 @@ export function useComicIssueMapping({
   isOwned = true,
   onMapped,
 }: UseComicIssueMappingOptions): UseComicIssueMapping {
+  const shouldAutoFetchIdentity =
+    initialIdentity == null && fetchEnabled !== false && isOwned && !!issueId
   const [identityState, setIdentityState] = useState<IssueIdentityResponse | null>(
     () => initialIdentity ?? null,
   )
-  const [isLoadingIdentity, setIsLoadingIdentity] = useState(false)
+  const [isLoadingIdentity, setIsLoadingIdentity] = useState(shouldAutoFetchIdentity)
   const [identityError, setIdentityError] = useState(false)
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false)
   const [searchMode, setSearchMode] = useState<'confirm' | 'replace'>('confirm')
@@ -148,6 +151,7 @@ export function useComicIssueMapping({
         await invalidateComicVineIssueIdentity(queryClient, issueId)
       }
       await fetchIdentity()
+      await invalidateAfterIssueMappingChange(queryClient)
       await onMappedRef.current?.()
     },
     [fetchIdentity, issueId],
@@ -163,6 +167,7 @@ export function useComicIssueMapping({
           ),
         )
       }
+      await invalidateAfterIssueMappingChange(queryClient)
       await onMappedRef.current?.()
     },
     [],
@@ -195,6 +200,7 @@ export function useComicIssueMapping({
       setIsRemoveDialogOpen(false)
       await invalidateComicVineIssueIdentity(queryClient, issueId)
       await fetchIdentity()
+      await invalidateAfterIssueMappingChange(queryClient)
       await onMappedRef.current?.()
     } catch (error) {
       setRemoveMappingError(

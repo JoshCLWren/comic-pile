@@ -224,6 +224,87 @@
     "name": "get_creator_summaries_endpoint"
   },
   {
+    "path": "/api/v1/creators/compare",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "compare_creators_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/team-chemistry",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_team_chemistry_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/discoveries",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_discoveries_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_series_issues_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_detail_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_metric_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_rating_distribution_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_role_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_series_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
     "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
     "methods": [
       "POST"
@@ -622,5 +703,101 @@
     ],
     "module": "app.api.identity_inbox",
     "name": "api_skip_item"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}/issues",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.issue",
+    "name": "list_issues"
+  },
+  {
+    "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.reading_order_projection",
+    "name": "confirm_plan_projection"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/folders",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_catalog",
+    "name": "list_cbl_source_folders"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/browse",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_catalog",
+    "name": "browse_cbl_source_catalog"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_comicvine_lookup",
+    "name": "find_cbl_sources_by_comicvine_issue"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/compare",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.cbl_comicvine_lookup",
+    "name": "compare_cbl_sources"
+  },
+  {
+    "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_comicvine_lookup",
+    "name": "find_cbl_candidates_for_reading_list"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_sources",
+    "name": "discover_cbl_source_lists"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_sources",
+    "name": "get_cbl_source_list"
+  },
+  {
+    "path": "/api/v1/cbl/{list_id}/adoption-commit",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.cbl_plan_adoption",
+    "name": "api_cbl_adoption_commit"
+  },
+  {
+    "path": "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.cbl_plan_adoption",
+    "name": "api_targeted_cbl_adoption_commit"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.issue_identity",
+    "name": "api_cbl_adoption_plan"
   }
 ]
