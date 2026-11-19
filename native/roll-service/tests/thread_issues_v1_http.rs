@@ -206,25 +206,6 @@ fn get(path: &str, token: &str, csrf: &str) -> Request<Body> {
     authed("GET", path, token, csrf, None)
 }
 
-async fn send_router(router: Router, request: Request<Body>) -> (StatusCode, Value) {
-    let response = router.oneshot(request).await.unwrap();
-    let status = response.status();
-    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
-    (
-        status,
-        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
-    )
-}
-
-fn creators_test_router(state: &Arc<AppState>) -> Router {
-    Router::new()
-        .route(
-            "/api/v1/threads/{thread_id}/issues/creators",
-            route_get(comicpile_roll_service::thread_issues::list_thread_issue_creators),
-        )
-        .with_state(state.clone())
-}
-
 async fn plain_thread(
     conn: &Conn,
     user_id: i32,

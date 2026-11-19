@@ -2357,10 +2357,19 @@ async fn test_backdate_thread_for_testing_updates_activity_and_returns_thread() 
     assert_eq!(body["is_test"], false);
     assert_eq!(body["last_rating"], Value::Null);
     assert_eq!(body["notes"], Value::Null);
+    assert_eq!(body["total_issues"], Value::Null);
+    assert_eq!(body["reading_progress"], Value::Null);
+    assert_eq!(body["next_unread_issue_id"], Value::Null);
+    assert_eq!(body["next_unread_issue_number"], Value::Null);
     assert_eq!(body["manual_creator_credits"], json!([]));
     assert_eq!(body["blocking_reasons"], json!([]));
     assert!(body["created_at"].as_str().unwrap().ends_with('Z'));
-    assert!(body["last_activity_at"].is_string(), "{body:?}");
+    assert!(
+        body["last_activity_at"]
+            .as_str()
+            .is_some_and(|value| value.ends_with('Z')),
+        "{body:?}"
+    );
 
     let activity: chrono::DateTime<chrono::Utc> = ctx
         .state
