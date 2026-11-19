@@ -362,6 +362,10 @@ fn app() -> Router {
             "/api/v1/threads/{thread_id}/set-pending",
             post(native_dispatch),
         )
+        .route(
+            "/api/v1/threads/{thread_id}/test-backdate",
+            put(native_dispatch),
+        )
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))
@@ -1053,6 +1057,45 @@ mod tests {
         assert!(
             text != r#"{"detail":"Not Found"}"#,
             "cbl-sources discover must not hit the native 404 fallback: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_backdate_ingress_reaches_rust_and_never_hits_json_404() {
+        // The threads route fragment points this method/path at this Vercel
+        // entry. Without a matching outer route the regenerated ingress falls
+        // through to native_not_found before the inner router ever sees the
+        // handler (same failure class as #5484). No DB state is needed here:
+        // an anonymous mutation must reach the dispatched handler's 401 (or
+        // the 503 cold-start response), never the Rust JSON 404.
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/v1/threads/21/test-backdate?days_ago=5")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "test-backdate must reach Rust dispatch, not the 404 fallback, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        let text = String::from_utf8_lossy(&bytes);
+        assert_ne!(
+            text, r#"{"detail":"Not Found"}"#,
+            "test-backdate must not hit native_not_found: {text}"
         );
     }
 

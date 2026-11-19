@@ -174,7 +174,7 @@ test('real creator source retains all eleven native v2 browser routes', () => {
   ]) {
     liveOperation(fragment, 'GET', route);
   }
-  assert.equal(liveOperation(fragment, 'GET', '/api/v1/threads/{thread_id}/issues/creators').dest, '/api/index.py');
+  assert.equal(liveOperation(fragment, 'GET', '/api/v1/threads/{thread_id}/issues/creators').dest, '/api/native_roll.rs');
 });
 
 test('real custom CBL source retains native v1 and v2 route ownership', () => {

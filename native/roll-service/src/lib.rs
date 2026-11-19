@@ -827,6 +827,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(thread_issues::create_thread_issues),
         )
         .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(thread_issues::list_thread_issue_creators),
+        )
+        .route(
             "/api/v1/threads/{thread_id}/issues:reorder",
             post(thread_issues::reorder_thread_issues),
         )
@@ -882,6 +886,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/set-pending",
             post(thread_lifecycle::set_pending_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/test-backdate",
+            put(thread_lifecycle::backdate_thread_for_testing),
         )
         .route(
             "/api/v2/reading-lists",
