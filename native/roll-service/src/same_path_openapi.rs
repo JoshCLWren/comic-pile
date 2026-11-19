@@ -179,14 +179,6 @@ mod tests {
         assert_eq!(expected.trim_end(), generated.trim_end());
     }
 
-    #[test]
-    fn __regenerate_contract_tmp() {
-        let generated = same_path_openapi()
-            .to_pretty_json()
-            .expect("serializable contract");
-        std::fs::write("/home/runner/work/comic-pile/comic-pile/native/contracts/same-path-runtime.openapi.json", generated).expect("write");
-    }
-
     /// The thread dependency operations moved to native Rust but their browser
     /// URLs stay on v1. Their response component schemas must stay in the
     /// same-path document so retiring the Python handlers does not erase the
