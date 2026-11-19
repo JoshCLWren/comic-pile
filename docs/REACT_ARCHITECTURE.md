@@ -70,8 +70,8 @@ frontend/
 └── package.json              # Dependencies and scripts (pnpm)
 ```
 
-Notable point: the old `.jsx` source layout (top-level `Header.jsx`,
-`Footer.jsx`, `App.jsx`, `main.jsx`) no longer exists. Pages are organized as
+Notable point: the old `.jsx` source layout (top-level `Header.jsx`, <!-- docs-path-check: ignore -->
+`Footer.jsx`, `App.jsx`, `main.jsx`) no longer exists. Pages are organized as <!-- docs-path-check: ignore -->
 module directories (`pages/RollPage/`, `pages/QueuePage/`) so each screen can
 own its coordinator hooks, domain helpers, and sub-components.
 
@@ -281,8 +281,8 @@ actions) is documented in [`REACT_INTERACTION_POLICY.md`](REACT_INTERACTION_POLI
   `/api`, `X-CSRF-Token` headers on state-changing methods, 401 → token refresh
   → single retry, login redirect, and typed request helpers that unwrap
   `response.data`.
-- Per-domain service modules (`api-queue.ts`, `api-threads.ts`, `api-rate.ts`,
-  `api-continuity-plans.ts`, `api-issues.ts`, ...) own the endpoint calls and
+- Per-domain service modules (`api-queue.ts`, `api-threads.ts`, `api-issues.ts`,
+  `api-continuity-plans.ts`, ...) own the endpoint calls and
   response shapes for each screen family.
 - Transport types are generated from the backend OpenAPI schema into
   `frontend/src/generated/openapi.ts`; domain/view-model types live in
