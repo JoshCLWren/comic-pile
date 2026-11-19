@@ -62,7 +62,7 @@ function renderActions(props?: Partial<Parameters<typeof ContainerQueueActions>[
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [3] })
+  mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [0, 3] })
   mocks.checkThreadMemberships.mockResolvedValue({ thread_ids: [2] })
   mocks.useCrossoverGroups.mockReturnValue({ groupsByThreadId: {}, isPending: false, error: null })
   mocks.bulkExclude.mockResolvedValue({ group: { id: 11 }, excluded_thread_ids: [1] })
