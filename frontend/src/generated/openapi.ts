@@ -226,22 +226,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Preview Series Mapping
-         * @description Preview a series mapping with safe scoping and classification.
-         *
-         *     This endpoint provides a read-only preview of what issues would be mapped
-         *     to a selected ComicVine series, with safe scoping rules and classification
-         *     of each issue mapping status.
-         *
-         *     Args:
-         *         request: Preview request with origin issue, provider, and series ID.
-         *         current_user: Authenticated user for authorization.
-         *         db: Database session.
-         *
-         *     Returns:
-         *         Preview response with scope information, counts, and classified rows.
-         */
         post: operations["preview_series_mapping_api_v1_catalog_series_mappings_preview_post"];
         delete?: never;
         options?: never;
@@ -796,15 +780,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Preview Plan Projection
-         * @description Preview a deterministic projection without mutating any resource.
-         *
-         *     The preview is recomputed from the persisted plan JSON on every call so
-         *     that callers always see the current state, even after concurrent edits.
-         *     Duplicate thread references, missing owned threads, and non-thread
-         *     nodes are reported as conflicts before any mutation is permitted.
-         */
         post: operations["preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post"];
         delete?: never;
         options?: never;
@@ -1335,8 +1310,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for the CBL adoption preview. */
-        get: operations["cbl_adoption_preview_documentation"];
+        get: operations["api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1354,25 +1328,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Preview Cbl Reading Graph
-         * @description Preview the prospective reading graph for a CBL selection (read-only).
-         *
-         *     The graph comes from the same Option E evaluator and cycle validator that
-         *     execute the reader's saved lists. It never writes list membership, issue
-         *     status, or an overlap decision.
-         *
-         *     Args:
-         *         list_id: Shared CBL source list being adopted or updated.
-         *         payload: Included source positions, prior answers, and optional list
-         *             to preview as updated instead of newly added.
-         *         current_user: Authenticated reader whose existing lists are included.
-         *         db: Async database session for the request.
-         *
-         *     Returns:
-         *         Prospective series nodes, overlap questions with both choice effects,
-         *         the issue directory with active blockers, and any cycle rejection.
-         */
         post: operations["preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post"];
         delete?: never;
         options?: never;
@@ -6919,6 +6874,86 @@ export interface components {
             recent_ratings: components["schemas"]["NativeReaderContextRecentRating"][];
             series_name?: string | null;
         };
+        NativeReadingGraphBlocker: {
+            explanation: string;
+            /** Format: int64 */
+            gate_issue_id?: number | null;
+            kind: string;
+            /** Format: int64 */
+            list_id?: number | null;
+            waiting_on_issue_ids: number[];
+        };
+        NativeReadingGraphChoiceEffect: {
+            choice: string;
+            detail: string;
+            label: string;
+            rollable_issue_ids: number[];
+            series: components["schemas"]["NativeReadingGraphSeriesNode"][];
+            waiting_issue_ids: number[];
+        };
+        NativeReadingGraphCycleError: {
+            code: string;
+            message: string;
+        };
+        NativeReadingGraphIssueReference: {
+            blockers: components["schemas"]["NativeReadingGraphBlocker"][];
+            comicvine_volume_id?: string | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            series_name: string;
+        };
+        NativeReadingGraphOverlap: {
+            blocked_issue_ids: number[];
+            choices: components["schemas"]["NativeReadingGraphChoiceEffect"][];
+            continuing_series: components["schemas"]["NativeReadingGraphSeriesReference"];
+            overlap_id: string;
+            question: string;
+            selected_choice?: string | null;
+            waiting_series: components["schemas"]["NativeReadingGraphSeriesReference"];
+        };
+        NativeReadingGraphOverlapChoice: {
+            choice: string;
+            overlap_id: string;
+        };
+        NativeReadingGraphPreview: {
+            content_hash: string;
+            cycle_errors: components["schemas"]["NativeReadingGraphCycleError"][];
+            issues: components["schemas"]["NativeReadingGraphIssueReference"][];
+            overlaps: components["schemas"]["NativeReadingGraphOverlap"][];
+            revision_sha: string;
+            rollable_issue_ids: number[];
+            series: components["schemas"]["NativeReadingGraphSeriesNode"][];
+            /** Format: int64 */
+            source_list_id: number;
+            waiting_issue_ids: number[];
+        };
+        NativeReadingGraphPreviewRequest: {
+            included_positions?: number[];
+            overlap_choices?: components["schemas"]["NativeReadingGraphOverlapChoice"][];
+            /** Format: int64 */
+            target_list_id?: number | null;
+        };
+        NativeReadingGraphSeriesNode: {
+            comicvine_volume_id: string;
+            /** Format: int64 */
+            rollable_count: number;
+            series_name: string;
+            state: string;
+            /** Format: int64 */
+            unread_count: number;
+            /** Format: int64 */
+            waiting_count: number;
+            waits_for_issue_ids: number[];
+            /** Format: int64 */
+            year?: number | null;
+        };
+        NativeReadingGraphSeriesReference: {
+            comicvine_volume_id: string;
+            series_name: string;
+            /** Format: int64 */
+            year?: number | null;
+        };
         /** @description Python `ReadingOrderItemResponse`. */
         NativeReadingOrderItemResponse: {
             is_read: boolean;
@@ -6975,6 +7010,94 @@ export interface components {
             name: string;
             /** Format: int64 */
             total_items: number;
+        };
+        NativeSeriesMappingPreviewCounts: {
+            /** Format: int64 */
+            already_confirmed: number;
+            /** Format: int64 */
+            excluded_special: number;
+            /** Format: int64 */
+            needs_review_ambiguous: number;
+            /** Format: int64 */
+            needs_review_conflict: number;
+            /** Format: int64 */
+            safe_exact_match: number;
+            /** Format: int64 */
+            unresolved: number;
+        };
+        /**
+         * @description Wire-exact mirror of
+         *     `app/schemas/catalog.py::SeriesMappingPreviewProviderSeries`.
+         *
+         *     Pydantic coerces `start_year` and `count_of_issues` from strings to integers;
+         *     the conversion helper below does the same so the generated contract types
+         *     these as integers rather than `unknown`.
+         */
+        NativeSeriesMappingPreviewProviderSeries: {
+            /** Format: int32 */
+            count_of_issues?: number | null;
+            id: string;
+            image?: unknown;
+            name?: string | null;
+            publisher?: string | null;
+            site_detail_url?: string | null;
+            /** Format: int32 */
+            start_year?: number | null;
+        };
+        /** @description Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`. */
+        NativeSeriesMappingPreviewRequest: {
+            /** Format: int32 */
+            origin_issue_id: number;
+            provider: string;
+            provider_series_external_id: string;
+            scope_mode?: string;
+        };
+        NativeSeriesMappingPreviewResponse: {
+            counts: components["schemas"]["NativeSeriesMappingPreviewCounts"];
+            /** Format: double */
+            expires_at?: number | null;
+            /** Format: double */
+            issued_at: number;
+            preview_token?: string | null;
+            provider_series?: components["schemas"]["NativeSeriesMappingPreviewProviderSeries"] | null;
+            rows: components["schemas"]["NativeSeriesMappingPreviewRow"][];
+            scope: components["schemas"]["NativeSeriesMappingPreviewScope"];
+        };
+        /**
+         * @description Wire-exact mirror of `app/schemas/catalog.py::SeriesMappingPreviewRow`.
+         *
+         *     Every field is always emitted, including the nullable ones and the two
+         *     defaults (`metadata_refresh_required: false`, `reason: null`). Internal plan
+         *     fields (`_identity_metadata`, `_provider_metadata`, `confidence`, `_roster_*`,
+         *     `_sibling_roster`, `_is_origin`, `_roster_only`) are deliberately absent: the
+         *     Python Pydantic model drops them, so a raw `Value` would leak them and omit
+         *     the defaults.
+         */
+        NativeSeriesMappingPreviewRow: {
+            classification: string;
+            current_mapping_status?: string | null;
+            default_selected: boolean;
+            external_id?: string | null;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            metadata_refresh_required: boolean;
+            proposed_mapping: boolean;
+            provider?: string | null;
+            reason?: string | null;
+            row_id: string;
+            /** Format: int32 */
+            thread_id?: number | null;
+            thread_title?: string | null;
+            title?: string | null;
+        };
+        NativeSeriesMappingPreviewScope: {
+            basis?: string | null;
+            /** Format: int32 */
+            origin_issue_id: number;
+            scope_key?: string | null;
+            series_label?: string | null;
+            status: string;
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`. */
         NativeSetCurrentIssueRequest: {
@@ -8080,6 +8203,41 @@ export interface components {
         /** @description Python `ReadingOrderListResponse`. */
         ReadingOrderListResponse: {
             reading_orders: components["schemas"]["ReadingOrderSummary"][];
+        };
+        ReadingOrderProjectPreviewConflict: {
+            code: string;
+            existing_positions: number[];
+            message: string;
+            node_id: string;
+            /** Format: int64 */
+            thread_id?: number | null;
+        };
+        ReadingOrderProjectPreviewEntry: {
+            /** Format: int64 */
+            position: number;
+            source: string;
+            source_node_id?: string | null;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title?: string | null;
+        };
+        ReadingOrderProjectPreviewRequest: {
+            /** Format: int64 */
+            reading_order_id: number;
+        };
+        ReadingOrderProjectPreviewResponse: {
+            conflicts: components["schemas"]["ReadingOrderProjectPreviewConflict"][];
+            dropped_node_ids: string[];
+            entries: components["schemas"]["ReadingOrderProjectPreviewEntry"][];
+            /** Format: int64 */
+            plan_id: number;
+            plan_name: string;
+            plan_ordering_mode: string;
+            /** Format: int64 */
+            reading_order_id: number;
+            reading_order_name: string;
+            /** Format: int64 */
+            total_positions: number;
         };
         /**
          * ReadingOrderProjectionConflict
@@ -10147,27 +10305,32 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SeriesMappingPreviewRequest"];
+                "application/json": components["schemas"]["NativeSeriesMappingPreviewRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Read-only series mapping preview */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SeriesMappingPreviewResponse"];
+                    "application/json": components["schemas"]["NativeSeriesMappingPreviewResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -11032,33 +11195,53 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Continuity plan id */
                 plan_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
+                "application/json": components["schemas"]["ReadingOrderProjectPreviewRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Deterministic projection preview */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingOrderProjectionPreview"];
+                    "application/json": components["schemas"]["ReadingOrderProjectPreviewResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan or reading order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed plan */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -12515,19 +12698,19 @@ export interface operations {
             };
         };
     };
-    cbl_adoption_preview_documentation: {
+    api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description CBL source list identifier */
+                /** @description CBL source list id */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Adoption preview for the active CBL list */
+            /** @description Read-only adoption preview */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -12536,6 +12719,13 @@ export interface operations {
                     "application/json": components["schemas"]["CblAdoptionPreviewResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description CBL source list not found or not active */
             404: {
                 headers: {
@@ -12543,17 +12733,8 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Path failed validation */
+            /** @description Validation failed */
             422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationErrorResponse"];
-                };
-            };
-            /** @description Database temporarily unavailable */
-            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12566,33 +12747,46 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list id */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReadingGraphPreviewRequest"];
+                "application/json": components["schemas"]["NativeReadingGraphPreviewRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Read-only graph preview */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingGraphPreview"];
+                    "application/json": components["schemas"]["NativeReadingGraphPreview"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CBL source list or target reading list not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed, or unknown/unresolved source position or overlap answer */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
