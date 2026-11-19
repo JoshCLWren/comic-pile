@@ -92,6 +92,20 @@
     },
     {
       "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/adoption\\-preview$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4842,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
       "dest": "/api/native_roll.rs",
