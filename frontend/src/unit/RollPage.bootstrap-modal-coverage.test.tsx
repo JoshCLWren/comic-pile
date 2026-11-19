@@ -51,6 +51,7 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToBack: () => ({ mutate: vi.fn(), isPending: false }),
   useShuffleQueue: () => ({ mutate: vi.fn(), isPending: false }),
   useActiveSeriesCount: () => null,
+  useRestoreExclusionGroup: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
 }))
 vi.mock('../hooks', () => ({ useRate: () => ({ mutate: vi.fn(), isPending: false }) }))
 vi.mock('../services/api-taste', () => ({

@@ -306,6 +306,16 @@ fn app() -> Router {
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))
+        .route("/api/v2/queue-exclusions", post(native_dispatch))
+        .route(
+            "/api/v2/queue-exclusions/status:check",
+            post(native_dispatch),
+        )
+        .route("/api/v2/queue-exclusions/restore", post(native_dispatch))
+        .route(
+            "/api/v2/queue-exclusion-groups/{group_id}/restore",
+            post(native_dispatch),
+        )
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", post(native_dispatch))
@@ -390,6 +400,10 @@ fn app() -> Router {
         )
         .route("/api/v2/reading-lists", get(native_dispatch))
         .route("/api/v2/reading-lists", post(native_dispatch))
+        .route(
+            "/api/v2/reading-lists/memberships:check",
+            post(native_dispatch),
+        )
         .route("/api/v2/reading-lists/{list_id}", get(native_dispatch))
         .route("/api/v2/reading-lists/{list_id}", delete(native_dispatch))
         .route("/api/v2/reading-lists/{list_id}", put(native_dispatch))

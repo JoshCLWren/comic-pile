@@ -10917,6 +10917,32 @@
         ],
         "type": "object"
       },
+      "QueueExclusionGroupRef": {
+        "description": "Bulk exclusion provenance attached to an excluded queue thread (#5435).",
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_kind": {
+            "type": "string"
+          },
+          "source_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_kind",
+          "source_id",
+          "source_name"
+        ],
+        "type": "object"
+      },
       "QueueOrderRequest": {
         "additionalProperties": false,
         "description": "Queue-order (shuffle) creation request.",
@@ -16819,6 +16845,17 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "queue_exclusion_group": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/QueueExclusionGroupRef",
+                "description": "Present when this excluded thread was removed as part of a bulk action."
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "queue_position": {

@@ -154,6 +154,7 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }),
   useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }),
   useActiveSeriesCount: () => null,
+  useRestoreExclusionGroup: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
 }))
 vi.mock('../hooks', () => ({
   useRate: () => ({ mutate: spies.rate, isPending: false }),

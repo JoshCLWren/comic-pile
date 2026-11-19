@@ -7182,6 +7182,15 @@ export interface components {
              */
             thread_id: number;
         };
+        /** @description Bulk exclusion provenance attached to an excluded queue thread (#5435). */
+        QueueExclusionGroupRef: {
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            source_id: number;
+            source_kind: string;
+            source_name: string;
+        };
         /** @description Queue-order (shuffle) creation request. */
         QueueOrderRequest: {
             /** @description Client retry key. Replaying a committed key returns the same revision. */
@@ -9166,6 +9175,7 @@ export interface components {
             manual_creator_credits: unknown;
             next_unread_issue_number?: string | null;
             notes?: string | null;
+            queue_exclusion_group?: components["schemas"]["QueueExclusionGroupRef"] | null;
             /** Format: int32 */
             queue_position: number;
             /**
