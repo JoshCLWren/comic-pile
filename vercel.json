@@ -400,6 +400,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/creators/(?!compare$|discoveries$|summaries$|team\\-chemistry$)[^/]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v2/creators/(?!compare$|discoveries$|summaries$|team\\-chemistry$)[^/]+$",
       "methods": [
         "GET"
