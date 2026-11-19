@@ -1423,6 +1423,26 @@ async fn identity_removal_and_readd_leave_thread_series_metadata_untouched() {
     }
 }
 
+/// Deterministic signal that a request is blocked on the reader's queue
+/// advisory lock: poll `pg_locks` for an ungranted waiter on that exact key.
+async fn wait_for_queue_lock_waiter(tx: &deadpool_postgres::Transaction<'_>, user_id: i32) {
+    loop {
+        let waiting: i64 = tx
+            .query_one(
+                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted \
+                 AND classid = 699001 AND objid = $1::int4::oid",
+                &[&user_id],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        if waiting > 0 {
+            return;
+        }
+        tokio::task::yield_now().await;
+    }
+}
+
 /// Holds the reader's queue advisory lock in one session and proves a request
 /// is blocked on it BEFORE it takes any thread/issue row lock (lock order:
 /// queue lock first, then row locks; #5398/#5419). While the request waits, a
@@ -1445,7 +1465,7 @@ async fn assert_queue_lock_precedes_row_locks(
         let state = state.clone();
         async move { send(&state, request).await }
     });
-    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    wait_for_queue_lock_waiter(&tx, user_id).await;
     assert!(!pending.is_finished(), "writer must wait on the queue lock");
     tx.query_one(
         "SELECT id FROM issues WHERE id = $1 FOR UPDATE NOWAIT",
@@ -1520,7 +1540,7 @@ async fn identity_and_import_writers_take_the_queue_lock_before_row_locks() {
         );
         async move { send(&state, request).await }
     });
-    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    wait_for_queue_lock_waiter(&tx, user_id).await;
     assert!(!pending.is_finished(), "import must wait on the queue lock");
     tx.commit().await.unwrap();
     drop(holder);
@@ -1772,4 +1792,53 @@ async fn browser_provider_calls_are_cached_and_honor_throttle_cooldowns() {
         calls,
         "cooldown blocks provider calls"
     );
+}
+
+#[tokio::test]
+async fn series_import_retry_into_a_reading_order_does_not_overcount_items() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-retrycount").await;
+    set_key(true);
+    let order: i32 = {
+        let conn = state.pool.get().await.unwrap();
+        let order: i32 = conn
+            .query_one(
+                "INSERT INTO reading_orders (user_id, name) VALUES ($1, 'O') RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        for n in 0..2 {
+            let t = thread(&conn, user_id, &format!("T{n}")).await;
+            conn.execute(
+                "INSERT INTO reading_order_items (reading_order_id, thread_id, position) VALUES ($1, $2, $3)",
+                &[&order, &t, &(n + 1)],
+            )
+            .await
+            .unwrap();
+        }
+        order
+    };
+    let mut totals = Vec::new();
+    for _ in 0..2 {
+        provider_ok(&state, json!({"results": {"id": 1, "name": "Two"}}));
+        provider_ok(
+            &state,
+            json!({"number_of_total_results": 2, "results": [roster_row(11, "1", 1), roster_row(12, "2", 1)]}),
+        );
+        let (status, body) = send(
+            &state,
+            call(
+                "POST",
+                "/api/v2/comicvine/series:import",
+                &token,
+                &csrf,
+                Some(json!({"comicvine_volume_id": 1, "reading_order_id": order})),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body:?}");
+        totals.push(body["total_items"].as_i64().unwrap());
+    }
+    assert_eq!(totals, vec![3, 3], "retry moves the entry; it adds none");
 }

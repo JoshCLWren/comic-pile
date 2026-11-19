@@ -1968,9 +1968,19 @@ pub async fn import_series(
             items.len(),
         );
         insert_into_reading_order(&tx, order_id, thread_id, target).await?;
+        // Count after the write: a retry moves the existing entry instead of
+        // adding one.
+        let total: i64 = tx
+            .query_one(
+                "SELECT count(*) FROM reading_order_items WHERE reading_order_id = $1",
+                &[&order_id],
+            )
+            .await
+            .map_err(db::query_error)?
+            .get(0);
         response.reading_order_id = Some(order_id);
         response.position = Some(target);
-        response.total_items = Some(items.len() as i32 + 1);
+        response.total_items = Some(total as i32);
     }
     tx.commit().await.map_err(db::query_error)?;
     Ok((StatusCode::CREATED, Json(response)))
