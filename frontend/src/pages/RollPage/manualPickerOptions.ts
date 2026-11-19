@@ -251,24 +251,16 @@ export function buildManualPickerOptions(params: {
   }
   resolveResidualCollisions(rows, duplicateNormalizedTitles)
 
+  const toOption = (row: PickerRow): ManualPickerOption => {
+    const option: ManualPickerOption = { id: row.thread.id, label: row.label }
+    if (row.thread.series_cover_image_url) {
+      option.threadTitle = row.thread.title
+      option.coverImageUrl = row.thread.series_cover_image_url
+    }
+    return option
+  }
   return {
-    activeOptions: rows.flatMap((row) =>
-      row.group === 'active' ? [{
-        id: row.thread.id,
-        label: row.label,
-        ...(row.thread.series_cover_image_url
-          ? { threadTitle: row.thread.title, coverImageUrl: row.thread.series_cover_image_url }
-          : {}),
-      }] : [],
-    ),
-    snoozedOptions: rows.flatMap((row) =>
-      row.group === 'snoozed' ? [{
-        id: row.thread.id,
-        label: row.label,
-        ...(row.thread.series_cover_image_url
-          ? { threadTitle: row.thread.title, coverImageUrl: row.thread.series_cover_image_url }
-          : {}),
-      }] : [],
-    ),
+    activeOptions: rows.flatMap((row) => row.group === 'active' ? [toOption(row)] : []),
+    snoozedOptions: rows.flatMap((row) => row.group === 'snoozed' ? [toOption(row)] : []),
   }
 }
