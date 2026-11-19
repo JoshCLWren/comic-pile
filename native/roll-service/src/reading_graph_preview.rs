@@ -441,15 +441,18 @@ fn build_series_nodes(
             }
         }
 
+        let rollable_clone = rollable.clone();
+        let waiting_clone = waiting.clone();
+        let waits_for_clone = waits_for.clone();
         let aggregate = grouped
             .entry(node_key)
             .or_insert_with(|| SeriesAggregate {
                 thread_id: *thread_id,
                 volume_id: volume_id.map(|s| s.to_string()),
                 unread: unread_count,
-                rollable: rollable.clone(),
-                waiting: waiting.clone(),
-                waits_for: waits_for.clone(),
+                rollable: rollable_clone,
+                waiting: waiting_clone,
+                waits_for: waits_for_clone,
             });
         aggregate.rollable.extend(rollable);
         aggregate.waiting.extend(waiting);
