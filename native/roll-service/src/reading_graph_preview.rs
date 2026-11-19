@@ -227,8 +227,13 @@ pub async fn preview_reading_graph_handler(
         .collect();
 
     // Validate inputs (contains cycle detection via contained path).
-    let validated = ValidatedReadingInputs::contained(inputs, &list_names)
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    let validated = ValidatedReadingInputs::contained(inputs, &list_names).map_err(|e| {
+        let msg = match &e {
+            reading_constraints::ValidationError::InvalidSnapshot { message } => message.clone(),
+            reading_constraints::ValidationError::Cycle { message, .. } => message.clone(),
+        };
+        ApiError::Internal(msg)
+    })?;
 
     // Evaluate eligibility.
     let eligibility = evaluate(&validated)?;
