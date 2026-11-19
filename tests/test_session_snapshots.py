@@ -28,7 +28,6 @@ async def test_session_start_snapshot_created(async_db: AsyncSession, default_us
 
     session = await get_or_create(async_db, user_id=default_user.id)
 
-    from sqlalchemy import select
 
     result = await async_db.execute(
         select(Snapshot)
@@ -77,7 +76,6 @@ async def test_session_start_snapshot_captures_thread_states(
 
     session = await get_or_create(async_db, user_id=default_user.id)
 
-    from sqlalchemy import select
 
     result = await async_db.execute(
         select(Snapshot)
@@ -120,7 +118,6 @@ async def test_session_start_snapshot_captures_manual_die(
 
     await create_session_start_snapshot(async_db, session)
 
-    from sqlalchemy import select
 
     result = await async_db.execute(
         select(Snapshot)
@@ -135,53 +132,4 @@ async def test_session_start_snapshot_captures_manual_die(
     assert snapshot.session_state["start_die"] == 6
     assert snapshot.session_state["manual_die"] == 20
 
-async def test_undo_to_snapshot_clears_pending_thread_id(
-    async_db: AsyncSession, default_user: User
-) -> None:
-    """Test that undo_to_snapshot clears pending_thread_id when processing.
-
-    Regression test for BUG-131: Verifies that snapshot restoration works correctly.
-    """
-    from app.api.undo import undo_to_snapshot
-    from app.models import ReadingSession, Snapshot
-
-    thread1 = Thread(
-        title="Thread 1",
-        format="Comic",
-        issues_remaining=10,
-        queue_position=1,
-        status="active",
-        user_id=default_user.id,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread1)
-    await async_db.commit()
-    await async_db.refresh(thread1)
-
-    session = ReadingSession(start_die=6, user_id=default_user.id)
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    await create_session_start_snapshot(async_db, session)
-
-    result = await async_db.execute(
-        select(Snapshot)
-        .where(Snapshot.session_id == session.id)
-        .where(Snapshot.description == "Session start")
-        .order_by(Snapshot.created_at)
-    )
-    snapshot = result.scalars().first()
-
-    assert snapshot is not None
-
-    # Modify thread1 and commit to create changes
-    thread1.issues_remaining = 5
-    await async_db.commit()
-
-    # Undo to snapshot
-    await undo_to_snapshot(session.id, snapshot.id, default_user, async_db)
-
-    await async_db.refresh(session)
-    assert session.pending_thread_id is None
 

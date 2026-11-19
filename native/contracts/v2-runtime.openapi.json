@@ -1795,35 +1795,6 @@
         ]
       }
     },
-    "/api/v2/analytics/metrics": {
-      "get": {
-        "tags": [
-          "analytics"
-        ],
-        "summary": "Documentation-only operation used by the canonical Rust OpenAPI generator.",
-        "operationId": "metrics_documentation",
-        "responses": {
-          "200": {
-            "description": "Owner-scoped bounded reading metrics",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AnalyticsMetricsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated, revoked token, or stale credential epoch"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v2/auth/csrf": {
       "get": {
         "tags": [
@@ -4436,64 +4407,6 @@
               "string",
               "null"
             ]
-          }
-        }
-      },
-      "AnalyticsMetricsResponse": {
-        "type": "object",
-        "description": "Reading metrics and analytics for the authenticated user.",
-        "required": [
-          "total_threads",
-          "active_threads",
-          "completed_threads",
-          "completion_rate",
-          "average_session_hours",
-          "recent_sessions",
-          "event_stats",
-          "top_rated_threads"
-        ],
-        "properties": {
-          "active_threads": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "average_session_hours": {
-            "type": "number",
-            "format": "double"
-          },
-          "completed_threads": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "completion_rate": {
-            "type": "number",
-            "format": "double"
-          },
-          "event_stats": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "recent_sessions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RecentSession"
-            }
-          },
-          "top_rated_threads": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TopRatedThread"
-            }
-          },
-          "total_threads": {
-            "type": "integer",
-            "format": "int32"
           }
         }
       },
@@ -10901,34 +10814,6 @@
           }
         }
       },
-      "RecentSession": {
-        "type": "object",
-        "description": "Summary of one recent reading session.",
-        "required": [
-          "id",
-          "started_at",
-          "start_die"
-        ],
-        "properties": {
-          "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "start_die": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "started_at": {
-            "type": "string"
-          }
-        }
-      },
       "RecoveryCandidate": {
         "type": "object",
         "required": [
@@ -11865,6 +11750,13 @@
             "type": "integer",
             "format": "int32"
           },
+          "series_cover_image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Derived series cover: the exact provider CDN URL of the thread's next\nunread confirmed issue, falling back to the first confirmed issue with a\ncover. Null when the series has no confirmed issue cover."
+          },
           "series_metadata": {
             "oneOf": [
               {
@@ -12023,32 +11915,6 @@
             "type": "string"
           },
           "token_type": {
-            "type": "string"
-          }
-        }
-      },
-      "TopRatedThread": {
-        "type": "object",
-        "description": "Summary of one highly rated thread.",
-        "required": [
-          "id",
-          "title",
-          "rating",
-          "format"
-        ],
-        "properties": {
-          "format": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "rating": {
-            "type": "number",
-            "format": "double"
-          },
-          "title": {
             "type": "string"
           }
         }

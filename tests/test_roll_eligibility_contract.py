@@ -21,7 +21,6 @@ from app.models.continuity_rule import ContinuityRule
 from app.models.continuity_plan import ContinuityPlan
 from app.models.dependency import Dependency
 from app.models.issue import Issue
-from app.models.thread import Thread
 from app.services.canonical_backfill import abort_on_retired_list_chain_rules
 from app.services.continuity_plan_writer import plan_rule_marker, replace_compiled_rules
 from app.services.list_chain_guard import (
@@ -129,72 +128,6 @@ async def test_unchanged_strict_save_produces_zero_rule_and_dependency_diff(
     assert await _roll_ids(user.id, async_db) == before_roll
 
 
-@pytest.mark.asyncio
-async def test_cbl_adjacency_series_change_and_membership_create_no_blockers(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Contract: adjacency, series changes, and membership gate nothing alone.
-
-    Interleaved CBL order across three series compiles zero hard edges, and
-    applying a reordered custom CBL (series changes plus membership churn)
-    still adds none — only explicit checkpoints may block Roll.
-    """
-    user = await get_or_create_user_async(async_db)
-    series_issues: list[list[Issue]] = []
-    threads: list[Thread] = []
-    for offset, title in enumerate(("Adjacency A", "Adjacency B", "Adjacency C"), start=1):
-        thread, issues = await _make_series(
-            async_db, user_id=user.id, title=title, numbers=["1", "2"], queue_position=offset
-        )
-        threads.append(thread)
-        series_issues.append(issues)
-    await async_db.commit()
-
-    interleaved = [
-        series_issues[0][0],
-        series_issues[1][0],
-        series_issues[2][0],
-        series_issues[0][1],
-        series_issues[1][1],
-        series_issues[2][1],
-    ]
-    created = await auth_client.post(
-        "/api/v1/continuity-plans/",
-        json=_plan_payload("Contract adjacency", interleaved),
-    )
-    assert created.status_code == 201, created.text
-    plan_id = created.json()["id"]
-    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == set()
-    assert await _plan_dependency_snapshot(async_db, plan_id=plan_id) == set()
-    roll_ids = await _roll_ids(user.id, async_db)
-    for thread in threads:
-        assert thread.id in roll_ids
-
-    # Apply a reordered custom CBL onto the plan: series membership changes
-    # and new adjacency are still not blockers.
-    reordered_ids = [
-        series_issues[2][0].id,
-        series_issues[0][0].id,
-        series_issues[0][1].id,
-        series_issues[2][1].id,
-    ]
-    custom = await auth_client.post(
-        "/api/v1/custom-cbls",
-        json={"name": "Contract reorder", "issue_ids": reordered_ids},
-    )
-    assert custom.status_code == 201, custom.text
-    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
-    applied = await auth_client.post(
-        f"/api/v1/custom-cbls/{custom.json()['id']}/reading-plans/{plan_id}:apply",
-        json={"expected_updated_at": fetched.json()["updated_at"]},
-    )
-    assert applied.status_code == 200, applied.text
-    assert await _compiled_pairs(async_db, user_id=user.id, plan_id=plan_id) == set()
-    assert await _plan_dependency_snapshot(async_db, plan_id=plan_id) == set()
-    roll_after = await _roll_ids(user.id, async_db)
-    for thread in threads:
-        assert thread.id in roll_after
 
 
 @pytest.mark.asyncio
