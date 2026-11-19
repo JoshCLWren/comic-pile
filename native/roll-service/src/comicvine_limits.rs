@@ -29,10 +29,18 @@ const WINDOW: Duration = Duration::from_secs(3600);
 const CACHE_TTL: Duration = Duration::from_secs(900);
 const CACHE_CAPACITY: usize = 256;
 
+/// A bucket's throttle window. `recorded_at` is when the 429 was observed, not
+/// when the window ends: Python's `reset(..., observed_at=...)` keeps a cooldown
+/// recorded at or after the successful request started (#4634312998).
+struct Cooldown {
+    recorded_at: Instant,
+    until: Instant,
+}
+
 #[derive(Default)]
 struct Inner {
     cache: HashMap<String, (Instant, Value)>,
-    cooldowns: HashMap<String, Instant>,
+    cooldowns: HashMap<String, Cooldown>,
     requests: HashMap<String, VecDeque<Instant>>,
 }
 
@@ -68,9 +76,9 @@ impl ComicVineLimits {
         inner
             .cache
             .retain(|_, (stored, _)| now.duration_since(*stored) < CACHE_TTL);
-        if let Some(until) = inner.cooldowns.get(bucket).copied() {
-            if until > now {
-                return Admission::Denied(remaining_secs(until, now));
+        if let Some(cooldown) = inner.cooldowns.get(bucket) {
+            if cooldown.until > now {
+                return Admission::Denied(remaining_secs(cooldown.until, now));
             }
             inner.cooldowns.remove(bucket);
         }
@@ -91,9 +99,28 @@ impl ComicVineLimits {
         Admission::Go
     }
 
-    fn record_success(&self, bucket: &str, cache_key: String, value: &Value, now: Instant) {
+    /// Record a successful response. `request_started_at` must be captured
+    /// before the provider call, matching Python's
+    /// `reset(..., observed_at=request_started_at)`: a sibling request that
+    /// received a 429 after ours started recorded a newer cooldown that must
+    /// survive our success. Only cooldowns recorded strictly before the
+    /// request started are cleared.
+    fn record_success(
+        &self,
+        bucket: &str,
+        cache_key: String,
+        value: &Value,
+        request_started_at: Instant,
+        now: Instant,
+    ) {
         let mut inner = self.lock();
-        inner.cooldowns.remove(bucket);
+        let older_cooldown = inner
+            .cooldowns
+            .get(bucket)
+            .is_some_and(|cooldown| cooldown.recorded_at < request_started_at);
+        if older_cooldown {
+            inner.cooldowns.remove(bucket);
+        }
         if inner.cache.len() >= CACHE_CAPACITY {
             if let Some(oldest) = inner
                 .cache
@@ -110,7 +137,10 @@ impl ComicVineLimits {
     fn record_throttle(&self, bucket: &str, retry_after: u32, now: Instant) {
         self.lock().cooldowns.insert(
             bucket.to_owned(),
-            now + Duration::from_secs(u64::from(retry_after)),
+            Cooldown {
+                recorded_at: now,
+                until: now + Duration::from_secs(u64::from(retry_after)),
+            },
         );
     }
 
@@ -150,14 +180,19 @@ impl ComicVineLimits {
     ) -> Result<Value, ProviderFailure> {
         let bucket = resource.split('/').next().unwrap_or(resource);
         let cache_key = format!("{resource}?{extra_query}");
-        match self.admit(bucket, &cache_key, fresh, Instant::now()) {
+        // The same timestamp bounds admission and the request's start, so a
+        // sibling 429 observed while this call is in flight is never cleared.
+        let request_started_at = Instant::now();
+        match self.admit(bucket, &cache_key, fresh, request_started_at) {
             Admission::Cached(value) => return Ok(value),
             Admission::Denied(wait) => return Err(ProviderFailure::RateLimited(wait)),
             Admission::Go => {}
         }
         let result = provider_response(outbound, resource, extra_query, api_key).await;
         match &result {
-            Ok(value) => self.record_success(bucket, cache_key, value, Instant::now()),
+            Ok(value) => {
+                self.record_success(bucket, cache_key, value, request_started_at, Instant::now());
+            }
             Err(ProviderFailure::RateLimited(wait)) => {
                 self.record_throttle(bucket, *wait, Instant::now());
             }
@@ -209,8 +244,52 @@ mod tests {
         ));
         assert!(go(&limits, "issues", "k", start + Duration::from_secs(91)));
         limits.record_throttle("issues", 90, start);
-        limits.record_success("issues", "k2".into(), &Value::Null, start);
-        assert!(go(&limits, "issues", "k3", start + Duration::from_secs(1)));
+        // The successful request started after the throttle was recorded, so
+        // its success clears the (older) cooldown.
+        limits.record_success(
+            "issues",
+            "k2".into(),
+            &Value::Null,
+            start + Duration::from_secs(1),
+            start + Duration::from_secs(2),
+        );
+        assert!(go(&limits, "issues", "k3", start + Duration::from_secs(3)));
+    }
+
+    /// Deterministic timestamps only: no sleeps and no wall-clock timing.
+    #[test]
+    fn success_only_clears_cooldowns_recorded_before_the_request_started() {
+        let base = Instant::now();
+
+        // Two sibling requests are in flight. Ours starts at t=10; at t=12 the
+        // other receives a 429 and records a 90s Retry-After cooldown.
+        let request_started_at = base + Duration::from_secs(10);
+        let limits = ComicVineLimits::default();
+        limits.record_throttle("search", 90, base + Duration::from_secs(12));
+        // Our success lands at t=15 but must not erase the newer cooldown.
+        limits.record_success(
+            "search",
+            "late-success".into(),
+            &Value::Null,
+            request_started_at,
+            base + Duration::from_secs(15),
+        );
+        assert!(matches!(
+            limits.admit("search", "next", false, base + Duration::from_secs(20)),
+            Admission::Denied(wait) if wait == 82
+        ));
+
+        // A cooldown recorded before our request started is cleared as usual.
+        let older = ComicVineLimits::default();
+        older.record_throttle("issues", 90, base + Duration::from_secs(5));
+        older.record_success(
+            "issues",
+            "early-success".into(),
+            &Value::Null,
+            base + Duration::from_secs(10),
+            base + Duration::from_secs(11),
+        );
+        assert!(go(&older, "issues", "next", base + Duration::from_secs(12)));
     }
 
     #[test]
@@ -219,7 +298,7 @@ mod tests {
         let start = Instant::now();
         let payload = serde_json::json!({"status_code": 1});
         assert!(go(&limits, "search", "q", start));
-        limits.record_success("search", "q".into(), &payload, start);
+        limits.record_success("search", "q".into(), &payload, start, start);
         assert!(matches!(
             limits.admit("search", "q", false, start + Duration::from_secs(60)),
             Admission::Cached(value) if value == payload
