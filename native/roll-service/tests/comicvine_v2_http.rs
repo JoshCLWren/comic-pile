@@ -10,7 +10,10 @@ use axum::{
     http::{header, Request, StatusCode},
 };
 use bytes::Bytes;
-use comicpile_roll_service::outbound::RecordingFakeOutbound;
+use comicpile_roll_service::outbound::{
+    OutboundError, OutboundFuture, OutboundHttp, OutboundRequest, OutboundResponse,
+    RecordingFakeOutbound,
+};
 use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
 use std::sync::{
@@ -37,16 +40,34 @@ async fn setup_user(
     i32,
     tokio::sync::MutexGuard<'static, ()>,
 ) {
+    setup_user_with(prefix, 2, None).await
+}
+
+async fn setup_user_with(
+    prefix: &str,
+    pool_size: usize,
+    outbound: Option<Arc<dyn OutboundHttp>>,
+) -> (
+    Arc<AppState>,
+    String,
+    String,
+    i32,
+    tokio::sync::MutexGuard<'static, ()>,
+) {
     let url = comicpile_roll_service::test_support::database_url().await;
-    let state = Arc::new(test_support::test_app_state(
+    let mut app = test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
-            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
             _ => None,
         })
         .unwrap(),
-    ));
+    );
+    if let Some(outbound) = outbound {
+        app.outbound = outbound;
+    }
+    let state = Arc::new(app);
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
     let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
     let (token, csrf, user_id) = register_user(&state, &username).await;
@@ -1423,9 +1444,19 @@ async fn identity_removal_and_readd_leave_thread_series_metadata_untouched() {
     }
 }
 
-/// Deterministic signal that a request is blocked on the reader's queue
-/// advisory lock: poll `pg_locks` for an ungranted waiter on that exact key.
-async fn wait_for_queue_lock_waiter(tx: &deadpool_postgres::Transaction<'_>, user_id: i32) {
+type Pending = tokio::task::JoinHandle<(StatusCode, Value)>;
+
+/// Deterministic signal that `expected` requests are blocked on the reader's
+/// queue advisory lock: poll `pg_locks` for ungranted waiters on that exact
+/// key. No sleeps or deadlines. A writer that skips the queue lock never
+/// becomes a waiter and instead runs to completion, which fails the test
+/// immediately instead of hanging it.
+async fn wait_for_queue_lock_waiters(
+    tx: &deadpool_postgres::Transaction<'_>,
+    user_id: i32,
+    expected: i64,
+    pending: &[&Pending],
+) {
     loop {
         let waiting: i64 = tx
             .query_one(
@@ -1436,11 +1467,34 @@ async fn wait_for_queue_lock_waiter(tx: &deadpool_postgres::Transaction<'_>, use
             .await
             .unwrap()
             .get(0);
-        if waiting > 0 {
+        if waiting >= expected {
             return;
         }
+        assert!(
+            pending.iter().all(|handle| !handle.is_finished()),
+            "a writer finished while the reader's queue lock was held: it never took the queue lock"
+        );
         tokio::task::yield_now().await;
     }
+}
+
+async fn hold_queue_lock(
+    conn: &mut deadpool_postgres::Object,
+    user_id: i32,
+) -> deadpool_postgres::Transaction<'_> {
+    let tx = conn.transaction().await.unwrap();
+    tx.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&699001_i32, &user_id],
+    )
+    .await
+    .unwrap();
+    tx
+}
+
+fn spawn_send(state: &Arc<AppState>, request: Request<Body>) -> Pending {
+    let state = state.clone();
+    tokio::spawn(async move { send(&state, request).await })
 }
 
 /// Holds the reader's queue advisory lock in one session and proves a request
@@ -1454,19 +1508,9 @@ async fn assert_queue_lock_precedes_row_locks(
     request: Request<Body>,
 ) -> (StatusCode, Value) {
     let mut holder = state.pool.get().await.unwrap();
-    let tx = holder.transaction().await.unwrap();
-    tx.execute(
-        "SELECT pg_advisory_xact_lock($1, $2)",
-        &[&699001_i32, &user_id],
-    )
-    .await
-    .unwrap();
-    let pending = tokio::spawn({
-        let state = state.clone();
-        async move { send(&state, request).await }
-    });
-    wait_for_queue_lock_waiter(&tx, user_id).await;
-    assert!(!pending.is_finished(), "writer must wait on the queue lock");
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let pending = spawn_send(state, request);
+    wait_for_queue_lock_waiters(&tx, user_id, 1, &[&pending]).await;
     tx.query_one(
         "SELECT id FROM issues WHERE id = $1 FOR UPDATE NOWAIT",
         &[&issue_id],
@@ -1475,10 +1519,7 @@ async fn assert_queue_lock_precedes_row_locks(
     .expect("writer took an issue row lock before the queue lock");
     tx.commit().await.unwrap();
     drop(holder);
-    tokio::time::timeout(std::time::Duration::from_secs(10), pending)
-        .await
-        .expect("writer resumes once the queue lock is released")
-        .unwrap()
+    pending.await.unwrap()
 }
 
 #[tokio::test]
@@ -1522,26 +1563,18 @@ async fn identity_and_import_writers_take_the_queue_lock_before_row_locks() {
     // import_issue creates a thread at the queue tail: the queue lock must
     // serialize the duplicate check and position assignment.
     let mut holder = state.pool.get().await.unwrap();
-    let tx = holder.transaction().await.unwrap();
-    tx.execute(
-        "SELECT pg_advisory_xact_lock($1, $2)",
-        &[&699001_i32, &user_id],
-    )
-    .await
-    .unwrap();
-    let pending = tokio::spawn({
-        let state = state.clone();
-        let request = call(
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let pending = spawn_send(
+        &state,
+        call(
             "POST",
             "/api/v2/comicvine/issues:import",
             &token,
             &csrf,
             Some(json!({"title": "Imported", "comicvine_issue_id": 9103})),
-        );
-        async move { send(&state, request).await }
-    });
-    wait_for_queue_lock_waiter(&tx, user_id).await;
-    assert!(!pending.is_finished(), "import must wait on the queue lock");
+        ),
+    );
+    wait_for_queue_lock_waiters(&tx, user_id, 1, &[&pending]).await;
     tx.commit().await.unwrap();
     drop(holder);
     let (status, body) = pending.await.unwrap();
@@ -1841,4 +1874,405 @@ async fn series_import_retry_into_a_reading_order_does_not_overcount_items() {
         totals.push(body["total_items"].as_i64().unwrap());
     }
     assert_eq!(totals, vec![3, 3], "retry moves the entry; it adds none");
+}
+
+/// Concurrent sibling writers: while one session holds the reader's queue
+/// lock, `identity:confirm`, `issues:import` (twice) and the native
+/// `DELETE /api/v2/issues/{id}` writer all wait on that same lock (none takes
+/// a row lock first), then all complete once it is released: no deadlock, and
+/// the two imports get distinct queue positions.
+#[tokio::test]
+async fn identity_and_import_writers_serialize_with_sibling_queue_writers() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-siblings", 8, None).await;
+    set_key(false);
+    let (confirm_issue, deleted_issue) = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Siblings").await;
+        (issue(&conn, t, "1", 1).await, issue(&conn, t, "2", 2).await)
+    };
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let confirm = spawn_send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{confirm_issue}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 9301})),
+        ),
+    );
+    let delete = spawn_send(
+        &state,
+        call(
+            "DELETE",
+            &format!("/api/v2/issues/{deleted_issue}"),
+            &token,
+            &csrf,
+            None,
+        ),
+    );
+    let imports: Vec<Pending> = [9302, 9303]
+        .into_iter()
+        .map(|cv| {
+            spawn_send(
+                &state,
+                call(
+                    "POST",
+                    "/api/v2/comicvine/issues:import",
+                    &token,
+                    &csrf,
+                    Some(json!({"title": format!("Sibling {cv}"), "comicvine_issue_id": cv})),
+                ),
+            )
+        })
+        .collect();
+    wait_for_queue_lock_waiters(
+        &tx,
+        user_id,
+        4,
+        &[&confirm, &delete, &imports[0], &imports[1]],
+    )
+    .await;
+    tx.commit().await.unwrap();
+    drop(holder);
+    let (status, body) = confirm.await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["comicvine_issue_id"], "9301");
+    let (status, body) = delete.await.unwrap();
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+    let mut threads = Vec::new();
+    for import in imports {
+        let (status, body) = import.await.unwrap();
+        assert_eq!(status, StatusCode::CREATED, "{body:?}");
+        threads.push(body["thread_id"].as_i64().unwrap() as i32);
+    }
+    let conn = state.pool.get().await.unwrap();
+    let positions: Vec<i32> = conn
+        .query(
+            "SELECT queue_position FROM threads WHERE id = ANY($1) ORDER BY id",
+            &[&threads],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(positions.len(), 2);
+    assert_ne!(
+        positions[0], positions[1],
+        "imports must not share a queue slot"
+    );
+}
+
+/// Order-independent fake ComicVine: `/issues` pages are synthesized from the
+/// request's `offset`, so concurrent page fetches cannot receive each other's
+/// payloads. Every response yields to the scheduler once before resolving,
+/// and the fake records the peak number of page requests in flight.
+struct PagedComicVine {
+    volume: i32,
+    total: usize,
+    /// Offset whose page is returned without a `results` list.
+    malformed_offset: Option<usize>,
+    in_flight: Arc<AtomicUsize>,
+    peak: AtomicUsize,
+    offsets: std::sync::Mutex<Vec<usize>>,
+}
+
+impl PagedComicVine {
+    fn new(volume: i32, total: usize, malformed_offset: Option<usize>) -> Arc<Self> {
+        Arc::new(Self {
+            volume,
+            total,
+            malformed_offset,
+            in_flight: Arc::new(AtomicUsize::new(0)),
+            peak: AtomicUsize::new(0),
+            offsets: std::sync::Mutex::new(Vec::new()),
+        })
+    }
+
+    fn payload(&self, path: &str) -> Value {
+        if path.starts_with(&format!("/api/volume/4050-{}/", self.volume)) {
+            return json!({"status_code": 1, "error": "OK", "results": {"id": self.volume, "name": "Paged"}});
+        }
+        let offset: usize = path
+            .split('&')
+            .find_map(|part| part.strip_prefix("offset="))
+            .unwrap()
+            .parse()
+            .unwrap();
+        self.offsets.lock().unwrap().push(offset);
+        if Some(offset) == self.malformed_offset {
+            return json!({"status_code": 1, "error": "OK", "number_of_total_results": self.total});
+        }
+        let end = (offset + 100).min(self.total);
+        let results: Vec<Value> = (offset..end)
+            .map(|n| json!({"id": 500_000 + n, "issue_number": (n + 1).to_string(), "volume": {"id": self.volume}}))
+            .collect();
+        json!({"status_code": 1, "error": "OK", "number_of_total_results": self.total, "results": results})
+    }
+}
+
+impl OutboundHttp for PagedComicVine {
+    fn send(&self, _host: &str, request: OutboundRequest) -> OutboundFuture {
+        let body = self.payload(&request.path).to_string();
+        // Only roster pages count toward the fan-out peak; the overlapping
+        // volume read is a separate provider call.
+        let page = request.path.starts_with("/api/issues/");
+        if page {
+            let now = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+            self.peak.fetch_max(now, Ordering::SeqCst);
+        }
+        let counter = Arc::clone(&self.in_flight);
+        Box::pin(async move {
+            tokio::task::yield_now().await;
+            if page {
+                counter.fetch_sub(1, Ordering::SeqCst);
+            }
+            Ok::<_, OutboundError>(OutboundResponse {
+                status: http::StatusCode::OK,
+                headers: http::HeaderMap::new(),
+                body: Body::from(body),
+            })
+        })
+    }
+
+    fn is_fake(&self) -> bool {
+        true
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+async fn paged_state(
+    prefix: &str,
+    fake: &Arc<PagedComicVine>,
+) -> (
+    Arc<AppState>,
+    String,
+    String,
+    i32,
+    tokio::sync::MutexGuard<'static, ()>,
+) {
+    let outbound: Arc<dyn OutboundHttp> = fake.clone();
+    setup_user_with(prefix, 2, Some(outbound)).await
+}
+
+/// Python `fetch_volume_issues` fetches the first page alone, then the
+/// remaining fixed offsets four at a time. A 1,250-row roster is 13 pages: the
+/// 12 remaining pages must overlap (peak 4 in flight, never more), and the
+/// rows must come back complete and in offset order on every caller that
+/// browses a roster (series issues, volume resolve, series import).
+#[tokio::test]
+async fn roster_pages_are_fetched_four_at_a_time_in_offset_order() {
+    let paged = PagedComicVine::new(77, 1250, None);
+    let (state, token, csrf, _user_id, _guard) = paged_state("cvv2-fanout", &paged).await;
+    set_key(true);
+    let (status, body) = send(
+        &state,
+        call(
+            "GET",
+            "/api/v2/comicvine/series/77/issues",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["series_name"], "Paged");
+    let issues = body["issues"].as_array().unwrap();
+    assert_eq!(issues.len(), 1250);
+    let numbers: Vec<String> = issues
+        .iter()
+        .map(|issue| issue["issue_number"].as_str().unwrap().to_owned())
+        .collect();
+    let expected: Vec<String> = (1..=1250).map(|n| n.to_string()).collect();
+    assert_eq!(numbers, expected, "pages are assembled in offset order");
+    assert_eq!(
+        paged.peak.load(Ordering::SeqCst),
+        4,
+        "remaining pages are fetched concurrently, at most four at a time"
+    );
+    let mut offsets = paged.offsets.lock().unwrap().clone();
+    assert_eq!(offsets[0], 0, "the first page is fetched alone first");
+    offsets.sort_unstable();
+    assert_eq!(offsets, (0..13).map(|page| page * 100).collect::<Vec<_>>());
+}
+
+/// Python `_fetch_volume_issue_page` raises on a page without a `results`
+/// list. A malformed later page must fail the roster, never truncate it:
+/// `series:import` answers the 502 provider failure and writes nothing, and
+/// the browse route degrades to an empty roster (Python catches it there).
+#[tokio::test]
+async fn malformed_roster_pages_fail_instead_of_truncating_the_import() {
+    let paged = PagedComicVine::new(88, 200, Some(100));
+    let (state, token, csrf, user_id, _guard) = paged_state("cvv2-malformed", &paged).await;
+    set_key(true);
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 88})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY, "{body:?}");
+    assert_eq!(
+        body["detail"],
+        json!({"code": "provider_failure", "message": "Failed to fetch series issues: ComicVineError"})
+    );
+    let conn = state.pool.get().await.unwrap();
+    let threads: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM threads WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(threads, 0, "a failed roster creates no thread or issues");
+    drop(conn);
+    let (status, body) = send(
+        &state,
+        call(
+            "GET",
+            "/api/v2/comicvine/series/88/issues?series_name=Named",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["series_name"], "Named");
+    assert_eq!(body["issues"], json!([]));
+}
+
+/// Golden values measured from the frozen Python request models (Pydantic v2
+/// lax mode, `app/schemas/comicvine_resolution.py`): ints accept `"5"`, `5.0`
+/// and `true`; confirm/replace ids have no `gt=0`; `field_name` and
+/// `canonical_value` are unconstrained; `reason` is `max_length=500`; an
+/// import `title` is bounded before `strip()`. Anything Python rejects is the
+/// generic `{"detail": "Validation failed"}` 422.
+#[tokio::test]
+async fn request_coercion_matches_the_python_models() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-lax").await;
+    set_key(false);
+    let issues: Vec<i32> = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Lax").await;
+        let mut ids = Vec::new();
+        for n in 1..=5 {
+            ids.push(issue(&conn, t, &n.to_string(), n).await);
+        }
+        ids
+    };
+    let confirm = |issue: i32, body: Value| {
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{issue}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(body),
+        )
+    };
+    for (issue, body, expected_id) in [
+        (issues[0], json!({"comicvine_issue_id": "9401"}), "9401"),
+        (issues[1], json!({"comicvine_issue_id": 9402.0}), "9402"),
+        (issues[2], json!({"comicvine_issue_id": true}), "1"),
+        (issues[3], json!({"comicvine_issue_id": 0}), "0"),
+    ] {
+        let (status, got) = send(&state, confirm(issue, body.clone())).await;
+        assert_eq!(status, StatusCode::OK, "{body}: {got:?}");
+        assert_eq!(got["comicvine_issue_id"], expected_id, "{body}");
+    }
+    let (status, got) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{}.0/identity:replace", issues[3]),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": -7})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{got:?}");
+    assert_eq!(got["comicvine_issue_id"], "-7");
+
+    let (status, got) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{}/metadata:correct", issues[4]),
+            &token,
+            &csrf,
+            Some(json!({"field_name": "", "canonical_value": ""})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{got:?}");
+    assert_eq!(got["corrections"][0]["field_name"], "");
+
+    let (status, got) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({"title": "   ", "comicvine_issue_id": "9405"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{got:?}");
+    let conn = state.pool.get().await.unwrap();
+    let title: String = conn
+        .query_one(
+            "SELECT title FROM threads WHERE id = $1",
+            &[&(got["thread_id"].as_i64().unwrap() as i32)],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(title, "", "Python stores the stripped title");
+    drop(conn);
+
+    let expected = json!({"detail": "Validation failed"});
+    for (path, body) in [
+        (
+            format!("/api/v2/comicvine/issues/{}/identity:confirm", issues[4]),
+            json!({"comicvine_issue_id": 5.5}),
+        ),
+        (
+            format!("/api/v2/comicvine/issues/{}/identity:confirm", issues[4]),
+            json!({"comicvine_issue_id": null}),
+        ),
+        (
+            format!("/api/v2/comicvine/issues/{}/metadata:correct", issues[4]),
+            json!({"field_name": "a", "canonical_value": "b", "reason": "x".repeat(501)}),
+        ),
+        (
+            "/api/v2/comicvine/issues:import".to_owned(),
+            json!({"title": "x", "comicvine_issue_id": "abc"}),
+        ),
+    ] {
+        let (status, got) = send(
+            &state,
+            call("POST", &path, &token, &csrf, Some(body.clone())),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{path} {body}: {got:?}"
+        );
+        assert_eq!(got, expected, "{path} {body}");
+    }
 }

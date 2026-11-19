@@ -35,6 +35,7 @@ use tokio_postgres::Transaction;
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ComicVineSeriesResult {
+    #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_volume_id: i32,
     pub name: String,
     pub publisher: Option<String>,
@@ -57,6 +58,7 @@ pub struct ComicVineSeriesSearchResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ComicVineResolvedIssue {
+    #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_issue_id: i32,
     pub series_name: Option<String>,
     pub volume_id: Option<i32>,
@@ -70,6 +72,7 @@ pub struct ComicVineResolvedIssue {
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ComicVineIssueCandidate {
+    #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_issue_id: i32,
     pub issue_number: Option<String>,
     pub name: Option<String>,
@@ -104,6 +107,7 @@ impl ComicVineResolveResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ComicVineSeriesIssuesResponse {
+    #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_volume_id: i32,
     pub series_name: String,
     pub issues: Vec<ComicVineIssueCandidate>,
@@ -158,6 +162,7 @@ pub struct MetadataCorrectionsResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SeriesImportStatusResponse {
+    #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_volume_id: i32,
     pub imported: bool,
     pub thread_id: Option<i32>,
@@ -172,9 +177,9 @@ pub struct SeriesImportStatusResponse {
 #[derive(Debug, Deserialize)]
 pub struct SearchQuery {
     pub q: String,
-    #[serde(default = "default_limit")]
+    #[serde(default = "default_limit", deserialize_with = "de_lax_i32")]
     pub limit: i32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_lax_i32")]
     pub offset: i32,
 }
 
@@ -195,11 +200,13 @@ pub struct SeriesIssuesQuery {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ConfirmIdentityRequest {
+    #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_issue_id: i32,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ReplaceIdentityRequest {
+    #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_issue_id: i32,
     pub reason: Option<String>,
 }
@@ -208,22 +215,26 @@ pub struct ReplaceIdentityRequest {
 pub struct MetadataCorrectionRequest {
     pub field_name: String,
     pub canonical_value: String,
-    #[allow(dead_code)]
     pub reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct MetadataCorrectionRevertRequest {
+    #[serde(deserialize_with = "de_lax_i32")]
     pub correction_id: i32,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ImportIssueRequest {
     pub title: String,
+    #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_issue_id: i32,
     pub issue_number: Option<String>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
     pub reading_order_id: Option<i32>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
     pub anchor_before_thread_id: Option<i32>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
     pub anchor_after_thread_id: Option<i32>,
 }
 
@@ -239,16 +250,21 @@ pub struct ImportIssueResponse {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ImportSeriesRequest {
+    #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_volume_id: i32,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
     pub reading_order_id: Option<i32>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
     pub anchor_before_thread_id: Option<i32>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
     pub anchor_after_thread_id: Option<i32>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_lax_i32")]
     pub already_read_count: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ImportSeriesIssueResult {
+    #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_issue_id: i32,
     pub issue_number: Option<String>,
     pub issue_id: Option<i32>,
@@ -261,12 +277,14 @@ pub struct ImportSeriesIssueResult {
 pub struct ImportSeriesResponse {
     pub thread_id: i32,
     pub series_name: String,
+    #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_volume_id: i32,
     pub total_issues_in_series: i32,
     pub issues_adopted: i32,
     pub issues_skipped: i32,
     pub issues_conflict: i32,
     pub issue_results: Vec<ImportSeriesIssueResult>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
     pub reading_order_id: Option<i32>,
     pub position: Option<i32>,
     pub total_items: Option<i32>,
@@ -295,6 +313,40 @@ fn unprocessable(reason: &'static str) -> ApiError {
 
 fn validation_failed() -> ApiError {
     unprocessable("extractor rejection")
+}
+
+/// Pydantic v2 lax `int` coercion (the Python request models are lax): JSON
+/// numbers with no fractional part, integer strings such as `"5"`/`"5.0"`, and
+/// booleans are accepted; anything else is a 422. Values outside `i32` are
+/// rejected because every target column is `integer`.
+fn lax_i32(value: &Value) -> Option<i32> {
+    crate::bug_reports::pydantic_lax_int(value).and_then(|n| i32::try_from(n).ok())
+}
+
+fn de_lax_i32<'de, D>(deserializer: D) -> Result<i32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    lax_i32(&value).ok_or_else(|| serde::de::Error::custom("invalid integer"))
+}
+
+fn de_lax_opt_i32<'de, D>(deserializer: D) -> Result<Option<i32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match Value::deserialize(deserializer)? {
+        Value::Null => Ok(None),
+        value => lax_i32(&value)
+            .map(Some)
+            .ok_or_else(|| serde::de::Error::custom("invalid integer")),
+    }
+}
+
+/// FastAPI `int` path parameter: lax string coercion, otherwise 422.
+fn path_int(raw: Result<Path<String>, PathRejection>) -> Result<i32, ApiError> {
+    let Path(raw) = raw.map_err(|_| validation_failed())?;
+    lax_i32(&Value::String(raw)).ok_or_else(validation_failed)
 }
 
 /// Coerce a provider value to an integer. ComicVine returns some numbers as
@@ -600,7 +652,24 @@ async fn link_confirmed(
 ) -> Result<i32, ApiError> {
     let identity_id =
         link_with_source(tx, user, issue_id, comicvine_issue_id, "user_confirmed").await?;
-    enqueue_hydration_if_needed(tx, identity_id).await?;
+    // Python commits the confirmation first and hydrates best-effort after;
+    // scheduling runs in a savepoint so its failure never undoes the mapping.
+    tx.batch_execute("SAVEPOINT comicvine_hydration_enqueue")
+        .await
+        .map_err(db::query_error)?;
+    if enqueue_hydration_if_needed(tx, identity_id).await.is_ok() {
+        tx.batch_execute("RELEASE SAVEPOINT comicvine_hydration_enqueue")
+            .await
+            .map_err(db::query_error)?;
+    } else {
+        tracing::warn!(
+            identity_id,
+            "comicvine hydration scheduling failed; confirmation kept"
+        );
+        tx.batch_execute("ROLLBACK TO SAVEPOINT comicvine_hydration_enqueue")
+            .await
+            .map_err(db::query_error)?;
+    }
     Ok(identity_id)
 }
 
@@ -717,9 +786,9 @@ fn volume_name(value: &Value) -> Option<String> {
 pub async fn get_issue_identity(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    issue_id: Result<Path<i32>, PathRejection>,
+    issue_id: Result<Path<String>, PathRejection>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
-    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let issue_id = path_int(issue_id)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
@@ -731,14 +800,11 @@ pub async fn get_issue_identity(
 pub async fn confirm_identity(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    issue_id: Result<Path<i32>, PathRejection>,
+    issue_id: Result<Path<String>, PathRejection>,
     request: Result<Json<ConfirmIdentityRequest>, JsonRejection>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
-    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let issue_id = path_int(issue_id)?;
     let Json(request) = request.map_err(|_| validation_failed())?;
-    if request.comicvine_issue_id <= 0 {
-        return Err(bad_request("comicvine_issue_id must be positive"));
-    }
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     // Lock order: queue advisory lock first, then issue row locks.
@@ -753,14 +819,11 @@ pub async fn confirm_identity(
 pub async fn replace_identity(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    issue_id: Result<Path<i32>, PathRejection>,
+    issue_id: Result<Path<String>, PathRejection>,
     request: Result<Json<ReplaceIdentityRequest>, JsonRejection>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
-    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let issue_id = path_int(issue_id)?;
     let Json(request) = request.map_err(|_| validation_failed())?;
-    if request.comicvine_issue_id <= 0 {
-        return Err(bad_request("comicvine_issue_id must be positive"));
-    }
     if request
         .reason
         .as_deref()
@@ -797,9 +860,9 @@ pub async fn replace_identity(
 pub async fn remove_identity(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    issue_id: Result<Path<i32>, PathRejection>,
+    issue_id: Result<Path<String>, PathRejection>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
-    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let issue_id = path_int(issue_id)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
@@ -829,9 +892,9 @@ pub async fn remove_identity(
 pub async fn list_corrections(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    issue_id: Result<Path<i32>, PathRejection>,
+    issue_id: Result<Path<String>, PathRejection>,
 ) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
-    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let issue_id = path_int(issue_id)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     let response = corrections_list(&tx, user.id(), issue_id).await?;
@@ -843,16 +906,24 @@ pub async fn list_corrections(
 pub async fn apply_correction(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    issue_id: Result<Path<i32>, PathRejection>,
+    issue_id: Result<Path<String>, PathRejection>,
     request: Result<Json<MetadataCorrectionRequest>, JsonRejection>,
 ) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
-    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let issue_id = path_int(issue_id)?;
     let Json(request) = request.map_err(|_| validation_failed())?;
-    if request.field_name.is_empty() || request.field_name.len() > 100 {
-        return Err(unprocessable("Invalid field name"));
+    // Python `MetadataCorrectionRequest`: `field_name`/`canonical_value` are
+    // unconstrained `str` (empty is accepted), `reason` is `max_length=500`.
+    // `field_name` is a `VARCHAR(100)` column: Python surfaces an oversized
+    // name as an unhandled 500 from the INSERT; Rust rejects it up front.
+    if request
+        .reason
+        .as_deref()
+        .is_some_and(|r| r.chars().count() > 500)
+    {
+        return Err(unprocessable("reason is too long"));
     }
-    if request.canonical_value.is_empty() {
-        return Err(unprocessable("Invalid canonical value"));
+    if request.field_name.chars().count() > 100 {
+        return Err(unprocessable("Invalid field name"));
     }
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
@@ -896,10 +967,10 @@ pub async fn apply_correction(
 pub async fn revert_correction(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    issue_id: Result<Path<i32>, PathRejection>,
+    issue_id: Result<Path<String>, PathRejection>,
     request: Result<Json<MetadataCorrectionRevertRequest>, JsonRejection>,
 ) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
-    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let issue_id = path_int(issue_id)?;
     let Json(request) = request.map_err(|_| validation_failed())?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
@@ -930,9 +1001,9 @@ pub async fn revert_correction(
 pub async fn refresh_metadata(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    issue_id: Result<Path<i32>, PathRejection>,
+    issue_id: Result<Path<String>, PathRejection>,
 ) -> Result<Json<MetadataRefreshResponse>, ApiError> {
-    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let issue_id = path_int(issue_id)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
@@ -1056,8 +1127,10 @@ pub async fn import_issue(
     request: Result<Json<ImportIssueRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<ImportIssueResponse>), ApiError> {
     let Json(request) = request.map_err(|_| validation_failed())?;
+    // Python `title: Field(min_length=1, max_length=200)` bounds the raw
+    // string; the service then stores `title.strip()` (possibly empty).
     let title = request.title.trim();
-    if title.is_empty() || request.title.chars().count() > 200 {
+    if request.title.is_empty() || request.title.chars().count() > 200 {
         return Err(unprocessable("Invalid title"));
     }
     if request.comicvine_issue_id <= 0 {
@@ -2123,10 +2196,10 @@ pub async fn search_series(
 pub async fn series_issues(
     State(state): State<Arc<AppState>>,
     _user: AuthenticatedUser,
-    comicvine_volume_id: Result<Path<i32>, PathRejection>,
+    comicvine_volume_id: Result<Path<String>, PathRejection>,
     query: Result<Query<SeriesIssuesQuery>, QueryRejection>,
 ) -> Result<Json<ComicVineSeriesIssuesResponse>, ApiError> {
-    let Path(comicvine_volume_id) = comicvine_volume_id.map_err(|_| validation_failed())?;
+    let comicvine_volume_id = path_int(comicvine_volume_id)?;
     let Query(query) = query.map_err(|_| validation_failed())?;
     let mut series_name = query.series_name;
     let Some(key) = provider_key() else {
@@ -2140,14 +2213,24 @@ pub async fn series_issues(
             issues: Vec::new(),
         }));
     };
-    let roster = provider_roster(&state, comicvine_volume_id, &key, false)
-        .await
-        .unwrap_or_default();
+    // Python schedules the roster and the volume read together when no name
+    // was supplied, so the two provider round trips overlap. Each degrades
+    // independently: a roster failure keeps the name with no issues.
+    let (roster, volume) = if series_name.is_empty() {
+        tokio::join!(
+            provider_roster(&state, comicvine_volume_id, &key, false),
+            provider_issue_volume(&state, comicvine_volume_id, &key)
+        )
+    } else {
+        (
+            provider_roster(&state, comicvine_volume_id, &key, false).await,
+            None,
+        )
+    };
+    let roster = roster.unwrap_or_default();
     let issues: Vec<ComicVineIssueCandidate> = roster.iter().filter_map(issue_candidate).collect();
     if series_name.is_empty() {
-        series_name = provider_issue_volume(&state, comicvine_volume_id, &key)
-            .await
-            .unwrap_or_else(|| format!("Volume {comicvine_volume_id}"));
+        series_name = volume.unwrap_or_else(|| format!("Volume {comicvine_volume_id}"));
     }
     Ok(Json(ComicVineSeriesIssuesResponse {
         comicvine_volume_id,
@@ -2156,85 +2239,140 @@ pub async fn series_issues(
     }))
 }
 
-/// Fetch the complete, validated issue roster for one volume. ComicVine pages
-/// at 100 rows; follow the reported total with a bounded fan-out and refuse a
-/// response whose rows do not belong to the requested volume (the Python
-/// provider applies the same guard so a bad filter cannot import mixed data).
+/// ComicVine `/issues` page size (Python `COLLECTION_PAGE_LIMIT`).
 const ROSTER_PAGE_SIZE: usize = 100;
-/// Safety bound on roster pagination (100 rows/page). Python's provider walks
-/// every page; Rust stops at this many pages and fails loudly rather than
+/// Python `VOLUME_ISSUES_PAGE_CONCURRENCY`: remaining roster pages are fetched
+/// at most this many at a time.
+const ROSTER_PAGE_CONCURRENCY: usize = 4;
+/// Safety bound on roster pagination (100 rows/page, so 10,000 issues).
+/// Python walks every page; Rust fails loudly past this bound rather than
 /// returning a truncated roster that an import would commit as complete.
 const MAX_ROSTER_PAGES: usize = 100;
 
-fn roster_rows(page: &Value) -> Vec<Value> {
-    page.get("results")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default()
+/// One validated roster page (Python `VolumeIssuePage`).
+struct RosterPage {
+    rows: Vec<Value>,
+    total: Option<usize>,
 }
 
-async fn provider_roster(
+/// Validate one `/issues` page exactly like Python
+/// `_fetch_volume_issue_page`: a page without a `results` list is a provider
+/// error (never an empty page), non-object rows are dropped, and a row whose
+/// `volume.id` is present and differs from the requested volume means the
+/// provider ignored the filter, so the whole roster is refused.
+fn roster_page(payload: &Value, volume_id: i32) -> Result<RosterPage, ProviderFailure> {
+    let results = payload
+        .get("results")
+        .and_then(Value::as_array)
+        .ok_or(ProviderFailure::InvalidPayload)?;
+    let rows: Vec<Value> = results
+        .iter()
+        .filter(|row| row.is_object())
+        .cloned()
+        .collect();
+    for row in &rows {
+        let volume_row_id = row
+            .get("volume")
+            .and_then(Value::as_object)
+            .and_then(|volume| volume.get("id"))
+            .filter(|id| !id.is_null());
+        if let Some(id) = volume_row_id {
+            if coerce_provider_int(Some(id)) != Some(volume_id) {
+                return Err(ProviderFailure::InvalidPayload);
+            }
+        }
+    }
+    // Python keeps the total only when it is an `int`.
+    let total = payload
+        .get("number_of_total_results")
+        .and_then(Value::as_i64)
+        .map(|total| total.max(0) as usize);
+    Ok(RosterPage { rows, total })
+}
+
+async fn fetch_roster_page(
     state: &AppState,
+    volume_id: i32,
+    key: &str,
+    offset: usize,
+    fresh: bool,
+) -> Result<RosterPage, ProviderFailure> {
+    let extra = format!(
+        "&filter=volume:{volume_id}&limit={ROSTER_PAGE_SIZE}&offset={offset}\
+         &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url,volume"
+    );
+    let limits = &state.comicvine_limits;
+    let payload = if fresh {
+        limits
+            .call_fresh(&state.outbound, "issues", &extra, key)
+            .await?
+    } else {
+        limits.call(&state.outbound, "issues", &extra, key).await?
+    };
+    roster_page(&payload, volume_id)
+}
+
+/// Fetch the complete, validated issue roster for one volume. Mirrors Python
+/// `ComicVineClient.fetch_volume_issues`: the first page is fetched alone; an
+/// omitted total walks forward until a short page; a short or complete first
+/// page is the roster; otherwise the remaining fixed offsets are fetched
+/// concurrently (at most [`ROSTER_PAGE_CONCURRENCY`] in flight) and assembled
+/// in offset order. Any malformed page fails the whole roster.
+async fn provider_roster(
+    state: &Arc<AppState>,
     volume_id: i32,
     key: &str,
     fresh: bool,
 ) -> Result<Vec<Value>, ProviderFailure> {
-    async fn fetch_page(
-        state: &AppState,
-        volume_id: i32,
-        key: &str,
-        offset: usize,
-        fresh: bool,
-    ) -> Result<Value, ProviderFailure> {
-        let extra = format!(
-            "&filter=volume:{volume_id}&limit={ROSTER_PAGE_SIZE}&offset={offset}\
-             &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url,volume"
-        );
-        let limits = &state.comicvine_limits;
-        if fresh {
-            limits
-                .call_fresh(&state.outbound, "issues", &extra, key)
-                .await
-        } else {
-            limits.call(&state.outbound, "issues", &extra, key).await
-        }
-    }
-    let first = fetch_page(state, volume_id, key, 0, fresh).await?;
-    let total = first
-        .get("number_of_total_results")
-        .and_then(|value| coerce_provider_int(Some(value)))
-        .map(|total| total.max(0) as usize);
-    let mut rows = roster_rows(&first);
-    // Mirrors Python `fetch_volume_issues`: a known total is walked to the end;
-    // an omitted total walks forward until a short page.
-    let mut pages = 1usize;
-    let mut last_page_len = rows.len();
-    loop {
-        let more = match total {
-            Some(total) => rows.len() < total && last_page_len > 0,
-            None => last_page_len >= ROSTER_PAGE_SIZE,
-        };
-        if !more {
-            break;
-        }
-        if pages >= MAX_ROSTER_PAGES {
-            return Err(ProviderFailure::InvalidPayload);
-        }
-        let page_rows = roster_rows(&fetch_page(state, volume_id, key, rows.len(), fresh).await?);
-        pages += 1;
-        last_page_len = page_rows.len();
-        rows.extend(page_rows);
-    }
-    for row in &rows {
-        if let Some(volume_id_value) = row
-            .get("volume")
-            .and_then(Value::as_object)
-            .and_then(|v| v.get("id"))
-        {
-            if coerce_provider_int(Some(volume_id_value)) != Some(volume_id) {
+    let first = fetch_roster_page(state, volume_id, key, 0, fresh).await?;
+    let Some(total) = first.total else {
+        let mut rows = first.rows;
+        let mut last_len = rows.len();
+        let mut pages = 1usize;
+        while last_len >= ROSTER_PAGE_SIZE {
+            if pages >= MAX_ROSTER_PAGES {
                 return Err(ProviderFailure::InvalidPayload);
             }
+            let page = fetch_roster_page(state, volume_id, key, rows.len(), fresh).await?;
+            pages += 1;
+            last_len = page.rows.len();
+            rows.extend(page.rows);
         }
+        return Ok(rows);
+    };
+    if first.rows.len() >= total || first.rows.len() < ROSTER_PAGE_SIZE {
+        return Ok(first.rows);
+    }
+    let pages_needed = total.div_ceil(ROSTER_PAGE_SIZE);
+    if pages_needed > MAX_ROSTER_PAGES {
+        return Err(ProviderFailure::InvalidPayload);
+    }
+    let offsets: Vec<usize> = (1..pages_needed)
+        .map(|page| page * ROSTER_PAGE_SIZE)
+        .collect();
+    let mut pages: Vec<Option<Vec<Value>>> = vec![None; offsets.len()];
+    // Dropping the set (error or request deadline) aborts in-flight fetches.
+    let mut in_flight = tokio::task::JoinSet::new();
+    let mut next = 0usize;
+    loop {
+        while next < offsets.len() && in_flight.len() < ROSTER_PAGE_CONCURRENCY {
+            let (state, key, index, offset) =
+                (Arc::clone(state), key.to_owned(), next, offsets[next]);
+            in_flight.spawn(async move {
+                let page = fetch_roster_page(&state, volume_id, &key, offset, fresh).await;
+                (index, page)
+            });
+            next += 1;
+        }
+        let Some(joined) = in_flight.join_next().await else {
+            break;
+        };
+        let (index, page) = joined.map_err(|_| ProviderFailure::Unavailable)?;
+        pages[index] = Some(page?.rows);
+    }
+    let mut rows = first.rows;
+    for page in pages {
+        rows.extend(page.ok_or(ProviderFailure::Unavailable)?);
     }
     Ok(rows)
 }
@@ -2399,9 +2537,9 @@ pub async fn resolve_input(
 pub async fn series_import_status(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    comicvine_volume_id: Result<Path<i32>, PathRejection>,
+    comicvine_volume_id: Result<Path<String>, PathRejection>,
 ) -> Result<Json<SeriesImportStatusResponse>, ApiError> {
-    let Path(comicvine_volume_id) = comicvine_volume_id.map_err(|_| validation_failed())?;
+    let comicvine_volume_id = path_int(comicvine_volume_id)?;
     let connection = db::checkout(&state).await?;
     let volume_id = comicvine_volume_id.to_string();
     let row = connection
