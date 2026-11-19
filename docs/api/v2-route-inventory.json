@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.py",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 52,
-    "native_rust": 52,
+    "total_live_operations": 53,
+    "native_rust": 53,
     "python_fastapi": 0,
-    "native_rust_status": 52,
+    "native_rust_status": 53,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -1092,6 +1092,19 @@
         "proof_reference": "native/roll-service/src/roll_reset.rs",
         "measurement_status": "pending-fixture"
       }
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4850,
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/roll/unsnooze",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "runtime": "native-rust",
