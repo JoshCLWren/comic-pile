@@ -260,6 +260,9 @@ jobs:
       - name: Run anti-slop lint
         run: pnpm run lint:anti-slop
 
+      - name: Test anti-slop lint scope regression
+        run: node --test scripts/anti_slop_scope.test.mjs
+
       - name: Run frontend lint
         run: pnpm --filter frontend run lint
 
