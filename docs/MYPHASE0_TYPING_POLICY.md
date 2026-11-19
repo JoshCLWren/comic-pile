@@ -97,7 +97,7 @@ Commands:
 - `make mypy-check` runs `scripts/mypy_baseline.py check`, fails on any
   diagnostic in a listed path, and is the local gate for this ratchet;
 - `make mypy-inventory` runs the same checker and writes
-  `docs/typing/mypy-inventory.json` on demand (git-ignored, no longer committed, #4750); and
+  `docs/typing/mypy-inventory.json` on demand (git-ignored, no longer committed, #4750); and <!-- docs-path-check: ignore -->
 - `tests/test_mypy_baseline.py` guards the manifest validation, clean-scope
   failure behavior, and package coverage.
 
