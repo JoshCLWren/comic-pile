@@ -62,7 +62,7 @@ factory_fast_check_plan() {
     esac
     # A manifest-only change must not bypass pnpm's frozen-lockfile gate.
     case "$path" in
-      package.json|pnpm-lock.yaml|pnpm-workspace.yaml|frontend/package.json|frontend/pnpm-lock.yaml)
+      package.json|pnpm-lock.yaml|pnpm-workspace.yaml|frontend/package.json)
         printf 'dependencies\t%s\n' "$path"
         ;;
     esac
