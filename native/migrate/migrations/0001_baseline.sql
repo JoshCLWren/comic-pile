@@ -1218,41 +1218,6 @@ ALTER SEQUENCE public.performance_metrics_id_seq OWNED BY public.performance_met
 
 
 --
--- Name: queue_exclusion_groups; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.queue_exclusion_groups (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    source_kind character varying(32) NOT NULL,
-    source_id integer NOT NULL,
-    source_name character varying(500) NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT ck_queue_exclusion_groups_source_kind CHECK (((source_kind)::text = ANY ((ARRAY['reading_list'::character varying, 'reading_plan'::character varying, 'crossover'::character varying])::text[])))
-);
-
-
---
--- Name: queue_exclusion_groups_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.queue_exclusion_groups_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: queue_exclusion_groups_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.queue_exclusion_groups_id_seq OWNED BY public.queue_exclusion_groups.id;
-
-
---
 -- Name: reading_order_items; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1863,8 +1828,7 @@ CREATE TABLE public.threads (
     manual_creator_credits json DEFAULT '[]'::json NOT NULL,
     catalog_series_id bigint,
     queue_order_key bigint,
-    queue_position_is_manual boolean DEFAULT false NOT NULL,
-    queue_exclusion_group_id integer
+    queue_position_is_manual boolean DEFAULT false NOT NULL
 );
 
 
@@ -2157,13 +2121,6 @@ ALTER TABLE ONLY public.password_reset_tokens ALTER COLUMN id SET DEFAULT nextva
 --
 
 ALTER TABLE ONLY public.performance_metrics ALTER COLUMN id SET DEFAULT nextval('public.performance_metrics_id_seq'::regclass);
-
-
---
--- Name: queue_exclusion_groups id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.queue_exclusion_groups ALTER COLUMN id SET DEFAULT nextval('public.queue_exclusion_groups_id_seq'::regclass);
 
 
 --
@@ -2579,14 +2536,6 @@ ALTER TABLE ONLY public.performance_metrics
 
 ALTER TABLE ONLY public.revoked_tokens
     ADD CONSTRAINT pk_revoked_tokens PRIMARY KEY (id);
-
-
---
--- Name: queue_exclusion_groups queue_exclusion_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.queue_exclusion_groups
-    ADD CONSTRAINT queue_exclusion_groups_pkey PRIMARY KEY (id);
 
 
 --
@@ -3472,13 +3421,6 @@ CREATE INDEX ix_perf_metrics_metric_type ON public.performance_metrics USING btr
 
 
 --
--- Name: ix_queue_exclusion_groups_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_queue_exclusion_groups_user_id ON public.queue_exclusion_groups USING btree (user_id);
-
-
---
 -- Name: ix_reading_plan_dependencies_dependency_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3742,13 +3684,6 @@ CREATE INDEX ix_thread_user_status_blocked_position ON public.threads USING btre
 --
 
 CREATE INDEX ix_thread_user_status_position ON public.threads USING btree (user_id, status, queue_position);
-
-
---
--- Name: ix_threads_queue_exclusion_group_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_threads_queue_exclusion_group_id ON public.threads USING btree (queue_exclusion_group_id);
 
 
 --
@@ -4177,14 +4112,6 @@ ALTER TABLE ONLY public.threads
 
 
 --
--- Name: threads fk_threads_queue_exclusion_group_id; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.threads
-    ADD CONSTRAINT fk_threads_queue_exclusion_group_id FOREIGN KEY (queue_exclusion_group_id) REFERENCES public.queue_exclusion_groups(id) ON DELETE SET NULL;
-
-
---
 -- Name: user_preferences fk_user_preferences_user_id_users; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4254,14 +4181,6 @@ ALTER TABLE ONLY public.password_reset_tokens
 
 ALTER TABLE ONLY public.performance_metrics
     ADD CONSTRAINT performance_metrics_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
-
-
---
--- Name: queue_exclusion_groups queue_exclusion_groups_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.queue_exclusion_groups
-    ADD CONSTRAINT queue_exclusion_groups_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 
 --
