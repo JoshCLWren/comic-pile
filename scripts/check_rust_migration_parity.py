@@ -5,7 +5,7 @@ While Alembic and the Rust runner (``native/migrate``) coexist, a database
 built by ``alembic upgrade head`` and one built by ``comicpile-migrate up`` must
 be schema-identical. This dumps both with ``pg_dump --schema-only``, normalizes
 them with the same rules as ``export_roll_test_schema.py``, and diffs them. The
-Rust-only ``schema_migrations`` bookkeeping table is excluded, and the Rust
+Rust-only ``refinery_schema_history`` bookkeeping table is excluded, and the Rust
 runner's pinned Alembic head must equal the repository's Alembic head.
 
     python scripts/check_rust_migration_parity.py \
@@ -46,7 +46,7 @@ def _dump(url: str) -> str:
             "--no-owner",
             "--no-privileges",
             "--no-comments",
-            "--exclude-table=public.schema_migrations",
+            "--exclude-table=public.refinery_schema_history",
             url.replace("postgresql+asyncpg://", "postgresql://", 1),
         ],
         check=False,
