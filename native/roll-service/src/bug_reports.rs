@@ -1523,59 +1523,7 @@ impl utoipa::Modify for BugReportsSecurityAddon {
 mod tests {
     use super::*;
     use chrono::TimeZone;
-    use std::sync::{
-        atomic::{AtomicUsize, Ordering},
-        Mutex,
-    };
     use utoipa::OpenApi;
-
-    /// Records issuer calls so a handler-boundary test can prove the in-process
-    /// fake ran and that `create_github_issue` (real network) was never used.
-    struct IssuerProbe {
-        calls: Arc<AtomicUsize>,
-        body: Arc<Mutex<String>>,
-    }
-
-    impl IssuerProbe {
-        fn new() -> Self {
-            Self {
-                calls: Arc::new(AtomicUsize::new(0)),
-                body: Arc::new(Mutex::new(String::new())),
-            }
-        }
-
-        fn issuer(
-            &self,
-            detail: &'static str,
-        ) -> impl Fn(GithubSettings, String, String, Vec<String>) -> GithubFuture + Send + Sync + '_
-        {
-            let calls = Arc::clone(&self.calls);
-            let body = Arc::clone(&self.body);
-            move |_settings, _title, issue_body, _labels| {
-                calls.fetch_add(1, Ordering::SeqCst);
-                *body.lock().expect("record issuer body") = issue_body;
-                let detail = detail.to_string();
-                Box::pin(async move { Err(detail) }) as GithubFuture
-            }
-        }
-
-        fn assert_issued_via_fake(&self, error: &BugReportError) {
-            assert_eq!(
-                self.calls.load(Ordering::SeqCst),
-                1,
-                "the injected fake issuer must be used; no real GitHub request may be made"
-            );
-            assert_eq!(
-                error.detail_json(),
-                serde_json::Value::String("SYNTHETIC_ISSUER_FAILURE".to_string()),
-                "the 502 detail must come from the fake issuer, not the network path"
-            );
-        }
-
-        fn captured_body(&self) -> String {
-            self.body.lock().expect("read issuer body").clone()
-        }
-    }
 
     fn sample_diagnostics() -> BugReportDiagnostics {
         BugReportDiagnostics {
