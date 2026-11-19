@@ -341,7 +341,14 @@ pub async fn preview_reading_graph(
             list_id: proposed_list_id,
             mode: proposed_mode.clone(),
             name: proposed_name.clone(),
-            entries: proposed_entries.clone(),
+            entries: proposed_entries
+                .iter()
+                .map(|e| reading_constraints::Entry {
+                    issue_id: e.issue_id,
+                    gate: e.gate.clone(),
+                    skipped: e.skipped,
+                })
+                .collect(),
             overlap_decisions: vec![],
         }],
         prerequisites,
@@ -470,7 +477,7 @@ fn build_series_nodes(
     graph_thread_ids: &HashSet<i32>,
     active_thread_ids: &HashSet<i32>,
     volume_by_thread: &HashMap<i32, Option<String>>,
-    baseline: &HashMap<i32, reading_eligibility::ThreadEligibility>,
+    baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
     excluded: &std::collections::BTreeSet<i32>,
 ) -> Vec<ReadingGraphSeriesNode> {
     let mut nodes: Vec<ReadingGraphSeriesNode> = vec![];
