@@ -122,6 +122,28 @@ async fn user_id_for(state: &Arc<AppState>, username: &str) -> i32 {
     row.get(0)
 }
 
+async fn seed_thread(state: &Arc<AppState>, user_id: i32, thread_id: i32) {
+    let conn = db::checkout(state).await.expect("seed connection");
+    conn.execute(
+        "INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status)
+          VALUES ($1, $2, 'Continuity Rules Test', 'Comic', 3, 1, 'active')",
+        &[&thread_id, &user_id],
+    )
+    .await
+    .expect("seed thread");
+}
+
+async fn seed_issue(state: &Arc<AppState>, thread_id: i32, issue_id: i32, number: &str) {
+    let conn = db::checkout(state).await.expect("seed connection");
+    conn.execute(
+        "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+          VALUES ($1, $2, $3, 'unread', NOW(), $4)",
+        &[&issue_id, &thread_id, &number, &(issue_id % 1000)],
+    )
+    .await
+    .expect("seed issue");
+}
+
 async fn seed_thread_issue(
     state: &Arc<AppState>,
     user_id: i32,
@@ -129,15 +151,15 @@ async fn seed_thread_issue(
     issue_id: i32,
     number: &str,
 ) {
-    let conn = db::checkout(state).await.expect("seed connection");
-    conn.batch_execute(&format!(
-        "INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status)
-          VALUES ({thread_id}, {user_id}, 'Continuity Rules Test', 'Comic', 3, 1, 'active');
-          INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
-          VALUES ({issue_id}, {thread_id}, '{number}', 'unread', NOW(), {issue_id} % 1000);"
-    ))
-    .await
-    .expect("seed thread and issue");
+    seed_thread(state, user_id, thread_id).await;
+    seed_issue(state, thread_id, issue_id, number).await;
+}
+
+async fn seed_thread_issues(state: &Arc<AppState>, user_id: i32, thread_id: i32, issue_ids: &[i32]) {
+    seed_thread(state, user_id, thread_id).await;
+    for (index, issue_id) in issue_ids.iter().enumerate() {
+        seed_issue(state, thread_id, *issue_id, &format!("{}", index + 1)).await;
+    }
 }
 
 fn item_read_rule(source_id: i64, target_id: i64) -> Value {
@@ -199,9 +221,7 @@ async fn continuity_rule_crud_wire_contract_and_canonical_edges() {
     let (state, _db) = database().await;
     let (token, csrf) = register_and_login(&state, "cr-crud").await;
     let user_id = user_id_for(&state, "cr-crud").await;
-    seed_thread_issue(&state, user_id, 810001, 810011, "1").await;
-    seed_thread_issue(&state, user_id, 810001, 810012, "2").await;
-    seed_thread_issue(&state, user_id, 810001, 810013, "3").await;
+    seed_thread_issues(&state, user_id, 810001, &[810011, 810012, 810013]).await;
 
     // Create: 201 with the full response shape.
     let (status, created) = authed_json(
@@ -339,15 +359,12 @@ async fn continuity_rule_validation_ownership_duplicate_and_cycle_errors() {
     let (state, _db) = database().await;
     let (token, csrf) = register_and_login(&state, "cr-errors").await;
     let user_id = user_id_for(&state, "cr-errors").await;
-    seed_thread_issue(&state, user_id, 820001, 820011, "1").await;
-    seed_thread_issue(&state, user_id, 820001, 820012, "2").await;
-    seed_thread_issue(&state, user_id, 820001, 820013, "3").await;
+    seed_thread_issues(&state, user_id, 820001, &[820011, 820012, 820013]).await;
 
     // A second user owns foreign issues and a foreign rule.
     let (foreign_token, foreign_csrf) = register_and_login(&state, "cr-foreign").await;
     let foreign_user_id = user_id_for(&state, "cr-foreign").await;
-    seed_thread_issue(&state, foreign_user_id, 820002, 820021, "1").await;
-    seed_thread_issue(&state, foreign_user_id, 820002, 820022, "2").await;
+    seed_thread_issues(&state, foreign_user_id, 820002, &[820021, 820022]).await;
     let (status, foreign_rule) = authed_json(
         &state,
         "POST",
@@ -488,9 +505,7 @@ async fn converged_and_checkpoint_rules_compile_canonical_edges() {
     let (state, _db) = database().await;
     let (token, csrf) = register_and_login(&state, "cr-converged").await;
     let user_id = user_id_for(&state, "cr-converged").await;
-    seed_thread_issue(&state, user_id, 830001, 830011, "1").await;
-    seed_thread_issue(&state, user_id, 830001, 830012, "2").await;
-    seed_thread_issue(&state, user_id, 830001, 830013, "3").await;
+    seed_thread_issues(&state, user_id, 830001, &[830011, 830012, 830013]).await;
 
     let uri = "/api/v1/continuity-rules/";
 
