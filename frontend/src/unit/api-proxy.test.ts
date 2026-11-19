@@ -78,7 +78,13 @@ describe('development API routing', () => {
     })
     const native = echo('native')
     const python = echo('python')
-    const proxy = createApiProxy(ingress.routes, {
+    const syntheticPythonRoute = {
+      src: '^/api/v1/__mixed-runtime-proxy-fixture$',
+      methods: ['POST', 'OPTIONS'],
+      dest: '/api/index.py',
+    }
+    const routes = [syntheticPythonRoute, ...ingress.routes]
+    const proxy = createApiProxy(routes, {
       native: await listen(native),
       python: await listen(python),
     })
@@ -90,13 +96,11 @@ describe('development API routing', () => {
     const gateway = createHttpServer(vite.middlewares)
     try {
       const base = await listen(gateway)
-      // One native route and one still-Python route. The series-mappings
-      // preview POST is native after #4842, and threads/check-duplicates was
-      // migrated on main, so use a route that is still a Python exception.
-      // Guard it explicitly so a future migration fails with a clear cause
-      // instead of a confusing proxy assertion.
-      const pythonPath = '/api/v1/reading-order-groups/'
-      expect(resolve('POST', pythonPath)).toBe('python')
+      // One native route and one deterministic Python fixture. The fixture keeps
+      // this mixed-runtime forwarding test independent of live Python route
+      // migrations.
+      const pythonPath = '/api/v1/__mixed-runtime-proxy-fixture'
+      expect(createApiDestinationResolver(routes)('POST', pythonPath)).toBe('python')
       const results = await Promise.all(Array.from({ length: 12 }, async (_, index) => {
         const path = index % 2 === 0 ? '/api/v2/auth/login' : pythonPath
         const response = await fetch(`${base}${path}?request=${index}`, {
