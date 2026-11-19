@@ -17,6 +17,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::instrument;
+use unicode_casefold::UnicodeCaseFold;
 
 use crate::{auth::AuthenticatedUser, db::checkout, ApiError, AppState};
 
@@ -2475,7 +2476,8 @@ fn normalize_title_number(value: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
-        .to_lowercase()
+        .case_fold()
+        .collect()
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -2979,6 +2981,7 @@ async fn reconcile_entries_impl<E: DbExec>(
         FROM cbl_source_entries cse
         LEFT JOIN external_identities ei ON ei.id = cse.external_issue_identity_id
         LEFT JOIN external_identities ev ON ev.id = cse.external_series_identity_id
+               AND ev.entity_type = 'series'
         WHERE cse.list_id = $1 AND cse.position = ANY($2::int[])
         ORDER BY cse.position ASC, cse.id ASC
         "#,
@@ -2997,6 +3000,7 @@ async fn reconcile_entries_impl<E: DbExec>(
         FROM cbl_source_entries cse
         LEFT JOIN external_identities ei ON ei.id = cse.external_issue_identity_id
         LEFT JOIN external_identities ev ON ev.id = cse.external_series_identity_id
+               AND ev.entity_type = 'series'
         WHERE cse.list_id = $1
         ORDER BY cse.position ASC, cse.id ASC
         "#,

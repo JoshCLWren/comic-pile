@@ -105,7 +105,7 @@ pub(crate) fn normalize_volume(provider: &str, external_id: &str) -> (String, St
 }
 fn volume_key(provider: &str, external_id: &str) -> Option<String> {
     let (provider, value) = normalize_volume(provider, external_id);
-    (provider == "comicvine").then(|| format!("comicvine:{value}"))
+    (provider == "comicvine" && !value.is_empty()).then(|| format!("comicvine:{value}"))
 }
 
 // Collect independent, owner-scoped datasets without multiplying list entries by
