@@ -2578,27 +2578,33 @@ mod tests {
         drop(connection);
 
         let _env = TempGitHubEnv::install();
-        let probe = IssuerProbe::new();
-        let error = create_with_issuer(
-            state.clone(),
-            1102,
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        assert!(state.outbound.is_fake());
+        fake.clear();
+        let error = create(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1102),
             Bytes::from(
                 br#"{"title":"Bug","description":"Details","diagnostics":{"timestamp":"t","url":"u","userAgent":"a","screen":{"width":"5","height":true,"pixelRatio":"2.5"},"viewport":{"width":3.0,"height":"4"},"scroll":{"x":"0","y":5.0},"performance":{"domContentLoaded":"2","loadComplete":true},"errors":[]}}"#
                     .to_vec(),
             ),
-            &probe.issuer("SYNTHETIC_ISSUER_FAILURE"),
         )
         .await
-        .expect_err("synthetic issuer must fail so the request reaches filing");
+        .expect_err("the recording fake must fail closed so the request reaches filing");
         assert_eq!(
             error.status(),
             StatusCode::BAD_GATEWAY,
             "lax diagnostics must clear Pydantic validation and reach the issuer, not return a fabricated 422"
         );
-        probe.assert_issued_via_fake(&error);
         // The coerced Pydantic values, not the raw wire strings, reach the
         // issue body builder that the real issuer would have called.
-        let issued_body = probe.captured_body();
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1, "the fake must record the issuer call");
+        let sent: serde_json::Value =
+            serde_json::from_slice(&calls[0].body).expect("recorded GitHub payload is JSON");
+        let issued_body = sent["body"].as_str().expect("issue body is a string");
         assert!(
             issued_body.contains("**Screen:** 5×1 @2.5x"),
             "{issued_body}"
