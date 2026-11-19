@@ -1,8 +1,7 @@
 {
   "family": "continuity-plans",
   "owned_path_patterns": [
-    "^/api/v2/continuity-plans(?:/.*)?$",
-    "^/api/v1/continuity-plans/[^/]+/reading-orders/project-preview$"
+    "^/api/v2/continuity-plans(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "native-rust",
@@ -165,6 +164,39 @@
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/reader",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/reader$",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/recovery$",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/recovery$",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
       ]
     }
   ]

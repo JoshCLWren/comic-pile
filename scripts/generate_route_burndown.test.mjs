@@ -219,21 +219,28 @@ test('real taste and bug-report fragments cannot regress to Python ingress', () 
 test('real session and undo fragments retain native-only supported operations', () => {
   const sessions = liveFragment('sessions');
   const undo = liveFragment('undo');
-  const expected = [
+  const sessionExpected = [
     ['GET', '/api/sessions/'],
     ['GET', '/api/v1/sessions/'],
     ['GET', '/api/sessions/{session_id}/details'],
     ['GET', '/api/v1/sessions/{session_id}/details'],
-    ['GET', '/api/undo/{session_id}/snapshots'],
-    ['POST', '/api/undo/{session_id}/undo/{snapshot_id}'],
-    ['GET', '/api/v1/undo/{session_id}/snapshots'],
-    ['POST', '/api/v1/undo/{session_id}/undo/{snapshot_id}'],
   ];
-  for (const [method, route] of expected) {
-    const fragment = route.includes('/undo/') ? undo : sessions;
-    const op = liveOperation(fragment, method, route);
+  for (const [method, route] of sessionExpected) {
+    const op = liveOperation(sessions, method, route);
     assert.equal(op.dest, '/api/native_roll.rs', route);
     assert.equal(op.exclude_from_inventory, true, route);
+    assert.equal(op.owning_issue, 4839, route);
+  }
+  const undoExpected = [
+    ['GET', '/api/v2/undo/{session_id}/snapshots'],
+    ['POST', '/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore'],
+  ];
+  assert.equal(undo.operations.length, undoExpected.length);
+  for (const [method, route] of undoExpected) {
+    const op = liveOperation(undo, method, route);
+    assert.equal(op.bucket, 'operations', route);
+    assert.equal(op.dest, '/api/native_roll.rs', route);
+    assert.equal(op.runtime, 'native-rust', route);
     assert.equal(op.owning_issue, 4839, route);
   }
   assert.ok(![...sessions.operations, ...undo.operations].some(

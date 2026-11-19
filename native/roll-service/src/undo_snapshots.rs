@@ -177,16 +177,15 @@ mod tests {
     fn undo_snapshots_openapi_covers_v2_path() {
         let document = serde_json::to_value(UndoSnapshotsApi::openapi()).expect("openapi");
         let paths = document["paths"].as_object().expect("paths");
-        assert!(paths.contains_key("/api/v2/undo/{session_id}/snapshots"));
+        let path = "/api/v2/undo/{session_id}/snapshots";
+        assert!(paths.contains_key(path));
         assert!(!paths.contains_key("/api/undo/{session_id}/snapshots"));
         assert!(!paths.contains_key("/api/v1/undo/{session_id}/snapshots"));
-        for path in ["/api/v2/undo/{session_id}/snapshots"] {
-            let operation = &document["paths"][path]["get"];
-            assert!(operation["operationId"].is_string());
-            assert!(operation["responses"]["200"].as_object().is_some());
-            assert!(operation["responses"]["404"].as_object().is_some());
-            assert!(operation["security"].is_array());
-        }
+        let operation = &document["paths"][path]["get"];
+        assert!(operation["operationId"].is_string());
+        assert!(operation["responses"]["200"].as_object().is_some());
+        assert!(operation["responses"]["404"].as_object().is_some());
+        assert!(operation["security"].is_array());
         assert!(document["components"]["schemas"]["UndoSnapshotsResponse"].is_object());
         assert!(document["components"]["schemas"]["UndoSnapshotItem"].is_object());
     }

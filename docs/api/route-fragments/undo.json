@@ -18,7 +18,9 @@
       "path": "/api/v2/undo/{session_id}/snapshots",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/undo/[^/]+/snapshots$",
-      "owning_issue": 4839
+      "owning_issue": 4839,
+      "runtime": "native-rust",
+      "status": "target"
     },
     {
       "bucket": "operations",
@@ -26,7 +28,9 @@
       "path": "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/undo/[^/]+/snapshots/[^/]+/restore$",
-      "owning_issue": 4839
+      "owning_issue": 4839,
+      "runtime": "native-rust",
+      "status": "target"
     }
   ]
 }
