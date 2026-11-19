@@ -14,6 +14,7 @@ import type { ContinuityPlan } from '../services/api-continuity-plans'
 import { cblSourcesApi, type CBLSourceListDiscoveryItem } from '../services/api-cbl-sources'
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
+import { ComicIssueCover } from './ComicIssueCard'
 import ReadingListSeriesSkipControls from './ReadingListSeriesSkipControls'
 import { buildReplacementModel } from '../utils/readingListReplacementModel'
 import { getReadingListProgressIndex } from '../utils/readingListProgress'
@@ -470,6 +471,11 @@ export default function CustomCBLBuilder({
     .filter((candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id))
     .sort((a, b) => a.series_name.localeCompare(b.series_name) || a.thread_id - b.thread_id)
 
+  // Search results have exact owned issue ids. Batch their covers independently
+  // of the saved-entry page so no result triggers a per-row fetch.
+  const searchResultCards = useIssueCards(searchResults.map((candidate) => candidate.issue_id), { enabled: open })
+  const searchResultCardsById = indexIssueCards(searchResultCards.data)
+
   // Show the series ID only when results hold several same-named series.
   const ambiguousSeriesNames = useMemo(() => {
     const ids = new Map<string, Set<number>>()
@@ -777,8 +783,16 @@ export default function CustomCBLBuilder({
               {searchResults.length > 0 && (
                 <div ref={issueSearchResults} className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-[var(--theme-border)] p-2" aria-label="Custom CBL issue search results">
                   {searchResults.map((candidate) => (
-                    <button key={candidate.issue_id} onKeyDown={(event) => focusSearchResult(event)} type="button" onClick={() => addIssue(candidate)} disabled={disabled || isPending} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)] disabled:opacity-50">
-                      <span>{candidate.series_name} #{candidate.issue_number}{ambiguousSeriesNames.has(candidate.series_name.toLocaleLowerCase()) && <span className="ml-2 text-xs text-[var(--theme-text-dim)]">Series ID {candidate.thread_id}</span>}</span><span className="text-xs text-[var(--theme-text-dim)]">Add</span>
+                    <button key={candidate.issue_id} onKeyDown={(event) => focusSearchResult(event)} type="button" onClick={() => addIssue(candidate)} disabled={disabled || isPending} aria-label={`${candidate.series_name} #${candidate.issue_number}${ambiguousSeriesNames.has(candidate.series_name.toLocaleLowerCase()) ? ` Series ID ${candidate.thread_id}` : ''} Add`} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)] disabled:opacity-50">
+                      <ComicIssueCover
+                        coverImageUrl={searchResultCardsById.get(candidate.issue_id)?.cover_image_url ?? null}
+                        threadTitle={candidate.series_name}
+                        issueNumber={candidate.issue_number}
+                        variant="compact"
+                        imageClassName="h-full w-full object-cover"
+                        altText=""
+                      />
+                      <span className="min-w-0 flex-1">{candidate.series_name} #{candidate.issue_number}{ambiguousSeriesNames.has(candidate.series_name.toLocaleLowerCase()) && <span className="ml-2 text-xs text-[var(--theme-text-dim)]">Series ID {candidate.thread_id}</span>}</span><span className="text-xs text-[var(--theme-text-dim)]">Add</span>
                     </button>
                   ))}
                 </div>
