@@ -167,10 +167,10 @@ function responseFor(method: string, path: string, query: CanonicalQuery) {
       entries: [],
     }
   }
-  if (path.startsWith('/api/v1/tags/effective/')) {
+  if (path.startsWith('/api/v2/tags/effective/')) {
     return { target_type: 'ContinuityPlan', target_id: 7, direct_tags: [], effective_tags: [] }
   }
-  if (path === '/api/v1/tags/') return { tags: [] }
+  if (path === '/api/v2/tags') return { tags: [] }
   return []
 }
 
@@ -196,8 +196,8 @@ const THREADS_PAGE = GET('/api/v2/threads', { page_size: 100 })
 const DEPENDENCY_GROUPS = GET('/api/v1/reading-order-groups/')
 const PLAN_READER = GET('/api/v2/continuity-plans/7/reader')
 const PLAN_DETAIL = GET('/api/v1/continuity-plans/7')
-const PLAN_TAGS = GET('/api/v1/tags/effective/plan/7/')
-const TAGS_CATALOG = GET('/api/v1/tags/')
+const PLAN_TAGS = GET('/api/v2/tags/effective/plans/7')
+const TAGS_CATALOG = GET('/api/v2/tags')
 const CUSTOM_LISTS = GET('/api/v2/reading-lists')
 const CUSTOM_LIST_SEVEN = GET('/api/v2/reading-lists/7')
 const EXCLUDED_THREADS = GET('/api/v1/threads/excluded/threads', { page_size: 50, sort: 'created' })
