@@ -77,6 +77,26 @@ describe('ContainerQueueActions', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it('checks membership in bounded batches for large containers', async () => {
+    const memberThreads = Array.from({ length: 4501 }, (_, index) => ({
+      id: index + 1,
+      title: `Series ${index + 1}`,
+    }))
+    mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [] })
+    mocks.checkThreadMemberships.mockResolvedValue({ thread_ids: [] })
+
+    const user = userEvent.setup()
+    renderActions({ memberThreads })
+
+    await user.click(await screen.findByRole('button', { name: 'Remove all series from Queue' }))
+
+    await waitFor(() => expect(mocks.checkThreadMemberships).toHaveBeenCalled())
+    expect(mocks.checkThreadMemberships.mock.calls.length).toBeGreaterThan(4)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Remove from Queue' })).toBeEnabled(),
+    )
+  })
+
   it('removes selected series after overlap checks complete', async () => {
     let resolveMemberships!: (value: { thread_ids: number[] }) => void
     mocks.checkThreadMemberships.mockImplementation(
@@ -258,5 +278,37 @@ describe('ContainerQueueActions', () => {
     renderActions()
     expect(screen.getByRole('button', { name: 'Remove all series from Queue' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Restore all to Queue' })).toBeDisabled()
+  })
+
+  it('closes the remove modal with the dialog close control', async () => {
+    const user = userEvent.setup()
+    renderActions()
+
+    await user.click(await screen.findByRole('button', { name: 'Remove all series from Queue' }))
+    await screen.findByRole('button', { name: 'Remove from Queue' })
+    await user.click(screen.getByRole('button', { name: 'Close modal' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Remove from Queue' })).not.toBeInTheDocument(),
+    )
+  })
+
+  it('closes the restore modal with cancel and the dialog close control', async () => {
+    const user = userEvent.setup()
+    renderActions()
+
+    await user.click(await screen.findByRole('button', { name: 'Restore all to Queue' }))
+    await screen.findByRole('button', { name: 'Restore to Queue' })
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Restore to Queue' })).not.toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Restore all to Queue' }))
+    await screen.findByRole('button', { name: 'Restore to Queue' })
+    await user.click(screen.getByRole('button', { name: 'Close modal' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Restore to Queue' })).not.toBeInTheDocument(),
+    )
   })
 })
