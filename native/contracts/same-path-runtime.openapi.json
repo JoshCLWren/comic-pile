@@ -916,23 +916,10 @@
         "tags": [
           "comicvine-resolution"
         ],
-        "summary": "OpenAPI documentation for the migrated same-path operation.",
         "operationId": "series_import_status_documentation",
-        "parameters": [
-          {
-            "name": "comicvine_volume_id",
-            "in": "path",
-            "description": "ComicVine volume ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
         "responses": {
           "200": {
-            "description": "Owned import status",
+            "description": "ok",
             "content": {
               "application/json": {
                 "schema": {
@@ -940,12 +927,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -17826,7 +17807,6 @@
       },
       "SeriesImportStatusResponse": {
         "type": "object",
-        "description": "Wire parity with Python `SeriesImportStatusResponse`.",
         "required": [
           "comicvine_volume_id",
           "imported"
