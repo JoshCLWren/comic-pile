@@ -646,10 +646,27 @@ jobs:
       # for this, so alembic check always reports a false-positive difference.
       # Single-head enforcement + clean upgrade-from-scratch is the effective gate.
 
+  docs-code-paths:
+    name: Docs code-path check
+    # Part of the required CI Summary gate. Offline and deterministic: fails when current
+    # Markdown docs cite repository code paths that no longer exist (see
+    # scripts/check_doc_code_paths.mjs). Runs on Node only. Runs on every event with no path filters.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Unit-test the doc path checker
+        run: node --test scripts/check_doc_code_paths.test.mjs
+      - name: Check Markdown code-path references
+        run: node scripts/check_doc_code_paths.mjs
+
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [build, build-fork, node-auth, rust-ingress, route-fragment-guard, factory-pr-auth, factory-complete-tests, factory-actionlint, factory-shellcheck, native-route-db-test-guard, changes, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
+    needs: [build, build-fork, node-auth, rust-ingress, route-fragment-guard, docs-code-paths, factory-pr-auth, factory-complete-tests, factory-actionlint, factory-shellcheck, native-route-db-test-guard, changes, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
     if: always()
     steps:
       - name: Check job results
@@ -659,6 +676,7 @@ jobs:
           echo "TypeScript auth: ${{ needs.node-auth.result }}"
           echo "Rust default route discovery: ${{ needs.rust-ingress.result }}"
           echo "Route fragment guard: ${{ needs.route-fragment-guard.result }}"
+          echo "Docs code paths: ${{ needs.docs-code-paths.result }}"
           echo "Factory PR authentication: ${{ needs.factory-pr-auth.result }}"
           echo "Factory tests: ${{ needs.factory-complete-tests.result }}"
           echo "Changed-files classification: ${{ needs.changes.result }}"
@@ -676,6 +694,7 @@ jobs:
              [ "${{ needs.node-auth.result }}" != "success" ] || \
              [ "${{ needs.rust-ingress.result }}" != "success" ] || \
              [ "${{ needs.route-fragment-guard.result }}" != "success" ] || \
+             [ "${{ needs.docs-code-paths.result }}" != "success" ] || \
              [ "${{ needs.factory-pr-auth.result }}" != "success" ] || \
              { [ "${{ needs.factory-complete-tests.result }}" != "success" ] && [ "${{ needs.factory-complete-tests.result }}" != "skipped" ]; } || \
              { [ "${{ needs.changes.result }}" != "success" ] && [ "${{ needs.changes.result }}" != "skipped" ]; } || \

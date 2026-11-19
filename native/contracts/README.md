@@ -160,7 +160,7 @@ top-level response. It must receive actual native-generated output. The frozen
 Python file alone does not establish native parity, runtime behavior, or a
 production cutover.
 
-The retired `tests/test_roll_bootstrap_port_oracle.py` executed the original
+The retired `tests/test_roll_bootstrap_port_oracle.py` <!-- docs-path-check: ignore --> executed the original
 Python v1 handler, validated its response against the frozen schema and recorded
 the emitted SQL, bind shapes and connection transaction events as
 `roll-bootstrap-v1.sql.json` in the CI `rust-sql-oracle-*` artifact. The oracle was removed with the Python handler (#4397); its transcript is
