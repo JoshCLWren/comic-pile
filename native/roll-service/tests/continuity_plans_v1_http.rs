@@ -629,6 +629,143 @@ async fn empty_plan_reader_opens_as_editable_without_recovery_409() {
     );
 }
 
+/// Issue #4724: a saved Strict plan linked to a loose (or stale) Reading List
+/// must keep displaying Strict. The List stays the sole authority for
+/// *execution*, but `ordering_mode` is the plan's explicit saved display intent
+/// and must agree with the plans index and the planner editor after refresh.
+#[tokio::test]
+async fn strict_plan_linked_to_loose_list_keeps_explicit_ordering_mode() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-mode-strict-loose").await;
+    let user_id = user_id_for(&state, "cp-mode-strict-loose").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "Plan A mode regression",
+            "ordering_mode": "strict_sequential",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+    let plan_id_i32 = i32::try_from(plan_id).expect("int4 plan id");
+
+    seed_thread_issue(&state, user_id, 547301, 547311, "Mode Series A", "1").await;
+    seed_thread_issue(&state, user_id, 547302, 547312, "Mode Series B", "1").await;
+
+    let conn = db::checkout(&state).await.expect("seed connection");
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at)
+             VALUES ($1, 'QA loose authority', 'loose', NOW(), NOW()) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .expect("create owned loose list")
+        .get(0);
+    conn.execute(
+        "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at)
+         VALUES ($1, 547311, 0, NOW()), ($1, 547312, 1, NOW())",
+        &[&list_id],
+    )
+    .await
+    .expect("seed owned list entries");
+    conn.execute(
+        "INSERT INTO reading_plan_sources
+            (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+         VALUES ($1, $2, $3, NOW())",
+        &[&plan_id_i32, &format!("custom-cbl:{list_id}"), &list_id],
+    )
+    .await
+    .expect("link plan to authoritative list");
+    drop(conn);
+
+    let (status, reader) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader}");
+    assert_eq!(reader["execution_mode"], "option_e", "{reader}");
+    assert_eq!(reader["ordering_mode"], "strict_sequential", "{reader}");
+    // Availability is still projected by the linked loose List, not the mode
+    // we display for the plan.
+    assert_eq!(
+        reader["lanes"][0]["issues"].as_array().map(Vec::len),
+        Some(2),
+        "{reader}"
+    );
+    assert_eq!(
+        reader["available_now"].as_array().map(Vec::len),
+        Some(2),
+        "{reader}"
+    );
+
+    let (status, listed) = authed_json(
+        &state,
+        "GET",
+        "/api/v1/continuity-plans/",
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    let item = listed
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["id"] == plan_id))
+        .expect("created plan in index");
+    assert_eq!(item["ordering_mode"], "strict_sequential", "{listed}");
+}
+
+/// Issue #4724 legacy fallback: a plan that never had an authoritative List
+/// keeps its explicit saved mode too, so a refresh cannot silently downgrade
+/// it when the source link is absent.
+#[tokio::test]
+async fn strict_legacy_plan_keeps_explicit_ordering_mode_without_list() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-mode-strict-legacy").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "Plan A legacy mode regression",
+            "ordering_mode": "strict_sequential",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+
+    let (status, reader) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader}");
+    assert_eq!(reader["execution_mode"], "legacy", "{reader}");
+    assert_eq!(reader["ordering_mode"], "strict_sequential", "{reader}");
+    assert_eq!(reader["available_now"], json!([]), "{reader}");
+    assert_eq!(reader["blocked_next"], json!([]), "{reader}");
+}
+
 /// A plan whose owned Reading List link was removed must still require the
 /// explicit recovery flow. The FK sets custom_cbl_list_id to NULL on list
 /// deletion while the immutable `custom-cbl:<id>` provenance survives.

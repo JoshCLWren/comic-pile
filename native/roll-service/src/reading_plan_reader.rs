@@ -506,12 +506,14 @@ pub async fn read(
         execution_mode: "option_e".to_string(),
         plan_id,
         name: plan_name,
-        ordering_mode: if list.mode == "strict" {
-            "strict_sequential"
-        } else {
-            "informational"
-        }
-        .to_string(),
+        // The order mode is the plan's explicit saved intent, also shown by the
+        // plans index and the planner editor. Deriving it from the linked List's
+        // mode here silently downgraded a saved `strict_sequential` plan to
+        // `informational` whenever the List was loose or stale (#4724). The
+        // List remains the sole authority for the *effective* execution
+        // (availability, blockers and explanations come from the shared Rust
+        // Reading List evaluator above), not for this display field.
+        ordering_mode: plan_ordering_mode,
         progress,
         available_now,
         blocked_next,
