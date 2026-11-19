@@ -3507,7 +3507,7 @@ pub async fn project_preview(
                     node.node_type, node.id
                 ),
                 node_id: node.id.clone(),
-                thread_id: node.ref_id,
+                thread_id: Some(node.ref_id),
                 existing_positions: Vec::new(),
             });
             continue;
@@ -3520,7 +3520,7 @@ pub async fn project_preview(
                     node.ref_id, node.id
                 ),
                 node_id: node.id.clone(),
-                thread_id: node.ref_id,
+                thread_id: Some(node.ref_id),
                 existing_positions: Vec::new(),
             });
             continue;
