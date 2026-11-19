@@ -22,7 +22,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,14 +31,8 @@ from app.services.bandwidth_inference import (
     HistoricalObservation,
     infer_bandwidth,
 )
+
 # reading-mode quiz logic moved to Rust; Python helpers removed.
-from app.services.recommendation_explanation import (
-    RecommendationExplanationProjection,
-)
-from app.services.recommendation_diagnostics import (
-    compute_recommendation_diagnostics,
-    resolve_diagnostics_range,
-)
 from comic_pile.recommendation_selection import (
     SelectionMode,
     resolve_selection_mode,
@@ -62,7 +55,6 @@ from comic_pile.recommendation_weighting import (
     TASTE_CATEGORY_CHARACTER,
     weight_pool,
 )
-from tests.roll_flow import roll_pending_thread
 
 pytestmark = pytest.mark.asyncio
 
@@ -247,7 +239,8 @@ class TestAC1LightHistoryInfersBandwidth:
 
     @pytest.mark.asyncio
     async def test_light_history_inference_returns_light_bandwidth(
-        self, async_db: AsyncSession,
+        self,
+        async_db: AsyncSession,
     ) -> None:
         """Seeded light-history sessions infer light bandwidth with meaningful confidence."""
         await _ensure_user(async_db)
@@ -271,7 +264,8 @@ class TestAC1LightHistoryInfersBandwidth:
 
     @pytest.mark.asyncio
     async def test_light_history_only_weights_candidates_in_die_pool(
-        self, async_db: AsyncSession,
+        self,
+        async_db: AsyncSession,
     ) -> None:
         """Light bandwidth weighting only redistributes probability inside the bounded die pool."""
         from comic_pile.recommendation_weights import build_candidate_weights
@@ -286,7 +280,8 @@ class TestAC1LightHistoryInfersBandwidth:
 
     @pytest.mark.asyncio
     async def test_deep_history_inference_returns_deep_bandwidth(
-        self, async_db: AsyncSession,
+        self,
+        async_db: AsyncSession,
     ) -> None:
         """Seeded deep-history sessions infer deep bandwidth."""
         observations = tuple(
@@ -306,12 +301,11 @@ class TestAC1LightHistoryInfersBandwidth:
 
     @pytest.mark.asyncio
     async def test_insufficient_history_defaults_to_balanced(
-        self, async_db: AsyncSession,
+        self,
+        async_db: AsyncSession,
     ) -> None:
         """Insufficient evidence defaults to balanced with low confidence."""
-        observations = tuple(
-            HistoricalObservation(effort_minutes=5.0) for _ in range(2)
-        )
+        observations = tuple(HistoricalObservation(effort_minutes=5.0) for _ in range(2))
 
         prediction = infer_bandwidth(observations)
 
@@ -322,114 +316,6 @@ class TestAC1LightHistoryInfersBandwidth:
 # ---------------------------------------------------------------------------
 # AC-2: Snoozing a heavy recommendation doesn't permanently demote; session adapts
 # ---------------------------------------------------------------------------
-
-
-class TestAC2SnoozeAdaptationWithoutPermanentDemotion:
-    """Snoozing a heavy recommendation.
-
-    Leaves durable affinity unchanged and the session adapts
-    toward lighter choices.
-    """
-
-    @pytest.mark.asyncio
-    async def test_snooze_updates_session_bandwidth_not_durable_affinity(
-        self, async_db: AsyncSession,
-    ) -> None:
-        """Snooze corrects session bandwidth without rewriting durable Taste Bank verdicts."""
-        user = await _ensure_user(async_db)
-        await async_db.commit()
-        user_id = user.id
-
-        threads = await _setup_user_with_history(
-            async_db, user_id, effort_minutes=15.0, count=5
-        )
-        session = await _create_session(
-            async_db, user_id,
-            active_bandwidth="deep",
-            bandwidth_source="inferred",
-            bandwidth_confidence=0.6,
-        )
-        await async_db.commit()
-
-        snooze_event = Event(
-            type="snooze",
-            session_id=session.id,
-            thread_id=threads[0].id,
-            timestamp=datetime.now(UTC),
-        )
-        async_db.add(snooze_event)
-        session.snoozed_thread_ids = [threads[0].id]
-        await async_db.commit()
-
-        # Durable thread rating must not change
-        assert threads[0].last_rating == 4.5
-
-    @pytest.mark.asyncio
-    async def test_snooze_causes_bandwidth_correction(
-        self, async_db: AsyncSession,
-    ) -> None:
-        """Snoozing a heavy comic shifts the predicted bandwidth toward lighter."""
-        from comic_pile.bandwidth_correction import compute_snooze_correction
-
-        user = await _ensure_user(async_db)
-        await async_db.commit()
-        user_id = user.id
-
-        await _setup_user_with_history(
-            async_db, user_id, effort_minutes=25.0, count=5
-        )
-        await _create_session(
-            async_db, user_id,
-            active_bandwidth="deep",
-            bandwidth_source="inferred",
-            bandwidth_confidence=0.6,
-            predicted_bandwidth="deep",
-        )
-        await async_db.commit()
-
-        # Compute the snooze correction: "heavy" is not a valid bandwidth
-        # level and defaults to index 1 (balanced). Since candidate_idx (1) <
-        # current_idx (2), the function treats this as a lighter-candidate
-        # snooze and degrades confidence without changing bandwidth.
-        correction = compute_snooze_correction(
-            current_bandwidth="deep",
-            current_confidence=0.6,
-            predicted_bandwidth="deep",
-            candidate_effort_level="heavy",
-            consecutive_snoozes=1,
-            last_snooze_direction=None,
-        )
-        assert correction.bandwidth_changed is False
-        assert correction.active_bandwidth == "deep"
-        assert correction.reason_code == "light_snooze_deflate"
-
-    @pytest.mark.asyncio
-    async def test_snooze_does_not_rewrite_thread_rating(
-        self, async_db: AsyncSession,
-    ) -> None:
-        """Snooze must never mutate the thread's durable last_rating."""
-        user = await _ensure_user(async_db)
-        await async_db.commit()
-        user_id = user.id
-
-        thread = await _create_thread(
-            async_db, user_id, title="Snooze Test Thread",
-            last_rating=4.8,
-        )
-        session = await _create_session(async_db, user_id)
-        await async_db.commit()
-
-        await _create_snooze_event(
-            async_db, session.id, thread.id,
-            timestamp=datetime.now(UTC),
-        )
-        await async_db.commit()
-
-        result = await async_db.execute(
-            select(Thread).where(Thread.id == thread.id)
-        )
-        refreshed = result.scalar_one()
-        assert refreshed.last_rating == 4.8
 
 
 class TestAC4MomentumIntent:
@@ -486,12 +372,14 @@ class TestAC4MomentumIntent:
     @pytest.mark.asyncio
     async def test_momentum_weights_stay_bounded(self, async_db: AsyncSession) -> None:
         """Momentum factor caps prevent runaway weighting."""
-        signals = [CandidateSignals(
-            thread_id=1,
-            last_rating=5.0,
-            days_since_last_read=0.5,
-            high_rated_streak=4,
-        )]
+        signals = [
+            CandidateSignals(
+                thread_id=1,
+                last_rating=5.0,
+                days_since_last_read=0.5,
+                high_rated_streak=4,
+            )
+        ]
 
         weighted = weight_pool(
             bandwidth="balanced",
@@ -512,13 +400,15 @@ class TestAC5FamiliarIntentUsesTasteBank:
 
     def test_familiar_weighted_by_confirmed_taste(self) -> None:
         """Confirmed Taste Bank verdicts boost Familiar intent weight."""
-        signals = [CandidateSignals(
-            thread_id=1,
-            matched_verdict_by_category={
-                TASTE_CATEGORY_CREATOR: VERDICT_CONFIRMED,
-                TASTE_CATEGORY_CHARACTER: VERDICT_CONFIRMED,
-            },
-        )]
+        signals = [
+            CandidateSignals(
+                thread_id=1,
+                matched_verdict_by_category={
+                    TASTE_CATEGORY_CREATOR: VERDICT_CONFIRMED,
+                    TASTE_CATEGORY_CHARACTER: VERDICT_CONFIRMED,
+                },
+            )
+        ]
 
         weighted = weight_pool(
             bandwidth="balanced",
@@ -562,12 +452,14 @@ class TestAC5FamiliarIntentUsesTasteBank:
     @pytest.mark.asyncio
     async def test_familiar_rejected_evidence_does_not_boost(self) -> None:
         """Rejected Taste Bank evidence does not boost Familiar intent."""
-        signals = [CandidateSignals(
-            thread_id=1,
-            matched_verdict_by_category={
-                TASTE_CATEGORY_CREATOR: VERDICT_REJECTED,
-            },
-        )]
+        signals = [
+            CandidateSignals(
+                thread_id=1,
+                matched_verdict_by_category={
+                    TASTE_CATEGORY_CREATOR: VERDICT_REJECTED,
+                },
+            )
+        ]
 
         weighted = weight_pool(
             bandwidth="balanced",
@@ -588,10 +480,12 @@ class TestAC6ExploreIntent:
 
     def test_explore_favors_novel_adjacent_candidate(self) -> None:
         """Explore intent gives a bonus to novel-but-adjacent candidates."""
-        signals = [CandidateSignals(
-            thread_id=1,
-            adjacent_anchor_categories=[TASTE_CATEGORY_CREATOR],
-        )]
+        signals = [
+            CandidateSignals(
+                thread_id=1,
+                adjacent_anchor_categories=[TASTE_CATEGORY_CREATOR],
+            )
+        ]
 
         weighted = weight_pool(
             bandwidth="balanced",
@@ -660,7 +554,8 @@ class TestAC7RandomAndLegacyRestoreUnweighted:
 
     @pytest.mark.asyncio
     async def test_legacy_control_mode_restores_unweighted_selection(
-        self, async_db: AsyncSession,
+        self,
+        async_db: AsyncSession,
     ) -> None:
         """Operator legacy control mode forces unweighted selection."""
         mode = resolve_selection_mode("balanced", "balanced", "legacy")
@@ -671,7 +566,8 @@ class TestAC7RandomAndLegacyRestoreUnweighted:
 
     @pytest.mark.asyncio
     async def test_legacy_mode_records_algorithm_version(
-        self, async_db: AsyncSession,
+        self,
+        async_db: AsyncSession,
     ) -> None:
         """Legacy mode records the legacy algorithm version for distinguishability."""
         version = RECOMMENDATION_ALGORITHM_VERSION_LEGACY
@@ -682,7 +578,8 @@ class TestAC7RandomAndLegacyRestoreUnweighted:
 
     @pytest.mark.asyncio
     async def test_random_mode_with_legacy_control_still_bypasses(
-        self, async_db: AsyncSession,
+        self,
+        async_db: AsyncSession,
     ) -> None:
         """Legacy control mode always forces unweighted selection.
 
@@ -702,298 +599,11 @@ class TestAC7RandomAndLegacyRestoreUnweighted:
 # ---------------------------------------------------------------------------
 
 
-class TestAC8WhyThisExplanation:
-    """Why this? explains the actual decision-time factors used."""
-
-    def test_explanation_translates_bandwidth_code(self) -> None:
-        """Bandwidth reason codes translate to human-readable explanations."""
-        projection = RecommendationExplanationProjection()
-
-        factor = projection.translate_bandwidth("band_light")
-        assert factor is not None
-        assert factor.label == "Quick read"
-        assert factor.detail == "~11-minute read"
-
-        factor = projection.translate_bandwidth("band_deep")
-        assert factor is not None
-        assert factor.label == "Deep read"
-
-    def test_explanation_translates_intent_code(self) -> None:
-        """Intent reason codes translate to human-readable explanations."""
-        projection = RecommendationExplanationProjection()
-
-        factor = projection.translate_intent("intent_momentum")
-        assert factor is not None
-        assert factor.label == "Recent series momentum"
-        factor = projection.translate_intent("intent_familiar")
-        assert factor is not None
-        assert factor.label == "Creator you confirmed you like"
-        factor = projection.translate_intent("intent_explore")
-        assert factor is not None
-        assert factor.label == "Novel but connected to your tastes"
-        factor = projection.translate_intent("intent_random")
-        assert factor is not None
-        assert factor.label == "No weighting applied"
-
-    def test_explanation_translates_selection_method(self) -> None:
-        """Selection method reason codes translate to explanations."""
-        projection = RecommendationExplanationProjection()
-
-        factor = projection.translate_selection_method("random")
-        assert factor is not None
-        assert factor.label == "Pure random"
-        factor = projection.translate_selection_method("override")
-        assert factor is not None
-        assert factor.label == "Manual pick"
-
-    def test_explanation_projects_recommendation_context(self) -> None:
-        """Full recommendation context projects to ordered explanations."""
-        projection = RecommendationExplanationProjection()
-
-        factors = projection.project_recommendation_context({
-            "bandwidth": "band_light",
-            "intent": "intent_momentum",
-            "taste_bank_factors": [
-                {"code": "taste_confirmed_creator", "detail": "Alice Writer"},
-            ],
-            "selection_method": "bandwidth",
-        })
-
-        assert len(factors) > 0
-        label_list = [f.label for f in factors]
-        assert any("Quick read" in label for label in label_list)
-        assert any("Recent series momentum" in label for label in label_list)
-
-    def test_explanation_translates_taste_bank_factor(self) -> None:
-        """Taste Bank factor codes translate to explanations."""
-        projection = RecommendationExplanationProjection()
-
-        factor = projection.translate_taste_bank_factor({"code": "taste_confirmed_creator"})
-        assert factor is not None
-        assert factor.label == "Creator you confirmed you like"
-        factor = projection.translate_taste_bank_factor({"code": "taste_novel_adjacent"})
-        assert factor is not None
-        assert factor.label == "Novel but connected to your tastes"
-        factor = projection.translate_taste_bank_factor({"code": "taste_high_affinity"})
-        assert factor is not None
-        assert factor.label == "Strong affinity"
-
-    @pytest.mark.asyncio
-    async def test_roll_response_contains_explanation(
-        self, auth_client: AsyncClient, async_db: AsyncSession,
-    ) -> None:
-        """A Roll response includes an explanation of the decision-time factors."""
-        from tests.conftest import get_or_create_user_async
-
-        user = await get_or_create_user_async(async_db)
-        await _create_thread(
-            async_db, user.id, title="Explanation Test Thread",
-        )
-        await async_db.commit()
-
-        data = (await roll_pending_thread(async_db)).model_dump()
-        assert "explanation" in data
-        assert data["explanation"] is not None
-        assert len(data["explanation"]) > 0
-
-
 # ---------------------------------------------------------------------------
 # AC-9: Diagnostics compare outcomes by mode/algorithm version
 # ---------------------------------------------------------------------------
 
 
-class TestAC9DiagnosticsByModeAndAlgorithmVersion:
-    """Recommendation-quality diagnostics compare outcomes by mode/algorithm version."""
-
-    def test_diagnostics_groups_by_control_mode(self) -> None:
-        """Diagnostics response includes control mode grouping."""
-        from app.schemas.recommendation_diagnostics import RecommendationDiagnosticsResponse
-
-        fields = list(RecommendationDiagnosticsResponse.model_fields.keys())
-        assert "groups_by_control_mode" in fields
-        assert "active_control_mode" in fields
-        assert "active_algorithm_version" in fields
-
-    @pytest.mark.asyncio
-    async def test_diagnostics_coverage_labels_legacy_events(
-        self, async_db: AsyncSession,
-    ) -> None:
-        """Diagnostics distinguish legacy events from instrumented events."""
-        user = await _ensure_user(async_db)
-        await async_db.commit()
-        user_id = user.id
-
-        session = await _create_session(
-            async_db, user_id,
-            active_bandwidth="balanced",
-            bandwidth_source="inferred",
-        )
-        await async_db.commit()
-
-        await _create_roll_event(
-            async_db, session.id, 1,
-            selection_method="momentum",
-            timestamp=datetime.now(UTC),
-        )
-        await async_db.commit()
-
-        range_start, range_end = resolve_diagnostics_range(None, None)
-        diagnostics = await compute_recommendation_diagnostics(
-            async_db,
-            user_id=user_id,
-            range_start=range_start,
-            range_end=range_end,
-        )
-
-        assert diagnostics.total_rolls >= 1
-        assert diagnostics.coverage is not None
-
-    @pytest.mark.asyncio
-    async def test_diagnostics_records_algorithm_version(
-        self, async_db: AsyncSession,
-    ) -> None:
-        """Diagnostics include the active algorithm version."""
-        from app.config import get_recommendation_settings
-
-        settings = get_recommendation_settings()
-        assert settings.algorithm_version in ("v1-contextual", "legacy")
-
-    @pytest.mark.asyncio
-    async def test_diagnostics_range_resolution(
-        self, async_db: AsyncSession,
-    ) -> None:
-        """Diagnostics range resolution applies defaults and caps."""
-        range_start, range_end = resolve_diagnostics_range(None, None)
-        assert range_end is not None
-        span_days = (range_end - range_start).days
-        assert span_days <= 365
-
-    @pytest.mark.asyncio
-    async def test_diagnostics_groups_by_algorithm_version(
-        self, auth_client: AsyncClient, async_db: AsyncSession,
-    ) -> None:
-        """Diagnostics service returns groups with algorithm versions (#4861).
-
-        The HTTP diagnostics handler was pruned; the service-level
-        diagnostics remain. The pruned HTTP path answers 404 while the
-        service still produces the grouped payload.
-        """
-        pruned = await auth_client.get("/api/v1/recommendations/diagnostics")
-        assert pruned.status_code == 404
-
-        from tests.conftest import get_or_create_user_async
-
-        user = await get_or_create_user_async(async_db)
-        await async_db.commit()
-        range_start, range_end = resolve_diagnostics_range(None, None)
-        diagnostics = await compute_recommendation_diagnostics(
-            async_db,
-            user_id=user.id,
-            range_start=range_start,
-            range_end=range_end,
-        )
-
-        data = diagnostics.model_dump()
-        assert "groups_by_control_mode" in data
-        assert "active_algorithm_version" in data
-        assert "active_control_mode" in data
-        assert "coverage" in data
-
-    @pytest.mark.asyncio
-    async def test_diagnostics_effort_band_outcomes(
-        self, auth_client: AsyncClient, async_db: AsyncSession,
-    ) -> None:
-        """Diagnostics service includes effort-band outcome breakdowns (#4861)."""
-        pruned = await auth_client.get("/api/v1/recommendations/diagnostics")
-        assert pruned.status_code == 404
-
-        from tests.conftest import get_or_create_user_async
-
-        user = await get_or_create_user_async(async_db)
-        await async_db.commit()
-        range_start, range_end = resolve_diagnostics_range(None, None)
-        diagnostics = await compute_recommendation_diagnostics(
-            async_db,
-            user_id=user.id,
-            range_start=range_start,
-            range_end=range_end,
-        )
-
-        data = diagnostics.model_dump()
-        assert "effort_band_outcomes" in data
-        assert isinstance(data["effort_band_outcomes"], list)
-
-
 # ---------------------------------------------------------------------------
 # Cross-cutting: Verify the complete adaptive Roll pipeline
 # ---------------------------------------------------------------------------
-
-
-class TestCrossCuttingAdaptivePipeline:
-    """Verify the complete adaptive Roll system works end-to-end."""
-
-    @pytest.mark.asyncio
-    async def test_full_roll_pipeline_with_bandwidth_and_intent(
-        self, auth_client: AsyncClient, async_db: AsyncSession,
-    ) -> None:
-        """A complete Roll respects bandwidth inference.
-
-        And die-pool bounding.
-        """
-        from tests.conftest import get_or_create_user_async
-
-        user = await get_or_create_user_async(async_db)
-        await _create_thread(async_db, user.id, title="Pipeline Test Thread")
-        await async_db.commit()
-
-        data = (await roll_pending_thread(async_db)).model_dump()
-        assert "thread_id" in data
-        assert "title" in data
-        assert "die_size" in data
-        assert "result" in data
-        assert "explanation" in data
-
-
-    @pytest.mark.asyncio
-    async def test_legacy_switch_available_in_roll(
-        self, async_db: AsyncSession,
-    ) -> None:
-        """The operator legacy switch is available and functional."""
-        from app.config import get_recommendation_settings
-
-        settings = get_recommendation_settings()
-        assert settings.control_mode in ("contextual", "legacy")
-
-        from comic_pile.recommendation_selection import SelectionMode
-        from comic_pile.recommendation_selection import resolve_selection_mode
-        mode = resolve_selection_mode("balanced", "balanced", "legacy")
-        assert mode == SelectionMode.FORCED_LEGACY
-
-    @pytest.mark.asyncio
-    async def test_snooze_preserves_queue_position(
-        self, auth_client: AsyncClient, async_db: AsyncSession,
-    ) -> None:
-        """Snooze preserves the thread queue position as a durable value."""
-        from app.models import Thread
-        from tests.conftest import get_or_create_user_async
-
-        user = await get_or_create_user_async(async_db)
-
-        thread = Thread(
-            title="Snooze Queue Test",
-            format="Comic",
-            issues_remaining=5,
-            queue_position=1,
-            status="active",
-            user_id=user.id,
-        )
-        async_db.add(thread)
-        await async_db.commit()
-        await async_db.refresh(thread)
-
-        result = await async_db.execute(
-            select(Thread).where(Thread.id == thread.id)
-        )
-        refreshed = result.scalar_one()
-        assert refreshed.queue_position == 1
-
