@@ -1115,14 +1115,210 @@ pub async fn series_import_status(
 }
 
 // ---------------------------------------------------------------------------
-// OpenAPI docs (stubs)
+// OpenAPI documentation
+//
+// Every browser-called operation in this family keeps its exact Python
+// method/path in the generated native contract so the TypeScript client
+// survives the shadowed Python handlers' retirement. The declarations mirror
+// the retired FastAPI parameters, bodies and status codes.
 // ---------------------------------------------------------------------------
 
-#[utoipa::path(get, path = "/api/v1/comicvine/search/series", tag = "comicvine-resolution", responses((status = 200, description = "ok", body = ComicVineSeriesSearchResponse)), security(("HTTPBearer" = [])))]
+#[utoipa::path(
+    get,
+    path = "/api/v1/comicvine/search/series",
+    tag = "comicvine-resolution",
+    params(
+        ("q" = String, Query, description = "Series search query"),
+        ("limit" = Option<i32>, Query, description = "Maximum results"),
+        ("offset" = Option<i32>, Query, description = "Zero-based result offset")
+    ),
+    responses(
+        (status = 200, description = "Successful Response", body = ComicVineSeriesSearchResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
 #[allow(dead_code)]
 pub fn search_comicvine_series_documentation() {}
 
-#[utoipa::path(get, path = "/api/v1/comicvine/series/{comicvine_volume_id}/import-status", tag = "comicvine-resolution", responses((status = 200, description = "ok", body = SeriesImportStatusResponse)), security(("HTTPBearer" = [])))]
+#[utoipa::path(
+    get,
+    path = "/api/v1/comicvine/resolve",
+    tag = "comicvine-resolution",
+    params(("input" = String, Query, description = "Search text or a pasted ComicVine issue/volume URL")),
+    responses(
+        (status = 200, description = "Successful Response", body = ComicVineResolveResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn resolve_comicvine_input_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/comicvine/series/{comicvine_volume_id}/issues",
+    tag = "comicvine-resolution",
+    params(
+        ("comicvine_volume_id" = i32, Path, description = "ComicVine volume ID"),
+        ("series_name" = Option<String>, Query, description = "Optional pre-fetched series name")
+    ),
+    responses(
+        (status = 200, description = "Successful Response", body = ComicVineSeriesIssuesResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_comicvine_series_issues_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/comicvine/issues/{issue_id}/identity",
+    tag = "comicvine-resolution",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    responses(
+        (status = 200, description = "Successful Response", body = IssueIdentityResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_issue_identity_documentation() {}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/comicvine/issues/{issue_id}/identity",
+    tag = "comicvine-resolution",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    responses(
+        (status = 200, description = "Successful Response", body = IssueIdentityResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn remove_identity_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/comicvine/issues/{issue_id}/identity:confirm",
+    tag = "comicvine-resolution",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = ConfirmIdentityRequest,
+    responses(
+        (status = 200, description = "Successful Response", body = IssueIdentityResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn confirm_identity_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/comicvine/issues/{issue_id}/identity:replace",
+    tag = "comicvine-resolution",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = ReplaceIdentityRequest,
+    responses(
+        (status = 200, description = "Successful Response", body = IssueIdentityResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn replace_identity_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/comicvine/issues/{issue_id}/metadata:refresh",
+    tag = "comicvine-resolution",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    responses(
+        (status = 200, description = "Successful Response", body = MetadataRefreshResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn refresh_metadata_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/comicvine/issues/{issue_id}/metadata:correct",
+    tag = "comicvine-resolution",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = MetadataCorrectionRequest,
+    responses(
+        (status = 200, description = "Successful Response", body = MetadataCorrectionsResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn apply_correction_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/comicvine/issues/{issue_id}/metadata:corrections",
+    tag = "comicvine-resolution",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    responses(
+        (status = 200, description = "Successful Response", body = MetadataCorrectionsResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_corrections_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/comicvine/issues/{issue_id}/metadata:revert",
+    tag = "comicvine-resolution",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = MetadataCorrectionRevertRequest,
+    responses(
+        (status = 200, description = "Successful Response", body = MetadataCorrectionsResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn revert_correction_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+    params(("comicvine_volume_id" = i32, Path, description = "ComicVine volume ID")),
+    tag = "comicvine-resolution",
+    responses(
+        (status = 200, description = "Owned import status", body = SeriesImportStatusResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
 #[allow(dead_code)]
 pub fn series_import_status_documentation() {}
 
