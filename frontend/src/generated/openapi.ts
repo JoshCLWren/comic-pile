@@ -6491,31 +6491,15 @@ export interface components {
             /** Refreshed */
             refreshed: boolean;
         };
-        /**
-         * MigrateToIssuesRequest
-         * @description Schema for migrating thread to issue tracking.
-         */
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
         MigrateToIssuesRequest: {
-            /**
-             * Last Issue Read
-             * @description The issue number user just finished reading (e.g., 15)
-             */
+            /** Format: int32 */
             last_issue_read: number;
-            /**
-             * Total Issues
-             * @description Total number of issues in the series (e.g., 25)
-             */
+            /** Format: int32 */
             total_issues: number;
         };
-        /**
-         * MigrateToIssuesSimpleRequest
-         * @description Schema for simplified migration (infers total_issues from current state).
-         */
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
         MigrateToIssuesSimpleRequest: {
-            /**
-             * Issue Number
-             * @description The issue number user just read (e.g., '5', 'Annual 1')
-             */
             issue_number: string;
         };
         /** @description Minimal release data for reconciliation endpoints (no body). */
@@ -6576,17 +6560,6 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
-        NativeMigrateToIssuesRequest: {
-            /** Format: int32 */
-            last_issue_read: number;
-            /** Format: int32 */
-            total_issues: number;
-        };
-        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
-        NativeMigrateToIssuesSimpleRequest: {
-            issue_number: string;
-        };
         /** @description Confirmed provider series metadata for one queue row. */
         NativeQueueSeriesMetadata: {
             publisher?: string | null;
@@ -6628,30 +6601,6 @@ export interface components {
         NativeReadingOrderProjectionRequest: {
             /** Format: int32 */
             reading_order_id: number;
-        };
-        /** @description Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`. */
-        NativeSetCurrentIssueRequest: {
-            issue_number: string;
-        };
-        /** @description Python `SetCurrentIssueResponse`. */
-        NativeSetCurrentIssueResponse: {
-            format: string;
-            /** Format: int32 */
-            issue_id?: number | null;
-            issue_number?: string | null;
-            /** Format: int32 */
-            issues_remaining: number;
-            /** Format: int32 */
-            next_issue_id?: number | null;
-            next_issue_number?: string | null;
-            /** Format: int32 */
-            queue_position: number;
-            reading_progress?: string | null;
-            /** Format: int32 */
-            thread_id: number;
-            title: string;
-            /** Format: int32 */
-            total_issues?: number | null;
         };
         /** @description Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`). */
         NativeThreadIssueCreatorsResponse: {
@@ -8580,43 +8529,28 @@ export interface components {
             id: number;
             title: string;
         };
-        /**
-         * SetCurrentIssueRequest
-         * @description Schema for atomically correcting the current issue in an active thread.
-         */
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`. */
         SetCurrentIssueRequest: {
-            /**
-             * Issue Number
-             * @description Target issue number to set as current
-             */
             issue_number: string;
         };
-        /**
-         * SetCurrentIssueResponse
-         * @description Response after atomically correcting the current issue.
-         */
+        /** @description Python `SetCurrentIssueResponse`. */
         SetCurrentIssueResponse: {
-            /** Format */
             format: string;
-            /** Issue Id */
+            /** Format: int32 */
             issue_id?: number | null;
-            /** Issue Number */
             issue_number?: string | null;
-            /** Issues Remaining */
+            /** Format: int32 */
             issues_remaining: number;
-            /** Next Issue Id */
+            /** Format: int32 */
             next_issue_id?: number | null;
-            /** Next Issue Number */
             next_issue_number?: string | null;
-            /** Queue Position */
+            /** Format: int32 */
             queue_position: number;
-            /** Reading Progress */
             reading_progress?: string | null;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
-            /** Title */
             title: string;
-            /** Total Issues */
+            /** Format: int32 */
             total_issues?: number | null;
         };
         SourceSyncFailure: {
@@ -15264,7 +15198,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeMigrateToIssuesRequest"];
+                "application/json": components["schemas"]["MigrateToIssuesRequest"];
             };
         };
         responses: {
@@ -15326,7 +15260,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeMigrateToIssuesSimpleRequest"];
+                "application/json": components["schemas"]["MigrateToIssuesSimpleRequest"];
             };
         };
         responses: {
@@ -15388,7 +15322,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeSetCurrentIssueRequest"];
+                "application/json": components["schemas"]["SetCurrentIssueRequest"];
             };
         };
         responses: {
@@ -15398,7 +15332,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSetCurrentIssueResponse"];
+                    "application/json": components["schemas"]["SetCurrentIssueResponse"];
                 };
             };
             /** @description Thread inactive, untracked or issue unavailable */
