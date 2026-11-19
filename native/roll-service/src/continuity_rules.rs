@@ -23,6 +23,7 @@ use crate::{
     auth::AuthenticatedUser, db, issue_service::refresh_blocked_threads, ApiError, AppState,
 };
 use axum::{
+    body::Bytes,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -624,13 +625,22 @@ pub async fn get(
     Ok(Json(response))
 }
 
+/// Parse a request body the way FastAPI does for a Pydantic model: any
+/// malformed JSON, mistyped field or missing required field is the house
+/// `{"detail":"Validation failed"}` 422, never axum's plain-text `Json`
+/// rejection, and no `Content-Type` header is required.
+fn parse_request(body: &[u8]) -> Result<ContinuityRuleRequest, ApiError> {
+    serde_json::from_slice(body).map_err(|_| validation_failed())
+}
+
 pub async fn create(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(mut request): Json<ContinuityRuleRequest>,
+    body: Bytes,
 ) -> Result<(StatusCode, Json<ContinuityRuleResponse>), ApiError> {
     // Pydantic validates field constraints (including `max_length`) before the
     // `model_validator` deduplicates, so validation must precede normalization.
+    let mut request = parse_request(&body)?;
     validate_request(&request)?;
     normalize_request(&mut request);
     let mut conn = db::checkout(&state).await?;
@@ -706,9 +716,10 @@ pub async fn update(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Path(rule_id): Path<i32>,
-    Json(mut request): Json<ContinuityRuleRequest>,
+    body: Bytes,
 ) -> Result<Json<ContinuityRuleResponse>, ApiError> {
     // Field constraints first, then the pydantic `model_validator` dedupe.
+    let mut request = parse_request(&body)?;
     validate_request(&request)?;
     normalize_request(&mut request);
     let mut conn = db::checkout(&state).await?;
