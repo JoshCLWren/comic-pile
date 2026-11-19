@@ -58,7 +58,7 @@ async fn status_and_body(
 async fn protected_native_mutations_require_a_matching_double_submit_pair() {
     // Cover the live mutation paths the SPA actually calls, not only one alias.
     for path in [
-        "/api/v1/roll/dismiss-pending",
+        "/api/v2/roll/dismiss-pending",
         "/api/v2/reading-sessions",
         "/api/v2/issues/cards",
         "/api/v2/queue-orders",
@@ -90,7 +90,7 @@ async fn protected_native_mutations_require_a_matching_double_submit_pair() {
     let (status, _) = status_and_body(
         Some("token-value"),
         Some("token-value"),
-        "/api/v1/roll/dismiss-pending",
+        "/api/v2/roll/dismiss-pending",
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
