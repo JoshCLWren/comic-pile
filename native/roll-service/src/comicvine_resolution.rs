@@ -152,6 +152,7 @@ pub struct MetadataCorrectionRevertRequest {
     pub correction_id: i32,
 }
 
+/// Wire parity with Python `SeriesImportStatusResponse`.
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SeriesImportStatusResponse {
     pub comicvine_volume_id: i32,
@@ -1442,6 +1443,7 @@ pub fn revert_correction_documentation() {}
 #[utoipa::path(
     get,
     path = "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+    summary = "OpenAPI documentation for the migrated same-path operation.",
     params(("comicvine_volume_id" = i32, Path, description = "ComicVine volume ID")),
     tag = "comicvine-resolution",
     responses(
