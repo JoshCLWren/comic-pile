@@ -64,14 +64,6 @@ pub struct ContinuityRuleResponse {
     pub updated_at: String,
 }
 
-fn bad_request(detail: impl Into<String>) -> ApiError {
-    ApiError::with_status(StatusCode::BAD_REQUEST, detail.into())
-}
-
-fn conflict(detail: impl Into<String>) -> ApiError {
-    ApiError::with_status(StatusCode::CONFLICT, detail.into())
-}
-
 fn not_found(detail: impl Into<String>) -> ApiError {
     ApiError::with_status(StatusCode::NOT_FOUND, detail.into())
 }
@@ -818,14 +810,15 @@ mod tests {
     #[tokio::test]
     async fn create_writes_continuity_rule_and_dependency_to_disposable_postgres() {
         let (state, user, _guard) = database_fixture().await;
+        let request = ContinuityRuleRequest {
+            source_id: 3001,
+            target_id: 3002,
+            ..request("item_read")
+        };
         let (status, Json(response)) = create(
             State(state),
             user,
-            Json(ContinuityRuleRequest {
-                source_id: 3001,
-                target_id: 3002,
-                ..request("item_read")
-            }),
+            Bytes::from(serde_json::to_vec(&request).unwrap()),
         )
         .await
         .expect("create continuity rule");
@@ -839,28 +832,30 @@ mod tests {
     #[tokio::test]
     async fn update_writes_continuity_rule_to_disposable_postgres() {
         let (state, user, _guard) = database_fixture().await;
+        let create_request = ContinuityRuleRequest {
+            source_id: 3001,
+            target_id: 3002,
+            ..request("item_read")
+        };
         let (_, Json(created)) = create(
             State(state.clone()),
             user,
-            Json(ContinuityRuleRequest {
-                source_id: 3001,
-                target_id: 3002,
-                ..request("item_read")
-            }),
+            Bytes::from(serde_json::to_vec(&create_request).unwrap()),
         )
         .await
         .expect("create continuity rule");
 
+        let update_request = ContinuityRuleRequest {
+            source_id: 3002,
+            target_id: 3001,
+            note: Some("updated".to_string()),
+            ..request("item_read")
+        };
         let Json(updated) = update(
             State(state),
             user,
-            Path(created.id),
-            Json(ContinuityRuleRequest {
-                source_id: 3002,
-                target_id: 3001,
-                note: Some("updated".to_string()),
-                ..request("item_read")
-            }),
+            Path(created.id.to_string()),
+            Bytes::from(serde_json::to_vec(&update_request).unwrap()),
         )
         .await
         .expect("update continuity rule");
@@ -874,19 +869,20 @@ mod tests {
     #[tokio::test]
     async fn delete_removes_continuity_rule_and_dependency_from_disposable_postgres() {
         let (state, user, _guard) = database_fixture().await;
+        let create_request = ContinuityRuleRequest {
+            source_id: 3001,
+            target_id: 3002,
+            ..request("item_read")
+        };
         let (_, Json(created)) = create(
             State(state.clone()),
             user,
-            Json(ContinuityRuleRequest {
-                source_id: 3001,
-                target_id: 3002,
-                ..request("item_read")
-            }),
+            Bytes::from(serde_json::to_vec(&create_request).unwrap()),
         )
         .await
         .expect("create continuity rule");
 
-        let response = delete(State(state.clone()), user, Path(created.id))
+        let response = delete(State(state.clone()), user, Path(created.id.to_string()))
             .await
             .expect("delete continuity rule");
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
