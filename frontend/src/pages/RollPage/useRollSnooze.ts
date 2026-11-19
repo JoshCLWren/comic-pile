@@ -1,6 +1,7 @@
 import { getApiErrorDetail } from '../../utils/apiError'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { RollResponse } from '../../types'
+import type { RollUnsnoozeResponse } from '../../services/apiTypes'
 import type { ThreadMetadata } from './types'
 import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
@@ -14,7 +15,7 @@ interface UseRollSnoozeParams {
     retryRefresh?: () => Promise<boolean>
   }
   rerollMutation?: { mutate: () => Promise<RollResponse> }
-  unsnoozeMutation: { mutate: (threadId: number) => Promise<RollResponse> }
+  unsnoozeMutation: { mutate: (threadId: number) => Promise<RollUnsnoozeResponse> }
   enterRatingView?: (
     threadId: number | null,
     result?: number | null,
@@ -58,10 +59,9 @@ export function useRollSnooze({
   async function handleUnsnooze(threadId: number) {
     try {
       // The mutation removes the snooze server-side, clears the browser
-      // cookie and refreshes die state; then the bootstrap is re-read.
+      // cookie, and its onSuccess refreshes bootstrap and die state.
       await unsnoozeMutation.mutate(threadId)
       setErrorMessage('')
-      await refetchBootstrap()
     } catch (error) {
       console.error('Unsnooze failed:', error)
       setErrorMessage(getApiErrorDetail(error))

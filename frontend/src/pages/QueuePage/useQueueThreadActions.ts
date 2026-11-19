@@ -11,6 +11,8 @@ import {
 } from '../../hooks/useQueue'
 import { useDeleteThread, useExcludeThread } from '../../hooks/useThread'
 import { rollApi } from '../../services/api-roll'
+import { useUnsnooze } from '../../hooks/useRoll'
+import type { RollUnsnoozeResponse } from '../../services/apiTypes'
 
 import { useToast } from '../../contexts/useToast'
 import {
@@ -58,7 +60,7 @@ export interface UseQueueThreadActionsDeps {
   moveToPositionHook?: typeof useMoveToPosition
   shuffleHook?: typeof useShuffleQueue
   reroll?: typeof rollApi.reroll
-  unsnooze?: typeof rollApi.unsnooze
+  unsnooze?: (threadId: number) => Promise<RollUnsnoozeResponse>
   toastHook?: typeof useToast
   setPending?: typeof threadsApi.setPending
 }
@@ -118,10 +120,14 @@ export function useQueueThreadActions(
     moveToPositionHook = useMoveToPosition,
     shuffleHook = useShuffleQueue,
     reroll = rollApi.reroll,
-    unsnooze = rollApi.unsnooze,
+    unsnooze: unsnoozeOverride,
     toastHook = useToast,
     setPending = threadsApi.setPending,
   } = deps
+  // Unsnooze is a write: it goes through the shared mutation, which owns the
+  // roll cache effects in onSuccess.
+  const unsnoozeMutation = useUnsnooze()
+  const unsnooze = unsnoozeOverride ?? unsnoozeMutation.mutate
 
   const { showToast } = toastHook()
   const deleteMutation = deleteHook()
@@ -337,8 +343,13 @@ export function useQueueThreadActions(
           // Queue unsnooze calls the server endpoint to restore the previous
           // pending roll and revert the die. The endpoint also clears the
           // browser snooze cookie.
-          await unsnooze(thread.id)
-          showToast(`Restored "${thread.title}" as the pending roll.`, 'success')
+          const result = await unsnooze(thread.id)
+          showToast(
+            result.restored
+              ? `Restored "${thread.title}" as the pending roll.`
+              : `Unsnoozed "${thread.title}". Your current roll was left as is.`,
+            'success',
+          )
         } else {
           // The canonical Rust offer atomically records the pending reroll
           // snooze, advances the die, and selects the replacement. The legacy

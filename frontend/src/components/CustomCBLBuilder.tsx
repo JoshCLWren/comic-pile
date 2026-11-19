@@ -17,22 +17,14 @@ import {
   type ReadingListPredecessorChange,
 } from '../services/api-custom-cbl'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
-import {
-  cblSourcesApi,
-  type CBLSourceListDiscoveryItem,
-} from '../services/api-cbl-sources'
+import { cblSourcesApi, type CBLSourceListDiscoveryItem } from '../services/api-cbl-sources'
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
 import ReadingListSeriesSkipControls from './ReadingListSeriesSkipControls'
 import { buildReplacementModel } from '../utils/readingListReplacementModel'
 import { getReadingListProgressIndex } from '../utils/readingListProgress'
 import ConfirmDialog from './ConfirmDialog'
-import {
-  computeEntryRequirements,
-  decodeCustomCBLError,
-  describeCyclePath,
-  describePredecessorChange,
-} from '../utils/readingListAuthoring'
+import { computeEntryRequirements, decodeCustomCBLError, describeCyclePath, describePredecessorChange } from '../utils/readingListAuthoring'
 
 interface CustomCBLBuilderProps {
   planId?: number

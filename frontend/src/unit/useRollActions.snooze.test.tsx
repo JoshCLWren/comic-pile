@@ -6,7 +6,7 @@
  * `console.error` after the sheet had already closed. Either way the reader
  * saw the click "succeed" and nothing was recorded.
  */
-import type { RollResponse } from '../types'
+import type { RollUnsnoozeResponse } from '../services/apiTypes'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NavigateFunction } from 'react-router-dom'
@@ -63,7 +63,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
   const onSnoozeRefreshFailed = vi.fn()
   const refetchBootstrap = vi.fn(() => Promise.resolve(bootstrap))
   // SAFETY: the hook discards the unsnooze response body; an empty stub suffices
-  const unsnoozeMutate = vi.fn((_threadId: number) => Promise.resolve({} as RollResponse))
+  const unsnoozeMutate = vi.fn((_threadId: number) => Promise.resolve({} as RollUnsnoozeResponse))
 
   const { result } = renderHook(() => {
     const state = useRollPageState()
@@ -182,7 +182,8 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
     // Roll unsnooze calls the native v2 endpoint (restores the pending roll and
     // reverts the die, #4589) and refreshes, with no legacy v1 unsnooze call.
     expect(unsnoozeMutate).toHaveBeenCalledWith(8)
-    expect(refetchBootstrap).toHaveBeenCalled()
+    // The unsnooze mutation owns the bootstrap refresh in onSuccess; no second refetch.
+    expect(refetchBootstrap).not.toHaveBeenCalled()
     expect(snoozeMutate).not.toHaveBeenCalled()
   })
 

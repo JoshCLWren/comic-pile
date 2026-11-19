@@ -24,7 +24,7 @@
 
 **Expected:** Excluded series do not roll while excluded, without being deleted or silently re-prioritized; they return when eligible. Temporary snoozes are browser-scoped reroll exclusions that expire at local midnight or on Reset Dice ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405); UPDATE 2026-11-18). Durable exclusion is Remove from Queue, which is non-destructive and restorable from the excluded section.
 
-**Unsnooze (UPDATE 2026-11-18, [#4589](https://github.com/JoshCLWren/comic-pile/issues/4589)):** Queue Unsnooze calls the server: it removes that snooze and, when it was the latest snooze with no later die-changing action, restores the series as the pending roll and reverts the die; otherwise it only removes the snooze. See MQA-ROLL-014.
+**Unsnooze (UPDATE 2026-11-18, [#4589](https://github.com/JoshCLWren/comic-pile/issues/4589)):** Queue Unsnooze calls the server: it removes that snooze and, when it was the latest snooze with no later action, restores the series as the pending roll and reverts the die; otherwise it only removes the snooze. See MQA-ROLL-014.
 
 ## MQA-QUEUE-004: Blocked differs from out-of-pool
 

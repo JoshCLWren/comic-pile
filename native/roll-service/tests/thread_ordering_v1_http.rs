@@ -1195,22 +1195,39 @@ async fn roll_unsnooze_restores_pending_roll_and_reverts_die() {
     assert_eq!(unsnoozes, 1);
 }
 
-/// Create `count` rollable threads and return their ids.
+/// Create `count` rollable threads and return their ids, using set-based
+/// statements (no per-series round trips).
 async fn rollable_threads(conn: &Conn, user_id: i32, count: usize) -> Vec<i32> {
-    let mut ids = Vec::new();
-    for index in 0..count {
-        let id = thread(conn, user_id, &format!("Rollable {index}")).await;
-        let issue_id = issue(conn, id, "1", 1, "unread").await;
-        frontier(conn, id, issue_id).await;
-        conn.execute(
-            "UPDATE threads SET issues_remaining = 1, queue_position = $2 WHERE id = $1",
-            &[&id, &((index + 1) as i32)],
+    let count = count as i32;
+    let ids: Vec<i32> = conn
+        .query(
+            "INSERT INTO threads (title, format, issues_remaining, queue_position, status, user_id) \
+             SELECT 'Rollable ' || n, 'Comic', 1, n, 'active', $1 \
+             FROM generate_series(1, $2::int) AS n RETURNING id",
+            &[&user_id, &count],
         )
         .await
-        .unwrap();
-        ids.push(id);
-    }
-    ids
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    conn.execute(
+        "INSERT INTO issues (thread_id, issue_number, status, created_at, position) \
+         SELECT id, '1', 'unread', NOW(), 1 FROM unnest($1::int[]) AS id",
+        &[&ids],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "UPDATE threads t SET next_unread_issue_id = i.id \
+         FROM issues i WHERE i.thread_id = t.id AND t.id = ANY($1::int[])",
+        &[&ids],
+    )
+    .await
+    .unwrap();
+    let mut ordered = ids;
+    ordered.sort_unstable();
+    ordered
 }
 
 async fn offer_value(
@@ -1473,4 +1490,63 @@ async fn roll_unsnooze_runs_concurrently_with_reset_and_reroll_without_deadlock(
     if let Some(pending) = pending {
         assert!(ids.contains(&pending), "pending must be a real thread");
     }
+}
+
+#[tokio::test]
+async fn roll_unsnooze_after_a_later_manual_pick_keeps_the_picked_roll() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-unsnooze-pick").await;
+    let ids = rollable_threads(&state.pool.get().await.unwrap(), user_id, 4).await;
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "INSERT INTO sessions (user_id, started_at, start_die, pending_thread_id) VALUES ($1, NOW(), 6, $2)",
+            &[&user_id, &ids[0]],
+        )
+        .await
+        .unwrap();
+    let offer = offer_value(&state, &token, &csrf, "unsnooze-pick-key-001", Some(ids[0])).await;
+    let snoozed = offer["snoozed_thread_id"].as_i64().unwrap() as i32;
+    let picked = ids
+        .iter()
+        .copied()
+        .find(|id| *id != snoozed && *id != offer["thread_id"].as_i64().unwrap() as i32)
+        .unwrap();
+    {
+        // A manual pick records a `roll` event and moves the pending selection.
+        let conn = state.pool.get().await.unwrap();
+        conn.execute(
+            "INSERT INTO events (user_id, type, timestamp, die, thread_id) \
+             VALUES ($1, 'roll', clock_timestamp(), 8, $2)",
+            &[&user_id, &picked],
+        )
+        .await
+        .unwrap();
+        conn.execute(
+            "UPDATE sessions SET pending_thread_id = $2 WHERE user_id = $1",
+            &[&user_id, &picked],
+        )
+        .await
+        .unwrap();
+    }
+    let (_, _, die_before) = session_state(&state, user_id).await;
+
+    let (status, body) = send(
+        &state,
+        post(
+            "/api/v2/roll/unsnooze",
+            &token,
+            &csrf,
+            Some(json!({ "thread_id": snoozed })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["restored"], json!(false), "{body:?}");
+    let (pending, snoozed_ids, die) = session_state(&state, user_id).await;
+    assert_eq!(pending, Some(picked), "the manual pick must survive");
+    assert!(snoozed_ids.is_empty());
+    assert_eq!(die, die_before);
 }

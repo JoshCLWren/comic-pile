@@ -604,8 +604,8 @@ pub async fn unsnooze(
         reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
 
     // Any snooze can be removed. The pending roll and die are restored only
-    // when this is the most recent snooze AND no later die-changing action
-    // (explicit die choice, rating, undo, reset) has superseded it, so an
+    // when this is the most recent snooze AND no later event of any kind
+    // (manual pick, die choice, rating, undo, reset) has superseded it, so an
     // unsnooze never silently erases a newer reader decision.
     let position = snoozed_ids.iter().position(|id| *id == request.thread_id);
     let mut die_size = crate::dice_state::current_die(&tx, user).await?;
@@ -629,8 +629,6 @@ pub async fn unsnooze(
             .query_opt(
                 "SELECT type, thread_id, die FROM events
                  WHERE user_id = $1
-                   AND type IN ('rate', 'snooze', 'undo', 'unsnooze', 'manual_die', 'reset_dice')
-                   AND die_after IN (2, 4, 6, 8, 10, 12, 20, 30, 50, 100)
                  ORDER BY timestamp DESC, id DESC LIMIT 1",
                 &[&user.id()],
             )

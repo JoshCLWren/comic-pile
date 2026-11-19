@@ -241,7 +241,7 @@ describe('useRollSnooze', () => {
     expect(refetchBootstrap).not.toHaveBeenCalled()
   })
 
-  it('unsnoozes through the mutation, then refreshes the bootstrap', async () => {
+  it('unsnoozes through the mutation, which owns the refresh', async () => {
     const unsnooze = vi.fn().mockResolvedValue({})
     const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
     const { result } = renderHook(() => useRollSnooze({
@@ -256,7 +256,7 @@ describe('useRollSnooze', () => {
     })
 
     expect(unsnooze).toHaveBeenCalledWith(8)
-    expect(refetchBootstrap).toHaveBeenCalledTimes(1)
+    expect(refetchBootstrap).not.toHaveBeenCalled()
   })
 
   it('shows a visible error when unsnooze fails and does not refresh', async () => {
