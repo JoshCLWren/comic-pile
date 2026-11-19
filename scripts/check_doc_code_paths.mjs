@@ -29,6 +29,8 @@ import {fileURLToPath} from 'node:url';
 export const HISTORICAL_PREFIXES = ['docs/issue-plans/', 'docs/changelog'];
 export const HISTORICAL_FILE_MARKER = '<!-- docs-path-check: historical -->';
 export const IGNORE_LINE_MARKER = '<!-- docs-path-check: ignore -->';
+export const ROUTE_BURNDOWN_BEGIN = '<!-- route-burndown:begin';
+export const ROUTE_BURNDOWN_END = '<!-- route-burndown:end -->';
 export const GENERATED_PREFIXES = [
   'dogfood-output/',
   'frontend/test-results/',
@@ -137,11 +139,23 @@ export function trackedFiles(root) {
   }
 }
 
-/** Return `[lineNumber, candidatePath]` pairs from inline code outside fences. */
+/** Return `[lineNumber, candidatePath]` pairs from inline code outside fences and generated blocks. */
 export function extractPaths(text) {
   const found = [];
   let fence = null;
+  let inGeneratedBlock = false;
   splitLines(text).forEach((line, index) => {
+    if (line.includes(ROUTE_BURNDOWN_END)) {
+      inGeneratedBlock = false;
+      return;
+    }
+    if (inGeneratedBlock) {
+      return;
+    }
+    if (line.includes(ROUTE_BURNDOWN_BEGIN)) {
+      inGeneratedBlock = true;
+      return;
+    }
     const [next, isFenceLine] = advanceFence(fence, line);
     const inFence = fence !== null;
     fence = next;
@@ -178,10 +192,22 @@ export function pathResolves(root, doc, candidate, basenames, tracked) {
   return basenames.has(candidate);
 }
 
-/** Return whether `marker` appears as a real comment, not in a code span or fence. */
+/** Return whether `marker` appears as a real comment, not in a code span, fence, or generated block. */
 function hasMarker(text, marker) {
   let fence = null;
+  let inGeneratedBlock = false;
   for (const line of splitLines(text)) {
+    if (line.includes(ROUTE_BURNDOWN_END)) {
+      inGeneratedBlock = false;
+      continue;
+    }
+    if (inGeneratedBlock) {
+      continue;
+    }
+    if (line.includes(ROUTE_BURNDOWN_BEGIN)) {
+      inGeneratedBlock = true;
+      continue;
+    }
     const [next, isFenceLine] = advanceFence(fence, line);
     const inFence = fence !== null;
     fence = next;

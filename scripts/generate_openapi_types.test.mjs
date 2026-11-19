@@ -14,7 +14,13 @@ import {
   main as exportMain,
   renderOpenapiSchema,
 } from './export_openapi_schema.mjs';
-import {main as clientMain, methodName, renderNativeClient, tsType} from './generate_native_client.mjs';
+import {
+  NativeClientGenerationError,
+  main as clientMain,
+  methodName,
+  renderNativeClient,
+  tsType,
+} from './generate_native_client.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -59,6 +65,59 @@ test('method names and type rendering', () => {
   assert.throws(() => methodName('__'));
   assert.equal(tsType({type: 'array', items: {$ref: '#/components/schemas/Foo'}}), "Array<components['schemas']['Foo']>");
   assert.equal(tsType({anyOf: [{type: 'string'}, {type: 'null'}]}), 'string | null');
+});
+
+test('client generator rejects missing merged operations', () => {
+  assert.throws(
+    () => renderNativeClient(
+      {paths: {}, components: {schemas: {}}},
+      {paths: {'/api/v2/missing': {get: {operationId: 'get_missing'}}}, components: {schemas: {}}},
+    ),
+    (err) => err instanceof NativeClientGenerationError
+      && err.message.includes('missing from the merged generated schema'),
+  );
+});
+
+test('client generator rejects duplicate method names', () => {
+  const op = (id) => ({operationId: id, responses: {'204': {description: 'ok'}}});
+  assert.throws(
+    () => renderNativeClient(
+      {paths: {'/api/v2/a': {get: op('get_foo')}, '/api/v2/b': {get: op('get_foo_documentation')}}},
+      {paths: {'/api/v2/a': {get: {}}, '/api/v2/b': {get: {}}}, components: {schemas: {}}},
+    ),
+    (err) => err instanceof NativeClientGenerationError
+      && err.message.includes('duplicate generated method names')
+      && err.message.includes('getFoo'),
+  );
+});
+
+test('renaming a child schema updates and renames its parent', () => {
+  const python = {
+    Parent: {type: 'object', properties: {x: {$ref: '#/components/schemas/Child'}}},
+    Child: {type: 'string'},
+  };
+  const native = {
+    Parent: {type: 'object', properties: {x: {$ref: '#/components/schemas/Child'}}},
+    Child: {type: 'integer'},
+  };
+  const renames = nativeSchemaRenames(python, native);
+  assert.deepEqual(renames, {Child: 'NativeChild', Parent: 'NativeParent'});
+  const merged = mergeNativeRuntimeContract(
+    {paths: {}, components: {schemas: python}},
+    {
+      paths: {'/api/v2/x': {get: {responses: {'200': {content: {'application/json': {schema: {$ref: '#/components/schemas/Parent'}}}}}}}},
+      components: {schemas: native},
+    },
+  );
+  assert.deepEqual(merged.components.schemas.NativeChild, {type: 'integer'});
+  assert.deepEqual(merged.components.schemas.NativeParent, {
+    type: 'object',
+    properties: {x: {$ref: '#/components/schemas/NativeChild'}},
+  });
+  assert.equal(
+    merged.paths['/api/v2/x'].get.responses['200'].content['application/json'].schema.$ref,
+    '#/components/schemas/NativeParent',
+  );
 });
 
 test('decimals inside JSON strings are not treated as float literals', () => {
