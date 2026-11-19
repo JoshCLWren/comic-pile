@@ -244,7 +244,6 @@ use utoipa::OpenApi;
         crate::releases::PublicReleaseResponse,
         crate::releases::ReleaseListResponse,
         crate::comicvine_resolution::SeriesImportStatusResponse,
-<<<<<<< HEAD
         crate::comicvine_v2::ComicVineSeriesResult,
         crate::comicvine_v2::ComicVineSeriesSearchResponse,
         crate::comicvine_v2::ComicVineResolvedIssue,
@@ -266,7 +265,6 @@ use utoipa::OpenApi;
         crate::comicvine_v2::ImportSeriesRequest,
         crate::comicvine_v2::ImportSeriesIssueResult,
         crate::comicvine_v2::ImportSeriesResponse,
-=======
         crate::creators_v2::CreatorSummaryCoverage,
         crate::creators_v2::CreatorSummaryItem,
         crate::creators_v2::CreatorSummariesResponse,
@@ -303,7 +301,6 @@ use utoipa::OpenApi;
         crate::creators_v2::CreatorMetricIssue,
         crate::creators_v2::CreatorMetricPagination,
         crate::creators_v2::CreatorMetricDrilldown,
->>>>>>> origin/main
     )),
     modifiers(&NativeSecurityAddon)
 )]
