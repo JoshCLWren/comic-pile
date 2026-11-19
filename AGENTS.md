@@ -58,7 +58,7 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 59 (59 native-rust + 0 python-fastapi).
+- Live v2 operations: 64 (64 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
 - Full Python-handler surface: 40 operations (v1 40 + unversioned 0); v1 active 15 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
@@ -80,6 +80,7 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4849 (1): `GET /api/v2/releases -> native-rust`
 - #4850 (4): `POST /api/v2/roll/dismiss-pending -> native-rust`; `POST /api/v2/roll/override -> native-rust`; `POST /api/v2/roll/switch-prerequisite -> native-rust`; `POST /api/v2/roll/unsnooze -> native-rust`
 - #4855 (1): `GET /api/v2/demo-roll -> native-rust`
+- #5435 (5): `POST /api/v2/queue-exclusion-groups/{group_id}/restore -> native-rust`; `POST /api/v2/queue-exclusions -> native-rust`; `POST /api/v2/queue-exclusions/restore -> native-rust`; `POST /api/v2/queue-exclusions/status:check -> native-rust`; `POST /api/v2/reading-lists/memberships:check -> native-rust`
 <!-- route-burndown:end -->
 
 ### Route generation ownership (bot-owned)

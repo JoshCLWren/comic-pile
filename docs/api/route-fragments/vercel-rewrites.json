@@ -17,6 +17,7 @@
     "issues",
     "metrics",
     "preferences",
+    "queue-exclusions",
     "reading-mode",
     "reading-order-groups",
     "reading-orders",
