@@ -157,17 +157,6 @@ fn authed(method: &str, path: &str, token: &str, csrf: &str, body: Option<Value>
 
 type Conn = deadpool_postgres::Object;
 
-async fn issue(conn: &Conn, thread_id: i32, number: &str, position: i32, status: &str) -> i32 {
-    conn.query_one(
-        "INSERT INTO issues (thread_id, issue_number, status, created_at, position) \
-         VALUES ($1, $2, $3, NOW(), $4) RETURNING id",
-        &[&thread_id, &number, &status, &position],
-    )
-    .await
-    .unwrap()
-    .get(0)
-}
-
 /// Seed several issues in one set-based insert (no SQL inside loops),
 /// returning their ids ordered by position.
 async fn seed_issues(conn: &Conn, thread_id: i32, numbers: &[&str], status: &str) -> Vec<i32> {
@@ -200,10 +189,6 @@ async fn frontier(conn: &Conn, thread_id: i32, issue_id: i32) {
 
 fn post(path: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Body> {
     authed("POST", path, token, csrf, body)
-}
-
-fn get(path: &str, token: &str, csrf: &str) -> Request<Body> {
-    authed("GET", path, token, csrf, None)
 }
 
 async fn plain_thread(
