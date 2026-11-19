@@ -106,8 +106,8 @@ const INSERT_MEMBERSHIP_SQL: &str = "INSERT INTO dependency_group_memberships \
      VALUES ($1, $2, $3, $4) RETURNING id, group_id, thread_id, issue_id, sequence_order";
 const INSERT_ISSUE_MEMBERSHIPS_SQL: &str = "INSERT INTO dependency_group_memberships (group_id, issue_id) \
      SELECT $1, issue_id FROM unnest($2::int[]) AS issue_ids(issue_id) ON CONFLICT DO NOTHING RETURNING issue_id";
-const INSERT_GROUP_SQL: &str = "INSERT INTO dependency_groups (user_id, name) \
-     VALUES ($1, $2) RETURNING id, name, created_at";
+const INSERT_GROUP_SQL: &str = "INSERT INTO dependency_groups (user_id, name, created_at) \
+     VALUES ($1, $2, now()) RETURNING id, name, created_at";
 
 /// Wire request mirroring the Python `DependencyGroupCreate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
