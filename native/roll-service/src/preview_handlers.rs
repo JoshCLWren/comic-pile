@@ -184,7 +184,7 @@ pub struct ReadingOrderProjectionPreview {
     pub reading_order_name: String,
     pub entries: Vec<ReadingOrderProjectionEntry>,
     pub conflicts: Vec<ReadingOrderProjectionConflict>,
-    #[serde(rename = "total_positions", default = 0)]
+    #[serde(rename = "total_positions", default)]
     pub total_positions: i32,
     #[serde(rename = "dropped_node_ids", default)]
     pub dropped_node_ids: Vec<String>,
@@ -256,11 +256,11 @@ pub struct ReadingGraphSeriesNode {
     pub series_name: String,
     pub year: Option<i32>,
     pub state: String,
-    #[serde(rename = "unread_count", default = 0)]
+    #[serde(rename = "unread_count", default)]
     pub unread_count: i32,
-    #[serde(rename = "rollable_count", default = 0)]
+    #[serde(rename = "rollable_count", default)]
     pub rollable_count: i32,
-    #[serde(rename = "waiting_count", default = 0)]
+    #[serde(rename = "waiting_count", default)]
     pub waiting_count: i32,
     #[serde(rename = "waits_for_issue_ids", default, skip_serializing_if = "Vec::is_empty")]
     pub waits_for_issue_ids: Vec<i32>,
@@ -440,7 +440,7 @@ pub async fn preview_series_mapping(
             ORDER BY m.id NULLS LAST
             LIMIT 1
             "#,
-            &[&auth.id() as i32, &origin_issue_id],
+            &[&auth.id(), &origin_issue_id],
         )
         .await
         .map_err(db::query_error)?;
@@ -652,7 +652,7 @@ pub async fn preview_series_mapping(
         "insufficient_non_thread_evidence"
     };
 
-    build_preview_response(
+    Ok(Json(build_preview_response(
         origin_issue_id,
         &payload.provider,
         &payload.provider_series_external_id,
@@ -662,7 +662,7 @@ pub async fn preview_series_mapping(
         &state,
         auth.id(),
         issued_at,
-    )
+    )))
 }
 
 fn build_preview_response(
@@ -675,7 +675,7 @@ fn build_preview_response(
     state: &Arc<AppState>,
     user_id: i32,
     issued_at: f64,
-) -> Json<SeriesMappingPreviewResponse> {
+) -> SeriesMappingPreviewResponse {
     // Classify rows and compute counts
     let (classified_rows, mut counts) = classify_rows(&rows, provider, scope_mode);
 
@@ -799,7 +799,7 @@ fn build_preview_response(
         (response_rows, counts_out, scope_key, provider_series_out, scope, state_digest)
     };
 
-    Json(SeriesMappingPreviewResponse {
+    SeriesMappingPreviewResponse {
         preview_token,
         scope: final_scope,
         provider_series: final_series,
@@ -807,7 +807,7 @@ fn build_preview_response(
         rows: final_rows,
         issued_at,
         expires_at: if scope_status == "available" { Some(expires_at) } else { None },
-    })
+    }
 }
 
 fn build_sibling_row(
