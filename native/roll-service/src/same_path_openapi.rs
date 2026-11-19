@@ -38,6 +38,20 @@ use utoipa::OpenApi;
     crate::continuity_plans_project_preview::documentation,
     crate::issue_identity_adoption_preview::documentation,
     crate::issue_identity_cbl_reading_graph_preview::documentation,
+    // The ComicVine resolution family keeps its browser-called /api/v1 URLs and
+    // publishes its wire contract here so the generated TypeScript client does
+    // not lose those methods when the shadowed Python handlers retire (#4835).
+    crate::comicvine_resolution::search_comicvine_series_documentation,
+    crate::comicvine_resolution::resolve_comicvine_input_documentation,
+    crate::comicvine_resolution::get_comicvine_series_issues_documentation,
+    crate::comicvine_resolution::get_issue_identity_documentation,
+    crate::comicvine_resolution::remove_identity_documentation,
+    crate::comicvine_resolution::confirm_identity_documentation,
+    crate::comicvine_resolution::replace_identity_documentation,
+    crate::comicvine_resolution::refresh_metadata_documentation,
+    crate::comicvine_resolution::apply_correction_documentation,
+    crate::comicvine_resolution::list_corrections_documentation,
+    crate::comicvine_resolution::revert_correction_documentation,
 ))]
 struct SamePathApi;
 
