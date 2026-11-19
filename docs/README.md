@@ -55,7 +55,7 @@ The inventory generator remains available for audits through the Documentation w
 
 ## Documentation maintenance
 
-`scripts/check_doc_code_paths.py` fails the required CI Summary when current docs cite a code path in backticks that no longer exists (offline, no network). Mark intentionally historical material with `<!-- docs-path-check: ignore -->` on the line or `<!-- docs-path-check: historical -->` in the file; `docs/issue-plans/` and changelogs are exempt. `scripts/check_markdown_docs.py` is the repository-side guard for local Markdown links and undocumented root-level Markdown sprawl. `scripts/generate_markdown_inventory.py` provides the exhaustive file-by-file audit when needed, while CI keeps its output artifact-only so documentation validation cannot create a repository-wide coordination bottleneck.
+`node scripts/check_doc_code_paths.mjs` fails the required CI Summary when current docs cite a code path in backticks that no longer exists (offline, no network). Mark intentionally historical material with `<!-- docs-path-check: ignore -->` on the line or `<!-- docs-path-check: historical -->` in the file; `docs/issue-plans/` and changelogs are exempt. `scripts/check_markdown_docs.py` is the repository-side guard for local Markdown links and undocumented root-level Markdown sprawl. `scripts/generate_markdown_inventory.py` provides the exhaustive file-by-file audit when needed, while CI keeps its output artifact-only so documentation validation cannot create a repository-wide coordination bottleneck.
 
 Do not commit `docs/MARKDOWN_INVENTORY.md`; generate the inventory locally or download the Documentation workflow artifact when an audit requires it. <!-- docs-path-check: ignore -->
 

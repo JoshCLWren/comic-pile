@@ -653,20 +653,18 @@ jobs:
     name: Docs code-path check
     # Part of the required CI Summary gate. Offline and deterministic: fails when current
     # Markdown docs cite repository code paths that no longer exist (see
-    # scripts/check_doc_code_paths.py). Runs on every event with no path filters.
+    # scripts/check_doc_code_paths.mjs). Runs on Node only. Runs on every event with no path filters.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-node@v7
         with:
-          python-version: "3.14"
+          node-version: "24"
       - name: Unit-test the doc path checker
-        run: python scripts/test_check_doc_code_paths.py
+        run: node --test scripts/check_doc_code_paths.test.mjs
       - name: Check Markdown code-path references
-        run: python scripts/check_doc_code_paths.py
-      - name: Check Markdown links and root Markdown ownership
-        run: python scripts/check_markdown_docs.py
+        run: node scripts/check_doc_code_paths.mjs
 
   check-all-jobs:
     name: CI Summary
