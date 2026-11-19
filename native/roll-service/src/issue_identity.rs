@@ -3391,69 +3391,40 @@ fn title_number_fallback(
         ));
     }
 
-    let cbl_series_is_comicvine = series_provider
-        .map(|p| p.eq_ignore_ascii_case("comicvine"))
-        .unwrap_or(false);
-    if cbl_series_is_comicvine {
-        if let Some(series_id) = series_external_id.map(str::trim).filter(|s| !s.is_empty()) {
-            let thread_ids: Vec<i32> = matches.iter().map(|m| m.3).collect();
-            let series_rows = tx
-                .run_query(
-                    r#"
-                SELECT tesm.thread_id, ei.external_id
-                FROM thread_external_series_mappings tesm
-                JOIN external_identities ei ON ei.id = tesm.external_identity_id
-                WHERE tesm.thread_id = ANY($1::int[])
-                  AND tesm.status = 'confirmed'
-                  AND ei.provider = 'comicvine'
-                  AND ei.entity_type = 'series'
-                "#,
-                    &[&thread_ids],
-                )
-                .await
-                .map_err(|e| tx_db_error(e, ""))?;
-            let mut by_thread: std::collections::HashMap<i32, std::collections::HashSet<String>> =
-                std::collections::HashMap::new();
-            for row in series_rows {
-                by_thread
-                    .entry(row.get(0))
-                    .or_default()
-                    .insert(row.get::<_, String>(1));
+    // Python applies every nonempty series_external_id, regardless of the
+    // source identity's provider label. The evidence compared against it is
+    // always the candidate thread's confirmed ComicVine series identities.
+    if let Some(series_id) = series_external_id.map(str::trim).filter(|s| !s.is_empty()) {
+        let mut verified = Vec::new();
+        let mut unverifiable = Vec::new();
+        for candidate in &matches {
+            let confirmed = fallback_index.confirmed_series.get(&candidate.3);
+            match confirmed {
+                None => unverifiable.push(candidate.clone()),
+                Some(ids) if ids.contains(series_id) => verified.push(candidate.clone()),
+                Some(_) => {}
             }
-            let mut verified = Vec::new();
-            let mut unverifiable = Vec::new();
-            for m in &matches {
-                let Some(set) = by_thread.get(&m.3) else {
-                    unverifiable.push(m.clone());
-                    continue;
-                };
-                if set.is_empty() {
-                    unverifiable.push(m.clone());
-                } else if set.contains(series_id) {
-                    verified.push(m.clone());
-                }
-            }
-            if !unverifiable.is_empty() {
-                return Ok((
-                    None,
-                    None,
-                    "ambiguous_title_number_unverifiable_series".to_string(),
-                    false,
-                    None,
-                    None,
-                ));
-            }
-            matches = verified;
-            if matches.is_empty() {
-                return Ok((
-                    None,
-                    None,
-                    "no_owned_issue_for_comicvine_id".to_string(),
-                    false,
-                    None,
-                    None,
-                ));
-            }
+        }
+        if !unverifiable.is_empty() {
+            return Ok((
+                None,
+                None,
+                "ambiguous_title_number_unverifiable_series".to_string(),
+                false,
+                None,
+                None,
+            ));
+        }
+        matches = verified;
+        if matches.is_empty() {
+            return Ok((
+                None,
+                None,
+                "no_owned_issue_for_comicvine_id".to_string(),
+                false,
+                None,
+                None,
+            ));
         }
     }
 
