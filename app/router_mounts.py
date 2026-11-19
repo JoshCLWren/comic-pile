@@ -126,13 +126,6 @@ def _register_comicvine_resolution(app: FastAPI) -> None:
 
 
 
-def _register_reading_orders(app: FastAPI) -> None:
-    """Register reading-order routers (absolute ``/api/v1`` paths)."""
-    from app.api import reading_orders
-
-    app.include_router(reading_orders.router, tags=["reading-orders"])
-
-
 def _register_sessions(app: FastAPI) -> None:
     """Register versioned reading-session routers."""
     from app.api import session
@@ -163,13 +156,6 @@ def _register_catalog(app: FastAPI) -> None:
     app.include_router(catalog.router, tags=["catalog"])
 
 
-def _register_issue_identity(app: FastAPI) -> None:
-    """Register issue-identity routers (absolute ``/api/v1`` paths)."""
-    from app.api import issue_identity
-
-    app.include_router(issue_identity.router, tags=["issue-identity"])
-
-
 #: Deferred mounts in historical ``include_router`` order. Segments were derived
 #: from the effective eager route table; ``tests/test_cold_start_router_loading.py``
 #: fails if a route's segment is missing here.
@@ -181,11 +167,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         "comicvine-resolution",
         frozenset({"comicvine"}),
         _register_comicvine_resolution,
-    ),
-    RouterMount(
-        "reading-orders",
-        frozenset({"reading-orders", "threads"}),
-        _register_reading_orders,
     ),
     RouterMount("sessions", frozenset({"sessions"}), _register_sessions),
     RouterMount(
@@ -203,7 +184,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         _register_dependencies,
     ),
     RouterMount("catalog", frozenset({"catalog"}), _register_catalog),
-    RouterMount("issue-identity", frozenset({"issue-identity"}), _register_issue_identity),
 )
 
 
