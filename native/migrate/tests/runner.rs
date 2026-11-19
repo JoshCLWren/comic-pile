@@ -8,9 +8,54 @@ use tokio_postgres::Client;
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
 
+/// P0 guard (2026-11-18 production wipe): this harness creates and drops
+/// databases, so the server must be local. It connects to a server-level
+/// database (for example `/postgres`) and only ever drops `migrate_test_*`
+/// databases it created itself, hence the host-only check.
+fn assert_local_server(url: &str) {
+    let rest = url
+        .strip_prefix("postgresql://")
+        .or_else(|| url.strip_prefix("postgres://"))
+        .unwrap_or_else(|| panic!("MIGRATE_TEST_DATABASE_URL must be a postgres:// URL"));
+    let (main, query) = rest.split_once('?').unwrap_or((rest, ""));
+    let authority = main.split('/').next().unwrap_or("");
+    let hostport = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let mut hosts: Vec<String> = hostport
+        .split(',')
+        .map(|h| match h.strip_prefix('[') {
+            Some(v6) => v6.split(']').next().unwrap_or("").to_string(),
+            None => h.rsplit_once(':').map_or(h, |(h, _)| h).to_string(),
+        })
+        .collect();
+    for pair in query.split('&') {
+        // The driver percent-decodes keys; refuse encoded keys outright.
+        assert!(
+            !pair.split('=').next().unwrap_or("").contains('%'),
+            "REFUSING to run destructive migration tests: percent-encoded URL query keys are not allowed"
+        );
+        if let Some((key, value)) = pair.split_once('=') {
+            if key == "host" || key == "hostaddr" {
+                hosts = value.split(',').map(str::to_string).collect();
+            }
+        }
+    }
+    let local = |h: &String| {
+        matches!(h.as_str(), "localhost" | "127.0.0.1" | "::1")
+            || h.starts_with('/')
+            || h.starts_with("%2F")
+    };
+    assert!(
+        !hosts.is_empty() && hosts.iter().all(local),
+        "REFUSING to run destructive migration tests: MIGRATE_TEST_DATABASE_URL must point at a \
+         local disposable Postgres (localhost/127.0.0.1/::1/unix socket)"
+    );
+}
+
 fn admin_url() -> String {
-    std::env::var("MIGRATE_TEST_DATABASE_URL")
-        .expect("MIGRATE_TEST_DATABASE_URL is required for migration runner tests")
+    let url = std::env::var("MIGRATE_TEST_DATABASE_URL")
+        .expect("MIGRATE_TEST_DATABASE_URL is required for migration runner tests");
+    assert_local_server(&url);
+    url
 }
 
 fn with_database(url: &str, database: &str) -> String {

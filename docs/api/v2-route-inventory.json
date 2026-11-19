@@ -1175,16 +1175,16 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-      "v1_total": 84,
-      "v1_shadowed_by_rust": 4,
+      "v1_total": 55,
+      "v1_shadowed_by_rust": 0,
       "v1_live_python": 30,
       "v1_orphaned": 0,
-      "unversioned_total": 1,
+      "unversioned_total": 0,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
-      "total_python_surface": 85,
-      "total_shadowed_by_rust": 4,
+      "total_python_surface": 55,
+      "total_shadowed_by_rust": 0,
       "total_live_python": 30,
       "total_orphaned": 0
     },
@@ -1204,32 +1204,6 @@
         "path": "/api/v1/catalog/series-mappings/preview",
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
-        "method": "POST",
-        "path": "/api/v1/cbl/{list_id}/adoption-commit",
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
-        "method": "POST",
-        "path": "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -1418,247 +1392,6 @@
       {
         "runtime": "native-rust",
         "status": "target",
-        "owning_issue": 4844,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/custom-cbls",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4844,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/custom-cbls",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4844,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/custom-cbls/issue-search",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4844,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/custom-cbls/{list_id}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4844,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ],
-        "method": "PUT",
-        "path": "/api/v1/custom-cbls/{list_id}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4844,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/custom-cbls/{list_id}/export",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4844,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4844,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ],
-        "method": "PUT",
-        "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4844,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ],
-        "method": "DELETE",
-        "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4844,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/custom-cbls/{list_id}/reader",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4844,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources",
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/browse",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
-        "method": "POST",
-        "path": "/api/v1/issue-identity/cbl-sources/compare",
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/folders",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
-        "method": "POST",
-        "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
         "owning_issue": 4843,
         "method": "GET",
         "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
@@ -1682,20 +1415,6 @@
         ],
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
-        "method": "GET",
-        "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -1780,26 +1499,6 @@
         ],
         "method": "POST",
         "path": "/api/v1/issues:bulkMarkUnread",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "owning_issue": 4854,
-        "runtime": "native-rust",
-        "status": "target",
-        "consumers": [],
-        "method": "GET",
-        "path": "/api/v1/metrics",
-        "db_free": true,
-        "sql_budget": {
-          "application_statements": 0,
-          "transaction_control_statements": 0,
-          "total_statements": 0,
-          "basis": "In-process startup metrics; native ingress serves response without PostgreSQL",
-          "max_statements": 0,
-          "grows_with_data": false
-        },
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "native Rust",
         "verified_against": "vercel.json"
@@ -1958,71 +1657,6 @@
         ],
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "native Rust",
-        "owning_issue": 4851,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/reading-plan-sync/status",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "native Rust",
-        "owning_issue": 4851,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/reading-plan-sync/sync",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4839,
-        "consumers": [
-          "frontend/src/services/api-sessions.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/sessions/",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4839,
-        "consumers": [
-          "frontend/src/services/api-sessions.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/sessions/{session_id}/details",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "transitional",
-        "owning_issue": 4853,
-        "consumers": [
-          "frontend/src/services/api-taste.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/taste/discoveries",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -2384,56 +2018,9 @@
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "native Rust",
         "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4839,
-        "consumers": [
-          "frontend/src/services/api-undo.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/undo/{session_id}/snapshots",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4839,
-        "consumers": [
-          "frontend/src/services/api-undo.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/undo/{session_id}/undo/{snapshot_id}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
       }
     ],
-    "unversioned_operations": [
-      {
-        "owning_issue": 4854,
-        "runtime": "native-rust",
-        "status": "target",
-        "consumers": [],
-        "method": "GET",
-        "path": "/api/metrics",
-        "db_free": true,
-        "sql_budget": {
-          "application_statements": 0,
-          "transaction_control_statements": 0,
-          "total_statements": 0,
-          "basis": "In-process startup metrics; native ingress serves response without PostgreSQL",
-          "max_statements": 0,
-          "grows_with_data": false
-        },
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      }
-    ]
+    "unversioned_operations": []
   },
   "retired_legacy_operations": [
     {

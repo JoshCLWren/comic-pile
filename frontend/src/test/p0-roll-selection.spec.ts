@@ -20,6 +20,7 @@ import { test } from './fixtures'
 import {
   createThread,
   gotoRollPage,
+  rollPoolThreadByTitle,
   startRequestLedger,
   waitForRollPageReady,
 } from './helpers'
@@ -59,7 +60,7 @@ test.describe('ROLL-001: Roll selection', () => {
 
     const pool = page.locator('[data-roll-pool]')
     await expect(pool).toBeVisible({ timeout: 15000 })
-    await expect(pool.getByText('Rolled Thread')).toBeVisible()
+    await expect(rollPoolThreadByTitle(page, 'Rolled Thread')).toBeVisible()
   })
 
   test('clicking a rolled thread enters the rating view', async ({
@@ -78,7 +79,7 @@ test.describe('ROLL-001: Roll selection', () => {
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
 
-    await page.getByText('Rating Target Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Rating Target Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
   })
 

@@ -12582,16 +12582,14 @@
         ],
         "properties": {
           "height": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           "pixelRatio": {
             "type": "number",
             "format": "double"
           },
           "width": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           }
         }
       },
@@ -12604,12 +12602,10 @@
         ],
         "properties": {
           "x": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           "y": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           }
         }
       },
@@ -12622,12 +12618,10 @@
         ],
         "properties": {
           "height": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           "width": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           }
         }
       },
@@ -19115,6 +19109,13 @@
           "queue_position": {
             "type": "integer",
             "format": "int32"
+          },
+          "series_cover_image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Derived series cover: the exact provider CDN URL of the thread's next\nunread confirmed issue, falling back to the first confirmed issue with a\ncover. Null when the series has no confirmed issue cover."
           },
           "series_metadata": {
             "oneOf": [

@@ -112,6 +112,9 @@ pub struct AppState {
     pub request_timeout: Duration,
     pub access_token_expire_minutes: i64,
     pub refresh_token_expire_days: i64,
+    /// Deployment environment; used for environment-aware error sanitization
+    /// (e.g. validation details are omitted in production).
+    pub environment: config::Environment,
     /// Validate a checked-out socket with a read-only probe before a handler can
     /// use it, replacing one that cannot carry a statement (#4732).
     ///
@@ -204,6 +207,7 @@ impl AppState {
             request_timeout: config.request_timeout,
             access_token_expire_minutes: config.access_token_expire_minutes,
             refresh_token_expire_days: config.refresh_token_expire_days,
+            environment: config.environment,
             connection_recovery: true,
             outbound,
         })
