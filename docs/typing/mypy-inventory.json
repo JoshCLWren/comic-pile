@@ -19,8 +19,6 @@
     "app/api/continuity_rule.py",
     "app/api/continuity_template.py",
     "app/api/creators.py",
-    "app/api/cron.py",
-    "app/api/custom_cbl.py",
     "app/api/debug.py",
     "app/api/delivery.py",
     "app/api/demo.py",
@@ -33,7 +31,6 @@
     "app/api/issue.py",
     "app/api/issue_dependency_batch.py",
     "app/api/issue_identity.py",
-    "app/api/metrics.py",
     "app/api/performance_metric.py",
     "app/api/preferences.py",
     "app/api/prerequisite.py",
@@ -42,20 +39,15 @@
     "app/api/reading_mode.py",
     "app/api/reading_orders.py",
     "app/api/reading_plan_reader.py",
-    "app/api/reading_plan_sync.py",
     "app/api/recommendation_diagnostics.py",
     "app/api/releases.py",
-    "app/api/roll.py",
-    "app/api/roll_recovery_switch.py",
     "app/api/session.py",
     "app/api/snooze.py",
     "app/api/tags.py",
-    "app/api/taste.py",
     "app/api/taste_signal.py",
     "app/api/test_helpers.py",
     "app/api/thread.py",
     "app/api/traffic_metrics.py",
-    "app/api/undo.py",
     "app/auth.py",
     "app/cbl_ingest.py",
     "app/cbl_sync.py",
@@ -154,12 +146,9 @@
     "app/repositories/snooze_repository.py",
     "app/repositories/tag_repository.py",
     "app/repositories/taste_signal.py",
-    "app/repositories/taste_signals.py",
     "app/repositories/thread_repository.py",
-    "app/repositories/undo_snapshot_repository.py",
     "app/repositories/user_repository.py",
     "app/roll_recovery.py",
-    "app/roll_recovery_switch.py",
     "app/safe_logging.py",
     "app/schemas/__init__.py",
     "app/schemas/analytics.py",
@@ -193,25 +182,19 @@
     "app/schemas/prerequisite.py",
     "app/schemas/rate.py",
     "app/schemas/reader_context.py",
-    "app/schemas/reading_list_reader.py",
     "app/schemas/reading_order.py",
     "app/schemas/reading_plan_membership.py",
     "app/schemas/reading_plan_reader.py",
     "app/schemas/reading_plan_release_source.py",
-    "app/schemas/reading_plan_sync.py",
     "app/schemas/recommendation_context.py",
     "app/schemas/recommendation_diagnostics.py",
-    "app/schemas/recommendation_explanation.py",
     "app/schemas/release.py",
     "app/schemas/roll.py",
-    "app/schemas/roll_recovery_switch.py",
     "app/schemas/roll_v2.py",
     "app/schemas/session.py",
     "app/schemas/shared_types.py",
     "app/schemas/snapshot.py",
     "app/schemas/tags.py",
-    "app/schemas/taste.py",
-    "app/schemas/taste_discovery.py",
     "app/schemas/taste_verdict.py",
     "app/schemas/test_fixtures.py",
     "app/schemas/thread.py",
@@ -288,7 +271,6 @@
     "app/services/performance_metric_service.py",
     "app/services/preferences_service.py",
     "app/services/prerequisite_service.py",
-    "app/services/prompt_eligibility.py",
     "app/services/provider_issue_adoption.py",
     "app/services/queue_display.py",
     "app/services/queue_pagination.py",
@@ -304,7 +286,6 @@
     "app/services/reading_list_conversion_plan.py",
     "app/services/reading_list_cycle_validator.py",
     "app/services/reading_list_evaluator.py",
-    "app/services/reading_list_reader.py",
     "app/services/reading_mode.py",
     "app/services/reading_order_adoption.py",
     "app/services/reading_order_placement.py",
@@ -312,9 +293,7 @@
     "app/services/reading_order_service.py",
     "app/services/reading_plan_normalization.py",
     "app/services/reading_plan_reader.py",
-    "app/services/reading_plan_release_extension.py",
     "app/services/reading_plan_release_source_service.py",
-    "app/services/reading_plan_sync_service.py",
     "app/services/reading_quiz.py",
     "app/services/reading_recovery_service.py",
     "app/services/reading_session_service.py",
@@ -323,13 +302,11 @@
     "app/services/recommendation_explanation.py",
     "app/services/recommendation_metrics.py",
     "app/services/relationship_evidence.py",
-    "app/services/release_exclusion_service.py",
     "app/services/release_ledger.py",
     "app/services/roll_cutover_forecast.py",
     "app/services/roll_service.py",
     "app/services/roll_v2_projection.py",
     "app/services/series_thread_reattach.py",
-    "app/services/session_history_projection.py",
     "app/services/session_response.py",
     "app/services/snapshot_contract.py",
     "app/services/snooze_service.py",
@@ -338,7 +315,6 @@
     "app/services/summary_service.py",
     "app/services/tag_inheritance_service.py",
     "app/services/tag_service.py",
-    "app/services/taste_bank.py",
     "app/services/taste_inference.py",
     "app/services/taste_recompute.py",
     "app/services/test_cbl_source_seed.py",
@@ -349,7 +325,6 @@
     "app/services/thread_service.py",
     "app/services/thread_state_repair.py",
     "app/services/ultimate_universe_production_migration.py",
-    "app/services/undo_snapshot_service.py",
     "app/startup_diagnostics.py",
     "app/traffic_metrics.py",
     "app/utils/__init__.py",
@@ -753,7 +728,6 @@
     "tests/test_recommendation_context_v2_weights.py",
     "tests/test_recommendation_diagnostics.py",
     "tests/test_recommendation_explanation.py",
-    "tests/test_recommendation_explanation_api.py",
     "tests/test_recommendation_selection.py",
     "tests/test_recommendation_weighting.py",
     "tests/test_relationship_evidence.py",
@@ -761,7 +735,6 @@
     "tests/test_release_collection_exclusions.py",
     "tests/test_release_ledger.py",
     "tests/test_release_reconcile.py",
-    "tests/test_release_sync_cron.py",
     "tests/test_release_writer.py",
     "tests/test_release_writer_agent_contract.py",
     "tests/test_release_writer_script.py",
@@ -781,11 +754,8 @@
     "tests/test_roll_cutover_migration.py",
     "tests/test_roll_eligibility_contract.py",
     "tests/test_roll_mutation_auth_replay.py",
-    "tests/test_roll_override_double_submit.py",
     "tests/test_roll_rate_flow.py",
-    "tests/test_roll_rating_v1_aliases.py",
     "tests/test_roll_recovery.py",
-    "tests/test_roll_recovery_switch.py",
     "tests/test_roll_skip_api.py",
     "tests/test_roll_v2_contract.py",
     "tests/test_roll_v2_projection.py",
@@ -882,7 +852,7 @@
     "tests/test_verify_clone_export.py",
     "tests/test_worker_id_fixture.py"
   ],
-  "error_count": 5558,
+  "error_count": 5440,
   "triage_note": "Conservative code-based triage, not proof of a runtime defect; inspect evidence before changing interfaces.",
   "modules": [
     {
@@ -925,108 +895,6 @@
       "groups": []
     },
     {
-      "path": "app/api/admin.py",
-      "module": "app.api.admin",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
-      "path": "app/api/analytics.py",
-      "module": "app.api.analytics",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/api/auth.py",
-      "module": "app.api.auth",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 12,
-      "groups": [
-        {
-          "code": "attr-defined",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "import-untyped",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 8
-        }
-      ]
-    },
-    {
-      "path": "app/api/bug_report.py",
-      "module": "app.api.bug_report",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/api/catalog.py",
       "module": "app.api.catalog",
       "package": "app",
@@ -1044,39 +912,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 10
-        }
-      ]
-    },
-    {
-      "path": "app/api/cbl_plan_adoption.py",
-      "module": "app.api.cbl_plan_adoption",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "call-overload",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
         }
       ]
     },
@@ -1104,33 +939,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/api/collection_exclusions.py",
-      "module": "app.api.collection_exclusions",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 3
         }
       ]
     },
@@ -1164,207 +972,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 14
-        }
-      ]
-    },
-    {
-      "path": "app/api/continuity_plan.py",
-      "module": "app.api.continuity_plan",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 10,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 9
-        }
-      ]
-    },
-    {
-      "path": "app/api/continuity_rule.py",
-      "module": "app.api.continuity_rule",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
-      "path": "app/api/continuity_template.py",
-      "module": "app.api.continuity_template",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "app/api/creators.py",
-      "module": "app.api.creators",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 13,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 12
-        }
-      ]
-    },
-    {
-      "path": "app/api/cron.py",
-      "module": "app.api.cron",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/api/custom_cbl.py",
-      "module": "app.api.custom_cbl",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 10,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 9
-        }
-      ]
-    },
-    {
-      "path": "app/api/debug.py",
-      "module": "app.api.debug",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/api/delivery.py",
-      "module": "app.api.delivery",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 9,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 3
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
-      "path": "app/api/demo.py",
-      "module": "app.api.demo",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
         }
       ]
     },
@@ -1459,48 +1066,6 @@
       ]
     },
     {
-      "path": "app/api/identity_inbox.py",
-      "module": "app.api.identity_inbox",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 8,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 7
-        }
-      ]
-    },
-    {
-      "path": "app/api/images.py",
-      "module": "app.api.images",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/api/issue.py",
       "module": "app.api.issue",
       "package": "app",
@@ -1518,27 +1083,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 14
-        }
-      ]
-    },
-    {
-      "path": "app/api/issue_dependency_batch.py",
-      "module": "app.api.issue_dependency_batch",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
         }
       ]
     },
@@ -1578,171 +1122,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 9
-        }
-      ]
-    },
-    {
-      "path": "app/api/metrics.py",
-      "module": "app.api.metrics",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/api/performance_metric.py",
-      "module": "app.api.performance_metric",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 3
-        }
-      ]
-    },
-    {
-      "path": "app/api/preferences.py",
-      "module": "app.api.preferences",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "app/api/prerequisite.py",
-      "module": "app.api.prerequisite",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "path": "app/api/queue.py",
-      "module": "app.api.queue",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "path": "app/api/rate.py",
-      "module": "app.api.rate",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/api/reading_mode.py",
-      "module": "app.api.reading_mode",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 8,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
         }
       ]
     },
@@ -1795,165 +1174,6 @@
       ]
     },
     {
-      "path": "app/api/reading_plan_reader.py",
-      "module": "app.api.reading_plan_reader",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/api/reading_plan_release_source.py",
-      "module": "app.api.reading_plan_release_source",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
-      "path": "app/api/reading_plan_sync.py",
-      "module": "app.api.reading_plan_sync",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "app/api/recommendation_diagnostics.py",
-      "module": "app.api.recommendation_diagnostics",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/api/releases.py",
-      "module": "app.api.releases",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 9,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 3
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
-      "path": "app/api/roll.py",
-      "module": "app.api.roll",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 14,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 11
-        }
-      ]
-    },
-    {
-      "path": "app/api/roll_recovery_switch.py",
-      "module": "app.api.roll_recovery_switch",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/api/session.py",
       "module": "app.api.session",
       "package": "app",
@@ -1981,117 +1201,6 @@
       ]
     },
     {
-      "path": "app/api/snooze.py",
-      "module": "app.api.snooze",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "app/api/tags.py",
-      "module": "app.api.tags",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 15,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 14
-        }
-      ]
-    },
-    {
-      "path": "app/api/taste.py",
-      "module": "app.api.taste",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "app/api/taste_signal.py",
-      "module": "app.api.taste_signal",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "app/api/test_helpers.py",
-      "module": "app.api.test_helpers",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
       "path": "app/api/thread.py",
       "module": "app.api.thread",
       "package": "app",
@@ -2109,48 +1218,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 18
-        }
-      ]
-    },
-    {
-      "path": "app/api/traffic_metrics.py",
-      "module": "app.api.traffic_metrics",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/api/undo.py",
-      "module": "app.api.undo",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
         }
       ]
     },
@@ -2907,21 +1974,6 @@
       "groups": []
     },
     {
-      "path": "app/repositories/catalog_commit_repository.py",
-      "module": "app.repositories.catalog_commit_repository",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/repositories/catalog_repository.py",
       "module": "app.repositories.catalog_repository",
       "package": "app",
@@ -2998,32 +2050,8 @@
       ]
     },
     {
-      "path": "app/repositories/creator_comparison.py",
-      "module": "app.repositories.creator_comparison",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/repositories/creator_detail.py",
-      "module": "app.repositories.creator_detail",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
       "path": "app/repositories/creator_summary.py",
       "module": "app.repositories.creator_summary",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/repositories/creator_team_chemistry.py",
-      "module": "app.repositories.creator_team_chemistry",
       "package": "app",
       "explicit_surface": true,
       "error_count": 0,
@@ -3106,21 +2134,6 @@
       ]
     },
     {
-      "path": "app/repositories/password_reset_token_repository.py",
-      "module": "app.repositories.password_reset_token_repository",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/repositories/perf_alarm_repository.py",
       "module": "app.repositories.perf_alarm_repository",
       "package": "app",
@@ -3144,21 +2157,6 @@
       "groups": []
     },
     {
-      "path": "app/repositories/preferences_repository.py",
-      "module": "app.repositories.preferences_repository",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 3
-        }
-      ]
-    },
-    {
       "path": "app/repositories/prerequisite_repository.py",
       "module": "app.repositories.prerequisite_repository",
       "package": "app",
@@ -3169,14 +2167,6 @@
     {
       "path": "app/repositories/queue_ordering.py",
       "module": "app.repositories.queue_ordering",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/repositories/queue_repository.py",
-      "module": "app.repositories.queue_repository",
       "package": "app",
       "explicit_surface": true,
       "error_count": 0,
@@ -3313,14 +2303,6 @@
       ]
     },
     {
-      "path": "app/repositories/roll_v2_projection.py",
-      "module": "app.repositories.roll_v2_projection",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
       "path": "app/repositories/snooze_repository.py",
       "module": "app.repositories.snooze_repository",
       "package": "app",
@@ -3359,21 +2341,6 @@
       ]
     },
     {
-      "path": "app/repositories/taste_signals.py",
-      "module": "app.repositories.taste_signals",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/repositories/thread_repository.py",
       "module": "app.repositories.thread_repository",
       "package": "app",
@@ -3385,21 +2352,6 @@
           "family": "dynamic-boundary",
           "triage": "design-interface-review",
           "count": 4
-        }
-      ]
-    },
-    {
-      "path": "app/repositories/undo_snapshot_repository.py",
-      "module": "app.repositories.undo_snapshot_repository",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 6
         }
       ]
     },
@@ -3421,21 +2373,6 @@
     {
       "path": "app/roll_recovery.py",
       "module": "app.roll_recovery",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/roll_recovery_switch.py",
-      "module": "app.roll_recovery_switch",
       "package": "app",
       "explicit_surface": true,
       "error_count": 1,
@@ -3482,48 +2419,6 @@
           "family": "contract-and-narrowing",
           "triage": "design-interface-review",
           "count": 3
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/auth.py",
-      "module": "app.schemas.auth",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 9,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 8
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/bug_report.py",
-      "module": "app.schemas.bug_report",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 9,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 8
         }
       ]
     },
@@ -3720,132 +2615,6 @@
       ]
     },
     {
-      "path": "app/schemas/creator_comparison.py",
-      "module": "app.schemas.creator_comparison",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 10,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 9
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/creator_detail.py",
-      "module": "app.schemas.creator_detail",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 11,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 10
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/creator_discovery.py",
-      "module": "app.schemas.creator_discovery",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/creator_list.py",
-      "module": "app.schemas.creator_list",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/creator_summary.py",
-      "module": "app.schemas.creator_summary",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 3
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/creator_team_chemistry.py",
-      "module": "app.schemas.creator_team_chemistry",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 6
-        }
-      ]
-    },
-    {
       "path": "app/schemas/custom_cbl.py",
       "module": "app.schemas.custom_cbl",
       "package": "app",
@@ -3975,27 +2744,6 @@
       ]
     },
     {
-      "path": "app/schemas/identity_inbox.py",
-      "module": "app.schemas.identity_inbox",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 8,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 7
-        }
-      ]
-    },
-    {
       "path": "app/schemas/issue.py",
       "module": "app.schemas.issue",
       "package": "app",
@@ -4080,27 +2828,6 @@
       ]
     },
     {
-      "path": "app/schemas/preferences.py",
-      "module": "app.schemas.preferences",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "app/schemas/prerequisite.py",
       "module": "app.schemas.prerequisite",
       "package": "app",
@@ -4122,27 +2849,6 @@
       ]
     },
     {
-      "path": "app/schemas/rate.py",
-      "module": "app.schemas.rate",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/schemas/reader_context.py",
       "module": "app.schemas.reader_context",
       "package": "app",
@@ -4160,27 +2866,6 @@
           "family": "contract-and-narrowing",
           "triage": "design-interface-review",
           "count": 10
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/reading_list_reader.py",
-      "module": "app.schemas.reading_list_reader",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
         }
       ]
     },
@@ -4227,27 +2912,6 @@
       ]
     },
     {
-      "path": "app/schemas/reading_plan_reader.py",
-      "module": "app.schemas.reading_plan_reader",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
       "path": "app/schemas/reading_plan_release_source.py",
       "module": "app.schemas.reading_plan_release_source",
       "package": "app",
@@ -4265,27 +2929,6 @@
           "family": "contract-and-narrowing",
           "triage": "design-interface-review",
           "count": 4
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/reading_plan_sync.py",
-      "module": "app.schemas.reading_plan_sync",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 10,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 9
         }
       ]
     },
@@ -4332,54 +2975,6 @@
       ]
     },
     {
-      "path": "app/schemas/recommendation_explanation.py",
-      "module": "app.schemas.recommendation_explanation",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/release.py",
-      "module": "app.schemas.release",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 11,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 6
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
       "path": "app/schemas/roll.py",
       "module": "app.schemas.roll",
       "package": "app",
@@ -4403,54 +2998,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/roll_recovery_switch.py",
-      "module": "app.schemas.roll_recovery_switch",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/roll_v2.py",
-      "module": "app.schemas.roll_v2",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 12,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 9
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
         }
       ]
     },
@@ -4534,90 +3081,6 @@
           "family": "contract-and-narrowing",
           "triage": "design-interface-review",
           "count": 16
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/taste.py",
-      "module": "app.schemas.taste",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/taste_discovery.py",
-      "module": "app.schemas.taste_discovery",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/taste_verdict.py",
-      "module": "app.schemas.taste_verdict",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 3
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/test_fixtures.py",
-      "module": "app.schemas.test_fixtures",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 4
         }
       ]
     },
@@ -4828,54 +3291,12 @@
       ]
     },
     {
-      "path": "app/services/catalog_series_commit.py",
-      "module": "app.services.catalog_series_commit",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 9,
-      "groups": [
-        {
-          "code": "call-overload",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 8
-        },
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/services/cbl_informational_plan_adoption.py",
       "module": "app.services.cbl_informational_plan_adoption",
       "package": "app",
       "explicit_surface": true,
       "error_count": 0,
       "groups": []
-    },
-    {
-      "path": "app/services/cbl_plan_adoption.py",
-      "module": "app.services.cbl_plan_adoption",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
     },
     {
       "path": "app/services/cbl_reconciliation.py",
@@ -4903,14 +3324,6 @@
     {
       "path": "app/services/cbl_source_public.py",
       "module": "app.services.cbl_source_public",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/cbl_targeted_plan_adoption.py",
-      "module": "app.services.cbl_targeted_plan_adoption",
       "package": "app",
       "explicit_surface": true,
       "error_count": 0,
@@ -5077,120 +3490,6 @@
           "count": 1
         }
       ]
-    },
-    {
-      "path": "app/services/correction_examples.py",
-      "module": "app.services.correction_examples",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/creator_comparison.py",
-      "module": "app.services.creator_comparison",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "arg-type",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "assignment",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "app/services/creator_detail.py",
-      "module": "app.services.creator_detail",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/creator_discovery.py",
-      "module": "app.services.creator_discovery",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/creator_insights.py",
-      "module": "app.services.creator_insights",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/creator_list.py",
-      "module": "app.services.creator_list",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/creator_metric_drilldown.py",
-      "module": "app.services.creator_metric_drilldown",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 16,
-      "groups": [
-        {
-          "code": "arg-type",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 3
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 13
-        }
-      ]
-    },
-    {
-      "path": "app/services/creator_rating_stats.py",
-      "module": "app.services.creator_rating_stats",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/creator_series.py",
-      "module": "app.services.creator_series",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/creator_summary.py",
-      "module": "app.services.creator_summary",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/creator_team_chemistry.py",
-      "module": "app.services.creator_team_chemistry",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
     },
     {
       "path": "app/services/crossover_reading_order_migration.py",
@@ -5391,29 +3690,6 @@
       "groups": []
     },
     {
-      "path": "app/services/identity_inbox.py",
-      "module": "app.services.identity_inbox",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/image_delivery.py",
-      "module": "app.services.image_delivery",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "app/services/issue.py",
       "module": "app.services.issue",
       "package": "app",
@@ -5566,29 +3842,6 @@
       ]
     },
     {
-      "path": "app/services/password_reset_mailer.py",
-      "module": "app.services.password_reset_mailer",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/password_reset_service.py",
-      "module": "app.services.password_reset_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "app/services/perf_alarm_store.py",
       "module": "app.services.perf_alarm_store",
       "package": "app",
@@ -5626,14 +3879,6 @@
       ]
     },
     {
-      "path": "app/services/preferences_service.py",
-      "module": "app.services.preferences_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
       "path": "app/services/prerequisite_service.py",
       "module": "app.services.prerequisite_service",
       "package": "app",
@@ -5647,14 +3892,6 @@
           "count": 4
         }
       ]
-    },
-    {
-      "path": "app/services/prompt_eligibility.py",
-      "module": "app.services.prompt_eligibility",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
     },
     {
       "path": "app/services/provider_issue_adoption.py",
@@ -5688,50 +3925,6 @@
     {
       "path": "app/services/queue_pagination.py",
       "module": "app.services.queue_pagination",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/queue_service.py",
-      "module": "app.services.queue_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "arg-type",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/services/rate_service.py",
-      "module": "app.services.rate_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 13,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 12
-        }
-      ]
-    },
-    {
-      "path": "app/services/read_frontier_service.py",
-      "module": "app.services.read_frontier_service",
       "package": "app",
       "explicit_surface": true,
       "error_count": 0,
@@ -5877,35 +4070,6 @@
       ]
     },
     {
-      "path": "app/services/reading_list_reader.py",
-      "module": "app.services.reading_list_reader",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/reading_mode.py",
-      "module": "app.services.reading_mode",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 4
-        }
-      ]
-    },
-    {
       "path": "app/services/reading_order_adoption.py",
       "module": "app.services.reading_order_adoption",
       "package": "app",
@@ -5979,29 +4143,6 @@
       ]
     },
     {
-      "path": "app/services/reading_plan_reader.py",
-      "module": "app.services.reading_plan_reader",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/services/reading_plan_release_extension.py",
-      "module": "app.services.reading_plan_release_extension",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
       "path": "app/services/reading_plan_release_source_service.py",
       "module": "app.services.reading_plan_release_source_service",
       "package": "app",
@@ -6023,43 +4164,12 @@
       ]
     },
     {
-      "path": "app/services/reading_plan_sync_service.py",
-      "module": "app.services.reading_plan_sync_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/reading_quiz.py",
-      "module": "app.services.reading_quiz",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
       "path": "app/services/reading_recovery_service.py",
       "module": "app.services.reading_recovery_service",
       "package": "app",
       "explicit_surface": true,
       "error_count": 0,
       "groups": []
-    },
-    {
-      "path": "app/services/reading_session_service.py",
-      "module": "app.services.reading_session_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
     },
     {
       "path": "app/services/reading_shadow_service.py",
@@ -6127,35 +4237,6 @@
       "groups": []
     },
     {
-      "path": "app/services/release_exclusion_service.py",
-      "module": "app.services.release_exclusion_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/release_ledger.py",
-      "module": "app.services.release_ledger",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "assignment",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "app/services/roll_cutover_forecast.py",
       "module": "app.services.roll_cutover_forecast",
       "package": "app",
@@ -6197,31 +4278,8 @@
       ]
     },
     {
-      "path": "app/services/roll_v2_projection.py",
-      "module": "app.services.roll_v2_projection",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "arg-type",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/services/series_thread_reattach.py",
       "module": "app.services.series_thread_reattach",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/session_history_projection.py",
-      "module": "app.services.session_history_projection",
       "package": "app",
       "explicit_surface": true,
       "error_count": 0,
@@ -6249,33 +4307,6 @@
       "explicit_surface": true,
       "error_count": 0,
       "groups": []
-    },
-    {
-      "path": "app/services/snooze_service.py",
-      "module": "app.services.snooze_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "operator",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 3
-        },
-        {
-          "code": "type-var",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 3
-        }
-      ]
     },
     {
       "path": "app/services/source_backed_reader_order_migration.py",
@@ -6345,14 +4376,6 @@
       ]
     },
     {
-      "path": "app/services/taste_bank.py",
-      "module": "app.services.taste_bank",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
       "path": "app/services/taste_inference.py",
       "module": "app.services.taste_inference",
       "package": "app",
@@ -6370,42 +4393,6 @@
         {
           "code": "no-any-return",
           "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/services/test_cbl_source_seed.py",
-      "module": "app.services.test_cbl_source_seed",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/services/test_helpers.py",
-      "module": "app.services.test_helpers",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "call-overload",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 3
-        },
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 1
         }
@@ -6508,21 +4495,6 @@
           "family": "contract-and-narrowing",
           "triage": "design-interface-review",
           "count": 4
-        }
-      ]
-    },
-    {
-      "path": "app/services/undo_snapshot_service.py",
-      "module": "app.services.undo_snapshot_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
         }
       ]
     },
@@ -7521,33 +5493,6 @@
       ]
     },
     {
-      "path": "tests/test_auth.py",
-      "module": "tests.test_auth",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 23,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 21
-        }
-      ]
-    },
-    {
       "path": "tests/test_auth_contract.py",
       "module": "tests.test_auth_contract",
       "package": "tests",
@@ -7586,96 +5531,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 2
-        }
-      ]
-    },
-    {
-      "path": "tests/test_auth_query_count.py",
-      "module": "tests.test_auth_query_count",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 3
-        }
-      ]
-    },
-    {
-      "path": "tests/test_auth_refresh_logging.py",
-      "module": "tests.test_auth_refresh_logging",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 8,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "import-untyped",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 6
-        }
-      ]
-    },
-    {
-      "path": "tests/test_auth_refresh_query_count.py",
-      "module": "tests.test_auth_refresh_query_count",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "path": "tests/test_auth_route_versioning.py",
-      "module": "tests.test_auth_route_versioning",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
         }
       ]
     },
@@ -7805,27 +5660,6 @@
       ]
     },
     {
-      "path": "tests/test_bprd_integrated_golden_path.py",
-      "module": "tests.test_bprd_integrated_golden_path",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "tests/test_bprd_production_migration.py",
       "module": "tests.test_bprd_production_migration",
       "package": "tests",
@@ -7853,33 +5687,6 @@
       "explicit_surface": true,
       "error_count": 0,
       "groups": []
-    },
-    {
-      "path": "tests/test_bug_report_api.py",
-      "module": "tests.test_bug_report_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 20,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "index",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 3
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 16
-        }
-      ]
     },
     {
       "path": "tests/test_canonical_blocking_explanations.py",
@@ -8083,144 +5890,12 @@
       ]
     },
     {
-      "path": "tests/test_cbl_adoption_commit_3364.py",
-      "module": "tests.test_cbl_adoption_commit_3364",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "path": "tests/test_cbl_adoption_idempotency.py",
-      "module": "tests.test_cbl_adoption_idempotency",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
-      "path": "tests/test_cbl_adoption_natural_order_3483.py",
-      "module": "tests.test_cbl_adoption_natural_order_3483",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 6
-        }
-      ]
-    },
-    {
-      "path": "tests/test_cbl_collection_exclusions.py",
-      "module": "tests.test_cbl_collection_exclusions",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "tests/test_cbl_ingest.py",
       "module": "tests.test_cbl_ingest",
       "package": "tests",
       "explicit_surface": true,
       "error_count": 0,
       "groups": []
-    },
-    {
-      "path": "tests/test_cbl_materialization_state.py",
-      "module": "tests.test_cbl_materialization_state",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "tests/test_cbl_plan_adoption.py",
-      "module": "tests.test_cbl_plan_adoption",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 40,
-      "groups": [
-        {
-          "code": "arg-type",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 9
-        },
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 30
-        }
-      ]
     },
     {
       "path": "tests/test_cbl_reconciliation.py",
@@ -8252,27 +5927,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 8
-        }
-      ]
-    },
-    {
-      "path": "tests/test_cbl_source_discovery.py",
-      "module": "tests.test_cbl_source_discovery",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 3
         }
       ]
     },
@@ -8317,27 +5971,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 4
-        }
-      ]
-    },
-    {
-      "path": "tests/test_cbl_targeted_plan_adoption.py",
-      "module": "tests.test_cbl_targeted_plan_adoption",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "unused-ignore",
-          "family": "obsolete-typing-workaround",
-          "triage": "local-typing-cleanup",
-          "count": 2
         }
       ]
     },
@@ -8421,27 +6054,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 5
-        }
-      ]
-    },
-    {
-      "path": "tests/test_collection_exclusions.py",
-      "module": "tests.test_collection_exclusions",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
         }
       ]
     },
@@ -8582,48 +6194,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 9
-        }
-      ]
-    },
-    {
-      "path": "tests/test_comicvine_intelligence_api.py",
-      "module": "tests.test_comicvine_intelligence_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 18,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 9
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 9
-        }
-      ]
-    },
-    {
-      "path": "tests/test_comicvine_intelligence_performance.py",
-      "module": "tests.test_comicvine_intelligence_performance",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
         }
       ]
     },
@@ -9068,33 +6638,6 @@
       ]
     },
     {
-      "path": "tests/test_continuity_plan_api.py",
-      "module": "tests.test_continuity_plan_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 29,
-      "groups": [
-        {
-          "code": "attr-defined",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 27
-        }
-      ]
-    },
-    {
       "path": "tests/test_continuity_plan_read_only_invariant_3347.py",
       "module": "tests.test_continuity_plan_read_only_invariant_3347",
       "package": "tests",
@@ -9149,27 +6692,6 @@
       ]
     },
     {
-      "path": "tests/test_continuity_plan_writer_service.py",
-      "module": "tests.test_continuity_plan_writer_service",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 8,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 6
-        }
-      ]
-    },
-    {
       "path": "tests/test_continuity_readiness_chains.py",
       "module": "tests.test_continuity_readiness_chains",
       "package": "tests",
@@ -9196,33 +6718,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 1
-        }
-      ]
-    },
-    {
-      "path": "tests/test_continuity_rule_api.py",
-      "module": "tests.test_continuity_rule_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 14,
-      "groups": [
-        {
-          "code": "call-overload",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 12
         }
       ]
     },
@@ -9296,27 +6791,6 @@
       ]
     },
     {
-      "path": "tests/test_correction_examples.py",
-      "module": "tests.test_correction_examples",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 16,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 15
-        }
-      ]
-    },
-    {
       "path": "tests/test_coverage_gaps.py",
       "module": "tests.test_coverage_gaps",
       "package": "tests",
@@ -9334,197 +6808,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 11
-        }
-      ]
-    },
-    {
-      "path": "tests/test_creator_comparison_api.py",
-      "module": "tests.test_creator_comparison_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 15,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 14
-        }
-      ]
-    },
-    {
-      "path": "tests/test_creator_detail_api.py",
-      "module": "tests.test_creator_detail_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 28,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 27
-        }
-      ]
-    },
-    {
-      "path": "tests/test_creator_discovery_api.py",
-      "module": "tests.test_creator_discovery_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 17,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 16
-        }
-      ]
-    },
-    {
-      "path": "tests/test_creator_insights.py",
-      "module": "tests.test_creator_insights",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "arg-type",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "tests/test_creator_list_api.py",
-      "module": "tests.test_creator_list_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 16,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 15
-        }
-      ]
-    },
-    {
-      "path": "tests/test_creator_metric_drilldown_api.py",
-      "module": "tests.test_creator_metric_drilldown_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 10,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 9
-        }
-      ]
-    },
-    {
-      "path": "tests/test_creator_rating_stats.py",
-      "module": "tests.test_creator_rating_stats",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "tests/test_creator_read_performance_regression.py",
-      "module": "tests.test_creator_read_performance_regression",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
-      "path": "tests/test_creator_summary_api.py",
-      "module": "tests.test_creator_summary_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 21,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 20
-        }
-      ]
-    },
-    {
-      "path": "tests/test_creator_team_chemistry_api.py",
-      "module": "tests.test_creator_team_chemistry_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 13,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 12
         }
       ]
     },
@@ -9644,27 +6927,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 2
-        }
-      ]
-    },
-    {
-      "path": "tests/test_custom_cbl_api.py",
-      "module": "tests.test_custom_cbl_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 13,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 12
         }
       ]
     },
@@ -9873,14 +7135,6 @@
       ]
     },
     {
-      "path": "tests/test_deepseek_special_lanes.py",
-      "module": "tests.test_deepseek_special_lanes",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
       "path": "tests/test_delete_thread_with_issues.py",
       "module": "tests.test_delete_thread_with_issues",
       "package": "tests",
@@ -9923,120 +7177,6 @@
       ]
     },
     {
-      "path": "tests/test_delta_compact_capture.py",
-      "module": "tests.test_delta_compact_capture",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "tests/test_delta_undo_completion.py",
-      "module": "tests.test_delta_undo_completion",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "tests/test_delta_undo_regressions.py",
-      "module": "tests.test_delta_undo_regressions",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 8,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 6
-        }
-      ]
-    },
-    {
-      "path": "tests/test_delta_undo_stack.py",
-      "module": "tests.test_delta_undo_stack",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 8,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 3
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 3
-        }
-      ]
-    },
-    {
       "path": "tests/test_demo_roll.py",
       "module": "tests.test_demo_roll",
       "package": "tests",
@@ -10063,57 +7203,6 @@
           "family": "annotation-completeness",
           "triage": "local-typing-cleanup",
           "count": 19
-        }
-      ]
-    },
-    {
-      "path": "tests/test_dependency_batch_api.py",
-      "module": "tests.test_dependency_batch_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 7
-        }
-      ]
-    },
-    {
-      "path": "tests/test_dependency_batch_request.py",
-      "module": "tests.test_dependency_batch_request",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "tests/test_dependency_blocking_api.py",
-      "module": "tests.test_dependency_blocking_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 5
         }
       ]
     },
@@ -10179,36 +7268,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 1
-        }
-      ]
-    },
-    {
-      "path": "tests/test_dependency_lifecycle_api.py",
-      "module": "tests.test_dependency_lifecycle_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 7
-        }
-      ]
-    },
-    {
-      "path": "tests/test_dependency_notes_api.py",
-      "module": "tests.test_dependency_notes_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 4
         }
       ]
     },
@@ -10403,14 +7462,6 @@
           "count": 14
         }
       ]
-    },
-    {
-      "path": "tests/test_factory_capacity_refill_workflow.py",
-      "module": "tests.test_factory_capacity_refill_workflow",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
     },
     {
       "path": "tests/test_factory_ci_reconciliation.py",
@@ -11058,48 +8109,6 @@
       ]
     },
     {
-      "path": "tests/test_feedback_report_types.py",
-      "module": "tests.test_feedback_report_types",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "path": "tests/test_finish_session_clears_snoozed.py",
-      "module": "tests.test_finish_session_clears_snoozed",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "tests/test_fixture_sequences.py",
       "module": "tests.test_fixture_sequences",
       "package": "tests",
@@ -11211,33 +8220,6 @@
       ]
     },
     {
-      "path": "tests/test_history.py",
-      "module": "tests.test_history",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "tests/test_history_events.py",
       "module": "tests.test_history_events",
       "package": "tests",
@@ -11261,87 +8243,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 5
-        }
-      ]
-    },
-    {
-      "path": "tests/test_history_issue_stability_regression.py",
-      "module": "tests.test_history_issue_stability_regression",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "tests/test_identity_inbox_list_performance.py",
-      "module": "tests.test_identity_inbox_list_performance",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 21,
-      "groups": [
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 12
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 8
-        }
-      ]
-    },
-    {
-      "path": "tests/test_image_delivery_api.py",
-      "module": "tests.test_image_delivery_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 12,
-      "groups": [
-        {
-          "code": "attr-defined",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 7
         }
       ]
     },
@@ -11415,21 +8316,6 @@
       ]
     },
     {
-      "path": "tests/test_issue_3470_cbl_identity_and_cycle_regression.py",
-      "module": "tests.test_issue_3470_cbl_identity_and_cycle_regression",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
       "path": "tests/test_issue_annual_api.py",
       "module": "tests.test_issue_annual_api",
       "package": "tests",
@@ -11474,21 +8360,6 @@
           "family": "annotation-completeness",
           "triage": "local-typing-cleanup",
           "count": 1
-        }
-      ]
-    },
-    {
-      "path": "tests/test_issue_dependency_batch_api.py",
-      "module": "tests.test_issue_dependency_batch_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 2
         }
       ]
     },
@@ -12175,27 +9046,6 @@
       ]
     },
     {
-      "path": "tests/test_override_snoozed_thread.py",
-      "module": "tests.test_override_snoozed_thread",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "tests/test_password_length.py",
       "module": "tests.test_password_length",
       "package": "tests",
@@ -12223,81 +9073,6 @@
       "explicit_surface": true,
       "error_count": 0,
       "groups": []
-    },
-    {
-      "path": "tests/test_password_reset.py",
-      "module": "tests.test_password_reset",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 10,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 3
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 6
-        }
-      ]
-    },
-    {
-      "path": "tests/test_password_reset_defaults.py",
-      "module": "tests.test_password_reset_defaults",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "tests/test_password_reset_mailer.py",
-      "module": "tests.test_password_reset_mailer",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 14,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 4
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 8
-        }
-      ]
     },
     {
       "path": "tests/test_perf_alarm_store.py",
@@ -12461,27 +9236,6 @@
       ]
     },
     {
-      "path": "tests/test_phantom_roll_on_snooze_283.py",
-      "module": "tests.test_phantom_roll_on_snooze_283",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "tests/test_phase0_instrumentation.py",
       "module": "tests.test_phase0_instrumentation",
       "package": "tests",
@@ -12553,48 +9307,12 @@
       ]
     },
     {
-      "path": "tests/test_position_preservation.py",
-      "module": "tests.test_position_preservation",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 3
-        }
-      ]
-    },
-    {
       "path": "tests/test_pre_push_git_environment.py",
       "module": "tests.test_pre_push_git_environment",
       "package": "tests",
       "explicit_surface": true,
       "error_count": 0,
       "groups": []
-    },
-    {
-      "path": "tests/test_preferences_api.py",
-      "module": "tests.test_preferences_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 13,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 12
-        }
-      ]
     },
     {
       "path": "tests/test_prerequisite_api.py",
@@ -12625,14 +9343,6 @@
           "count": 2
         }
       ]
-    },
-    {
-      "path": "tests/test_probe_opencode_free_roster.py",
-      "module": "tests.test_probe_opencode_free_roster",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
     },
     {
       "path": "tests/test_prod_data_changeset_guards.py",
@@ -12667,27 +9377,6 @@
           "family": "annotation-completeness",
           "triage": "local-typing-cleanup",
           "count": 3
-        }
-      ]
-    },
-    {
-      "path": "tests/test_prompt_eligibility.py",
-      "module": "tests.test_prompt_eligibility",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "unused-ignore",
-          "family": "obsolete-typing-workaround",
-          "triage": "local-typing-cleanup",
-          "count": 2
         }
       ]
     },
@@ -13011,60 +9700,6 @@
       ]
     },
     {
-      "path": "tests/test_queue_service.py",
-      "module": "tests.test_queue_service",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 17,
-      "groups": [
-        {
-          "code": "attr-defined",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 9
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 7
-        }
-      ]
-    },
-    {
-      "path": "tests/test_queue_ui.py",
-      "module": "tests.test_queue_ui",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 11,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 4
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 6
-        }
-      ]
-    },
-    {
       "path": "tests/test_railway_loadtest.py",
       "module": "tests.test_railway_loadtest",
       "package": "tests",
@@ -13125,27 +9760,6 @@
       ]
     },
     {
-      "path": "tests/test_rate_greenlet_regression.py",
-      "module": "tests.test_rate_greenlet_regression",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "tests/test_rate_limit.py",
       "module": "tests.test_rate_limit",
       "package": "tests",
@@ -13194,69 +9808,6 @@
       ]
     },
     {
-      "path": "tests/test_rate_page.py",
-      "module": "tests.test_rate_page",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 18,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 16
-        }
-      ]
-    },
-    {
-      "path": "tests/test_rate_performance.py",
-      "module": "tests.test_rate_performance",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 3
-        }
-      ]
-    },
-    {
-      "path": "tests/test_rate_snapshot_query_count.py",
-      "module": "tests.test_rate_snapshot_query_count",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "tests/test_rate_source_roll_linkage.py",
       "module": "tests.test_rate_source_roll_linkage",
       "package": "tests",
@@ -13280,48 +9831,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 11
-        }
-      ]
-    },
-    {
-      "path": "tests/test_rate_ui.py",
-      "module": "tests.test_rate_ui",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "tests/test_read_frontier_service.py",
-      "module": "tests.test_read_frontier_service",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 3
         }
       ]
     },
@@ -13531,27 +10040,6 @@
       "groups": []
     },
     {
-      "path": "tests/test_reading_list_authoring_api.py",
-      "module": "tests.test_reading_list_authoring_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 19,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 18
-        }
-      ]
-    },
-    {
       "path": "tests/test_reading_list_cycle_validator.py",
       "module": "tests.test_reading_list_cycle_validator",
       "package": "tests",
@@ -13615,21 +10103,6 @@
       ]
     },
     {
-      "path": "tests/test_reading_mode_api.py",
-      "module": "tests.test_reading_mode_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 8,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 8
-        }
-      ]
-    },
-    {
       "path": "tests/test_reading_order_batch_api.py",
       "module": "tests.test_reading_order_batch_api",
       "package": "tests",
@@ -13687,27 +10160,6 @@
       ]
     },
     {
-      "path": "tests/test_reading_order_insert_api.py",
-      "module": "tests.test_reading_order_insert_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 8,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 6
-        }
-      ]
-    },
-    {
       "path": "tests/test_reading_order_projection_api.py",
       "module": "tests.test_reading_order_projection_api",
       "package": "tests",
@@ -13725,27 +10177,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 1
-        }
-      ]
-    },
-    {
-      "path": "tests/test_reading_plan_cbl_integrated_golden_path.py",
-      "module": "tests.test_reading_plan_cbl_integrated_golden_path",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
         }
       ]
     },
@@ -13822,27 +10253,6 @@
       ]
     },
     {
-      "path": "tests/test_reading_plan_reader.py",
-      "module": "tests.test_reading_plan_reader",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 6
-        }
-      ]
-    },
-    {
       "path": "tests/test_reading_plan_release_candidates.py",
       "module": "tests.test_reading_plan_release_candidates",
       "package": "tests",
@@ -13860,21 +10270,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 10
-        }
-      ]
-    },
-    {
-      "path": "tests/test_reading_plan_release_extension.py",
-      "module": "tests.test_reading_plan_release_extension",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
         }
       ]
     },
@@ -13921,48 +10316,6 @@
       ]
     },
     {
-      "path": "tests/test_reading_plan_sync_api.py",
-      "module": "tests.test_reading_plan_sync_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 10,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 9
-        }
-      ]
-    },
-    {
-      "path": "tests/test_reading_plan_sync_service.py",
-      "module": "tests.test_reading_plan_sync_service",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 20,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 19
-        }
-      ]
-    },
-    {
       "path": "tests/test_reading_plan_threads_unit.py",
       "module": "tests.test_reading_plan_threads_unit",
       "package": "tests",
@@ -13982,14 +10335,6 @@
           "count": 1
         }
       ]
-    },
-    {
-      "path": "tests/test_reading_quiz.py",
-      "module": "tests.test_reading_quiz",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
     },
     {
       "path": "tests/test_reading_session_naming_guard.py",
@@ -14126,51 +10471,6 @@
       ]
     },
     {
-      "path": "tests/test_recommendation_explanation_api.py",
-      "module": "tests.test_recommendation_explanation_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 18,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 6
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 7
-        }
-      ]
-    },
-    {
       "path": "tests/test_recommendation_selection.py",
       "module": "tests.test_recommendation_selection",
       "package": "tests",
@@ -14227,69 +10527,6 @@
       "groups": []
     },
     {
-      "path": "tests/test_release_api.py",
-      "module": "tests.test_release_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 21,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "index",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 19
-        }
-      ]
-    },
-    {
-      "path": "tests/test_release_collection_exclusions.py",
-      "module": "tests.test_release_collection_exclusions",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 10,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 10
-        }
-      ]
-    },
-    {
-      "path": "tests/test_release_ledger.py",
-      "module": "tests.test_release_ledger",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "tests/test_release_reconcile.py",
       "module": "tests.test_release_reconcile",
       "package": "tests",
@@ -14301,27 +10538,6 @@
           "family": "annotation-completeness",
           "triage": "local-typing-cleanup",
           "count": 16
-        }
-      ]
-    },
-    {
-      "path": "tests/test_release_sync_cron.py",
-      "module": "tests.test_release_sync_cron",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 12,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 10
         }
       ]
     },
@@ -14508,27 +10724,6 @@
       ]
     },
     {
-      "path": "tests/test_restore_session_query_count.py",
-      "module": "tests.test_restore_session_query_count",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "tests/test_review_api.py",
       "module": "tests.test_review_api",
       "package": "tests",
@@ -14588,105 +10783,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 22
-        }
-      ]
-    },
-    {
-      "path": "tests/test_roll_bootstrap_exclusions.py",
-      "module": "tests.test_roll_bootstrap_exclusions",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "path": "tests/test_roll_bootstrap_ownership.py",
-      "module": "tests.test_roll_bootstrap_ownership",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 53,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-untyped-call",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 31
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 16
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
-        },
-        {
-          "code": "var-annotated",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "tests/test_roll_bootstrap_query_budget.py",
-      "module": "tests.test_roll_bootstrap_query_budget",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 4,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
         }
       ]
     },
@@ -14793,90 +10889,6 @@
       ]
     },
     {
-      "path": "tests/test_roll_mutation_auth_replay.py",
-      "module": "tests.test_roll_mutation_auth_replay",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "tests/test_roll_override_double_submit.py",
-      "module": "tests.test_roll_override_double_submit",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "tests/test_roll_rate_flow.py",
-      "module": "tests.test_roll_rate_flow",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "tests/test_roll_rating_v1_aliases.py",
-      "module": "tests.test_roll_rating_v1_aliases",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "tests/test_roll_recovery.py",
       "module": "tests.test_roll_recovery",
       "package": "tests",
@@ -14894,108 +10906,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 7
-        }
-      ]
-    },
-    {
-      "path": "tests/test_roll_recovery_switch.py",
-      "module": "tests.test_roll_recovery_switch",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
-      "path": "tests/test_roll_skip_api.py",
-      "module": "tests.test_roll_skip_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 8,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
-      "path": "tests/test_roll_v2_contract.py",
-      "module": "tests.test_roll_v2_contract",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 24,
-      "groups": [
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 24
-        }
-      ]
-    },
-    {
-      "path": "tests/test_roll_v2_projection.py",
-      "module": "tests.test_roll_v2_projection",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 28,
-      "groups": [
-        {
-          "code": "arg-type",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 6
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 18
-        },
-        {
-          "code": "unused-ignore",
-          "family": "obsolete-typing-workaround",
-          "triage": "local-typing-cleanup",
-          "count": 1
         }
       ]
     },
@@ -15495,27 +11405,6 @@
       ]
     },
     {
-      "path": "tests/test_session_details_deleted_threads.py",
-      "module": "tests.test_session_details_deleted_threads",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
       "path": "tests/test_session_history_integration.py",
       "module": "tests.test_session_history_integration",
       "package": "tests",
@@ -15535,14 +11424,6 @@
           "count": 15
         }
       ]
-    },
-    {
-      "path": "tests/test_session_history_projection.py",
-      "module": "tests.test_session_history_projection",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
     },
     {
       "path": "tests/test_session_history_projection_wiring.py",
@@ -15610,27 +11491,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 10
-        }
-      ]
-    },
-    {
-      "path": "tests/test_session_mode.py",
-      "module": "tests.test_session_mode",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 8,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 7
         }
       ]
     },
@@ -15728,27 +11588,6 @@
       ]
     },
     {
-      "path": "tests/test_session_timezone_capture.py",
-      "module": "tests.test_session_timezone_capture",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 26,
-      "groups": [
-        {
-          "code": "no-untyped-call",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 14
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 12
-        }
-      ]
-    },
-    {
       "path": "tests/test_snapshot_delta_lookup.py",
       "module": "tests.test_snapshot_delta_lookup",
       "package": "tests",
@@ -15782,27 +11621,6 @@
       ]
     },
     {
-      "path": "tests/test_snooze_api.py",
-      "module": "tests.test_snooze_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 9,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 8
-        }
-      ]
-    },
-    {
       "path": "tests/test_snooze_backoff.py",
       "module": "tests.test_snooze_backoff",
       "package": "tests",
@@ -15822,147 +11640,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 11
-        }
-      ]
-    },
-    {
-      "path": "tests/test_snooze_correction.py",
-      "module": "tests.test_snooze_correction",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
-        }
-      ]
-    },
-    {
-      "path": "tests/test_snooze_ladder_bug.py",
-      "module": "tests.test_snooze_ladder_bug",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "tests/test_snooze_performance.py",
-      "module": "tests.test_snooze_performance",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "tests/test_snooze_query_count.py",
-      "module": "tests.test_snooze_query_count",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "path": "tests/test_snooze_queue_placement.py",
-      "module": "tests.test_snooze_queue_placement",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "path": "tests/test_snooze_session_correction_acceptance.py",
-      "module": "tests.test_snooze_session_correction_acceptance",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 18,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 17
-        }
-      ]
-    },
-    {
-      "path": "tests/test_snooze_source_roll_linkage.py",
-      "module": "tests.test_snooze_source_roll_linkage",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 10,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 9
         }
       ]
     },
@@ -16223,60 +11900,6 @@
       ]
     },
     {
-      "path": "tests/test_taste_acceptance.py",
-      "module": "tests.test_taste_acceptance",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "path": "tests/test_taste_discovery_api.py",
-      "module": "tests.test_taste_discovery_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "tests/test_taste_inference.py",
       "module": "tests.test_taste_inference",
       "package": "tests",
@@ -16308,27 +11931,6 @@
       "groups": []
     },
     {
-      "path": "tests/test_taste_signal_api.py",
-      "module": "tests.test_taste_signal_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 14,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 13
-        }
-      ]
-    },
-    {
       "path": "tests/test_test_data_management.py",
       "module": "tests.test_test_data_management",
       "package": "tests",
@@ -16346,27 +11948,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 13
-        }
-      ]
-    },
-    {
-      "path": "tests/test_test_helpers.py",
-      "module": "tests.test_test_helpers",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 6
         }
       ]
     },
@@ -16654,69 +12235,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 8
-        }
-      ]
-    },
-    {
-      "path": "tests/test_undo.py",
-      "module": "tests.test_undo",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 22,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 20
-        }
-      ]
-    },
-    {
-      "path": "tests/test_undo_performance.py",
-      "module": "tests.test_undo_performance",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "path": "tests/test_unsnooze_api.py",
-      "module": "tests.test_unsnooze_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 4
         }
       ]
     },
@@ -17476,90 +12994,6 @@
       "message": "Untyped decorator makes function \"get_creator_series_drilldown_endpoint\" untyped"
     },
     {
-      "file": "app/api/cron.py",
-      "line": 7,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/cron.py",
-      "line": 98,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"release_sync_cron\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 7,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 37,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"list_custom_cbl_lists\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 46,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"search_custom_cbl_issues\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 62,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"create_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 83,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"get_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 97,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"update_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 120,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"delete_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 135,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"export_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 154,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"apply_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 176,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"read_custom_cbl\" untyped"
-    },
-    {
       "file": "app/api/debug.py",
       "line": 5,
       "code": "import-not-found",
@@ -18302,20 +13736,6 @@
       "message": "Untyped decorator makes function \"api_cbl_adoption_plan\" untyped"
     },
     {
-      "file": "app/api/metrics.py",
-      "line": 2,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/metrics.py",
-      "line": 11,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"metrics\" untyped"
-    },
-    {
       "file": "app/api/performance_metric.py",
       "line": 11,
       "code": "import-not-found",
@@ -18666,27 +14086,6 @@
       "message": "Untyped decorator makes function \"delete_release_source\" untyped"
     },
     {
-      "file": "app/api/reading_plan_sync.py",
-      "line": 7,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/reading_plan_sync.py",
-      "line": 85,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"sync_released_issues_endpoint\" untyped"
-    },
-    {
-      "file": "app/api/reading_plan_sync.py",
-      "line": 113,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"get_sync_status\" untyped"
-    },
-    {
       "file": "app/api/recommendation_diagnostics.py",
       "line": 5,
       "code": "import-not-found",
@@ -18762,118 +14161,6 @@
       "code": "no-any-return",
       "severity": "error",
       "message": "Returning Any from function declared to return \"ReleaseResponse\""
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 10,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 11,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi.responses\""
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 94,
-      "code": "type-arg",
-      "severity": "error",
-      "message": "Missing type arguments for generic type \"list\""
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 248,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"roll_dice\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 365,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"dismiss_pending_roll\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 381,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"skip_roll\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 487,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"unskip_thread\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 641,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"override_roll\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 665,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"set_manual_die\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 697,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"clear_manual_die\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 721,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"update_session_mode\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 825,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"roll_bootstrap\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 1002,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"roll_v2_bootstrap\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 1153,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"get_roll_recommendation_explanation\" untyped"
-    },
-    {
-      "file": "app/api/roll_recovery_switch.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/roll_recovery_switch.py",
-      "line": 20,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"switch_roll_prerequisite\" untyped"
     },
     {
       "file": "app/api/session.py",
@@ -19063,27 +14350,6 @@
       "code": "untyped-decorator",
       "severity": "error",
       "message": "Untyped decorator makes function \"get_tag_usage\" untyped"
-    },
-    {
-      "file": "app/api/taste.py",
-      "line": 14,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/taste.py",
-      "line": 30,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"list_taste_discoveries\" untyped"
-    },
-    {
-      "file": "app/api/taste.py",
-      "line": 56,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"dismiss_taste_discovery\" untyped"
     },
     {
       "file": "app/api/taste_signal.py",
@@ -19301,27 +14567,6 @@
       "code": "untyped-decorator",
       "severity": "error",
       "message": "Untyped decorator makes function \"get_traffic_metrics\" untyped"
-    },
-    {
-      "file": "app/api/undo.py",
-      "line": 7,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/undo.py",
-      "line": 21,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"undo_to_snapshot\" untyped"
-    },
-    {
-      "file": "app/api/undo.py",
-      "line": 108,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"list_session_snapshots\" untyped"
     },
     {
       "file": "app/auth.py",
@@ -20766,13 +16011,6 @@
       "message": "Returning Any from function declared to return \"TasteSignal | None\""
     },
     {
-      "file": "app/repositories/taste_signals.py",
-      "line": 55,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"TasteSignal | None\""
-    },
-    {
       "file": "app/repositories/thread_repository.py",
       "line": 33,
       "code": "no-any-return",
@@ -20796,48 +16034,6 @@
     {
       "file": "app/repositories/thread_repository.py",
       "line": 205,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"Thread | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 70,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"Snapshot | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 97,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"Snapshot | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 137,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"Snapshot | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 161,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"ReadingSession | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 220,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"Event | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 231,
       "code": "no-any-return",
       "severity": "error",
       "message": "Returning Any from function declared to return \"Thread | None\""
@@ -20873,13 +16069,6 @@
     {
       "file": "app/roll_recovery.py",
       "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/roll_recovery_switch.py",
-      "line": 7,
       "code": "import-not-found",
       "severity": "error",
       "message": "Cannot find implementation or library stub for module named \"fastapi\""
@@ -22761,20 +17950,6 @@
       "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
     },
     {
-      "file": "app/schemas/reading_list_reader.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/reading_list_reader.py",
-      "line": 18,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
       "file": "app/schemas/reading_order.py",
       "line": 3,
       "code": "import-not-found",
@@ -22992,76 +18167,6 @@
       "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
     },
     {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 8,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 11,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 26,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 36,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 57,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 65,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 77,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 85,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 92,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 122,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
       "file": "app/schemas/recommendation_context.py",
       "line": 8,
       "code": "import-not-found",
@@ -23127,27 +18232,6 @@
     {
       "file": "app/schemas/recommendation_diagnostics.py",
       "line": 74,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/recommendation_explanation.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/recommendation_explanation.py",
-      "line": 8,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/recommendation_explanation.py",
-      "line": 22,
       "code": "misc",
       "severity": "error",
       "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
@@ -23340,27 +18424,6 @@
       "code": "untyped-decorator",
       "severity": "error",
       "message": "Untyped decorator makes function \"bound_summary_lists\" untyped"
-    },
-    {
-      "file": "app/schemas/roll_recovery_switch.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/roll_recovery_switch.py",
-      "line": 8,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/roll_recovery_switch.py",
-      "line": 17,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
     },
     {
       "file": "app/schemas/roll_v2.py",
@@ -23715,62 +18778,6 @@
     {
       "file": "app/schemas/tags.py",
       "line": 277,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste.py",
-      "line": 14,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/taste.py",
-      "line": 35,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste.py",
-      "line": 75,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste.py",
-      "line": 106,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste.py",
-      "line": 122,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste_discovery.py",
-      "line": 10,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/taste_discovery.py",
-      "line": 13,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste_discovery.py",
-      "line": 27,
       "code": "misc",
       "severity": "error",
       "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
@@ -26154,13 +21161,6 @@
       "code": "arg-type",
       "severity": "error",
       "message": "Argument \"spec\" to \"_factual_snapshot\" has incompatible type \"UltimateUniverseDryRunSpec\"; expected \"ReaderOrderMigrationSpec\""
-    },
-    {
-      "file": "app/services/undo_snapshot_service.py",
-      "line": 6,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
     },
     {
       "file": "comic_pile/bandwidth.py",
@@ -47058,132 +42058,6 @@
       "message": "Argument 1 to \"project_recommendation_context\" of \"RecommendationExplanationProjection\" has incompatible type \"str\"; expected \"dict[str, Any] | None\""
     },
     {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 17,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"httpx\""
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 28,
-      "code": "type-arg",
-      "severity": "error",
-      "message": "Missing type arguments for generic type \"dict\""
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 43,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 48,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"User\""
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 51,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_with_full_context\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 52,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 137,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_absent_context_returns_selection_bypass\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 138,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 182,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_unknown_legacy_context_falls_back\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 183,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 236,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_404_for_nonexistent_event\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 245,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_422_for_non_roll_event\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 246,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 280,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_random_selection_mentions_bypass\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 281,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 323,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explainable_factor_frozen_dataclass\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 333,
-      "code": "misc",
-      "severity": "error",
-      "message": "Property \"code\" defined in \"ExplainableFactor\" is read-only"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 338,
-      "code": "misc",
-      "severity": "error",
-      "message": "Property \"label\" defined in \"ExplainableFactor\" is read-only"
-    },
-    {
       "file": "tests/test_recommendation_selection.py",
       "line": 15,
       "code": "import-not-found",
@@ -47679,90 +42553,6 @@
       "code": "no-untyped-def",
       "severity": "error",
       "message": "Function is missing a return type annotation"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 19,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 20,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"httpx\""
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 192,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_fails_closed_when_secret_is_not_configured\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 211,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_rejects_missing_or_incorrect_bearer\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 212,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_rejects_missing_or_incorrect_bearer\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 236,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_rejects_non_ascii_authorization_without_crashing\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 255,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_runs_for_every_owner_with_enabled_sources\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 297,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_already_running_is_a_non_error_noop\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 335,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_partial_source_failure_preserves_successful_work\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 369,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_retry_is_idempotent\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 393,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_defers_owners_when_time_budget_is_exhausted\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 429,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_does_not_log_the_secret_or_provider_key\" untyped"
     },
     {
       "file": "tests/test_release_writer.py",
@@ -49361,41 +44151,6 @@
       "message": "Untyped decorator makes function \"test_snooze_expired_token_has_no_partial_write_and_replay_commits_once\" untyped"
     },
     {
-      "file": "tests/test_roll_override_double_submit.py",
-      "line": 11,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"httpx\""
-    },
-    {
-      "file": "tests/test_roll_override_double_submit.py",
-      "line": 29,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_repeat_override_logs_single_event\" untyped"
-    },
-    {
-      "file": "tests/test_roll_override_double_submit.py",
-      "line": 33,
-      "code": "type-arg",
-      "severity": "error",
-      "message": "Missing type arguments for generic type \"dict\""
-    },
-    {
-      "file": "tests/test_roll_override_double_submit.py",
-      "line": 49,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_distinct_picks_still_log_new_events\" untyped"
-    },
-    {
-      "file": "tests/test_roll_override_double_submit.py",
-      "line": 53,
-      "code": "type-arg",
-      "severity": "error",
-      "message": "Missing type arguments for generic type \"dict\""
-    },
-    {
       "file": "tests/test_roll_rate_flow.py",
       "line": 9,
       "code": "import-not-found",
@@ -49408,20 +44163,6 @@
       "code": "untyped-decorator",
       "severity": "error",
       "message": "Untyped decorator makes function \"test_roll_rate_history_consistency\" untyped"
-    },
-    {
-      "file": "tests/test_roll_rating_v1_aliases.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "tests/test_roll_rating_v1_aliases.py",
-      "line": 6,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi.routing\""
     },
     {
       "file": "tests/test_roll_recovery.py",
@@ -49478,55 +44219,6 @@
       "code": "untyped-decorator",
       "severity": "error",
       "message": "Untyped decorator makes function \"test_roll_recovery_preserves_original_and_recommends_readable_leaf\" untyped"
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"httpx\""
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 7,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 95,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_switches_blocked_roll_to_direct_readable_prerequisite\" untyped"
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 150,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_switches_to_transitive_readable_leaf\" untyped"
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 187,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_duplicate_switch_is_idempotent\" untyped"
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 235,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_rejects_stale_recommendation_after_prerequisite_becomes_read\" untyped"
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 270,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_rejects_issue_that_was_not_recommended\" untyped"
     },
     {
       "file": "tests/test_roll_skip_api.py",

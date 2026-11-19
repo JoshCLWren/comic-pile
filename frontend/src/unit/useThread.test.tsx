@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import axios from 'axios'
 import type { ReactNode } from 'react'
 import type { Thread } from '../types'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   useCreateThread,
   useDeleteThread,
@@ -13,6 +13,8 @@ import {
   useUpdateThread,
 } from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
+import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
 
 vi.mock('../services/api-threads', () => ({
   threadsApi: {
@@ -34,6 +36,10 @@ function createWrapper() {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>
   }
 }
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 beforeEach(() => {
   // SAFETY: mock payload supplies only the fields this test asserts
@@ -93,6 +99,48 @@ it('creates, updates, deletes, and reactivates threads', async () => {
   expect(mockedThreadsApi.update).toHaveBeenCalledWith(7, { title: 'Updated' })
   expect(mockedThreadsApi.delete).toHaveBeenCalledWith(7)
   expect(mockedThreadsApi.reactivate).toHaveBeenCalledWith({ thread_id: 7, issues_to_add: 3 })
+})
+
+it('refreshes Roll, session, and plan views when a thread is renamed (#5264)', async () => {
+  const wrapper = createWrapper()
+  // SAFETY: mock payload supplies only the fields this rename reconciliation test asserts.
+  const updatedThread = {
+    id: 7,
+    title: 'Renamed',
+    format: 'issue',
+    issues_remaining: 4,
+    total_issues: 12,
+    queue_position: 3,
+    status: 'active',
+    is_blocked: false,
+    blocking_reasons: [],
+    last_activity_at: null,
+    last_rating: null,
+    notes: null,
+    is_test: false,
+    created_at: '2026-08-03T00:00:00Z',
+  } as Thread
+  mockedThreadsApi.update.mockResolvedValue(updatedThread)
+  const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue()
+
+  const { result } = renderHook(() => useUpdateThread(), { wrapper })
+  await act(async () => {
+    await result.current.mutate({ id: 7, data: { title: 'Renamed' } })
+  })
+
+  expect(invalidateQueries).toHaveBeenCalledWith({
+    queryKey: queryKeys.roll.bootstrap(),
+    exact: true,
+  })
+  expect(invalidateQueries).toHaveBeenCalledWith({
+    queryKey: queryKeys.session.current(),
+    exact: true,
+  })
+  expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
+  expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.all })
+  expect(invalidateQueries).toHaveBeenCalledWith({
+    queryKey: queryKeys.thread.duplicateChecks(),
+  })
 })
 
 it('handles empty ids, detail failures, and stale failures', async () => {

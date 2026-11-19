@@ -1,15 +1,17 @@
 //! Bounded, awaited ComicVine metadata-repair worker.
 //! A Vercel request is the lifetime of the work: never spawn and forget a task.
-use crate::{db, ApiError, AppState};
+use crate::{
+    db,
+    outbound::{OutboundHttp, OutboundRequest},
+    ApiError, AppState,
+};
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
     Json,
 };
 use bytes::Bytes;
-use http_body_util::{BodyExt, Empty};
-use hyper::client::conn::http1;
-use hyper_util::rt::TokioIo;
+use http_body_util::BodyExt;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use std::{sync::Arc, time::Duration};
@@ -23,17 +25,6 @@ const PROVIDER_TIMEOUT: Duration = Duration::from_secs(5);
 // implementations must use the same precise policy (see needs_provider_fetch).
 const COMPLETE_FRESH_DAYS: i64 = 30;
 const EMPTY_CREDIT_RECHECK_DAYS: i64 = 7;
-
-// A provider connection must not outlive its awaited Vercel request. In
-// particular, early return on malformed/oversized provider responses must
-// cancel the HTTP driver instead of leaving a detached serverless task.
-struct ConnectionGuard(tokio::task::JoinHandle<()>);
-
-impl Drop for ConnectionGuard {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
-}
 
 const FIELDS: &str = "id,name,issue_number,cover_date,store_date,image,volume,person_credits,character_credits,team_credits,story_arc_credits,date_last_updated";
 const CLAIM: &str = r#"
@@ -264,6 +255,7 @@ fn provider_timestamp(value: &Value) -> Option<String> {
 }
 
 async fn provider_response(
+    outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
     extra_query: &str,
     api_key: &str,
@@ -273,70 +265,30 @@ async fn provider_response(
     if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
         return Err(ProviderFailure::Unavailable);
     }
-    let connect = async {
-        let tcp = tokio::net::TcpStream::connect((HOST, 443))
-            .await
-            .map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                ProviderFailure::Unavailable
-            })?;
-        let tls = native_tls::TlsConnector::new().map_err(|e| {
+    let request = OutboundRequest {
+        method: http::Method::GET,
+        path: format!("/api/{resource}/?api_key={api_key}&format=json{extra_query}"),
+        headers: vec![
+            ("accept".to_string(), "application/json".to_string()),
+            (
+                "user-agent".to_string(),
+                "ComicPile/1.0 (metadata repair)".to_string(),
+            ),
+        ],
+        body: Bytes::new(),
+    };
+    let exchange = async {
+        let response = outbound.send(HOST, request).await.map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
                 "preserved underlying error before mapping"
             );
             ProviderFailure::Unavailable
         })?;
-        let tls = tokio_native_tls::TlsConnector::from(tls)
-            .connect(HOST, tcp)
-            .await
-            .map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                ProviderFailure::Unavailable
-            })?;
-        let (mut sender, connection) = http1::handshake(TokioIo::new(tls)).await.map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            ProviderFailure::Unavailable
-        })?;
-        let _connection_guard = ConnectionGuard(tokio::spawn(async move {
-            let _ = connection.await;
-        }));
-        let path = format!("/api/{resource}/?api_key={api_key}&format=json{extra_query}");
-        let request = http::Request::builder()
-            .method("GET")
-            .uri(path)
-            .header("host", HOST)
-            .header("accept", "application/json")
-            .header("user-agent", "ComicPile/1.0 (metadata repair)")
-            .body(Empty::<Bytes>::new())
-            .map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                ProviderFailure::Unavailable
-            })?;
-        let mut response = sender.send_request(request).await.map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            ProviderFailure::Unavailable
-        })?;
-        if response.status() == StatusCode::TOO_MANY_REQUESTS
-            || response.status() == StatusCode::FORBIDDEN
-        {
+        let status = response.status;
+        if status == StatusCode::TOO_MANY_REQUESTS || status == StatusCode::FORBIDDEN {
             let retry = response
-                .headers()
+                .headers
                 .get("retry-after")
                 .and_then(|h| h.to_str().ok())
                 .and_then(|h| h.parse::<u32>().ok())
@@ -344,11 +296,11 @@ async fn provider_response(
                 .clamp(60, 3600);
             return Err(ProviderFailure::RateLimited(retry));
         }
-        if !response.status().is_success() {
+        if !status.is_success() {
             return Err(ProviderFailure::Unavailable);
         }
         if response
-            .headers()
+            .headers
             .get("content-length")
             .and_then(|h| h.to_str().ok())
             .and_then(|n| n.parse::<usize>().ok())
@@ -357,7 +309,8 @@ async fn provider_response(
             return Err(ProviderFailure::InvalidPayload);
         }
         let mut data = Vec::new();
-        while let Some(frame) = response.body_mut().frame().await {
+        let mut body = response.body;
+        while let Some(frame) = body.frame().await {
             let frame = frame.map_err(|e| {
                 tracing::debug!(
                     error_kind = crate::error_kind(&e),
@@ -384,7 +337,7 @@ async fn provider_response(
         }
         Ok(payload)
     };
-    tokio::time::timeout(PROVIDER_TIMEOUT, connect)
+    tokio::time::timeout(PROVIDER_TIMEOUT, exchange)
         .await
         .map_err(|e| {
             tracing::debug!(
@@ -395,8 +348,13 @@ async fn provider_response(
         })?
 }
 
-async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure> {
+async fn provider_issue(
+    outbound: &Arc<dyn OutboundHttp>,
+    id: u32,
+    api_key: &str,
+) -> Result<Value, ProviderFailure> {
     provider_response(
+        outbound,
         &format!("issue/4000-{id}"),
         &format!("&field_list={FIELDS}"),
         api_key,
@@ -411,6 +369,7 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
 /// by the Python preview builder. Never turn an outage or partial roster into
 /// an empty successful plan: doing so can approve a wrong comic identity.
 pub(crate) async fn catalog_volume_roster(
+    outbound: &Arc<dyn OutboundHttp>,
     external_id: &str,
 ) -> Result<(Value, Vec<Value>), ApiError> {
     // Test scaffolding only: an installed fixture short-circuits the live
@@ -429,7 +388,7 @@ pub(crate) async fn catalog_volume_roster(
         .ok()
         .filter(|v| !v.is_empty())
         .ok_or_else(unavailable)?;
-    let volume = provider_response(&format!("volume/4050-{volume_id}"), "", &api_key)
+    let volume = provider_response(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
         .await
         .map_err(|_| unavailable())?;
     let volume_info = volume
@@ -451,7 +410,7 @@ pub(crate) async fn catalog_volume_roster(
     let mut expected_total: Option<usize> = None;
     loop {
         let query = format!("&filter=volume:{volume_id}&limit=100&offset={offset}");
-        let page = provider_response("issues", &query, &api_key)
+        let page = provider_response(outbound, "issues", &query, &api_key)
             .await
             .map_err(|_| unavailable())?;
         let results = page
@@ -705,7 +664,7 @@ async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'sta
         .await?;
         return Ok("deferred");
     };
-    match provider_issue(id, key)
+    match provider_issue(&state.outbound, id, key)
         .await
         .and_then(|value| normalized_metadata(&value, id))
     {
@@ -809,7 +768,8 @@ pub(crate) async fn hydrate_catalog_commit(
             let Some(comicvine_id) = issue_id(&external_id) else {
                 continue;
             };
-            let Ok(provider_data) = provider_issue(comicvine_id, &api_key).await else {
+            let Ok(provider_data) = provider_issue(&state.outbound, comicvine_id, &api_key).await
+            else {
                 continue;
             };
             let Ok((patch, _, external_url, provider_updated_at)) =
