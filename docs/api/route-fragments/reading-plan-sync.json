@@ -2,8 +2,8 @@
   "family": "reading-plan-sync",
   "owned_path_patterns": [
     "^/api/v1/cron/release-sync$",
-    "^/api/v1/reading-plan-sync/status$",
-    "^/api/v1/reading-plan-sync/sync$"
+    "^/api/v2/reading-plan-sync/status$",
+    "^/api/v2/reading-plan-sync/runs$"
   ],
   "defaults": {
     "runtime": "native-rust",
@@ -24,22 +24,20 @@
       "exclude_from_inventory": true
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/reading-plan-sync/status",
+      "path": "/api/v2/reading-plan-sync/status",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading-plan-sync/status$",
-      "owning_issue": 4851,
-      "exclude_from_inventory": true
+      "src": "^/api/v2/reading-plan-sync/status$",
+      "owning_issue": 4851
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/reading-plan-sync/sync",
+      "path": "/api/v2/reading-plan-sync/runs",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading-plan-sync/sync$",
-      "owning_issue": 4851,
-      "exclude_from_inventory": true
+      "src": "^/api/v2/reading-plan-sync/runs$",
+      "owning_issue": 4851
     }
   ]
 }

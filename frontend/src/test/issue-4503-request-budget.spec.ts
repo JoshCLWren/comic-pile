@@ -69,9 +69,9 @@ test.describe('Issue #4503 route request budgets', () => {
 
     await page.goto('/continuity-plans')
     await expect(page.getByRole('heading', { name: 'Reading Plans' })).toBeVisible()
-    await settleCalls(page, () => countCalls(calls, 'GET', '/api/v1/continuity-plans/'))
+    await settleCalls(page, () => countCalls(calls, 'GET', '/api/v2/continuity-plans/'))
 
-    expect(countCalls(calls, 'GET', '/api/v1/continuity-plans/')).toBe(1)
+    expect(countCalls(calls, 'GET', '/api/v2/continuity-plans/')).toBe(1)
   })
 
   test('new reading plan requests planner collections once', async ({ authenticatedPage }) => {
@@ -103,7 +103,7 @@ test.describe('Issue #4503 route request budgets', () => {
   test('reading plan detail requests the reader and plan tags once', async ({ authenticatedPage }) => {
     const page = authenticatedPage
     const headers = await authHeaders(page)
-    const created = await page.request.post('/api/v1/continuity-plans/', {
+    const created = await page.request.post('/api/v2/continuity-plans/', {
       headers,
       data: { name: 'Request budget plan', ordering_mode: 'informational', lanes: [], nodes: [] },
     })

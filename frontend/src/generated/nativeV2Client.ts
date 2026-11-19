@@ -177,12 +177,6 @@ export interface CreateIssuesRequest {
 
 export type CreateIssuesResponse = components['schemas']['IssueListResponse']
 
-export interface CreateLegacyDependencyRequest {
-  body: components['schemas']['DependencyCreateRequest']
-}
-
-export type CreateLegacyDependencyResponse = components['schemas']['DependencyResponse']
-
 export interface CreateQueueOrderRequest {
   body: components['schemas']['QueueOrderRequest']
 }
@@ -232,14 +226,6 @@ export interface DeleteIssueRequest {
 }
 
 export type DeleteIssueResponse = void
-
-export interface DeleteLegacyDependencyRequest {
-  path: {
-    dependency_id: number
-  }
-}
-
-export type DeleteLegacyDependencyResponse = unknown
 
 export interface DeleteReadingListRequest {
   path: {
@@ -408,6 +394,14 @@ export interface ListThreadsRequest {
 
 export type ListThreadsResponse = components['schemas']['ThreadListResponse']
 
+export interface ListUndoSnapshotsRequest {
+  path: {
+    session_id: number
+  }
+}
+
+export type ListUndoSnapshotsResponse = components['schemas']['UndoSnapshotsResponse']
+
 export interface LoginRequest {
   body: components['schemas']['LoginRequest']
 }
@@ -492,6 +486,25 @@ export interface ReadingBoundaryBatchRequest {
 export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundaryBatchResponseV2']
 
 export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
+
+export interface ReadingOrdersInsertItemRequest {
+  path: {
+    reading_order_id: number
+  }
+  body: components['schemas']['InsertReadingOrderItemRequest']
+}
+
+export type ReadingOrdersInsertItemResponse = components['schemas']['InsertReadingOrderItemResponse']
+
+export type ReadingOrdersListResponse = components['schemas']['ReadingOrderListResponse']
+
+export interface ReadingPlanSyncRequest {
+  body: components['schemas']['SyncRequest']
+}
+
+export type ReadingPlanSyncResponse = components['schemas']['SyncResponse']
+
+export type ReadingPlanSyncStatusResponse = components['schemas']['SyncStatusResponse']
 
 export interface RefreshRequest {
   body?: components['schemas']['RefreshTokenRequest'] | null
@@ -697,6 +710,15 @@ export type SummariesResponse = components['schemas']['CreatorSummariesResponse'
 
 export type TeamChemistryResponse = components['schemas']['CreatorTeamChemistryResponse']
 
+export interface UndoToSnapshotRequest {
+  path: {
+    session_id: number
+    snapshot_id: number
+  }
+}
+
+export type UndoToSnapshotResponse = components['schemas']['UndoApplyResponse']
+
 export interface UnsnoozeRequest {
   body: components['schemas']['UnsnoozeRequest']
 }
@@ -752,7 +774,6 @@ export interface NativeV2Client {
   continuityRulesUpdate(args: ContinuityRulesUpdateRequest): Promise<ContinuityRulesUpdateResponse>
   createDependency(args: CreateDependencyRequest): Promise<CreateDependencyResponse>
   createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
-  createLegacyDependency(args: CreateLegacyDependencyRequest): Promise<CreateLegacyDependencyResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
   creatorsList(args?: CreatorsListRequest): Promise<CreatorsListResponse>
@@ -760,7 +781,6 @@ export interface NativeV2Client {
   defer(args: DeferRequest): Promise<DeferResponse>
   deleteDependency(args: DeleteDependencyRequest): Promise<DeleteDependencyResponse>
   deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
-  deleteLegacyDependency(args: DeleteLegacyDependencyRequest): Promise<DeleteLegacyDependencyResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
   detail(args: DetailRequest): Promise<DetailResponse>
   dieState(): Promise<DieStateResponse>
@@ -786,6 +806,7 @@ export interface NativeV2Client {
   listReadingLists(): Promise<ListReadingListsResponse>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
+  listUndoSnapshots(args: ListUndoSnapshotsRequest): Promise<ListUndoSnapshotsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
   logout(): Promise<LogoutResponse>
   manualDie(args: ManualDieRequest): Promise<ManualDieResponse>
@@ -799,6 +820,10 @@ export interface NativeV2Client {
   readReadingList(args: ReadReadingListRequest): Promise<ReadReadingListResponse>
   readingBoundaryBatch(args: ReadingBoundaryBatchRequest): Promise<ReadingBoundaryBatchResponse>
   readingGraph(): Promise<ReadingGraphResponse>
+  readingOrdersInsertItem(args: ReadingOrdersInsertItemRequest): Promise<ReadingOrdersInsertItemResponse>
+  readingOrdersList(): Promise<ReadingOrdersListResponse>
+  readingPlanSync(args: ReadingPlanSyncRequest): Promise<ReadingPlanSyncResponse>
+  readingPlanSyncStatus(): Promise<ReadingPlanSyncStatusResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
   reject(args: RejectRequest): Promise<RejectResponse>
@@ -824,6 +849,7 @@ export interface NativeV2Client {
   skip(args: SkipRequest): Promise<SkipResponse>
   summaries(args?: SummariesRequest): Promise<SummariesResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
+  undoToSnapshot(args: UndoToSnapshotRequest): Promise<UndoToSnapshotResponse>
   unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
   updateLegacyDependency(args: UpdateLegacyDependencyRequest): Promise<UpdateLegacyDependencyResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
@@ -858,54 +884,54 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     continuityPlansAdoptReadingOrder(args: ContinuityPlansAdoptReadingOrderRequest) {
       return client.post<ContinuityPlansAdoptReadingOrderResponse, ContinuityPlansAdoptReadingOrderRequest['body']>(
-        "/v1/continuity-plans/from-reading-order",
+        "/v2/continuity-plans/from-reading-order",
         args.body,
       )
     },
     continuityPlansCreate(args: ContinuityPlansCreateRequest) {
       return client.post<ContinuityPlansCreateResponse, ContinuityPlansCreateRequest['body']>(
-        "/v1/continuity-plans/",
+        "/v2/continuity-plans/",
         args.body,
       )
     },
     continuityPlansDelete(args: ContinuityPlansDeleteRequest) {
       return client.delete<ContinuityPlansDeleteResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
       )
     },
     continuityPlansGet(args: ContinuityPlansGetRequest) {
       return client.get<ContinuityPlansGetResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
       )
     },
     continuityPlansLinkDependency(args: ContinuityPlansLinkDependencyRequest) {
       return client.post<ContinuityPlansLinkDependencyResponse, ContinuityPlansLinkDependencyRequest['body']>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
         args.body,
       )
     },
     continuityPlansList() {
-      return client.get<ContinuityPlansListResponse>("/v1/continuity-plans/")
+      return client.get<ContinuityPlansListResponse>("/v2/continuity-plans/")
     },
     continuityPlansMembership(args: ContinuityPlansMembershipRequest) {
       return client.get<ContinuityPlansMembershipResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/membership`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/membership`,
       )
     },
     continuityPlansProjectToReadingOrder(args: ContinuityPlansProjectToReadingOrderRequest) {
       return client.post<ContinuityPlansProjectToReadingOrderResponse, ContinuityPlansProjectToReadingOrderRequest['body']>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reading-orders/project`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reading-orders/project`,
         args.body,
       )
     },
     continuityPlansUnlinkDependency(args: ContinuityPlansUnlinkDependencyRequest) {
       return client.delete<ContinuityPlansUnlinkDependencyResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
       )
     },
     continuityPlansUpdate(args: ContinuityPlansUpdateRequest) {
       return client.put<ContinuityPlansUpdateResponse, ContinuityPlansUpdateRequest['body']>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
         args.body,
       )
     },
@@ -946,12 +972,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-    createLegacyDependency(args: CreateLegacyDependencyRequest) {
-      return client.post<CreateLegacyDependencyResponse, CreateLegacyDependencyRequest['body']>(
-        "/v1/dependencies/",
-        args.body,
-      )
-    },
     createQueueOrder(args: CreateQueueOrderRequest) {
       return client.post<CreateQueueOrderResponse, CreateQueueOrderRequest['body']>(
         "/v2/queue-orders",
@@ -984,11 +1004,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     deleteIssue(args: DeleteIssueRequest) {
       return client.delete<DeleteIssueResponse>(
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
-      )
-    },
-    deleteLegacyDependency(args: DeleteLegacyDependencyRequest) {
-      return client.delete<DeleteLegacyDependencyResponse>(
-        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
       )
     },
     deleteReadingList(args: DeleteReadingListRequest) {
@@ -1027,7 +1042,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     getLegacyDependency(args: GetLegacyDependencyRequest) {
       return client.get<GetLegacyDependencyResponse>(
-        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        `/v2/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
       )
     },
     getMetrics() {
@@ -1095,7 +1110,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       )
     },
     listBlockedLegacyDependencies() {
-      return client.get<ListBlockedLegacyDependenciesResponse>("/v1/dependencies/blocked")
+      return client.get<ListBlockedLegacyDependenciesResponse>("/v2/dependencies/blocked")
     },
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")
@@ -1110,6 +1125,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<ListThreadsResponse>(
         "/v2/threads",
         { params: compactQuery(args.query) },
+      )
+    },
+    listUndoSnapshots(args: ListUndoSnapshotsRequest) {
+      return client.get<ListUndoSnapshotsResponse>(
+        `/v2/undo/${encodeURIComponent(String(args.path.session_id))}/snapshots`,
       )
     },
     login(args: LoginRequest) {
@@ -1175,6 +1195,24 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     readingGraph() {
       return client.get<ReadingGraphResponse>("/v2/reading-graph")
     },
+    readingOrdersInsertItem(args: ReadingOrdersInsertItemRequest) {
+      return client.post<ReadingOrdersInsertItemResponse, ReadingOrdersInsertItemRequest['body']>(
+        `/v2/reading-orders/${encodeURIComponent(String(args.path.reading_order_id))}/items`,
+        args.body,
+      )
+    },
+    readingOrdersList() {
+      return client.get<ReadingOrdersListResponse>("/v2/reading-orders/")
+    },
+    readingPlanSync(args: ReadingPlanSyncRequest) {
+      return client.post<ReadingPlanSyncResponse, ReadingPlanSyncRequest['body']>(
+        "/v2/reading-plan-sync/runs",
+        args.body,
+      )
+    },
+    readingPlanSyncStatus() {
+      return client.get<ReadingPlanSyncStatusResponse>("/v2/reading-plan-sync/status")
+    },
     refresh(args: RefreshRequest = {}) {
       return client.post<RefreshResponse, RefreshRequest['body']>(
         "/v2/auth/refresh",
@@ -1195,28 +1233,28 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     releaseSourcesCreate(args: ReleaseSourcesCreateRequest) {
       return client.post<ReleaseSourcesCreateResponse, ReleaseSourcesCreateRequest['body']>(
-        "/v1/continuity-plans/release-sources/",
+        "/v2/continuity-plans/release-sources/",
         args.body,
       )
     },
     releaseSourcesDelete(args: ReleaseSourcesDeleteRequest) {
       return client.delete<ReleaseSourcesDeleteResponse>(
-        `/v1/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
+        `/v2/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
       )
     },
     releaseSourcesList(args: ReleaseSourcesListRequest) {
       return client.get<ReleaseSourcesListResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/`,
       )
     },
     releaseSourcesListReader(args: ReleaseSourcesListReaderRequest) {
       return client.get<ReleaseSourcesListReaderResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/reader`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/reader`,
       )
     },
     releaseSourcesUpdate(args: ReleaseSourcesUpdateRequest) {
       return client.patch<ReleaseSourcesUpdateResponse, ReleaseSourcesUpdateRequest['body']>(
-        `/v1/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
+        `/v2/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
         args.body,
       )
     },
@@ -1313,6 +1351,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     teamChemistry() {
       return client.get<TeamChemistryResponse>("/v2/creators/team-chemistry")
     },
+    undoToSnapshot(args: UndoToSnapshotRequest) {
+      return client.post<UndoToSnapshotResponse>(`/v2/undo/${encodeURIComponent(String(args.path.session_id))}/snapshots/${encodeURIComponent(String(args.path.snapshot_id))}/restore`)
+    },
     unsnooze(args: UnsnoozeRequest) {
       return client.post<UnsnoozeResponse, UnsnoozeRequest['body']>(
         "/v2/roll/unsnooze",
@@ -1321,7 +1362,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     updateLegacyDependency(args: UpdateLegacyDependencyRequest) {
       return client.patch<UpdateLegacyDependencyResponse, UpdateLegacyDependencyRequest['body']>(
-        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        `/v2/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
         args.body,
       )
     },
