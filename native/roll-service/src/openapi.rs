@@ -9,7 +9,7 @@
 //! and reading-boundary declarations.
 //!
 //! The checked-in artifact is `native/contracts/v2-runtime.openapi.json`; see
-//! `native/contracts/README.md` for regeneration. `scripts/export_openapi_schema.py`
+//! `native/contracts/README.md` for regeneration. `scripts/export_openapi_schema.mjs`
 //! merges this runtime contract into the single generated frontend client.
 
 use utoipa::OpenApi;

@@ -3,7 +3,7 @@
   "description": "Hermetic route-burndown fixture caf\u00e9 \ud83d\ude00",
   "updated_by_issue": 4739,
   "burndown": {
-    "generated_by": "scripts/generate_route_burndown.py",
+    "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
     "total_live_operations": 2,
@@ -46,11 +46,11 @@
     }
   ],
   "full_surface": {
-    "generated_by": "scripts/generate_route_burndown.py",
+    "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
     "summary": {
-      "generated_by": "scripts/generate_route_burndown.py",
+      "generated_by": "scripts/generate_route_burndown.mjs",
       "issue": 4739,
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
