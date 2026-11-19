@@ -149,22 +149,6 @@
         "OPTIONS"
       ],
       "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/issues/creators$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/test\\-backdate$",
-      "methods": [
-        "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
     }
   ]
 }
