@@ -163,10 +163,11 @@ async fn run_locked(client: &mut Client) -> Result<Report, MigrateError> {
             // writing the Alembic revision; repair it below.
         }
         Some(AlembicState::Empty) => {
-            return Err(MigrateError(format!(
+            return Err(MigrateError(
                 "alembic_version is empty, expected a supported head; \
                  run Alembic to a supported head before switching to the Rust runner"
-            )));
+                    .to_string(),
+            ));
         }
         Some(AlembicState::Other(revisions)) => {
             return Err(MigrateError(format!(
@@ -217,15 +218,10 @@ async fn alembic_state(client: &Client) -> Result<Option<AlembicState>, MigrateE
         return Ok(None);
     };
     Ok(Some(match revisions.as_slice() {
-        [only]
-            if only == BASELINE_ALEMBIC_HEAD || only == QUEUE_EXCLUSION_HEAD =>
-        {
+        [only] if only == BASELINE_ALEMBIC_HEAD || only == QUEUE_EXCLUSION_HEAD => {
             AlembicState::CurrentHead
         }
-        [only]
-            if only == BASELINE_SCHEMA_ALEMBIC_HEAD
-                || only == DEFERRED_IDENTITY_REPAIR_HEAD =>
-        {
+        [only] if only == BASELINE_SCHEMA_ALEMBIC_HEAD || only == DEFERRED_IDENTITY_REPAIR_HEAD => {
             AlembicState::BaselineHead
         }
         [] => AlembicState::Empty,

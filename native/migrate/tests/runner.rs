@@ -3,9 +3,7 @@
 //! and drops its own scratch database on the server named by
 //! `MIGRATE_TEST_DATABASE_URL`.
 
-use comicpile_migrate::{
-    connect, run, BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD,
-};
+use comicpile_migrate::{connect, run, BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD};
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio_postgres::Client;
 
@@ -152,10 +150,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
     assert_eq!(stamp, BASELINE_ALEMBIC_HEAD);
 
     let recorded: i64 = client
-        .query_one(
-            "SELECT count(*) FROM public.refinery_schema_history",
-            &[],
-        )
+        .query_one("SELECT count(*) FROM public.refinery_schema_history", &[])
         .await
         .unwrap()
         .get(0);
@@ -244,14 +239,20 @@ async fn alembic_database_at_baseline_head_adopts_baseline_and_runs_pending() {
         .await
         .unwrap()
         .get(0);
-    assert!(queue_groups, "the pending V2 migration must run after adoption");
+    assert!(
+        queue_groups,
+        "the pending V2 migration must run after adoption"
+    );
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
         .await
         .unwrap()
         .get(0);
-    assert_eq!(stamp, BASELINE_ALEMBIC_HEAD, "the old head must be moved forward");
+    assert_eq!(
+        stamp, BASELINE_ALEMBIC_HEAD,
+        "the old head must be moved forward"
+    );
 
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
