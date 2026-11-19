@@ -18,6 +18,15 @@ test('audit ingress preserves production method/path routing and native priority
   assert.match(nginx, /add_header X-ComicPile-API-Runtime \$audit_api_runtime always;/);
 });
 
+test('stale pre-regeneration Python exceptions are audited as Rust', () => {
+  const nginx = renderAuditIngress({routes: [
+    {src: '^/api/v1/legacy$', methods: ['GET'], dest: '/api/index.py'},
+    {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
+  ]});
+  assert.match(nginx, /~\^\(\?:GET\):\(\?:\/api\/v1\/legacy\)\$ rust;/);
+  assert.doesNotMatch(nginx, /python/);
+});
+
 test('audit ingress rejects a Python catch-all or unknown API runtime', () => {
   assert.throws(() => renderAuditIngress({routes: [
     {src: '^/api/v2/ping$', methods: ['GET'], dest: '/api/native_roll.rs'},

@@ -9,6 +9,9 @@ import {readFileSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
 const RUST = new Set(['/api/native_roll.rs', '/api/native_issue.rs']);
+// main's bot-owned vercel.json can still carry stale Python exceptions until
+// regenerate-routes.yml lands; they must be exercised as Rust 404s now.
+const RETIRED_PYTHON = '/api/index.py';
 const FALLBACK = '/api(?:/.*)?';
 const ALL_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
@@ -24,7 +27,7 @@ export function renderAuditIngress(config) {
       continue;
     }
     if (!route.src?.startsWith('/api/') && !route.src?.startsWith('^/api/')) continue;
-    if (!RUST.has(route.dest)) {
+    if (!RUST.has(route.dest) && route.dest !== RETIRED_PYTHON) {
       throw new Error(`Unknown API destination ${route.dest} for ${route.src}`);
     }
     if (/[\r\n;]/.test(route.src)) throw new Error('Unsafe nginx ingress expression');
