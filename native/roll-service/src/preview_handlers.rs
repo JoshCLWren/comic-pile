@@ -536,7 +536,7 @@ pub async fn preview_series_mapping(
                 "thread_id": r.get::<_, Option<i32>>(3),
                 "thread_title": r.get::<_, Option<String>>(4),
                 "current_mapping_status": r.get::<_, Option<String>>(5),
-                "provider": r.get::<_, Option<String>>(6)],
+                "provider": r.get::<_, Option<String>>(6),
                 "external_id": r.get::<_, Option<String>>(7),
                 "confidence": r.get::<_, Option<f64>>(8),
                 "classification": "unresolved",
