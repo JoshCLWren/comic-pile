@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import {
@@ -341,6 +341,29 @@ export default function RollPage() {
   })
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
+  // Snoozed bootstrap summaries carry only series identity. Resolve their
+  // representative covers in one bounded paginated thread-list scan, never
+  // a request per row, only when the shelf is expanded.
+  const snoozedCoverQuery = useQuery({
+    queryKey: ['roll', 'snoozed-series-covers', snoozedThreads.map((thread) => thread.id).sort((a, b) => a - b)],
+    queryFn: async (): Promise<Record<number, string | null>> => {
+      const remaining = new Set(snoozedThreads.map((thread) => thread.id))
+      const covers: Record<number, string | null> = {}
+      let pageToken: string | null = null
+      do {
+        const page = await threadsApi.list({ page_size: 200 }, pageToken)
+        for (const thread of page.threads) {
+          if (!remaining.has(thread.id)) continue
+          covers[thread.id] = thread.series_cover_image_url ?? null
+          remaining.delete(thread.id)
+        }
+        pageToken = page.next_page_token ?? null
+      } while (pageToken && remaining.size > 0)
+      return covers
+    },
+    enabled: state.snoozedExpanded && snoozedThreads.length > 0 && !state.isRatingView,
+    staleTime: 60_000,
+  })
   // Derived die drives the pool cutoff and 3D model; scoped-only with a d6
   // default (see `resolveRollSelectedDie` above).
   const effectiveDie = selectedDie
@@ -535,6 +558,7 @@ export default function RollPage() {
 
               snoozedThreads={snoozedThreads}
               snoozedCount={bootstrap?.snoozed_count ?? snoozedThreads.length}
+              snoozedCovers={snoozedCoverQuery.data}
               eligibleThreadIds={scopedEligibleIssueIds?.thread_ids ?? null}
               issueCards={scopedIssueCards ?? null}
               snoozedExpanded={state.snoozedExpanded}
