@@ -419,6 +419,12 @@ describe('targeted cache effects', () => {
     // separately mounted Finished Series shelf must refresh without a reset.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
     expect(resetQueries).not.toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
+
+    // Parent views that render the read label from their own query (rather than
+    // from the shared card) must refresh too, or a saved read leaves crossover
+    // progress and CBL preview labels stale (#4445).
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.crossover.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.cblSources.previewAll() })
   })
 
   it('invalidates edited issue surfaces and reconciles open views after read/progress edits', async () => {

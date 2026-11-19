@@ -21,9 +21,9 @@ use crate::{db, AppState};
 
 /// Load the canonical Alembic head schema only when a test actually needs it.
 ///
-/// `0001_baseline.sql` is the original Alembic baseline fixture; later SQL
+/// `V1__baseline.sql` is the original Alembic baseline fixture; later SQL
 /// migrations advance it to the current Alembic head. Loading every migration
-/// in order keeps tests aligned with `comicpile-migrate up`.
+/// in version order keeps tests aligned with `comicpile-migrate up`.
 fn canonical_schema() -> String {
     let migrations_dir =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../migrate/migrations");
@@ -140,7 +140,7 @@ pub async fn truncate_application_tables(state: &AppState) {
     let rows = connection
         .query(
             "SELECT tablename FROM pg_tables \
-             WHERE schemaname = 'public' AND tablename NOT IN ('alembic_version', 'schema_migrations') \
+             WHERE schemaname = 'public' AND tablename NOT IN ('alembic_version', 'refinery_schema_history') \
              ORDER BY tablename",
             &[],
         )

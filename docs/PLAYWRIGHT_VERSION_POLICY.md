@@ -44,8 +44,13 @@ These are the required Chromium paths that must continue to run:
 
 - Rendered UI audit: `pnpm run audit:ui` (root) → `scripts/run_ui_audit.sh` →
   `pnpm --filter frontend exec playwright test --config=playwright.audit.config.ts`.
-  CI: the `ui-audit` job installs Chromium via
-  `pnpm --filter frontend exec playwright install --with-deps chromium`.
+  CI: the `ui-audit` job installs only the pinned Chromium binaries via
+  `pnpm --filter frontend exec playwright install chromium`. It deliberately does
+  **not** use `--with-deps`: that path runs `apt-get install` for fonts/xfonts from
+  `security.ubuntu.com`, whose 503 responses broke the job on every PR. The
+  `ubuntu-24.04` runner already provides the browser system libraries, so no apt
+  access is needed at runtime. The same rule applies to the
+  `e2e-chromium-regression` workflow.
 - E2E suite: `make verify-e2e` → `pnpm --filter frontend run test:e2e`.
 - P0 Chromium suite: `pnpm --filter frontend run test:e2e:p0`
   (`playwright.p0.config.ts`).
