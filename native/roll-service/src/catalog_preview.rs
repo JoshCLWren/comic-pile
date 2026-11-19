@@ -240,7 +240,7 @@ pub async fn preview_series_mapping(
 
 // --- Internal logic ---
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Plan {
     scope: SeriesMappingPreviewScope,
     provider_series: Option<SeriesMappingPreviewProviderSeries>,
