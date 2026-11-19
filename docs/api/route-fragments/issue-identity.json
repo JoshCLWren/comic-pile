@@ -111,6 +111,20 @@
     {
       "bucket": "v1_operations",
       "method": "POST",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/reading\\-graph\\-preview$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4842,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
       "path": "/api/v1/cbl/{list_id}/adoption-commit",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/cbl/[^/]+/adoption\\-commit$",
