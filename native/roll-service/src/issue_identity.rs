@@ -3156,6 +3156,81 @@ async fn reconcile_entries_impl<E: DbExec>(
     Ok(out)
 }
 
+type EntryResolution = (
+    Option<i32>,
+    Option<i32>,
+    String,
+    bool,
+    Option<String>,
+    Option<String>,
+);
+
+#[derive(Clone)]
+struct CanonicalIssueRow {
+    id: i32,
+    status: Option<String>,
+    read_at: Option<String>,
+}
+
+type CanonicalIssueIndex = HashMap<String, Vec<CanonicalIssueRow>>;
+
+/// Load every requested known identity and its owner-scoped confirmed mappings.
+/// An empty vector means the identity exists but has no owned issue, which is
+/// the only case that may use title/number fallback. A missing key means the
+/// provider identity itself is unknown and must remain unresolved.
+async fn load_canonical_issue_index<E: DbExec>(
+    tx: &E,
+    user_id: i32,
+    rows: &[tokio_postgres::Row],
+) -> Result<CanonicalIssueIndex, ApiError> {
+    let cvids: Vec<String> = rows
+        .iter()
+        .filter_map(|row| row.get::<_, Option<String>>(4))
+        .map(|cvid| cvid.trim().to_string())
+        .filter(|cvid| !cvid.is_empty())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    if cvids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let rows = tx
+        .run_query(
+            r#"
+        SELECT e.external_id,
+               CASE WHEN t.id IS NULL THEN NULL ELSE i.id END AS issue_id,
+               CASE WHEN t.id IS NULL THEN NULL ELSE i.status::text END AS status,
+               CASE WHEN t.id IS NULL THEN NULL ELSE i.read_at::text END AS read_at
+        FROM external_identities e
+        LEFT JOIN issue_external_identity_mappings m
+          ON m.external_identity_id = e.id AND m.status = 'confirmed'
+        LEFT JOIN issues i ON i.id = m.issue_id
+        LEFT JOIN threads t ON t.id = i.thread_id AND t.user_id = $2
+        WHERE e.provider = 'comicvine'
+          AND e.entity_type = 'issue'
+          AND e.external_id = ANY($1::text[])
+        ORDER BY e.external_id, issue_id
+        "#,
+            &[&cvids, &user_id],
+        )
+        .await
+        .map_err(|e| tx_db_error(e, ""))?;
+    let mut index = CanonicalIssueIndex::new();
+    for row in rows {
+        let cvid: String = row.get(0);
+        let issue = row.get::<_, Option<i32>>(1).map(|id| CanonicalIssueRow {
+            id,
+            status: row.get(2),
+            read_at: row.get(3),
+        });
+        let entry = index.entry(cvid).or_default();
+        if let Some(issue) = issue {
+            entry.push(issue);
+        }
+    }
+    Ok(index)
+}
+
 #[derive(Clone)]
 struct OwnedIssueFallbackRow {
     id: i32,
@@ -3171,6 +3246,8 @@ struct OwnedIssueFallbackRow {
 /// for every unresolved entry (no SQL in row loops).
 struct OwnedIssueFallbackIndex {
     rows: Vec<OwnedIssueFallbackRow>,
+    confirmed_issue_ids: HashSet<i32>,
+    confirmed_series: HashMap<i32, HashSet<String>>,
 }
 
 async fn load_owned_issue_fallback_index<E: DbExec>(
