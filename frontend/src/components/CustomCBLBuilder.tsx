@@ -1190,9 +1190,7 @@ export default function CustomCBLBuilder({
           </p>
           <ul className="space-y-2" aria-label="Waiting changes">
             {(confirmationChanges ?? []).map((change) => (
-              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
-                {describePredecessorChange(change)}
-              </li>
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
             ))}
           </ul>
           <div className="flex flex-wrap justify-end gap-2">
@@ -1219,9 +1217,7 @@ export default function CustomCBLBuilder({
           </p>
           <ul className="space-y-2" aria-label="Replacement waiting changes">
             {(replaceConfirmation?.changes ?? []).map((change) => (
-              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
-                {describePredecessorChange(change)}
-              </li>
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
             ))}
           </ul>
           <div className="flex flex-wrap justify-end gap-2">
@@ -1253,9 +1249,7 @@ export default function CustomCBLBuilder({
           </p>
           <ul className="space-y-2" aria-label="Undo waiting changes">
             {(undoConfirmation ?? []).map((change) => (
-              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
-                {describePredecessorChange(change)}
-              </li>
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
             ))}
           </ul>
           <div className="flex flex-wrap justify-end gap-2">
