@@ -137,3 +137,18 @@ On 2026-10-13 production, the known baseline included 18 Custom CBLs with 1,055 
 ### Read now selection acceptance
 
 App-wide activation must exercise Queue **Read & Rate** (the `set-pending` API), not only dice Roll and override. Manual selection records the exact canonical Issue ID and number in its roll event, regardless of cached Thread frontier or blocked flags. Rating must consume that same offered Issue; undo restores its unread state. A successful selection response alone is insufficient acceptance evidence. Session skips and durable snooze backoff remain enforced before offering a manual selection; an explicit current-session unsnooze is recorded durably. Set current issue → rate and prerequisite recovery Read now → rate must also bind the exact canonical Issue, without consulting retired frontier flags or generated dependencies.
+
+## Status / amendments (2026-11-18)
+
+The original text above is preserved as history. Amendments, with citations:
+
+- **Implementation status:** the header "implementation pending" is superseded. Option E runs on the Rust v2 stack: canonical continuity-plan reader and release metadata (95e0fd8a2, Nov 5), v2 Reading List read/create/delete/reader and atomic owner-scoped replace with predecessor confirmation (172fc7203, dbc689713), retirement of the legacy v1 continuity-plan reader (#4346 / #4710), and removal of the shadowed Python handlers (#5405, #5399, #5402). Coordination issue: #2366.
+- **Dependency cycles:** a reading-dependency cycle caused a production outage (P0 #4759). Rust v2 now contains cycles with atomic graph preflight and owner-scoped recovery; CBL previews that contain only a cycle show the loop and a resolve path (#5379 / #5438).
+- **Orphaned plans:** plans whose Reading List identity was deleted are recovered by explicit preview and relink (#4684), and deletion of an authoritative list is refused (ddfd1cf13). Empty plans (0 lanes) still open to this recovery screen: open bug #5462.
+- **Plan tag inheritance:** plan tags flow to issues through the linked authoritative Reading List, including a plan's sole unread issue (#5265 / #5463).
+- **Roll behavior superseded:** the Roll contract is now sessionless and event-derived ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405), 2026-10-31): die ladder d2-d20, uniform selection, no reading-mode/bandwidth weighting, no snooze backfill. Option E remains the only automatic-eligibility authority, but it never vetoes manual read/rate of an owned issue. "Read now selection acceptance" below is read in that light. Sessions v1 current and restore-session-start were retired (#4343 / #5442).
+- **Reading mode:** the quiz launcher is feature-flagged off (`frontend/src/config/features.ts`, #1945) and removed from the product direction by #4405.
+- **Crossovers:** the Crossovers list now redirects into Reading Plans (`/continuity-plans`, `/continuity-plans/events`); whether `/crossovers` and `/cbl-sources` get navigation entries or fold into Reading Lists is open under #5437.
+- **Not verified here:** custom CBL authoring and dependency-group behavior were not re-audited in this pass; no amendment is claimed for them.
+
+The user-facing contract for these flows lives in [docs/manual-qa/](manual-qa/README.md).

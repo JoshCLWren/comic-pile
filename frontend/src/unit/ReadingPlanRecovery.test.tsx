@@ -88,6 +88,10 @@ describe('orphaned Reading Plan recovery', () => {
     await screen.findByRole('heading', { name: 'Recover this Reading Plan' })
     expect(screen.getByText(/original Reading List identity was deleted/)).toBeInTheDocument()
     expect(screen.getByText(/Creating another list with the same name does not restore its identity/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'open the Plan authoring UI' })).toHaveAttribute(
+      'href',
+      '/continuity-plans/1000096/edit?authoring=1',
+    )
     expect(relinkApi).not.toHaveBeenCalled()
 
     await user.selectOptions(screen.getByLabelText('Reading List to relink'), '1000109')
