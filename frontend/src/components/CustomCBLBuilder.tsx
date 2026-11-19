@@ -27,7 +27,12 @@ import ReadingListSeriesSkipControls from './ReadingListSeriesSkipControls'
 import { buildReplacementModel } from '../utils/readingListReplacementModel'
 import { getReadingListProgressIndex } from '../utils/readingListProgress'
 import ConfirmDialog from './ConfirmDialog'
-import { DEFAULT_GATE } from '../utils/customCBLDefaults'
+import {
+  computeEntryRequirements,
+  decodeCustomCBLError,
+  describeCyclePath,
+  describePredecessorChange,
+} from '../utils/readingListAuthoring'
 import {
   buildWritePayload,
   checkpointTargetsFor,
@@ -35,13 +40,7 @@ import {
   messageFor,
   normalizePositions,
   sameEntries,
-} from '../utils/customCBLDraft'
-import {
-  computeEntryRequirements,
-  decodeCustomCBLError,
-  describeCyclePath,
-  describePredecessorChange,
-} from '../utils/readingListAuthoring'
+} from './customCBLBuilderHelpers'
 
 interface CustomCBLBuilderProps {
   planId?: number
@@ -52,6 +51,7 @@ interface CustomCBLBuilderProps {
 }
 
 const DEFAULT_MODE: ReadingListMode = 'loose'
+const DEFAULT_GATE: ReadingListGate = 'none'
 const ENTRY_PAGE_SIZE = 30
 
 /**
@@ -948,6 +948,12 @@ export default function CustomCBLBuilder({
                           Retry source search
                         </button>
                       </div>
+                    )}
+
+                    {cblSourcesQuery.isSuccess && !cblSourcesQuery.isFetching && cblSourcesQuery.data.length === 0 && (
+                      <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+                        No active global CBL sources match &ldquo;{cblSubmittedQuery}&rdquo;.
+                      </p>
                     )}
 
                     {(cblSourcesQuery.data?.length ?? 0) > 0 && (
