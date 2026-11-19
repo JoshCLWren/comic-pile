@@ -239,6 +239,74 @@ def _detect_pr_downgrade_base(base_ref: str | None) -> str | None:
     return f"-{len(added_revs)}"
 
 
+def _current_head_is_merge(env: dict[str, str] | None = None) -> bool:
+    """Return True when the Alembic head is a merge revision (multiple parents)."""
+    try:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        cfg = Config(str(REPO_ROOT / "alembic.ini"))
+        script = ScriptDirectory.from_config(cfg)
+        heads = script.get_heads()
+        if len(heads) != 1:
+            return True
+        rev = script.get_revision(heads[0])
+        if rev is None:
+            return False
+        down = rev.down_revision
+        return isinstance(down, tuple) and len(down) > 1
+    except Exception:
+        return False
+
+
+def _merge_head_safe_base() -> str | None:
+    """Return a deterministic downgrade base for a merge head (its branchpoint/parents' common base)."""
+    try:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        cfg = Config(str(REPO_ROOT / "alembic.ini"))
+        script = ScriptDirectory.from_config(cfg)
+        heads = script.get_heads()
+        if len(heads) != 1:
+            return None
+        rev = script.get_revision(heads[0])
+        if rev is None:
+            return None
+        down = rev.down_revision
+        if isinstance(down, tuple) and len(down) > 1:
+            # Downgrade to the first parent revision target is not directly "base of merge";
+            # better to downgrade to the merge's down revisions' common ancestor? complex.
+            # Use the branchpoint revision by taking any parent's down-revision chain? easier:
+            # return the first down revision's... actually `alembic downgrade <rev>` goes to rev.
+            # To undo the merge revision itself, downgrade to one of its parents - but graph requires care.
+            # Safest: downgrade to the parent revision that all merge branches descend from in simple cases:
+            # find common ancestor of down revisions. For simple 2-way merge, parents share a branchpoint child?
+            # Actually merge file's down_revision lists parents (e.g. i5378, s5435) and those both have parent c4405.
+            # So downgrading to c44050000002 would undo merge + both branches - a good PR-base-like step if no new migrations.
+            parents = [d for d in down if isinstance(d, str)]
+            if not parents:
+                return None
+            parent_revs = [script.get_revision(p) for p in parents]
+            grand: list[str] = []
+            for pr in parent_revs:
+                if pr is None:
+                    return None
+                pd = pr.down_revision
+                if isinstance(pd, str):
+                    grand.append(pd)
+                elif isinstance(pd, tuple) and len(pd) == 1:
+                    grand.append(pd[0])
+                else:
+                    return None
+            if grand and len(set(grand)) == 1:
+                return grand[0]
+            return parents[0]
+    except Exception:
+        return None
+    return None
+
+
 def _downgrade_target(
     *,
     fixture_revision: str,
@@ -253,9 +321,11 @@ def _downgrade_target(
     pr_base = _detect_pr_downgrade_base(base_ref)
     if pr_base is not None:
         return pr_base
-    # No new migrations vs base_ref, or no base_ref context: step back one
-    # revision to exercise rollback. Callers may pass --base/--downgrade-steps
-    # for merge heads or known-safe targets.
+    # No new migrations vs base_ref, or no base_ref context.
+    if _current_head_is_merge():
+        merge_base = _merge_head_safe_base()
+        if merge_base:
+            return merge_base
     return "-1"
 
 
