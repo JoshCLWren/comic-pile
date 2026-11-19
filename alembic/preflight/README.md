@@ -5,7 +5,7 @@ machine-enforced safety preconditions for one risky Alembic migration. The
 gates that consume them live in `scripts/migration_safety.py` and are wired
 into CI (`migration-safety`) and `deploy-production.yml`.
 
-Full policy and schema reference: `docs/MIGRATION_SAFETY.md`.
+Full policy and schema reference: `scripts/migration_safety.py` (the gate implementation and its schema docstrings).
 
 A manifest is required whenever a migration's source contains:
 

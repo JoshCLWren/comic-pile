@@ -355,11 +355,11 @@ A domain noun that also names something else must be qualified at every boundary
 domain concept to application code under a bare, ambiguous name when a second meaning exists in the
 same codebase.
 
-- The durable reading-history model is `ReadingSession` (`app/models/reading_session.py`), reached through `app/repositories/reading_session_repository.py` and `app/services/reading_session_service.py`. It is never `Session`, `sessions`, or `SessionModel`.
+- The durable reading-history model is `ReadingSession` (`app/models/reading_session.py`), reached through `app/repositories/reading_session_repository.py` and, in the Rust runtime, `native/roll-service/src/reading_session.rs`. It is never `Session`, `sessions`, or `SessionModel`.
 - Auth state has its own precise names: access token, refresh token, `password_changed_at` (credential epoch), `revoked_tokens`, and `password_reset_tokens`. There is no auth-session persistence model, and none may be added just to make naming symmetrical.
-- Auth modules (`app/auth.py`, `app/api/auth.py`, `app/services/password_reset_service.py`, `app/services/password_reset_mailer.py`, and the auth-state repositories) must not import or call reading-history persistence. Revoke credentials with auth state; reading history is not a credential.
+- Auth modules (`app/auth.py`, `native/roll-service/src/auth/`, and the auth-state repositories) must not import or call reading-history persistence. Revoke credentials with auth state; reading history is not a credential.
 - Storage/API edges may keep familiar wire names (`sessions` table, `/api/session/`, `SessionListItem`) because clients and migrations depend on them. Ambiguity is resolved in code, not on the wire.
-- The static guard `tests/test_reading_session_naming_guard.py` enforces the boundary; `tests/test_password_reset.py::test_reset_preserves_reading_sessions` proves a reset preserves populated reading history.
+- The static guard `tests/test_reading_session_naming_guard.py` enforces the boundary; a password reset must preserve populated reading history.
 
 See [`docs/READING_SESSION_NAMING.md`](docs/READING_SESSION_NAMING.md) for the full convention, the
 retained-ambiguity inventory, and the rationale from the #2996 password-reset incident.
@@ -463,7 +463,7 @@ Port conflicts: Dev (5435), Test (5437), CI (5432).
 **Query keys naming:** build every key through `queryKeys.*` from `queryKeys.ts`. Prefer stable keys
 with normalized params; put pagination cursors in `pageParam`, not in the key.
 
-**Reads (`useQuery`):** wrap a service call from `services/api.ts`; gate with `enabled`; keys from
+**Reads (`useQuery`):** wrap a service call from `frontend/src/services/api.ts`; gate with `enabled`; keys from
 `queryKeys.*`. Return `{ data, isPending, isError, refetch }`.
 
 **Writes (`useMutation`):** `mutationFn` calls the API service; `onSuccess` performs cache effects
@@ -606,9 +606,7 @@ python3 .github/scripts/validate-free-model-factories.py
 python3 -m pytest --noconftest -o addopts='' -q tests/test_factory_provider_candidates.py tests/test_factory_worker_slots.py tests/test_factory_runtime_model_select.py
 ```
 
-Do not resurrect `.github/free-model-factories.tsv`,
-`.github/factory-expected-workers.json`,
-`.github/factory-roster-snapshot.json`, or the removed retirement workflow.
+<!-- docs-path-check: ignore --> Do not resurrect the removed `.github/free-model-factories.tsv` or `.github/factory-roster-snapshot.json` files, or the removed retirement workflow.
 
 ## GitHub Issue Workflow
 

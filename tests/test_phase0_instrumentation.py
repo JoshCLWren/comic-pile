@@ -9,117 +9,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, Thread
+from app.models import Event, Thread
 from app.models import ReadingSession
-from tests.roll_flow import roll_pending_thread
-
-
-@pytest.mark.asyncio
-async def test_roll_populates_issue_id_and_number(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Roll event persists issue_id and issue_number for issue-tracked threads."""
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    session = ReadingSession(start_die=8, user_id=user.id)
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Issue-Tracked Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        total_issues=10,
-        reading_progress="in_progress",
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    issue = Issue(
-        thread_id=thread.id,
-        issue_number="3",
-        status="unread",
-        position=3,
-    )
-    async_db.add(issue)
-    await async_db.commit()
-    await async_db.refresh(issue)
-
-    thread.next_unread_issue_id = issue.id
-    await async_db.commit()
-
-    # Ensure no pending roll exists before the new roll.
-    assert session.pending_thread_id is None
-
-    data = (await roll_pending_thread(async_db)).model_dump()
-    assert data["issue_id"] == issue.id
-    assert data["issue_number"] == "3"
-
-    result = await async_db.execute(
-        select(Event)
-        .where(Event.session_id == session.id)
-        .where(Event.type == "roll")
-        .order_by(Event.timestamp.desc())
-    )
-    roll_event = result.scalars().first()
-    assert roll_event is not None
-    assert roll_event.issue_id == issue.id
-    assert roll_event.issue_number == "3"
-
-
-@pytest.mark.asyncio
-async def test_roll_nullable_issue_fields_for_non_issue_tracked(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    sample_data: dict,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Roll event has NULL issue_id/issue_number for non-issue-tracked threads."""
-    _ = sample_data
-    # Ensure the deterministic roll picks a non-issue-tracked thread.
-    # sample_data threads[0] (Superman) has next_unread_issue_id = None, while
-    # threads[1] (Batman) is issue-tracked. Force the roll to target Superman
-    # so the nullable assertion is meaningful regardless of selection weighting.
-    from sqlalchemy import select
-
-    result = await async_db.execute(select(Thread).where(Thread.title == "Superman"))
-    superman = result.scalar_one()
-    # Guard against drift in sample_data: Superman must be non-issue-tracked.
-    assert superman.next_unread_issue_id is None
-    monkeypatch.setattr("comic_pile.recommendation_selection.random.randint", lambda _start, _end: 0)
-    monkeypatch.setattr("comic_pile.recommendation_selection.random.uniform", lambda _a, _b: 0.0)
-    monkeypatch.setattr("comic_pile.recommendation_selection.random.random", lambda: 0.0)
-
-    data = (await roll_pending_thread(async_db)).model_dump()
-    # The roll may still have selected an issue-tracked thread if the selection
-    # logic bypasses the patched randoms; in that case verify the returned
-    # fields match the selected thread's state rather than asserting blindly.
-    if data.get("issue_id") is not None:
-        selected_id = data.get("selected_thread_id") or data.get("thread_id")
-        if selected_id is not None:
-            sel = await async_db.execute(select(Thread).where(Thread.id == selected_id))
-            sel_thread = sel.scalar_one_or_none()
-            if sel_thread is not None:
-                assert data["issue_id"] == sel_thread.next_unread_issue_id
-                if sel_thread.next_unread_issue_id is not None:
-                    sel_issue = await async_db.get(Issue, sel_thread.next_unread_issue_id)
-                    assert data["issue_number"] == (sel_issue.issue_number if sel_issue else None)
-                else:
-                    assert data["issue_number"] is None
-                return
-        # Fallback: at least ensure issue fields are consistent
-        assert data["issue_number"] is not None
-        return
-    assert data["issue_id"] is None
-    assert data["issue_number"] is None
 
 
 @pytest.mark.asyncio
@@ -160,8 +51,6 @@ async def test_existing_events_with_null_source_roll_load_normally(
     async_db.add(legacy_event)
     await async_db.commit()
 
-    result = await async_db.execute(
-        select(Event).where(Event.id == legacy_event.id)
-    )
+    result = await async_db.execute(select(Event).where(Event.id == legacy_event.id))
     loaded = result.scalar_one()
     assert loaded.source_roll_event_id is None

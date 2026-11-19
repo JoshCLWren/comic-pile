@@ -10,6 +10,8 @@
 
 **Expected:** Exact canonical issue IDs/order remain, with no duplicate or unintended addition; an unchanged save doesn't change eligibility or reading state.
 
+**Issue search (owner issue #4725):** Searching the Reading List editor for an issue (e.g. `Mutant X #1`) lists each canonical issue once; the database already forbids a duplicate issue number within one series, so the only look-alike rows are distinct series sharing a title. Those stay separate rows (the editor groups them by series) and show a `Series ID` label so they can be told apart. Search deliberately remains click/Enter-driven ("Find issues"): live as-you-type suggestions are not offered, to avoid one request per keystroke against the issue table; revisit only with debounced, cancelled requests.
+
 ## MQA-LIST-002: Strict means earlier remaining entries first
 
 **Setup:** Strict QA list interleaving multiple series and a curated later annual.
@@ -113,3 +115,9 @@ Some currently deployed routes may still implement older Reading Plans behavior.
 **Test:** Open the plan detail page, refresh it, and reopen it after an orphaned-plan recovery relink. Compare the eyebrow mode label with the plans index and the planner editor.
 
 **Expected:** Every surface shows Strict for a plan saved as Strict; a missing, stale or Loose authoritative List never silently downgrades the displayed mode to Informational. The linked Reading List remains the sole authority for actual availability, blockers and explanations (MQA-LIST-002/003), so a mode change is only ever the result of an explicit save or relink choice, never a refresh-time projection. Source: #4724 (post-Rust QA follow-up to #4684).
+
+## MQA-PLAN-SYNC: Open plan detail follows a thread rename from another tab
+
+**Test:** Open a plan detail and a thread detail in separate tabs. Rename the thread in the thread tab, then switch back to the plan tab without reloading.
+
+**Expected:** The plan detail shows the new series title as soon as the tab regains focus, with no reload. Source: #5486 (part of #5264); related MQA-QUEUE-010.

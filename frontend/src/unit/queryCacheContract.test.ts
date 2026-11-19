@@ -564,7 +564,7 @@ describe('targeted cache effects', () => {
 
     expect(setQueryData).not.toHaveBeenCalled()
     expect(resetQueries).not.toHaveBeenCalled()
-    expect(invalidateQueries).toHaveBeenCalledTimes(7)
+    expect(invalidateQueries).toHaveBeenCalledTimes(9)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
@@ -582,6 +582,9 @@ describe('targeted cache effects', () => {
     })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.all })
+    // #5486: the thread page Next-issue line reads these projections.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.readingBoundariesAll() })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.blockingBatchAll() })
   })
 
   it('refreshes queue mapping counts and roll surfaces after a mapping change (#5264)', async () => {
