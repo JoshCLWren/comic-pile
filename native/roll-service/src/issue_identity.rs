@@ -1593,17 +1593,17 @@ fn sha256_hex(data: &[u8]) -> String {
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-struct CblListMeta {
-    id: i32,
-    source_repository: String,
-    source_path: String,
-    content_hash: String,
-    revision_sha: String,
-    name: String,
-    declared_issue_count: Option<i32>,
+pub(crate) struct CblListMeta {
+    pub(crate) id: i32,
+    pub(crate) source_repository: String,
+    pub(crate) source_path: String,
+    pub(crate) content_hash: String,
+    pub(crate) revision_sha: String,
+    pub(crate) name: String,
+    pub(crate) declared_issue_count: Option<i32>,
 }
 
-async fn load_active_cbl_list_meta(
+pub(crate) async fn load_active_cbl_list_meta(
     pool: &deadpool_postgres::Object,
     list_id: i32,
 ) -> Result<CblListMeta, ApiError> {
@@ -2915,7 +2915,7 @@ async fn do_cbl_adoption_commit(
     Ok((status, resp))
 }
 
-async fn reconcile_entries_for_adoption<E: DbExec>(
+pub(crate) async fn reconcile_entries_for_adoption<E: DbExec>(
     tx: &E,
     user_id: i32,
     list_meta: &CblListMeta,

@@ -91,6 +91,7 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::cbl_catalog::CblCatalogApi::openapi())
         .merge_from(crate::issue_identity::IssueIdentityApi::openapi())
         .merge_from(crate::custom_cbl::CustomCblApi::openapi())
+        .merge_from(crate::reading_graph_preview::ReadingGraphPreviewApi::openapi())
         // The browser still calls these v1 thread dependency URLs, which now
         // run in Rust. Publishing their contract here keeps the generated TS
         // client types after the shadowed Python handlers retire (#5440).
