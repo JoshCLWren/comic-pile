@@ -63,7 +63,7 @@ export default function ContainerQueueActions({
     queryKey: queryKeys.excluded.memberStatus(memberIds),
     queryFn: async () => {
       const result = await threadsApi.checkExcludedStatus(memberIds)
-      return result.excluded_thread_ids
+      return result.excluded_thread_ids.filter((id) => id > 0)
     },
     enabled: memberIds.length > 0,
     staleTime: 30_000,
@@ -95,12 +95,16 @@ export default function ContainerQueueActions({
       for (let index = 0; index < memberIds.length; index += chunkSize) {
         chunks.push(memberIds.slice(index, index + chunkSize))
       }
-      const results = await Promise.all(
-        chunks.map((chunk) => customCBLApi.checkThreadMemberships(chunk, excludeListId)),
-      )
       const inOtherList = new Set<number>()
-      for (const result of results) {
-        for (const id of result.thread_ids) inOtherList.add(id)
+      const concurrency = 4
+      for (let index = 0; index < chunks.length; index += concurrency) {
+        const batch = chunks.slice(index, index + concurrency)
+        const results = await Promise.all(
+          batch.map((chunk) => customCBLApi.checkThreadMemberships(chunk, excludeListId)),
+        )
+        for (const result of results) {
+          for (const id of result.thread_ids) inOtherList.add(id)
+        }
       }
       return inOtherList
     },

@@ -565,10 +565,28 @@ def main() -> int:
         raise SystemExit("provide --database-url or set DATABASE_URL to a migrated database")
 
     _assert_at_head(database_url)
-    exported = _dump(database_url)
+    alembic_exported = _dump(database_url)
+    paths = _migration_sql_paths()
+
+    if len(paths) > 1:
+        rust_exported = _dump_rust_migration_chain(database_url)
+        if _normalize_catalog(rust_exported) != _normalize_catalog(alembic_exported):
+            delta = _compare_normalized_schemas(rust_exported, alembic_exported)
+            details = []
+            for kind in ("added", "removed", "changed"):
+                for item in delta[kind][:20]:
+                    details.append(f"{kind}: {item}")
+            if details:
+                print("\n".join(details), file=sys.stderr)
+            raise SystemExit(
+                "Rust migration chain schema differs from the Alembic head schema. "
+                "Update the incremental migration files to match."
+            )
+        exported = rust_exported
+    else:
+        exported = alembic_exported
 
     if args.check:
-        paths = _migration_sql_paths()
         if len(paths) <= 1:
             if not FIXTURE_PATH.exists():
                 raise SystemExit(f"missing fixture: {FIXTURE_PATH.relative_to(REPO_ROOT)}")
@@ -588,19 +606,6 @@ def main() -> int:
             print(f"{FIXTURE_PATH.relative_to(REPO_ROOT)} matches the Alembic head schema.")
             return 0
 
-        rust_exported = _dump_rust_migration_chain(database_url)
-        if _normalize_catalog(rust_exported) != _normalize_catalog(exported):
-            delta = _compare_normalized_schemas(rust_exported, exported)
-            details = []
-            for kind in ("added", "removed", "changed"):
-                for item in delta[kind][:20]:
-                    details.append(f"{kind}: {item}")
-            if details:
-                print("\n".join(details), file=sys.stderr)
-            raise SystemExit(
-                "Rust migration chain schema differs from the Alembic head schema. "
-                "Update the incremental migration files to match."
-            )
         if not FIXTURE_PATH.exists():
             raise SystemExit(f"missing baseline fixture: {FIXTURE_PATH.relative_to(REPO_ROOT)}")
         print(
@@ -609,7 +614,6 @@ def main() -> int:
         )
         return 0
 
-    paths = _migration_sql_paths()
     if len(paths) > 1:
         raise SystemExit(
             "incremental Rust migrations exist; do not rewrite 0001_baseline.sql. "

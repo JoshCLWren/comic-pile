@@ -113,6 +113,8 @@ export const queryKeys = {
           pageSize,
         },
       ] as const,
+    /** Prefix for every scoped excluded-member-status read. */
+    memberStatusAll: () => ['excluded', 'member-status'] as const,
     /**
      * Canonical key for resolving which specific thread IDs are currently
      * excluded, scoped to the requested member set. Used by container-level

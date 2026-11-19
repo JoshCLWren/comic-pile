@@ -358,7 +358,7 @@ export async function invalidateAfterQueueMovement(
     client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
     // Container-level bulk actions derive removable/restorable members from a
     // scoped excluded-member-status query; refresh it with the boundary change.
-    client.invalidateQueries({ queryKey: ['excluded', 'member-status'] }),
+    client.invalidateQueries({ queryKey: queryKeys.excluded.memberStatusAll() }),
   ])
 }
 

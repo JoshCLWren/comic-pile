@@ -240,7 +240,10 @@ async fn alembic_database_at_another_revision_is_refused() {
         .await
         .unwrap();
     let err = run(&mut client).await.unwrap_err();
-    assert!(err.0.contains("alembic_version"), "{err}");
+    assert!(
+        err.0.contains("alembic_version") && err.0.contains("some_other_revision"),
+        "{err}"
+    );
     let tracked: i64 = client
         .query_one(
             "SELECT count(*) FROM pg_tables WHERE tablename = 'schema_migrations'",
