@@ -630,8 +630,10 @@ pub async fn create(
     user: AuthenticatedUser,
     Json(mut request): Json<ContinuityRuleRequest>,
 ) -> Result<(StatusCode, Json<ContinuityRuleResponse>), ApiError> {
-    normalize_request(&mut request);
+    // Pydantic validates field constraints (including `max_length`) before the
+    // `model_validator` deduplicates, so validation must precede normalization.
     validate_request(&request)?;
+    normalize_request(&mut request);
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -707,8 +709,9 @@ pub async fn update(
     Path(rule_id): Path<i32>,
     Json(mut request): Json<ContinuityRuleRequest>,
 ) -> Result<Json<ContinuityRuleResponse>, ApiError> {
-    normalize_request(&mut request);
+    // Field constraints first, then the pydantic `model_validator` dedupe.
     validate_request(&request)?;
+    normalize_request(&mut request);
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
