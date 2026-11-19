@@ -445,7 +445,8 @@ pub async fn offer(
             .await
             .map_err(db::query_error)?
             .get(0);
-        let mut snoozed_ids: Vec<i32> = reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
+        let mut snoozed_ids: Vec<i32> =
+            reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
         if !snoozed_ids.contains(&previous) {
             snoozed_ids.push(previous);
             tx.execute(
@@ -556,13 +557,7 @@ pub async fn unsnooze(
     user: AuthenticatedUser,
     Json(request): Json<UnsnoozeRequest>,
 ) -> Result<Json<UnsnoozeResponse>, ApiError> {
-    let active = reading_session::bootstrap(
-        &state,
-        user,
-        None,
-        SessionPolicy::default(),
-    )
-    .await?;
+    let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
 
     // Compute the read-only Option E snapshot before taking the write
     // connection so this request never nests two pool checkouts.
@@ -602,11 +597,14 @@ pub async fn unsnooze(
 
     let _current_pending: Option<i32> = row.try_get(0).map_err(db::query_error)?;
     let snoozed_raw: Option<String> = row.try_get(1).map_err(db::query_error)?;
-    let mut snoozed_ids: Vec<i32> = reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
+    let mut snoozed_ids: Vec<i32> =
+        reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
 
     // The thread to unsnooze must be the most recently snoozed one (last in the array).
     let Some(&last_snoozed) = snoozed_ids.last() else {
-        return Err(ApiError::BadRequest("No snoozed thread to restore".to_string()));
+        return Err(ApiError::BadRequest(
+            "No snoozed thread to restore".to_string(),
+        ));
     };
     if last_snoozed != request.thread_id {
         return Err(ApiError::Conflict(
@@ -637,7 +635,8 @@ pub async fn unsnooze(
     tx.execute(
         "UPDATE sessions SET snoozed_thread_ids = $1::text::json WHERE id = $2 AND user_id = $3",
         &[
-            &serde_json::to_string(&snoozed_ids).map_err(|_| ApiError::Internal("Invalid snooze state".to_string()))?,
+            &serde_json::to_string(&snoozed_ids)
+                .map_err(|_| ApiError::Internal("Invalid snooze state".to_string()))?,
             &active.session.id,
             &user.id(),
         ],
@@ -651,12 +650,14 @@ pub async fn unsnooze(
             "UPDATE sessions
              SET pending_thread_id=$1, pending_issue_id=NULL, pending_thread_updated_at=NOW()
              WHERE id=$2 AND user_id=$3",
-        &[&snoozed_thread, &active.session.id, &user.id()],
+            &[&snoozed_thread, &active.session.id, &user.id()],
         )
         .await
         .map_err(db::query_error)?;
     if updated != 1 {
-        return Err(ApiError::Conflict("Reading session changed; try again".to_string()));
+        return Err(ApiError::Conflict(
+            "Reading session changed; try again".to_string(),
+        ));
     }
 
     // Record an unsnooze event with the reverted die.
@@ -669,7 +670,13 @@ pub async fn unsnooze(
         "INSERT INTO events
            (user_id, type, timestamp, die, die_after, thread_id, context)
          VALUES ($1, 'unsnooze', clock_timestamp(), $2, $3, $4, $5::text::json)",
-        &[&user.id(), &die_before, &die_before, &snoozed_thread, &context.to_string()],
+        &[
+            &user.id(),
+            &die_before,
+            &die_before,
+            &snoozed_thread,
+            &context.to_string(),
+        ],
     )
     .await
     .map_err(db::query_error)?;
@@ -677,7 +684,14 @@ pub async fn unsnooze(
     tx.commit().await.map_err(db::query_error)?;
 
     // Fetch metadata for the restored thread.
-    let metadata = offer_metadata(&*pending.connection(), user, snoozed_thread, option_e, eligible_ids).await?;
+    let metadata = offer_metadata(
+        &*pending.connection(),
+        user,
+        snoozed_thread,
+        option_e,
+        eligible_ids,
+    )
+    .await?;
     pending.release();
 
     Ok(Json(UnsnoozeResponse {
@@ -838,14 +852,10 @@ mod tests {
 
     #[test]
     fn unsnooze_request_shape_requires_explicit_thread_id_and_rejects_unknown_fields() {
-        assert!(serde_json::from_str::<UnsnoozeRequest>(
-            r#"{"thread_id": 42}"#
-        )
-        .is_ok());
-        assert!(serde_json::from_str::<UnsnoozeRequest>(
-            r#"{"thread_id": 42, "user_id": 9}"#
-        )
-        .is_err());
+        assert!(serde_json::from_str::<UnsnoozeRequest>(r#"{"thread_id": 42}"#).is_ok());
+        assert!(
+            serde_json::from_str::<UnsnoozeRequest>(r#"{"thread_id": 42, "user_id": 9}"#).is_err()
+        );
         assert!(serde_json::from_str::<UnsnoozeRequest>(r#"{}"#).is_err());
     }
 

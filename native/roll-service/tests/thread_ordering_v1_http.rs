@@ -1120,8 +1120,16 @@ async fn roll_unsnooze_restores_pending_roll_and_reverts_die() {
     )
     .await;
     assert_eq!(offer_status, StatusCode::OK, "{offer_body:?}");
-    assert_eq!(offer_body["snoozed_thread_id"].as_i64(), Some(snoozed as i64), "{offer_body:?}");
-    assert_eq!(offer_body["thread_id"].as_i64(), Some(replacement as i64), "{offer_body:?}");
+    assert_eq!(
+        offer_body["snoozed_thread_id"].as_i64(),
+        Some(snoozed as i64),
+        "{offer_body:?}"
+    );
+    assert_eq!(
+        offer_body["thread_id"].as_i64(),
+        Some(replacement as i64),
+        "{offer_body:?}"
+    );
 
     // Unsnooze must restore the snoozed thread as the pending roll and revert
     // the die to its pre-snooze size.
@@ -1136,8 +1144,16 @@ async fn roll_unsnooze_restores_pending_roll_and_reverts_die() {
     )
     .await;
     assert_eq!(unsnooze_status, StatusCode::OK, "{unsnooze_body:?}");
-    assert_eq!(unsnooze_body["thread_id"].as_i64(), Some(snoozed as i64), "{unsnooze_body:?}");
-    assert_eq!(unsnooze_body["die_size"].as_i64(), Some(6), "{unsnooze_body:?}");
+    assert_eq!(
+        unsnooze_body["thread_id"].as_i64(),
+        Some(snoozed as i64),
+        "{unsnooze_body:?}"
+    );
+    assert_eq!(
+        unsnooze_body["die_size"].as_i64(),
+        Some(6),
+        "{unsnooze_body:?}"
+    );
 
     let pool = state.pool.get().await.unwrap();
     let pending: Option<i32> = pool
@@ -1148,7 +1164,11 @@ async fn roll_unsnooze_restores_pending_roll_and_reverts_die() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(pending, Some(snoozed), "unsnooze must restore the pending roll");
+    assert_eq!(
+        pending,
+        Some(snoozed),
+        "unsnooze must restore the pending roll"
+    );
 
     let snoozed_ids: String = pool
         .query_one(
@@ -1159,7 +1179,10 @@ async fn roll_unsnooze_restores_pending_roll_and_reverts_die() {
         .unwrap()
         .get(0);
     let decoded: Vec<i32> = serde_json::from_str(&snoozed_ids).unwrap_or_default();
-    assert!(!decoded.contains(&snoozed), "unsnooze must remove the thread from snoozed_thread_ids");
+    assert!(
+        !decoded.contains(&snoozed),
+        "unsnooze must remove the thread from snoozed_thread_ids"
+    );
 
     let unsnoozes: i64 = pool
         .query_one(

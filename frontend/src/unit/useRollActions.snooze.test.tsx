@@ -8,6 +8,7 @@
  */
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { rollApi } from '../services/api-roll'
 import type { NavigateFunction } from 'react-router-dom'
 import { useRollActions } from '../pages/RollPage/useRollActions'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
@@ -166,7 +167,8 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
   })
 
   it('unsnoozes the selected series regardless of the pending thread', async () => {
-    document.cookie = `comicpile_roll_snoozes=${encodeURIComponent('[8,9]')}; path=/`
+    // SAFETY: the hook discards the unsnooze response body; an empty stub suffices
+    const unsnoozeSpy = vi.spyOn(rollApi, 'unsnooze').mockResolvedValue({} as never)
     const { result, snoozeMutate, refetchBootstrap } = renderActionSheet({
       bootstrap: bootstrapWith({ snoozed_threads: [pooledThread(8)], pending_thread_id: null }),
     })
@@ -176,9 +178,10 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
       await result.current.actions.handleAction('snooze')
     })
 
-    // Roll unsnooze is browser-only: it drops the id from the snooze cookie
-    // and refreshes, with no legacy v1 unsnooze server call (#4349).
-    expect(decodeURIComponent(document.cookie)).toContain('[9]')
+    // Roll unsnooze calls the native v2 endpoint (restores the pending roll and
+    // reverts the die, #4589) and refreshes, with no legacy v1 unsnooze call.
+    expect(unsnoozeSpy).toHaveBeenCalledWith(8)
+    unsnoozeSpy.mockRestore()
     expect(refetchBootstrap).toHaveBeenCalled()
     expect(snoozeMutate).not.toHaveBeenCalled()
   })

@@ -11,6 +11,7 @@ import { useSnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
+import { rollApi } from '../services/api-roll'
 
 const toastMocks = vi.hoisted(() => ({ showToast: vi.fn(), removeToast: vi.fn() }))
 vi.mock('../hooks/useCompletedThreads', () => ({
@@ -503,14 +504,16 @@ describe('QueuePage callback coverage', () => {
     vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])
     vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [], is_blocked: false, blocking_dependencies: [] })
+    // SAFETY: the hook discards the unsnooze response body; an empty stub suffices
+    const unsnoozeSpy = vi.spyOn(rollApi, 'unsnooze').mockResolvedValue({} as never)
     renderPage()
     await user.click(screen.getByText('read callback'))
     expect(toastMocks.showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
-    // Queue unsnooze is client-only since the v1 unsnooze route was retired:
-    // it drops the id from the browser snooze cookie without a server write.
-    document.cookie = `comicpile_roll_snoozes=${encodeURIComponent('[1]')}; path=/`
+    // Queue unsnooze calls the native v2 unsnooze endpoint, which restores the
+    // pending roll and reverts the die (#4589).
     await user.click(screen.getByText('snooze callback'))
-    await waitFor(() => expect(document.cookie).not.toContain(encodeURIComponent('[1]')))
+    await waitFor(() => expect(unsnoozeSpy).toHaveBeenCalledWith(1))
+    unsnoozeSpy.mockRestore()
     expect(toastMocks.showToast).not.toHaveBeenCalledWith(expect.stringContaining('Failed'), 'error')
   })
 
