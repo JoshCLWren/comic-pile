@@ -10,6 +10,8 @@ afterEach(() => vi.restoreAllMocks())
 
 describe('PlannerLanes cover presentation', () => {
   it('uses batched canonical issue and series covers without inventing crossover art', async () => {
+    // SAFETY: this fixture represents an exact owned issue with a confirmed provider cover;
+    // only the cover, identity and read/mapping status are used by PlannerLanes.
     const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([{
       issue_id: 40,
       thread_id: 4,
@@ -20,6 +22,8 @@ describe('PlannerLanes cover presentation', () => {
       has_confirmed_identity: true,
       status: 'unread',
     } as IssueCard])
+    // SAFETY: this isolated render checks only the read-only lane projection.
+    // Editing callbacks and asynchronous editor commands are not exercised.
     const editor = {
       orderedLanes: [{ id: 'main', name: 'Reading order', order: 0 }],
       nodes: [
@@ -29,7 +33,9 @@ describe('PlannerLanes cover presentation', () => {
       ],
       targetLaneId: 'main',
       editingGateNodeId: null,
-    } as unknown as ContinuityPlannerEditor
+    } as ContinuityPlannerEditor
+    // SAFETY: the mocked planner series needs only its id, title and
+    // representative cover; all other queue fields are unused in this render.
     const threads = [{
       id: 8,
       title: 'Geiger',
