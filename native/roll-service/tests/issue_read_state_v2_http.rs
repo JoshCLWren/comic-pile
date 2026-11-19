@@ -399,7 +399,11 @@ async fn mark_read_walks_a_series_to_completion_and_renumbers_the_queue() {
 
     let (status, body) = send(
         &state,
-        mark(&format!("/api/v2/issues/{}/read-markers", a[0]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", a[0]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
@@ -410,7 +414,11 @@ async fn mark_read_walks_a_series_to_completion_and_renumbers_the_queue() {
 
     let (status, body) = send(
         &state,
-        mark(&format!("/api/v2/issues/{}/read-markers", a[0]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", a[0]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -421,7 +429,11 @@ async fn mark_read_walks_a_series_to_completion_and_renumbers_the_queue() {
 
     let (status, _) = send(
         &state,
-        mark(&format!("/api/v2/issues/{}/read-markers", a[1]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", a[1]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -471,7 +483,11 @@ async fn completing_an_excluded_series_keeps_it_excluded_without_renumbering() {
     let (active, _) = series(&conn, user_id, "Active", 3, "active", &[("1", "unread")]).await;
     let (status, _) = send(
         &state,
-        mark(&format!("/api/v2/issues/{}/read-markers", e[0]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", e[0]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -570,7 +586,11 @@ async fn read_state_changes_refresh_the_blocked_flag_in_the_same_transaction() {
 
     let (status, _) = send(
         &state,
-        mark(&format!("/api/v2/issues/{}/read-markers", k[0]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", k[0]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -608,7 +628,11 @@ async fn single_mark_and_move_hide_foreign_issues_behind_the_same_404() {
     let before = thread_row(&conn, foreign).await;
 
     for (method, path, body) in [
-        ("POST", format!("/api/v2/issues/{}/read-markers", f[0]), None),
+        (
+            "POST",
+            format!("/api/v2/issues/{}/read-markers", f[0]),
+            None,
+        ),
         (
             "DELETE",
             format!("/api/v2/issues/{}/read-markers", f[1]),
@@ -624,15 +648,26 @@ async fn single_mark_and_move_hide_foreign_issues_behind_the_same_404() {
             format!("/api/v2/issues/{}/position", m[0]),
             Some(json!({"after_issue_id": f[0]})),
         ),
-        ("POST", "/api/v2/issues/999999/read-markers".to_string(), None),
+        (
+            "POST",
+            "/api/v2/issues/999999/read-markers".to_string(),
+            None,
+        ),
     ] {
-        let (status, response) =
-            send(&state, authed(method, &path, &token, &csrf, body)).await;
-        assert_eq!(status, StatusCode::NOT_FOUND, "{method} {path}: {response:?}");
+        let (status, response) = send(&state, authed(method, &path, &token, &csrf, body)).await;
+        assert_eq!(
+            status,
+            StatusCode::NOT_FOUND,
+            "{method} {path}: {response:?}"
+        );
     }
     let (status, body) = send(
         &state,
-        mark(&format!("/api/v2/issues/{}/read-markers", f[0]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", f[0]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(
@@ -1032,7 +1067,11 @@ async fn validation_errors_use_the_production_detail_after_authentication() {
 
     let expected = json!({"detail": "Validation failed"});
 
-    let (status, body) = send(&state, mark("/api/v2/issues/abc/read-markers", &token, &csrf)).await;
+    let (status, body) = send(
+        &state,
+        mark("/api/v2/issues/abc/read-markers", &token, &csrf),
+    )
+    .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body, expected);
     let (status, body) = send(
