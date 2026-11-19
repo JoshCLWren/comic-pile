@@ -101,3 +101,8 @@ test('longer or mixed fences stay open until a valid closing fence', () => {
     'After `app/real_gone.py`.\n';
   assert.deepEqual(run({'README.md': body}), ['README.md:11: stale code path: app/real_gone.py']);
 });
+
+test('fences nested in indented list items are recognized', () => {
+  const body = '- item\n\n      ```\n      `app/gone.py`\n      ```\n\n- next `app/real_gone.py`\n';
+  assert.deepEqual(run({'README.md': body}), ['README.md:7: stale code path: app/real_gone.py']);
+});

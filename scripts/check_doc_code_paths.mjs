@@ -43,7 +43,7 @@ const BARE_CODE_EXTENSIONS = new Set([
   'py', 'rs', 'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'sh', 'yml', 'yaml',
 ]);
 const INLINE_CODE_RE = /`([^`\n]+)`/g;
-const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const FENCE_RE = /^\s*(`{3,}|~{3,})(.*)$/;
 const PATH_RE = new RegExp(
   `^(?:\\./)?[A-Za-z0-9_.@\\-]+(?:/[A-Za-z0-9_.@\\-]+)+\\.${CODE_EXTENSIONS}$` +
     `|^[A-Za-z0-9_\\-]+\\.${CODE_EXTENSIONS}$`,
@@ -53,7 +53,7 @@ const PLACEHOLDER_RE = /[*{}<>$]|YYYY|NNN|\bXXX/;
 
 /**
  * Advance CommonMark fence state for one line. `fence` is null outside a fence, otherwise the
- * opening marker; only a same-character, at-least-as-long, info-free marker closes it.
+ * opening marker (any indentation, so list-nested fences work); only a same-character, at-least-as-long, info-free marker closes it.
  * Returns `[nextFence, isFenceLine]`.
  */
 function advanceFence(fence, line) {
