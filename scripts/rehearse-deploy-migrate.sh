@@ -5,10 +5,12 @@
 set -euo pipefail
 bin="$(realpath "${1:?usage: rehearse-deploy-migrate.sh <comicpile-migrate binary>}")"
 : "${ADMIN_URL:?ADMIN_URL is required}"
-case "$ADMIN_URL" in
-  postgresql://*@127.0.0.1:*|postgresql://*@localhost:*) ;;
-  *) echo "REFUSING: ADMIN_URL must be a local Postgres" >&2; exit 1 ;;
-esac
+# Strict allow-list: no query string (host=/hostaddr= could redirect psql), no
+# percent-encoding, local host only. This script CREATEs and DROPs databases.
+if [[ ! "$ADMIN_URL" =~ ^postgresql://[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+@(127\.0\.0\.1|localhost)(:[0-9]+)?/[A-Za-z0-9_]+$ ]]; then
+  echo "REFUSING: ADMIN_URL must be postgresql://user:pass@127.0.0.1|localhost[:port]/db with no query string" >&2
+  exit 1
+fi
 unset DATABASE_URL NEON_DATABASE_URL
 base="${ADMIN_URL%/*}"
 suffix="$$"
