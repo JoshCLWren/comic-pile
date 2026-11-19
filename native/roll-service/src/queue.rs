@@ -1021,6 +1021,14 @@ mod tests {
     struct OptionEEnv(Option<std::ffi::OsString>, Option<std::ffi::OsString>);
 
     impl OptionEEnv {
+        /// Snapshot the current values so Drop restores them without changing either.
+        fn capture() -> Self {
+            Self(
+                std::env::var_os("OPTION_E_ENABLED"),
+                std::env::var_os("OPTION_E_APPROVED_PREVIEW"),
+            )
+        }
+
         fn enable() -> Self {
             let enabled = std::env::var_os("OPTION_E_ENABLED");
             let approval = std::env::var_os("OPTION_E_APPROVED_PREVIEW");
@@ -1779,10 +1787,8 @@ mod tests {
         seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
         seed_option_e_thread(&state, 7, 3, 3, true, Some(30)).await;
 
-        let saved = (
-            std::env::var_os("OPTION_E_ENABLED"),
-            std::env::var_os("OPTION_E_APPROVED_PREVIEW"),
-        );
+        // Restores both variables on drop, including when an assertion panics.
+        let _restore = OptionEEnv::capture();
         // Stored: 1,2 readable then 3 blocked. Evaluated: 2,3 readable then 1.
         let legacy = [(1, 1), (2, 2), (3, 3)];
         let evaluated = [(1, 3), (2, 1), (3, 2)];
@@ -1814,15 +1820,6 @@ mod tests {
                     entry.0.position, position,
                     "enabled={enabled:?} approval={approval:?} thread {thread_id}"
                 );
-            }
-        }
-        for (name, value) in [
-            ("OPTION_E_ENABLED", saved.0),
-            ("OPTION_E_APPROVED_PREVIEW", saved.1),
-        ] {
-            match value {
-                Some(value) => std::env::set_var(name, value),
-                None => std::env::remove_var(name),
             }
         }
     }
