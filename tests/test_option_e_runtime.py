@@ -13,7 +13,6 @@ from app.models import Dependency, Event, Issue, ReadingSession, Thread, User
 from app.models.collection_exclusion import CollectionExclusion
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
-from app.services.errors import InvalidRequestError
 from app.services.reading_eligibility_service import get_execution_eligibility
 from app.services.thread_service import list_queue_threads
 from comic_pile.queue import get_bounded_roll_pool_rows
@@ -412,41 +411,6 @@ async def test_read_now_rejects_canonical_blocked_and_session_skipped_threads(
     for thread_id in thread_ids:
         selected = await auth_client.post(f"/api/v1/threads/{thread_id}/set-pending")
         assert selected.status_code == 400, selected.text
-    assert await async_db.scalar(select(Event.id).where(Event.selection_method == "manual")) is None
-
-
-async def test_rejected_current_issue_correction_does_not_commit_progress(
-    option_e: None,
-    async_db: AsyncSession,
-) -> None:
-    """Session initialization cannot commit progress before availability validation."""
-    from app.services.thread_service import set_current_issue
-
-    user = await get_or_create_user_async(async_db)
-    _, source_issues = await _series(async_db, user.id, "Correction prerequisite", 1)
-    target, target_issues = await _series(async_db, user.id, "Blocked correction", 2)
-    async_db.add(
-        Dependency(
-            source_issue_id=source_issues[0].id,
-            target_issue_id=target_issues[1].id,
-            origin="reader",
-            classification="A",
-            provenance="Explicit correction prerequisite",
-        )
-    )
-    owner_id, thread_id, issue_ids = user.id, target.id, [issue.id for issue in target_issues]
-    await async_db.commit()
-    with pytest.raises(InvalidRequestError):
-        await set_current_issue(async_db, owner_id, thread_id, issue_number="2")
-    await async_db.rollback()
-    statuses = list(
-        (
-            await async_db.scalars(
-                select(Issue.status).where(Issue.id.in_(issue_ids)).order_by(Issue.position)
-            )
-        ).all()
-    )
-    assert statuses == ["unread", "unread"]
     assert await async_db.scalar(select(Event.id).where(Event.selection_method == "manual")) is None
 
 

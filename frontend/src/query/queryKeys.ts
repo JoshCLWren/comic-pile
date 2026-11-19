@@ -367,6 +367,8 @@ export const queryKeys = {
     readingListCandidates: (listId: number) =>
       ['cblSources', 'readingListCandidates', listId] as const,
     preview: (listId: number) => ['cblSources', 'preview', listId] as const,
+    /** All CBL adoption previews; a direct read/rate changes their row labels. */
+    previewAll: () => ['cblSources', 'preview'] as const,
     adoptionPlan: (
       listId: number,
       seriesDecisions: Record<string, boolean>,

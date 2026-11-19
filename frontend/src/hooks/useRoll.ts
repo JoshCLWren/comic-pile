@@ -70,6 +70,27 @@ export function useSetDie(api?: RollApi) {
   }
 }
 
+/**
+ * Server-side Roll unsnooze (#4589). The write goes through `useMutation`; the
+ * cache effects live in `onSuccess` and refresh both the bootstrap and the
+ * scoped die state, because unsnoozing the latest snooze reverts the die.
+ */
+export function useUnsnooze(api?: RollApi) {
+  const rollApiInstance = getRollApi(api)
+  const mutation = useMutation({
+    mutationFn: (threadId: number) => rollApiInstance.unsnooze(threadId),
+    onSuccess: async () => {
+      await invalidateAfterRollDieModeUpdate(queryClient)
+    },
+  })
+
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
+}
+
 export function useResetDice(api?: RollApi) {
   const rollApiInstance = getRollApi(api)
   const mutation = useMutation({

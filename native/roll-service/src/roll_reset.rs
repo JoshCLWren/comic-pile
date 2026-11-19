@@ -1,8 +1,8 @@
 //! Explicit Reset Dice command for the sessionless Roll flow.
 //!
 //! Reset records one `reset_dice` event (die becomes d6), discards any pending
-//! offer, and never deletes reading progress or past ratings. The browser owns
-//! clearing its temporary snooze cookie; the server does not treat it as state.
+//! offer, and never deletes reading progress or past ratings. It also clears
+//! the session's saved temporary snoozes; the browser clears its snooze cookie.
 use crate::{
     auth::AuthenticatedUser,
     db,
@@ -52,7 +52,8 @@ pub(crate) async fn persist_reset(
                  SET pending_thread_id=NULL,pending_issue_id=NULL,
                  -- Clear the legacy pin with the pending selection so it cannot
                  -- override Reset Dice's event-derived d6 on the next bootstrap.
-                     pending_thread_updated_at=NULL,manual_die=NULL
+                     pending_thread_updated_at=NULL,manual_die=NULL,
+                     snoozed_thread_ids=NULL
                  WHERE id=$1 AND user_id=$2",
                 &[&session_id, &user.id()],
             )

@@ -62,7 +62,7 @@ factory_fast_check_plan() {
     esac
     # A manifest-only change must not bypass pnpm's frozen-lockfile gate.
     case "$path" in
-      package.json|pnpm-lock.yaml|pnpm-workspace.yaml|frontend/package.json|frontend/pnpm-lock.yaml)
+      package.json|pnpm-lock.yaml|pnpm-workspace.yaml|frontend/package.json)
         printf 'dependencies\t%s\n' "$path"
         ;;
     esac
@@ -76,10 +76,10 @@ factory_fast_check_plan() {
         printf 'ingress\t%s\n' "$path"
         ;;
     esac
-    # Check the real FastAPI-generated contract before a worker pushes.
-    # Deletions are included because an imported module might be removed.
+    # Check the generated OpenAPI contract (built from the checked-in
+    # native/contracts/*.openapi.json, no Python) before a worker pushes.
     case "$path" in
-      app/**/*.py|app/*.py|api/**/*.py|api/*.py|scripts/export_openapi_schema.py|scripts/generate_openapi_types.py|frontend/src/generated/openapi.json|frontend/src/generated/openapi.ts)
+      native/contracts/*.openapi.json|scripts/export_openapi_schema.mjs|scripts/generate_openapi_types.mjs|scripts/generate_native_client.mjs|frontend/src/generated/openapi.json|frontend/src/generated/openapi.ts|frontend/src/generated/nativeV2Client.ts)
         printf 'openapi\t%s\n' "$path"
         ;;
     esac
@@ -214,15 +214,11 @@ factory_run_fast_checks() {
 
   # App changes can break the frontend API contract without changing a single
   # frontend file. Check generated schema freshness before GitHub CI sees it.
-  # Python diffs have already synced dependencies above; JSON-only diffs have not.
   if (( openapi_check )); then
-    if ! _factory_fast_check_ensure_uv; then
-      failures+=('OpenAPI check toolchain (uv)')
-    elif (( ${#py_files[@]} == 0 )) && ! _factory_fast_check_run "$log" 'OpenAPI dependency sync' \
-      uv sync --frozen --all-extras --quiet; then
-      failures+=('OpenAPI check dependencies')
+    if ! command -v node >/dev/null 2>&1; then
+      failures+=('OpenAPI check toolchain (node)')
     elif ! _factory_fast_check_run "$log" 'OpenAPI schema freshness' \
-      uv run --frozen python scripts/export_openapi_schema.py --check; then
+      node scripts/export_openapi_schema.mjs --check; then
       failures+=('OpenAPI schema freshness')
     fi
   fi

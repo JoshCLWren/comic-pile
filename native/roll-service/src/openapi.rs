@@ -9,7 +9,7 @@
 //! and reading-boundary declarations.
 //!
 //! The checked-in artifact is `native/contracts/v2-runtime.openapi.json`; see
-//! `native/contracts/README.md` for regeneration. `scripts/export_openapi_schema.py`
+//! `native/contracts/README.md` for regeneration. `scripts/export_openapi_schema.mjs`
 //! merges this runtime contract into the single generated frontend client.
 
 use utoipa::OpenApi;
@@ -41,6 +41,7 @@ use utoipa::OpenApi;
         crate::bootstrap::initialize_session_documentation,
         crate::dice_api::manual_die_documentation,
         crate::roll_offer::offer_documentation,
+        crate::roll_offer::unsnooze_documentation,
         crate::roll_reset::reset_documentation,
         crate::roll_resources::die_state_documentation,
         crate::roll_resources::eligible_issue_ids_documentation,
@@ -138,6 +139,8 @@ use utoipa::OpenApi;
         crate::dice_api::DiceCommandReceipt,
         crate::roll_offer::RollOfferRequest,
         crate::roll_offer::RollOfferResponse,
+        crate::roll_offer::UnsnoozeRequest,
+        crate::roll_offer::UnsnoozeResponse,
         crate::roll_reset::ResetDiceRequest,
         crate::roll_reset::ResetDiceResponse,
         crate::roll_resources::RollDieStateResponse,

@@ -58,9 +58,9 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 52 (52 native-rust + 0 python-fastapi).
+- Live v2 operations: 53 (53 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 55 operations (v1 55 + unversioned 0); v1 active 30 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Full Python-handler surface: 43 operations (v1 43 + unversioned 0); v1 active 30 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
@@ -76,6 +76,7 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4684 (16): `GET /api/v2/continuity-plans/{plan_id}/reader -> native-rust`; `GET /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/dependencies/ -> native-rust`; `DELETE /api/v2/dependencies/{dependency_id} -> native-rust`; `DELETE /api/v2/issues/{issue_id} -> native-rust`; `GET /api/v2/reading-graph -> native-rust`; `POST /api/v2/reading-graph/repairs -> native-rust`; `GET /api/v2/reading-lists -> native-rust`; `POST /api/v2/reading-lists -> native-rust`; `DELETE /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id} -> native-rust`; `PUT /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id}/reader -> native-rust`; `PUT /api/v2/threads/{thread_id}/issue-order -> native-rust`; `POST /api/v2/threads/{thread_id}/issues -> native-rust`
 - #4822 (1): `GET /api/v2/activity -> native-rust`
 - #4836 (11): `GET /api/v2/creators -> native-rust`; `GET /api/v2/creators/compare -> native-rust`; `GET /api/v2/creators/discoveries -> native-rust`; `GET /api/v2/creators/summaries -> native-rust`; `GET /api/v2/creators/team-chemistry -> native-rust`; `GET /api/v2/creators/{creator_key} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/role-stats/{role} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/series-stats/{series_key} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/{metric_type} -> native-rust`; `GET /api/v2/creators/{creator_key}/series/{series_key}/issues -> native-rust`
+- #4850 (1): `POST /api/v2/roll/unsnooze -> native-rust`
 - #4855 (1): `GET /api/v2/demo-roll -> native-rust`
 <!-- route-burndown:end -->
 
@@ -355,11 +356,11 @@ A domain noun that also names something else must be qualified at every boundary
 domain concept to application code under a bare, ambiguous name when a second meaning exists in the
 same codebase.
 
-- The durable reading-history model is `ReadingSession` (`app/models/reading_session.py`), reached through `app/repositories/reading_session_repository.py` and `app/services/reading_session_service.py`. It is never `Session`, `sessions`, or `SessionModel`.
+- The durable reading-history model is `ReadingSession` (`app/models/reading_session.py`), reached through `app/repositories/reading_session_repository.py` and, in the Rust runtime, `native/roll-service/src/reading_session.rs`. It is never `Session`, `sessions`, or `SessionModel`.
 - Auth state has its own precise names: access token, refresh token, `password_changed_at` (credential epoch), `revoked_tokens`, and `password_reset_tokens`. There is no auth-session persistence model, and none may be added just to make naming symmetrical.
-- Auth modules (`app/auth.py`, `app/api/auth.py`, `app/services/password_reset_service.py`, `app/services/password_reset_mailer.py`, and the auth-state repositories) must not import or call reading-history persistence. Revoke credentials with auth state; reading history is not a credential.
+- Auth modules (`app/auth.py`, `native/roll-service/src/auth/`, and the auth-state repositories) must not import or call reading-history persistence. Revoke credentials with auth state; reading history is not a credential.
 - Storage/API edges may keep familiar wire names (`sessions` table, `/api/session/`, `SessionListItem`) because clients and migrations depend on them. Ambiguity is resolved in code, not on the wire.
-- The static guard `tests/test_reading_session_naming_guard.py` enforces the boundary; `tests/test_password_reset.py::test_reset_preserves_reading_sessions` proves a reset preserves populated reading history.
+- The static guard `tests/test_reading_session_naming_guard.py` enforces the boundary; a password reset must preserve populated reading history.
 
 See [`docs/READING_SESSION_NAMING.md`](docs/READING_SESSION_NAMING.md) for the full convention, the
 retained-ambiguity inventory, and the rationale from the #2996 password-reset incident.
@@ -463,7 +464,7 @@ Port conflicts: Dev (5435), Test (5437), CI (5432).
 **Query keys naming:** build every key through `queryKeys.*` from `queryKeys.ts`. Prefer stable keys
 with normalized params; put pagination cursors in `pageParam`, not in the key.
 
-**Reads (`useQuery`):** wrap a service call from `services/api.ts`; gate with `enabled`; keys from
+**Reads (`useQuery`):** wrap a service call from `frontend/src/services/api.ts`; gate with `enabled`; keys from
 `queryKeys.*`. Return `{ data, isPending, isError, refetch }`.
 
 **Writes (`useMutation`):** `mutationFn` calls the API service; `onSuccess` performs cache effects
@@ -606,9 +607,7 @@ python3 .github/scripts/validate-free-model-factories.py
 python3 -m pytest --noconftest -o addopts='' -q tests/test_factory_provider_candidates.py tests/test_factory_worker_slots.py tests/test_factory_runtime_model_select.py
 ```
 
-Do not resurrect `.github/free-model-factories.tsv`,
-`.github/factory-expected-workers.json`,
-`.github/factory-roster-snapshot.json`, or the removed retirement workflow.
+<!-- docs-path-check: ignore --> Do not resurrect the removed `.github/free-model-factories.tsv` or `.github/factory-roster-snapshot.json` files, or the removed retirement workflow.
 
 ## GitHub Issue Workflow
 
