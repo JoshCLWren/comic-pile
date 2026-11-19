@@ -7,6 +7,7 @@ import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
 import {
   invalidateAfterQueueMutation,
   invalidateCrossoverGroupsForThreads,
+  invalidateReadingPlanReader,
 } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import { getApiErrorDetail } from '../utils/apiError' 
@@ -58,26 +59,33 @@ export default function ContainerQueueActions({
   const members = useMemo(() => uniqueMembers(memberThreads), [memberThreads])
   const memberIds = useMemo(() => members.map((thread) => thread.id), [members])
 
-  // Resolve excluded status for every container member with a scoped lookup.
-  const excludedMemberIdsQuery = useQuery({
+  // Resolve excluded/active status for every container member with a scoped lookup.
+  const memberStatusQuery = useQuery({
     queryKey: queryKeys.excluded.memberStatus(memberIds),
     queryFn: async () => {
       const result = await threadsApi.checkExcludedStatus(memberIds)
-      return result.excluded_thread_ids.filter((id) => id > 0)
+      return {
+        excluded_thread_ids: result.excluded_thread_ids.filter((id) => id > 0),
+        active_thread_ids: (result.active_thread_ids ?? []).filter((id) => id > 0),
+      }
     },
     enabled: memberIds.length > 0,
     staleTime: 30_000,
   })
 
   const excludedIdSet = useMemo(
-    () => new Set(excludedMemberIdsQuery.data ?? []),
-    [excludedMemberIdsQuery.data],
+    () => new Set(memberStatusQuery.data?.excluded_thread_ids ?? []),
+    [memberStatusQuery.data],
+  )
+  const activeIdSet = useMemo(
+    () => new Set(memberStatusQuery.data?.active_thread_ids ?? []),
+    [memberStatusQuery.data],
   )
 
-  // Members not currently excluded are candidates for removal from the queue.
+  // Members not currently excluded and currently active in the queue are removable.
   const removable = useMemo(
-    () => members.filter((thread) => !excludedIdSet.has(thread.id)),
-    [members, excludedIdSet],
+    () => members.filter((thread) => activeIdSet.has(thread.id) && !excludedIdSet.has(thread.id)),
+    [members, activeIdSet, excludedIdSet],
   )
   // Members currently excluded are candidates for container-level restore.
   const restorable = useMemo(
@@ -142,6 +150,13 @@ export default function ContainerQueueActions({
   const overlapChecksError = otherListsQuery.isError || otherCrossoversError != null
   const overlapChecksErrored = removeOpen && memberIds.length > 0 && !overlapChecksPending && overlapChecksError
 
+  const invalidateContainerQueries = async () => {
+    await invalidateAfterQueueMutation(queryClient)
+    if (sourceKind === 'reading_plan') {
+      await invalidateReadingPlanReader(queryClient, sourceId)
+    }
+  }
+
   const removeMutation = useMutation({
     mutationFn: async (threadIds: number[]) => {
       for (const chunk of chunkIds(threadIds)) {
@@ -152,7 +167,7 @@ export default function ContainerQueueActions({
       }
     },
     onSuccess: async () => {
-      await invalidateAfterQueueMutation(queryClient)
+      await invalidateContainerQueries()
       setRemoveOpen(false)
       setKeptIds(new Set())
       setActionError(null)
@@ -169,7 +184,7 @@ export default function ContainerQueueActions({
       }
     },
     onSuccess: async () => {
-      await invalidateAfterQueueMutation(queryClient)
+      await invalidateContainerQueries()
       setRestoreOpen(false)
       setActionError(null)
     },
@@ -214,8 +229,8 @@ export default function ContainerQueueActions({
     void invalidateCrossoverGroupsForThreads(queryClient, memberIds)
   }
 
-  const memberStatusPending = excludedMemberIdsQuery.isPending
-  const memberStatusError = excludedMemberIdsQuery.isError
+  const memberStatusPending = memberStatusQuery.isPending
+  const memberStatusError = memberStatusQuery.isError
 
   return (
     <section
@@ -235,7 +250,7 @@ export default function ContainerQueueActions({
                 type="button"
                 className="underline"
                 onClick={() => {
-                  void excludedMemberIdsQuery.refetch()
+                  void memberStatusQuery.refetch()
                 }}
               >
                 Try again

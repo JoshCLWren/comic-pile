@@ -540,6 +540,13 @@ export async function invalidateReadingPlanReleaseSources(
   ])
 }
 
+export async function invalidateReadingPlanReader(
+  client: QueryClient,
+  planId: number,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.readingPlans.reader(planId) })
+}
+
 /**
  * Apply a committed reading plan to the cache and refresh dependent queries.
  * Centralizes the pattern used in useReadingPlans.ts useSaveReadingPlan and

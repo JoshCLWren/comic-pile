@@ -76,16 +76,22 @@ export function createThreadsApi(client: HttpClient) {
       }
       const results = await Promise.all(
         chunks.map((chunk) =>
-          client.post<{ excluded_thread_ids: number[] }>('/v2/queue-exclusions/status:check', {
-            thread_ids: chunk,
-          }),
+          client.post<{ excluded_thread_ids: number[]; active_thread_ids?: number[] }>(
+            '/v2/queue-exclusions/status:check',
+            { thread_ids: chunk },
+          ),
         ),
       )
       const excluded = new Set<number>()
+      const active = new Set<number>()
       for (const result of results) {
-        for (const id of result.excluded_thread_ids) excluded.add(id)
+        for (const id of result.excluded_thread_ids ?? []) excluded.add(id)
+        for (const id of result.active_thread_ids ?? []) active.add(id)
       }
-      return { excluded_thread_ids: Array.from(excluded) }
+      return {
+        excluded_thread_ids: Array.from(excluded),
+        active_thread_ids: Array.from(active),
+      }
     },
     restoreExclusionGroup: (groupId: number) =>
       client.post<BulkQueueRestoreResponse>(`/v2/queue-exclusion-groups/${groupId}/restore`),

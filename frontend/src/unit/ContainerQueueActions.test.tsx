@@ -62,7 +62,7 @@ function renderActions(props?: Partial<Parameters<typeof ContainerQueueActions>[
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [0, 3] })
+  mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [0, 3], active_thread_ids: [1, 2] })
   mocks.checkThreadMemberships.mockResolvedValue({ thread_ids: [2] })
   mocks.useCrossoverGroups.mockReturnValue({ groupsByThreadId: {}, isPending: false, error: null })
   mocks.bulkExclude.mockResolvedValue({ group: { id: 11 }, excluded_thread_ids: [1] })
@@ -82,7 +82,10 @@ describe('ContainerQueueActions', () => {
       id: index + 1,
       title: `Series ${index + 1}`,
     }))
-    mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [] })
+    mocks.checkExcludedStatus.mockResolvedValue({
+      excluded_thread_ids: [],
+      active_thread_ids: memberThreads.map((thread) => thread.id),
+    })
     mocks.checkThreadMemberships.mockResolvedValue({ thread_ids: [] })
 
     const user = userEvent.setup()
@@ -177,7 +180,7 @@ describe('ContainerQueueActions', () => {
 
   it('shows member-status error and retries excluded lookup', async () => {
     mocks.checkExcludedStatus.mockRejectedValueOnce(new Error('nope'))
-    mocks.checkExcludedStatus.mockResolvedValueOnce({ excluded_thread_ids: [3] })
+    mocks.checkExcludedStatus.mockResolvedValueOnce({ excluded_thread_ids: [3], active_thread_ids: [1, 2] })
     const user = userEvent.setup()
     renderActions()
 
@@ -221,7 +224,7 @@ describe('ContainerQueueActions', () => {
   })
 
   it('supports reading plan sources and crossover overlap keep toggles', async () => {
-    mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [] })
+    mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [], active_thread_ids: [1, 2, 3] })
     mocks.checkThreadMemberships.mockResolvedValue({ thread_ids: [] })
     mocks.useCrossoverGroups.mockReturnValue({
       groupsByThreadId: { 2: [{ id: 99, name: 'Other' }] },
@@ -249,7 +252,7 @@ describe('ContainerQueueActions', () => {
   })
 
   it('does not treat the current crossover group as an external overlap', async () => {
-    mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [] })
+    mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [], active_thread_ids: [1, 2, 3] })
     mocks.checkThreadMemberships.mockResolvedValue({ thread_ids: [] })
     mocks.useCrossoverGroups.mockReturnValue({
       groupsByThreadId: { 1: [{ id: 7, name: 'Same crossover' }] },
@@ -271,6 +274,24 @@ describe('ContainerQueueActions', () => {
         source: { kind: 'crossover', id: 7, name: 'Same crossover' },
       })
     })
+  })
+
+  it('does not offer completed non-excluded series for removal', async () => {
+    mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [], active_thread_ids: [1] })
+    mocks.checkThreadMemberships.mockResolvedValue({ thread_ids: [] })
+    const user = userEvent.setup()
+    renderActions()
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Remove all series from Queue' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Remove all series from Queue' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Remove from Queue' })).toBeEnabled(),
+    )
+    expect(screen.getByText('1 of 1 series will be removed.')).toBeInTheDocument()
+    expect(screen.queryByText('Beta')).not.toBeInTheDocument()
+    expect(screen.queryByText('Gamma')).not.toBeInTheDocument()
   })
 
   it('disables queue actions while member status is loading', () => {

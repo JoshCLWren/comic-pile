@@ -78,6 +78,11 @@ pub struct ExcludedStatusCheckRequest {
 pub struct ExcludedStatusCheckResponse {
     /// Requested thread IDs currently excluded for the reader.
     pub excluded_thread_ids: Vec<i32>,
+    /// Requested thread IDs currently active in the queue for the reader.
+    ///
+    /// Used by container bulk actions to exclude completed/inactive series from
+    /// removable selections without per-thread lookups.
+    pub active_thread_ids: Vec<i32>,
 }
 
 fn bad_request(detail: &str) -> ApiError {
@@ -401,16 +406,27 @@ pub async fn check_excluded_status(
     let connection = db::checkout(&state).await?;
     let rows = connection
         .query(
-            "SELECT id FROM threads \
-             WHERE user_id = $1 AND id = ANY($2::int[]) AND status = 'excluded' \
+            "SELECT id, status FROM threads \
+             WHERE user_id = $1 AND id = ANY($2::int[]) AND status IN ('excluded', 'active') \
              ORDER BY id",
             &[&user.id(), &thread_ids],
         )
         .await
         .map_err(db::query_error)?;
-    let excluded_thread_ids = rows.iter().map(|row| row.get(0)).collect();
+    let mut excluded_thread_ids = Vec::new();
+    let mut active_thread_ids = Vec::new();
+    for row in &rows {
+        let id: i32 = row.get(0);
+        let status: &str = row.get(1);
+        match status {
+            "excluded" => excluded_thread_ids.push(id),
+            "active" => active_thread_ids.push(id),
+            _ => {}
+        }
+    }
     Ok(Json(ExcludedStatusCheckResponse {
         excluded_thread_ids,
+        active_thread_ids,
     }))
 }
 

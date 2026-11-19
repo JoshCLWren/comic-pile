@@ -71,7 +71,7 @@ test.describe('Issue 5435: bulk queue exclusions for reading containers', () => 
     await expect(removeDialog.getByText('Bulk Exclusion Alpha')).toBeVisible()
     await expect(removeDialog.getByText('Bulk Exclusion Beta')).toBeVisible()
     await removeDialog.getByRole('button', { name: 'Remove from Queue' }).click()
-    await expect(removeDialog).toBeHidden({ timeout: 15000 })
+    await expect(removeDialog).toBeHidden()
 
     await gotoQueue(page)
     await waitForQueueReady(page)
@@ -88,8 +88,8 @@ test.describe('Issue 5435: bulk queue exclusions for reading containers', () => 
     await expect(group).toContainText('Bulk Exclusion Beta')
 
     await group.getByRole('button', { name: `Restore all series removed with ${listName}` }).click()
-    await expect(group).toHaveCount(0, { timeout: 15000 })
-    await expect(activeQueue.filter({ hasText: 'Bulk Exclusion Alpha' })).toBeVisible({ timeout: 15000 })
-    await expect(activeQueue.filter({ hasText: 'Bulk Exclusion Beta' })).toBeVisible({ timeout: 15000 })
+    await expect(group).toHaveCount(0)
+    await expect(activeQueue.filter({ hasText: 'Bulk Exclusion Alpha' })).toBeVisible()
+    await expect(activeQueue.filter({ hasText: 'Bulk Exclusion Beta' })).toBeVisible()
   })
 })
