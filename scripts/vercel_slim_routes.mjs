@@ -8,7 +8,7 @@
  * path. Overlap is decided by unifying the two routes segment by segment, so a
  * pair is dropped only when the regexes are PROVEN disjoint. Any regex shape the
  * unifier does not understand (lookaheads, alternation, ...) is treated as
- * overlapping, i.e. the roll route is kept. scripts/generate_route_burndown.py
+ * overlapping, i.e. the roll route is kept. scripts/generate_route_burndown.mjs
  * mirrors this algorithm exactly; keep the two in sync.
  */
 

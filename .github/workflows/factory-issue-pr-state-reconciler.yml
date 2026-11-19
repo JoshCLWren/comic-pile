@@ -60,6 +60,15 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: 01ada6f12e50dbbea1ddb33be8d107a370f0a776
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Install Neon-first GitHub read shim
         shell: bash
