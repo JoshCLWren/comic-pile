@@ -134,6 +134,11 @@ cargo test --locked -p comicpile-roll-service --all-targets
 ```
 
 Missing test configuration fails instead of silently skipping integration tests.
+CI also runs `node scripts/check_native_route_db_tests.mjs` (with its own
+`node --test` regression file): every module that registers an HTTP route in
+`lib.rs::router` must have at least one `tests/*.rs` HTTP test using this real
+database harness, or an explicit reason in the checker's allowlist. This closes
+the gap that let a route module ship with no database test at all (#5351).
 CI provisions PostgreSQL. `tests/fixtures/roll-v2/auth-matrix.json` is consumed by
 both Rust integration tests and `tests/test_native_auth_matrix.py`, pinning valid
 credentials and exact auth rejection status/detail/challenge across languages.
