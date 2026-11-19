@@ -744,6 +744,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
+        .route("/api/v2/roll/unsnooze", post(roll_offer::unsnooze))
         .route("/api/v2/roll/reset", post(roll_reset::reset))
         .route(
             "/api/v2/reading-boundaries",
@@ -827,10 +828,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/issues",
             post(thread_issues::create_thread_issues),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issues/creators",
-            get(thread_issues::list_thread_issue_creators),
         )
         .route(
             "/api/v1/threads/{thread_id}/issues:reorder",
@@ -1122,7 +1119,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/creators/", get(creators::list_creators))
         .route("/api/v1/creators/summaries", get(creators::get_summaries))
         .route("/api/v2/creators", get(creators_v2::list_creators))
-        .route("/api/v2/creators/", get(creators_v2::list_creators))
         .route(
             "/api/v2/creators/summaries",
             get(creators_v2::get_summaries),

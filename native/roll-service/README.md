@@ -123,7 +123,7 @@ failures return the sanitized Python database-unavailable 503 envelope and
 Tests require a **disposable local PostgreSQL** connection. The native Roll
 service never creates or alters schema, so its integration tests run against the
 canonical Alembic schema in `public`, loaded from
-`native/migrate/migrations/0001_baseline.sql` (a `pg_dump --schema-only` of a database
+`native/migrate/migrations/V1__baseline.sql` (a `pg_dump --schema-only` of a database
 at Alembic head — regenerate with `make roll-test-schema`). They truncate and
 reseed the application tables between cases and never hand-write them:
 

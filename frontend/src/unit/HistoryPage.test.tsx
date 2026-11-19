@@ -15,8 +15,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import HistoryPage from '../pages/HistoryPage'
 import type { ActivityItem } from '../services/api-activity'
+import { issueCardsApi } from '../services/issueCardsApi'
 
 const listMock = vi.hoisted(() => vi.fn())
+
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 vi.mock('../services/api-activity', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-activity')>()

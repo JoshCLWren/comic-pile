@@ -15,7 +15,7 @@ same-path contract test checks that each operation remains documented.
 `native/contracts/same-path-runtime.openapi.json` supplies the contracts formerly
 obtained by importing the retired Python handlers. It is generated from the Rust
 DTO documentation, alongside the existing canonical v2 contract, and merged by
-`scripts/export_openapi_schema.py`. Alias operation IDs are unique; canonical v2
+`scripts/export_openapi_schema.mjs`. Alias operation IDs are unique; canonical v2
 IDs stay stable. See `native/contracts/README.md` for regeneration.
 
 Vite derives its local Rust/Python forwarding from the checked-in Vercel rules,

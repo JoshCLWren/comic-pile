@@ -1,22 +1,29 @@
-//! Rust database migration runner.
+//! Rust database migration runner backed by [refinery].
 //!
-//! The schema history starts at a single BASELINE migration that is exactly the
-//! schema of the Alembic head [`BASELINE_ALEMBIC_HEAD`]. Three situations are
-//! handled when [`run`] is called:
+//! The schema history starts at a single baseline migration that reproduces the
+//! schema of the Alembic head [`BASELINE_ALEMBIC_HEAD`]. When [`run`] is called:
 //!
-//! * A database already managed by this runner: only pending migrations apply.
+//! * A database already managed by refinery: only pending migrations apply.
 //! * An empty database: the baseline is applied, and `alembic_version` is
 //!   stamped with the baseline head so Alembic and Rust agree while both exist.
 //! * A database managed by Alembic (production): when `alembic_version` equals
-//!   [`BASELINE_ALEMBIC_HEAD`] the baseline is recorded as applied WITHOUT
-//!   executing it. Any other revision, or any unmanaged schema, is refused.
+//!   [`BASELINE_ALEMBIC_HEAD`] the baseline is recorded as applied in
+//!   `refinery_schema_history` WITHOUT executing it. Any other revision, or any
+//!   unmanaged schema, is refused.
 //!
-//! Everything runs in one transaction under an advisory lock, so concurrent
-//! runners serialize and a failure leaves the database untouched.
+//! Adoption uses refinery's own fake-target facility (`Target::FakeVersion`)
+//! guarded by `alembic_version`, so the recorded checksum/name come from the
+//! embedded migration refinery will later verify. A session advisory lock
+//! serializes concurrent runners.
 
-use sha2::{Digest, Sha256};
+use refinery::Target;
 use std::fmt;
 use tokio_postgres::Client;
+
+mod embedded {
+    use refinery::embed_migrations;
+    embed_migrations!("migrations");
+}
 
 /// Alembic revision whose schema the baseline migration reproduces.
 ///
@@ -29,19 +36,9 @@ pub const BASELINE_ALEMBIC_HEAD: &str = "i5378deferred01";
 /// Advisory-lock key serializing concurrent runners.
 const MIGRATE_LOCK: i64 = 5_554_000_001;
 
-/// One embedded, ordered migration.
-pub struct Migration {
-    pub version: i64,
-    pub name: &'static str,
-    pub sql: &'static str,
-}
-
-/// All migrations, in version order. Append only; never edit an applied one.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "baseline",
-    sql: include_str!("../migrations/0001_baseline.sql"),
-}];
+/// Schema-qualified history table so migrations that clear `search_path`
+/// (the baseline dump does) cannot hide refinery's bookkeeping table.
+const MIGRATION_TABLE: &str = "public.refinery_schema_history";
 
 /// Failure running migrations.
 #[derive(Debug)]
@@ -64,19 +61,29 @@ impl From<tokio_postgres::Error> for MigrateError {
     }
 }
 
+impl From<refinery::Error> for MigrateError {
+    fn from(error: refinery::Error) -> Self {
+        MigrateError(format!("migration error: {error}"))
+    }
+}
+
 /// What a [`run`] did.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Report {
     /// Versions whose SQL was executed.
-    pub applied: Vec<i64>,
+    pub applied: Vec<i32>,
     /// Versions recorded as applied without executing (Alembic adoption).
-    pub adopted: Vec<i64>,
+    pub adopted: Vec<i32>,
 }
 
-/// Hex SHA-256 of a migration body.
-pub fn checksum(sql: &str) -> String {
-    let digest = Sha256::digest(sql.as_bytes());
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+#[derive(Debug, PartialEq, Eq)]
+enum AlembicState {
+    /// `alembic_version` contains exactly the baseline head.
+    Head,
+    /// `alembic_version` exists but has no revision row.
+    Empty,
+    /// `alembic_version` contains revisions other than exactly the head.
+    Other(Vec<String>),
 }
 
 /// Connect, using TLS when the URL's `sslmode` asks for it.
@@ -93,93 +100,100 @@ pub async fn connect(url: &str) -> Result<Client, MigrateError> {
     Ok(client)
 }
 
-/// Bring the database to the latest migration. See the module docs.
-pub async fn run(client: &mut Client) -> Result<Report, MigrateError> {
-    let result = run_in_transaction(client).await;
-    if result.is_err() {
-        let _ = client.batch_execute("ROLLBACK").await;
-    }
-    // The baseline carries session-level settings (empty search_path, ...).
-    client.batch_execute("RESET ALL").await?;
-    result
+fn runner() -> refinery::Runner {
+    let mut runner = embedded::migrations::runner();
+    runner.set_migration_table_name(MIGRATION_TABLE);
+    runner
 }
 
-async fn run_in_transaction(client: &mut Client) -> Result<Report, MigrateError> {
-    client.batch_execute("BEGIN").await?;
+/// Bring the database to the latest migration. See the module docs.
+pub async fn run(client: &mut Client) -> Result<Report, MigrateError> {
     client
-        .execute("SELECT pg_advisory_xact_lock($1)", &[&MIGRATE_LOCK])
+        .execute("SELECT pg_advisory_lock($1)", &[&MIGRATE_LOCK])
         .await?;
-    client
-        .batch_execute(
-            "CREATE TABLE IF NOT EXISTS public.schema_migrations (\
-                version bigint PRIMARY KEY, \
-                name text NOT NULL, \
-                checksum text NOT NULL, \
-                adopted boolean NOT NULL DEFAULT false, \
-                applied_at timestamptz NOT NULL DEFAULT now())",
-        )
-        .await?;
-    let rows = client
-        .query(
-            "SELECT version, checksum FROM public.schema_migrations",
-            &[],
-        )
-        .await?;
-    let recorded: Vec<(i64, String)> = rows.iter().map(|r| (r.get(0), r.get(1))).collect();
-    for (version, stored) in &recorded {
-        let Some(migration) = MIGRATIONS.iter().find(|m| m.version == *version) else {
-            return Err(MigrateError(format!(
-                "database has migration {version} that this binary does not know; refusing to run an older binary"
-            )));
-        };
-        if *stored != checksum(migration.sql) {
-            return Err(MigrateError(format!(
-                "migration {version} ({}) was modified after it was applied",
-                migration.name
-            )));
+    let result = run_locked(client).await;
+    let unlock = client
+        .execute("SELECT pg_advisory_unlock($1)", &[&MIGRATE_LOCK])
+        .await;
+    // The baseline carries session-level settings (empty search_path, ...).
+    client.batch_execute("RESET ALL").await?;
+    match result {
+        Err(e) => {
+            let _ = unlock;
+            Err(e)
+        }
+        Ok(report) => {
+            unlock?;
+            Ok(report)
         }
     }
+}
 
+async fn run_locked(client: &mut Client) -> Result<Report, MigrateError> {
     let mut report = Report {
         applied: Vec::new(),
         adopted: Vec::new(),
     };
-    let mut pending: Vec<&Migration> = MIGRATIONS
-        .iter()
-        .filter(|m| !recorded.iter().any(|(v, _)| *v == m.version))
-        .collect();
 
-    if recorded.is_empty() && adopt_alembic_baseline(client).await? {
-        let baseline = MIGRATIONS
-            .first()
-            .ok_or_else(|| MigrateError("no baseline migration embedded".into()))?;
-        record(client, baseline, true).await?;
-        report.adopted.push(baseline.version);
-        pending.retain(|m| m.version != baseline.version);
-    }
+    let alembic_state = alembic_state(client).await?;
+    let baseline_recorded = refinery_has_baseline(client).await?;
 
-    for migration in pending {
-        client.batch_execute(migration.sql).await?;
-        if migration.version == 1 {
-            // Keep Alembic's bookkeeping truthful while both tools exist, so a
-            // Rust-built database is indistinguishable from an Alembic-built one.
-            client
-                .execute(
-                    "INSERT INTO public.alembic_version (version_num) VALUES ($1)",
-                    &[&BASELINE_ALEMBIC_HEAD],
-                )
-                .await?;
+    match &alembic_state {
+        Some(AlembicState::Head) | None => {}
+        Some(AlembicState::Empty) if baseline_recorded => {
+            // A verified refinery-managed baseline with an empty alembic_version
+            // row means a previous run applied/stamped history but failed before
+            // writing the Alembic revision; repair it below.
         }
-        record(client, migration, false).await?;
-        report.applied.push(migration.version);
+        Some(AlembicState::Empty) => {
+            return Err(MigrateError(format!(
+                "alembic_version is empty, expected exactly [{BASELINE_ALEMBIC_HEAD:?}]; \
+                 run Alembic to the baseline head before switching to the Rust runner"
+            )));
+        }
+        Some(AlembicState::Other(revisions)) => {
+            return Err(MigrateError(format!(
+                "alembic_version is {revisions:?}, expected exactly [{BASELINE_ALEMBIC_HEAD:?}]; \
+                 run Alembic to the baseline head before switching to the Rust runner"
+            )));
+        }
     }
-    client.batch_execute("COMMIT").await?;
+
+    if !baseline_recorded {
+        if matches!(alembic_state, Some(AlembicState::Head)) {
+            // Alembic database at the baseline head: record baseline as applied
+            // without executing it, using refinery's own checksum/name.
+            runner()
+                .set_target(Target::FakeVersion(1))
+                .run_async(client)
+                .await?;
+            report.adopted.push(1);
+        } else {
+            ensure_empty_or_refinery_managed(client).await?;
+        }
+    }
+
+    let outcome = runner().run_async(client).await?;
+    report
+        .applied
+        .extend(outcome.applied_migrations().iter().map(|m| m.version()));
+
+    ensure_alembic_stamp(client).await?;
     Ok(report)
 }
 
-/// Decide whether this unmanaged database is an Alembic database at the
-/// baseline head (adopt), or an empty one (apply). Anything else is an error.
-async fn adopt_alembic_baseline(client: &Client) -> Result<bool, MigrateError> {
+async fn alembic_state(client: &Client) -> Result<Option<AlembicState>, MigrateError> {
+    let Some(revisions) = alembic_revisions(client).await? else {
+        return Ok(None);
+    };
+    Ok(Some(match revisions.as_slice() {
+        [only] if only == BASELINE_ALEMBIC_HEAD => AlembicState::Head,
+        [] => AlembicState::Empty,
+        _ => AlembicState::Other(revisions),
+    }))
+}
+
+async fn alembic_revisions(client: &Client) -> Result<Option<Vec<String>>, MigrateError> {
     let has_alembic: bool = client
         .query_one(
             "SELECT to_regclass('public.alembic_version') IS NOT NULL",
@@ -187,25 +201,45 @@ async fn adopt_alembic_baseline(client: &Client) -> Result<bool, MigrateError> {
         )
         .await?
         .get(0);
-    if has_alembic {
-        let revisions: Vec<String> = client
-            .query("SELECT version_num FROM public.alembic_version", &[])
-            .await?
-            .iter()
-            .map(|r| r.get(0))
-            .collect();
-        return match revisions.as_slice() {
-            [only] if only == BASELINE_ALEMBIC_HEAD => Ok(true),
-            other => Err(MigrateError(format!(
-                "alembic_version is {other:?}, expected exactly [{BASELINE_ALEMBIC_HEAD:?}]; \
-                 run Alembic to the baseline head before switching to the Rust runner"
-            ))),
-        };
+    if !has_alembic {
+        return Ok(None);
     }
+    let revisions = client
+        .query("SELECT version_num FROM public.alembic_version", &[])
+        .await?
+        .iter()
+        .map(|r| r.get(0))
+        .collect();
+    Ok(Some(revisions))
+}
+
+async fn refinery_has_baseline(client: &Client) -> Result<bool, MigrateError> {
+    let has_refinery: bool = client
+        .query_one(
+            "SELECT to_regclass('public.refinery_schema_history') IS NOT NULL",
+            &[],
+        )
+        .await?
+        .get(0);
+    if !has_refinery {
+        return Ok(false);
+    }
+    Ok(client
+        .query_opt(
+            "SELECT 1 FROM public.refinery_schema_history WHERE version = 1",
+            &[],
+        )
+        .await?
+        .is_some())
+}
+
+/// Refuse to baseline a database that has tables but is not managed by
+/// Alembic or by this runner's refinery history.
+async fn ensure_empty_or_refinery_managed(client: &Client) -> Result<(), MigrateError> {
     let tables: i64 = client
         .query_one(
             "SELECT count(*) FROM pg_tables \
-             WHERE schemaname = 'public' AND tablename <> 'schema_migrations'",
+             WHERE schemaname = 'public' AND tablename <> 'refinery_schema_history'",
             &[],
         )
         .await?
@@ -216,20 +250,26 @@ async fn adopt_alembic_baseline(client: &Client) -> Result<bool, MigrateError> {
                 .into(),
         ));
     }
-    Ok(false)
+    Ok(())
 }
 
-async fn record(client: &Client, migration: &Migration, adopted: bool) -> Result<(), MigrateError> {
+/// Keep Alembic's bookkeeping truthful while both tools exist.
+async fn ensure_alembic_stamp(client: &Client) -> Result<(), MigrateError> {
+    let has_alembic: bool = client
+        .query_one(
+            "SELECT to_regclass('public.alembic_version') IS NOT NULL",
+            &[],
+        )
+        .await?
+        .get(0);
+    if !has_alembic {
+        return Ok(());
+    }
     client
         .execute(
-            "INSERT INTO public.schema_migrations (version, name, checksum, adopted) \
-             VALUES ($1, $2, $3, $4)",
-            &[
-                &migration.version,
-                &migration.name,
-                &checksum(migration.sql),
-                &adopted,
-            ],
+            "INSERT INTO public.alembic_version (version_num) VALUES ($1) \
+             ON CONFLICT (version_num) DO NOTHING",
+            &[&BASELINE_ALEMBIC_HEAD],
         )
         .await?;
     Ok(())

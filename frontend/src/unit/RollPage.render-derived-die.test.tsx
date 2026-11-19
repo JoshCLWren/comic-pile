@@ -76,6 +76,7 @@ vi.mock('../hooks/useRollResources', () => ({
 }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
+  useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: vi.fn(),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: vi.fn(),

@@ -42,20 +42,17 @@ _EXPORT_MODULES: dict[str, str] = {
     "BlockingExplanation": "app.schemas.dependency",
     "ThreadDependenciesResponse": "app.schemas.dependency",
     "IssueCreate": "app.schemas.issue",
+    "IssueCreatorsEntry": "app.schemas.issue",
+    "IssueListResponse": "app.schemas.issue",
     "IssueUpdate": "app.schemas.issue",
     "IssueResponse": "app.schemas.issue",
-    "IssueListResponse": "app.schemas.issue",
-    "IssueCreatorsEntry": "app.schemas.issue",
     "ThreadIssueCreatorsResponse": "app.schemas.issue",
-    "MigrateToIssuesRequest": "app.schemas.migration",
     "KeepaliveResponse": "app.schemas.keepalive",
     "PerformanceMetricCreate": "app.schemas.performance_metric",
     "PerformanceMetricQuery": "app.schemas.performance_metric",
     "PerformanceMetricSummary": "app.schemas.performance_metric",
     "PerformanceMetricComparison": "app.schemas.performance_metric",
     "RollResponse": "app.schemas.roll",
-    "SetCurrentIssueRequest": "app.schemas.roll",
-    "SetCurrentIssueResponse": "app.schemas.roll",
     "RecommendationContextCreate": "app.schemas.recommendation_context",
     "RecommendationContextResponse": "app.schemas.recommendation_context",
     "RollingRecommendationContext": "app.schemas.recommendation_context",
@@ -96,7 +93,6 @@ __all__ = [
     "IssueResponse",
     "IssueUpdate",
     "KeepaliveResponse",
-    "MigrateToIssuesRequest",
     "PerformanceMetricComparison",
     "PerformanceMetricCreate",
     "PerformanceMetricQuery",
@@ -121,8 +117,6 @@ __all__ = [
     "SessionListResponse",
     "SessionMode",
     "SessionResponse",
-    "SetCurrentIssueRequest",
-    "SetCurrentIssueResponse",
     "SnapshotResponse",
     "SnapshotsListResponse",
     "ThreadCreate",
@@ -172,14 +166,12 @@ if TYPE_CHECKING:
     )
     from app.schemas.issue import (
         IssueCreate,
-        IssueCreatorsEntry,
         IssueListResponse,
         IssueResponse,
         IssueUpdate,
         ThreadIssueCreatorsResponse,
     )
     from app.schemas.keepalive import KeepaliveResponse
-    from app.schemas.migration import MigrateToIssuesRequest
     from app.schemas.performance_metric import (
         PerformanceMetricComparison,
         PerformanceMetricCreate,
@@ -199,8 +191,6 @@ if TYPE_CHECKING:
     )
     from app.schemas.roll import (
         RollResponse,
-        SetCurrentIssueRequest,
-        SetCurrentIssueResponse,
     )
     from app.schemas.session import (
         ActiveThreadInfo,

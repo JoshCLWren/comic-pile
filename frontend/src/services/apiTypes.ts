@@ -7,11 +7,15 @@ import type {
 } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
+/** Native unsnooze response; `restored` is false when only the snooze was removed. */
+export type RollUnsnoozeResponse = RollResponse & { restored: boolean }
+
 export interface RollApi {
   roll: () => Promise<RollResponse>
   override: (data: OverrideRollPayload) => Promise<RollResponse>
   dismissPending: () => Promise<void>
   reroll: (expectedPendingThreadId?: number) => Promise<RollResponse>
+  unsnooze: (threadId: number) => Promise<RollUnsnoozeResponse>
   setDie: (die: number) => Promise<void>
   reset: () => Promise<{ die: number; replayed: boolean }>
 }

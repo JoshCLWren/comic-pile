@@ -29,6 +29,8 @@ import {fileURLToPath} from 'node:url';
 export const HISTORICAL_PREFIXES = ['docs/issue-plans/', 'docs/changelog'];
 export const HISTORICAL_FILE_MARKER = '<!-- docs-path-check: historical -->';
 export const IGNORE_LINE_MARKER = '<!-- docs-path-check: ignore -->';
+export const ROUTE_BURNDOWN_BEGIN = '<!-- route-burndown:begin';
+export const ROUTE_BURNDOWN_END = '<!-- route-burndown:end -->';
 export const GENERATED_PREFIXES = [
   'dogfood-output/',
   'frontend/test-results/',
@@ -137,10 +139,11 @@ export function trackedFiles(root) {
   }
 }
 
-/** Return `[lineNumber, candidatePath]` pairs from inline code outside fences. */
+/** Return `[lineNumber, candidatePath]` pairs from inline code outside fences and generated blocks. */
 export function extractPaths(text) {
   const found = [];
   let fence = null;
+  let inGeneratedBlock = false;
   splitLines(text).forEach((line, index) => {
     const [next, isFenceLine] = advanceFence(fence, line);
     const inFence = fence !== null;
@@ -148,7 +151,21 @@ export function extractPaths(text) {
     if (isFenceLine) {
       return;
     }
-    if (inFence || stripInlineCode(line).includes(IGNORE_LINE_MARKER)) {
+    if (inGeneratedBlock) {
+      if (!inFence && stripInlineCode(line).includes(ROUTE_BURNDOWN_END)) {
+        inGeneratedBlock = false;
+      }
+      return;
+    }
+    if (inFence) {
+      return;
+    }
+    const visible = stripInlineCode(line);
+    if (visible.includes(ROUTE_BURNDOWN_BEGIN)) {
+      inGeneratedBlock = true;
+      return;
+    }
+    if (visible.includes(IGNORE_LINE_MARKER)) {
       return;
     }
     for (const match of line.matchAll(INLINE_CODE_RE)) {
@@ -178,9 +195,10 @@ export function pathResolves(root, doc, candidate, basenames, tracked) {
   return basenames.has(candidate);
 }
 
-/** Return whether `marker` appears as a real comment, not in a code span or fence. */
+/** Return whether `marker` appears as a real comment, not in a code span, fence, or generated block. */
 function hasMarker(text, marker) {
   let fence = null;
+  let inGeneratedBlock = false;
   for (const line of splitLines(text)) {
     const [next, isFenceLine] = advanceFence(fence, line);
     const inFence = fence !== null;
@@ -188,7 +206,21 @@ function hasMarker(text, marker) {
     if (isFenceLine) {
       continue;
     }
-    if (!inFence && stripInlineCode(line).includes(marker)) {
+    if (inGeneratedBlock) {
+      if (!inFence && stripInlineCode(line).includes(ROUTE_BURNDOWN_END)) {
+        inGeneratedBlock = false;
+      }
+      continue;
+    }
+    if (inFence) {
+      continue;
+    }
+    const visible = stripInlineCode(line);
+    if (visible.includes(ROUTE_BURNDOWN_BEGIN)) {
+      inGeneratedBlock = true;
+      continue;
+    }
+    if (visible.includes(marker)) {
       return true;
     }
   }
