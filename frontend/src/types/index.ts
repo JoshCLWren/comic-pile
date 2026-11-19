@@ -18,6 +18,14 @@ export interface ThreadQueueExclusionGroup {
  */
 export type ThreadListItem = components['schemas']['QueueThreadListItem'] & {
   queue_exclusion_group?: ThreadQueueExclusionGroup | null
+  /**
+   * Derived series cover from the native `/api/v2/threads` projection (#5433):
+   * the next unread confirmed issue's provider CDN URL, else the first confirmed
+   * issue with a cover. Null when no confirmed cover exists. Not yet in the
+   * Python-generated schema, so it is declared here until the native contract
+   * replaces it.
+   */
+  series_cover_image_url?: string | null
 }
 
 export interface BulkQueueExclusionRequest {
