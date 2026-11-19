@@ -13,7 +13,7 @@ for (const width of [390, 1280]) {
     page.on('request', (request) => {
       if (request.url().includes('remove-identity')) removed.push(request.url())
     })
-    await page.route('**/api/v1/comicvine/search/series**', (route) => route.fulfill({ json: {
+    await page.route('**/api/v2/comicvine/search/series**', (route) => route.fulfill({ json: {
       query: 'Tom Strong', results: [{ comicvine_volume_id: 6566, name: 'Tom Strong',
         publisher: 'America’s Best Comics', start_year: 1999, issue_count: 36,
         site_detail_url: null, image_url: null }],

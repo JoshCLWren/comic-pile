@@ -46,7 +46,7 @@ async function installCoverRoutes(page: Page): Promise<void> {
   await page.route('**/v1/issues/*/comicvine', (route) =>
     route.fulfill({ json: { comicvine_issue_id: '77777', comicvine_url: null, series_name: 'Cover Geometry', series_id: 7, issue_number: '1', name: 'One Stable Surface', description: null, image_url: COVER_DATA_URI, cover_date: '2026-01-01', store_date: null, creators: [], story_arcs: [] } }),
   )
-  await page.route('**/v1/comicvine/issues/*/identity', (route) =>
+  await page.route('**/v2/comicvine/issues/*/identity', (route) =>
     route.fulfill({ json: { issue_id: 1, thread_id: 1, thread_title: 'Cover Geometry Thread', has_confirmed_identity: true, confirmed_mappings: [], candidate_mappings: [], has_unresolved: false } }),
   )
 }

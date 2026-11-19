@@ -130,7 +130,7 @@ async function installRatingRoutes(page: Page): Promise<void> {
   await page.route('**/v1/issues/*/comicvine', (route) =>
     route.fulfill({ json: longArcIntelligence() }),
   )
-  await page.route('**/v1/comicvine/issues/*/identity', (route) =>
+  await page.route('**/v2/comicvine/issues/*/identity', (route) =>
     route.fulfill({ json: confirmedIdentity() }),
   )
 }
