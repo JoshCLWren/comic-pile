@@ -30646,7 +30646,7 @@
     },
     "/api/v2/comicvine/series/{comicvine_volume_id}/issues": {
       "get": {
-        "operationId": "series_issues_documentation",
+        "operationId": "comicvine_series_issues_documentation",
         "parameters": [
           {
             "description": "ComicVine volume ID",

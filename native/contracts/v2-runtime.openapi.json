@@ -2658,7 +2658,7 @@
         "tags": [
           "comicvine-v2"
         ],
-        "operationId": "series_issues_documentation",
+        "operationId": "comicvine_series_issues_documentation",
         "parameters": [
           {
             "name": "comicvine_volume_id",
