@@ -426,7 +426,7 @@
         "POST",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/v1/comicvine/issues/[^/]+/identity$",

@@ -1349,7 +1349,8 @@ fn classify_rows(
         };
         let row_id = format!("{}{}", prefix, id);
 
-        let as_object = row.as_object_mut().unwrap_or(&mut serde_json::Map::new());
+        let mut empty_map = serde_json::Map::new();
+        let as_object = row.as_object_mut().unwrap_or(&mut empty_map);
         as_object.insert("row_id".to_string(), serde_json::json!(row_id));
         as_object.insert("classification".to_string(), serde_json::json!(classification));
         as_object.insert("proposed_mapping".to_string(), serde_json::json!(classification == "safe_exact_match" || classification == "already_confirmed"));
