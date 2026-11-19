@@ -31,11 +31,9 @@ def mount_subrouters() -> None:
 
     from app.api import cbl_sources
     from app.api import dependency_group
-    from app.api import dependency_group_batch
     from app.api import reading_order_projection
 
     router.include_router(dependency_group.router)
-    router.include_router(dependency_group_batch.router)
     # project-preview is intentionally left on Python (out of scope for #4838).
     # The confirm/project operation is served by native Rust; its shadowed
     # Python handler has been removed from reading_order_projection.router.

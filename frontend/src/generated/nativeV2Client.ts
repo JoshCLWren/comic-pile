@@ -204,7 +204,7 @@ export interface CreateIssuesRequest {
   body: components['schemas']['CreateIssuesRequest']
 }
 
-export type CreateIssuesResponse = components['schemas']['NativeIssueListResponse']
+export type CreateIssuesResponse = components['schemas']['IssueListResponse']
 
 export interface CreateLegacyDependencyRequest {
   body: components['schemas']['DependencyCreateRequest']

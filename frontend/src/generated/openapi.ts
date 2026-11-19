@@ -2362,26 +2362,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/threads/groups:batch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * List Thread Groups Batch
-         * @description List crossover groups for several owned threads in one request.
-         */
-        post: operations["list_thread_groups_batch_api_v1_threads_groups_batch_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/threads/reactivate": {
         parameters: {
             query?: never;
@@ -4420,109 +4400,6 @@ export interface components {
             tag_id: number;
             target_type: string;
         };
-        /**
-         * CBLAdoptionEntryResponse
-         * @description Typed reconciliation and adoption state for one source position.
-         */
-        CBLAdoptionEntryResponse: {
-            /** Adopted */
-            adopted: boolean;
-            /**
-             * Adoption Class
-             * @enum {string}
-             */
-            adoption_class: "existing" | "missing_importable" | "ambiguous_unresolved";
-            /**
-             * Adoption Decision
-             * @enum {string}
-             */
-            adoption_decision: "included_existing" | "would_create_missing" | "awaiting_opt_in" | "excluded" | "unresolved";
-            /** Canonical Issue Id */
-            canonical_issue_id: number | null;
-            /** Cbl Entry Id */
-            cbl_entry_id: number;
-            /** Cbl Position */
-            cbl_position: number;
-            /**
-             * Collection Excluded
-             * @default false
-             */
-            collection_excluded: boolean;
-            /** Collection Exclusion Ids */
-            collection_exclusion_ids?: number[];
-            /** Collection Exclusion Reason */
-            collection_exclusion_reason?: string | null;
-            /** Comicvine Issue Id */
-            comicvine_issue_id: string | null;
-            /** Comicvine Series Id */
-            comicvine_series_id: string | null;
-            /** Is Duplicate Identity */
-            is_duplicate_identity: boolean;
-            /** Issue Number */
-            issue_number: string;
-            /** Publication Year */
-            publication_year?: number | null;
-            /** Read At */
-            read_at: string | null;
-            /** Read Status */
-            read_status: string | null;
-            /** Resolution Status */
-            resolution_status: string;
-            /** Resolved Issue Id */
-            resolved_issue_id: number | null;
-            /** Series External Id */
-            series_external_id: string | null;
-            /** Series Group Id */
-            series_group_id: string;
-            /** Series Name */
-            series_name: string;
-            /** Series Provider */
-            series_provider: string | null;
-            /** Volume Year */
-            volume_year?: number | null;
-        };
-        /**
-         * CBLAdoptionPreviewResponse
-         * @description Complete typed, read-only CBL adoption preview contract.
-         */
-        CBLAdoptionPreviewResponse: {
-            /** Entries */
-            entries: components["schemas"]["CBLAdoptionEntryResponse"][];
-            source: components["schemas"]["CBLSourceFingerprintResponse"];
-            summary: components["schemas"]["CBLAdoptionSummaryResponse"];
-            /** Total Positions */
-            total_positions: number;
-        };
-        /**
-         * CBLAdoptionSummaryResponse
-         * @description Dry-run counts and source-position order for an adoption plan.
-         */
-        CBLAdoptionSummaryResponse: {
-            /** Awaiting Opt In Count */
-            awaiting_opt_in_count: number;
-            /** Awaiting Opt In Positions */
-            awaiting_opt_in_positions: number[];
-            /** Excluded Count */
-            excluded_count: number;
-            /** Excluded Positions */
-            excluded_positions: number[];
-            /** Final Adopted Count */
-            final_adopted_count: number;
-            /** Final Adopted Order */
-            final_adopted_order: number[];
-            /** Missing Would Create Count */
-            missing_would_create_count: number;
-            /** Missing Would Create Positions */
-            missing_would_create_positions: number[];
-            /** Reused Existing Count */
-            reused_existing_count: number;
-            /** Reused Existing Positions */
-            reused_existing_positions: number[];
-            /** Unresolved Count */
-            unresolved_count: number;
-            /** Unresolved Positions */
-            unresolved_positions: number[];
-        };
         CBLBreadcrumb: {
             name: string;
             path: string;
@@ -4584,22 +4461,6 @@ export interface components {
             folders: components["schemas"]["CBLSourceFolder"][];
             /** Format: int32 */
             total_list_count: number;
-        };
-        /**
-         * CBLSourceFingerprintResponse
-         * @description Immutable source evidence needed to review and later accept a plan.
-         */
-        CBLSourceFingerprintResponse: {
-            /** Content Hash */
-            content_hash: string;
-            /** Revision Sha */
-            revision_sha: string;
-            /** Source List Id */
-            source_list_id: number;
-            /** Source Path */
-            source_path: string;
-            /** Source Repository */
-            source_repository: string;
         };
         CBLSourceFolder: {
             /** Format: int32 */
@@ -6154,14 +6015,6 @@ export interface components {
             name: string;
         };
         /**
-         * DependencyGroupThreadBatchRequest
-         * @description Request crossover summaries for a bounded set of owned threads.
-         */
-        DependencyGroupThreadBatchRequest: {
-            /** Thread Ids */
-            thread_ids: number[];
-        };
-        /**
          * DependencyGroupUpdate
          * @description Rename a named dependency group.
          */
@@ -6508,28 +6361,6 @@ export interface components {
             /** Format: int64 */
             total_items: number;
         };
-        /**
-         * IssueBulkMarkReadRequest
-         * @description Schema for bulk marking issues as read.
-         */
-        IssueBulkMarkReadRequest: {
-            /**
-             * Issue Ids
-             * @description Broadcast list of issue IDs to mark read.
-             */
-            issue_ids: number[];
-        };
-        /**
-         * IssueBulkMarkUnreadRequest
-         * @description Schema for bulk marking issues as unread.
-         */
-        IssueBulkMarkUnreadRequest: {
-            /**
-             * Issue Ids
-             * @description Broadcast list of issue IDs to mark unread.
-             */
-            issue_ids: number[];
-        };
         /** @description Request body for the bulk read-state operations. */
         IssueBulkRequest: {
             issue_ids: number[];
@@ -6575,20 +6406,14 @@ export interface components {
             /** @description Owned cards in first-request order; foreign or missing IDs are omitted. */
             items: components["schemas"]["IssueCard"][];
         };
-        /**
-         * IssueCreateRange
-         * @description Schema for creating issues from range format.
-         */
+        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues`. */
         IssueCreateRange: {
             /**
-             * Insert After Issue Id
-             * @description Insert new issues after this issue ID. Omit the field to place ordinary numeric issues in natural series order. Send explicit null to append at the end.
+             * Format: int32
+             * @description Insert after this issue id; omit for natural placement, null to append.
              */
             insert_after_issue_id?: number | null;
-            /**
-             * Issue Range
-             * @description Issue range like '1-25' or '1, 3, 5-7'
-             */
+            /** @description Range such as `1-25` or `1, 3, 5-7`. */
             issue_range: string;
         };
         /**
@@ -6693,28 +6518,19 @@ export interface components {
             store_date?: string | null;
             story_arcs: components["schemas"]["StoryArc"][];
         };
-        /**
-         * IssueListResponse
-         * @description Schema for paginated issue list response.
-         */
         IssueListResponse: {
-            /** Issues */
-            issues: components["schemas"]["IssueResponse"][];
-            /** Next Page Token */
+            issues: components["schemas"]["IssueMutationItem"][];
             next_page_token?: string | null;
-            /** Page Size */
+            /** Format: int64 */
             page_size: number;
-            /** Total Count */
+            /** Format: int32 */
             total_count: number;
         };
-        /**
-         * IssueMoveRequest
-         * @description Schema for moving an issue to a new position.
-         */
+        /** @description Request body for `POST /api/v1/issues/{issue_id}:move`. */
         IssueMoveRequest: {
             /**
-             * After Issue Id
-             * @description Move after this issue. null = move to position 1 (top).
+             * Format: int32
+             * @description Move after this issue. `null` moves the issue to position 1.
              */
             after_issue_id: number | null;
         };
@@ -6729,12 +6545,8 @@ export interface components {
         IssueOrderRequest: {
             issue_ids: number[];
         };
-        /**
-         * IssueOrderValidationResponse
-         * @description Schema for reporting in-thread dependency ordering conflicts.
-         */
+        /** @description Python `IssueOrderValidationResponse`. */
         IssueOrderValidationResponse: {
-            /** Warnings */
             warnings: string[];
         };
         IssueReadRateRequest: {
@@ -6770,15 +6582,8 @@ export interface components {
             replayed: boolean;
             thread: components["schemas"]["ThreadProgress"];
         };
-        /**
-         * IssueReorderRequest
-         * @description Schema for bulk reordering issues within a thread.
-         */
+        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`. */
         IssueReorderRequest: {
-            /**
-             * Issue Ids
-             * @description Ordered list of issue IDs representing the desired order.
-             */
             issue_ids: number[];
         };
         /**
@@ -7091,16 +6896,6 @@ export interface components {
             /** Format: int32 */
             total_items?: number | null;
         };
-        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues`. */
-        NativeIssueCreateRange: {
-            /**
-             * Format: int32
-             * @description Insert after this issue id; omit for natural placement, null to append.
-             */
-            insert_after_issue_id?: number | null;
-            /** @description Range such as `1-25` or `1, 3, 5-7`. */
-            issue_range: string;
-        };
         /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
         NativeIssueCreatorsEntry: {
             creators: components["schemas"]["CreatorCredit"][];
@@ -7129,30 +6924,6 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
-        };
-        NativeIssueListResponse: {
-            issues: components["schemas"]["IssueMutationItem"][];
-            next_page_token?: string | null;
-            /** Format: int64 */
-            page_size: number;
-            /** Format: int32 */
-            total_count: number;
-        };
-        /** @description Request body for `POST /api/v1/issues/{issue_id}:move`. */
-        NativeIssueMoveRequest: {
-            /**
-             * Format: int32
-             * @description Move after this issue. `null` moves the issue to position 1.
-             */
-            after_issue_id: number | null;
-        };
-        /** @description Python `IssueOrderValidationResponse`. */
-        NativeIssueOrderValidationResponse: {
-            warnings: string[];
-        };
-        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`. */
-        NativeIssueReorderRequest: {
-            issue_ids: number[];
         };
         /** @description One issue row (Python `IssueResponse`). */
         NativeIssueResponse: {
@@ -7205,129 +6976,6 @@ export interface components {
             /** Format: int32 */
             year?: number | null;
         };
-        /** @description Python `ReaderContextCrossover`. */
-        NativeReaderContextCrossover: {
-            applies_to_current_issue: boolean;
-            /** Format: double */
-            average_rating?: number | null;
-            /** Format: int32 */
-            id: number;
-            /** @description `issue` or `thread`. */
-            membership_kind: string;
-            name: string;
-            next_member?: components["schemas"]["NativeReaderContextCrossoverNextMember"] | null;
-            /** Format: int64 */
-            ratings_count: number;
-            /** Format: int64 */
-            read_count: number;
-        };
-        /** @description Python `ReaderContextCrossoverMembership`. */
-        NativeReaderContextCrossoverMembership: {
-            /** Format: int32 */
-            id: number;
-            name: string;
-        };
-        /** @description Python `ReaderContextCrossoverNextMember`. */
-        NativeReaderContextCrossoverNextMember: {
-            /** Format: int32 */
-            issue_id: number;
-            issue_number: string;
-        };
-        /** @description Python `ReaderContextEdge`. */
-        NativeReaderContextEdge: {
-            explanation?: string | null;
-            /** Format: int32 */
-            id: number;
-            /** @description `dependency` or `continuity`. */
-            kind: string;
-            note?: string | null;
-            /** Format: int32 */
-            source_issue_id: number;
-            source_issue_number?: string | null;
-            source_label?: string | null;
-            source_status?: string | null;
-            /** Format: int32 */
-            source_thread_id?: number | null;
-            source_thread_title?: string | null;
-            /** Format: int32 */
-            target_issue_id: number;
-            target_issue_number?: string | null;
-            target_label?: string | null;
-            target_status?: string | null;
-            /** Format: int32 */
-            target_thread_id?: number | null;
-            target_thread_title?: string | null;
-        };
-        /** @description Python `ReaderContextLocalChain`. */
-        NativeReaderContextLocalChain: {
-            edges: components["schemas"]["NativeReaderContextEdge"][];
-            issues: components["schemas"]["NativeReaderContextLocalIssue"][];
-        };
-        /** @description Python `ReaderContextLocalIssue`. */
-        NativeReaderContextLocalIssue: {
-            crossover_memberships: components["schemas"]["NativeReaderContextCrossoverMembership"][];
-            /** Format: int32 */
-            issue_id: number;
-            issue_number: string;
-            /** Format: int32 */
-            position: number;
-            /** Format: double */
-            rating?: number | null;
-            /** @description `previous`, `current`, `next` or `future`. */
-            relation: string;
-            status: string;
-        };
-        /** @description Python `ReaderContextPreviousIssue`. */
-        NativeReaderContextPreviousIssue: {
-            /** Format: int32 */
-            issue_id: number;
-            issue_number: string;
-            /** Format: double */
-            rating?: number | null;
-        };
-        /** @description Python `ReaderContextRecentRating`. */
-        NativeReaderContextRecentRating: {
-            /** Format: int32 */
-            issue_id: number;
-            issue_number: string;
-            /** Format: double */
-            rating: number;
-        };
-        /** @description Python `ReaderContextResponse`. */
-        NativeReaderContextResponse: {
-            crossovers: components["schemas"]["NativeReaderContextCrossover"][];
-            /** Format: int32 */
-            issue_id: number;
-            local_chain: components["schemas"]["NativeReaderContextLocalChain"];
-            series: components["schemas"]["NativeReaderContextSeries"];
-        };
-        /** @description Python `ReaderContextSeries`. */
-        NativeReaderContextSeries: {
-            /** Format: double */
-            average_rating?: number | null;
-            canonical_series_id?: string | null;
-            /** Format: double */
-            highest_rating?: number | null;
-            /** @description `comicvine` or `unavailable`. */
-            identity_source: string;
-            /** Format: double */
-            lowest_rating?: number | null;
-            previous_issue?: components["schemas"]["NativeReaderContextPreviousIssue"] | null;
-            /** Format: int64 */
-            ratings_count: number;
-            recent_ratings: components["schemas"]["NativeReaderContextRecentRating"][];
-            series_name?: string | null;
-        };
-        /** @description Python `ReadingOrderItemResponse`. */
-        NativeReadingOrderItemResponse: {
-            is_read: boolean;
-            issue_number?: string | null;
-            /** Format: int32 */
-            position: number;
-            /** Format: int32 */
-            thread_id: number;
-            thread_title: string;
-        };
         NativeReadingOrderProjectionConflict: {
             code: string;
             existing_positions: number[];
@@ -7363,18 +7011,6 @@ export interface components {
             /** Format: int32 */
             reading_order_id: number;
         };
-        /** @description Python `ReadingOrderResponse`. */
-        NativeReadingOrderResponse: {
-            /** Format: int64 */
-            completed_items: number;
-            description?: string | null;
-            /** Format: int32 */
-            id: number;
-            items: components["schemas"]["NativeReadingOrderItemResponse"][];
-            name: string;
-            /** Format: int64 */
-            total_items: number;
-        };
         NativeReplaceIdentityRequest: {
             /** Format: int32 */
             comicvine_issue_id: number;
@@ -7409,10 +7045,6 @@ export interface components {
             issues: components["schemas"]["NativeIssueCreatorsEntry"][];
             /** Format: int32 */
             thread_id: number;
-        };
-        /** @description Python `ThreadReadingOrdersResponse`. */
-        NativeThreadReadingOrdersResponse: {
-            reading_orders: components["schemas"]["NativeReadingOrderResponse"][];
         };
         /** @description Python `ThreadResponse`. */
         NativeThreadResponse: {
@@ -7857,193 +7489,117 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
-        /**
-         * ReaderContextCrossover
-         * @description One owned crossover relevant to the requested issue's thread.
-         */
+        /** @description Python `ReaderContextCrossover`. */
         ReaderContextCrossover: {
-            /** Applies To Current Issue */
             applies_to_current_issue: boolean;
-            /** Average Rating */
+            /** Format: double */
             average_rating?: number | null;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /**
-             * Membership Kind
-             * @enum {string}
-             */
-            membership_kind: "issue" | "thread";
-            /** Name */
+            /** @description `issue` or `thread`. */
+            membership_kind: string;
             name: string;
             next_member?: components["schemas"]["ReaderContextCrossoverNextMember"] | null;
-            /**
-             * Ratings Count
-             * @default 0
-             */
+            /** Format: int64 */
             ratings_count: number;
-            /**
-             * Read Count
-             * @default 0
-             */
+            /** Format: int64 */
             read_count: number;
         };
-        /**
-         * ReaderContextCrossoverMembership
-         * @description One exact crossover membership held by an owned issue.
-         */
+        /** @description Python `ReaderContextCrossoverMembership`. */
         ReaderContextCrossoverMembership: {
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Name */
             name: string;
         };
-        /**
-         * ReaderContextCrossoverNextMember
-         * @description The nearest future exact member of a crossover in the current thread.
-         */
+        /** @description Python `ReaderContextCrossoverNextMember`. */
         ReaderContextCrossoverNextMember: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
         };
-        /**
-         * ReaderContextEdge
-         * @description One persisted one-hop dependency or continuity edge.
-         */
+        /** @description Python `ReaderContextEdge`. */
         ReaderContextEdge: {
-            /** Explanation */
             explanation?: string | null;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "dependency" | "continuity";
-            /** Note */
+            /** @description `dependency` or `continuity`. */
+            kind: string;
             note?: string | null;
-            /** Source Issue Id */
+            /** Format: int32 */
             source_issue_id: number;
-            /** Source Issue Number */
             source_issue_number?: string | null;
-            /** Source Label */
             source_label?: string | null;
-            /** Source Status */
             source_status?: string | null;
-            /** Source Thread Id */
+            /** Format: int32 */
             source_thread_id?: number | null;
-            /** Source Thread Title */
             source_thread_title?: string | null;
-            /** Target Issue Id */
+            /** Format: int32 */
             target_issue_id: number;
-            /** Target Issue Number */
             target_issue_number?: string | null;
-            /** Target Label */
             target_label?: string | null;
-            /** Target Status */
             target_status?: string | null;
-            /** Target Thread Id */
+            /** Format: int32 */
             target_thread_id?: number | null;
-            /** Target Thread Title */
             target_thread_title?: string | null;
         };
-        /**
-         * ReaderContextLocalChain
-         * @description The bounded local reading neighborhood around the requested issue.
-         */
+        /** @description Python `ReaderContextLocalChain`. */
         ReaderContextLocalChain: {
-            /** Edges */
-            edges?: components["schemas"]["ReaderContextEdge"][];
-            /** Issues */
-            issues?: components["schemas"]["ReaderContextLocalIssue"][];
+            edges: components["schemas"]["ReaderContextEdge"][];
+            issues: components["schemas"]["ReaderContextLocalIssue"][];
         };
-        /**
-         * ReaderContextLocalIssue
-         * @description One bounded local-chain issue centered on the requested issue.
-         */
+        /** @description Python `ReaderContextLocalIssue`. */
         ReaderContextLocalIssue: {
-            /** Crossover Memberships */
-            crossover_memberships?: components["schemas"]["ReaderContextCrossoverMembership"][];
-            /** Issue Id */
+            crossover_memberships: components["schemas"]["ReaderContextCrossoverMembership"][];
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
-            /** Position */
+            /** Format: int32 */
             position: number;
-            /** Rating */
+            /** Format: double */
             rating?: number | null;
-            /**
-             * Relation
-             * @enum {string}
-             */
-            relation: "previous" | "current" | "next" | "future";
-            /** Status */
+            /** @description `previous`, `current`, `next` or `future`. */
+            relation: string;
             status: string;
         };
-        /**
-         * ReaderContextPreviousIssue
-         * @description The immediately preceding issue inside the requested issue's thread.
-         */
+        /** @description Python `ReaderContextPreviousIssue`. */
         ReaderContextPreviousIssue: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
-            /** Rating */
+            /** Format: double */
             rating?: number | null;
         };
-        /**
-         * ReaderContextRecentRating
-         * @description One effective series rating ordered by its effective event timestamp.
-         */
+        /** @description Python `ReaderContextRecentRating`. */
         ReaderContextRecentRating: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
-            /** Rating */
+            /** Format: double */
             rating: number;
         };
-        /**
-         * ReaderContextResponse
-         * @description Bounded reader-context for one owned issue.
-         */
+        /** @description Python `ReaderContextResponse`. */
         ReaderContextResponse: {
-            /** Crossovers */
-            crossovers?: components["schemas"]["ReaderContextCrossover"][];
-            /** Issue Id */
+            crossovers: components["schemas"]["ReaderContextCrossover"][];
+            /** Format: int32 */
             issue_id: number;
             local_chain: components["schemas"]["ReaderContextLocalChain"];
             series: components["schemas"]["ReaderContextSeries"];
         };
-        /**
-         * ReaderContextSeries
-         * @description Canonical-series reading analytics for the requested issue.
-         */
+        /** @description Python `ReaderContextSeries`. */
         ReaderContextSeries: {
-            /** Average Rating */
+            /** Format: double */
             average_rating?: number | null;
-            /** Canonical Series Id */
             canonical_series_id?: string | null;
-            /** Highest Rating */
+            /** Format: double */
             highest_rating?: number | null;
-            /**
-             * Identity Source
-             * @enum {string}
-             */
-            identity_source: "comicvine" | "unavailable";
-            /** Lowest Rating */
+            /** @description `comicvine` or `unavailable`. */
+            identity_source: string;
+            /** Format: double */
             lowest_rating?: number | null;
             previous_issue?: components["schemas"]["ReaderContextPreviousIssue"] | null;
-            /**
-             * Ratings Count
-             * @default 0
-             */
+            /** Format: int64 */
             ratings_count: number;
-            /** Recent Ratings */
-            recent_ratings?: components["schemas"]["ReaderContextRecentRating"][];
-            /** Series Name */
+            recent_ratings: components["schemas"]["ReaderContextRecentRating"][];
             series_name?: string | null;
         };
         ReadingBoundaryBatchRequest: {
@@ -8462,23 +8018,14 @@ export interface components {
             /** Format: int32 */
             reading_order_id: number;
         };
-        /**
-         * ReadingOrderItemResponse
-         * @description Response schema for a single item within a reading order.
-         */
+        /** @description Python `ReadingOrderItemResponse`. */
         ReadingOrderItemResponse: {
-            /**
-             * Is Read
-             * @default false
-             */
             is_read: boolean;
-            /** Issue Number */
             issue_number?: string | null;
-            /** Position */
+            /** Format: int32 */
             position: number;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
-            /** Thread Title */
             thread_title: string;
         };
         /** @description Python `ReadingOrderListResponse`. */
@@ -8569,25 +8116,16 @@ export interface components {
             /** Format: int32 */
             updated_count: number;
         };
-        /**
-         * ReadingOrderResponse
-         * @description Response schema for a reading order with items.
-         */
+        /** @description Python `ReadingOrderResponse`. */
         ReadingOrderResponse: {
-            /** Completed Items */
+            /** Format: int64 */
             completed_items: number;
-            /** Description */
             description?: string | null;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /**
-             * Items
-             * @default []
-             */
             items: components["schemas"]["ReadingOrderItemResponse"][];
-            /** Name */
             name: string;
-            /** Total Items */
+            /** Format: int64 */
             total_items: number;
         };
         /** @description One row of the reading-orders list (Python `ReadingOrderSummary`). */
@@ -9848,12 +9386,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /**
-         * ThreadReadingOrdersResponse
-         * @description Response schema for reading orders containing a specific thread.
-         */
+        /** @description Python `ThreadReadingOrdersResponse`. */
         ThreadReadingOrdersResponse: {
-            /** Reading Orders */
             reading_orders: components["schemas"]["ReadingOrderResponse"][];
         };
         /**
@@ -13184,7 +12718,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReaderContextResponse"];
+                    "application/json": components["schemas"]["ReaderContextResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -13341,7 +12875,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeIssueMoveRequest"];
+                "application/json": components["schemas"]["IssueMoveRequest"];
             };
         };
         responses: {
@@ -15179,41 +14713,6 @@ export interface operations {
             };
         };
     };
-    list_thread_groups_batch_api_v1_threads_groups_batch_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DependencyGroupThreadBatchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: components["schemas"]["DependencyGroupSummary"][];
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     reactivate_thread_api_v1_threads_reactivate_post: {
         parameters: {
             query?: never;
@@ -15678,7 +15177,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeIssueCreateRange"];
+                "application/json": components["schemas"]["IssueCreateRange"];
             };
         };
         responses: {
@@ -15798,7 +15297,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeIssueReorderRequest"];
+                "application/json": components["schemas"]["IssueReorderRequest"];
             };
         };
         responses: {
@@ -15864,7 +15363,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueOrderValidationResponse"];
+                    "application/json": components["schemas"]["IssueOrderValidationResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -15915,7 +15414,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeThreadReadingOrdersResponse"];
+                    "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -19399,7 +18898,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueListResponse"];
+                    "application/json": components["schemas"]["IssueListResponse"];
                 };
             };
             /** @description Invalid issue range or no new issues */

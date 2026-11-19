@@ -325,7 +325,7 @@ pub async fn offer(
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
     // The canonical position shown for a pending Roll comes from the same
     // Option E ordering the Queue list and Thread Detail use.
-    let option_e = crate::threads::option_e_enabled();
+    let option_e = state.option_e;
     let eligible_ids = if option_e {
         crate::threads::eligible_candidate_ids(&validated)?
     } else {

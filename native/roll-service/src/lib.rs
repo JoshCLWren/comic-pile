@@ -35,6 +35,7 @@ pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
+pub mod option_e_setting;
 pub mod option_inputs;
 pub mod outbound;
 pub(crate) mod plan_rule_compiler;
@@ -127,6 +128,9 @@ pub struct AppState {
     /// fake that never opens a socket, so no test can reach the network
     /// (#5339). See [`outbound`].
     pub outbound: Arc<dyn outbound::OutboundHttp>,
+    /// Effective Option E setting (see [`option_e_setting`]); injectable so
+    /// tests choose it per state instead of mutating process environment.
+    pub option_e: bool,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -211,6 +215,7 @@ impl AppState {
             environment: config.environment,
             connection_recovery: true,
             outbound,
+            option_e: config.option_e,
         })
     }
 
