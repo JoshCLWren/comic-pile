@@ -31,7 +31,7 @@ pub struct ConvergenceTarget {
     pub id: i32,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ContinuityRuleRequest {
     pub source_type: String,
