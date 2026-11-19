@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
+import { ComicIssueCover } from '../../../components/ComicIssueCard'
 import type { RollBootstrapThread, RollPoolReason } from '../../../types/rollBootstrap'
 import type { IssueCardsResponse } from '../../../generated/nativeV2Client'
 
@@ -222,6 +223,12 @@ export function ThreadPool({
                 <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
                   {index + 1}
                 </span>
+                <ComicIssueCover
+                  coverImageUrl={card?.cover_image_url ?? null}
+                  threadTitle={displayTitle}
+                  issueNumber={issueNumber ?? ''}
+                  variant="compact"
+                />
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-stone-200 truncate text-sm">{displayTitle}</p>
                   <p className="truncate text-xs text-stone-400">
