@@ -1,8 +1,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-//! Database tests for the migration runner. Each test creates and drops its own
-//! scratch database on the server named by `MIGRATE_TEST_DATABASE_URL`.
+//! Database tests for the refinery-backed migration runner. Each test creates
+//! and drops its own scratch database on the server named by
+//! `MIGRATE_TEST_DATABASE_URL`.
 
-use comicpile_migrate::{checksum, connect, run, BASELINE_ALEMBIC_HEAD, MIGRATIONS};
+use comicpile_migrate::{connect, run, BASELINE_ALEMBIC_HEAD};
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio_postgres::Client;
 
@@ -101,7 +102,10 @@ impl Scratch {
 
 /// Simulate an Alembic-managed database at the baseline head.
 async fn alembic_managed(client: &Client) {
-    client.batch_execute(MIGRATIONS[0].sql).await.unwrap();
+    client
+        .batch_execute(include_str!("../migrations/V1__baseline.sql"))
+        .await
+        .unwrap();
     client.batch_execute("RESET ALL").await.unwrap();
     client
         .execute(
@@ -118,24 +122,31 @@ async fn fresh_database_gets_baseline_and_alembic_stamp() {
     let mut client = db.client().await;
     let report = run(&mut client).await.unwrap();
     assert_eq!((report.applied, report.adopted), (vec![1], vec![]));
+
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
         .await
         .unwrap()
         .get(0);
     assert_eq!(stamp, BASELINE_ALEMBIC_HEAD);
-    let adopted: bool = client
-        .query_one("SELECT adopted FROM public.schema_migrations", &[])
+
+    let recorded: bool = client
+        .query_one(
+            "SELECT EXISTS(SELECT 1 FROM public.refinery_schema_history WHERE version = 1)",
+            &[],
+        )
         .await
         .unwrap()
         .get(0);
-    assert!(!adopted);
+    assert!(recorded);
+
     let threads: bool = client
         .query_one("SELECT to_regclass('public.threads') IS NOT NULL", &[])
         .await
         .unwrap()
         .get(0);
     assert!(threads);
+
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
     drop(client);
@@ -147,14 +158,38 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     alembic_managed(&client).await;
+    client
+        .batch_execute("CREATE TABLE public.adopt_preserved (marker int PRIMARY KEY)")
+        .await
+        .unwrap();
+    client
+        .execute(
+            "INSERT INTO public.adopt_preserved (marker) VALUES (42)",
+            &[],
+        )
+        .await
+        .unwrap();
+
     let report = run(&mut client).await.unwrap();
     assert_eq!((report.applied, report.adopted), (vec![], vec![1]));
-    let adopted: bool = client
-        .query_one("SELECT adopted FROM public.schema_migrations", &[])
+
+    let recorded: bool = client
+        .query_one(
+            "SELECT EXISTS(SELECT 1 FROM public.refinery_schema_history WHERE version = 1)",
+            &[],
+        )
         .await
         .unwrap()
         .get(0);
-    assert!(adopted);
+    assert!(recorded);
+
+    let marker: i32 = client
+        .query_one("SELECT marker FROM public.adopt_preserved", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(marker, 42, "adoption must preserve existing data");
+
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
     drop(client);
@@ -174,7 +209,7 @@ async fn alembic_database_at_another_revision_is_refused() {
     assert!(error.0.contains("zzzzzzzzzzzz"), "{error}");
     let tracked: i64 = client
         .query_one(
-            "SELECT count(*) FROM pg_tables WHERE tablename = 'schema_migrations'",
+            "SELECT count(*) FROM pg_tables WHERE tablename = 'refinery_schema_history'",
             &[],
         )
         .await
@@ -206,13 +241,20 @@ async fn edited_applied_migration_is_refused() {
     run(&mut client).await.unwrap();
     client
         .execute(
-            "UPDATE public.schema_migrations SET checksum = $1",
-            &[&checksum("other")],
+            "UPDATE public.refinery_schema_history SET checksum = $1 WHERE version = 1",
+            &[&"0"],
         )
         .await
         .unwrap();
     let error = run(&mut client).await.unwrap_err();
-    assert!(error.0.contains("modified after it was applied"), "{error}");
+    let msg = error.0.to_lowercase();
+    assert!(
+        msg.contains("divergent")
+            || msg.contains("different")
+            || msg.contains("checksum")
+            || msg.contains("modified"),
+        "expected checksum/divergence error, got: {error}"
+    );
     drop(client);
     db.drop_database().await;
 }
