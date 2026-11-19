@@ -28,7 +28,6 @@ interface UseRollModalsParams {
  */
 export function useRollModals({
   state,
-  bootstrap,
   overrideMutation,
   enterRatingView,
   setRestoreAction,
