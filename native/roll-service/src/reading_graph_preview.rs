@@ -517,82 +517,481 @@ pub async fn preview_reading_graph(
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn reading_list_from_entries(
-    list_id: i32,
-    mode: &str,
-    name: &str,
-    entries: &[reading_constraints::Entry],
-) -> option_inputs::ReadingList {
-    option_inputs::ReadingList {
-        list_id,
-        mode: mode.to_string(),
-        name: name.to_string(),
-        entries: entries
-            .iter()
-            .map(|e| option_inputs::ReadingEntry {
-                issue_id: e.issue_id,
-                gate: e.gate.clone(),
-                skipped: e.skipped,
-            })
-            .collect(),
-        overlap_decisions: vec![],
-    }
-}
-
 fn build_series_nodes(
     issue_meta: &HashMap<i32, IssueMeta>,
     thread_names: &HashMap<i32, String>,
     graph_thread_ids: &HashSet<i32>,
-    _active_thread_ids: &HashSet<i32>,
     volume_by_thread: &HashMap<i32, Option<String>>,
-    _baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
+    baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
     excluded: &std::collections::BTreeSet<i32>,
+    thread_volumes: &std::collections::BTreeMap<i32, String>,
 ) -> Vec<ReadingGraphSeriesNode> {
-    let mut nodes: Vec<ReadingGraphSeriesNode> = vec![];
+    // Aggregate per exact volume: group all graph threads sharing the same
+    // volume key into one series node.
+    let mut volume_threads: std::collections::BTreeMap<String, Vec<i32>> =
+        std::collections::BTreeMap::new();
     for &thread_id in graph_thread_ids.iter() {
-        let volume_id = volume_by_thread.get(&thread_id).cloned().flatten();
-        let key = volume_id
-            .clone()
+        let volume_id = volume_by_thread
+            .get(&thread_id)
+            .cloned()
+            .flatten()
             .unwrap_or_else(|| format!("unidentified-thread:{thread_id}"));
-        let series_name = thread_names.get(&thread_id).cloned().unwrap_or_default();
-        let unread = issue_meta.values().filter(|m| m.thread_id == thread_id && !excluded.contains(&m.issue_id) && m.status != "read").count() as i32;
-        let state = if unread > 0 { "continues" } else { "waits" }.to_string();
+        volume_threads.entry(volume_id).or_default().push(thread_id);
+    }
+
+    let mut nodes: Vec<ReadingGraphSeriesNode> = vec![];
+    for (volume_id, thread_ids) in volume_threads {
+        let mut unread_count = 0i32;
+        let mut rollable_count = 0i32;
+        let mut waiting_count = 0i32;
+        let mut waits_for: Vec<i32> = vec![];
+
+        for &thread_id in &thread_ids {
+            let state = baseline.get(&thread_id);
+            let eligible = state.map(|s| s.eligible).unwrap_or(false);
+            let next_issue = state.and_then(|s| s.next_issue_id);
+
+            for (_, m) in issue_meta.iter() {
+                if m.thread_id != thread_id {
+                    continue;
+                }
+                if excluded.contains(&m.issue_id) || m.status == "read" {
+                    continue;
+                }
+                unread_count += 1;
+                if Some(m.issue_id) == next_issue && eligible {
+                    rollable_count += 1;
+                } else {
+                    waiting_count += 1;
+                }
+            }
+
+            if let Some(s) = state {
+                for blocker in &s.blockers {
+                    for wid in &blocker.waiting_on_issue_ids {
+                        if let Some(wm) = issue_meta.get(wid) {
+                            if wm.thread_id == thread_id
+                                && !excluded.contains(wid)
+                                && wm.status != "read"
+                            {
+                                waits_for.push(*wid);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        waits_for.sort_unstable();
+        waits_for.dedup();
+
+        let series_name = thread_ids
+            .iter()
+            .filter_map(|tid| thread_names.get(tid))
+            .cloned()
+            .next()
+            .unwrap_or_default();
+
+        let state = if rollable_count > 0 {
+            "continues"
+        } else if waiting_count > 0 {
+            "waits"
+        } else {
+            "mixed"
+        };
+
+        let year = thread_volumes
+            .get(&thread_ids[0])
+            .and_then(|v| v.split(':').nth(1))
+            .and_then(|y| y.parse::<i32>().ok());
+
         nodes.push(ReadingGraphSeriesNode {
-            comicvine_volume_id: key,
+            comicvine_volume_id: volume_id,
             series_name,
-            year: None,
-            state,
-            unread_count: unread,
-            rollable_count: 0,
-            waiting_count: 0,
-            waits_for_issue_ids: vec![],
+            year,
+            state: state.to_string(),
+            unread_count,
+            rollable_count,
+            waiting_count,
+            waits_for_issue_ids: waits_for,
         });
     }
     nodes.sort_by(|a, b| a.series_name.cmp(&b.series_name));
     nodes
 }
 
+struct OverlapContext {
+    issue_meta: HashMap<i32, IssueMeta>,
+    thread_names: HashMap<i32, String>,
+    volume_by_thread: HashMap<i32, Option<String>>,
+    series_refs: HashMap<String, ReadingGraphSeriesReference>,
+}
+
+fn series_refs_for_volumes(
+    issue_meta: &HashMap<i32, IssueMeta>,
+    thread_names: &HashMap<i32, String>,
+    volume_by_thread: &HashMap<i32, Option<String>>,
+    thread_volumes: &std::collections::BTreeMap<i32, String>,
+) -> HashMap<String, ReadingGraphSeriesReference> {
+    let mut refs: HashMap<String, ReadingGraphSeriesReference> = HashMap::new();
+    for (thread_id, volume_opt) in volume_by_thread.iter() {
+        let key = volume_opt
+            .clone()
+            .unwrap_or_else(|| format!("unidentified-thread:{thread_id}"));
+        let series_name = thread_names
+            .get(thread_id)
+            .cloned()
+            .unwrap_or_else(|| format!("Series {thread_id}"));
+        let year = thread_volumes
+            .get(thread_id)
+            .and_then(|v| v.split(':').nth(1))
+            .and_then(|y| y.parse::<i32>().ok());
+        refs.insert(
+            key.clone(),
+            ReadingGraphSeriesReference {
+                comicvine_volume_id: key,
+                series_name,
+                year,
+            },
+        );
+    }
+    refs
+}
+
+fn context_for_overlaps(
+    issue_meta: &HashMap<i32, IssueMeta>,
+    thread_names: &HashMap<i32, String>,
+    volume_by_thread: &HashMap<i32, Option<String>>,
+    thread_volumes: &std::collections::BTreeMap<i32, String>,
+) -> OverlapContext {
+    OverlapContext {
+        issue_meta: issue_meta.clone(),
+        thread_names: thread_names.clone(),
+        volume_by_thread: volume_by_thread.clone(),
+        series_refs: series_refs_for_volumes(
+            issue_meta,
+            thread_names,
+            volume_by_thread,
+            thread_volumes,
+        ),
+    }
+}
+
+fn build_overlaps(
+    ctx: &OverlapContext,
+    _selected_issue_ids: &[i32],
+    baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
+    _volume_by_thread: &HashMap<i32, Option<String>>,
+    _series_refs: &HashMap<String, ReadingGraphSeriesReference>,
+    proposed_list_id: &i32,
+    overlap_choices: &[ReadingGraphOverlapChoice],
+) -> (
+    Vec<ReadingGraphOverlap>,
+    std::collections::HashMap<
+        (String, String),
+        std::collections::HashSet<i32>,
+    >,
+) {
+    let mut pairs: std::collections::BTreeSet<(String, String)> =
+        std::collections::BTreeSet::new();
+    let mut blocked_by_pair: std::collections::HashMap<
+        (String, String),
+        std::collections::HashSet<i32>,
+    > = std::collections::HashMap::new();
+
+    // Detect strict_order cross-volume blockers in the proposed list.
+    for (_tid, state) in baseline.iter() {
+        for blocker in &state.blockers {
+            if blocker.kind != "strict_order" {
+                continue;
+            }
+            // Only blockers belonging to the proposed list create overlap questions.
+            if blocker.list_id != Some(*proposed_list_id) {
+                continue;
+            }
+            // The continuing thread is the state's own thread.
+            let continuing_thread = state.thread_id;
+            let continuing_volume = ctx
+                .volume_by_thread
+                .get(&continuing_thread)
+                .cloned()
+                .flatten();
+            let continuing_key = continuing_volume
+                .clone()
+                .unwrap_or_else(|| format!("unidentified-thread:{continuing_thread}"));
+
+            for wid in &blocker.waiting_on_issue_ids {
+                if let Some(wm) = ctx.issue_meta.get(wid) {
+                    let waiting_thread = wm.thread_id;
+                    let waiting_volume = ctx
+                        .volume_by_thread
+                        .get(&waiting_thread)
+                        .cloned()
+                        .flatten();
+                    let waiting_key = waiting_volume
+                        .clone()
+                        .unwrap_or_else(|| format!("unidentified-thread:{waiting_thread}"));
+
+                    if continuing_key == waiting_key {
+                        continue;
+                    }
+
+                    let pair = if continuing_key < waiting_key {
+                        (continuing_key.clone(), waiting_key.clone())
+                    } else {
+                        (waiting_key.clone(), continuing_key.clone())
+                    };
+                    pairs.insert(pair.clone());
+                    blocked_by_pair.entry(pair).or_default().insert(*wid);
+                }
+            }
+        }
+    }
+
+    // Build chosen map from overlap_choices. We can't reverse opaque IDs, so we
+    // match choices to pairs in deterministic order.
+    let mut sorted_pairs: Vec<(String, String)> = pairs.into_iter().collect();
+    sorted_pairs.sort();
+    let mut choice_iter = overlap_choices.iter();
+
+    let mut overlaps: Vec<ReadingGraphOverlap> = vec![];
+    for pair in sorted_pairs {
+        let (continuing_volume, waiting_volume) = &pair;
+        let continuing_ref = ctx
+            .series_refs
+            .get(continuing_volume)
+            .cloned()
+            .unwrap_or_else(|| ReadingGraphSeriesReference {
+                comicvine_volume_id: continuing_volume.clone(),
+                series_name: continuing_volume.clone(),
+                year: None,
+            });
+        let waiting_ref = ctx
+            .series_refs
+            .get(waiting_volume)
+            .cloned()
+            .unwrap_or_else(|| ReadingGraphSeriesReference {
+                comicvine_volume_id: waiting_volume.clone(),
+                series_name: waiting_volume.clone(),
+                year: None,
+            });
+
+        let selected_choice = choice_iter.next().and_then(|oc| {
+            if oc.overlap_id.is_empty() {
+                None
+            } else {
+                Some(oc.choice.clone())
+            }
+        });
+
+        overlaps.push(ReadingGraphOverlap {
+            overlap_id: format!(
+                "overlap-{:x}",
+                simple_hash(&format!("{continuing_volume}\0{waiting_volume}"))[..24]
+            ),
+            continuing_series: continuing_ref,
+            waiting_series: waiting_ref,
+            question: format!(
+                "Should {} continue while {} waits?",
+                continuing_ref.series_name, waiting_ref.series_name
+            ),
+            blocked_issue_ids: {
+                let mut v: Vec<i32> = blocked_by_pair
+                    .get(&pair)
+                    .cloned()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect();
+                v.sort_unstable();
+                v
+            },
+            choices: vec![
+                ReadingGraphChoiceEffect {
+                    choice: "protect_order".to_string(),
+                    label: "Keep the full chosen order".to_string(),
+                    detail: format!(
+                        "{} waits for every earlier unread {} comic before it continues.",
+                        continuing_ref.series_name, waiting_ref.series_name
+                    ),
+                    rollable_issue_ids: vec![],
+                    waiting_issue_ids: vec![],
+                    series: vec![],
+                },
+                ReadingGraphChoiceEffect {
+                    choice: "continue_series".to_string(),
+                    label: format!(
+                        "Let {} continue; {} waits",
+                        continuing_ref.series_name, waiting_ref.series_name
+                    ),
+                    detail: format!(
+                        "Removes the ordering restriction between {} and {}; other prerequisites and restrictions still apply.",
+                        continuing_ref.series_name, waiting_ref.series_name
+                    ),
+                    rollable_issue_ids: vec![],
+                    waiting_issue_ids: vec![],
+                    series: vec![],
+                },
+            ],
+            selected_choice,
+        });
+    }
+
+    (overlaps, blocked_by_pair)
+}
+
+fn simple_hash(input: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::Hash;
+    let mut h = DefaultHasher::new();
+    input.hash(&mut h);
+    format!("{:016x}", h.finish())
+}
+
 fn build_issue_references(
-    _graph_issue_ids: &HashSet<i32>,
-    _baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
-    _issue_meta: &HashMap<i32, IssueMeta>,
+    graph_issue_ids: &HashSet<i32>,
+    baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
+    issue_meta: &HashMap<i32, IssueMeta>,
+    volume_by_thread: &HashMap<i32, Option<String>>,
+    series_refs: &HashMap<String, ReadingGraphSeriesReference>,
 ) -> Vec<ReadingGraphIssueReference> {
-    vec![]
+    let mut references: Vec<ReadingGraphIssueReference> = vec![];
+
+    for &issue_id in graph_issue_ids.iter() {
+        let meta = match issue_meta.get(&issue_id) {
+            Some(m) => m,
+            None => continue,
+        };
+        let series_ref = volume_by_thread
+            .get(&meta.thread_id)
+            .and_then(|v| v.as_ref())
+            .and_then(|v| series_refs.get(v));
+
+        let series_name = series_ref
+            .map(|r| r.series_name.clone())
+            .unwrap_or_else(|| meta.issue_number.clone());
+
+        let comicvine_volume_id = series_ref.map(|r| r.comicvine_volume_id.clone());
+
+        let mut blockers: Vec<ReadingGraphBlocker> = vec![];
+        if let Some(state) = baseline.get(&meta.thread_id) {
+            if state.next_issue_id == Some(issue_id) {
+                for blocker in &state.blockers {
+                    let description = match blocker.kind.as_str() {
+                        "prerequisite" => {
+                            let origin = blocker.origin.as_deref().unwrap_or("converted");
+                            format!(
+                                "{} prerequisite",
+                                if origin == "reader" { "Reader" } else { "Converted" }
+                            )
+                        }
+                        "strict_order" => "Strict order".to_string(),
+                        "hold" => "Hold".to_string(),
+                        "after_previous" => "Wait for previous".to_string(),
+                        _ => blocker.kind.clone(),
+                    };
+                    let waiting: Vec<i32> = blocker
+                        .waiting_on_issue_ids
+                        .iter()
+                        .filter(|wid| graph_issue_ids.contains(wid))
+                        .cloned()
+                        .collect();
+                    if !waiting.is_empty() {
+                        blockers.push(ReadingGraphBlocker {
+                            kind: blocker.kind.clone(),
+                            list_id: blocker.list_id,
+                            waiting_on_issue_ids: waiting,
+                            gate_issue_id: blocker.gate_issue_id,
+                            explanation: format!("{description}: waiting on {:?}", waiting),
+                        });
+                    }
+                }
+            }
+        }
+
+        references.push(ReadingGraphIssueReference {
+            issue_id,
+            series_name,
+            issue_number: meta.issue_number.clone(),
+            comicvine_volume_id,
+            blockers,
+        });
+    }
+
+    references.sort_by(|a, b| {
+        issue_meta
+            .get(&a.issue_id)
+            .and_then(|m| issue_meta.get(&b.issue_id).map(|n| (m.position, n.position)))
+            .map(|(pa, pb)| pa.cmp(&pb))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    references
 }
 
 fn build_cycle_errors(
-    _snapshot: &reading_constraints::Snapshot,
+    snapshot: &reading_constraints::Snapshot,
+    issue_meta: &HashMap<i32, IssueMeta>,
+    thread_names: &HashMap<i32, String>,
+    list_names: &std::collections::BTreeMap<i32, String>,
 ) -> Vec<ReadingGraphCycleError> {
-    vec![]
+    let _ = thread_names;
+    let _ = list_names;
+    match reading_constraints::validate(snapshot) {
+        Ok(_) => vec![],
+        Err(reading_constraints::ValidationError::Cycle { edges, .. }) => {
+            let issue_label = |issue_id: i32| {
+                issue_meta
+                    .get(&issue_id)
+                    .map(|m| format!("{} #{}", m.issue_number, m.issue_number))
+                    .unwrap_or_else(|| format!("Issue {issue_id}"))
+            };
+            let path: String = edges
+                .iter()
+                .map(|e| {
+                    format!(
+                        "{} --[{}]--> {}",
+                        issue_label(e.source_issue_id),
+                        e.origin,
+                        issue_label(e.target_issue_id)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" -> ");
+            vec![ReadingGraphCycleError {
+                code: "reading_constraint_cycle".to_string(),
+                message: format!("Reading constraint cycle: {path}"),
+            }]
+        }
+        Err(_) => vec![],
+    }
 }
 
 fn expand_graph_threads(
     _snapshot: &reading_constraints::Snapshot,
-    _baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
-    _seed_threads: &HashSet<i32>,
-    _issue_meta: &HashMap<i32, IssueMeta>,
+    baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
+    seed_threads: &HashSet<i32>,
+    issue_meta: &HashMap<i32, IssueMeta>,
 ) -> HashSet<i32> {
-    HashSet::new()
+    let mut thread_ids: HashSet<i32> = seed_threads.clone();
+    loop {
+        let mut discovered: HashSet<i32> = HashSet::new();
+        for &thread_id in &thread_ids {
+            if let Some(state) = baseline.get(&thread_id) {
+                for blocker in &state.blockers {
+                    for wid in &blocker.waiting_on_issue_ids {
+                        if let Some(meta) = issue_meta.get(wid) {
+                            discovered.insert(meta.thread_id);
+                        }
+                    }
+                }
+            }
+        }
+        let new_threads: HashSet<i32> = discovered.difference(&thread_ids).cloned().collect();
+        if new_threads.is_empty() {
+            break;
+        }
+        thread_ids.extend(new_threads);
+    }
+    thread_ids
 }
 
 /// OpenAPI documentation for the reading-graph-preview endpoint.
