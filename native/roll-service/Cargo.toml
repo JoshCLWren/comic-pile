@@ -25,6 +25,7 @@ base64 = "0.23"
 chrono = "0.4"
 chrono-tz = "0.10"
 deadpool-postgres = "0.14"
+hex = "0.4"
 jsonwebtoken = { version = "12", default-features = false, features = ["rust_crypto"] }
 native-tls = "0.2"
 postgres-native-tls = "0.5"

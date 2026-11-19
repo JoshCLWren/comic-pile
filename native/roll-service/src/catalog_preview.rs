@@ -220,7 +220,7 @@ pub async fn preview_series_mapping(
     
     // Validate scope_mode
     if payload.scope_mode != SCOPE_MODE_CONFIRMED_ORIGIN && payload.scope_mode != SCOPE_MODE_QUEUE_THREAD_BOOTSTRAP {
-        validation_errors.push(validation_string("scope_mode", format!("unsupported scope_mode: {}", payload.scope_mode)));
+        validation_errors.push(validation_string("scope_mode", &format!("unsupported scope_mode: {}", payload.scope_mode)));
     }
     
     if !validation_errors.is_empty() {
