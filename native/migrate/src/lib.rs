@@ -206,9 +206,7 @@ async fn run_locked(client: &mut Client) -> Result<Report, MigrateError> {
         .applied
         .extend(outcome.applied_migrations().iter().map(|m| m.version()));
 
-    if !report.applied.is_empty() || !report.adopted.is_empty() {
-        ensure_deferred_identity_status(client).await?;
-    }
+    ensure_deferred_identity_status(client).await?;
     ensure_alembic_stamp(client).await?;
     Ok(report)
 }

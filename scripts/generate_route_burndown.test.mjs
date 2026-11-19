@@ -182,7 +182,7 @@ test('real custom CBL source retains native v1 and v2 route ownership', () => {
   const v1 = fragment.operations.filter(op => op.bucket === 'v1_operations');
   const v2 = fragment.operations.filter(op => op.bucket === 'operations');
   assert.equal(v1.length, 11);
-  assert.equal(v2.length, 6);
+  assert.equal(v2.length, 7);
   for (const op of v1) {
     assert.equal(op.dest, '/api/native_roll.rs', op.path);
     assert.equal(op.runtime, 'native-rust', op.path);
