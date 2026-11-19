@@ -62,6 +62,8 @@ use utoipa::OpenApi;
         crate::issue_mutation::create_issues_documentation,
         crate::issue_mutation::delete_issue_documentation,
         crate::issue_mutation::issue_order_documentation,
+        crate::issue_read::get_issue_documentation,
+        crate::issue_read::get_issue_dependencies_documentation,
         crate::issue_read::get_thread_issue_dependencies_documentation,
         crate::issue_read::list_thread_issues_documentation,
         crate::reading_list::list_reading_lists_documentation,
@@ -301,6 +303,7 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::queue::QueueApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
+        .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
         .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must

@@ -1,15 +1,12 @@
-//! Same-path Rust cutover for the browser-called issue read-state routes
-//! (#4832, part C).
+//! Rust v2 resources for the browser-called issue read-state operations
+//! (#4832, part C; moved from the retired `/api/v1/issues/{id}:action` URLs):
 //!
-//! Replaces the frozen Python handlers in `app/api/issue.py` and
-//! `app/services/issue.py` at the identical HTTP methods and paths:
-//!
-//! * `POST /api/v1/issues/{issue_id}:markRead`
-//! * `POST /api/v1/issues/{issue_id}:markUnread`
-//! * `POST /api/v1/issues/{issue_id}:move`
-//! * `POST /api/v1/issues:bulkMarkRead`
-//! * `POST /api/v1/issues:bulkMarkUnread`
-//! * `GET  /api/v1/issues/{issue_id}/reader-context` (see [`crate::reader_context`])
+//! * `POST   /api/v2/issues/{issue_id}/read-markers` (was `:markRead`)
+//! * `DELETE /api/v2/issues/{issue_id}/read-markers` (was `:markUnread`)
+//! * `PUT    /api/v2/issues/{issue_id}/position` (was `:move`)
+//! * `POST   /api/v2/issue-read-markers` (was `:bulkMarkRead`)
+//! * `POST   /api/v2/issue-read-marker-removals` (was `:bulkMarkUnread`)
+//! * `GET    /api/v2/issues/{issue_id}/reader-context` (see [`crate::reader_context`])
 //!
 //! Every mutation runs in one transaction that takes the per-reader queue
 //! advisory lock first (the global lock order every queue writer uses), then
@@ -33,11 +30,6 @@
 //!   validation, as in FastAPI.
 //! * A bulk list that repeats an id records one history event per list entry,
 //!   exactly like the Python loop.
-//! * axum cannot express a parameter followed by `:action`, so the whole
-//!   `{issue_id}:action` segment is captured and dispatched on its suffix
-//!   (the same technique the thread-action dispatcher uses). Any other
-//!   `POST /api/v1/issues/{segment}` is a 405, as in Starlette where the
-//!   path matches the `GET` route only.
 
 #![forbid(unsafe_code)]
 
@@ -779,39 +771,43 @@ async fn move_issue(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Dispatch `POST /api/v1/issues/{issue_id}:{action}` operations.
-///
-/// The segment is split on its action suffix like Starlette's
-/// `(?P<issue_id>[^/]+):action` pattern, so an id containing a colon is an
-/// invalid integer rather than a different route. Any other segment matches
-/// only the `GET` route in Python and is a 405.
-pub async fn post_issue_action(
+/// `POST /api/v2/issues/{issue_id}/read-markers` — mark one issue read.
+pub async fn create_read_marker(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    segment: Result<Path<String>, PathRejection>,
-    body: Bytes,
+    raw_id: Result<Path<String>, PathRejection>,
 ) -> Result<StatusCode, ApiError> {
-    let Path(segment) = segment.map_err(|_| path_int_error(""))?;
-    if let Some(raw_id) = segment.strip_suffix(":markRead") {
-        let issue_id = resolve_issue_id(raw_id)?;
-        return mark_issue_read(&state, user, issue_id).await;
-    }
-    if let Some(raw_id) = segment.strip_suffix(":markUnread") {
-        let issue_id = resolve_issue_id(raw_id)?;
-        return mark_issue_unread(&state, user, issue_id).await;
-    }
-    if let Some(raw_id) = segment.strip_suffix(":move") {
-        // FastAPI reports path errors before body errors.
-        let path_id = parse_int_text(raw_id).ok_or_else(|| path_int_error(raw_id))?;
-        let after = parse_move_body(&body)?;
-        let issue_id = i32::try_from(path_id).map_err(|_| issue_not_found(path_id))?;
-        return move_issue(&state, user, issue_id, after).await;
-    }
-    Err(ApiError::MethodNotAllowed("Method Not Allowed".to_string()))
+    let issue_id = parse_path_issue_id(raw_id)?;
+    mark_issue_read(&state, user, issue_id).await
 }
 
-/// `POST /api/v1/issues:bulkMarkRead`
-pub async fn bulk_mark_issues_read(
+/// `DELETE /api/v2/issues/{issue_id}/read-markers` — mark one issue unread.
+pub async fn delete_read_marker(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    raw_id: Result<Path<String>, PathRejection>,
+) -> Result<StatusCode, ApiError> {
+    let issue_id = parse_path_issue_id(raw_id)?;
+    mark_issue_unread(&state, user, issue_id).await
+}
+
+/// `PUT /api/v2/issues/{issue_id}/position` — move an issue within its thread.
+pub async fn put_issue_position(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    raw_id: Result<Path<String>, PathRejection>,
+    body: Bytes,
+) -> Result<StatusCode, ApiError> {
+    // FastAPI reports path errors before body errors.
+    let Path(raw_id) = raw_id.map_err(|_| path_int_error(""))?;
+    let path_id = parse_int_text(&raw_id).ok_or_else(|| path_int_error(&raw_id))?;
+    let after = parse_move_body(&body)?;
+    let issue_id = i32::try_from(path_id).map_err(|_| issue_not_found(path_id))?;
+    move_issue(&state, user, issue_id, after).await
+}
+
+/// `POST /api/v2/issue-read-markers` — mark many issues read atomically.
+pub async fn create_read_markers(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     body: Bytes,
@@ -820,8 +816,8 @@ pub async fn bulk_mark_issues_read(
     bulk_mark(&state, user, &ids, true).await
 }
 
-/// `POST /api/v1/issues:bulkMarkUnread`
-pub async fn bulk_mark_issues_unread(
+/// `POST /api/v2/issue-read-marker-removals` — mark many issues unread atomically.
+pub async fn remove_read_markers(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     body: Bytes,
@@ -830,7 +826,7 @@ pub async fn bulk_mark_issues_unread(
     bulk_mark(&state, user, &ids, false).await
 }
 
-/// Request body for `POST /api/v1/issues/{issue_id}:move`.
+/// Request body for `PUT /api/v2/issues/{issue_id}/position`.
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct IssueMoveRequest {
     /// Move after this issue. `null` moves the issue to position 1.
@@ -845,10 +841,10 @@ pub struct IssueBulkRequest {
     pub issue_ids: Vec<i32>,
 }
 
-/// Documentation-only operation for `:markRead`.
+/// Documentation-only operation for creating an issue read marker.
 #[utoipa::path(
     post,
-    path = "/api/v1/issues/{issue_id}:markRead",
+    path = "/api/v2/issues/{issue_id}/read-markers",
     tag = "issues",
     operation_id = "issue_read_state_mark_read",
     params(("issue_id" = i32, Path, description = "Owned Issue identifier")),
@@ -865,10 +861,10 @@ pub struct IssueBulkRequest {
 #[allow(dead_code)]
 pub fn mark_read_documentation() {}
 
-/// Documentation-only operation for `:markUnread`.
+/// Documentation-only operation for deleting an issue read marker.
 #[utoipa::path(
-    post,
-    path = "/api/v1/issues/{issue_id}:markUnread",
+    delete,
+    path = "/api/v2/issues/{issue_id}/read-markers",
     tag = "issues",
     operation_id = "issue_read_state_mark_unread",
     params(("issue_id" = i32, Path, description = "Owned Issue identifier")),
@@ -885,10 +881,10 @@ pub fn mark_read_documentation() {}
 #[allow(dead_code)]
 pub fn mark_unread_documentation() {}
 
-/// Documentation-only operation for `:move`.
+/// Documentation-only operation for setting an issue position.
 #[utoipa::path(
-    post,
-    path = "/api/v1/issues/{issue_id}:move",
+    put,
+    path = "/api/v2/issues/{issue_id}/position",
     tag = "issues",
     operation_id = "issue_read_state_move",
     params(("issue_id" = i32, Path, description = "Owned Issue identifier")),
@@ -905,10 +901,10 @@ pub fn mark_unread_documentation() {}
 #[allow(dead_code)]
 pub fn move_documentation() {}
 
-/// Documentation-only operation for `:bulkMarkRead`.
+/// Documentation-only operation for creating read markers in bulk.
 #[utoipa::path(
     post,
-    path = "/api/v1/issues:bulkMarkRead",
+    path = "/api/v2/issue-read-markers",
     tag = "issues",
     operation_id = "issue_read_state_bulk_mark_read",
     request_body = IssueBulkRequest,
@@ -925,10 +921,10 @@ pub fn move_documentation() {}
 #[allow(dead_code)]
 pub fn bulk_mark_read_documentation() {}
 
-/// Documentation-only operation for `:bulkMarkUnread`.
+/// Documentation-only operation for removing read markers in bulk.
 #[utoipa::path(
     post,
-    path = "/api/v1/issues:bulkMarkUnread",
+    path = "/api/v2/issue-read-marker-removals",
     tag = "issues",
     operation_id = "issue_read_state_bulk_mark_unread",
     request_body = IssueBulkRequest,
@@ -948,7 +944,7 @@ pub fn bulk_mark_unread_documentation() {}
 /// Documentation-only operation for reader context.
 #[utoipa::path(
     get,
-    path = "/api/v1/issues/{issue_id}/reader-context",
+    path = "/api/v2/issues/{issue_id}/reader-context",
     tag = "issues",
     operation_id = "issue_read_state_reader_context",
     params(("issue_id" = i32, Path, description = "Owned Issue identifier")),
@@ -968,9 +964,9 @@ pub fn reader_context_documentation() {}
 #[derive(utoipa::OpenApi)]
 #[openapi(
     info(
-        title = "ComicPile native same-path issue read-state API",
-        version = "1.0.0",
-        description = "Generated contract for the native issue read-state, move and reader-context handlers that retain their original method and path."
+        title = "ComicPile native issue read-state v2 API",
+        version = "2.0.0",
+        description = "Generated contract for the native issue read-state, position and reader-context resources."
     ),
     paths(
         mark_read_documentation,
@@ -1105,16 +1101,15 @@ mod tests {
     fn contract_documents_every_operation_and_stays_current() {
         let document = serde_json::to_value(issue_read_state_openapi()).unwrap();
         for path in [
-            "/api/v1/issues/{issue_id}:markRead",
-            "/api/v1/issues/{issue_id}:markUnread",
-            "/api/v1/issues/{issue_id}:move",
-            "/api/v1/issues:bulkMarkRead",
-            "/api/v1/issues:bulkMarkUnread",
-            "/api/v1/issues/{issue_id}/reader-context",
+            "/api/v2/issues/{issue_id}/read-markers",
+            "/api/v2/issues/{issue_id}/position",
+            "/api/v2/issue-read-markers",
+            "/api/v2/issue-read-marker-removals",
+            "/api/v2/issues/{issue_id}/reader-context",
         ] {
             assert!(document["paths"].get(path).is_some(), "{path}");
         }
-        let expected = include_str!("../../contracts/issue-read-state-v1.openapi.json");
+        let expected = include_str!("../../contracts/issue-read-state-v2.openapi.json");
         let generated = issue_read_state_openapi().to_pretty_json().unwrap();
         assert_eq!(expected.trim_end(), generated.trim_end());
     }

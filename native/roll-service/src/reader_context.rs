@@ -1,4 +1,4 @@
-//! Same-path Rust cutover for `GET /api/v1/issues/{issue_id}/reader-context`
+//! Same-path Rust cutover for `GET /api/v2/issues/{issue_id}/reader-context`
 //! (#4832, part C).
 //!
 //! The frozen Python oracle is `app/services/reader_context.py` and
@@ -865,7 +865,7 @@ async fn local_edges(
         .collect())
 }
 
-/// `GET /api/v1/issues/{issue_id}/reader-context`
+/// `GET /api/v2/issues/{issue_id}/reader-context`
 pub async fn get_issue_reader_context(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,

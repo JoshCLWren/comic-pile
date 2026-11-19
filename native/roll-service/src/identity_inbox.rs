@@ -1,6 +1,6 @@
 //! Owner-scoped identity reconciliation inbox.
 //!
-//! Rust replacement for the Python `/api/v1/identity-inbox/*` routes. The HTTP
+//! Rust replacement for the Python `/api/v2/identity-inbox/*` routes. The HTTP
 //! method and exact path are preserved; only the implementation moves.
 
 use crate::{
@@ -1111,7 +1111,7 @@ pub async fn skip(
 // Documentation-only operations for OpenAPI
 #[utoipa::path(
     get,
-    path = "/api/v1/identity-inbox",
+    path = "/api/v2/identity-inbox",
     tag = "identity-inbox",
     responses((status = 200, description = "ok", body = IdentityInboxResponse)),
     security(("HTTPBearer" = []))
@@ -1121,7 +1121,7 @@ pub fn list_documentation() {}
 
 #[utoipa::path(
     get,
-    path = "/api/v1/identity-inbox/search/issues",
+    path = "/api/v2/identity-inbox/issue-matches",
     tag = "identity-inbox",
     responses((status = 200, description = "ok", body = IdentityInboxSearchResponse)),
     security(("HTTPBearer" = []))
@@ -1131,7 +1131,7 @@ pub fn search_documentation() {}
 
 #[utoipa::path(
     get,
-    path = "/api/v1/identity-inbox/{mapping_id}",
+    path = "/api/v2/identity-inbox/{mapping_id}",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
     responses((status = 200, description = "ok", body = IdentityInboxResponse)),
@@ -1142,7 +1142,7 @@ pub fn get_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v1/identity-inbox/{mapping_id}/confirm",
+    path = "/api/v2/identity-inbox/{mapping_id}/confirmations",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
     request_body = ActionRequest,
@@ -1154,7 +1154,7 @@ pub fn confirm_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v1/identity-inbox/{mapping_id}/defer",
+    path = "/api/v2/identity-inbox/{mapping_id}/deferrals",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),
@@ -1165,7 +1165,7 @@ pub fn defer_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v1/identity-inbox/{mapping_id}/reject",
+    path = "/api/v2/identity-inbox/{mapping_id}/rejections",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
     request_body = ActionRequest,
@@ -1177,7 +1177,7 @@ pub fn reject_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v1/identity-inbox/{mapping_id}/skip",
+    path = "/api/v2/identity-inbox/{mapping_id}/skips",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),

@@ -287,6 +287,22 @@ export interface GetRequest {
 
 export type GetResponse = components['schemas']['IdentityInboxResponse']
 
+export interface GetIssueRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type GetIssueResponse = components['schemas']['IssueDetailResponse']
+
+export interface GetIssueDependenciesRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type GetIssueDependenciesResponse = components['schemas']['IssueDependenciesResponse']
+
 export interface GetLegacyDependencyRequest {
   path: {
     dependency_id: number
@@ -368,6 +384,51 @@ export interface IssueReadRateRequest {
 }
 
 export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
+
+export interface IssueReadStateBulkMarkReadRequest {
+  body: components['schemas']['IssueBulkRequest']
+}
+
+export type IssueReadStateBulkMarkReadResponse = void
+
+export interface IssueReadStateBulkMarkUnreadRequest {
+  body: components['schemas']['IssueBulkRequest']
+}
+
+export type IssueReadStateBulkMarkUnreadResponse = void
+
+export interface IssueReadStateMarkReadRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type IssueReadStateMarkReadResponse = void
+
+export interface IssueReadStateMarkUnreadRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type IssueReadStateMarkUnreadResponse = void
+
+export interface IssueReadStateMoveRequest {
+  path: {
+    issue_id: number
+  }
+  body: components['schemas']['IssueMoveRequest']
+}
+
+export type IssueReadStateMoveResponse = void
+
+export interface IssueReadStateReaderContextRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type IssueReadStateReaderContextResponse = components['schemas']['ReaderContextResponse']
 
 export type ListResponse = components['schemas']['IdentityInboxResponse']
 
@@ -768,6 +829,8 @@ export interface NativeV2Client {
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
+  getIssue(args: GetIssueRequest): Promise<GetIssueResponse>
+  getIssueDependencies(args: GetIssueDependenciesRequest): Promise<GetIssueDependenciesResponse>
   getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
   getMetrics(): Promise<GetMetricsResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
@@ -780,6 +843,12 @@ export interface NativeV2Client {
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
   issueOrder(args: IssueOrderRequest): Promise<IssueOrderResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
+  issueReadStateBulkMarkRead(args: IssueReadStateBulkMarkReadRequest): Promise<IssueReadStateBulkMarkReadResponse>
+  issueReadStateBulkMarkUnread(args: IssueReadStateBulkMarkUnreadRequest): Promise<IssueReadStateBulkMarkUnreadResponse>
+  issueReadStateMarkRead(args: IssueReadStateMarkReadRequest): Promise<IssueReadStateMarkReadResponse>
+  issueReadStateMarkUnread(args: IssueReadStateMarkUnreadRequest): Promise<IssueReadStateMarkUnreadResponse>
+  issueReadStateMove(args: IssueReadStateMoveRequest): Promise<IssueReadStateMoveResponse>
+  issueReadStateReaderContext(args: IssueReadStateReaderContextRequest): Promise<IssueReadStateReaderContextResponse>
   list(): Promise<ListResponse>
   listActivity(args?: ListActivityRequest): Promise<ListActivityResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
@@ -852,7 +921,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     confirm(args: ConfirmRequest) {
       return client.post<ConfirmResponse, ConfirmRequest['body']>(
-        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/confirm`,
+        `/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/confirmations`,
         args.body,
       )
     },
@@ -974,7 +1043,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<CsrfResponse>("/v2/auth/csrf")
     },
     defer(args: DeferRequest) {
-      return client.post<DeferResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/defer`)
+      return client.post<DeferResponse>(`/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/deferrals`)
     },
     deleteDependency(args: DeleteDependencyRequest) {
       return client.delete<DeleteDependencyResponse>(
@@ -1022,7 +1091,17 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     get(args: GetRequest) {
       return client.get<GetResponse>(
-        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
+        `/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
+      )
+    },
+    getIssue(args: GetIssueRequest) {
+      return client.get<GetIssueResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
+      )
+    },
+    getIssueDependencies(args: GetIssueDependenciesRequest) {
+      return client.get<GetIssueDependenciesResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/dependencies`,
       )
     },
     getLegacyDependency(args: GetLegacyDependencyRequest) {
@@ -1085,8 +1164,39 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    issueReadStateBulkMarkRead(args: IssueReadStateBulkMarkReadRequest) {
+      return client.post<IssueReadStateBulkMarkReadResponse, IssueReadStateBulkMarkReadRequest['body']>(
+        "/v2/issue-read-markers",
+        args.body,
+      )
+    },
+    issueReadStateBulkMarkUnread(args: IssueReadStateBulkMarkUnreadRequest) {
+      return client.post<IssueReadStateBulkMarkUnreadResponse, IssueReadStateBulkMarkUnreadRequest['body']>(
+        "/v2/issue-read-marker-removals",
+        args.body,
+      )
+    },
+    issueReadStateMarkRead(args: IssueReadStateMarkReadRequest) {
+      return client.post<IssueReadStateMarkReadResponse>(`/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/read-markers`)
+    },
+    issueReadStateMarkUnread(args: IssueReadStateMarkUnreadRequest) {
+      return client.delete<IssueReadStateMarkUnreadResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/read-markers`,
+      )
+    },
+    issueReadStateMove(args: IssueReadStateMoveRequest) {
+      return client.put<IssueReadStateMoveResponse, IssueReadStateMoveRequest['body']>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/position`,
+        args.body,
+      )
+    },
+    issueReadStateReaderContext(args: IssueReadStateReaderContextRequest) {
+      return client.get<IssueReadStateReaderContextResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/reader-context`,
+      )
+    },
     list() {
-      return client.get<ListResponse>("/v1/identity-inbox")
+      return client.get<ListResponse>("/v2/identity-inbox")
     },
     listActivity(args: ListActivityRequest = {}) {
       return client.get<ListActivityResponse>(
@@ -1189,7 +1299,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     reject(args: RejectRequest) {
       return client.post<RejectResponse, RejectRequest['body']>(
-        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/reject`,
+        `/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/rejections`,
         args.body,
       )
     },
@@ -1282,7 +1392,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       )
     },
     search() {
-      return client.get<SearchResponse>("/v1/identity-inbox/search/issues")
+      return client.get<SearchResponse>("/v2/identity-inbox/issue-matches")
     },
     series(args: SeriesRequest) {
       return client.get<SeriesResponse>(
@@ -1302,7 +1412,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       )
     },
     skip(args: SkipRequest) {
-      return client.post<SkipResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/skip`)
+      return client.post<SkipResponse>(`/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/skips`)
     },
     summaries(args: SummariesRequest = {}) {
       return client.get<SummariesResponse>(

@@ -1,0 +1,65 @@
+{
+  "family": "identity-inbox",
+  "owned_path_patterns": [
+    "^/api/v2/identity\\-inbox(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "native-rust",
+    "status": "target",
+    "owning_issue": 4335,
+    "consumers": [
+      "frontend/src/services/api-identity.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/identity-inbox",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/identity\\-inbox$"
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/identity-inbox/issue-matches",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/identity\\-inbox/issue\\-matches$"
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/identity-inbox/{mapping_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/identity\\-inbox/[^/]+$"
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/confirmations",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/identity\\-inbox/[^/]+/confirmations$"
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/deferrals",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/identity\\-inbox/[^/]+/deferrals$"
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/rejections",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/identity\\-inbox/[^/]+/rejections$"
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/skips",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/identity\\-inbox/[^/]+/skips$"
+    }
+  ]
+}

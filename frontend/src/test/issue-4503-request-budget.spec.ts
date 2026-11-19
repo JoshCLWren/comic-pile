@@ -40,7 +40,7 @@ async function settleCalls(page: Page, count: () => number, minimum = 1) {
 
 async function expectNoDuplicateIdentityProbe(calls: ApiCall[]) {
   const identityCalls = calls.filter(
-    (call) => call.method === 'GET' && call.path === '/api/v1/identity-inbox',
+    (call) => call.method === 'GET' && call.path === '/api/v2/identity-inbox',
   )
   expect(identityCalls).toHaveLength(1)
   expect(identityCalls[0].query.get('limit')).toBe('20')
@@ -57,7 +57,7 @@ test.describe('Issue #4503 route request budgets', () => {
     await expect(page.getByRole('heading', { name: 'Identity Inbox' })).toBeVisible()
     await settleCalls(
       page,
-      () => calls.filter((call) => call.path === '/api/v1/identity-inbox').length,
+      () => calls.filter((call) => call.path === '/api/v2/identity-inbox').length,
     )
 
     await expectNoDuplicateIdentityProbe(calls)

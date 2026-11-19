@@ -1,29 +1,26 @@
-//! Native same-path reads for the browser-called issues family (#4845).
+//! Native resource-shaped reads for the browser-called issues family (#4845).
 //!
-//! Migrates the read-only subset of `app/api/issue.py` and
-//! `app/api/dependency.py` to the native Rust router with identical
-//! method/path and wire contract:
+//! Serves the read-only subset of `app/api/issue.py` and
+//! `app/api/dependency.py` from the native Rust router:
 //!
-//! * `GET /api/v1/issues/{issue_id}`
-//! * `GET /api/v1/issues/{issue_id}/dependencies`
+//! * `GET /api/v2/issues/{issue_id}`
+//! * `GET /api/v2/issues/{issue_id}/dependencies`
 //!
 //! The third browser-called read in the family,
 //! `GET /api/v1/issues/{issue_id}/comicvine`, reuses the existing
 //! [`crate::comicvine_issue::issue_intelligence`] handler, which already
-//! serves `GET /api/v2/issues/{issue_id}/comicvine`. Python handlers remain;
-//! deployed ingress in `vercel.json` shadows them after this cutover.
-//! Read-state mutations (`:markRead`, `:markUnread`, `:move`,
-//! `:bulkMarkRead`, `:bulkMarkUnread`) and `GET .../reader-context` stay on
-//! Python until their own slices land.
+//! serves `GET /api/v2/issues/{issue_id}/comicvine`.
+//! Read-state mutations and `GET .../reader-context` live in
+//! [`crate::issue_read_state`] and [`crate::reader_context`].
 //!
 //! Wire parity with Python:
 //!
-//! * `GET /api/v1/issues/{issue_id}` returns `IssueResponse`
+//! * `GET /api/v2/issues/{issue_id}` returns `IssueResponse`
 //!   (`id`, `thread_id`, `issue_number`, `position`, `status`, `read_at`,
 //!   `created_at`). `read_at`/`created_at` are UTC ISO-8601 strings with
 //!   millisecond precision (`YYYY-MM-DD"T"HH24:MI:SS.MS"Z"`), matching the
 //!   `to_char` format the existing card projection uses for `read_at`.
-//! * `GET /api/v1/issues/{issue_id}/dependencies` returns
+//! * `GET /api/v2/issues/{issue_id}/dependencies` returns
 //!   `IssueDependenciesResponse` (`issue_id`, `incoming`, `outgoing`).
 //!   Each edge carries `dependency_id`, `source_issue_id`,
 //!   `source_issue_number`, `source_thread_id`, `source_thread_title`.
@@ -104,7 +101,7 @@ fn not_found(issue_id: i32) -> ApiError {
     ApiError::with_status(StatusCode::NOT_FOUND, format!("Issue {issue_id} not found"))
 }
 
-/// `GET /api/v1/issues/{issue_id}` — one owner-scoped issue row.
+/// `GET /api/v2/issues/{issue_id}` — one owner-scoped issue row.
 pub async fn get_issue(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -127,7 +124,7 @@ pub async fn get_issue(
     }))
 }
 
-/// `GET /api/v1/issues/{issue_id}/dependencies` — bounded incoming/outgoing edges.
+/// `GET /api/v2/issues/{issue_id}/dependencies` — bounded incoming/outgoing edges.
 pub async fn get_issue_dependencies(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -455,9 +452,9 @@ pub fn list_thread_issues_documentation() {}
 /// Documentation-only operation for the mounted single-issue read.
 #[utoipa::path(
     get,
-    path = "/api/v1/issues/{issue_id}",
+    path = "/api/v2/issues/{issue_id}",
     tag = "issues",
-    description = "Return one owner-scoped issue. Wire parity with Python GET /api/v1/issues/{issue_id}: {id, thread_id, issue_number, position, status, read_at, created_at}. Missing or foreign issues return 404 with the Python detail text.",
+    description = "Return one owner-scoped issue: {id, thread_id, issue_number, position, status, read_at, created_at}. Missing or foreign issues return 404 with the Python detail text.",
     params(("issue_id" = i32, Path, description = "Owned Issue identifier")),
     responses(
         (status = 200, description = "Issue detail", body = IssueDetailResponse),
@@ -473,9 +470,9 @@ pub fn get_issue_documentation() {}
 /// Documentation-only operation for the mounted issue-dependencies read.
 #[utoipa::path(
     get,
-    path = "/api/v1/issues/{issue_id}/dependencies",
+    path = "/api/v2/issues/{issue_id}/dependencies",
     tag = "issues",
-    description = "Return owner-scoped incoming and outgoing dependency edges for one issue. Wire parity with Python GET /api/v1/issues/{issue_id}/dependencies: {issue_id, incoming, outgoing}, each edge carrying dependency_id, source_issue_id, source_issue_number, source_thread_id, source_thread_title. Bounded to two edge queries; no per-row fan-out.",
+    description = "Return owner-scoped incoming and outgoing dependency edges for one issue: {issue_id, incoming, outgoing}, each edge carrying dependency_id, source_issue_id, source_issue_number, source_thread_id, source_thread_title. Bounded to two edge queries; no per-row fan-out.",
     params(("issue_id" = i32, Path, description = "Owned Issue identifier")),
     responses(
         (status = 200, description = "Issue dependencies", body = IssueDependenciesResponse),
@@ -698,7 +695,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn v1_issue_reads_require_auth_through_service_router() {
+    async fn v2_issue_reads_require_auth_through_service_router() {
         use crate::{config::Config, router, AppState};
         use axum::{
             body::Body,
@@ -714,9 +711,9 @@ mod tests {
         .unwrap();
         let app = router(Arc::new(AppState::new(config).unwrap()));
         for uri in [
-            "/api/v1/issues/7",
+            "/api/v2/issues/7",
             "/api/v1/issues/7/comicvine",
-            "/api/v1/issues/7/dependencies",
+            "/api/v2/issues/7/dependencies",
             "/api/v1/threads/7/issue-dependencies",
             "/api/v1/threads/7/issues",
         ] {

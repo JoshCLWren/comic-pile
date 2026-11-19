@@ -208,7 +208,7 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     })
     expect(depResponse.ok()).toBeTruthy()
 
-    const depsResponse = await page.request.get(`/api/v1/issues/${issuesB[0].id}/dependencies`, {
+    const depsResponse = await page.request.get(`/api/v2/issues/${issuesB[0].id}/dependencies`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(depsResponse.ok()).toBeTruthy()
