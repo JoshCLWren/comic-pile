@@ -71,14 +71,15 @@ const SESSION_SQL: &str = "SELECT id, to_char(started_at AT TIME ZONE 'UTC', 'YY
 /// roll rating) are persisted by `dice_mutation` with `user_id` but no
 /// `session_id`, so the session timeline also claims that reader's session-less
 /// `rate`/`snooze`/`unsnooze` events that fall inside the session's own window.
+/// An unended session is bounded by the next session for the same reader so a
+/// later session's session-less actions are not absorbed by an abandoned row.
 macro_rules! session_events_filter {
     () => {
-        "(session_id = $1 OR (session_id IS NULL AND user_id = $2 AND type IN ('rate','snooze','unsnooze') AND EXISTS (SELECT 1 FROM sessions s WHERE s.id = $1 AND events.timestamp >= s.started_at AND (s.ended_at IS NULL OR events.timestamp <= s.ended_at))))"
+        "(session_id = $1 OR (session_id IS NULL AND user_id = $2 AND type IN ('rate','snooze','unsnooze') AND EXISTS (SELECT 1 FROM sessions s WHERE s.id = $1 AND events.timestamp >= s.started_at AND ((s.ended_at IS NOT NULL AND events.timestamp <= s.ended_at) OR (s.ended_at IS NULL AND events.timestamp < COALESCE((SELECT MIN(s2.started_at) FROM sessions s2 WHERE s2.user_id = s.user_id AND s2.id <> s.id AND s2.started_at > s.started_at), 'infinity'::timestamptz))))))"
     };
 }
-const EVENTS_SQL: &str = concat!("SELECT id, type, to_char(timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), thread_id, selected_thread_id, issue_number, context, die, result, selection_method, rating, issues_read, queue_move, die_after, (session_id IS NULL) FROM events WHERE ", session_events_filter!(), " ORDER BY timestamp DESC, id DESC");
+const EVENTS_SQL: &str = concat!("SELECT id, type, to_char(timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), thread_id, selected_thread_id, issue_number, context::text, die, result, selection_method, rating, issues_read, queue_move, die_after, (session_id IS NULL) FROM events WHERE ", session_events_filter!(), " ORDER BY timestamp DESC, id DESC");
 const SNAPSHOT_TITLES_SQL: &str = "SELECT thread_states::text FROM snapshots WHERE session_id = $1 ORDER BY created_at DESC, id DESC";
-const LADDER_SQL: &str = concat!("SELECT die_after FROM events WHERE ", session_events_filter!(), " AND type IN ('rate','snooze','undo') AND die_after IS NOT NULL ORDER BY timestamp ASC, id ASC");
 const CURRENT_DIE_SQL: &str = "SELECT die_after, context::text FROM events WHERE (user_id = $1 OR session_id = $2) AND type IN ('rate','snooze','undo','reset_dice','manual_die') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1";
 
 fn not_found() -> ApiError {
@@ -149,6 +150,20 @@ fn display_title(title: &str, thread_deleted: bool) -> String {
     } else {
         title.to_string()
     }
+}
+
+/// A Roll-offer rating is persisted twice: `dice_mutation` records the die step
+/// and `issue_service` records the reader-visible rating/read event. Keep the
+/// richer issue-service record and suppress the session-less dice-mutation
+/// companion so timeline, ladder and summary count the action once.
+fn is_dice_mutation_roll_rating_companion(type_: &str, sessionless: bool, context: &Value) -> bool {
+    sessionless
+        && type_ == "rate"
+        && context
+            .get("dice_command")
+            .and_then(|command| command.get("kind"))
+            .and_then(Value::as_str)
+            == Some("roll_rating")
 }
 
 fn mode_label(value: &str) -> String {
@@ -254,30 +269,45 @@ pub async fn get_session_details(
     // absent. Preserve the null/empty distinction here.
     let snoozed_raw: Option<Value> = session_row.try_get(21).ok();
 
-    // Fetch all events for this session
+    // Fetch all events for this session (newest first).
     let event_rows = connection
         .query(EVENTS_SQL, &[&session_id, &user.id()])
         .await
         .map_err(db::query_error)?;
 
-    // Build ladder path
-    let ladder_rows = connection
-        .query(LADDER_SQL, &[&session_id, &user.id()])
-        .await
-        .map_err(db::query_error)?;
-    let ladder_values: Vec<i32> = ladder_rows
-        .iter()
-        .map(|row| {
-            row.try_get(0).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                internal()
-            })
+    // Drop dice-mutation RollRating companions: the paired issue-service rate
+    // event carries the reader-visible action, so keeping both would duplicate
+    // timeline entries, ladder steps and narrative reads.
+    let event_rows: Vec<tokio_postgres::Row> = event_rows
+        .into_iter()
+        .filter(|row| {
+            let type_: String = row.try_get(1).unwrap_or_default();
+            let sessionless: bool = row.try_get(14).unwrap_or(false);
+            let context_text: Option<String> = row.try_get(6).ok();
+            let context: Value = context_text
+                .as_deref()
+                .and_then(|text| serde_json::from_str(text).ok())
+                .unwrap_or(Value::Null);
+            !is_dice_mutation_roll_rating_companion(&type_, sessionless, &context)
         })
-        .collect::<Result<_, ApiError>>()?;
+        .collect();
+
+    // Build ladder path from the filtered session events (chronological).
+    let mut ladder_values: Vec<i32> = event_rows
+        .iter()
+        .rev()
+        .filter_map(|row| {
+            let type_: String = row.try_get(1).ok()?;
+            let die_after: Option<i32> = row.try_get(13).ok().flatten();
+            if matches!(type_.as_str(), "rate" | "snooze" | "undo") {
+                die_after
+            } else {
+                None
+            }
+        })
+        .collect();
     let ladder = ladder_path(start_die, &ladder_values);
+    ladder_values.clear();
 
     // Current die
     let die_row = connection
@@ -1019,5 +1049,88 @@ mod tests {
         );
         assert_eq!(response.narrative_summary["skipped"], ["Owned Comic"]);
         assert_eq!(response.narrative_summary["completed"], ["Done Comic"]);
+    }
+
+    #[tokio::test]
+    async fn session_details_dedupes_roll_offer_rate_companion_events() {
+        let (state, user, _guard) = database_fixture().await;
+        let connection = db::checkout(&state).await.expect("connection");
+        connection
+            .batch_execute(
+                "INSERT INTO issues (id, thread_id, issue_number, position, status, created_at) VALUES (9401, 9201, '7', 1, 'read', NOW());
+                 INSERT INTO events (user_id, session_id, type, timestamp, thread_id, issue_id, issue_number, die, die_after, rating, issues_read, context) VALUES
+                   (9101, NULL, 'rate', NOW() + interval '1 minute', 9201, 9401, NULL, 6, 8, 4.0, NULL, '{\"dice_command_key\":\"roll-rating-9201-k\",\"dice_command\":{\"kind\":\"roll_rating\",\"thread_id\":9201,\"issue_id\":9401,\"rating\":4.0}}'),
+                   (9101, NULL, 'rate', NOW() + interval '1 minute 1 millisecond', 9201, 9401, '7', 6, 8, 4.0, 1, '{\"source\":\"roll_offer\",\"issue_command_key\":\"k\",\"issue_command_payload\":{},\"source_roll_event_id\":null}');",
+            )
+            .await
+            .expect("seed roll-offer companion events");
+        drop(connection);
+        let Json(response) = get_session_details(Path(9303), user, State(state.clone()))
+            .await
+            .expect("session details");
+        let rate_events: Vec<_> = response
+            .events
+            .iter()
+            .filter(|event| event.type_ == "rate")
+            .collect();
+        assert_eq!(
+            rate_events.len(),
+            1,
+            "dice-mutation companion must not duplicate the roll-offer rate"
+        );
+        assert_eq!(rate_events[0].issue_number.as_deref(), Some("7"));
+        assert_eq!(
+            response.narrative_summary["read"],
+            ["Owned Comic #7 (4.0/5.0)"]
+        );
+        assert_eq!(
+            response.ladder_path, "6 → 8",
+            "companion die step must not be counted twice"
+        );
+    }
+
+    #[tokio::test]
+    async fn session_details_do_not_absorb_sessionless_events_into_unended_predecessor() {
+        let (state, user, _guard) = database_fixture().await;
+        let connection = db::checkout(&state).await.expect("connection");
+        connection
+            .batch_execute(
+                "INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids) VALUES
+                   (9310, 9101, NOW() - interval '2 hours', NULL, 6, NULL, NULL, false, NULL),
+                   (9311, 9101, NOW() - interval '30 minutes', NULL, 6, NULL, NULL, false, NULL);
+                 INSERT INTO events (session_id, type, timestamp, thread_id, selected_thread_id, die, result) VALUES
+                   (9310, 'roll', NOW() - interval '90 minutes', NULL, 9201, 6, 2),
+                   (9311, 'roll', NOW() - interval '20 minutes', NULL, 9201, 6, 3);
+                 INSERT INTO events (user_id, session_id, type, timestamp, thread_id, die, die_after, rating) VALUES
+                   (9101, NULL, 'rate', NOW() - interval '10 minutes', 9201, 6, 8, 4.0);",
+            )
+            .await
+            .expect("seed overlapping unended sessions");
+        drop(connection);
+        let Json(old_session) = get_session_details(Path(9310), user, State(state.clone()))
+            .await
+            .expect("old session details");
+        assert!(
+            old_session.events.iter().all(|event| event.type_ == "roll"),
+            "later session-less action must not leak into abandoned predecessor: {:?}",
+            old_session
+                .events
+                .iter()
+                .map(|event| event.type_.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert!(old_session.narrative_summary["read"].is_empty());
+
+        let Json(new_session) = get_session_details(Path(9311), user, State(state.clone()))
+            .await
+            .expect("new session details");
+        assert!(
+            new_session.events.iter().any(|event| event.type_ == "rate"),
+            "action belongs to the active session window"
+        );
+        assert_eq!(
+            new_session.narrative_summary["read"],
+            ["Owned Comic (4.0/5.0)"]
+        );
     }
 }
