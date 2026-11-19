@@ -411,6 +411,41 @@ fn app() -> Router {
             "/api/v1/issue-identity/cbl-sources/folders",
             get(native_dispatch),
         )
+        // Issue Identity / CBL Adoption ingress (#5484). PR #5451 cut these
+        // paths over to native-rust and removed the Python handlers, but only
+        // registered the discover/browse/folders/adoption-preview siblings in
+        // this Vercel entry. Unregistered paths fell through to
+        // native_not_found, so production source detail, list candidates and
+        // adoption commit returned 404 "Not Found". Keep this table in sync
+        // with the inner comicpile_roll_service::router() route table.
+        .route(
+            "/api/v1/issue-identity/cbl-sources/{list_id}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/compare",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/adoption-commit",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+            post(native_dispatch),
+        )
         .route(
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(native_dispatch),
@@ -845,6 +880,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cbl_adoption_paths_reach_rust_ingress_and_never_hit_json_404() {
+        // Regression for #5484: PR #5451 cut these adoption-path operations to
+        // native-rust and removed their Python handlers, but this Vercel entry
+        // only registered the discover/browse/folders/adoption-preview paths.
+        // Every unregistered path fell through to native_not_found, which is
+        // the production "Unable to load this CBL source" / 404 seen on source
+        // detail, list candidates and adoption commit. An authenticated-rust
+        // path must reach the dispatched handler's 401/503 (no DB state here),
+        // never the Rust JSON 404 fallback.
+        let cases = [
+            ("GET", "/api/v1/issue-identity/cbl-sources/26"),
+            (
+                "GET",
+                "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/4000-1",
+            ),
+            ("POST", "/api/v1/issue-identity/cbl-sources/compare"),
+            (
+                "GET",
+                "/api/v1/issue-identity/reading-lists/26/cbl-candidates",
+            ),
+            ("POST", "/api/v1/issue-identity/cbl/26/adoption-plan"),
+            ("POST", "/api/v1/cbl/26/adoption-commit"),
+            ("POST", "/api/v1/cbl/26/reading-plans/7/adoption-commit"),
+        ];
+        for (method, uri) in cases {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert_ne!(
+                text, r#"{"detail":"Not Found"}"#,
+                "{method} {uri} must not hit native_not_found: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn cbl_sources_discover_ingress_reaches_rust_and_requires_auth() {
         // The bare discover path must be registered in this Vercel entry like
         // its /browse and /folders siblings; an unregistered path falls through
@@ -1108,6 +1202,27 @@ mod tests {
                      active boolean NOT NULL,
                      created_at timestamptz NOT NULL DEFAULT now(),
                      updated_at timestamptz NOT NULL DEFAULT now()
+                 );
+                 CREATE TABLE {schema}.external_identities (
+                     id integer PRIMARY KEY,
+                     provider varchar(50) NOT NULL,
+                     entity_type varchar(20) NOT NULL,
+                     external_id varchar(100) NOT NULL,
+                     metadata_json jsonb NOT NULL DEFAULT '{{}}',
+                     created_at timestamptz NOT NULL DEFAULT now(),
+                     updated_at timestamptz NOT NULL DEFAULT now()
+                 );
+                 CREATE TABLE {schema}.cbl_source_entries (
+                     id integer PRIMARY KEY,
+                     list_id integer NOT NULL,
+                     position integer NOT NULL,
+                     series_name varchar(500) NOT NULL,
+                     issue_number varchar(100) NOT NULL,
+                     volume_year integer,
+                     publication_year integer,
+                     external_series_identity_id integer,
+                     external_issue_identity_id integer,
+                     created_at timestamptz NOT NULL DEFAULT now()
                  );"
             ))
             .await
@@ -1170,13 +1285,24 @@ mod tests {
         );
     }
 
+    /// Each DB-backed test registers its own user. The auth register limiter is
+    /// a process-global 5-per-minute bucket keyed by client IP, so a fixed IP
+    /// makes parallel tests race into 429 "Too many requests" flakes. Give every
+    /// registration a unique client IP so each test owns its own bucket.
+    static REGISTER_CLIENT_COUNTER: std::sync::atomic::AtomicU32 =
+        std::sync::atomic::AtomicU32::new(0);
+
     async fn register_session(username: &str) -> (String, String, i32) {
+        let client_ip = format!(
+            "198.51.100.{}",
+            REGISTER_CLIENT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+        );
         let (status, body, cookies, text) = call_app(
             Request::builder()
                 .method("POST")
                 .uri("/api/v2/auth/register")
                 .header(header::CONTENT_TYPE, "application/json")
-                .header("x-forwarded-for", "198.51.100.20")
+                .header("x-forwarded-for", client_ip)
                 .body(Body::from(
                     serde_json::json!({
                         "username": username,
@@ -1774,6 +1900,105 @@ mod tests {
                     "discovery keeps the raw stored path: {text}"
                 );
                 assert_eq!(items[0]["declared_issue_count"], 12, "{text}");
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn cbl_source_detail_is_served_from_rust_ingress_against_postgres() {
+        // Deterministic DB-backed regression for #5484: the source-detail path
+        // must be registered in this Vercel entry and dispatched to the Rust
+        // get_cbl_source_list handler (not fall through to native_not_found).
+        // Drive the real handler against a disposable schema and assert the
+        // projected detail plus ordered entries, including Comic Vine IDs.
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("cbl-detail-ingress-{}", std::process::id());
+                let (access, _csrf, _user_id) = register_session(&username).await;
+
+                let connection = TEST_ROLL_STATE
+                    .try_with(Clone::clone)
+                    .expect("test state")
+                    .pool
+                    .get()
+                    .await
+                    .expect("seed connection");
+                connection
+                    .batch_execute(
+                        "INSERT INTO cbl_sources (id, repository, revision_sha) \
+                         VALUES (1, '/mnt/bigdata/CBL-ReadingLists', 'abc123'); \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         VALUES \
+                           (26, 1, 'BPRD/Plague of Frogs/Omnibus Vol 3.cbl', \
+                            'B.P.R.D. Plague of Frogs Omnibus Vol. 3', 2, \
+                            'h-bprd', 'abc123', TRUE); \
+                         INSERT INTO external_identities \
+                           (id, provider, entity_type, external_id) \
+                         VALUES \
+                           (10, 'comicvine', 'issue', '4000-1'), \
+                           (11, 'comicvine', 'series', '4050-1'); \
+                         INSERT INTO cbl_source_entries \
+                           (id, list_id, position, series_name, issue_number, \
+                            volume_year, publication_year, \
+                            external_issue_identity_id, external_series_identity_id) \
+                         VALUES \
+                           (1, 26, 1, 'B.P.R.D.', '1', 2002, 2003, 10, 11), \
+                           (2, 26, 2, 'B.P.R.D.', '2', NULL, 2004, NULL, 11);",
+                    )
+                    .await
+                    .expect("seed cbl source detail");
+                drop(connection);
+
+                // Without credentials the registered path reaches the handler's
+                // 401, not the ingress 404 fallback.
+                let (status, _, _, text) = call_app(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/issue-identity/cbl-sources/26")
+                        .body(Body::empty())
+                        .expect("unauthenticated cbl detail request"),
+                )
+                .await;
+                assert_eq!(status, StatusCode::UNAUTHORIZED, "{text}");
+
+                let (status, body, _, text) = call_app(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/issue-identity/cbl-sources/26?limit=10")
+                        .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                        .body(Body::empty())
+                        .expect("authenticated cbl detail request"),
+                )
+                .await;
+                assert_eq!(status, StatusCode::OK, "{text}");
+                assert_eq!(body["id"], 26, "{text}");
+                assert_eq!(
+                    body["name"], "B.P.R.D. Plague of Frogs Omnibus Vol. 3",
+                    "{text}"
+                );
+                assert_eq!(
+                    body["source_repository"], "JoshCLWren/CBL-ReadingLists",
+                    "mirror repository must project to public name: {text}"
+                );
+                assert_eq!(
+                    body["source_path"], "BPRD/Plague of Frogs/Omnibus Vol 3.cbl",
+                    "detail keeps the raw source path: {text}"
+                );
+                assert_eq!(body["entries_total"], 2, "{text}");
+                let entries = body["entries"].as_array().expect("ordered entries");
+                assert_eq!(entries.len(), 2, "{text}");
+                assert_eq!(entries[0]["position"], 1, "{text}");
+                assert_eq!(entries[0]["comicvine_issue_id"], "4000-1", "{text}");
+                assert_eq!(entries[0]["comicvine_volume_id"], "4050-1", "{text}");
+                assert_eq!(entries[1]["position"], 2, "{text}");
+                assert!(
+                    entries[1]["comicvine_issue_id"].is_null(),
+                    "unmapped entry must have no comicvine issue id: {text}"
+                );
             })
             .await;
     }

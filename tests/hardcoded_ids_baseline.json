@@ -54,9 +54,6 @@
         "tests/test_reading_shadow.py": [
             "user_id=1"
         ],
-        "tests/test_roll_recovery.py": [
-            "user_id=1"
-        ],
         "tests/test_screen_response_contracts.py": [
             "user_id=1"
         ],
