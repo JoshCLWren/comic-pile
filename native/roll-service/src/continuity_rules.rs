@@ -1213,6 +1213,17 @@ mod tests {
             .expect("verify rule deletion")
             .get(0);
         assert_eq!(remaining, 0);
+        let compiled_edges: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM dependencies
+                 WHERE source_issue_id = 3001 AND target_issue_id = 3002
+                   AND note LIKE 'canonical:rule:%'",
+                &[],
+            )
+            .await
+            .expect("verify compiled edge retirement")
+            .get(0);
+        assert_eq!(compiled_edges, 0);
     }
 
     #[test]
@@ -1239,11 +1250,41 @@ mod tests {
     fn non_compilable_rule_shapes_are_rejected_before_database_writes() {
         let mut member_rule = request("selected_members_read");
         member_rule.selected_member_issue_ids = vec![30];
-        assert!(require_compilable(&member_rule).is_err());
+        let detail = assert_structured(
+            require_compilable(&member_rule).expect_err("member rules never block Roll"),
+            StatusCode::BAD_REQUEST,
+            "continuity_rule_not_compilable",
+        );
+        assert!(
+            detail["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("would never block Roll")),
+            "{detail}"
+        );
 
         let mut crossover_rule = request("item_read");
         crossover_rule.target_type = "crossover".to_string();
-        assert!(require_compilable(&crossover_rule).is_err());
+        assert_structured(
+            require_compilable(&crossover_rule).expect_err("crossover targets never block Roll"),
+            StatusCode::BAD_REQUEST,
+            "continuity_rule_not_compilable",
+        );
+
+        let mut converged = request("converged");
+        converged.convergence_targets = vec![ConvergenceTarget {
+            node_type: "crossover".to_string(),
+            id: 9,
+        }];
+        let detail = assert_structured(
+            require_compilable(&converged).expect_err("non-issue prerequisites are rejected"),
+            StatusCode::BAD_REQUEST,
+            "continuity_rule_not_compilable",
+        );
+        assert!(
+            detail["message"].as_str().is_some_and(|message| message
+                .starts_with("Converged rule has 1 non-issue prerequisite(s);")),
+            "{detail}"
+        );
     }
 
     #[test]
