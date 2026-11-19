@@ -792,7 +792,14 @@ fn build_preview_response(
     };
 
     let (final_rows, final_counts, final_scope_key, final_series, final_scope, final_digest) = if scope_status == "unavailable" {
-        (vec![], empty_counts(), None, None, SeriesMappingPreviewScope {
+        (vec![], SeriesMappingPreviewCounts {
+            already_confirmed: 0,
+            safe_exact_match: 0,
+            needs_review_ambiguous: 0,
+            needs_review_conflict: 0,
+            unresolved: 0,
+            excluded_special: 0,
+        }, None, None, SeriesMappingPreviewScope {
             status: "unavailable".to_string(),
             scope_key: None,
             origin_issue_id,
