@@ -7279,11 +7279,11 @@ export interface components {
         };
         NativeComicVineResolveResponse: {
             input: string;
-            issue?: null | components["schemas"]["NativeComicVineResolvedIssue"];
+            issue?: components["schemas"]["NativeComicVineResolvedIssue"] | null;
             issues: components["schemas"]["NativeComicVineIssueCandidate"][];
             kind: string;
             validation_error?: string | null;
-            volume?: null | components["schemas"]["NativeComicVineSeriesResult"];
+            volume?: components["schemas"]["NativeComicVineSeriesResult"] | null;
         };
         NativeComicVineResolvedIssue: {
             /** Format: int32 */
@@ -7449,7 +7449,6 @@ export interface components {
             mode?: string | null;
             name: string;
         };
-<<<<<<< HEAD
         NativeImportIssueRequest: {
             /** Format: int32 */
             anchor_after_thread_id?: number | null;
@@ -7521,6 +7520,22 @@ export interface components {
             /** Format: int32 */
             total_items?: number | null;
         };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues`. */
+        NativeIssueCreateRange: {
+            /**
+             * Format: int32
+             * @description Insert after this issue id; omit for natural placement, null to append.
+             */
+            insert_after_issue_id?: number | null;
+            /** @description Range such as `1-25` or `1, 3, 5-7`. */
+            issue_range: string;
+        };
+        /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
+        NativeIssueCreatorsEntry: {
+            creators: components["schemas"]["CreatorCredit"][];
+            /** Format: int32 */
+            issue_id: number;
+        };
         NativeIssueIdentityMapping: {
             comicvine_id: string;
             /** Format: double */
@@ -7543,23 +7558,6 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
-=======
-        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues`. */
-        NativeIssueCreateRange: {
-            /**
-             * Format: int32
-             * @description Insert after this issue id; omit for natural placement, null to append.
-             */
-            insert_after_issue_id?: number | null;
-            /** @description Range such as `1-25` or `1, 3, 5-7`. */
-            issue_range: string;
-        };
-        /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
-        NativeIssueCreatorsEntry: {
-            creators: components["schemas"]["CreatorCredit"][];
-            /** Format: int32 */
-            issue_id: number;
->>>>>>> origin/main
         };
         NativeIssueListResponse: {
             issues: components["schemas"]["IssueMutationItem"][];
@@ -7569,27 +7567,6 @@ export interface components {
             /** Format: int32 */
             total_count: number;
         };
-<<<<<<< HEAD
-        NativeMetadataCorrectionRequest: {
-            canonical_value: string;
-            field_name: string;
-            reason?: string | null;
-        };
-        NativeMetadataCorrectionRevertRequest: {
-            /** Format: int32 */
-            correction_id: number;
-        };
-        NativeMetadataCorrectionsResponse: {
-            corrections: components["schemas"]["NativeCanonicalCorrection"][];
-            /** Format: int32 */
-            issue_id: number;
-        };
-        NativeMetadataRefreshResponse: {
-            comicvine_issue_id?: string | null;
-            /** Format: int32 */
-            issue_id: number;
-            refreshed: boolean;
-=======
         /** @description Request body for `POST /api/v1/issues/{issue_id}:move`. */
         NativeIssueMoveRequest: {
             /**
@@ -7619,6 +7596,26 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        NativeMetadataCorrectionRequest: {
+            canonical_value: string;
+            field_name: string;
+            reason?: string | null;
+        };
+        NativeMetadataCorrectionRevertRequest: {
+            /** Format: int32 */
+            correction_id: number;
+        };
+        NativeMetadataCorrectionsResponse: {
+            corrections: components["schemas"]["NativeCanonicalCorrection"][];
+            /** Format: int32 */
+            issue_id: number;
+        };
+        NativeMetadataRefreshResponse: {
+            comicvine_issue_id?: string | null;
+            /** Format: int32 */
+            issue_id: number;
+            refreshed: boolean;
+        };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
         NativeMigrateToIssuesRequest: {
             /** Format: int32 */
@@ -7629,7 +7626,6 @@ export interface components {
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
         NativeMigrateToIssuesSimpleRequest: {
             issue_number: string;
->>>>>>> origin/main
         };
         NativeOverlapDecisionItem: {
             continuing_volume_id: string;
@@ -9719,49 +9715,6 @@ export interface components {
             /** Total Issues */
             total_issues?: number | null;
         };
-<<<<<<< HEAD
-        /**
-         * RouteTrafficCounter
-         * @description One aggregated (method, route template, status class) tally.
-         */
-        RouteTrafficCounter: {
-            /**
-             * Count
-             * @description Requests observed since process start.
-             */
-            count: number;
-            /**
-             * Method
-             * @description HTTP method, e.g. GET.
-             */
-            method: string;
-            /**
-             * Route
-             * @description Routed path template, e.g. /api/v1/threads/{thread_id}.
-             */
-            route: string;
-            /**
-             * Status Class
-             * @description Response status class, e.g. 2xx or 4xx.
-             */
-            status_class: string;
-        };
-        /**
-         * SeriesDecision
-         * @description Series-level decision for CBL adoption.
-         */
-        SeriesDecision: {
-            /** @description Include or exclude this entire series */
-            decision: components["schemas"]["SourceBackedDecision"];
-            /**
-             * Series Name
-             * @description Series name
-             */
-            series_name: string;
-        };
-=======
-        /** @description Wire parity with Python `SeriesImportStatusResponse`. */
->>>>>>> origin/main
         SeriesImportStatusResponse: {
             /** Format: int32 */
             comicvine_volume_id: number;
