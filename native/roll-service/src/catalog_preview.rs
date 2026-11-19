@@ -22,7 +22,7 @@ use crate::{
 const PREVIEW_TOKEN_TTL_SECONDS: f64 = 600.0;
 
 /// Python `SeriesMappingPreviewRequest` wire schema.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewRequest {
     pub origin_issue_id: i32,
     pub provider: String,
@@ -32,7 +32,7 @@ pub struct SeriesMappingPreviewRequest {
 }
 
 /// Python `SeriesMappingPreviewResponse` wire schema.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewResponse {
     pub preview_token: Option<String>,
     pub scope: Value,
@@ -146,7 +146,7 @@ fn hmac_sign(secret: &str, payload: &Value) -> Result<String, ApiError> {
 
 fn hex_hmac_sha256(secret: &str, message: &str) -> Result<String, hmac::digest::InvalidLength> {
     use hmac::{digest::KeyInit, Hmac, Mac};
-    use sha2::{Digest, Sha256};
+    use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes())?;
     mac.update(message.as_bytes());
