@@ -659,17 +659,17 @@ fn series_refs_for_volumes(
 }
 
 fn context_for_overlaps(
-    issue_meta: &HashMap<i32, IssueMeta>,
+    _issue_meta: &HashMap<i32, IssueMeta>,
     thread_names: &HashMap<i32, String>,
     volume_by_thread: &HashMap<i32, Option<String>>,
     thread_volumes: &std::collections::BTreeMap<i32, String>,
 ) -> OverlapContext {
     OverlapContext {
-        issue_meta: issue_meta.clone(),
+        issue_meta: _issue_meta.clone(),
         thread_names: thread_names.clone(),
         volume_by_thread: volume_by_thread.clone(),
         series_refs: series_refs_for_volumes(
-            issue_meta,
+            _issue_meta,
             thread_names,
             volume_by_thread,
             thread_volumes,
@@ -812,8 +812,7 @@ fn build_overlaps(
                     choice: "protect_order".to_string(),
                     label: "Keep the full chosen order".to_string(),
                     detail: format!(
-                        "{} waits for every earlier unread {} comic before it continues.",
-                        continuing_ref.series_name, waiting_ref.series_name
+                        "{waiting_name} waits for every earlier unread {continuing_name} comic before it continues.",
                     ),
                     rollable_issue_ids: vec![],
                     waiting_issue_ids: vec![],
@@ -822,12 +821,10 @@ fn build_overlaps(
                 ReadingGraphChoiceEffect {
                     choice: "continue_series".to_string(),
                     label: format!(
-                        "Let {} continue; {} waits",
-                        continuing_ref.series_name, waiting_ref.series_name
+                        "Let {continuing_name} continue; {waiting_name} waits",
                     ),
                     detail: format!(
-                        "Removes the ordering restriction between {} and {}; other prerequisites and restrictions still apply.",
-                        continuing_ref.series_name, waiting_ref.series_name
+                        "Removes the ordering restriction between {continuing_name} and {waiting_name}; other prerequisites and restrictions still apply.",
                     ),
                     rollable_issue_ids: vec![],
                     waiting_issue_ids: vec![],
