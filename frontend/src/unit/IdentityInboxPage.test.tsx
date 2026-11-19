@@ -98,6 +98,28 @@ beforeEach(() => {
 })
 
 describe('IdentityInboxPage', () => {
+  it('shows each unconfirmed provider candidate own cover without changing confirmation actions', async () => {
+    const item = inboxItem()
+    item.candidates[0].metadata_json = {
+      volume: { name: 'Mister Miracle' },
+      image: { medium_url: 'https://example.test/comicvine-mister-miracle.jpg' },
+      issue_number: 'Annual 1',
+    }
+    mockQueryResult([item], 1)
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    expect(screen.getByRole('img', { name: 'Cover for Mister Miracle #Annual 1' })).toHaveAttribute(
+      'src', 'https://example.test/comicvine-mister-miracle.jpg',
+    )
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled()
+  })
+
   it('renders loading state while fetching items', () => {
     mockLoadingState()
 
