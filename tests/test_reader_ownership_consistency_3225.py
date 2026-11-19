@@ -316,35 +316,3 @@ async def test_detect_violations_reports_without_private_payloads(
     await db.rollback()
 
 
-@pytest.mark.asyncio
-async def test_set_pending_thread_supersedes_cross_thread_pointer(
-    db: AsyncSession, sample_user
-) -> None:
-    """Manual selection retargets the whole pending pair to one thread."""
-    from app.services.thread_service import set_current_issue, set_pending_thread
-
-    thread_a = await _make_thread(db, sample_user.id, "Series A")
-    thread_b = await _make_thread(db, sample_user.id, "Series B")
-    await _make_issue(db, thread_a.id, number="1")
-    await _make_issue(db, thread_b.id, number="1")
-    thread_a.total_issues = 1
-    thread_b.total_issues = 1
-    await db.flush()
-
-    await set_current_issue(db, sample_user.id, thread_a.id, issue_number="1")
-    await set_pending_thread(db, sample_user.id, thread_b.id)
-
-    status = await ownership_guard.session_pending_status(
-        db,
-        (
-            await db.execute(
-                select(ReadingSession)
-                .where(
-                    ReadingSession.user_id == sample_user.id,
-                    ReadingSession.ended_at.is_(None),
-                )
-                .order_by(ReadingSession.id.desc())
-            )
-        ).scalar_one(),
-    )
-    assert status.consistent

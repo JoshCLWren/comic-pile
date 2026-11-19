@@ -697,6 +697,12 @@ export type SummariesResponse = components['schemas']['CreatorSummariesResponse'
 
 export type TeamChemistryResponse = components['schemas']['CreatorTeamChemistryResponse']
 
+export interface UnsnoozeRequest {
+  body: components['schemas']['UnsnoozeRequest']
+}
+
+export type UnsnoozeResponse = components['schemas']['UnsnoozeResponse']
+
 export interface UpdateLegacyDependencyRequest {
   path: {
     dependency_id: number
@@ -818,6 +824,7 @@ export interface NativeV2Client {
   skip(args: SkipRequest): Promise<SkipResponse>
   summaries(args?: SummariesRequest): Promise<SummariesResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
+  unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
   updateLegacyDependency(args: UpdateLegacyDependencyRequest): Promise<UpdateLegacyDependencyResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
   updateReadingList(args: UpdateReadingListRequest): Promise<UpdateReadingListResponse>
@@ -1305,6 +1312,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     teamChemistry() {
       return client.get<TeamChemistryResponse>("/v2/creators/team-chemistry")
+    },
+    unsnooze(args: UnsnoozeRequest) {
+      return client.post<UnsnoozeResponse, UnsnoozeRequest['body']>(
+        "/v2/roll/unsnooze",
+        args.body,
+      )
     },
     updateLegacyDependency(args: UpdateLegacyDependencyRequest) {
       return client.patch<UpdateLegacyDependencyResponse, UpdateLegacyDependencyRequest['body']>(
