@@ -1062,6 +1062,50 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(comicvine_resolution::series_import_status),
         )
         .route(
+            "/api/v1/comicvine/search/series",
+            get(comicvine_resolution::search_comicvine_series),
+        )
+        .route(
+            "/api/v1/comicvine/resolve",
+            get(comicvine_resolution::resolve_comicvine_input),
+        )
+        .route(
+            "/api/v1/comicvine/series/{comicvine_volume_id}/issues",
+            get(comicvine_resolution::get_comicvine_series_issues),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/identity",
+            get(comicvine_resolution::get_issue_identity),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/identity",
+            delete(comicvine_resolution::remove_identity),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/identity:confirm",
+            post(comicvine_resolution::confirm_identity),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/identity:replace",
+            post(comicvine_resolution::replace_identity),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/metadata:refresh",
+            post(comicvine_resolution::refresh_metadata),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/metadata:correct",
+            post(comicvine_resolution::apply_correction),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/metadata:corrections",
+            get(comicvine_resolution::list_corrections),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/metadata:revert",
+            post(comicvine_resolution::revert_correction),
+        )
+        .route(
             "/api/v1/issues/{issue_id}/dependencies",
             get(issue_read::get_issue_dependencies),
         )

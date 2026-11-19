@@ -500,6 +500,50 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route(
+            "/api/v1/comicvine/search/series",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/comicvine/resolve",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/comicvine/series/{comicvine_volume_id}/issues",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/identity",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/identity",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/identity:confirm",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/identity:replace",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/metadata:refresh",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/metadata:correct",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/metadata:corrections",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/metadata:revert",
+            post(native_dispatch),
+        )
+        .route(
             "/api/v1/issues/{issue_id}/dependencies",
             get(native_dispatch),
         )
