@@ -5,12 +5,8 @@ use utoipa::OpenApi;
 #[derive(utoipa::OpenApi)]
 #[openapi(paths(
     crate::dismiss_pending::dismiss_pending_documentation,
-    crate::dismiss_pending::dismiss_pending_legacy_documentation,
     crate::session_history::list_session_snapshots_documentation,
-    crate::session_list::list_sessions_documentation,
-    crate::session_list::list_sessions_v1_documentation,
     crate::session_details::get_session_details_documentation,
-    crate::session_details::get_session_details_v1_documentation,
     crate::undo_snapshots::list_undo_snapshots_documentation,
     crate::undo_snapshots::list_undo_snapshots_v1_documentation,
     crate::undo_apply::undo_to_snapshot_documentation,

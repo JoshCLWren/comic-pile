@@ -23,6 +23,15 @@ export function compactQuery(
   return Object.keys(params).length > 0 ? params : undefined
 }
 
+export interface AssignTagRequest {
+  path: {
+    tag_id: number
+  }
+  body: components['schemas']['AssignTagRequest']
+}
+
+export type AssignTagResponse = components['schemas']['TagAssignmentResponse']
+
 export interface BootstrapRequest {
   query?: {
     timezone?: string
@@ -30,6 +39,24 @@ export interface BootstrapRequest {
 }
 
 export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
+
+export interface BulkAssignTagRequest {
+  path: {
+    tag_id: number
+  }
+  body: components['schemas']['BulkAssignRequest']
+}
+
+export type BulkAssignTagResponse = components['schemas']['BulkAssignResponse']
+
+export interface BulkUnassignTagRequest {
+  path: {
+    tag_id: number
+  }
+  body: components['schemas']['BulkAssignRequest']
+}
+
+export type BulkUnassignTagResponse = components['schemas']['BulkAssignResponse']
 
 export interface CommitRequest {
   body: components['schemas']['CommitRequest']
@@ -195,6 +222,12 @@ export interface CreateReadingListRequest {
 
 export type CreateReadingListResponse = components['schemas']['ReadingList']
 
+export interface CreateTagRequest {
+  body: components['schemas']['CreateTagRequest']
+}
+
+export type CreateTagResponse = components['schemas']['CreateTagResponse']
+
 export interface CreatorsListRequest {
   query?: {
     search?: string
@@ -249,6 +282,14 @@ export interface DeleteReadingListRequest {
 
 export type DeleteReadingListResponse = void
 
+export interface DeleteTagRequest {
+  path: {
+    tag_id: number
+  }
+}
+
+export type DeleteTagResponse = components['schemas']['TagDeleteResponse']
+
 export interface DetailRequest {
   path: {
     creator_key: string
@@ -266,6 +307,40 @@ export type DieStateResponse = components['schemas']['RollDieStateResponse']
 export type DiscoveriesResponse = components['schemas']['CreatorDiscoveryResponse']
 
 export type DismissPendingResponse = void
+
+export type DismissReadingModeSuggestionResponse = components['schemas']['ReadingModeResponse']
+
+export interface EffectiveIssueRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type EffectiveIssueResponse = components['schemas']['EffectiveTagsResponse']
+
+export interface EffectivePlanRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type EffectivePlanResponse = components['schemas']['EffectiveTagsResponse']
+
+export interface EffectiveThreadRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type EffectiveThreadResponse = components['schemas']['EffectiveTagsResponse']
+
+export interface EffectiveThreadIssuesRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type EffectiveThreadIssuesResponse = components['schemas']['ThreadIssuesEffectiveTagsResponse']
 
 export interface EligibleIssueIdsRequest {
   query?: {
@@ -315,6 +390,8 @@ export interface GetReadingListRequest {
 
 export type GetReadingListResponse = components['schemas']['ReadingList']
 
+export type GetReadingModeResponse = components['schemas']['ReadingModeResponse']
+
 export interface GetSessionDetailsRequest {
   path: {
     session_id: number
@@ -322,6 +399,14 @@ export interface GetSessionDetailsRequest {
 }
 
 export type GetSessionDetailsResponse = components['schemas']['SessionDetailsResponse']
+
+export interface GetTagRequest {
+  path: {
+    tag_id: number
+  }
+}
+
+export type GetTagResponse = components['schemas']['Tag']
 
 export interface GetThreadDependenciesRequest {
   path: {
@@ -338,6 +423,8 @@ export interface GetThreadIssueDependenciesRequest {
 }
 
 export type GetThreadIssueDependenciesResponse = components['schemas']['ThreadIssueDependenciesResponse']
+
+export type GetUserPreferencesResponse = components['schemas']['UserPreferencesResponse']
 
 export interface InitializeSessionRequest {
   body: components['schemas']['InitializeSessionRequest']
@@ -399,6 +486,8 @@ export interface ListSessionSnapshotsRequest {
 }
 
 export type ListSessionSnapshotsResponse = components['schemas']['SessionSnapshotsResponse']
+
+export type ListTagsResponse = components['schemas']['TagListResponse']
 
 export interface ListThreadIssuesRequest {
   path: {
@@ -467,6 +556,12 @@ export interface OverrideRollRequest {
 }
 
 export type OverrideRollResponse = components['schemas']['NativeRollResponse']
+
+export interface PatchUserPreferencesRequest {
+  body: components['schemas']['UserPreferencesPatchRequest']
+}
+
+export type PatchUserPreferencesResponse = components['schemas']['UserPreferencesResponse']
 
 export interface PreviewRequest {
   path: {
@@ -701,6 +796,12 @@ export interface SeriesIssuesRequest {
 
 export type SeriesIssuesResponse = components['schemas']['CreatorSeriesIssueListResponse']
 
+export interface SetReadingModeRequest {
+  body: components['schemas']['ReadingModeSetRequest']
+}
+
+export type SetReadingModeResponse = components['schemas']['ReadingModeResponse']
+
 export interface SkipRequest {
   path: {
     mapping_id: number
@@ -708,6 +809,8 @@ export interface SkipRequest {
 }
 
 export type SkipResponse = components['schemas']['IdentityInboxActionResponse']
+
+export type SuggestReadingModeResponse = components['schemas']['ReadingModeResponse']
 
 export interface SummariesRequest {
   query?: {
@@ -724,6 +827,16 @@ export interface SwitchPrerequisiteRequest {
 export type SwitchPrerequisiteResponse = components['schemas']['RollPrerequisiteSwitchResponse']
 
 export type TeamChemistryResponse = components['schemas']['CreatorTeamChemistryResponse']
+
+export interface UnassignTagRequest {
+  path: {
+    tag_id: number
+    target_type: string
+    target_id: number
+  }
+}
+
+export type UnassignTagResponse = components['schemas']['TagAssignmentResponse']
 
 export interface UnsnoozeRequest {
   body: components['schemas']['UnsnoozeRequest']
@@ -758,8 +871,28 @@ export interface UpdateReadingListRequest {
 
 export type UpdateReadingListResponse = components['schemas']['ReadingList']
 
+export interface UpdateTagRequest {
+  path: {
+    tag_id: number
+  }
+  body: components['schemas']['UpdateTagRequest']
+}
+
+export type UpdateTagResponse = components['schemas']['Tag']
+
+export interface UsageTagRequest {
+  path: {
+    tag_id: number
+  }
+}
+
+export type UsageTagResponse = components['schemas']['TagUsageResponse']
+
 export interface NativeV2Client {
+  assignTag(args: AssignTagRequest): Promise<AssignTagResponse>
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
+  bulkAssignTag(args: BulkAssignTagRequest): Promise<BulkAssignTagResponse>
+  bulkUnassignTag(args: BulkUnassignTagRequest): Promise<BulkUnassignTagResponse>
   commit(args: CommitRequest): Promise<CommitResponse>
   compare(args?: CompareRequest): Promise<CompareResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
@@ -783,6 +916,7 @@ export interface NativeV2Client {
   createLegacyDependency(args: CreateLegacyDependencyRequest): Promise<CreateLegacyDependencyResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
+  createTag(args: CreateTagRequest): Promise<CreateTagResponse>
   creatorsList(args?: CreatorsListRequest): Promise<CreatorsListResponse>
   csrf(): Promise<CsrfResponse>
   defer(args: DeferRequest): Promise<DeferResponse>
@@ -790,10 +924,16 @@ export interface NativeV2Client {
   deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
   deleteLegacyDependency(args: DeleteLegacyDependencyRequest): Promise<DeleteLegacyDependencyResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
+  deleteTag(args: DeleteTagRequest): Promise<DeleteTagResponse>
   detail(args: DetailRequest): Promise<DetailResponse>
   dieState(): Promise<DieStateResponse>
   discoveries(): Promise<DiscoveriesResponse>
   dismissPending(): Promise<DismissPendingResponse>
+  dismissReadingModeSuggestion(): Promise<DismissReadingModeSuggestionResponse>
+  effectiveIssue(args: EffectiveIssueRequest): Promise<EffectiveIssueResponse>
+  effectivePlan(args: EffectivePlanRequest): Promise<EffectivePlanResponse>
+  effectiveThread(args: EffectiveThreadRequest): Promise<EffectiveThreadResponse>
+  effectiveThreadIssues(args: EffectiveThreadIssuesRequest): Promise<EffectiveThreadIssuesResponse>
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
@@ -801,9 +941,12 @@ export interface NativeV2Client {
   getMetrics(): Promise<GetMetricsResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
+  getReadingMode(): Promise<GetReadingModeResponse>
   getSessionDetails(args: GetSessionDetailsRequest): Promise<GetSessionDetailsResponse>
+  getTag(args: GetTagRequest): Promise<GetTagResponse>
   getThreadDependencies(args: GetThreadDependenciesRequest): Promise<GetThreadDependenciesResponse>
   getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
+  getUserPreferences(): Promise<GetUserPreferencesResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
@@ -814,6 +957,7 @@ export interface NativeV2Client {
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
   listSessionSnapshots(args: ListSessionSnapshotsRequest): Promise<ListSessionSnapshotsResponse>
+  listTags(): Promise<ListTagsResponse>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
@@ -823,6 +967,7 @@ export interface NativeV2Client {
   metric(args: MetricRequest): Promise<MetricResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
   overrideRoll(args: OverrideRollRequest): Promise<OverrideRollResponse>
+  patchUserPreferences(args: PatchUserPreferencesRequest): Promise<PatchUserPreferencesResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
   ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
   read(args: ReadRequest): Promise<ReadResponse>
@@ -852,22 +997,45 @@ export interface NativeV2Client {
   series(args: SeriesRequest): Promise<SeriesResponse>
   seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
   seriesIssues(args: SeriesIssuesRequest): Promise<SeriesIssuesResponse>
+  setReadingMode(args: SetReadingModeRequest): Promise<SetReadingModeResponse>
   skip(args: SkipRequest): Promise<SkipResponse>
+  suggestReadingMode(): Promise<SuggestReadingModeResponse>
   summaries(args?: SummariesRequest): Promise<SummariesResponse>
   switchPrerequisite(args: SwitchPrerequisiteRequest): Promise<SwitchPrerequisiteResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
+  unassignTag(args: UnassignTagRequest): Promise<UnassignTagResponse>
   unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
   updateLegacyDependency(args: UpdateLegacyDependencyRequest): Promise<UpdateLegacyDependencyResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
   updateReadingList(args: UpdateReadingListRequest): Promise<UpdateReadingListResponse>
+  updateTag(args: UpdateTagRequest): Promise<UpdateTagResponse>
+  usageTag(args: UsageTagRequest): Promise<UsageTagResponse>
 }
 
 export function createNativeV2Client(client: HttpClient): NativeV2Client {
   return {
+    assignTag(args: AssignTagRequest) {
+      return client.post<AssignTagResponse, AssignTagRequest['body']>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/assignments`,
+        args.body,
+      )
+    },
     bootstrap(args: BootstrapRequest = {}) {
       return client.get<BootstrapResponse>(
         "/v2/roll/bootstrap",
         { params: compactQuery(args.query) },
+      )
+    },
+    bulkAssignTag(args: BulkAssignTagRequest) {
+      return client.post<BulkAssignTagResponse, BulkAssignTagRequest['body']>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/assignment-batches`,
+        args.body,
+      )
+    },
+    bulkUnassignTag(args: BulkUnassignTagRequest) {
+      return client.post<BulkUnassignTagResponse, BulkUnassignTagRequest['body']>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/unassignment-batches`,
+        args.body,
       )
     },
     commit(args: CommitRequest) {
@@ -996,6 +1164,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    createTag(args: CreateTagRequest) {
+      return client.post<CreateTagResponse, CreateTagRequest['body']>(
+        "/v2/tags",
+        args.body,
+      )
+    },
     creatorsList(args: CreatorsListRequest = {}) {
       return client.get<CreatorsListResponse>(
         "/v2/creators",
@@ -1028,6 +1202,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
       )
     },
+    deleteTag(args: DeleteTagRequest) {
+      return client.delete<DeleteTagResponse>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}`,
+      )
+    },
     detail(args: DetailRequest) {
       return client.get<DetailResponse>(
         `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}`,
@@ -1042,6 +1221,29 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     dismissPending() {
       return client.post<DismissPendingResponse>("/v2/roll/dismiss-pending")
+    },
+    dismissReadingModeSuggestion() {
+      return client.post<DismissReadingModeSuggestionResponse>("/v2/reading-mode/suggestion-dismissals")
+    },
+    effectiveIssue(args: EffectiveIssueRequest) {
+      return client.get<EffectiveIssueResponse>(
+        `/v2/tags/effective/issues/${encodeURIComponent(String(args.path.issue_id))}`,
+      )
+    },
+    effectivePlan(args: EffectivePlanRequest) {
+      return client.get<EffectivePlanResponse>(
+        `/v2/tags/effective/plans/${encodeURIComponent(String(args.path.plan_id))}`,
+      )
+    },
+    effectiveThread(args: EffectiveThreadRequest) {
+      return client.get<EffectiveThreadResponse>(
+        `/v2/tags/effective/threads/${encodeURIComponent(String(args.path.thread_id))}`,
+      )
+    },
+    effectiveThreadIssues(args: EffectiveThreadIssuesRequest) {
+      return client.get<EffectiveThreadIssuesResponse>(
+        `/v2/tags/effective/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
+      )
     },
     eligibleIssueIds(args: EligibleIssueIdsRequest = {}) {
       return client.get<EligibleIssueIdsResponse>(
@@ -1078,9 +1280,17 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
       )
     },
+    getReadingMode() {
+      return client.get<GetReadingModeResponse>("/v2/reading-mode")
+    },
     getSessionDetails(args: GetSessionDetailsRequest) {
       return client.get<GetSessionDetailsResponse>(
         `/v2/reading-sessions/${encodeURIComponent(String(args.path.session_id))}/details`,
+      )
+    },
+    getTag(args: GetTagRequest) {
+      return client.get<GetTagResponse>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}`,
       )
     },
     getThreadDependencies(args: GetThreadDependenciesRequest) {
@@ -1092,6 +1302,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<GetThreadIssueDependenciesResponse>(
         `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-dependencies`,
       )
+    },
+    getUserPreferences() {
+      return client.get<GetUserPreferencesResponse>("/v2/users/me/preferences")
     },
     initializeSession(args: InitializeSessionRequest) {
       return client.post<InitializeSessionResponse, InitializeSessionRequest['body']>(
@@ -1142,6 +1355,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/reading-sessions/${encodeURIComponent(String(args.path.session_id))}/snapshots`,
       )
     },
+    listTags() {
+      return client.get<ListTagsResponse>("/v2/tags")
+    },
     listThreadIssues(args: ListThreadIssuesRequest) {
       return client.get<ListThreadIssuesResponse>(
         `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
@@ -1187,6 +1403,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     overrideRoll(args: OverrideRollRequest) {
       return client.post<OverrideRollResponse, OverrideRollRequest['body']>(
         "/v2/roll/override",
+        args.body,
+      )
+    },
+    patchUserPreferences(args: PatchUserPreferencesRequest) {
+      return client.patch<PatchUserPreferencesResponse, PatchUserPreferencesRequest['body']>(
+        "/v2/users/me/preferences",
         args.body,
       )
     },
@@ -1349,8 +1571,17 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
+    setReadingMode(args: SetReadingModeRequest) {
+      return client.put<SetReadingModeResponse, SetReadingModeRequest['body']>(
+        "/v2/reading-mode",
+        args.body,
+      )
+    },
     skip(args: SkipRequest) {
       return client.post<SkipResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/skip`)
+    },
+    suggestReadingMode() {
+      return client.post<SuggestReadingModeResponse>("/v2/reading-mode/suggestions")
     },
     summaries(args: SummariesRequest = {}) {
       return client.get<SummariesResponse>(
@@ -1366,6 +1597,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     teamChemistry() {
       return client.get<TeamChemistryResponse>("/v2/creators/team-chemistry")
+    },
+    unassignTag(args: UnassignTagRequest) {
+      return client.delete<UnassignTagResponse>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/assignments/${encodeURIComponent(String(args.path.target_type))}/${encodeURIComponent(String(args.path.target_id))}`,
+      )
     },
     unsnooze(args: UnsnoozeRequest) {
       return client.post<UnsnoozeResponse, UnsnoozeRequest['body']>(
@@ -1389,6 +1625,17 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.put<UpdateReadingListResponse, UpdateReadingListRequest['body']>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
         args.body,
+      )
+    },
+    updateTag(args: UpdateTagRequest) {
+      return client.patch<UpdateTagResponse, UpdateTagRequest['body']>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}`,
+        args.body,
+      )
+    },
+    usageTag(args: UsageTagRequest) {
+      return client.get<UsageTagResponse>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/usage`,
       )
     },
   }
