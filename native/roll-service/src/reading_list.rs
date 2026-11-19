@@ -1090,6 +1090,103 @@ async fn load_entries_conn(
         .collect())
 }
 
+/// Request for a batched reading-list membership check scoped to thread IDs.
+///
+/// Returns which of the requested threads appear in any owned reading list,
+/// optionally excluding one list (the container the action is initiated from).
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReadingListMembershipCheckRequest {
+    /// Thread IDs to check. Duplicates and non-positive values are ignored.
+    pub thread_ids: Vec<i32>,
+    /// When set, exclude this reading list from the membership check.
+    #[serde(default)]
+    pub exclude_list_id: Option<i32>,
+}
+
+/// Batched reading-list membership check response.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReadingListMembershipCheckResponse {
+    /// Thread IDs from the request that belong to at least one other owned
+    /// reading list (after applying `exclude_list_id`).
+    pub thread_ids: Vec<i32>,
+}
+
+const MAX_MEMBERSHIP_CHECK_THREAD_IDS: usize = 1000;
+
+/// `POST /api/v2/reading-lists/memberships:check`
+///
+/// Batched, owner-scoped lookup of which requested threads appear in any
+/// reading list, scoped to the provided thread IDs. Used to detect "series in
+/// another active list" without fetching every list's details.
+pub async fn check_thread_memberships(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<ReadingListMembershipCheckRequest>,
+) -> Result<Json<ReadingListMembershipCheckResponse>, ApiError> {
+    if request.thread_ids.is_empty() {
+        return Err(ApiError::BadRequest(
+            "thread_ids must contain at least one id".to_string(),
+        ));
+    }
+    if request.thread_ids.len() > MAX_MEMBERSHIP_CHECK_THREAD_IDS {
+        return Err(ApiError::BadRequest(format!(
+            "thread_ids must contain at most {MAX_MEMBERSHIP_CHECK_THREAD_IDS} ids"
+        )));
+    }
+
+    let mut thread_ids: Vec<i32> = request
+        .thread_ids
+        .into_iter()
+        .filter(|id| *id > 0)
+        .collect();
+    thread_ids.sort_unstable();
+    thread_ids.dedup();
+    if thread_ids.is_empty() {
+        return Err(ApiError::BadRequest(
+            "thread_ids must contain at least one positive id".to_string(),
+        ));
+    }
+
+    let conn = db::checkout(&state).await?;
+    let matched: Vec<i32> = if let Some(exclude_list_id) = request.exclude_list_id {
+        let rows = conn
+            .query(
+                "SELECT DISTINCT i.thread_id \
+                 FROM custom_cbl_entries e \
+                 JOIN custom_cbl_lists l ON l.id = e.list_id \
+                 JOIN issues i ON i.id = e.issue_id \
+                 WHERE l.user_id = $1 \
+                   AND e.list_id <> $2 \
+                   AND i.thread_id = ANY($3::int[]) \
+                 ORDER BY i.thread_id",
+                &[&user.id(), &exclude_list_id, &thread_ids],
+            )
+            .await
+            .map_err(db::query_error)?;
+        rows.iter().map(|row| row.get(0)).collect()
+    } else {
+        let rows = conn
+            .query(
+                "SELECT DISTINCT i.thread_id \
+                 FROM custom_cbl_entries e \
+                 JOIN custom_cbl_lists l ON l.id = e.list_id \
+                 JOIN issues i ON i.id = e.issue_id \
+                 WHERE l.user_id = $1 \
+                   AND i.thread_id = ANY($2::int[]) \
+                 ORDER BY i.thread_id",
+                &[&user.id(), &thread_ids],
+            )
+            .await
+            .map_err(db::query_error)?;
+        rows.iter().map(|row| row.get(0)).collect()
+    };
+
+    Ok(Json(ReadingListMembershipCheckResponse {
+        thread_ids: matched,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -56,6 +56,15 @@ jobs:
           ref: main
           path: factory-control
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: 5ebb57c3d497af114921958ce8ad694676f3da5a
+          path: factory-control/.rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash factory-control/.rotisserie/runtime/factory/install/overlay.sh factory-control
 
       - name: Resolve observability App client ID
         id: app_identity

@@ -78,6 +78,15 @@ pub struct QueueSeriesMetadata {
     pub publisher: Option<String>,
 }
 
+/// Bulk exclusion provenance attached to an excluded queue thread (#5435).
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct QueueExclusionGroupRef {
+    pub id: i32,
+    pub source_kind: String,
+    pub source_id: i32,
+    pub source_name: String,
+}
+
 /// One reader threads collection item.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ThreadListItem {
@@ -99,6 +108,9 @@ pub struct ThreadListItem {
     pub tags: Vec<ThreadTag>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub series_metadata: Option<QueueSeriesMetadata>,
+    /// Present when this excluded thread was removed as part of a bulk action.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue_exclusion_group: Option<QueueExclusionGroupRef>,
     /// Derived series cover: the exact provider CDN URL of the thread's next
     /// unread confirmed issue, falling back to the first confirmed issue with a
     /// cover. Null when the series has no confirmed issue cover.
@@ -115,7 +127,7 @@ pub struct ThreadListResponse {
 }
 
 /// The legacy single-thread response retained for the v1 and bare aliases.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ThreadDetailResponse {
     pub id: i32,
     pub title: String,
@@ -656,18 +668,69 @@ pub(crate) async fn list_excluded_page(
     } else {
         None
     };
-    let threads = rows
+    let mut threads = rows
         .into_iter()
         .map(|mut row| {
             row.queue_position = 0;
             row.into_item(None, None)
         })
         .collect::<Result<Vec<_>, ApiError>>()?;
+    attach_queue_exclusion_groups(state, claims, &mut threads).await?;
     Ok(Json(ThreadListResponse {
         threads,
         next_page_token,
         active_count: 0,
     }))
+}
+
+/// Attach bulk exclusion provenance to excluded thread list items in one query.
+async fn attach_queue_exclusion_groups(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+    threads: &mut [ThreadListItem],
+) -> Result<(), ApiError> {
+    if threads.is_empty() {
+        return Ok(());
+    }
+    let ids: Vec<i32> = threads.iter().map(|thread| thread.id).collect();
+    let connection = db::checkout(state).await?;
+    let user_id: i32 = connection
+        .query_one(
+            "SELECT id FROM users WHERE username = $1",
+            &[&claims.username()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
+    let rows = connection
+        .query(
+            "SELECT t.id, g.id, g.source_kind, g.source_id, g.source_name \
+             FROM threads t \
+             JOIN queue_exclusion_groups g ON g.id = t.queue_exclusion_group_id \
+             WHERE t.user_id = $1 AND t.id = ANY($2::int[]) AND t.status = 'excluded'",
+            &[&user_id, &ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    drop(connection);
+    let mut groups = std::collections::HashMap::with_capacity(rows.len());
+    for row in rows {
+        groups.insert(
+            row.get::<_, i32>(0),
+            QueueExclusionGroupRef {
+                id: row.get(1),
+                source_kind: row.get(2),
+                source_id: row.get(3),
+                source_name: row.get(4),
+            },
+        );
+    }
+    for thread in threads {
+        if let Some(group) = groups.remove(&thread.id) {
+            thread.queue_exclusion_group = Some(group);
+        }
+    }
+    Ok(())
 }
 
 fn validate_auth(claims: &VerifiedAccessClaims, auth: &Option<AuthRow>) -> Result<(), ApiError> {
@@ -793,6 +856,7 @@ impl PageRow {
             },
             tags: self.tags,
             series_metadata: series_metadata(&self.series_documents, &self.title),
+            queue_exclusion_group: None,
             series_cover_image_url: self.series_cover_image_url,
         })
     }
