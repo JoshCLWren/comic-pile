@@ -111,7 +111,6 @@ use utoipa::OpenApi;
         crate::releases::publish_documentation,
         crate::releases::retract_documentation,
         crate::comicvine_resolution::series_import_status_documentation,
-<<<<<<< HEAD
         crate::comicvine_v2::get_issue_identity_documentation,
         crate::comicvine_v2::confirm_identity_documentation,
         crate::comicvine_v2::replace_identity_documentation,
@@ -126,7 +125,6 @@ use utoipa::OpenApi;
         crate::comicvine_v2::series_import_status_v2_documentation,
         crate::comicvine_v2::import_issue_documentation,
         crate::comicvine_v2::import_series_documentation,
-=======
         crate::creators_v2::list_documentation,
         crate::creators_v2::summaries_documentation,
         crate::creators_v2::compare_documentation,
@@ -138,7 +136,6 @@ use utoipa::OpenApi;
         crate::creators_v2::rating_distribution_documentation,
         crate::creators_v2::role_documentation,
         crate::creators_v2::series_documentation,
->>>>>>> origin/main
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
