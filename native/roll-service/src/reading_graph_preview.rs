@@ -290,7 +290,9 @@ struct CblSourceEntry {
 /// One CBL source list preview.
 #[derive(Debug, Clone)]
 struct CblSourceListPreview {
+    #[allow(dead_code)]
     id: i32,
+    #[allow(dead_code)]
     name: String,
     content_hash: String,
     revision_sha: String,
