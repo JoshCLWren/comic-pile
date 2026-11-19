@@ -6,6 +6,7 @@ import argparse
 from datetime import UTC, datetime
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -763,6 +764,49 @@ def test_cbl_adoption_series_exclusion_defers_unresolved_entries() -> None:
     )
     assert reconsidered.unresolved_count == 1
     assert reconsidered.entries[1]["adoption_decision"] == "unresolved"
+
+
+@pytest.mark.asyncio
+async def test_cbl_adoption_endpoint_returns_typed_fingerprinted_contract(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """The public preview endpoint exposes the client-ready typed contract."""
+    user = await get_or_create_user_async(async_db)
+    read_at = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+    issue = await _make_issue(
+        async_db,
+        user_id=user.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=read_at,
+    )
+    source_list_id = await _seed_source_list(async_db, issues=[issue])
+
+    response = await auth_client.get(
+        f"/api/v1/issue-identity/cbl/{source_list_id}/adoption-preview"
+    )
+
+    assert response.status_code == 200
+    contract = CBLAdoptionPreviewResponse.model_validate(response.json())
+    assert contract.source.source_list_id == source_list_id
+    assert contract.source.content_hash == "hash-1"
+    assert contract.source.revision_sha == "sha-1"
+    assert contract.entries[0].adoption_decision == "included_existing"
+    assert contract.entries[0].read_status == "read"
+    assert response.json()["entries"][0]["read_at"] == "2026-01-02T03:04:05Z"
+    assert contract.entries[0].read_at == read_at
+    assert contract.summary.final_adopted_order == [1]
+
+    openapi = (await auth_client.get("/openapi.json")).json()
+    read_at_schema = openapi["components"]["schemas"]["CBLAdoptionEntryResponse"]["properties"][
+        "read_at"
+    ]
+    assert read_at_schema["anyOf"] == [
+        {"type": "string", "format": "date-time"},
+        {"type": "null"},
+    ]
 
 
 @pytest.mark.asyncio

@@ -32,7 +32,10 @@ from app.services.bandwidth_inference import (
     HistoricalObservation,
     infer_bandwidth,
 )
-# reading-mode quiz logic moved to Rust; Python helpers removed.
+from app.services.reading_quiz import (
+    QuizResolutionError,
+    resolve_quiz_answers,
+)
 from app.services.recommendation_explanation import (
     RecommendationExplanationProjection,
 )
@@ -430,6 +433,106 @@ class TestAC2SnoozeAdaptationWithoutPermanentDemotion:
         )
         refreshed = result.scalar_one()
         assert refreshed.last_rating == 4.8
+
+
+# ---------------------------------------------------------------------------
+# AC-3: Repeated mismatch correctable manually or through quiz
+# ---------------------------------------------------------------------------
+
+
+class TestAC3MismatchCorrection:
+    """Repeated mismatch.
+
+    Can be corrected manually or through the optional
+    two-question quiz.
+    """
+
+    @pytest.mark.asyncio
+    async def test_manual_mode_correction_works(self, async_db: AsyncSession) -> None:
+        """Manual bandwidth/intent correction persists correctly."""
+        from app.services.reading_mode import ReadingModeService
+
+        user = await _ensure_user(async_db)
+        await async_db.commit()
+        user_id = user.id
+
+        await _create_session(
+            async_db, user_id,
+            active_bandwidth="balanced",
+            bandwidth_source="inferred",
+        )
+        await async_db.commit()
+
+        service = ReadingModeService(async_db)
+        result = await service.set_reading_mode(
+            user,
+            bandwidth="light",
+            intent="momentum",
+            source="manual",
+        )
+
+        assert result["bandwidth"] == "light"
+        assert result["intent"] == "momentum"
+        assert result["source"] == "manual"
+
+    @pytest.mark.asyncio
+    async def test_quiz_resolution_works(self, async_db: AsyncSession) -> None:
+        """The two-question quiz resolves to a valid reading mode."""
+        answers = {"brainpower": "easy", "pick": "explore"}
+        mode = resolve_quiz_answers(answers)
+
+        assert mode.bandwidth == "light"
+        assert mode.intent == "explore"
+
+    @pytest.mark.asyncio
+    async def test_all_quiz_combinations_produce_valid_mode(
+        self, async_db: AsyncSession,
+    ) -> None:
+        """Every quiz combination produces a valid bandwidth/intent pair."""
+        from app.services.reading_quiz import all_answer_combinations
+
+        combinations = all_answer_combinations()
+        assert len(combinations) == 12
+
+        for combo in combinations:
+            mode = resolve_quiz_answers(combo)
+            assert mode.bandwidth in ("light", "balanced", "deep")
+            assert mode.intent in ("momentum", "familiar", "explore", "random")
+
+    @pytest.mark.asyncio
+    async def test_quiz_rejection_for_invalid_answer(self, async_db: AsyncSession) -> None:
+        """Invalid quiz answers raise QuizResolutionError."""
+        with pytest.raises(QuizResolutionError):
+            resolve_quiz_answers({"brainpower": "unknown", "pick": "random"})
+
+    @pytest.mark.asyncio
+    async def test_bandwidth_correction_preserves_predicted(
+        self, async_db: AsyncSession,
+    ) -> None:
+        """Bandwidth correction changes active but preserves predicted."""
+        user = await _ensure_user(async_db)
+        await async_db.commit()
+        user_id = user.id
+
+        session = await _create_session(
+            async_db, user_id,
+            active_bandwidth="deep",
+            bandwidth_source="inferred",
+            bandwidth_confidence=0.6,
+            predicted_bandwidth="deep",
+        )
+        await async_db.commit()
+
+        from app.services.reading_mode import ReadingModeService
+        service = ReadingModeService(async_db)
+        await service.dismiss_suggestion(user)
+
+        assert session.active_bandwidth in ("deep",)
+
+
+# ---------------------------------------------------------------------------
+# AC-4: Momentum intent favors a current high-rated run without forcing diversity
+# ---------------------------------------------------------------------------
 
 
 class TestAC4MomentumIntent:
@@ -997,3 +1100,22 @@ class TestCrossCuttingAdaptivePipeline:
         refreshed = result.scalar_one()
         assert refreshed.queue_position == 1
 
+
+    @pytest.mark.asyncio
+    async def test_roll_with_manual_mode_override(
+        self, async_db: AsyncSession,
+    ) -> None:
+        """Manual mode override affects the subsequent Roll."""
+        from app.services.reading_mode import ReadingModeService
+        from tests.conftest import get_or_create_user_async
+
+        user = await get_or_create_user_async(async_db)
+        await _create_thread(async_db, user.id, title="Manual Override Thread")
+        await async_db.commit()
+
+        await ReadingModeService(async_db).set_reading_mode(
+            user, bandwidth="light", intent="momentum", source="manual",
+        )
+
+        data = (await roll_pending_thread(async_db)).model_dump()
+        assert "thread_id" in data

@@ -37,6 +37,51 @@ async def _details(client: AsyncClient, session_id: int) -> dict[str, list[str]]
     return response.json()["narrative_summary"]
 
 
+@pytest.mark.asyncio
+async def test_snooze_then_unsnooze_is_not_still_snoozed(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A series snoozed and then unsnoozed in one session is not counted."""
+    thread = _thread(default_user.id, "Saga", 1)
+    async_db.add(thread)
+    await async_db.flush()
+
+    started_at = datetime.now(UTC) - timedelta(minutes=30)
+    session = ReadingSession(
+        user_id=default_user.id,
+        started_at=started_at,
+        ended_at=started_at + timedelta(minutes=20),
+    )
+    async_db.add(session)
+    await async_db.flush()
+
+    async_db.add_all(
+        [
+            Event(
+                type="snooze",
+                session_id=session.id,
+                thread_id=thread.id,
+                timestamp=started_at + timedelta(minutes=5),
+            ),
+            Event(
+                type="unsnooze",
+                session_id=session.id,
+                thread_id=thread.id,
+                timestamp=started_at + timedelta(minutes=10),
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    details = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert details.status_code == 200
+    body = details.json()
+    assert body["narrative_summary"]["snoozed"] == []
+    # The detailed timeline keeps both historical actions (newest first).
+    timeline_types = [event["type"] for event in body["events"] if event["type"] in {"snooze", "unsnooze"}]
+    assert sorted(timeline_types) == ["snooze", "unsnooze"]
 
 
 @pytest.mark.asyncio
@@ -368,6 +413,58 @@ async def test_other_readers_snooze_state_is_not_exposed(
     assert summary["snoozed"] == []
 
 
+@pytest.mark.asyncio
+async def test_viewing_history_does_not_mutate_events_or_session_state(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Reading a historical summary is a pure projection over stored history."""
+    thread = _thread(default_user.id, "Saga", 1)
+    async_db.add(thread)
+    await async_db.flush()
+
+    started_at = datetime.now(UTC) - timedelta(minutes=20)
+    session = ReadingSession(
+        user_id=default_user.id,
+        started_at=started_at,
+        ended_at=started_at + timedelta(minutes=10),
+    )
+    async_db.add(session)
+    await async_db.flush()
+
+    async_db.add_all(
+        [
+            Event(
+                type="snooze",
+                session_id=session.id,
+                thread_id=thread.id,
+                timestamp=started_at + timedelta(minutes=2),
+            ),
+            Event(
+                type="unsnooze",
+                session_id=session.id,
+                thread_id=thread.id,
+                timestamp=started_at + timedelta(minutes=3),
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    event_count = await async_db.scalar(
+        select(func.count()).select_from(Event).where(Event.session_id == session.id)
+    )
+    ended_at_before = session.ended_at
+
+    await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+
+    await async_db.refresh(session)
+    event_count_after = await async_db.scalar(
+        select(func.count()).select_from(Event).where(Event.session_id == session.id)
+    )
+    assert event_count_after == event_count
+    assert session.ended_at == ended_at_before
+    assert session.snoozed_thread_ids is None
 
 
 @pytest.mark.asyncio
@@ -422,5 +519,120 @@ async def test_missing_initial_state_evidence_does_not_invent_snoozes(
     assert summary["snoozed"] == ["Saga"]
 
 
+@pytest.mark.asyncio
+async def test_regression_session_1018010_snooze_events_followed_by_unsnooze(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Historical session /sessions/1018010 shows only its end-of-session state.
+
+    The reported session listed series whose SNOOZED events were later followed
+    by UNSNOOZED events. The summary must report the remaining snoozes while the
+    detailed timeline still shows every recorded action.
+    """
+    still_snoozed = _thread(default_user.id, "Saga", 1)
+    unsnoozed_first = _thread(default_user.id, "Monstress", 2)
+    unsnoozed_second = _thread(default_user.id, "Paper Girls", 3)
+    async_db.add_all([still_snoozed, unsnoozed_first, unsnoozed_second])
+    await async_db.flush()
+
+    started_at = datetime.now(UTC) - timedelta(minutes=40)
+    session = ReadingSession(
+        user_id=default_user.id,
+        started_at=started_at,
+        ended_at=started_at + timedelta(minutes=30),
+    )
+    async_db.add(session)
+    await async_db.flush()
+
+    async_db.add_all(
+        [
+            Event(
+                type="snooze",
+                session_id=session.id,
+                thread_id=still_snoozed.id,
+                timestamp=started_at + timedelta(minutes=1),
+            ),
+            Event(
+                type="snooze",
+                session_id=session.id,
+                thread_id=unsnoozed_first.id,
+                timestamp=started_at + timedelta(minutes=2),
+            ),
+            Event(
+                type="snooze",
+                session_id=session.id,
+                thread_id=unsnoozed_second.id,
+                timestamp=started_at + timedelta(minutes=3),
+            ),
+            Event(
+                type="unsnooze",
+                session_id=session.id,
+                thread_id=unsnoozed_first.id,
+                timestamp=started_at + timedelta(minutes=4),
+            ),
+            Event(
+                type="unsnooze",
+                session_id=session.id,
+                thread_id=unsnoozed_second.id,
+                timestamp=started_at + timedelta(minutes=5),
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["narrative_summary"]["snoozed"] == ["Saga"]
+
+    timeline_types = sorted(
+        event["type"] for event in body["events"] if event["type"] in {"snooze", "unsnooze"}
+    )
+    assert timeline_types == ["snooze", "snooze", "snooze", "unsnooze", "unsnooze"]
 
 
+@pytest.mark.asyncio
+async def test_saved_end_state_wins_over_incomplete_legacy_events(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A saved cleared state is not resurrected by legacy event replay.
+
+    Before #4209, manually selecting a snoozed series cleared the session snooze
+    without recording an unsnooze event. A historical session therefore keeps a
+    durable snooze action but an empty saved end state, and only the saved state
+    proves the series was released before the session ended.
+    """
+    thread = _thread(default_user.id, "Saga", 1)
+    async_db.add(thread)
+    await async_db.flush()
+
+    started_at = datetime.now(UTC) - timedelta(minutes=30)
+    session = ReadingSession(
+        user_id=default_user.id,
+        started_at=started_at,
+        ended_at=started_at + timedelta(minutes=20),
+        snoozed_thread_ids=[],
+    )
+    async_db.add(session)
+    await async_db.flush()
+
+    async_db.add(
+        Event(
+            type="snooze",
+            session_id=session.id,
+            thread_id=thread.id,
+            timestamp=started_at + timedelta(minutes=5),
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["narrative_summary"]["snoozed"] == []
+    # The historical snooze action itself is preserved in the timeline.
+    assert [event["type"] for event in body["events"]] == ["snooze"]

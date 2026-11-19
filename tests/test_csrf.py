@@ -58,7 +58,7 @@ async def test_safe_methods_do_not_require_csrf_token(auth_client: AsyncClient) 
     auth_client.headers.pop(CSRF_HEADER_NAME, None)
     auth_client.cookies.delete(CSRF_COOKIE_NAME)
 
-    response = await auth_client.get("/api/v1/sessions/")
+    response = await auth_client.get("/api/v1/sessions/current/")
 
     assert response.status_code == 200
 

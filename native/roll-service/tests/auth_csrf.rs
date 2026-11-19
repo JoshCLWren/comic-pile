@@ -10,20 +10,23 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, test_support, AppState};
+use comicpile_roll_service::{config::Config, router, AppState};
 use serde_json::Value;
 use std::sync::Arc;
 use tower::ServiceExt;
 
 fn state() -> Arc<AppState> {
-    Arc::new(test_support::test_app_state(
-        Config::from_lookup(|key| match key {
-            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
-            "RUST_ROLL_JWT_SECRET" => Some("synthetic-csrf-test-secret".into()),
-            _ => None,
-        })
+    Arc::new(
+        AppState::new(
+            Config::from_lookup(|key| match key {
+                "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+                "RUST_ROLL_JWT_SECRET" => Some("synthetic-csrf-test-secret".into()),
+                _ => None,
+            })
+            .unwrap(),
+        )
         .unwrap(),
-    ))
+    )
 }
 
 async fn status_and_body(

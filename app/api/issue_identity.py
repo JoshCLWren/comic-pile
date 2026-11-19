@@ -22,6 +22,13 @@ from app.services.cbl_source_public import public_cbl_repository
 router = APIRouter(prefix="/api/v1/issue-identity", tags=["issue-identity"])
 
 
+class CBLAdoptionPlanRequest(BaseModel):
+    """Optional per-series and per-entry choices for a read-only CBL plan."""
+
+    series_decisions: dict[str, bool] = Field(default_factory=dict)
+    entry_decisions: dict[str, bool] = Field(default_factory=dict)
+
+
 class CBLSourceFingerprintResponse(BaseModel):
     """Immutable source evidence needed to review and later accept a plan."""
 
@@ -164,4 +171,22 @@ async def api_cbl_adoption_preview(
 ) -> CBLAdoptionPreviewResponse:
     """Preview all CBL positions and their default read-only adoption choices."""
     report, plan = await preview_cbl_adoption(db, user_id=current_user.id, list_id=list_id)
+    return _adoption_payload(report, plan)
+
+
+@router.post("/cbl/{list_id}/adoption-plan", response_model=CBLAdoptionPreviewResponse)
+async def api_cbl_adoption_plan(
+    list_id: int,
+    request: CBLAdoptionPlanRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CBLAdoptionPreviewResponse:
+    """Calculate a dry-run CBL adoption plan with explicit selection overrides."""
+    report, plan = await preview_cbl_adoption(
+        db,
+        user_id=current_user.id,
+        list_id=list_id,
+        series_decisions=request.series_decisions,
+        entry_decisions=request.entry_decisions,
+    )
     return _adoption_payload(report, plan)

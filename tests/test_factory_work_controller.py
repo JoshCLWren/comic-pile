@@ -1912,13 +1912,9 @@ def test_reconcile_skips_manual_only_history_reads(
 ) -> None:
     """Manual-only holds never consume comment history calls or label writes."""
     now = 2_000_000_000
-    held_issue = _local_lease_item(
-        3129, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
-    )
+    held_issue = _local_lease_item(3129, now - 7200, "factory:building")
     held_issue["body"] = "<!-- factory-execution:manual-only -->\n"
-    ordinary_issue = _local_lease_item(
-        4684, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
-    )
+    ordinary_issue = _local_lease_item(4684, now - 7200, "factory:building")
     writes = _lease_reconcile_setup(
         controller, monkeypatch, [held_issue, ordinary_issue]
     )
@@ -1941,10 +1937,7 @@ def test_reconcile_expires_old_local_claim_without_trusted_marker(
     """No marker must not immortalize an abandoned implementation lease."""
     now = 2_000_000_000
     issue_row = _local_lease_item(
-        4684,
-        now - controller.LOCAL_LEASE_TTL_SECONDS - 1,
-        "factory:building",
-        "ralph-status:in-progress",
+        4684, now - 7200, "factory:building", "ralph-status:in-progress"
     )
     writes = _lease_reconcile_setup(controller, monkeypatch, [issue_row])
     assert controller.reconcile_stale_leases(now_epoch=now) == [4684]
@@ -1976,9 +1969,7 @@ def test_reconcile_uses_latest_trusted_marker_when_more_recent_than_update(
 ) -> None:
     """A fresh trusted progress record protects a legitimately active lease."""
     now = 2_000_000_000
-    item = _local_lease_item(
-        4625, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
-    )
+    item = _local_lease_item(4625, now - 7200, "factory:building")
     writes = _lease_reconcile_setup(
         controller, monkeypatch, [item], markers={4625: now - 120}
     )
@@ -1991,9 +1982,7 @@ def test_reconcile_keeps_blocked_issue_blocked_after_releasing_old_owner(
 ) -> None:
     """Blocked work loses ownership, not its product blocker."""
     now = 2_000_000_000
-    item = _local_lease_item(
-        3679, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "ralph-status:blocked"
-    )
+    item = _local_lease_item(3679, now - 7200, "ralph-status:blocked")
     writes = _lease_reconcile_setup(controller, monkeypatch, [item])
     assert controller.reconcile_stale_leases(now_epoch=now) == [3679]
     assert "factory:unowned" in writes[0]["labels"]
@@ -2001,29 +1990,11 @@ def test_reconcile_keeps_blocked_issue_blocked_after_releasing_old_owner(
     assert "ralph-status:blocked" in writes[0]["labels"]
 
 
-def _local_lease_ttl_seconds() -> int:
-    """Read the current local lease TTL from policy without test-global coupling."""
-    scripts_dir = str(REPO_ROOT / ".github" / "scripts")
-    added = scripts_dir not in sys.path
-    if added:
-        sys.path.insert(0, scripts_dir)
-    try:
-        import factory_work_policy as policy
-
-        return int(policy.LOCAL_LEASE_TTL_SECONDS)
-    finally:
-        if added:
-            sys.path.remove(scripts_dir)
-
-
 @pytest.mark.parametrize(
     ("live_labels", "live_updated"),
     [
         (("factory", "factory:local", "factory:building"), -120),
-        (
-            ("factory", "factory:62", "factory:building"),
-            -(_local_lease_ttl_seconds() + 1),
-        ),
+        (("factory", "factory:62", "factory:building"), -7200),
     ],
 )
 def test_reconcile_does_not_steal_a_refreshed_or_reassigned_lease(
@@ -2034,9 +2005,7 @@ def test_reconcile_does_not_steal_a_refreshed_or_reassigned_lease(
 ) -> None:
     """Recheck GitHub after snapshot selection, before the label write."""
     now = 2_000_000_000
-    item = _local_lease_item(
-        4684, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
-    )
+    item = _local_lease_item(4684, now - 7200, "factory:building")
     live = {
         4684: {
             "number": 4684,
@@ -2082,9 +2051,7 @@ def test_future_marker_does_not_immortalize_old_local_lease(
 ) -> None:
     """Malformed future markers must not prevent inactivity expiration."""
     now = 2_000_000_000
-    item = _local_lease_item(
-        4344, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
-    )
+    item = _local_lease_item(4344, now - 7200, "factory:building")
     writes = _lease_reconcile_setup(
         controller, monkeypatch, [item], markers={4344: now + 86400}
     )
@@ -2097,9 +2064,7 @@ def test_reconcile_does_not_guess_when_github_update_time_is_missing(
 ) -> None:
     """An absent updatedAt must not be replaced with ancient issue creation."""
     now = 2_000_000_000
-    item = _local_lease_item(
-        4549, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
-    )
+    item = _local_lease_item(4549, now - 7200, "factory:building")
     item.pop("updatedAt")
     item["createdAt"] = _lease_timestamp(now - 365 * 86400)
     writes = _lease_reconcile_setup(controller, monkeypatch, [item])
@@ -2115,16 +2080,8 @@ def test_canonical_pr_and_issue_share_local_lease_activity(
 ) -> None:
     """A local PR repair stays owned when progress appears on either side."""
     now = 2_000_000_000
-    issue_updated = (
-        now - 90
-        if fresh_side == "issue"
-        else now - controller.LOCAL_LEASE_TTL_SECONDS - 1
-    )
-    pr_updated = (
-        now - 90
-        if fresh_side == "pr"
-        else now - controller.LOCAL_LEASE_TTL_SECONDS - 1
-    )
+    issue_updated = now - 90 if fresh_side == "issue" else now - 7200
+    pr_updated = now - 90 if fresh_side == "pr" else now - 7200
     issue_row = _local_lease_item(4615, issue_updated, "factory:building")
     pr_row = _local_lease_item(4709, pr_updated, "factory:building")
     pr_row["body"] = "Closes #4615"
@@ -2144,9 +2101,8 @@ def test_expired_canonical_local_pair_releases_both_leases(
 ) -> None:
     """Once both issue and PR are inactive they must not hold each other forever."""
     now = 2_000_000_000
-    stale = now - controller.LOCAL_LEASE_TTL_SECONDS - 1
-    issue_row = _local_lease_item(4615, stale, "factory:building")
-    pr_row = _local_lease_item(4709, stale, "factory:review")
+    issue_row = _local_lease_item(4615, now - 7200, "factory:building")
+    pr_row = _local_lease_item(4709, now - 7200, "factory:review")
     pr_row["body"] = "Closes #4615"
     writes = _lease_reconcile_setup(
         controller, monkeypatch, [issue_row], [pr_row]
@@ -2162,9 +2118,7 @@ def test_unrelated_pr_activity_cannot_extend_an_inactive_issue_lease(
 ) -> None:
     """Only a canonical PR with the same owner may extend the issue lease."""
     now = 2_000_000_000
-    issue_row = _local_lease_item(
-        4549, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
-    )
+    issue_row = _local_lease_item(4549, now - 7200, "factory:building")
     unrelated = _local_lease_item(4709, now - 10, "factory:review")
     unrelated["body"] = "Closes #4615"
     writes = _lease_reconcile_setup(

@@ -52,6 +52,12 @@ class SetCurrentIssueResponse(BaseModel):
     reading_progress: str | None = None
 
 
+class OverrideRequest(BaseModel):
+    """Schema for manual thread override."""
+
+    thread_id: int
+
+
 class RollRecoveryPrerequisite(BaseModel):
     """One currently readable prerequisite recommended for a blocked active roll."""
 

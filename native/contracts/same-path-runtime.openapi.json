@@ -184,10 +184,10 @@
               "schema": {
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/RefreshTokenRequest"
+                    "type": "null"
                   },
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/RefreshTokenRequest"
                   }
                 ]
               }
@@ -908,10 +908,10 @@
               "schema": {
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/RefreshTokenRequest"
+                    "type": "null"
                   },
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/RefreshTokenRequest"
                   }
                 ]
               }
@@ -1123,130 +1123,6 @@
         ]
       }
     },
-    "/api/v1/cbl/{list_id}/adoption-commit": {
-      "post": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for committing an adoption plan.",
-        "operationId": "cbl_adoption_commit_documentation",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "description": "CBL source list identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CblAdoptionCommitRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Reading Plan created with adopted CBL issues",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblAdoptionCommitResponseWire"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Stale source fingerprint"
-          },
-          "422": {
-            "description": "Request failed validation"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit": {
-      "post": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for targeted adoption into an existing plan.",
-        "operationId": "cbl_targeted_adoption_commit_documentation",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "description": "CBL source list identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "plan_id",
-            "in": "path",
-            "description": "Owned continuity plan identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CblAdoptionCommitRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Reading Plan updated with adopted CBL issues",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblAdoptionCommitResponseWire"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Stale source fingerprint"
-          },
-          "422": {
-            "description": "Request failed validation or plan not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/comicvine/series/{comicvine_volume_id}/import-status": {
       "get": {
         "tags": [
@@ -1299,6 +1175,7 @@
         "operationId": "continuity_plans_list",
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1334,6 +1211,7 @@
         },
         "responses": {
           "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1368,6 +1246,7 @@
         },
         "responses": {
           "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1402,6 +1281,7 @@
         },
         "responses": {
           "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1436,7 +1316,9 @@
           }
         ],
         "responses": {
-          "204": {}
+          "204": {
+            "description": ""
+          }
         },
         "security": [
           {
@@ -1472,6 +1354,7 @@
         },
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1507,6 +1390,7 @@
         ],
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1550,6 +1434,7 @@
         },
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1582,7 +1467,9 @@
           }
         ],
         "responses": {
-          "204": {}
+          "204": {
+            "description": ""
+          }
         },
         "security": [
           {
@@ -1629,6 +1516,7 @@
         },
         "responses": {
           "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1670,7 +1558,9 @@
           }
         ],
         "responses": {
-          "204": {}
+          "204": {
+            "description": ""
+          }
         },
         "security": [
           {
@@ -1698,6 +1588,7 @@
         ],
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1743,6 +1634,7 @@
         },
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1778,6 +1670,7 @@
         ],
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1816,6 +1709,7 @@
         ],
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1843,6 +1737,7 @@
         "operationId": "continuity_rules_list",
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1878,6 +1773,7 @@
         },
         "responses": {
           "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1913,6 +1809,7 @@
         ],
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1956,6 +1853,7 @@
         },
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1988,7 +1886,9 @@
           }
         ],
         "responses": {
-          "204": {}
+          "204": {
+            "description": ""
+          }
         },
         "security": [
           {
@@ -3203,66 +3103,6 @@
         ]
       }
     },
-    "/api/v1/issue-identity/cbl-sources": {
-      "get": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for CBL source discovery.",
-        "operationId": "discover_cbl_source_lists_documentation",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "description": "Case-insensitive list-name filter, max 200 characters",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum results, 1-100 (default 25)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Active CBL source lists",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CblSourceListDiscoveryItem"
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Query failed validation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/issue-identity/cbl-sources/browse": {
       "get": {
         "tags": [
@@ -3318,6 +3158,7 @@
         ],
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3327,6 +3168,7 @@
             }
           },
           "400": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3336,6 +3178,7 @@
             }
           },
           "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3345,6 +3188,7 @@
             }
           },
           "422": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3354,6 +3198,7 @@
             }
           },
           "503": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3363,134 +3208,6 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}": {
-      "get": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for Comic Vine occurrence lookup.",
-        "operationId": "find_cbl_sources_by_comicvine_issue_documentation",
-        "parameters": [
-          {
-            "name": "comicvine_issue_id",
-            "in": "path",
-            "description": "Comic Vine issue identifier, max 100 characters",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Occurrence offset, 0-based (default 0)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Occurrence limit, 1-200 (default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Shared-catalog occurrences for the Comic Vine issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblComicvineOccurrencePage"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Identifier or query failed validation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/issue-identity/cbl-sources/compare": {
-      "post": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for CBL source comparison.",
-        "operationId": "compare_cbl_sources_documentation",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum ranked candidates, 1-100 (default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CblSourceComparisonRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Ranked coverage comparison",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblSourceComparisonResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request or query failed validation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
       }
     },
     "/api/v1/issue-identity/cbl-sources/folders": {
@@ -3515,6 +3232,7 @@
         ],
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3524,6 +3242,7 @@
             }
           },
           "400": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3533,6 +3252,7 @@
             }
           },
           "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3542,6 +3262,7 @@
             }
           },
           "422": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3551,6 +3272,7 @@
             }
           },
           "503": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3560,253 +3282,6 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/issue-identity/cbl-sources/{list_id}": {
-      "get": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for one CBL source list.",
-        "operationId": "get_cbl_source_list_documentation",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "description": "CBL source list identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Entry offset, 0-based (default 0)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Entry limit, 1-2000 (default 1000)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "CBL source list with a bounded page of entries",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblSourceListDetail"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "CBL source list not found"
-          },
-          "422": {
-            "description": "Query failed validation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/issue-identity/cbl/{list_id}/adoption-plan": {
-      "post": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for the CBL adoption plan.",
-        "operationId": "cbl_adoption_plan_documentation",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "description": "CBL source list identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CblAdoptionPlanRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Adoption preview for the active CBL list",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Inactive list or invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/issue-identity/cbl/{list_id}/adoption-preview": {
-      "get": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for the CBL adoption preview.",
-        "operationId": "cbl_adoption_preview_documentation",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "description": "CBL source list identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Adoption preview for the active CBL list",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "CBL source list not found or not active"
-          },
-          "422": {
-            "description": "Path failed validation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates": {
-      "get": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for reading-list CBL candidates.",
-        "operationId": "find_cbl_candidates_for_reading_list_documentation",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "description": "Owned custom CBL list identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum ranked candidates, 1-100 (default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Reading-list gaps and ranked CBL candidates",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblReadingListCandidatesResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Custom CBL not found"
-          },
-          "422": {
-            "description": "Query failed validation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
       }
     },
     "/api/v1/issues/{issue_id}": {
@@ -3883,10 +3358,10 @@
                 "schema": {
                   "oneOf": [
                     {
-                      "$ref": "#/components/schemas/IssueIntelligence"
+                      "type": "null"
                     },
                     {
-                      "type": "null"
+                      "$ref": "#/components/schemas/IssueIntelligence"
                     }
                   ]
                 }
@@ -3943,289 +3418,6 @@
           },
           "404": {
             "description": "Issue not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/issues/{issue_id}/reader-context": {
-      "get": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for reader context.",
-        "operationId": "issue_read_state_reader_context",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Bounded reader context",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReaderContextResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/issues/{issue_id}:markRead": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for `:markRead`.",
-        "operationId": "issue_read_state_mark_read",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Issue marked read and the thread counters refreshed"
-          },
-          "400": {
-            "description": "Issue is already marked as read"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/issues/{issue_id}:markUnread": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for `:markUnread`.",
-        "operationId": "issue_read_state_mark_unread",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Issue marked unread; a completed thread is reactivated"
-          },
-          "400": {
-            "description": "Issue is already marked as unread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/issues/{issue_id}:move": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for `:move`.",
-        "operationId": "issue_read_state_move",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueMoveRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Issue moved within its thread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue or anchor issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/issues:bulkMarkRead": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for `:bulkMarkRead`.",
-        "operationId": "issue_read_state_bulk_mark_read",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Every issue marked read atomically"
-          },
-          "400": {
-            "description": "An issue is already marked as read"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/issues:bulkMarkUnread": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for `:bulkMarkUnread`.",
-        "operationId": "issue_read_state_bulk_mark_unread",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Every issue marked unread atomically"
-          },
-          "400": {
-            "description": "An issue is already marked as unread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -4591,6 +3783,7 @@
         ],
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4633,6 +3826,7 @@
         },
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4701,6 +3895,7 @@
         ],
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4744,6 +3939,7 @@
         ],
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4787,6 +3983,7 @@
         ],
         "responses": {
           "200": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -5562,58 +4759,6 @@
         ]
       }
     },
-    "/api/v1/taste/discoveries": {
-      "get": {
-        "tags": [
-          "taste"
-        ],
-        "summary": "Documentation-only operation for the mounted discovery listing.",
-        "description": "Return ranked prompt-eligible taste discoveries for the authenticated reader. Wire parity with Python GET /api/v1/taste/discoveries: applies evidence/confidence/affinity/diversity gates, the 14-day prompting cooldown, dismissal suppression and creator-role dedup, and records last_prompted_at for exactly the returned signals.",
-        "operationId": "taste_discoveries_list",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum discoveries to return.",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "title": "Limit",
-              "description": "Maximum discoveries to return.",
-              "default": 3,
-              "maximum": 3,
-              "minimum": 1
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Ranked discoveries",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TasteDiscoveryListResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "422": {
-            "description": "limit is outside the allowed range"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/taste/discoveries/{signal_id}/dismiss": {
       "post": {
         "tags": [
@@ -5778,56 +4923,6 @@
         ]
       }
     },
-    "/api/v1/threads/{thread_id}/connected": {
-      "get": {
-        "tags": [
-          "dependencies"
-        ],
-        "summary": "Documentation-only operation for connected threads.",
-        "operationId": "thread_ordering_connected_threads",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Threads connected through dependencies",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadConnectedResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/threads/{thread_id}/dependencies": {
       "get": {
         "tags": [
@@ -5864,56 +4959,6 @@
           },
           "404": {
             "description": "Thread not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/threads/{thread_id}/dependency-order-check": {
-      "get": {
-        "tags": [
-          "dependencies"
-        ],
-        "summary": "Documentation-only operation for the dependency order check.",
-        "operationId": "thread_ordering_dependency_order_check",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Dependency edges that disagree with issue positions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadDependencyOrderCheckResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -6043,560 +5088,6 @@
           },
           "422": {
             "description": "Validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for issue creation.",
-        "operationId": "thread_issues_create",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueCreateRange"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Newly created issues",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadIssueCreateListResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid or fully duplicate range"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread or anchor issue not found"
-          },
-          "409": {
-            "description": "Issue number already exists"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/threads/{thread_id}/issues/creators": {
-      "get": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for the bulk creator read.",
-        "operationId": "thread_issues_creators",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Stored creator credits per mapped issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadIssueCreatorsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/threads/{thread_id}/issues:reorder": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for issue reordering.",
-        "operationId": "thread_issues_reorder",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueReorderRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Order rewritten"
-          },
-          "400": {
-            "description": "issue_ids must name every issue exactly once"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/threads/{thread_id}/issues:validateOrder": {
-      "get": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for issue order validation.",
-        "operationId": "thread_ordering_validate_order",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Human-readable ordering warnings",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueOrderValidationResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/threads/{thread_id}/reading-orders": {
-      "get": {
-        "tags": [
-          "reading-orders"
-        ],
-        "summary": "Documentation-only operation for reading orders containing a thread.",
-        "operationId": "thread_ordering_reading_orders",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Owned reading orders containing the thread",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/threads/{thread_id}:getBlockingInfo": {
-      "post": {
-        "tags": [
-          "dependencies"
-        ],
-        "summary": "Documentation-only operation for the single-thread blocking explanation.",
-        "operationId": "thread_ordering_get_blocking_info",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Blocked status and reasons",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BlockingExplanation"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/threads/{thread_id}:migrateToIssues": {
-      "post": {
-        "tags": [
-          "threads"
-        ],
-        "summary": "Documentation-only operation for the explicit migration.",
-        "operationId": "thread_issues_migrate",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MigrateToIssuesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Migrated thread",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Already migrated or inconsistent range"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/threads/{thread_id}:migrateToIssuesSimple": {
-      "post": {
-        "tags": [
-          "threads"
-        ],
-        "summary": "Documentation-only operation for the simplified migration.",
-        "operationId": "thread_issues_migrate_simple",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MigrateToIssuesSimpleRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Migrated thread",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Already migrated or issue cannot be created"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/threads/{thread_id}:setCurrentIssue": {
-      "post": {
-        "tags": [
-          "threads"
-        ],
-        "summary": "Documentation-only operation for correcting the current issue.",
-        "operationId": "thread_issues_set_current",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetCurrentIssueRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Corrected current issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SetCurrentIssueResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Thread inactive, untracked or issue unavailable"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread or issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/threads:getBlockingInfo": {
-      "post": {
-        "tags": [
-          "dependencies"
-        ],
-        "summary": "Documentation-only operation for the batch blocking explanation.",
-        "operationId": "thread_ordering_get_threads_blocking_info",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BatchBlockingExplanationRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Blocking explanations keyed by thread id",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BatchBlockingExplanationResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "One or more threads not found"
-          },
-          "422": {
-            "description": "Request validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -7022,6 +5513,64 @@
           }
         }
       },
+      "AnalyticsMetricsResponse": {
+        "type": "object",
+        "description": "Reading metrics and analytics for the authenticated user.",
+        "required": [
+          "total_threads",
+          "active_threads",
+          "completed_threads",
+          "completion_rate",
+          "average_session_hours",
+          "recent_sessions",
+          "event_stats",
+          "top_rated_threads"
+        ],
+        "properties": {
+          "active_threads": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "average_session_hours": {
+            "type": "number",
+            "format": "double"
+          },
+          "completed_threads": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "completion_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "event_stats": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "recent_sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecentSession"
+            }
+          },
+          "top_rated_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopRatedThread"
+            }
+          },
+          "total_threads": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "AssignTagRequest": {
         "type": "object",
         "required": [
@@ -7035,36 +5584,6 @@
           },
           "target_type": {
             "type": "string"
-          }
-        }
-      },
-      "BatchBlockingExplanationRequest": {
-        "type": "object",
-        "description": "Python `BatchBlockingExplanationRequest` (documentation schema).",
-        "required": [
-          "thread_ids"
-        ],
-        "properties": {
-          "thread_ids": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "maxItems": 500,
-            "minItems": 1
-          }
-        }
-      },
-      "BatchBlockingExplanationResponse": {
-        "type": "object",
-        "description": "Python `BatchBlockingExplanationResponse`.",
-        "required": [
-          "threads"
-        ],
-        "properties": {
-          "threads": {
-            "$ref": "#/components/schemas/OrderedExplanations"
           }
         }
       },
@@ -7083,64 +5602,6 @@
           "reading_list",
           "reader_prerequisite"
         ]
-      },
-      "BlockingDependency": {
-        "type": "object",
-        "description": "One blocking issue (Python `BlockingDependency`).",
-        "required": [
-          "thread_id",
-          "thread_title",
-          "issue_number",
-          "label"
-        ],
-        "properties": {
-          "issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        }
-      },
-      "BlockingExplanation": {
-        "type": "object",
-        "description": "Blocked status plus reader-language reasons (Python `BlockingExplanation`).",
-        "required": [
-          "is_blocked",
-          "blocking_reasons",
-          "blocking_dependencies"
-        ],
-        "properties": {
-          "blocking_dependencies": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BlockingDependency"
-            }
-          },
-          "blocking_reasons": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "is_blocked": {
-            "type": "boolean"
-          }
-        }
       },
       "BootstrapActiveThread": {
         "type": "object",
@@ -7430,7 +5891,6 @@
           "pool_reason",
           "snoozed_threads",
           "snoozed_count",
-          "snoozed_thread_ids",
           "skipped_thread_ids",
           "skipped_threads"
         ],
@@ -7438,10 +5898,10 @@
           "active_thread": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/BootstrapActiveThread"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapActiveThread"
               }
             ]
           },
@@ -7451,10 +5911,10 @@
           "last_read": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/BootstrapLastRead"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapLastRead"
               }
             ]
           },
@@ -7478,10 +5938,10 @@
           "roll_recovery": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/BootstrapRollRecovery"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapRollRecovery"
               }
             ]
           },
@@ -7515,20 +5975,11 @@
             "type": "integer",
             "format": "int64"
           },
-          "snoozed_thread_ids": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "description": "Every owned thread the session currently has snoozed, uncapped, so\nconsumers such as Queue can resolve per-row snooze state."
-          },
           "snoozed_threads": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/BootstrapThreadSummary"
-            },
-            "description": "Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`\nfor the complete snooze set."
+            }
           },
           "timezone": {
             "type": [
@@ -7919,10 +6370,10 @@
           "diagnostics": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/BugReportDiagnostics"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BugReportDiagnostics"
               }
             ]
           },
@@ -8299,939 +6750,6 @@
           }
         }
       },
-      "CblAdoptionCommitRequest": {
-        "type": "object",
-        "required": [
-          "content_hash",
-          "revision_sha"
-        ],
-        "properties": {
-          "content_hash": {
-            "type": "string"
-          },
-          "entry_decisions": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "revision_sha": {
-            "type": "string"
-          },
-          "series_decisions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CommitSeriesDecision"
-            }
-          },
-          "series_overrides": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CommitEntryOverride"
-            }
-          }
-        }
-      },
-      "CblAdoptionCommitResponseWire": {
-        "type": "object",
-        "required": [
-          "id",
-          "user_id",
-          "name",
-          "ordering_mode",
-          "lanes",
-          "nodes",
-          "created_at",
-          "updated_at",
-          "reused_positions",
-          "created_positions",
-          "excluded_positions",
-          "unresolved_positions"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "created_positions": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "excluded_positions": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "lanes": {
-            "type": "object"
-          },
-          "name": {
-            "type": "string"
-          },
-          "nodes": {
-            "type": "object"
-          },
-          "ordering_mode": {
-            "type": "string"
-          },
-          "reused_positions": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "unresolved_positions": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "user_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "CblAdoptionEntryResponse": {
-        "type": "object",
-        "required": [
-          "collection_excluded",
-          "collection_exclusion_ids",
-          "cbl_position",
-          "cbl_entry_id",
-          "series_name",
-          "issue_number",
-          "series_group_id",
-          "adoption_class",
-          "adoption_decision",
-          "adopted",
-          "resolution_status",
-          "is_duplicate_identity"
-        ],
-        "properties": {
-          "adopted": {
-            "type": "boolean"
-          },
-          "adoption_class": {
-            "type": "string"
-          },
-          "adoption_decision": {
-            "type": "string"
-          },
-          "canonical_issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "cbl_entry_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "cbl_position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "collection_excluded": {
-            "type": "boolean"
-          },
-          "collection_exclusion_ids": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "collection_exclusion_reason": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "comicvine_issue_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "comicvine_series_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "is_duplicate_identity": {
-            "type": "boolean"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "publication_year": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "read_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "read_status": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "resolution_status": {
-            "type": "string"
-          },
-          "resolved_issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "series_external_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "series_group_id": {
-            "type": "string"
-          },
-          "series_name": {
-            "type": "string"
-          },
-          "series_provider": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "volume_year": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "CblAdoptionPlanRequest": {
-        "type": "object",
-        "properties": {
-          "entry_decisions": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "boolean"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "series_decisions": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "boolean"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "CblAdoptionPreviewResponse": {
-        "type": "object",
-        "required": [
-          "source",
-          "total_positions",
-          "entries",
-          "summary"
-        ],
-        "properties": {
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CblAdoptionEntryResponse"
-            }
-          },
-          "source": {
-            "$ref": "#/components/schemas/CblSourceFingerprintResponse"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/CblAdoptionSummaryResponse"
-          },
-          "total_positions": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "CblAdoptionSummaryResponse": {
-        "type": "object",
-        "required": [
-          "reused_existing_count",
-          "missing_would_create_count",
-          "excluded_count",
-          "unresolved_count",
-          "awaiting_opt_in_count",
-          "final_adopted_count",
-          "final_adopted_order",
-          "reused_existing_positions",
-          "missing_would_create_positions",
-          "excluded_positions",
-          "unresolved_positions",
-          "awaiting_opt_in_positions"
-        ],
-        "properties": {
-          "awaiting_opt_in_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "awaiting_opt_in_positions": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "excluded_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "excluded_positions": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "final_adopted_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "final_adopted_order": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "missing_would_create_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "missing_would_create_positions": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "reused_existing_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "reused_existing_positions": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "unresolved_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "unresolved_positions": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        }
-      },
-      "CblComicvineOccurrence": {
-        "type": "object",
-        "description": "One Comic Vine occurrence in the shared CBL catalog.",
-        "required": [
-          "list_id",
-          "list_name",
-          "source_path",
-          "source_repository",
-          "source_ref",
-          "revision_sha",
-          "position",
-          "series_name",
-          "issue_number",
-          "comicvine_issue_id"
-        ],
-        "properties": {
-          "comicvine_issue_id": {
-            "type": "string"
-          },
-          "comicvine_volume_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "list_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "list_name": {
-            "type": "string"
-          },
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "publication_year": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "revision_sha": {
-            "type": "string"
-          },
-          "series_name": {
-            "type": "string"
-          },
-          "source_path": {
-            "type": "string"
-          },
-          "source_ref": {
-            "type": "string"
-          },
-          "source_repository": {
-            "type": "string"
-          },
-          "volume_year": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "CblComicvineOccurrencePage": {
-        "type": "object",
-        "description": "A page of Comic Vine occurrences with shared-catalog totals.",
-        "required": [
-          "comicvine_issue_id",
-          "occurrences_total",
-          "lists_total",
-          "occurrences_offset",
-          "occurrences_limit",
-          "occurrences"
-        ],
-        "properties": {
-          "comicvine_issue_id": {
-            "type": "string"
-          },
-          "lists_total": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "occurrences": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CblComicvineOccurrence"
-            }
-          },
-          "occurrences_limit": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "occurrences_offset": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "occurrences_total": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "CblReadingListCandidatesResponse": {
-        "type": "object",
-        "required": [
-          "list_id",
-          "list_name",
-          "input_entry_count",
-          "input_confirmed_total",
-          "input_missing_count",
-          "input_conflict_count",
-          "input_ids",
-          "entries",
-          "candidates_total",
-          "candidates"
-        ],
-        "properties": {
-          "candidates": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CblSourceComparisonMatch"
-            }
-          },
-          "candidates_total": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CblReadingListInputEntry"
-            }
-          },
-          "input_confirmed_total": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "input_conflict_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "input_entry_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "input_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "input_missing_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "list_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "list_name": {
-            "type": "string"
-          }
-        }
-      },
-      "CblReadingListInputEntry": {
-        "type": "object",
-        "required": [
-          "position",
-          "issue_id",
-          "series_name",
-          "issue_number",
-          "comicvine_issue_ids",
-          "identity_status"
-        ],
-        "properties": {
-          "comicvine_issue_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "comicvine_issue_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "identity_status": {
-            "type": "string"
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "series_name": {
-            "type": "string"
-          }
-        }
-      },
-      "CblSourceComparisonMatch": {
-        "type": "object",
-        "required": [
-          "list_id",
-          "list_name",
-          "source_path",
-          "source_repository",
-          "source_ref",
-          "revision_sha",
-          "entries_total",
-          "distinct_source_issues",
-          "matched_input_count",
-          "input_total",
-          "matched_occurrence_count",
-          "duplicate_match_count",
-          "source_only_issue_count",
-          "input_coverage_percentage",
-          "source_coverage_percentage",
-          "order_status",
-          "order_pair_count",
-          "order_disagreement_count",
-          "matched_input_ids",
-          "missing_input_ids",
-          "score"
-        ],
-        "properties": {
-          "declared_issue_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "distinct_source_issues": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "duplicate_match_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "entries_total": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "input_coverage_percentage": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "input_total": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "list_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "list_name": {
-            "type": "string"
-          },
-          "matched_input_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "matched_input_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "matched_occurrence_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "missing_input_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "order_disagreement_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "order_pair_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "order_status": {
-            "type": "string"
-          },
-          "revision_sha": {
-            "type": "string"
-          },
-          "score": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "source_coverage_percentage": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "source_only_issue_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "source_path": {
-            "type": "string"
-          },
-          "source_ref": {
-            "type": "string"
-          },
-          "source_repository": {
-            "type": "string"
-          }
-        }
-      },
-      "CblSourceComparisonRequest": {
-        "type": "object",
-        "required": [
-          "comicvine_issue_ids"
-        ],
-        "properties": {
-          "comicvine_issue_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "CblSourceComparisonResponse": {
-        "type": "object",
-        "required": [
-          "comicvine_issue_ids",
-          "input_total",
-          "candidates_total",
-          "candidates"
-        ],
-        "properties": {
-          "candidates": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CblSourceComparisonMatch"
-            }
-          },
-          "candidates_total": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "comicvine_issue_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "input_total": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "CblSourceEntryDetail": {
-        "type": "object",
-        "description": "One ordered source occurrence inside a CBL list.",
-        "required": [
-          "position",
-          "series_name",
-          "issue_number"
-        ],
-        "properties": {
-          "comicvine_issue_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "comicvine_volume_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "publication_year": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "series_name": {
-            "type": "string"
-          },
-          "volume_year": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "CblSourceFingerprintResponse": {
-        "type": "object",
-        "required": [
-          "source_list_id",
-          "source_repository",
-          "source_path",
-          "content_hash",
-          "revision_sha"
-        ],
-        "properties": {
-          "content_hash": {
-            "type": "string"
-          },
-          "revision_sha": {
-            "type": "string"
-          },
-          "source_list_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "source_path": {
-            "type": "string"
-          },
-          "source_repository": {
-            "type": "string"
-          }
-        }
-      },
-      "CblSourceListDetail": {
-        "type": "object",
-        "description": "One active CBL source list with one bounded page of ordered occurrences.",
-        "required": [
-          "id",
-          "name",
-          "source_path",
-          "source_repository",
-          "source_ref",
-          "content_hash",
-          "revision_sha",
-          "entries_total",
-          "entries_offset",
-          "entries_limit",
-          "entries"
-        ],
-        "properties": {
-          "content_hash": {
-            "type": "string"
-          },
-          "declared_issue_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CblSourceEntryDetail"
-            }
-          },
-          "entries_limit": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "entries_offset": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "entries_total": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "name": {
-            "type": "string"
-          },
-          "revision_sha": {
-            "type": "string"
-          },
-          "source_path": {
-            "type": "string"
-          },
-          "source_ref": {
-            "type": "string"
-          },
-          "source_repository": {
-            "type": "string"
-          }
-        }
-      },
-      "CblSourceListDiscoveryItem": {
-        "type": "object",
-        "description": "Reader-safe summary of one active persisted CBL source list.",
-        "required": [
-          "id",
-          "name",
-          "source_path",
-          "source_repository",
-          "content_hash",
-          "revision_sha"
-        ],
-        "properties": {
-          "content_hash": {
-            "type": "string"
-          },
-          "declared_issue_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "name": {
-            "type": "string"
-          },
-          "revision_sha": {
-            "type": "string"
-          },
-          "source_path": {
-            "type": "string",
-            "description": "Raw stored path: Python's discovery response deliberately returns the\nunprojected `source_path` (see `list_cbl_source_previews`)."
-          },
-          "source_repository": {
-            "type": "string"
-          }
-        }
-      },
       "ComicPileMatch": {
         "type": "object",
         "description": "Owner-scoped local representations of a related ComicVine issue.",
@@ -9296,22 +6814,6 @@
           "tracked_issue_count": {
             "type": "integer",
             "format": "int32"
-          }
-        }
-      },
-      "CommitEntryOverride": {
-        "type": "object",
-        "required": [
-          "cbl_position",
-          "decision"
-        ],
-        "properties": {
-          "cbl_position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "decision": {
-            "type": "string"
           }
         }
       },
@@ -9383,21 +6885,6 @@
           }
         }
       },
-      "CommitSeriesDecision": {
-        "type": "object",
-        "required": [
-          "series_name",
-          "decision"
-        ],
-        "properties": {
-          "decision": {
-            "type": "string"
-          },
-          "series_name": {
-            "type": "string"
-          }
-        }
-      },
       "CommitSeriesMapping": {
         "type": "object",
         "required": [
@@ -9417,42 +6904,6 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
-          }
-        }
-      },
-      "ConnectedThreadInfo": {
-        "type": "object",
-        "description": "Python `ConnectedThreadInfo`.",
-        "required": [
-          "thread_id",
-          "title",
-          "connection_type",
-          "dependency_id",
-          "is_circular"
-        ],
-        "properties": {
-          "connection_type": {
-            "type": "string"
-          },
-          "dependency_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "is_circular": {
-            "type": "boolean"
-          },
-          "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "title": {
             "type": "string"
           }
         }
@@ -9493,8 +6944,6 @@
           "ordering_mode",
           "lane_count",
           "step_count",
-          "source_paths",
-          "source_names",
           "updated_at"
         ],
         "properties": {
@@ -9535,18 +6984,7 @@
           "node_type",
           "ref_id",
           "lane_id",
-          "position",
-          "label",
-          "source_role",
-          "source_confidence",
-          "source_explanation",
-          "source_paths",
-          "source_cbl_placements",
-          "source_story_arc_ids",
-          "source_target_story_arc_id",
-          "reader_role",
-          "reader_optional",
-          "convergence_gate"
+          "position"
         ],
         "properties": {
           "checkpoint_target_ref_id": {
@@ -9664,8 +7102,6 @@
           "user_id",
           "name",
           "ordering_mode",
-          "lanes",
-          "nodes",
           "created_at",
           "updated_at"
         ],
@@ -9691,47 +7127,6 @@
             "items": {
               "$ref": "#/components/schemas/ContinuityPlanNode"
             }
-          },
-          "ordering_mode": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "user_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "ContinuityPlanResponseWire": {
-        "type": "object",
-        "required": [
-          "id",
-          "user_id",
-          "name",
-          "ordering_mode",
-          "lanes",
-          "nodes",
-          "created_at",
-          "updated_at"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "lanes": {
-            "type": "object"
-          },
-          "name": {
-            "type": "string"
-          },
-          "nodes": {
-            "type": "object"
           },
           "ordering_mode": {
             "type": "string"
@@ -10079,831 +7474,6 @@
           }
         }
       },
-      "CreatorComparisonCoverage": {
-        "type": "object",
-        "required": [
-          "rated_issues_total",
-          "rated_issues_with_creator_metadata",
-          "ratings_complete",
-          "read_unrated_issues_total",
-          "read_unrated_issues_with_creator_metadata",
-          "read_unrated_complete",
-          "unread_issues_total",
-          "unread_issues_with_creator_metadata",
-          "upcoming_complete"
-        ],
-        "properties": {
-          "rated_issues_total": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "rated_issues_with_creator_metadata": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "ratings_complete": {
-            "type": "boolean"
-          },
-          "read_unrated_complete": {
-            "type": "boolean"
-          },
-          "read_unrated_issues_total": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "read_unrated_issues_with_creator_metadata": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "unread_issues_total": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "unread_issues_with_creator_metadata": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "upcoming_complete": {
-            "type": "boolean"
-          }
-        }
-      },
-      "CreatorComparisonIssueRef": {
-        "type": "object",
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "issue_number",
-          "status"
-        ],
-        "properties": {
-          "issue_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        }
-      },
-      "CreatorComparisonItem": {
-        "type": "object",
-        "required": [
-          "canonical_creator_key",
-          "display_name",
-          "normalized_roles",
-          "ratings_count",
-          "rating_distribution",
-          "role_stats",
-          "strongest_series",
-          "min_rated_issues_per_series",
-          "unread_upcoming_count",
-          "read_unrated_count",
-          "unread_issue_refs",
-          "read_unrated_issue_refs",
-          "max_issue_refs_per_group",
-          "insufficient_data"
-        ],
-        "properties": {
-          "average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "canonical_creator_key": {
-            "type": "string"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "insufficient_data": {
-            "type": "boolean"
-          },
-          "max_issue_refs_per_group": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "median_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "min_rated_issues_per_series": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "normalized_roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "rating_distribution": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "ratings_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "read_unrated_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "read_unrated_issue_refs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorComparisonIssueRef"
-            }
-          },
-          "role_stats": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorComparisonRoleStat"
-            }
-          },
-          "strongest_series": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorComparisonSeriesAggregate"
-            }
-          },
-          "top_rating_rate": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "unread_issue_refs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorComparisonIssueRef"
-            }
-          },
-          "unread_upcoming_count": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "CreatorComparisonResponse": {
-        "type": "object",
-        "required": [
-          "comparisons",
-          "coverage",
-          "insufficient_data_keys"
-        ],
-        "properties": {
-          "comparisons": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/CreatorComparisonItem"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "coverage": {
-            "$ref": "#/components/schemas/CreatorComparisonCoverage"
-          },
-          "insufficient_data_keys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "CreatorComparisonRoleStat": {
-        "type": "object",
-        "required": [
-          "role",
-          "issue_count",
-          "rated_issue_count"
-        ],
-        "properties": {
-          "average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "rated_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "role": {
-            "type": "string"
-          }
-        }
-      },
-      "CreatorComparisonSeriesAggregate": {
-        "type": "object",
-        "required": [
-          "thread_id",
-          "thread_title",
-          "issue_count",
-          "rated_issue_count",
-          "average_rating"
-        ],
-        "properties": {
-          "average_rating": {
-            "type": "number",
-            "format": "double"
-          },
-          "issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "rated_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        }
-      },
-      "CreatorCredit": {
-        "type": "object",
-        "description": "One credited creator (Python `ComicVineCreator`).",
-        "required": [
-          "name",
-          "roles"
-        ],
-        "properties": {
-          "creator_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "name": {
-            "type": "string"
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "CreatorDetailResponse": {
-        "type": "object",
-        "required": [
-          "summary",
-          "coverage",
-          "role_stats",
-          "series_groups",
-          "series_groups_total",
-          "series_groups_complete",
-          "rated_issues",
-          "rated_population_scope",
-          "headline_roles",
-          "read_unrated_issues",
-          "upcoming_issues"
-        ],
-        "properties": {
-          "coverage": {
-            "$ref": "#/components/schemas/CreatorSummaryCoverage"
-          },
-          "headline_roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "insights": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/CreatorInsights"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "rated_issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorIssueRow"
-            }
-          },
-          "rated_population_scope": {
-            "type": "string"
-          },
-          "rating_distribution": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/CreatorRatingDistribution"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "read_unrated_issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorIssueRow"
-            }
-          },
-          "role_stats": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorRoleStat"
-            }
-          },
-          "series_groups": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorSeriesGroup"
-            }
-          },
-          "series_groups_complete": {
-            "type": "boolean"
-          },
-          "series_groups_total": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/CreatorSummaryItem"
-          },
-          "upcoming_issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorIssueRow"
-            }
-          }
-        }
-      },
-      "CreatorDiscoveryCoverage": {
-        "type": "object",
-        "required": [
-          "rated_issues_total",
-          "rated_issues_with_creator_metadata",
-          "ratings_complete"
-        ],
-        "properties": {
-          "rated_issues_total": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "rated_issues_with_creator_metadata": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "ratings_complete": {
-            "type": "boolean"
-          }
-        }
-      },
-      "CreatorDiscoveryEntry": {
-        "type": "object",
-        "required": [
-          "canonical_creator_key",
-          "display_name",
-          "normalized_roles",
-          "rated_issue_count",
-          "top_rating_count",
-          "unread_issue_count",
-          "read_unrated_issue_count",
-          "trend_sample_count",
-          "reasons"
-        ],
-        "properties": {
-          "average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "canonical_creator_key": {
-            "type": "string"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "earlier_average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "max_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "median_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "min_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "normalized_roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "rated_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "rating_spread": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "rating_stddev": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "read_unrated_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "reasons": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorDiscoveryReason"
-            }
-          },
-          "recent_average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "top_rating_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "top_rating_rate": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "trend_delta": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "trend_direction": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "trend_sample_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "unread_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "CreatorDiscoveryReason": {
-        "type": "object",
-        "required": [
-          "metric",
-          "label",
-          "value",
-          "threshold",
-          "comparison"
-        ],
-        "properties": {
-          "comparison": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "metric": {
-            "type": "string"
-          },
-          "threshold": {
-            "type": "number",
-            "format": "double"
-          },
-          "value": {
-            "type": "number",
-            "format": "double"
-          }
-        }
-      },
-      "CreatorDiscoveryResponse": {
-        "type": "object",
-        "required": [
-          "views",
-          "coverage",
-          "minimum_reliable_sample",
-          "max_entries_per_view"
-        ],
-        "properties": {
-          "coverage": {
-            "$ref": "#/components/schemas/CreatorDiscoveryCoverage"
-          },
-          "max_entries_per_view": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "minimum_reliable_sample": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "views": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorDiscoveryView"
-            }
-          }
-        }
-      },
-      "CreatorDiscoveryView": {
-        "type": "object",
-        "required": [
-          "mode",
-          "title",
-          "description",
-          "min_sample",
-          "total",
-          "truncated",
-          "max_entries",
-          "entries"
-        ],
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorDiscoveryEntry"
-            }
-          },
-          "max_entries": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "min_sample": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "mode": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "total": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "truncated": {
-            "type": "boolean"
-          }
-        }
-      },
-      "CreatorInsights": {
-        "type": "object",
-        "required": [
-          "min_series_sample",
-          "series_sample_met",
-          "excluded_incomplete_series_count",
-          "individual_issue_limit",
-          "individual_issues_combined",
-          "highest_rated_issues",
-          "lowest_rated_issues"
-        ],
-        "properties": {
-          "excluded_incomplete_series_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "highest_rated_issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorIssueInsight"
-            }
-          },
-          "individual_issue_limit": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "individual_issues_combined": {
-            "type": "boolean"
-          },
-          "lowest_rated_issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorIssueInsight"
-            }
-          },
-          "min_series_sample": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "most_rated_series": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/CreatorSeriesInsight"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "series_message": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "series_sample_met": {
-            "type": "boolean"
-          },
-          "strongest_series": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/CreatorSeriesInsight"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "weakest_series": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/CreatorSeriesInsight"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
-      "CreatorIssueInsight": {
-        "type": "object",
-        "required": [
-          "issue_id",
-          "issue_number",
-          "thread_id",
-          "thread_title",
-          "effective_rating",
-          "roles",
-          "sort_key"
-        ],
-        "properties": {
-          "effective_rating": {
-            "type": "number",
-            "format": "double"
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "sort_key": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        }
-      },
-      "CreatorIssueRow": {
-        "type": "object",
-        "required": [
-          "issue_id",
-          "issue_number",
-          "thread_id",
-          "thread_title",
-          "status",
-          "roles",
-          "sort_key"
-        ],
-        "properties": {
-          "effective_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "rating_timestamp": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "sort_key": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        }
-      },
       "CreatorListItem": {
         "type": "object",
         "required": [
@@ -10964,555 +7534,6 @@
           "offset": {
             "type": "integer",
             "format": "int64"
-          },
-          "total": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "CreatorMetricCalculation": {
-        "type": "object",
-        "required": [
-          "formula",
-          "numerator"
-        ],
-        "properties": {
-          "denominator": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "formula": {
-            "type": "string"
-          },
-          "numerator": {
-            "type": "string"
-          },
-          "percentage": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "CreatorMetricDrilldown": {
-        "type": "object",
-        "required": [
-          "metric_type",
-          "creator_key",
-          "calculation",
-          "total_count",
-          "included_issues",
-          "excluded_issues",
-          "pagination"
-        ],
-        "properties": {
-          "bucket_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "bucket_percentage": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "calculation": {
-            "$ref": "#/components/schemas/CreatorMetricCalculation"
-          },
-          "creator_key": {
-            "type": "string"
-          },
-          "excluded_issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorMetricIssue"
-            }
-          },
-          "included_issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorMetricIssue"
-            }
-          },
-          "metric_type": {
-            "type": "string"
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/CreatorMetricPagination"
-          },
-          "rating_value": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "role": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "role_average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "role_issue_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "role_rated_issue_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "series_average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "series_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "series_issue_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "series_rated_issue_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "series_title": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "total_count": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "CreatorMetricIssue": {
-        "type": "object",
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "issue_number",
-          "status",
-          "creator_roles"
-        ],
-        "properties": {
-          "creator_roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "effective_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "effective_rating_source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "effective_rating_timestamp": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "exclusion_reason": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "missing_rating_cause": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        }
-      },
-      "CreatorMetricPagination": {
-        "type": "object",
-        "required": [
-          "page",
-          "page_size",
-          "total_pages"
-        ],
-        "properties": {
-          "next_page_token": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "page": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "page_size": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "total_pages": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "CreatorRatingBucket": {
-        "type": "object",
-        "required": [
-          "rating",
-          "count"
-        ],
-        "properties": {
-          "count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "rating": {
-            "type": "number",
-            "format": "double"
-          }
-        }
-      },
-      "CreatorRatingDistribution": {
-        "type": "object",
-        "required": [
-          "buckets",
-          "sample_count",
-          "mean_rating",
-          "median_rating",
-          "min_rating",
-          "max_rating"
-        ],
-        "properties": {
-          "buckets": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorRatingBucket"
-            }
-          },
-          "max_rating": {
-            "type": "number",
-            "format": "double"
-          },
-          "mean_rating": {
-            "type": "number",
-            "format": "double"
-          },
-          "median_rating": {
-            "type": "number",
-            "format": "double"
-          },
-          "min_rating": {
-            "type": "number",
-            "format": "double"
-          },
-          "sample_count": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "CreatorRoleStat": {
-        "type": "object",
-        "required": [
-          "role",
-          "issue_count",
-          "rated_issue_count"
-        ],
-        "properties": {
-          "average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "rated_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "role": {
-            "type": "string"
-          }
-        }
-      },
-      "CreatorSeriesGroup": {
-        "type": "object",
-        "required": [
-          "series_key",
-          "thread_id",
-          "thread_title",
-          "rated_issue_count",
-          "roles",
-          "unread_issue_count",
-          "read_unrated_issue_count",
-          "metadata_complete",
-          "sort_key",
-          "population_scope"
-        ],
-        "properties": {
-          "average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "highest_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "lowest_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "metadata_complete": {
-            "type": "boolean"
-          },
-          "population_scope": {
-            "type": "string"
-          },
-          "rated_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "read_unrated_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "series_key": {
-            "type": "string"
-          },
-          "sort_key": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_title": {
-            "type": "string"
-          },
-          "unread_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "CreatorSeriesInsight": {
-        "type": "object",
-        "required": [
-          "series_key",
-          "thread_id",
-          "thread_title",
-          "rated_issue_count",
-          "average_rating",
-          "lowest_rating",
-          "highest_rating",
-          "roles",
-          "metadata_complete",
-          "sort_key"
-        ],
-        "properties": {
-          "average_rating": {
-            "type": "number",
-            "format": "double"
-          },
-          "highest_rating": {
-            "type": "number",
-            "format": "double"
-          },
-          "lowest_rating": {
-            "type": "number",
-            "format": "double"
-          },
-          "metadata_complete": {
-            "type": "boolean"
-          },
-          "rated_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "series_key": {
-            "type": "string"
-          },
-          "sort_key": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        }
-      },
-      "CreatorSeriesIssueListResponse": {
-        "type": "object",
-        "required": [
-          "series_key",
-          "thread_id",
-          "thread_title",
-          "roles",
-          "rated_issue_count",
-          "metadata_complete",
-          "population_scope",
-          "issues",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "properties": {
-          "average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "highest_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorIssueRow"
-            }
-          },
-          "limit": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "lowest_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "metadata_complete": {
-            "type": "boolean"
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "offset": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "population_scope": {
-            "type": "string"
-          },
-          "rated_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "series_key": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_title": {
-            "type": "string"
           },
           "total": {
             "type": "integer",
@@ -11631,225 +7652,6 @@
           "upcoming_count": {
             "type": "integer",
             "format": "int64"
-          }
-        }
-      },
-      "CreatorTeamChemistryResponse": {
-        "type": "object",
-        "required": [
-          "pairs",
-          "pairs_total",
-          "min_shared_team_sample",
-          "max_ranked_pairs",
-          "coverage"
-        ],
-        "properties": {
-          "coverage": {
-            "$ref": "#/components/schemas/CreatorTeamCoverage"
-          },
-          "max_ranked_pairs": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "min_shared_team_sample": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "pairs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorTeamPair"
-            }
-          },
-          "pairs_total": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "CreatorTeamCoverage": {
-        "type": "object",
-        "required": [
-          "rated_issues_total",
-          "rated_issues_with_creator_metadata",
-          "ratings_complete"
-        ],
-        "properties": {
-          "rated_issues_total": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "rated_issues_with_creator_metadata": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "ratings_complete": {
-            "type": "boolean"
-          }
-        }
-      },
-      "CreatorTeamIssueRef": {
-        "type": "object",
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "issue_number",
-          "status"
-        ],
-        "properties": {
-          "effective_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        }
-      },
-      "CreatorTeamMember": {
-        "type": "object",
-        "required": [
-          "canonical_creator_key",
-          "display_name",
-          "roles",
-          "baseline_rated_count"
-        ],
-        "properties": {
-          "baseline_average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "baseline_rated_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "canonical_creator_key": {
-            "type": "string"
-          },
-          "difference_from_baseline": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "CreatorTeamPair": {
-        "type": "object",
-        "required": [
-          "pair_key",
-          "creators",
-          "shared_rated_issue_count",
-          "shared_rating_distribution",
-          "shared_series",
-          "shared_issue_refs",
-          "max_shared_issue_refs"
-        ],
-        "properties": {
-          "creators": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorTeamMember"
-            }
-          },
-          "max_shared_issue_refs": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "pair_key": {
-            "type": "string"
-          },
-          "shared_average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "shared_issue_refs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorTeamIssueRef"
-            }
-          },
-          "shared_median_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "shared_rated_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "shared_rating_distribution": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "shared_series": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorTeamSeriesRef"
-            }
-          }
-        }
-      },
-      "CreatorTeamSeriesRef": {
-        "type": "object",
-        "required": [
-          "thread_id",
-          "thread_title",
-          "shared_issue_count"
-        ],
-        "properties": {
-          "shared_issue_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "thread_title": {
-            "type": "string"
           }
         }
       },
@@ -12393,61 +8195,6 @@
           }
         }
       },
-      "DependencyOrderConflict": {
-        "type": "object",
-        "description": "Python `DependencyOrderConflict`.",
-        "required": [
-          "issue_id",
-          "issue_number",
-          "position",
-          "dependency_requires_before",
-          "conflict"
-        ],
-        "properties": {
-          "conflict": {
-            "type": "string"
-          },
-          "dependency_requires_before": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DependencyOrderRequirement"
-            }
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "DependencyOrderRequirement": {
-        "type": "object",
-        "description": "Python `DependencyOrderRequirement`.",
-        "required": [
-          "issue_id",
-          "issue_number",
-          "position"
-        ],
-        "properties": {
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "DependencyResponse": {
         "type": "object",
         "description": "Issue-level dependency response mirroring the Python `DependencyResponse`\nfields the Dependency Builder consumes (`warning`, labels, thread ids).",
@@ -12582,14 +8329,16 @@
         ],
         "properties": {
           "height": {
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           "pixelRatio": {
             "type": "number",
             "format": "double"
           },
           "width": {
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -12602,10 +8351,12 @@
         ],
         "properties": {
           "x": {
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           "y": {
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -12618,10 +8369,12 @@
         ],
         "properties": {
           "height": {
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           "width": {
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -12739,10 +8492,10 @@
           "updated_item": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/IdentityInboxItem"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/IdentityInboxItem"
               }
             ]
           }
@@ -13086,24 +8839,6 @@
           }
         }
       },
-      "IssueBulkRequest": {
-        "type": "object",
-        "description": "Request body for the bulk read-state operations.",
-        "required": [
-          "issue_ids"
-        ],
-        "properties": {
-          "issue_ids": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "maxItems": 100,
-            "minItems": 1
-          }
-        }
-      },
       "IssueCard": {
         "type": "object",
         "required": [
@@ -13206,47 +8941,6 @@
               "$ref": "#/components/schemas/IssueCard"
             },
             "description": "Owned cards in first-request order; foreign or missing IDs are omitted."
-          }
-        }
-      },
-      "IssueCreateRange": {
-        "type": "object",
-        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues`.",
-        "required": [
-          "issue_range"
-        ],
-        "properties": {
-          "insert_after_issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Insert after this issue id; omit for natural placement, null to append."
-          },
-          "issue_range": {
-            "type": "string",
-            "description": "Range such as `1-25` or `1, 3, 5-7`."
-          }
-        }
-      },
-      "IssueCreatorsEntry": {
-        "type": "object",
-        "description": "Stored creator credits for one issue (Python `IssueCreatorsEntry`).",
-        "required": [
-          "issue_id",
-          "creators"
-        ],
-        "properties": {
-          "creators": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CreatorCredit"
-            }
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
           }
         }
       },
@@ -13471,24 +9165,6 @@
           }
         }
       },
-      "IssueMoveRequest": {
-        "type": "object",
-        "description": "Request body for `POST /api/v1/issues/{issue_id}:move`.",
-        "required": [
-          "after_issue_id"
-        ],
-        "properties": {
-          "after_issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Move after this issue. `null` moves the issue to position 1.",
-            "minimum": 1
-          }
-        }
-      },
       "IssueMutationItem": {
         "type": "object",
         "required": [
@@ -13529,21 +9205,6 @@
           }
         },
         "additionalProperties": false
-      },
-      "IssueOrderValidationResponse": {
-        "type": "object",
-        "description": "Python `IssueOrderValidationResponse`.",
-        "required": [
-          "warnings"
-        ],
-        "properties": {
-          "warnings": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
       },
       "IssueReadRateRequest": {
         "type": "object",
@@ -13622,63 +9283,6 @@
           }
         }
       },
-      "IssueReorderRequest": {
-        "type": "object",
-        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`.",
-        "required": [
-          "issue_ids"
-        ],
-        "properties": {
-          "issue_ids": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        }
-      },
-      "IssueResponse": {
-        "type": "object",
-        "description": "One issue row (Python `IssueResponse`).",
-        "required": [
-          "id",
-          "thread_id",
-          "issue_number",
-          "position",
-          "status",
-          "created_at"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "read_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "LoginRequest": {
         "type": "object",
         "description": "Request body for username/password login.\n\nLogin deliberately does not impose the registration minimum length: accounts\ncreated before the current policy must still be able to sign in. An empty\npassword is rejected by bcrypt verification with the same non-enumerating\n401 as any other incorrect credential, matching Python.",
@@ -13721,36 +9325,6 @@
             }
           }
         ]
-      },
-      "MigrateToIssuesRequest": {
-        "type": "object",
-        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`.",
-        "required": [
-          "last_issue_read",
-          "total_issues"
-        ],
-        "properties": {
-          "last_issue_read": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "total_issues": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "MigrateToIssuesSimpleRequest": {
-        "type": "object",
-        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`.",
-        "required": [
-          "issue_number"
-        ],
-        "properties": {
-          "issue_number": {
-            "type": "string"
-          }
-        }
       },
       "MinimalReleaseResponse": {
         "type": "object",
@@ -13855,16 +9429,6 @@
           "scope": {
             "type": "string"
           }
-        }
-      },
-      "OrderedExplanations": {
-        "type": "object",
-        "description": "Ordered `thread_id -> explanation` object (Python `dict[int, ...]`).",
-        "additionalProperties": {
-          "$ref": "#/components/schemas/BlockingExplanation"
-        },
-        "propertyNames": {
-          "type": "string"
         }
       },
       "OverlapDecisionItem": {
@@ -14639,404 +10203,6 @@
           }
         }
       },
-      "ReaderContextCrossover": {
-        "type": "object",
-        "description": "Python `ReaderContextCrossover`.",
-        "required": [
-          "id",
-          "name",
-          "applies_to_current_issue",
-          "membership_kind",
-          "ratings_count",
-          "read_count"
-        ],
-        "properties": {
-          "applies_to_current_issue": {
-            "type": "boolean"
-          },
-          "average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "membership_kind": {
-            "type": "string",
-            "description": "`issue` or `thread`."
-          },
-          "name": {
-            "type": "string"
-          },
-          "next_member": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ReaderContextCrossoverNextMember"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "ratings_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "read_count": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "ReaderContextCrossoverMembership": {
-        "type": "object",
-        "description": "Python `ReaderContextCrossoverMembership`.",
-        "required": [
-          "id",
-          "name"
-        ],
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "name": {
-            "type": "string"
-          }
-        }
-      },
-      "ReaderContextCrossoverNextMember": {
-        "type": "object",
-        "description": "Python `ReaderContextCrossoverNextMember`.",
-        "required": [
-          "issue_id",
-          "issue_number"
-        ],
-        "properties": {
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          }
-        }
-      },
-      "ReaderContextEdge": {
-        "type": "object",
-        "description": "Python `ReaderContextEdge`.",
-        "required": [
-          "id",
-          "kind",
-          "source_issue_id",
-          "target_issue_id"
-        ],
-        "properties": {
-          "explanation": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "kind": {
-            "type": "string",
-            "description": "`dependency` or `continuity`."
-          },
-          "note": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "source_issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_label": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_status": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_thread_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "source_thread_title": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "target_issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "target_issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "target_label": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "target_status": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "target_thread_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "target_thread_title": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "ReaderContextLocalChain": {
-        "type": "object",
-        "description": "Python `ReaderContextLocalChain`.",
-        "required": [
-          "issues",
-          "edges"
-        ],
-        "properties": {
-          "edges": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReaderContextEdge"
-            }
-          },
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReaderContextLocalIssue"
-            }
-          }
-        }
-      },
-      "ReaderContextLocalIssue": {
-        "type": "object",
-        "description": "Python `ReaderContextLocalIssue`.",
-        "required": [
-          "issue_id",
-          "issue_number",
-          "position",
-          "status",
-          "relation",
-          "crossover_memberships"
-        ],
-        "properties": {
-          "crossover_memberships": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReaderContextCrossoverMembership"
-            }
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "relation": {
-            "type": "string",
-            "description": "`previous`, `current`, `next` or `future`."
-          },
-          "status": {
-            "type": "string"
-          }
-        }
-      },
-      "ReaderContextPreviousIssue": {
-        "type": "object",
-        "description": "Python `ReaderContextPreviousIssue`.",
-        "required": [
-          "issue_id",
-          "issue_number"
-        ],
-        "properties": {
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          }
-        }
-      },
-      "ReaderContextRecentRating": {
-        "type": "object",
-        "description": "Python `ReaderContextRecentRating`.",
-        "required": [
-          "issue_id",
-          "issue_number",
-          "rating"
-        ],
-        "properties": {
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "rating": {
-            "type": "number",
-            "format": "double"
-          }
-        }
-      },
-      "ReaderContextResponse": {
-        "type": "object",
-        "description": "Python `ReaderContextResponse`.",
-        "required": [
-          "issue_id",
-          "series",
-          "crossovers",
-          "local_chain"
-        ],
-        "properties": {
-          "crossovers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReaderContextCrossover"
-            }
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "local_chain": {
-            "$ref": "#/components/schemas/ReaderContextLocalChain"
-          },
-          "series": {
-            "$ref": "#/components/schemas/ReaderContextSeries"
-          }
-        }
-      },
-      "ReaderContextSeries": {
-        "type": "object",
-        "description": "Python `ReaderContextSeries`.",
-        "required": [
-          "identity_source",
-          "ratings_count",
-          "recent_ratings"
-        ],
-        "properties": {
-          "average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "canonical_series_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "highest_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "identity_source": {
-            "type": "string",
-            "description": "`comicvine` or `unavailable`."
-          },
-          "lowest_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "previous_issue": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ReaderContextPreviousIssue"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "ratings_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "recent_ratings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReaderContextRecentRating"
-            }
-          },
-          "series_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "ReadingBoundaryBatchRequest": {
         "type": "object",
         "required": [
@@ -15082,10 +10248,10 @@
           "editor": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/BoundaryEditorTarget"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BoundaryEditorTarget"
               }
             ]
           },
@@ -15124,10 +10290,10 @@
           "next": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/ReadingBoundaryNext"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ReadingBoundaryNext"
               }
             ]
           },
@@ -15152,10 +10318,10 @@
           "editor": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/BoundaryEditorTarget"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BoundaryEditorTarget"
               }
             ]
           },
@@ -15737,10 +10903,10 @@
           "explanation": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
               }
             ]
           },
@@ -15987,38 +11153,6 @@
         },
         "additionalProperties": false
       },
-      "ReadingOrderItemResponse": {
-        "type": "object",
-        "description": "Python `ReadingOrderItemResponse`.",
-        "required": [
-          "thread_id",
-          "thread_title",
-          "position",
-          "is_read"
-        ],
-        "properties": {
-          "is_read": {
-            "type": "boolean"
-          },
-          "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        }
-      },
       "ReadingOrderListResponse": {
         "type": "object",
         "description": "Python `ReadingOrderListResponse`.",
@@ -16203,46 +11337,6 @@
           "updated_count": {
             "type": "integer",
             "format": "int32"
-          }
-        }
-      },
-      "ReadingOrderResponse": {
-        "type": "object",
-        "description": "Python `ReadingOrderResponse`.",
-        "required": [
-          "id",
-          "name",
-          "total_items",
-          "completed_items",
-          "items"
-        ],
-        "properties": {
-          "completed_items": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReadingOrderItemResponse"
-            }
-          },
-          "name": {
-            "type": "string"
-          },
-          "total_items": {
-            "type": "integer",
-            "format": "int64"
           }
         }
       },
@@ -16587,6 +11681,34 @@
           }
         }
       },
+      "RecentSession": {
+        "type": "object",
+        "description": "Summary of one recent reading session.",
+        "required": [
+          "id",
+          "started_at",
+          "start_die"
+        ],
+        "properties": {
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "start_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string"
+          }
+        }
+      },
       "RecoveryCandidate": {
         "type": "object",
         "required": [
@@ -16882,10 +12004,10 @@
           "release": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/MinimalReleaseResponse"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/MinimalReleaseResponse"
               }
             ]
           }
@@ -17048,11 +12170,11 @@
           "last_roll": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/RollLastRoll",
-                "description": "The most recent recorded roll, when the reader has rolled."
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RollLastRoll",
+                "description": "The most recent recorded roll, when the reader has rolled."
               }
             ]
           }
@@ -17487,20 +12609,20 @@
           "active_thread": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SessionActiveThread"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionActiveThread"
               }
             ]
           },
           "bandwidth": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SessionBandwidthState"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionBandwidthState"
               }
             ]
           },
@@ -17525,10 +12647,10 @@
           "intent": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SessionIntentState"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionIntentState"
               }
             ]
           },
@@ -17855,10 +12977,10 @@
           "active_thread": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SessionActiveThread"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionActiveThread"
               }
             ]
           },
@@ -18067,88 +13189,6 @@
           },
           "title": {
             "type": "string"
-          }
-        }
-      },
-      "SetCurrentIssueRequest": {
-        "type": "object",
-        "description": "Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`.",
-        "required": [
-          "issue_number"
-        ],
-        "properties": {
-          "issue_number": {
-            "type": "string"
-          }
-        }
-      },
-      "SetCurrentIssueResponse": {
-        "type": "object",
-        "description": "Python `SetCurrentIssueResponse`.",
-        "required": [
-          "thread_id",
-          "title",
-          "format",
-          "issues_remaining",
-          "queue_position"
-        ],
-        "properties": {
-          "format": {
-            "type": "string"
-          },
-          "issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issues_remaining": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "next_issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "next_issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "queue_position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "reading_progress": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "title": {
-            "type": "string"
-          },
-          "total_issues": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
           }
         }
       },
@@ -18578,64 +13618,6 @@
           }
         }
       },
-      "TasteDiscovery": {
-        "type": "object",
-        "description": "One prompt-eligible inferred taste pattern shown on Roll.",
-        "required": [
-          "id",
-          "signal_type",
-          "external_key",
-          "display_name",
-          "prompt",
-          "evidence_count",
-          "distinct_thread_count"
-        ],
-        "properties": {
-          "display_name": {
-            "type": "string"
-          },
-          "distinct_thread_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "evidence_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "external_key": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "prompt": {
-            "type": "string"
-          },
-          "signal_type": {
-            "type": "string"
-          }
-        }
-      },
-      "TasteDiscoveryListResponse": {
-        "type": "object",
-        "description": "Ranked prompt-eligible discoveries for the authenticated reader.",
-        "required": [
-          "discoveries",
-          "generated_at"
-        ],
-        "properties": {
-          "discoveries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TasteDiscovery"
-            }
-          },
-          "generated_at": {
-            "type": "string"
-          }
-        }
-      },
       "TasteDismissResponse": {
         "type": "object",
         "description": "Wire parity with Python `{\"dismissed\": True}`.",
@@ -18754,26 +13736,6 @@
           }
         }
       },
-      "ThreadConnectedResponse": {
-        "type": "object",
-        "description": "Python `ThreadConnectedResponse`.",
-        "required": [
-          "thread_id",
-          "connected_threads"
-        ],
-        "properties": {
-          "connected_threads": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConnectedThreadInfo"
-            }
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "ThreadDependenciesResponse": {
         "type": "object",
         "description": "Wire parity with Python `ThreadDependenciesResponse`\n(`app/schemas/dependency.py`): the `blocking` list holds edges where this\nthread's issues block others, `blocked_by` holds edges where this thread's\nissues are blocked. Each entry is the enriched `DependencyResponse`.",
@@ -18793,26 +13755,6 @@
             "items": {
               "$ref": "#/components/schemas/DependencyResponse"
             }
-          }
-        }
-      },
-      "ThreadDependencyOrderCheckResponse": {
-        "type": "object",
-        "description": "Python `ThreadDependencyOrderCheckResponse`.",
-        "required": [
-          "thread_id",
-          "conflicts"
-        ],
-        "properties": {
-          "conflicts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DependencyOrderConflict"
-            }
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
           }
         }
       },
@@ -18917,57 +13859,6 @@
           }
         }
       },
-      "ThreadIssueCreateListResponse": {
-        "type": "object",
-        "description": "Newly created issues (Python `IssueListResponse`). Named distinctly from the v2 `IssueListResponse` so merged contracts never collide.",
-        "required": [
-          "issues",
-          "total_count",
-          "page_size"
-        ],
-        "properties": {
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IssueResponse"
-            }
-          },
-          "next_page_token": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "page_size": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "total_count": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "ThreadIssueCreatorsResponse": {
-        "type": "object",
-        "description": "Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`).",
-        "required": [
-          "thread_id",
-          "issues"
-        ],
-        "properties": {
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IssueCreatorsEntry"
-            }
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "ThreadIssueDependenciesResponse": {
         "type": "object",
         "description": "Wire parity with Python `ThreadIssueDependenciesResponse`.",
@@ -19063,10 +13954,10 @@
           "comicvine_mapping": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/ComicVineMappingHealth"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ComicVineMappingHealth"
               }
             ]
           },
@@ -19110,20 +14001,13 @@
             "type": "integer",
             "format": "int32"
           },
-          "series_cover_image_url": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Derived series cover: the exact provider CDN URL of the thread's next\nunread confirmed issue, falling back to the first confirmed issue with a\ncover. Null when the series has no confirmed issue cover."
-          },
           "series_metadata": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/QueueSeriesMetadata"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/QueueSeriesMetadata"
               }
             ]
           },
@@ -19215,127 +14099,6 @@
           }
         }
       },
-      "ThreadReadingOrdersResponse": {
-        "type": "object",
-        "description": "Python `ThreadReadingOrdersResponse`.",
-        "required": [
-          "reading_orders"
-        ],
-        "properties": {
-          "reading_orders": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReadingOrderResponse"
-            }
-          }
-        }
-      },
-      "ThreadResponse": {
-        "type": "object",
-        "description": "Python `ThreadResponse`.",
-        "required": [
-          "id",
-          "title",
-          "format",
-          "issues_remaining",
-          "queue_position",
-          "status",
-          "is_test",
-          "is_blocked",
-          "blocking_reasons",
-          "created_at",
-          "manual_creator_credits"
-        ],
-        "properties": {
-          "blocking_reasons": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "format": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "is_blocked": {
-            "type": "boolean"
-          },
-          "is_test": {
-            "type": "boolean"
-          },
-          "issues_remaining": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "last_activity_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "last_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "manual_creator_credits": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "next_unread_issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "next_unread_issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "notes": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "queue_position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "reading_progress": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "total_issues": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
       "ThreadTag": {
         "type": "object",
         "description": "One tag visible to the reader.",
@@ -19400,6 +14163,32 @@
           }
         }
       },
+      "TopRatedThread": {
+        "type": "object",
+        "description": "Summary of one highly rated thread.",
+        "required": [
+          "id",
+          "title",
+          "rating",
+          "format"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
       "UndoApplyResponse": {
         "type": "object",
         "description": "Full session response matching Python SessionResponse.",
@@ -19422,20 +14211,20 @@
           "active_thread": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SessionActiveThread"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionActiveThread"
               }
             ]
           },
           "bandwidth": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SessionBandwidthState"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionBandwidthState"
               }
             ]
           },
@@ -19459,10 +14248,10 @@
           "intent": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SessionIntentState"
+                "type": "null"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionIntentState"
               }
             ]
           },

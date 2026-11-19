@@ -2,7 +2,6 @@
 """Worker 48 App bootstrap and installation-token selection."""
 from __future__ import annotations
 
-import importlib
 import importlib.util
 import json
 import os
@@ -19,14 +18,13 @@ REPO = SCRIPTS.parents[1]
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-app = importlib.import_module("factory_worker_github_app")
-_factory_review_policy = importlib.import_module("factory_review_policy")
-trusted_comment_bodies = _factory_review_policy.trusted_comment_bodies
-_factory_work_policy = importlib.import_module("factory_work_policy")
-TRUSTED_FACTORY_APP_SLUGS = _factory_work_policy.TRUSTED_FACTORY_APP_SLUGS
-comment_is_trusted = _factory_work_policy.comment_is_trusted
-_stale_pr_decay = importlib.import_module("stale_pr_decay")
-stale_comment_is_trusted = _stale_pr_decay.comment_is_trusted
+import factory_worker_github_app as app  # noqa: E402
+from factory_review_policy import trusted_comment_bodies  # noqa: E402
+from factory_work_policy import (  # noqa: E402
+    TRUSTED_FACTORY_APP_SLUGS,
+    comment_is_trusted,
+)
+from stale_pr_decay import comment_is_trusted as stale_comment_is_trusted  # noqa: E402
 
 
 def _load_fence():
@@ -175,7 +173,7 @@ class MintTest(unittest.TestCase):
                 def __exit__(self, *exc: object) -> bool:
                     return False
 
-            def opener(request: object, timeout: int = 30) -> Response:
+            def opener(request, timeout=30):  # noqa: ANN001
                 del timeout
                 seen["url"] = request.full_url
                 seen["auth"] = request.get_header("Authorization")

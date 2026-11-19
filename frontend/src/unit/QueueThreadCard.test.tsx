@@ -495,22 +495,6 @@ describe('QueueThreadCard', () => {
     expect(screen.getByTestId('queue-thread-blocked-detail').className).toMatch(/theme-continuity-accent/)
   })
 
-  it('renders the derived series cover image from the thread projection', () => {
-    renderCard(createMockThread({ title: 'Cover Series', series_cover_image_url: 'https://comicvine.example/covers/series.jpg' }))
-    const cover = screen.getByTestId('queue-thread-series-cover')
-    expect(within(cover).getByRole('img', { name: 'Cover for Cover Series' })).toHaveAttribute(
-      'src',
-      'https://comicvine.example/covers/series.jpg',
-    )
-  })
-
-  it('shows the existing No cover placeholder when no confirmed series cover exists', () => {
-    renderCard(createMockThread({ title: 'Bare Series', series_cover_image_url: null }))
-    const placeholder = screen.getByTestId('queue-thread-series-cover-placeholder')
-    expect(placeholder).toHaveAttribute('aria-label', 'No cover for Bare Series')
-    expect(screen.queryByRole('img', { name: /Cover for Bare Series/ })).not.toBeInTheDocument()
-  })
-
   it('renders thread title', () => {
     const thread = createMockThread({ title: 'Amazing Spider-Man' })
     renderCard(thread)

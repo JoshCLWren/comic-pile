@@ -16,7 +16,7 @@ export type CreatorSummaryCoverage = components['schemas']['CreatorSummaryCovera
 export function createCreatorSummariesApi(client: HttpClient) {
   return {
     getSummaries: (keys: string[]) =>
-      client.get<CreatorSummariesResponse>('/v2/creators/summaries', {
+      client.get<CreatorSummariesResponse>('/v1/creators/summaries', {
         params: { keys: keys.join(',') },
         ...RECOVERY_CONFIG,
       }),

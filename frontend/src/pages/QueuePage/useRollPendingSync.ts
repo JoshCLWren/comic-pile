@@ -1,44 +1,37 @@
 import { useCallback, useMemo } from 'react'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
+import type { SessionCurrent } from '../../types'
+import type { SessionRefetch } from '../../hooks/useSession'
 import { queryClient } from '../../query/queryClient'
 
-/**
- * Sessionless Roll state the Queue reads: the pending roll and the snoozed
- * series, both derived from the Roll bootstrap (event-derived state).
- */
-export interface QueueRollState {
-  pending_thread_id: number | null
-  /** Complete set of snoozed series ids (not the 20-row display summary). */
-  snoozed_thread_ids: number[]
-}
-
 interface UseRollPendingSyncParams {
-  rollBootstrap: RollBootstrapResponse | null | undefined
+  rollBootstrap: RollBootstrapResponse | null
+  session: SessionCurrent | null | undefined
+  refetchSession: SessionRefetch
   refetchQueue: () => Promise<void>
 }
 
 interface UseRollPendingSyncResult {
-  rollState: QueueRollState | undefined
+  session: SessionCurrent | null | undefined
   onUpdated: () => Promise<void>
-  onRefetchRollState: () => Promise<void>
+  onRefetchSession: () => Promise<void>
 }
 
 export function useRollPendingSync({
   rollBootstrap,
+  session,
+  refetchSession,
   refetchQueue,
 }: UseRollPendingSyncParams): UseRollPendingSyncResult {
-  // Bootstrap is authoritative, including when pending_thread_id is null.
-  const rollState = useMemo<QueueRollState | undefined>(() => {
-    if (rollBootstrap == null) return undefined
-    // `snoozed_threads` is capped at 20 display rows; the id list is complete.
-    // The summary ids are merged for payloads that predate the id list.
-    const snoozedIds = new Set<number>(rollBootstrap.snoozed_thread_ids ?? [])
-    for (const thread of rollBootstrap.snoozed_threads ?? []) snoozedIds.add(thread.id)
-    return {
-      pending_thread_id: rollBootstrap.pending_thread_id,
-      snoozed_thread_ids: Array.from(snoozedIds),
+  const syncedSession = useMemo(() => {
+    if (!session) return undefined
+    // Bootstrap is authoritative when it exists, including when pending_thread_id is null.
+    // Fall back to session.pending_thread_id only when bootstrap data is absent.
+    if (rollBootstrap != null) {
+      return { ...session, pending_thread_id: rollBootstrap.pending_thread_id }
     }
-  }, [rollBootstrap])
+    return session
+  }, [session, rollBootstrap])
 
   const onUpdated = useCallback(async () => {
     await refetchQueue()
@@ -47,9 +40,12 @@ export function useRollPendingSync({
     }
   }, [refetchQueue, rollBootstrap])
 
-  const onRefetchRollState = useCallback(async () => {
-    await queryClient.refetchQueries({ queryKey: ['roll', 'bootstrap'] })
-  }, [])
+  const onRefetchSession = useCallback(async () => {
+    await refetchSession()
+    if (rollBootstrap) {
+      await queryClient.refetchQueries({ queryKey: ['roll', 'bootstrap'] })
+    }
+  }, [refetchSession, rollBootstrap])
 
-  return { rollState, onUpdated, onRefetchRollState }
+  return { session: syncedSession, onUpdated, onRefetchSession }
 }

@@ -39,7 +39,6 @@ vi.mock('../query/queryClient', () => ({
   queryClient: {
     invalidateQueries: vi.fn().mockResolvedValue(undefined),
     setQueryData: vi.fn(),
-    getQueriesData: vi.fn(() => []),
   },
 }))
 
@@ -93,26 +92,6 @@ describe('ComicIssueMappingAction', () => {
     expect(await screen.findByTestId('comic-mapping-map')).toHaveTextContent('Map comic')
     expect(screen.getByTestId('comic-mapping-status')).toHaveTextContent('Not mapped')
     expect(searchSeriesSpy).not.toHaveBeenCalled()
-  })
-
-  it('shows a loading mapping state on mount instead of a transient unmapped state (#5264)', async () => {
-    let resolveIdentity: (value: IssueIdentityResponse) => void = () => {}
-    getIssueIdentitySpy.mockReturnValueOnce(
-      new Promise<IssueIdentityResponse>((resolve) => {
-        resolveIdentity = resolve
-      }),
-    )
-
-    render(
-      <ComicIssueMappingAction issueId={77} threadTitle="Hellboy in Hell" issueNumber="1" />,
-    )
-
-    expect(screen.getByTestId('comic-mapping-status')).toHaveTextContent('Checking mapping…')
-    expect(screen.queryByText('Not mapped')).toBeNull()
-
-    resolveIdentity(UNMAPPED)
-    expect(await screen.findByTestId('comic-mapping-map')).toHaveTextContent('Map comic')
-    expect(screen.getByTestId('comic-mapping-status')).toHaveTextContent('Not mapped')
   })
 
   it('shows Mapped plus Change mapping for a mapped issue', () => {

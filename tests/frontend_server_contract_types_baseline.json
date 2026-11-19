@@ -50,6 +50,10 @@
     "SyncStatusResponse",
     "SyncStatusSource"
   ],
+  "frontend/src/services/api-continuity-rules.ts": [
+    "ContinuityRuleCreate",
+    "ContinuityRuleResponse"
+  ],
   "frontend/src/services/api-creators.ts": [
     "CreatorDetailResponse",
     "CreatorInsights",

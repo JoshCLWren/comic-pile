@@ -1,0 +1,357 @@
+"""Schemas for the bounded personal creator comparison API (issue #3091)."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+from app.constants import MIN_RATED_ISSUES_PER_SERIES
+
+
+class CreatorComparisonRoleStat(BaseModel):
+    """Role-specific statistics for a creator in comparison."""
+
+    model_config = {"frozen": True}
+
+    role: str = Field(..., description="The normalized role name.")
+    issue_count: int = Field(
+        ..., ge=0, description="Number of issues the creator held this role on."
+    )
+    rated_issue_count: int = Field(
+        ..., ge=0, description="Number of rated issues backing the average_rating for this role."
+    )
+    average_rating: float | None = Field(
+        default=None,
+        description="Average rating for issues where the creator held this specific role.",
+    )
+
+
+class CreatorComparisonSeriesAggregate(BaseModel):
+    """Strongest series/thread aggregate for a creator."""
+
+    model_config = {"frozen": True}
+
+    thread_id: int = Field(..., description="Local ComicPile thread ID.")
+    thread_title: str = Field(..., description="Title of the series/thread.")
+    issue_count: int = Field(
+        ..., ge=0, description="Number of issues by this creator in this series."
+    )
+    rated_issue_count: int = Field(
+        ...,
+        ge=MIN_RATED_ISSUES_PER_SERIES,
+        description="Number of rated issues backing average_rating. Series below "
+        "the minimum rated sample are excluded from strongest_series entirely.",
+    )
+    average_rating: float = Field(
+        ...,
+        description="Average rating for this creator's rated issues in this series. "
+        "Always present because only series meeting the minimum rated sample are returned.",
+    )
+
+
+class CreatorComparisonIssueRef(BaseModel):
+    """Bounded navigable reference to one creator-attributed issue (issue #3174)."""
+
+    model_config = {"frozen": True}
+
+    issue_id: int = Field(..., description="Local ComicPile issue ID.")
+    thread_id: int = Field(..., description="Local ComicPile thread ID owning the issue.")
+    thread_title: str = Field(..., description="Title of the thread owning the issue.")
+    issue_number: str = Field(..., description="Display issue number within its thread.")
+    status: str = Field(
+        ..., description="Local issue status (``read`` or ``unread``) at aggregation time."
+    )
+
+
+class CreatorComparisonItem(BaseModel):
+    """Comparison data for one creator identity."""
+
+    model_config = {"frozen": True}
+
+    canonical_creator_key: str = Field(
+        ..., description="Stable normalized creator key (e.g. ``creator:12345``)."
+    )
+    display_name: str = Field(
+        ..., description="Human-readable creator name from confirmed issue metadata."
+    )
+    normalized_roles: list[str] = Field(
+        default_factory=list,
+        description="Distinct roles seen for this creator across the user's issues.",
+    )
+    average_rating: float | None = Field(
+        default=None,
+        description="Average of the user's latest effective ratings across issues "
+        "attributed to this creator with a headline-eligible role. ``null`` when no ratings.",
+    )
+    median_rating: float | None = Field(
+        default=None,
+        description="Median of the user's latest effective ratings across headline-eligible issues. "
+        "``null`` when fewer than 1 rated issue.",
+    )
+    ratings_count: int = Field(
+        default=0,
+        ge=0,
+        description="Number of distinct rated issues contributing to the headline average.",
+    )
+    rating_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="Distribution of ratings (e.g. {'5': 3, '4': 2, '3': 1}).",
+    )
+    top_rating_rate: float | None = Field(
+        default=None,
+        description="Proportion of ratings at the top of ComicPile's 1-5 scale (5★). "
+        "``null`` when no ratings.",
+    )
+    role_stats: list[CreatorComparisonRoleStat] = Field(
+        default_factory=list,
+        description="Breakdown of statistics per role.",
+    )
+    strongest_series: list[CreatorComparisonSeriesAggregate] = Field(
+        default_factory=list,
+        description="Series ranked by rating strength, strongest first. Series with fewer "
+        "than min_rated_issues_per_series rated issues are excluded.",
+    )
+    min_rated_issues_per_series: int = Field(
+        default=MIN_RATED_ISSUES_PER_SERIES,
+        ge=1,
+        description="Minimum rated issues a series needs before strongest_series ranks it. "
+        "Exposed so the UI can explain an empty list instead of silently hiding it.",
+    )
+    unread_upcoming_count: int = Field(
+        default=0,
+        ge=0,
+        description="Number of unread owned issues attributed to this creator "
+        "(``Issue.status == 'unread'``). This is unread attributed work already in "
+        "the user's library, not queue position, roll eligibility, or upcoming "
+        "scheduling.",
+    )
+    read_unrated_count: int = Field(
+        default=0,
+        ge=0,
+        description="Number of read owned issues attributed to this creator with no "
+        "stored effective rating.",
+    )
+    unread_issue_refs: list[CreatorComparisonIssueRef] = Field(
+        default_factory=list,
+        description="Bounded sample of the unread attributed issues behind "
+        "``unread_upcoming_count`` in stable display order. At most "
+        "``max_issue_refs_per_group`` entries; the count remains the full total.",
+    )
+    read_unrated_issue_refs: list[CreatorComparisonIssueRef] = Field(
+        default_factory=list,
+        description="Bounded sample of the read attributed issues behind "
+        "``read_unrated_count`` with no stored effective rating. At most "
+        "``max_issue_refs_per_group`` entries; the count remains the full total.",
+    )
+    max_issue_refs_per_group: int = Field(
+        default=5,
+        ge=1,
+        description="Maximum issue references returned per drilldown group. "
+        "Exposed so the UI can explain a truncated list instead of silently hiding it.",
+    )
+    insufficient_data: bool = Field(
+        default=False,
+        description="True when the creator has fewer than 5 rated issues, making "
+        "statistics less reliable.",
+    )
+
+
+class CreatorComparisonCoverage(BaseModel):
+    """Coverage state distinguishing complete from lower-bound statistics across compared creators."""
+
+    model_config = {"frozen": True}
+
+    rated_issues_total: int = Field(
+        default=0,
+        ge=0,
+        description="Total owned issues with an effective rating across all compared creators.",
+    )
+    rated_issues_with_creator_metadata: int = Field(
+        default=0,
+        ge=0,
+        description="Rated owned issues with confirmed usable creator metadata.",
+    )
+    ratings_complete: bool = Field(
+        default=True,
+        description="True only when every owned rated issue has confirmed "
+        "usable creator metadata.",
+    )
+    read_unrated_issues_total: int = Field(
+        default=0,
+        ge=0,
+        description="Total owned read-but-unrated issues.",
+    )
+    read_unrated_issues_with_creator_metadata: int = Field(
+        default=0,
+        ge=0,
+        description="Read-but-unrated owned issues with confirmed usable creator metadata.",
+    )
+    read_unrated_complete: bool = Field(
+        default=True,
+        description="True only when every owned read-but-unrated issue has "
+        "confirmed usable creator metadata.",
+    )
+    unread_issues_total: int = Field(
+        default=0,
+        ge=0,
+        description="Total owned unread issues.",
+    )
+    unread_issues_with_creator_metadata: int = Field(
+        default=0,
+        ge=0,
+        description="Unread owned issues with confirmed usable creator metadata.",
+    )
+    upcoming_complete: bool = Field(
+        default=True,
+        description="True only when every owned unread issue considered by the "
+        "library has confirmed usable creator metadata. While false, per-creator "
+        "unread counts are lower bounds: an unread issue without creator metadata "
+        "cannot be attributed to any creator.",
+    )
+
+
+class CreatorComparisonResponse(BaseModel):
+    """Response body for the batch creator comparison API."""
+
+    model_config = {"frozen": True}
+
+    comparisons: dict[str, CreatorComparisonItem] = Field(
+        ...,
+        description="Mapping from canonical creator key to comparison data for every "
+        "requested key visible in the authenticated user's library.",
+    )
+    coverage: CreatorComparisonCoverage = Field(
+        ..., description="Coverage state distinguishing complete from lower-bound statistics."
+    )
+    insufficient_data_keys: list[str] = Field(
+        default_factory=list,
+        description="Canonical keys of creators with insufficient data (fewer than 5 rated issues).",
+    )
+
+
+class CreatorMetricCalculation(BaseModel):
+    """Human-readable calculation explaining how a metric was derived."""
+
+    model_config = {"frozen": True}
+
+    formula: str = Field(..., description="Human-readable formula showing the calculation.")
+    numerator: str = Field(..., description="Description of the numerator/upper value.")
+    denominator: str | None = Field(
+        default=None, description="Description of the denominator/lower value when applicable."
+    )
+    percentage: str | None = Field(
+        default=None, description="Formatted percentage when applicable."
+    )
+
+
+class CreatorMetricIssue(BaseModel):
+    """Single issue with context for a metric drilldown."""
+
+    model_config = {"frozen": True}
+
+    issue_id: int = Field(..., description="Local ComicPile issue ID.")
+    thread_id: int = Field(..., description="Local ComicPile thread ID owning the issue.")
+    thread_title: str = Field(..., description="Title of the thread owning the issue.")
+    issue_number: str = Field(..., description="Display issue number within its thread.")
+    status: str = Field(..., description="Local issue status (``read`` or ``unread``).")
+    effective_rating: float | None = Field(
+        default=None, description="Effective rating for this issue when applicable."
+    )
+    effective_rating_source: str | None = Field(
+        default=None,
+        description="Source of the effective rating (e.g., 'historical', 'manual', 'inferred').",
+    )
+    effective_rating_timestamp: str | None = Field(
+        default=None,
+        description="ISO 8601 timestamp when the effective rating was established.",
+    )
+    creator_roles: list[str] = Field(
+        default_factory=list, description="Roles this creator held on this issue."
+    )
+    exclusion_reason: str | None = Field(
+        default=None,
+        description="Why this issue is excluded from the calculation (if applicable).",
+    )
+    missing_rating_cause: str | None = Field(
+        default=None,
+        description=(
+            "Machine-readable cause for a read issue with no effective rating "
+            "(issue #3175 classification, e.g. 'no_source_rating', "
+            "'missing_rate_event', 'unresolved_mapping', 'edition_conflict', "
+            "'ambiguous_thread_rating'). None when the issue is rated, unread, "
+            "or the cause has not been classified."
+        ),
+    )
+
+
+class CreatorMetricDrilldown(BaseModel):
+    """Response for a creator metric drilldown."""
+
+    model_config = {"frozen": True}
+
+    metric_type: str = Field(..., description="Type of metric being drilled down.")
+    creator_key: str = Field(..., description="Canonical creator key.")
+    calculation: CreatorMetricCalculation = Field(..., description="Human-readable calculation.")
+    total_count: int = Field(..., ge=0, description="Total number of issues in the calculation.")
+    included_issues: list[CreatorMetricIssue] = Field(
+        default_factory=list, description="Issues included in the calculation."
+    )
+    excluded_issues: list[CreatorMetricIssue] = Field(
+        default_factory=list, description="Issues excluded from the calculation with reasons."
+    )
+    pagination: dict[str, int | str | None] = Field(
+        default_factory=dict,
+        description="Pagination info (``page``, ``page_size``, ``next_page_token``, ``total_pages``).",
+    )
+
+
+class CreatorRatingDistributionDrilldown(CreatorMetricDrilldown):
+    """Specialized drilldown for rating distribution buckets."""
+
+    model_config = {"frozen": True}
+
+    rating_value: str = Field(..., description="The specific rating value (e.g., '5.0', '4.5').")
+    bucket_count: int = Field(..., ge=0, description="Number of issues in this rating bucket.")
+    bucket_percentage: float = Field(..., ge=0, le=100, description="Percentage of total rated issues.")
+
+
+class CreatorRoleDrilldown(CreatorMetricDrilldown):
+    """Specialized drilldown for role statistics."""
+
+    model_config = {"frozen": True}
+
+    role: str = Field(..., description="The specific role being drilled down.")
+    role_issue_count: int = Field(..., ge=0, description="Total issues with this role.")
+    role_rated_issue_count: int = Field(..., ge=0, description="Rated issues with this role.")
+    role_average_rating: float | None = Field(
+        default=None, description="Average rating for this role."
+    )
+
+
+class CreatorSeriesDrilldown(CreatorMetricDrilldown):
+    """Specialized drilldown for series statistics."""
+
+    model_config = {"frozen": True}
+
+    series_id: int = Field(..., description="Local thread ID for the series.")
+    series_title: str = Field(..., description="Title of the series.")
+    series_issue_count: int = Field(..., ge=0, description="Total issues in this series.")
+    series_rated_issue_count: int = Field(..., ge=0, description="Rated issues in this series.")
+    series_average_rating: float | None = Field(
+        default=None, description="Average rating for this series."
+    )
+
+
+__all__ = [
+    "CreatorComparisonResponse",
+    "CreatorComparisonItem",
+    "CreatorComparisonCoverage",
+    "CreatorComparisonIssueRef",
+    "CreatorComparisonRoleStat",
+    "CreatorComparisonSeriesAggregate",
+    "CreatorMetricCalculation",
+    "CreatorMetricIssue",
+    "CreatorMetricDrilldown",
+    "CreatorRatingDistributionDrilldown",
+    "CreatorRoleDrilldown",
+    "CreatorSeriesDrilldown",
+]

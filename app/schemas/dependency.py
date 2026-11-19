@@ -1,8 +1,18 @@
 """Dependency request/response schemas."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+
+class DependencyCreate(BaseModel):
+    """Schema for creating dependencies."""
+
+    source_type: Literal["thread", "issue"]
+    source_id: int
+    target_type: Literal["thread", "issue"]
+    target_id: int
 
 
 class DependencyResponse(BaseModel):
@@ -21,6 +31,12 @@ class DependencyResponse(BaseModel):
     source_issue_thread_id: int | None = None
     target_issue_thread_id: int | None = None
     warning: str | None = None
+
+
+class DependencyNoteUpdate(BaseModel):
+    """Schema for updating a dependency note."""
+
+    note: str | None = Field(None, max_length=255)
 
 
 class BlockingDependency(BaseModel):

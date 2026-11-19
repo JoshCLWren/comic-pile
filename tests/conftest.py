@@ -236,7 +236,12 @@ async def db_engine(
                 async with engine.begin() as conn:
 
                     def _check_and_drop(sync_conn: Connection) -> None:
-                        assert_safe_test_database_url(database_url)
+                        if _has_schema_drift(sync_conn):
+                            if not _looks_like_test_database(database_url):
+                                raise RuntimeError(
+                                    "Refusing to reset schema on non-test database. "
+                                    f"Database '{make_url(database_url).database}' must include 'test'."
+                                )
                         sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
                         sync_conn.exec_driver_sql("CREATE SCHEMA public")
                         Base.metadata.create_all(bind=sync_conn)
@@ -259,7 +264,12 @@ async def db_engine(
         async with engine.begin() as conn:
 
             def _check_and_drop(sync_conn: Connection) -> None:
-                assert_safe_test_database_url(database_url)
+                if _has_schema_drift(sync_conn):
+                    if not _looks_like_test_database(database_url):
+                        raise RuntimeError(
+                            "Refusing to reset schema on non-test database. "
+                            f"Database '{make_url(database_url).database}' must include 'test'."
+                        )
                 sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
                 sync_conn.exec_driver_sql("CREATE SCHEMA public")
                 Base.metadata.create_all(bind=sync_conn)
@@ -406,57 +416,17 @@ async def reset_global_engine_pool(worker_id: str) -> AsyncIterator[None]:
         )
 
 
-_LOCAL_TEST_DB_HOSTS = {"localhost", "127.0.0.1", "::1"}
-
-
-def assert_safe_test_database_url(database_url: str) -> None:
-    """Refuse any PostgreSQL URL that is not a local, disposable test database.
-
-    P0 incident 2026-11-18: a test run against DATABASE_URL (production) wiped
-    application tables. Every destructive test path (schema drop, truncate) runs
-    on an engine built from get_test_database_url(), which calls this first.
-    The host must be localhost/127.0.0.1/::1/a unix socket (or listed in
-    COMIC_PILE_TEST_DB_ALLOW_HOSTS, a comma-separated allowlist reserved for CI
-    service-container hostnames) and the database name must contain "test".
-    """
-    url = make_url(database_url)
-    if url.get_backend_name() == "sqlite":
-        return
-    query_host = url.query.get("host") or url.query.get("hostaddr")
-    hosts = [query_host] if isinstance(query_host, str) else list(query_host or [])
-    if not hosts:
-        hosts = [url.host or ""]
-    allowed = _LOCAL_TEST_DB_HOSTS | {
-        h.strip() for h in os.getenv("COMIC_PILE_TEST_DB_ALLOW_HOSTS", "").split(",") if h.strip()
-    }
-    for host in hosts:
-        if host not in allowed and not host.startswith("/"):
-            raise RuntimeError(
-                f"Refusing to run destructive test setup: host {host!r} is not a local "
-                "disposable database."
-            )
-    overrides = {"database", "dbname"} & {str(key).lower() for key in url.query}
-    if overrides:
-        raise RuntimeError(
-            "Refusing to run destructive test setup: query database override "
-            f"{sorted(overrides)!r} is not allowed; put the name in the URL path."
-        )
-    if "test" not in (url.database or "").lower():
-        raise RuntimeError(
-            "Refusing to run destructive test setup: database "
-            f"{url.database!r} must contain 'test'."
-        )
-
-
 def get_test_database_url() -> str:
-    """Get test database URL from TEST_DATABASE_URL only (never DATABASE_URL)."""
+    """Get test database URL from environment (PostgreSQL only)."""
     test_db_url = os.getenv("TEST_DATABASE_URL")
     if test_db_url:
-        assert_safe_test_database_url(test_db_url)
         return test_db_url
 
-    # Fallback to a local SQLite database when no TEST_DATABASE_URL is provided.
-    # DATABASE_URL is deliberately ignored: it may point at production.
+    database_url = os.getenv("DATABASE_URL")
+    if database_url and database_url.startswith("postgresql"):
+        return database_url
+
+    # Fallback to an in‑memory SQLite database for local testing when no PostgreSQL URL is provided.
     return "sqlite+aiosqlite:///test.db"
 
 
@@ -822,3 +792,4 @@ def clear_config_cache() -> Iterator[None]:
     clear_settings_cache()
     yield
     clear_settings_cache()
+

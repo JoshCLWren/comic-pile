@@ -1,22 +1,566 @@
 """Integration tests for session and history operations."""
 
+from datetime import UTC, datetime
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Event, Snapshot, Thread, User
+from app.models import ReadingSession
 
 
+@pytest.mark.asyncio
+async def test_undo_operation_creates_history_event(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Test that undo operation creates a history event."""
+    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Test Comic",
+        format="comic",
+        issues_remaining=15,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        session_id=session.id,
+        selected_thread_id=thread.id,
+        die=6,
+        result=4,
+        selection_method="random",
+    )
+    async_db.add(event)
+    await async_db.commit()
+    await async_db.refresh(event)
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=event.id,
+        thread_states={thread.id: {"issues_remaining": 15, "queue_position": 1}},
+        description="Before changes",
+    )
+    async_db.add(snapshot)
+    await async_db.commit()
+
+    initial_events_result = await async_db.execute(
+        select(Event).where(Event.session_id == session.id)
+    )
+    initial_events = initial_events_result.scalars().all()
+
+    response = await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
+    assert response.status_code == 200
+
+    final_events_result = await async_db.execute(
+        select(Event).where(Event.session_id == session.id)
+    )
+    final_events = final_events_result.scalars().all()
+
+    assert len(final_events) >= len(initial_events)
 
 
+@pytest.mark.asyncio
+async def test_session_restore_preserves_events(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Test that session restore preserves session events."""
+    from comic_pile.reading_session import create_session_start_snapshot
+
+    thread = Thread(
+        title="Test Comic",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    await create_session_start_snapshot(async_db, session)
+
+    roll_event = Event(
+        type="roll",
+        session_id=session.id,
+        selected_thread_id=thread.id,
+        die=6,
+        result=4,
+        selection_method="random",
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    rate_event = Event(
+        type="rate",
+        session_id=session.id,
+        thread_id=thread.id,
+        rating=4.5,
+        issues_read=1,
+        die_after=8,
+    )
+    async_db.add(rate_event)
+    await async_db.commit()
+
+    initial_events_result = await async_db.execute(
+        select(Event).where(Event.session_id == session.id)
+    )
+    initial_events = initial_events_result.scalars().all()
+
+    response = await auth_client.post(f"/api/v1/sessions/{session.id}/restore-session-start")
+    assert response.status_code == 200
+
+    final_events_result = await async_db.execute(
+        select(Event).where(Event.session_id == session.id)
+    )
+    final_events = final_events_result.scalars().all()
+
+    assert len(final_events) == len(initial_events)
 
 
+@pytest.mark.asyncio
+async def test_multiple_undos_in_sequence(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Test that multiple undo operations work correctly in sequence."""
+    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Test Comic",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    event1 = Event(type="rate", session_id=session.id, thread_id=thread.id, rating=4.0)
+    async_db.add(event1)
+    await async_db.commit()
+
+    snapshot1 = Snapshot(
+        session_id=session.id,
+        event_id=event1.id,
+        thread_states={thread.id: {"issues_remaining": 8}},
+        description="Snapshot 1",
+    )
+    async_db.add(snapshot1)
+    await async_db.commit()
+
+    thread.issues_remaining = 6
+    await async_db.commit()
+
+    event2 = Event(type="rate", session_id=session.id, thread_id=thread.id, rating=5.0)
+    async_db.add(event2)
+    await async_db.commit()
+
+    snapshot2 = Snapshot(
+        session_id=session.id,
+        event_id=event2.id,
+        thread_states={thread.id: {"issues_remaining": 6}},
+        description="Snapshot 2",
+    )
+    async_db.add(snapshot2)
+    await async_db.commit()
+
+    thread.issues_remaining = 4
+    await async_db.commit()
+
+    await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot2.id}")
+    await async_db.refresh(thread)
+    assert thread.issues_remaining == 6
+
+    await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot1.id}")
+    await async_db.refresh(thread)
+    assert thread.issues_remaining == 8
 
 
+@pytest.mark.asyncio
+async def test_get_session_details_endpoint(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Test getting session details with all events."""
+    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Test Comic",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    roll_event = Event(
+        type="roll",
+        session_id=session.id,
+        selected_thread_id=thread.id,
+        die=6,
+        result=4,
+        selection_method="random",
+        issue_number="11",
+    )
+    async_db.add(roll_event)
+
+    rate_event = Event(
+        type="rate",
+        session_id=session.id,
+        thread_id=thread.id,
+        rating=4.5,
+        issues_read=1,
+        die_after=8,
+        issue_number="11",
+    )
+    async_db.add(rate_event)
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+    data = response.json()
+    event_types = [e["type"] for e in data["events"]]
+    assert "roll" in event_types
+    assert "rate" in event_types
+    assert any(e.get("thread_title") == "Test Comic" for e in data["events"])
+    assert all(e.get("issue_number") == "11" for e in data["events"])
 
 
+@pytest.mark.asyncio
+async def test_get_session_details_describes_events_in_reader_language(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Session timeline events expose reader-language descriptions (issue #1694)."""
+    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Promethea",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    async_db.add_all(
+        [
+            Event(
+                type="roll",
+                session_id=session.id,
+                selected_thread_id=thread.id,
+                die=6,
+                result=4,
+                selection_method="random",
+            ),
+            Event(
+                type="rate",
+                session_id=session.id,
+                thread_id=thread.id,
+                rating=4.0,
+                issues_read=2,
+            ),
+            Event(type="snooze", session_id=session.id, thread_id=thread.id),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+    data = response.json()
+
+    descriptions = {event["type"]: event["description"] for event in data["events"]}
+    assert descriptions["roll"] == "Selected Promethea"
+    assert descriptions["rate"] == "Rated · Promethea · 2 issues read · 4.0/5"
+    assert descriptions["snooze"] == "Snoozed Promethea"
+    assert all(value for value in descriptions.values()), descriptions
 
 
+@pytest.mark.asyncio
+async def test_session_details_narrative_summary_includes_issue_numbers(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """History narrative entries always pair thread titles with issue numbers."""
+    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Promethea",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+        status="completed",
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    async_db.add_all(
+        [
+            Event(
+                type="rate",
+                session_id=session.id,
+                thread_id=thread.id,
+                rating=4.0,
+                issues_read=2,
+                issue_number="32",
+            ),
+            Event(
+                type="rolled_but_skipped",
+                session_id=session.id,
+                thread_id=thread.id,
+                issue_number="50",
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+    data = response.json()
+
+    summary = data["narrative_summary"]
+    assert "Promethea #32 (4.0/5.0)" in summary["read"]
+    assert "Promethea #32" in summary["completed"]
+    assert "Promethea #50" in summary["skipped"]
 
 
+@pytest.mark.asyncio
+async def test_multiple_sessions_listed_in_reverse_order(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Test that sessions are listed in reverse chronological order."""
+    for i in range(5):
+        session = ReadingSession(
+            start_die=6 + i, user_id=default_user.id, started_at=datetime.now(UTC)
+        )
+        async_db.add(session)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/v1/sessions/")
+    assert response.status_code == 200
+    sessions = response.json()["sessions"]
+
+    session_ids = [s["id"] for s in sessions]
+    assert session_ids == sorted(session_ids, reverse=True)
 
 
+@pytest.mark.asyncio
+async def test_undo_to_snapshot_with_session_state(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Test undo operation properly restores session state."""
+    session = ReadingSession(
+        start_die=10, manual_die=8, user_id=default_user.id, started_at=datetime.now(UTC)
+    )
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Test Comic",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    event = Event(
+        type="roll",
+        session_id=session.id,
+        selected_thread_id=thread.id,
+        die=10,
+        result=6,
+        selection_method="random",
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=event.id,
+        thread_states={thread.id: {"issues_remaining": 15}},
+        session_state={"start_die": 6, "manual_die": 4},
+        description="Different session state",
+    )
+    async_db.add(snapshot)
+    await async_db.commit()
+
+    response = await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
+    assert response.status_code == 200
+    data = response.json()
+
+    await async_db.refresh(session)
+    assert session.start_die == 6
+    assert session.manual_die == 4
+    assert data["start_die"] == 6
+    assert data["manual_die"] == 4
 
 
+@pytest.mark.asyncio
+async def test_current_session_response_includes_ladder_path(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Test current session response includes dice ladder path."""
+    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Test Comic",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    roll_event = Event(
+        type="roll",
+        session_id=session.id,
+        selected_thread_id=thread.id,
+        die=6,
+        result=4,
+        selection_method="random",
+    )
+    async_db.add(roll_event)
+
+    rate_event = Event(
+        type="rate",
+        session_id=session.id,
+        thread_id=thread.id,
+        rating=4.5,
+        issues_read=1,
+        die_after=8,
+    )
+    async_db.add(rate_event)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/v1/sessions/current/")
+    assert response.status_code == 200
+    data = response.json()
+    assert "ladder_path" in data
+    assert "6 → 8" in data["ladder_path"]
 
 
+@pytest.mark.asyncio
+async def test_history_list_surfaces_pending_thread_title_without_roll(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Newest history row must show the pending thread title even before any roll.
+
+    Regression for #2195: a session with a pending_thread_id but no roll event
+    previously had an empty active_thread, so the newest History row showed only
+    date/die and omitted the comic/thread title.
+    """
+    thread = Thread(
+        title="Pending Comic",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    session = ReadingSession(
+        start_die=6,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+        pending_thread_id=thread.id,
+    )
+    async_db.add(session)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/v1/sessions/")
+    assert response.status_code == 200
+    sessions = response.json()["sessions"]
+
+    newest = next(s for s in sessions if s["id"] == session.id)
+    assert newest["active_thread"] is not None
+    assert newest["active_thread"]["title"] == "Pending Comic"
+
+
+@pytest.mark.asyncio
+async def test_history_list_pending_thread_omitted_from_active_thread_when_roll_exists(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """A rolled thread takes precedence over a stale pending thread in History.
+
+    When a session already has a roll event for a thread, that rolled thread is
+    the active_thread; the pending_thread_id must not override it. The pending
+    branch only fills the gap for sessions with no roll yet.
+    """
+    rolled_thread = Thread(
+        title="Rolled Comic",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    pending_thread = Thread(
+        title="Stale Pending",
+        format="comic",
+        issues_remaining=5,
+        queue_position=2,
+        user_id=default_user.id,
+    )
+    async_db.add_all([rolled_thread, pending_thread])
+    await async_db.commit()
+
+    session = ReadingSession(
+        start_die=6,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+        pending_thread_id=pending_thread.id,
+    )
+    async_db.add(session)
+    await async_db.commit()
+
+    roll_event = Event(
+        type="roll",
+        session_id=session.id,
+        selected_thread_id=rolled_thread.id,
+        die=6,
+        result=4,
+        selection_method="random",
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/v1/sessions/")
+    assert response.status_code == 200
+    sessions = response.json()["sessions"]
+
+    item = next(s for s in sessions if s["id"] == session.id)
+    assert item["active_thread"] is not None
+    assert item["active_thread"]["title"] == "Rolled Comic"

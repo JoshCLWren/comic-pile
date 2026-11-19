@@ -1,4 +1,4 @@
-"""Read-only CBL source list detail previews.
+"""Read-only CBL source list discovery and detail previews.
 
 These helpers read persisted CBL provenance only. They never adopt, reconcile,
 repair, or otherwise mutate reader-owned issues, threads, or identity mappings.
@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.cbl_source_repository import (
+    discover_cbl_source_lists as discover_source_rows,
     get_cbl_source_list_detail as load_source_list_detail,
 )
 from app.services.cbl_source_public import (
@@ -18,6 +19,19 @@ from app.services.cbl_source_public import (
     public_cbl_source_path,
     public_cbl_source_ref,
 )
+
+
+@dataclass(frozen=True)
+class CBLSourceListSummary:
+    """One active persisted source list available for preview."""
+
+    id: int
+    name: str
+    source_path: str
+    source_repository: str
+    declared_issue_count: int | None
+    content_hash: str
+    revision_sha: str
 
 
 @dataclass(frozen=True)
@@ -49,6 +63,37 @@ class CBLSourceListPreview:
     entries_offset: int
     entries_limit: int
     entries: tuple[CBLSourceEntryPreview, ...]
+
+
+async def list_cbl_source_previews(
+    db: AsyncSession,
+    *,
+    query_text: str | None,
+    limit: int,
+) -> list[CBLSourceListSummary]:
+    """Return active CBL source lists available for preview.
+
+    Args:
+        db: Database session.
+        query_text: Optional case-insensitive match against list name or source path.
+        limit: Maximum number of lists to return.
+
+    Returns:
+        Reader-safe summaries of the matching active source lists.
+    """
+    rows = await discover_source_rows(db, query_text=query_text, limit=limit)
+    return [
+        CBLSourceListSummary(
+            id=source_list.id,
+            name=source_list.name,
+            source_path=source_list.source_path,
+            source_repository=public_cbl_repository(repository),
+            declared_issue_count=source_list.declared_issue_count,
+            content_hash=source_list.content_hash,
+            revision_sha=source_list.revision_sha,
+        )
+        for source_list, repository in rows
+    ]
 
 
 async def get_cbl_source_list_preview(

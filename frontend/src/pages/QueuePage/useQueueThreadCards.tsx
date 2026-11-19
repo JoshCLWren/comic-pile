@@ -1,6 +1,5 @@
-import type { QueueRollState } from './useRollPendingSync'
 import { useCallback, useMemo } from 'react'
-import type { BlockingDependency, ThreadListItem } from '../../types'
+import type { BlockingDependency, SessionCurrent, ThreadListItem } from '../../types'
 import { useNavigate } from 'react-router-dom'
 import { canSnoozeSeries } from '../../components/snoozeAvailability'
 import { rollApi } from '../../services/api-roll'
@@ -23,8 +22,8 @@ interface UseQueueThreadCardsParams {
   activeThreads: ThreadListItem[]
   /** Modal controllers from the queue modals module. */
   modals: QueueModals
-  /** Sessionless Roll state, used to resolve per-row snooze state. */
-  rollState?: QueueRollState | null
+  /** Current reading session, used to resolve per-row snooze state. */
+  session?: SessionCurrent | null
   /** Whether position-based actions (move to front/back, reposition) apply. */
   positionActionsAvailable?: boolean
   /** Current sort mode to determine drag handle visibility. */
@@ -49,7 +48,7 @@ export function useQueueThreadCards({
   actions,
   activeThreads,
   modals,
-  rollState,
+  session,
   positionActionsAvailable = true,
   sortBy = 'position',
 }: UseQueueThreadCardsParams) {
@@ -77,12 +76,12 @@ export function useQueueThreadCards({
   // instead of being invalidated by a fresh array on every session snapshot.
   const snoozedThreadIds = useMemo(
     () => Array.from(new Set([
-      ...(rollState?.snoozed_thread_ids ?? []),
+      ...(session?.snoozed_threads?.map((t) => t.id) ?? []),
       ...activeThreads
         .map((thread) => thread.id)
         .filter((threadId) => rollApi.isTemporarilySnoozed(threadId)),
     ])),
-    [activeThreads, rollState],
+    [activeThreads, session],
   )
 
   const renderThreadCard = useCallback(
@@ -102,7 +101,7 @@ export function useQueueThreadCards({
       const snoozeDisabled = !canSnoozeSeries({
         threadId: thread.id,
         isSnoozed,
-        pendingThreadId: rollState?.pending_thread_id,
+        pendingThreadId: session?.pending_thread_id,
       })
       const readDisabled = isBlocked
       const blockingReasons = canonicalBoundary
@@ -150,7 +149,7 @@ export function useQueueThreadCards({
         />
       )
     },
-    [actions, activeThreads, boundaryData, boundaryPending, legacyBlockingByThreadId, crossovers, modals, navigate, rollState, snoozedThreadIds, positionActionsAvailable, sortBy],
+    [actions, activeThreads, boundaryData, boundaryPending, legacyBlockingByThreadId, crossovers, modals, navigate, session, snoozedThreadIds, positionActionsAvailable, sortBy],
   )
 
   // One shared failure notice belongs above the list; repeating an error and

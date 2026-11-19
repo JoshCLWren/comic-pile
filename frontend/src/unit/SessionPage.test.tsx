@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import SessionPage from '../pages/SessionPage'
 import {
+  useRestoreSessionStart,
   useSessionDetails,
   useSessionSnapshots,
 } from '../hooks/useSession'
@@ -14,6 +15,7 @@ import { queryKeys } from '../query/queryKeys'
 vi.mock('../hooks/useSession', () => ({
   useSessionDetails: vi.fn(),
   useSessionSnapshots: vi.fn(),
+  useRestoreSessionStart: vi.fn(),
 }))
 
 vi.mock('../hooks/useUndo', () => ({
@@ -26,6 +28,7 @@ vi.mock('../contexts/useToast', () => ({
   useToast: () => ({ toasts: [], showToast: showToastSpy, removeToast: vi.fn() }),
 }))
 
+const restoreSpy = vi.fn()
 const undoSpy = vi.fn()
 const refetchDetailsSpy = vi.fn()
 const refetchSnapshotsSpy = vi.fn()
@@ -33,6 +36,8 @@ const refetchSnapshotsSpy = vi.fn()
 const mockedUseSessionDetails = vi.mocked(useSessionDetails) as any
 // SAFETY: the module is mocked, so the test supplies the return shape directly
 const mockedUseSessionSnapshots = vi.mocked(useSessionSnapshots) as any
+// SAFETY: the module is mocked, so the test supplies the return shape directly
+const mockedUseRestoreSessionStart = vi.mocked(useRestoreSessionStart) as any
 // SAFETY: the module is mocked, so the test supplies the return shape directly
 const mockedUseUndo = vi.mocked(useUndo) as any
 
@@ -62,7 +67,9 @@ beforeEach(() => {
     },
     refetch: refetchSnapshotsSpy,
   })
+  mockedUseRestoreSessionStart.mockReturnValue({ mutate: restoreSpy, isPending: false })
   mockedUseUndo.mockReturnValue({ mutate: undoSpy, isPending: false })
+  restoreSpy.mockReset()
   undoSpy.mockReset()
   refetchDetailsSpy.mockReset()
   refetchSnapshotsSpy.mockReset()
@@ -92,19 +99,33 @@ it('renders session details and only allows undoing the latest rating', async ()
   expect(screen.getAllByRole('button', { name: /undo latest/i })).toHaveLength(1)
   expect(queryClient.getQueryState(queryKeys.session.snapshots(12))?.isInvalidated).toBe(false)
 
-  // #4343: the destructive session-rewind action is retired; history is kept.
-  expect(screen.queryByRole('button', { name: /restore/i })).not.toBeInTheDocument()
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /restore start/i }))
+  expect(screen.getByRole('dialog', { name: 'Restore session start?' })).toBeInTheDocument()
+  expect(screen.getByText(/replaces your entire current pile/i)).toBeInTheDocument()
+  expect(screen.getByText(/reading progress, ratings, and queue order may be reverted/i)).toBeInTheDocument()
+  expect(restoreSpy).not.toHaveBeenCalled()
+
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(screen.queryByRole('dialog', { name: 'Restore session start?' })).not.toBeInTheDocument()
+  expect(restoreSpy).not.toHaveBeenCalled()
+
+  await user.click(screen.getByRole('button', { name: /restore start/i }))
+  await user.click(screen.getByRole('button', { name: 'Restore session start' }))
+  expect(restoreSpy).toHaveBeenCalledWith(12)
+  expect(screen.queryByRole('dialog', { name: 'Restore session start?' })).not.toBeInTheDocument()
+  expect(refetchDetailsSpy).toHaveBeenCalledOnce()
+  // #3468: restore and undo refresh the snapshot list through the shared cache
+  // helper, which invalidates the same key the session view reads. A
+  // component-local refetch would leave the History card counting rows this page
+  // no longer shows, so the page must not call the hook's refetch at all.
+  expect(refetchSnapshotsSpy).not.toHaveBeenCalled()
+  expect(queryClient.getQueryState(queryKeys.session.snapshots(12))?.isInvalidated).toBe(true)
+  expect(showToastSpy).toHaveBeenCalledWith('Session restored to its starting state.', 'success')
 
   await user.click(screen.getByRole('button', { name: /undo latest/i }))
   expect(undoSpy).toHaveBeenCalledWith({ sessionId: 12, snapshotId: 4 })
-  expect(refetchDetailsSpy).toHaveBeenCalledOnce()
-  // #3468: undo refreshes the snapshot list through the shared cache helper,
-  // which invalidates the same key the session view reads. A component-local
-  // refetch would leave the History card counting rows this page no longer
-  // shows, so the page must not call the hook's refetch at all.
+  expect(refetchDetailsSpy).toHaveBeenCalledTimes(2)
   expect(refetchSnapshotsSpy).not.toHaveBeenCalled()
-  expect(queryClient.getQueryState(queryKeys.session.snapshots(12))?.isInvalidated).toBe(true)
   expect(showToastSpy).toHaveBeenCalledWith('Last change undone.', 'success')
 })
 
@@ -161,15 +182,15 @@ it('formats multi-step ladder path from raw API values', () => {
   expect(screen.getByText('d6 → d8')).toBeInTheDocument()
 })
 
-it('explains Undo Latest and offers no session-rewind action (#4343)', () => {
+it('explains how Undo Latest differs from Restore Start instead of leaving two near-identical buttons bare', () => {
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
 
   const explanation = screen.getByText(/reverses only the newest change/)
   expect(explanation).toHaveTextContent(/Undo Latest/)
   expect(explanation).toHaveTextContent(/stays on the newest snapshot until it has been used once/)
-  expect(explanation).toHaveTextContent(/reading history stays intact/i)
-  expect(explanation).not.toHaveTextContent(/Restore Start/)
-  expect(screen.queryByText(/rewinds the whole session/)).not.toBeInTheDocument()
+  expect(explanation).toHaveTextContent(/Restore Start/)
+  expect(explanation).toHaveTextContent(/rewinds the whole session to the moment it began/)
+  expect(explanation).toHaveTextContent(/asks for confirmation first/)
 })
 
 it('reports a failed undo instead of leaving the page silent', async () => {
@@ -256,7 +277,7 @@ it('shows session-start snapshots as history instead of rating undo targets', ()
   expect(screen.getByText('History')).toBeInTheDocument()
 })
 
-it('renders optional event metadata', () => {
+it('renders pending restore state and optional event metadata', () => {
   mockedUseSessionDetails.mockReturnValue({ data: {
     session_id: 15, started_at: '2024-01-01', ended_at: '2024-01-02', start_die: 4, current_die: 6,
     ladder_path: 'd4 → d6', narrative_summary: undefined,
@@ -266,7 +287,9 @@ it('renders optional event metadata', () => {
     data: { snapshots: [{ id: 6, description: 'Snapshot', created_at: '2024-01-01' }] },
     refetch: refetchSnapshotsSpy,
   })
+  mockedUseRestoreSessionStart.mockReturnValue({ mutate: restoreSpy, isPending: true })
   render(<MemoryRouter><SessionPage /></MemoryRouter>)
+  expect(screen.getByRole('button', { name: 'Restoring...' })).toBeDisabled()
   expect(screen.getByText('Queue move: front')).toBeInTheDocument()
 })
 

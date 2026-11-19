@@ -8,16 +8,7 @@ import type { components } from '../generated/openapi'
  * last_rating, or is_test to reduce payload
  * size for large lists.
  */
-export type ThreadListItem = components['schemas']['QueueThreadListItem'] & {
-  /**
-   * Derived series cover from the native `/api/v2/threads` projection (#5433):
-   * the next unread confirmed issue's provider CDN URL, else the first confirmed
-   * issue with a cover. Null when no confirmed cover exists. Not yet in the
-   * Python-generated schema, so it is declared here until the native contract
-   * replaces it.
-   */
-  series_cover_image_url?: string | null
-}
+export type ThreadListItem = components['schemas']['QueueThreadListItem']
 
 /**
  * Represents a comic thread/series
@@ -358,6 +349,12 @@ export interface SessionDetails {
   narrative_summary: Record<string, string[]>;
   events: SessionEvent[];
 }
+
+export type AnalyticsSession = components['schemas']['RecentSession']
+
+export type TopRatedThread = components['schemas']['TopRatedThread']
+
+export type AnalyticsMetrics = components['schemas']['AnalyticsMetricsResponse']
 
 export type ThreadListResponse = components['schemas']['QueueThreadListResponse']
 

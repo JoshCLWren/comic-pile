@@ -167,10 +167,11 @@ async def test_imported_thread_does_not_queue_omitted_external_issues(
     )
     assert response.status_code == 201
 
-    owned_issues = (
-        await async_db.execute(select(Issue).where(Issue.thread_id == thread.id))
-    ).scalars().all()
-    assert [issue.issue_number for issue in owned_issues] == ["900"]
+    listed = await auth_client.get(f"/api/v1/threads/{thread.id}/issues")
+    assert listed.status_code == 200
+    listed_data = listed.json()
+    assert listed_data["total_count"] == 1
+    assert [issue["issue_number"] for issue in listed_data["issues"]] == ["900"]
 
     await async_db.refresh(thread)
     assert thread.total_issues == 1

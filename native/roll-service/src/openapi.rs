@@ -5,7 +5,7 @@
 //! documentation-only operation is generated from the same Rust request and
 //! response types the mounted handlers use, and the aggregate merges the
 //! existing per-domain [`utoipa::OpenApi`] documents (`QueueApi`, `ThreadsApi`,
-//! `IssueApi`) with the v2 auth, bootstrap, dice, offer, reset
+//! `IssueApi`, `AnalyticsApi`) with the v2 auth, bootstrap, dice, offer, reset
 //! and reading-boundary declarations.
 //!
 //! The checked-in artifact is `native/contracts/v2-runtime.openapi.json`; see
@@ -17,7 +17,7 @@ use utoipa::OpenApi;
 /// The native `/api/v2` operations that are declared in the auth, bootstrap,
 /// dice, offer, reset and reading-boundary modules.
 ///
-/// `QueueApi`, `ThreadsApi` and `IssueApi` already publish the
+/// `QueueApi`, `ThreadsApi`, `IssueApi` and `AnalyticsApi` already publish the
 /// remaining deployed operations and are merged in [`canonical_openapi`].
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -111,17 +111,6 @@ use utoipa::OpenApi;
         crate::releases::publish_documentation,
         crate::releases::retract_documentation,
         crate::comicvine_resolution::series_import_status_documentation,
-        crate::creators_v2::list_documentation,
-        crate::creators_v2::summaries_documentation,
-        crate::creators_v2::compare_documentation,
-        crate::creators_v2::discoveries_documentation,
-        crate::creators_v2::team_chemistry_documentation,
-        crate::creators_v2::detail_documentation,
-        crate::creators_v2::series_issues_documentation,
-        crate::creators_v2::metric_documentation,
-        crate::creators_v2::rating_distribution_documentation,
-        crate::creators_v2::role_documentation,
-        crate::creators_v2::series_documentation,
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -230,42 +219,6 @@ use utoipa::OpenApi;
         crate::releases::PublicReleaseResponse,
         crate::releases::ReleaseListResponse,
         crate::comicvine_resolution::SeriesImportStatusResponse,
-        crate::creators_v2::CreatorSummaryCoverage,
-        crate::creators_v2::CreatorSummaryItem,
-        crate::creators_v2::CreatorSummariesResponse,
-        crate::creators_v2::CreatorListItem,
-        crate::creators_v2::CreatorListResponse,
-        crate::creators_v2::CreatorRoleStat,
-        crate::creators_v2::CreatorIssueRow,
-        crate::creators_v2::CreatorRatingBucket,
-        crate::creators_v2::CreatorRatingDistribution,
-        crate::creators_v2::CreatorSeriesGroup,
-        crate::creators_v2::CreatorSeriesIssueListResponse,
-        crate::creators_v2::CreatorIssueInsight,
-        crate::creators_v2::CreatorSeriesInsight,
-        crate::creators_v2::CreatorInsights,
-        crate::creators_v2::CreatorDetailResponse,
-        crate::creators_v2::CreatorComparisonRoleStat,
-        crate::creators_v2::CreatorComparisonSeriesAggregate,
-        crate::creators_v2::CreatorComparisonIssueRef,
-        crate::creators_v2::CreatorComparisonItem,
-        crate::creators_v2::CreatorComparisonCoverage,
-        crate::creators_v2::CreatorComparisonResponse,
-        crate::creators_v2::CreatorDiscoveryReason,
-        crate::creators_v2::CreatorDiscoveryEntry,
-        crate::creators_v2::CreatorDiscoveryView,
-        crate::creators_v2::CreatorDiscoveryCoverage,
-        crate::creators_v2::CreatorDiscoveryResponse,
-        crate::creators_v2::CreatorTeamMember,
-        crate::creators_v2::CreatorTeamIssueRef,
-        crate::creators_v2::CreatorTeamSeriesRef,
-        crate::creators_v2::CreatorTeamPair,
-        crate::creators_v2::CreatorTeamCoverage,
-        crate::creators_v2::CreatorTeamChemistryResponse,
-        crate::creators_v2::CreatorMetricCalculation,
-        crate::creators_v2::CreatorMetricIssue,
-        crate::creators_v2::CreatorMetricPagination,
-        crate::creators_v2::CreatorMetricDrilldown,
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -298,6 +251,7 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::queue::QueueApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
+        .merge_from(crate::analytics::AnalyticsApi::openapi())
         .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
@@ -465,7 +419,6 @@ mod tests {
                 "last_read",
                 "snoozed_threads",
                 "snoozed_count",
-                "snoozed_thread_ids",
                 "skipped_thread_ids",
                 "skipped_threads",
                 "timezone",

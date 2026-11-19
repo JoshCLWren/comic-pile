@@ -67,5 +67,9 @@ export function stabilizeAuditApiPayload(pathname: string, payload: unknown) {
     }
   }
 
+  if (pathname === '/api/v1/sessions/current/' && isJsonRecord(payload)) {
+    return normalizeSessionRecord(payload, 0)
+  }
+
   return payload
 }

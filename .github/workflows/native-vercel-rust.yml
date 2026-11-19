@@ -46,9 +46,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - uses: Swatinem/rust-cache@v2.9.3
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: Swatinem/rust-cache@v2
       - name: Verify unified Cargo workspace lockfile
         # Runs the same guard the production @vercel/rust build.sh runs. It
         # fails on a second lockfile, divergent resolution or lock mutation,

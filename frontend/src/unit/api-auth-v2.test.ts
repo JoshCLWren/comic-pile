@@ -78,7 +78,7 @@ it('keeps password-reset secrets out of console diagnostics', async () => {
   }
 })
 
-it('keeps ordinary endpoint diagnostics and includes sanitized request path', async () => {
+it('keeps ordinary endpoint diagnostics unchanged', async () => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   try {
     const error = {
@@ -87,7 +87,7 @@ it('keeps ordinary endpoint diagnostics and includes sanitized request path', as
     }
     await responseInterceptor(error).catch(() => undefined)
 
-    expect(consoleError).toHaveBeenCalledWith('API Error:', '/v2/threads/42', error)
+    expect(consoleError).toHaveBeenCalledWith('API Error:', error)
   } finally {
     consoleError.mockRestore()
   }

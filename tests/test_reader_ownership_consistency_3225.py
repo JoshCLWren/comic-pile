@@ -27,6 +27,7 @@ from app.models.tag import Tag
 from app.models.thread import Thread
 from app.schemas.continuity_plan import ContinuityPlanNode
 from app.services import ownership_guard
+from app.services.dependency_service import create_dependency
 from app.services.errors import ForbiddenError, NotFoundError
 from app.services.tag_service import TagService
 
@@ -94,6 +95,14 @@ async def test_cross_user_dependency_rejected_despite_shared_catalog(
     thread_b = await _make_thread(db, sample_user2.id, "Bob thread")
     issue_a = await _make_issue(db, thread_a.id, catalog_issue_id=catalog_issue.id)
     issue_b = await _make_issue(db, thread_b.id, catalog_issue_id=catalog_issue.id)
+
+    result, reason = await create_dependency(issue_a.id, issue_b.id, sample_user.id, db)
+    assert result is None
+    assert reason == "Issue not found"
+
+    result, reason = await create_dependency(issue_b.id, issue_a.id, sample_user2.id, db)
+    assert result is None
+    assert reason == "Issue not found"
 
     with pytest.raises(HTTPException) as exc_info:
         await ownership_guard.require_dependency_endpoints_owned(

@@ -39,3 +39,8 @@ def test_pruned_python_analytics_absent_from_openapi() -> None:
         assert path not in schema["paths"], f"{path} must stay pruned"
 
 
+@pytest.mark.asyncio
+async def test_retained_metrics_surface_still_available(client: AsyncClient) -> None:
+    """The eager ``/api/metrics`` surface is a different, retained route."""
+    response = await client.get("/api/metrics")
+    assert response.status_code == 200

@@ -15,12 +15,15 @@ from typing import TypedDict
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, ReadingSession, Thread
+from app.models import Event, ReadingSession, Thread, User
 from app.models.thread import normalize_format_value
 from app.models.recommendation_context import RecommendationContext as RecContextModel
 from app.repositories.roll_repository import (
     clear_session_pending,
     fetch_issue_by_id,
+    fetch_latest_session_event,
+    fetch_pending_thread_id,
+    fetch_thread_by_id,
     insert_event,
     fetch_session_events,
     insert_recommendation_context,
@@ -30,6 +33,7 @@ from app.services.queue_display import display_position
 from app.services.reading_effort import (
     EffortEstimate,
     build_recommendation_context,
+    compute_effort_estimate,
     compute_effort_estimates_batch,
 )
 from app.services.reading_eligibility_service import (
@@ -38,6 +42,7 @@ from app.services.reading_eligibility_service import (
 from app.services.bandwidth_selection import select_bandwidth_weighted
 from app.services.roll_exclusion import (
     derive_effective_roll_excluded_thread_ids,
+    derive_cross_session_excluded_thread_ids,
 )
 from app.services.explanation_projection import get_primary_explanation
 from app.schemas.recommendation_context import (
@@ -691,3 +696,272 @@ class RollService:
         )
         await self._db.commit()
         return response
+
+
+    async def execute_override(self, *, thread_id: int, current_user: User) -> RollResponse:
+        """Select an owned Thread using the active eligibility authority.
+
+        Args:
+            thread_id: Reader-selected Thread.
+            current_user: Authenticated reader.
+
+        Returns:
+            Selected canonical issue and decision-time context.
+        """
+        db = self._db
+        override_thread = await fetch_thread_by_id(db, thread_id, current_user.id, for_update=True)
+        if not override_thread:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="That series was not found",
+            )
+
+        eligibility = await get_execution_eligibility(db, current_user.id)
+        if (
+            override_thread.is_blocked
+            if eligibility is None
+            else thread_id not in eligibility.candidate_ids()
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f'"{override_thread.title}" is blocked and cannot be selected',
+            )
+
+        if override_thread.status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    f'"{override_thread.title}" is {override_thread.status} '
+                    "and cannot be selected"
+                ),
+            )
+
+        current_session = await get_or_create(
+            db, user_id=current_user.id, existing_user=current_user
+        )
+        current_session_id = current_session.id
+        current_die = await get_current_die_for_session(current_session, db)
+
+        override_thread_id = override_thread.id
+        override_thread_title = override_thread.title
+        override_thread_format = normalize_format_value(override_thread.format)
+        override_thread_queue_position = await display_position(self._db, override_thread)
+
+        override_thread_issues_remaining = (
+            await override_thread.get_issues_remaining(db)
+            if eligibility is None
+            else eligibility.unread_counts.get(thread_id, 0)
+        )
+        override_thread_total_issues = override_thread.total_issues
+        override_thread_reading_progress = override_thread.reading_progress
+        override_thread_issue_id = None
+        override_thread_issue_number = None
+        if eligibility is not None:
+            override_thread_issue_id = eligibility.threads[thread_id].next_issue_id
+            override_thread_issue_number = eligibility.issue_numbers.get(override_thread_issue_id)
+        elif override_thread.uses_issue_tracking() and override_thread.next_unread_issue_id:
+            next_issue = await fetch_issue_by_id(db, override_thread.next_unread_issue_id)
+            if next_issue and next_issue.status == "unread":
+                override_thread_issue_id = next_issue.id
+                override_thread_issue_number = next_issue.issue_number
+
+        snoozed_ids = (
+            list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+        )
+
+        if eligibility is not None and override_thread_id in (
+            current_session.skipped_thread_ids or []
+        ):
+            raise HTTPException(status_code=400, detail="Unskip this Thread before selecting it")
+
+        # Issue #3446: the "Pick manually" picker lists the current session's snoozed
+        # series on purpose, so an explicit override must succeed and leave the durable
+        # session snooze untouched (#293) — the series stays snoozed after the manual
+        # read. A thread that is only on durable cross-session snooze backoff, never
+        # surfaced in that picker, stays excluded.
+        derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, current_user.id)
+        if override_thread_id in derived_snoozed_ids and override_thread_id not in snoozed_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f'"{override_thread_title}" is on session-based snooze backoff and '
+                    "cannot be overridden yet."
+                ),
+            )
+
+        # Issue #3467: a double-clicked "Pick this series" must log a single ROLLED
+        # event. Both signals must agree: the session still points at this thread
+        # (so the pick is live and unconsumed) and the newest event is already the
+        # override for it. A random roll, a rate, a snooze, a dismiss, or a
+        # different pick breaks one of those signals, so a later pick of the same
+        # series is treated as genuinely new and still records its own event.
+        latest_event = await fetch_latest_session_event(db, current_session_id)
+        pending_thread_id = await fetch_pending_thread_id(db, current_session_id)
+        is_duplicate_override = (
+            pending_thread_id == override_thread_id
+            and latest_event is not None
+            and latest_event.type == "roll"
+            and latest_event.selection_method == "override"
+            and latest_event.selected_thread_id == override_thread_id
+        )
+        if is_duplicate_override:
+            snoozed_count = len(snoozed_ids)
+            return RollResponse(
+                thread_id=override_thread_id,
+                title=override_thread_title,
+                format=override_thread_format,
+                issues_remaining=override_thread_issues_remaining,
+                queue_position=override_thread_queue_position,
+                die_size=current_die,
+                result=0,
+                offset=snoozed_count,
+                snoozed_count=snoozed_count,
+                issue_id=override_thread_issue_id,
+                issue_number=override_thread_issue_number,
+                next_issue_id=override_thread_issue_id,
+                next_issue_number=override_thread_issue_number,
+                total_issues=override_thread_total_issues,
+                reading_progress=override_thread_reading_progress,
+                explanation=get_primary_explanation([]),
+            )
+
+        # Decision-time context is purely observational: it records the estimate
+        # that existed when this roll happened and never changes the selection.
+        effort_estimate = await compute_effort_estimate(
+            db,
+            user_id=current_user.id,
+            thread_id=override_thread_id,
+            issue_id=override_thread_issue_id,
+        )
+        recommendation_settings = get_recommendation_settings()
+        control_mode = recommendation_settings.control_mode
+        algorithm_version = recommendation_algorithm_version(control_mode)
+        override_candidate_weights: list[dict[str, object]] = [
+            {
+                "candidate_id": override_thread_id,
+                "weight": 1.0,
+                "reasons": [],
+                "factors": [],
+            }
+        ]
+        recommendation_context = build_recommendation_context(
+            effort_estimate,
+            thread_id=override_thread_id,
+            issue_id=override_thread_issue_id,
+            issue_number=override_thread_issue_number,
+            candidate_weights=override_candidate_weights,
+            bandwidth="balanced",
+            bandwidth_source="manual_override",
+            bandwidth_confidence=1.0,
+            random_bypass=False,
+            balanced_neutrality=True,
+            selected_weight=1.0,
+            algorithm_version=algorithm_version,
+            control_mode=control_mode,
+        )
+
+        effort_estimate_str = (
+            effort_estimate.band if isinstance(effort_estimate, EffortEstimate) else effort_estimate
+        )
+
+        event = Event(
+            type="roll",
+            session_id=current_session_id,
+            selected_thread_id=override_thread_id,
+            die=current_die,
+            result=0,
+            selection_method="override",
+            recommendation_reason_codes=[],
+            recommendation_context=recommendation_context,
+            issue_id=override_thread_issue_id,
+            issue_number=override_thread_issue_number,
+            rolling_recommendation_context=self._build_rolling_recommendation_context(
+                die_size=current_die,
+                selected_queue_position=override_thread_queue_position,
+                bounded_candidate_ids=[override_thread_id],
+                selected_index=0,
+                selection_method="override",
+                session_timezone=current_session.timezone,
+                selected_thread_last_rating=override_thread.last_rating,
+                selected_thread_last_activity_at=override_thread.last_activity_at,
+                effort_estimate=effort_estimate_str,
+                algorithm_version=algorithm_version,
+                control_mode=control_mode,
+            ),
+        )
+        db.add(event)
+
+        context_data = RecommendationContextCreate(
+            schema_version=2,
+            intent="balanced",
+            intent_source="manual_override",
+            intent_confidence=1.0,
+            bandwidth="balanced",
+            bandwidth_source="manual_override",
+            bandwidth_confidence=1.0,
+            candidate_factors=None,
+            final_weight=1.0,
+            random_bypass=False,
+            balanced_neutrality=True,
+            effort_minutes=round(effort_estimate.minutes, 2)
+            if effort_estimate.minutes is not None
+            else None,
+            effort_band=effort_estimate.band,
+            effort_source=effort_estimate.source.value,
+            effort_confidence=round(effort_estimate.confidence, 3),
+            effort_sample_count=effort_estimate.sample_count,
+        )
+
+        await insert_event(db, event)
+        await db.flush()
+
+        rec_context = RecContextModel(
+            event_id=event.id,
+            schema_version=context_data.schema_version,
+            intent=context_data.intent,
+            intent_source=context_data.intent_source,
+            intent_confidence=context_data.intent_confidence,
+            bandwidth=context_data.bandwidth,
+            bandwidth_source=context_data.bandwidth_source,
+            bandwidth_confidence=context_data.bandwidth_confidence,
+            candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
+            if context_data.candidate_factors
+            else None,
+            final_weight=context_data.final_weight,
+            random_bypass=context_data.random_bypass,
+            balanced_neutrality=context_data.balanced_neutrality,
+            effort_minutes=context_data.effort_minutes,
+            effort_band=context_data.effort_band,
+            effort_source=context_data.effort_source,
+            effort_confidence=context_data.effort_confidence,
+            effort_sample_count=context_data.effort_sample_count,
+        )
+        await insert_recommendation_context(db, rec_context)
+
+        await update_session_pending_thread(
+            db, current_session_id, override_thread_id, datetime.now(UTC)
+        )
+
+        await db.commit()
+
+        snoozed_count = len(snoozed_ids)
+        offset = snoozed_count
+
+        return RollResponse(
+            thread_id=override_thread_id,
+            title=override_thread_title,
+            format=override_thread_format,
+            issues_remaining=override_thread_issues_remaining,
+            queue_position=override_thread_queue_position,
+            die_size=current_die,
+            result=0,
+            offset=offset,
+            snoozed_count=snoozed_count,
+            issue_id=override_thread_issue_id,
+            issue_number=override_thread_issue_number,
+            next_issue_id=override_thread_issue_id,
+            next_issue_number=override_thread_issue_number,
+            total_issues=override_thread_total_issues,
+            reading_progress=override_thread_reading_progress,
+            explanation=get_primary_explanation([]),
+        )

@@ -33,21 +33,22 @@ def _request(path: str, method: str = "GET") -> Request:
 
 
 def test_session_read_operation_classifies_only_bounded_list_reads() -> None:
-    """History lists are instrumented without detail noise; retired reads are not."""
-    assert _session_read_operation("/api/sessions/current/", "GET") is None
-    assert _session_read_operation("/api/v1/sessions/current", "GET") is None
+    """Current-session and History lists are instrumented without detail noise."""
+    assert _session_read_operation("/api/sessions/current/", "GET") == "current-session"
+    assert _session_read_operation("/api/v1/sessions/current", "GET") == "current-session"
     assert _session_read_operation("/api/sessions/", "GET") == "history-list"
     assert _session_read_operation("/api/v1/sessions", "GET") == "history-list"
     assert _session_read_operation("/api/sessions/42", "GET") is None
+    assert _session_read_operation("/api/sessions/current/", "POST") is None
 
 
 @pytest.mark.asyncio
-async def test_history_list_response_exposes_phase_and_query_diagnostics(
+async def test_current_session_response_exposes_phase_and_query_diagnostics(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Successful History list reads expose structured timing evidence."""
+    """Successful current-session reads expose structured timing evidence."""
     middleware = SecurityHeadersMiddleware(app=lambda scope, receive, send: None)
-    request = _request("/api/sessions/")
+    request = _request("/api/sessions/current/")
     request.state.request_id = "request-123"
     token = begin_request_diagnostics()
 
@@ -62,12 +63,12 @@ async def test_history_list_response_exposes_phase_and_query_diagnostics(
     finally:
         end_request_diagnostics(token)
 
-    assert response.headers["X-Session-Read-Operation"] == "history-list"
+    assert response.headers["X-Session-Read-Operation"] == "current-session"
     assert response.headers["X-Session-Read-DB-Ms"] == "20.00"
     assert response.headers["X-Session-Read-DB-Queries"] == "2"
     assert float(response.headers["X-Session-Read-Total-Ms"]) >= 0
     assert float(response.headers["X-Session-Read-App-Ms"]) >= 0
-    assert "Session read diagnostics: history-list" in caplog.text
+    assert "Session read diagnostics: current-session" in caplog.text
 
 
 @pytest.mark.asyncio

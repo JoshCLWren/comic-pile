@@ -282,15 +282,14 @@ def test_provably_stale_local_lease_falls_through_to_history() -> None:
     policy = _policy()
     now = 1_800_000_000
     labels = ["factory", "factory:local", "factory:building"]
-    ttl = sys.modules["factory_work_policy"].LOCAL_LEASE_TTL_SECONDS
 
     assert policy.lease_action_for_issue(
-        _issue_payload(labels, _iso_timestamp(now - ttl - 1)),
+        _issue_payload(labels, _iso_timestamp(now - 3601)),
         now_epoch=now,
     ) == policy.LEASE_ACTION_RECONCILE
     # Exactly at the TTL is not yet stale.
     assert policy.lease_action_for_issue(
-        _issue_payload(labels, _iso_timestamp(now - ttl)),
+        _issue_payload(labels, _iso_timestamp(now - 3600)),
         now_epoch=now,
     ) == policy.LEASE_ACTION_HOLD_LOCAL
 

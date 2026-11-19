@@ -598,8 +598,7 @@ mod tests {
             jsonwebtoken::encode(
                 &jsonwebtoken::Header::default(),
                 &claims,
-                &jsonwebtoken::EncodingKey::from_secret(TEST_SECRET.as_bytes())
-                    .expect("signing key"),
+                &jsonwebtoken::EncodingKey::from_secret(TEST_SECRET.as_bytes()),
             )
             .expect("signed access token")
         }

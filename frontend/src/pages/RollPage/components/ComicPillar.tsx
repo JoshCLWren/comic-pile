@@ -16,7 +16,7 @@ interface ComicPillarProps {
   activeRatingThread: RatingThread | null
   /** Die size the current roll used, so the winning face can be named on the card (issue #3126). */
   currentDie?: number
-  onRefreshThread: (options?: { forceRefresh?: boolean }) => Promise<void> | void
+  onRefreshThread: () => void
 }
 
 // A non-breaking space before the separator glues it to the item it follows, so
@@ -252,13 +252,9 @@ export function ComicPillar({
           totalIssues={activeRatingThread.total_issues}
           threadTitle={activeRatingThread.title}
           onClose={() => setIsCorrectionDialogOpen(false)}
-          onSuccess={(options) => {
+          onSuccess={() => {
             setIsCorrectionDialogOpen(false)
-            if (options?.alreadyRefreshed) {
-              void onRefreshThread()
-              return
-            }
-            void onRefreshThread({ forceRefresh: true })
+            onRefreshThread()
           }}
         />
       ) : null}

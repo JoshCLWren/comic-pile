@@ -7,14 +7,13 @@
 //! * `GET /api/v1/sessions/{session_id}`
 //!
 //! Remaining browser-called sessions operations stay on Python in this slice:
-//! list (`GET /api/sessions/` + v1 twin), details (`GET .../{id}/details` +
-//! v1), correction-examples
+//! list (`GET /api/sessions/` + v1 twin), current (`GET .../current/` + v1),
+//! details (`GET .../{id}/details` + v1), restore-session-start
+//! (`POST .../{id}/restore-session-start` + v1), correction-examples
 //! (`GET /api/v1/sessions/correction-examples`), and snapshots
 //! (`GET .../{id}/snapshots` + v1, covered by PR #4888). Undo operations
 //! (`/api/undo/*`, `/api/v1/undo/*`) live outside the sessions route
-//! fragment and are not claimed here. Current (`GET .../current/`) and
-//! restore-session-start (`POST .../{id}/restore-session-start`) are retired,
-//! not ported (#4343).
+//! fragment and are not claimed here.
 //!
 //! Wire parity with Python `get_session` (`app/api/session.py`):
 //!

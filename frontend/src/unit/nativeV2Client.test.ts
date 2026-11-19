@@ -137,6 +137,12 @@ const clientCases: ClientCase[] = [
     expectedArgs: ['/v2/auth/me'],
   },
   {
+    name: 'reads owner-scoped analytics metrics',
+    invoke: (client) => client.metrics(),
+    method: 'get',
+    expectedArgs: ['/v2/analytics/metrics'],
+  },
+  {
     name: 'requests a Roll offer',
     invoke: (client) =>
       client.offer({

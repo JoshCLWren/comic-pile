@@ -6,20 +6,12 @@
 use sha2::{Digest, Sha256};
 use std::{env, fs, path::PathBuf, process::Command};
 
-fn hex_lower(bytes: impl AsRef<[u8]>) -> String {
-    bytes
-        .as_ref()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
-
 fn canonical_lock_sha256() -> String {
     let workspace_root = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("Cargo supplies the workspace manifest directory"),
     );
     let lockfile = fs::read(workspace_root.join("Cargo.lock")).expect("read canonical Cargo.lock");
-    hex_lower(Sha256::digest(lockfile))
+    format!("{:x}", Sha256::digest(lockfile))
 }
 
 fn main() {

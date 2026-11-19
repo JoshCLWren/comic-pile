@@ -285,23 +285,6 @@ export default function CblBrowserPage() {
     gcTime: 15 * 60 * 1000, // 15 minutes
   })
   const browsePage = browseQuery.data ?? null
-
-  // The server clamps an out-of-range page to the last valid page (#5381).
-  // Adopt the returned page in the URL so Previous/Next step from the page
-  // actually shown instead of the stale requested one.
-  const servedPage = browsePage && !browseQuery.isPlaceholderData ? browsePage.page : null
-  useEffect(() => {
-    if (servedPage === null || servedPage === page) return
-    setSearchParams(
-      (current) => {
-        const params = new URLSearchParams(current)
-        if (servedPage > 1) params.set('page', String(servedPage))
-        else params.delete('page')
-        return params
-      },
-      { replace: true },
-    )
-  }, [servedPage, page, setSearchParams])
   const selectedSource =
     deepLinkedListId !== null
       ? (browsePage?.items.find((item) => item.id === deepLinkedListId) ?? null)
@@ -912,7 +895,7 @@ export default function CblBrowserPage() {
             </p>
           )}
 
-          {graph && (hasGenuineOverlap(graph) || graphCycleErrors.length > 0) && (
+          {graph && hasGenuineOverlap(graph) && (
             <ReadingGraphSummary
               preview={graph}
               choices={overlapChoices}

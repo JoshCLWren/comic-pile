@@ -25,6 +25,21 @@ async def test_roll_success(
 
 
 @pytest.mark.asyncio
+async def test_roll_override(auth_client: AsyncClient, sample_data: dict) -> None:
+    """POST /roll/override/ sets specific thread."""
+    _ = sample_data
+    thread_id = 1
+    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread_id})
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["thread_id"] == thread_id
+    assert data["title"] == "Superman"
+    assert data["die_size"] == 8
+    assert data["result"] == 0
+
+
+@pytest.mark.asyncio
 async def test_roll_no_pool(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Returns error if no active threads."""
     from tests.conftest import get_or_create_user_async
@@ -60,6 +75,71 @@ async def test_roll_overflow(auth_client: AsyncClient, async_db: AsyncSession) -
     data = await roll_pending_thread(async_db)
     assert data.thread_id == thread.id
     assert 1 <= data.result <= 1
+
+
+@pytest.mark.asyncio
+async def test_roll_override_nonexistent(auth_client: AsyncClient, sample_data: dict) -> None:
+    """Override returns 404 for non-existent thread."""
+    _ = sample_data
+    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": 999})
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_override_roll_blocked_thread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Override roll returns 422 for blocked threads."""
+    from app.models import Thread
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    blocked_thread = Thread(
+        title="Blocked Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        is_blocked=True,
+        user_id=user.id,
+    )
+    async_db.add(blocked_thread)
+    await async_db.commit()
+    await async_db.refresh(blocked_thread)
+
+    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": blocked_thread.id})
+    assert response.status_code == 422
+    assert "blocked" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_override_roll_completed_thread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Override roll returns 422 for completed threads."""
+    from app.models import Thread
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    completed_thread = Thread(
+        title="Completed Thread",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="completed",
+        is_blocked=False,
+        user_id=user.id,
+    )
+    async_db.add(completed_thread)
+    await async_db.commit()
+    await async_db.refresh(completed_thread)
+
+    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": completed_thread.id})
+    assert response.status_code == 422
+    assert "completed" in response.json()["detail"].lower()
 
 
 @pytest.mark.asyncio

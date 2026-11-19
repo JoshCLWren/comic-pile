@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Event, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.repositories.read_without_rating_audit import ThreadHistoricalRating
+from app.services.creator_metric_drilldown import get_creator_metric_drilldown
 from app.services.read_without_rating_audit import (
     CAUSE_AMBIGUOUS_THREAD_RATING,
     CAUSE_EDITION_CONFLICT,
@@ -533,6 +534,34 @@ async def test_creator_impact_breaks_down_outlier_by_cause(
     }
     assert thread_b.id in audit.by_thread
     assert audit.by_thread[thread_b.id].thread_title == "Solo Book"
+
+
+@pytest.mark.asyncio
+async def test_drilldown_surfaces_missing_rating_cause(
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """The read-unrated drilldown carries the audit cause per row."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Team Book", issue_count=2, queue_position=1,
+        read_through=2,
+    )
+    creators = [{"id": 1, "name": "Chris Claremont", "role": "writer"}]
+    for issue in issues:
+        await _confirm_identity(async_db, issue, creators=creators)
+    await _rate(async_db, issues[0], rating=5.0, timestamp=D1)
+
+    drilldown = await get_creator_metric_drilldown(
+        async_db,
+        default_user.id,
+        "creator:1",
+        "read-unrated-count",
+    )
+    assert drilldown.total_count == 1
+    assert len(drilldown.included_issues) == 1
+    assert drilldown.included_issues[0].issue_id == issues[1].id
+    assert drilldown.included_issues[0].missing_rating_cause == CAUSE_NO_SOURCE_RATING
+    assert drilldown.excluded_issues[0].missing_rating_cause is None
 
 
 @pytest.mark.asyncio

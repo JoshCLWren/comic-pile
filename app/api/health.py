@@ -1,17 +1,130 @@
-"""Bounded warm-up endpoint for Vercel Fluid Compute instance reuse."""
+"""Bounded operational health and warm-up endpoints."""
 
 from __future__ import annotations
 
+import dataclasses
+import logging
+import os
+import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.services import health_probe
 from app.startup_diagnostics import StartupSnapshot
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
+
+
+async def _authorize_operational_probe(
+    x_health_token: Annotated[str | None, Header()] = None,
+) -> None:
+    """Require the configured health token for detailed operational probes.
+
+    Args:
+        x_health_token: Token supplied by trusted production monitoring.
+
+    Raises:
+        HTTPException: If a configured token is missing or incorrect.
+    """
+    expected = os.getenv("HEALTH_CHECK_TOKEN")
+    if expected and (
+        x_health_token is None or not secrets.compare_digest(x_health_token, expected)
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+
+@router.get("/health/live", include_in_schema=False)
+async def liveness() -> dict[str, str]:
+    """Confirm that the FastAPI process can serve requests without dependencies.
+
+    Returns:
+        Stable liveness response.
+    """
+    return {"status": "alive"}
+
+
+@router.get(
+    "/health/dependencies",
+    response_model=health_probe.DependencyHealthResult,
+    include_in_schema=False,
+)
+async def dependency_health(
+    _: Annotated[None, Depends(_authorize_operational_probe)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> health_probe.DependencyHealthResult | JSONResponse:
+    """Probe database with strict time bounds.
+
+    Args:
+        _: Operational-probe authorization result.
+        db: Async database session.
+
+    Returns:
+        Structured per-dependency status and timings.
+    """
+    result = await health_probe.get_dependency_health(db)
+
+    if result.status == "unhealthy":
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=dataclasses.asdict(result),
+        )
+    if result.status == "degraded":
+        return JSONResponse(
+            status_code=status.HTTP_207_MULTI_STATUS,
+            content=dataclasses.asdict(result),
+        )
+    return result
+
+
+@router.get(
+    "/health/warmup",
+    response_model=health_probe.DependencyHealthResult,
+    include_in_schema=False,
+)
+async def warmup(
+    _: Annotated[None, Depends(_authorize_operational_probe)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> health_probe.DependencyHealthResult | JSONResponse:
+    """Exercise the real read-only database dependency path.
+
+    Args:
+        _: Operational-probe authorization result.
+        db: Async database session.
+
+    Returns:
+        The same bounded dependency report used by production monitoring.
+    """
+    result = await health_probe.get_warmup_health(db)
+
+    if result.status == "unhealthy":
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=dataclasses.asdict(result),
+        )
+    if result.status == "degraded":
+        return JSONResponse(
+            status_code=status.HTTP_207_MULTI_STATUS,
+            content=dataclasses.asdict(result),
+        )
+    return result
+
+
+@router.get("/health", include_in_schema=False)
+async def legacy_health() -> dict[str, str]:
+    """Preserve the public legacy health URL as dependency-free liveness.
+
+    Database checks live only on the explicit bounded operational
+    endpoints so an uptime probe cannot wake Neon.
+
+    Returns:
+        Stable liveness response.
+    """
+    return {"status": "alive"}
 
 
 async def warm_endpoint(

@@ -77,7 +77,7 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
       onCreated: vi.fn(async () => undefined),
       onUpdated: vi.fn(async () => undefined),
       onReactivated: vi.fn(async () => undefined),
-      refetchRollState: vi.fn(async () => undefined),
+      refetchSession: vi.fn(async () => undefined),
       submitCreate,
       submitEdit: vi.fn(),
       submitReactivate: vi.fn(),

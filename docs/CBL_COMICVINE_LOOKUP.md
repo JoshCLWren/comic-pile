@@ -78,8 +78,11 @@ matching comic gets the same answer as a reader who does not.
 
 ## Layers
 
-The Python router, service and repository were removed (#4843); the Rust v2 handlers in
-`native/roll-service/src/issue_identity.rs` serve these routes natively.
+| Layer | Module | Responsibility |
+|---|---|---|
+| Router | `app/api/cbl_comicvine_lookup.py` | Validates the request and maps the service result to the response schema |
+| Service | `app/services/cbl_comicvine_lookup_service.py` | Builds the reader-safe occurrence page |
+| Repository | `app/repositories/cbl_comicvine_lookup_repository.py` | Owns the identity join, the occurrence query, and the totals |
 
 The reverse lookup is a read path. It performs no writes, triggers no GitHub fetch, and does not
 depend on the reading-plan sync, so a lookup never causes per-CBL network work.

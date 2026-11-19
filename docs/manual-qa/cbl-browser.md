@@ -37,17 +37,3 @@
 **Expected:** The existing list is never implicitly selected for replacement by title alone. A name collision is clearly disambiguated, using a new distinct list name/identity or an explicit confirmation to update a specified existing list with a full change preview. Cancel and failed writes do not mutate either list. Only explicitly approved entries change; previously curated ordering, exclusions, IDs, read states and unrelated lists remain intact. Deleting a newly imported list cannot reveal that a prior same-named list was silently destroyed.
 
 **Tracking:** Reproduced QA data-loss issue [#3933](https://github.com/JoshCLWren/comic-pile/issues/3933). The expected safety rule is independent of whether its current implementation has shipped.
-
-## MQA-CBL-006: Out-of-range browse pages clamp to the last page
-
-**Test:** Request a catalog browse/search page beyond the last page.
-
-**Expected:** The last valid page's matching results are returned instead of a false empty state. Source: #5381, fixed by #5445.
-
-## MQA-CBL-007: Cycle-only previews show the loop and a resolve path
-
-**Setup:** CBL preview whose reading graph has a cycle but no overlap questions.
-
-**Test:** Preview it and try Add.
-
-**Expected:** Add is disabled with a reason, the reading-graph panel shows the loop and series graph, and a hint explains how to break it (exclude a series in the loop under Customize). Source: #5379, fixed by #5438.

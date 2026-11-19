@@ -30,11 +30,7 @@ export interface RollBootstrapApi {
 export type SessionApi = ReturnType<typeof import('./api-sessions').createSessionApi>
 
 export interface CacheEffectsApi {
-  applyRatedThreadCache: (
-    client: import('@tanstack/react-query').QueryClient,
-    thread: RateResponsePayload,
-    options?: { refetchRollBootstrap?: boolean },
-  ) => Promise<void>
+  applyRatedThreadCache: (client: import('@tanstack/react-query').QueryClient, thread: RateResponsePayload) => Promise<void>
   invalidateCurrentSessionAfterSnooze: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
 }
 

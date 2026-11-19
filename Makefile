@@ -238,7 +238,7 @@ migrate:  ## Run database migrations (alembic upgrade head)
 	@echo "Running database migrations..."
 	@alembic upgrade head
 
-roll-test-schema:  ## Regenerate native/migrate/migrations/0001_baseline.sql from Alembic head
+roll-test-schema:  ## Regenerate native/roll-service/tests/fixtures/schema/public_schema.sql from Alembic head
 	@uv run python scripts/export_roll_test_schema.py --database-url "$(DATABASE_URL)"
 
 production-schema-audit:  ## Read-only production schema audit vs canonical fixture (#4735); requires PRODUCTION_SCHEMA_AUDIT_DATABASE_URL

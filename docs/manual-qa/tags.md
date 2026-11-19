@@ -1,7 +1,5 @@
 # Tags
 
-**Owner ruling (2026-11-18, [#5436 comment](https://github.com/JoshCLWren/comic-pile/issues/5436#issuecomment-6994669992)):** Tag data, including ComicVine-derived tags, is kept; there is no standalone `/tags` page or nav entry and none should be added. Tags are managed through inline editors and dialogs on thread and issue views.
-
 Tags can be private or global. They can be assigned to supported threads, issues, and reading plans; effective issue tags include allowed inherited assignments.
 
 ## MQA-TAG-001: Create with one of 32 colors
@@ -38,13 +36,13 @@ Tags can be private or global. They can be assigned to supported threads, issues
 
 **Test:** Inspect effective tags and inheritance sources; remove one contributing source.
 
-**Expected:** The issue inherits the union of visible thread/plan/direct tags. Duplicate effective chips display once with all contributing sources. Removing one source does not erase a still-inherited tag. Private tags never leak between users. This includes a plan's sole unread issue ([#5265](https://github.com/JoshCLWren/comic-pile/issues/5265), fixed by #5463).
+**Expected:** The issue inherits the union of visible thread/plan/direct tags. Duplicate effective chips display once with all contributing sources. Removing one source does not erase a still-inherited tag. Private tags never leak between users.
 
 ## MQA-TAG-006: Dedicated tag management page
 
-**Status: Retired (2026-11-18)** -- Owner ruling (2026-11-18, [#5436 comment](https://github.com/JoshCLWren/comic-pile/issues/5436#issuecomment-6994669992), also posted on #5437): no Tags page; tag data is kept but no standalone `/tags` page or nav entry exists or should be added. Inline tag creation, editing and deletion stay covered by MQA-TAG-001..004.
+**Test:** Once built, visit `/tags`, search the library's tags, create/edit/delete a permitted tag, then use an inline tag editor.
 
-**Original expectation (historical):** `/tags` is a real searchable tag-management page (search, create/edit/delete a permitted tag), not a redirect or 404; inline tagging remains available.
+**Expected:** `/tags` is a real searchable tag-management page, not a redirect or 404. Inline tagging remains available. This owner-confirmed expectation remains in the inventory before implementation.
 
 ## MQA-TAG-007: Inherited sources are legible and navigable
 

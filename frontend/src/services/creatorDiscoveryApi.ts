@@ -10,7 +10,7 @@ import type { CreatorDiscoveryResponse } from '../types/index'
 export function createCreatorDiscoveryApi(client: HttpClient) {
   return {
     getDiscoveries: () =>
-      client.get<CreatorDiscoveryResponse>('/v2/creators/discoveries'),
+      client.get<CreatorDiscoveryResponse>('/v1/creators/discoveries'),
   }
 }
 

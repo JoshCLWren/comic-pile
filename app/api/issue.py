@@ -4,7 +4,7 @@ import logging
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -126,6 +126,45 @@ def _is_issue_thread_number_conflict(exc: IntegrityError) -> bool:
         "duplicate key value violates unique constraint" in error_text
         and "thread_id" in error_text
         and "issue_number" in error_text
+    )
+
+
+@router.get("/threads/{thread_id}/issues", response_model=IssueListResponse)
+async def list_issues(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    status_filter: str | None = Query(None, pattern="^(unread|read)$", alias="status"),
+    page_size: int = Query(50, ge=1, le=100),
+    page_token: str | None = Query(None),
+) -> IssueListResponse:
+    """List all issues for a thread with optional status filter and pagination.
+
+    Args:
+        thread_id: The thread ID to list issues for.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+        status_filter: Optional filter by issue status (read/unread).
+        page_size: Number of issues to return per page.
+        page_token: Token for pagination continuation.
+
+    Returns:
+        IssueListResponse with paginated issues.
+
+    Raises:
+        HTTPException: If thread not found.
+    """
+    issues, total_count, next_token = await issue_service.list_issues(
+        db, thread_id, current_user.id, status_filter, page_size, page_token
+    )
+
+    issue_responses = [issue_to_response(issue) for issue in issues]
+
+    return IssueListResponse(
+        issues=issue_responses,
+        total_count=total_count,
+        page_size=page_size,
+        next_page_token=next_token,
     )
 
 

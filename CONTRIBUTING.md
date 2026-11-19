@@ -103,7 +103,7 @@ Contributors edit only `docs/api/route-fragments/*.json` source fragments
 `<!-- route-burndown -->` section, or `docs/api/route-fragments/vercel-rewrites.json` in a PR.
 Those files are bot-owned and are regenerated post-merge by
 `.github/workflows/regenerate-routes.yml` (runs
-`node scripts/generate_route_burndown.mjs` then
+`python3 scripts/generate_route_burndown.py` then
 `node scripts/generate_vercel_routes.mjs`). The `route-fragment-guard`
 workflow fails PRs that include generated files. `vercel.json` stays on
 `main` for Vercel deploy (do not gitignore it); the previous `main` copy
