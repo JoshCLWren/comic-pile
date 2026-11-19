@@ -1182,6 +1182,14 @@ export async function applyIssueCardMutation(
   }
   await Promise.all([
     invalidateAfterReaderProgress(client),
+    // Crossover detail rows and CBL adoption previews render the read label,
+    // progress and Next Up from their own parent queries, which none of the
+    // reader-progress prefixes above cover. Refresh them so a direct read on
+    // one of the new #4445 controls cannot leave those rows stale (#4445).
+    // Invalidating a preview refetches its server projection but leaves the
+    // reader's local checklist decisions untouched (same content_hash).
+    client.invalidateQueries({ queryKey: queryKeys.crossover.all }),
+    client.invalidateQueries({ queryKey: queryKeys.cblSources.previewAll() }),
     // Creator ratings, averages, comparison breakdowns and issue evidence are
     // derived from saved ratings; keep them coherent with the shared card.
     client.invalidateQueries({ queryKey: queryKeys.creator.all }),
