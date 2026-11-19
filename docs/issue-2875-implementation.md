@@ -13,7 +13,7 @@ Coordination issue: "Use the existing Factory to implement the first Latticery e
 ## What is already true from prior issues
 
 - #2874 is closed; the cross-repository delivery bridge exists (`DeliveryService`, ledger, credential boundary).
-- #2870 is closed; pure dependency/executable policy was staged in ComicPile (`latticery_extraction/`, since retired under #4750 as an abandoned handoff; the retained reference is `.github/scripts/factory_work_policy_latticery_ref.py`).
+- #2870 is closed; pure dependency/executable policy was staged in ComicPile (`latticery_extraction/`, since retired under #4750 as an abandoned handoff; the retained reference is [.github/scripts/factory_work_policy_latticery_ref.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/factory_work_policy_latticery_ref.py)).
 - Execution workers release leases while waiting on external review/CI (controller claim-release markers).
 
 ## What is still required to close #2875

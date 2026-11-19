@@ -6,6 +6,7 @@ pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
 pub mod catalog_commit;
+pub mod catalog_series_mapping_preview;
 pub mod cbl_catalog;
 pub mod comicvine_issue;
 pub mod comicvine_limits;
@@ -14,6 +15,7 @@ pub mod comicvine_resolution;
 pub mod comicvine_v2;
 pub mod config;
 pub mod continuity_plans;
+pub mod continuity_plans_project_preview;
 pub mod continuity_rules;
 pub mod creators;
 pub mod creators_v2;
@@ -22,6 +24,7 @@ pub mod custom_cbl;
 pub mod db;
 pub mod demo;
 pub mod dependencies;
+pub mod dependency_groups;
 pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
@@ -29,6 +32,8 @@ pub mod dismiss_pending;
 pub mod identity_inbox;
 pub mod issue_handler;
 pub mod issue_identity;
+pub mod issue_identity_adoption_preview;
+pub mod issue_identity_cbl_reading_graph_preview;
 pub mod issue_mutation;
 pub mod issue_read;
 pub mod issue_read_state;
@@ -41,6 +46,7 @@ pub mod option_inputs;
 pub mod outbound;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
+mod preview_validation;
 pub mod queue;
 pub mod reader_context;
 pub mod reading_blocker_projection;
@@ -55,6 +61,7 @@ pub mod reading_orders;
 pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
 pub mod reading_plan_sync;
+pub(crate) mod reading_preview_eval;
 pub mod reading_session;
 pub mod recommendation_explanation;
 pub mod releases;
@@ -638,6 +645,22 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/catalog/series-mappings/commit",
             post(catalog_commit::commit_series_mapping_handler),
         )
+        .route(
+            "/api/v1/catalog/series-mappings/preview",
+            post(catalog_series_mapping_preview::preview_series_mapping_handler),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+            post(continuity_plans_project_preview::preview_plan_projection_handler),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(issue_identity_adoption_preview::api_cbl_adoption_preview_handler),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+            post(issue_identity_cbl_reading_graph_preview::preview_cbl_reading_graph_handler),
+        )
         .route("/api/auth/register", post(auth::handlers::register))
         .route("/api/auth/login", post(auth::handlers::login))
         .route("/api/auth/refresh", post(auth::handlers::refresh))
@@ -1017,10 +1040,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(issue_identity::find_cbl_candidates_for_reading_list),
         )
         .route(
-            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
-            get(issue_identity::cbl_adoption_preview),
-        )
-        .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
             post(issue_identity::cbl_adoption_plan),
         )
@@ -1335,6 +1354,54 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/reading-mode/suggest",
             post(reading_mode::suggest_reading_mode),
+        )
+        .route(
+            "/api/v1/reading-order-groups/",
+            get(dependency_groups::list_groups),
+        )
+        .route(
+            "/api/v1/reading-order-groups/",
+            post(dependency_groups::create_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+            get(dependency_groups::list_thread_groups),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            get(dependency_groups::get_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            patch(dependency_groups::update_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            delete(dependency_groups::delete_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/detail",
+            get(dependency_groups::get_group_detail),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+            post(dependency_groups::add_issue_range),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members",
+            post(dependency_groups::add_member),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+            delete(dependency_groups::remove_member),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/order",
+            put(dependency_groups::set_group_order),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/plans",
+            get(dependency_groups::list_crossover_plans),
         )
         .fallback(|| async { ApiError::NotFound("Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
