@@ -232,8 +232,9 @@
       "bucket": "v1_operations",
       "method": "PUT",
       "path": "/api/v1/threads/{thread_id}/test-backdate",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+/test\\-backdate$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+/test\\-backdate$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
