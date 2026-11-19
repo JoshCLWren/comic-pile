@@ -144,17 +144,6 @@ async fn seed_issue(state: &Arc<AppState>, thread_id: i32, issue_id: i32, number
     .expect("seed issue");
 }
 
-async fn seed_thread_issue(
-    state: &Arc<AppState>,
-    user_id: i32,
-    thread_id: i32,
-    issue_id: i32,
-    number: &str,
-) {
-    seed_thread(state, user_id, thread_id).await;
-    seed_issue(state, thread_id, issue_id, number).await;
-}
-
 async fn seed_thread_issues(state: &Arc<AppState>, user_id: i32, thread_id: i32, issue_ids: &[i32]) {
     seed_thread(state, user_id, thread_id).await;
     for (index, issue_id) in issue_ids.iter().enumerate() {
