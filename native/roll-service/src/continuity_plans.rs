@@ -1399,6 +1399,48 @@ async fn compile_plan_rules(
     // 3. Convergence rules: a node waits for every gate target.
     let nodes_by_id: HashMap<&str, &ContinuityPlanNode> =
         nodes.iter().map(|node| (node.id.as_str(), node)).collect();
+
+    // Collect all issue ref_ids involved in convergence gates for bulk thread/position lookup.
+    // Python skips a convergence target when both issues belong to the same thread
+    // and the target immediately follows its prerequisite by Issue.position.
+    let mut convergence_issue_ids: HashSet<i32> = HashSet::new();
+    for node in nodes {
+        if node.convergence_gate.is_empty() {
+            continue;
+        }
+        if node.node_type == "issue" || node.node_type == "crossover" {
+            convergence_issue_ids.insert(node.ref_id);
+        }
+        for gate in &node.convergence_gate {
+            if let Some(target_node_id) = gate.get("node_id").and_then(|v| v.as_str()) {
+                if let Some(target_node) = nodes_by_id.get(target_node_id) {
+                    if target_node.node_type == "issue" || target_node.node_type == "crossover" {
+                        convergence_issue_ids.insert(target_node.ref_id);
+                    }
+                }
+            }
+        }
+    }
+
+    // Bulk load thread_id and position for all convergence issues.
+    let mut issue_thread_pos: HashMap<i32, (i32, i32)> = HashMap::new();
+    if !convergence_issue_ids.is_empty() {
+        let issue_ids: Vec<i32> = convergence_issue_ids.into_iter().collect();
+        let pos_rows = tx
+            .query(
+                "SELECT id, thread_id, position FROM issues WHERE id = ANY($1::int[])",
+                &[&issue_ids],
+            )
+            .await
+            .map_err(db::query_error)?;
+        for row in &pos_rows {
+            let issue_id: i32 = row.get(0);
+            let thread_id: i32 = row.get(1);
+            let position: i32 = row.get(2);
+            issue_thread_pos.insert(issue_id, (thread_id, position));
+        }
+    }
+
     for node in nodes {
         if node.convergence_gate.is_empty() {
             continue;
@@ -1428,14 +1470,39 @@ async fn compile_plan_rules(
         if targets.is_empty() {
             continue;
         }
-        targets.sort();
+
+        // Filter out convergence targets where both issues are in the same thread
+        // and the target immediately follows the source by position (Python behavior).
+        let mut filtered_targets: Vec<(String, i32)> = Vec::new();
+        for (target_kind, target_ref_id) in targets {
+            let should_skip = if node.node_type == "issue" && target_kind == "issue" {
+                if let (Some((source_thread, source_pos)), Some((target_thread, target_pos))) = (
+                    issue_thread_pos.get(&node.ref_id),
+                    issue_thread_pos.get(&target_ref_id),
+                ) {
+                    source_thread == target_thread && target_pos == source_pos + 1
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+            if !should_skip {
+                filtered_targets.push((target_kind, target_ref_id));
+            }
+        }
+
+        if filtered_targets.is_empty() {
+            continue;
+        }
+        filtered_targets.sort();
         edges_to_add.push(CompiledEdge {
             source_type: node.node_type.clone(),
             source_id: node.ref_id,
             target_type: node.node_type.clone(),
             target_id: node.ref_id,
             satisfaction: "converged".into(),
-            extra: Some(EdgeExtra::Converged(targets)),
+            extra: Some(EdgeExtra::Converged(filtered_targets)),
         });
     }
 
