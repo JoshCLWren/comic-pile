@@ -952,7 +952,7 @@ pub async fn apply_correction(
         )
         .await
         .map_err(db::query_error)?
-        .map(|row| row.get::<_, Option<String>>(0))
+        .map(|row| row.get::<_, Option<String>>(0).map(|s| s.to_owned()))
         .unwrap_or(None)
         .and_then(|value| match value.as_ref() {
             Some("") | None => None,
