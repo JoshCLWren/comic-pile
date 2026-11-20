@@ -1,5 +1,5 @@
 import { createServer as createHttpServer, type Server } from 'node:http'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import type { AddressInfo } from 'node:net'
 import { resolve as resolvePath } from 'node:path'
 import { createServer as createViteServer } from 'vite'
@@ -9,6 +9,27 @@ import { createApiDestinationResolver, createApiProxy } from '../../scripts/api-
 const ingress = JSON.parse(readFileSync(resolvePath(process.cwd(), '../vercel.json'), 'utf8'))
 const resolve = createApiDestinationResolver(ingress.routes)
 const ipv4Loopback = [127, 0, 0, 1].join('.')
+
+// vercel.json is bot-owned and regenerated post-merge, so at PR CI time it still
+// carries Python exceptions for operations retired in this PR. Route fragments
+// are the authoritative ingress source (see the migrated-preview test below),
+// so resolve retired operations against those instead.
+const fragmentsDir = resolvePath(process.cwd(), '../docs/api/route-fragments')
+const fragmentRoutes = readdirSync(fragmentsDir)
+  .filter((file) => file.endsWith('.json') && file !== 'vercel-rewrites.json')
+  .flatMap((file) => {
+    // SAFETY: route fragments are checked-in JSON objects whose `operations`,
+    // when present, is an array of objects with method/src/dest string fields.
+    const fragment = JSON.parse(readFileSync(resolvePath(fragmentsDir, file), 'utf8')) as {
+      operations?: { method: string; src?: string; dest?: string }[]
+    }
+    return (fragment.operations ?? []).map((operation) => ({
+      src: operation.src,
+      methods: [operation.method],
+      dest: operation.dest,
+    }))
+  })
+const resolveRetired = createApiDestinationResolver(fragmentRoutes)
 
 async function listen(server: Server): Promise<string> {
   await new Promise<void>((done) => server.listen(0, ipv4Loopback, done))
@@ -32,7 +53,7 @@ describe('development API routing', () => {
     for (const operation of retired) {
       const path = operation.path.replace(/\{[^}]+\}/g, '42')
       for (const method of operation.methods) {
-        expect(resolve(method, path), `${method} ${path}`).toBe('native')
+        expect(resolveRetired(method, path), `${method} ${path}`).toBe('native')
       }
     }
   })
