@@ -27,9 +27,9 @@ BASELINE_PATH = Path(__file__).resolve().parent / "hardcoded_ids_baseline.json"
 _GUARD_FILE_NAME = Path(__file__).name
 
 _SCOPE_DIRECTORIES = {"tests": REPOSITORY_ROOT / "tests"}
-# ``app`` remains a scanner mode for the retired Python-application rule, but
-# there is no longer an app/ directory to walk in the repository baseline.
-_SCAN_SCOPES = {"tests", "app"}
+# The retired Python-application rule is gone with ``app/``; the scanner only
+# covers ``tests/`` now, so there is no scope that could silently scan nothing.
+_SCAN_SCOPES = {"tests"}
 
 
 def _named_int_arguments(node: ast.Call) -> dict[str, int]:
@@ -55,16 +55,15 @@ def scan_source(source: str, *, scope: str) -> set[str]:
     """Scan one module's source for hardcoded primary-key literals.
 
     Args:
-        source: Full Python source text of a ``tests/`` or ``app/`` module.
-        scope: Either ``"tests"`` or ``"app"``, selecting which couplings to
-            report.
+        source: Full Python source text of a ``tests/`` module.
+        scope: Either ``"tests"``, selecting which couplings to report.
 
     Returns:
         The set of offending literals, such as ``"User(id=1)"``,
         ``"user_id=7"``, or ``"user_id=1"``.
 
     Raises:
-        ValueError: If ``scope`` is not ``"tests"`` or ``"app"``.
+        ValueError: If ``scope`` is not ``"tests"``.
     """
     if scope not in _SCAN_SCOPES:
         raise ValueError(f"Unknown scan scope: {scope!r}")
@@ -76,14 +75,11 @@ def scan_source(source: str, *, scope: str) -> set[str]:
         if not isinstance(node, ast.Call):
             continue
         arguments = _named_int_arguments(node)
-        if scope == "tests":
-            is_user_constructor = isinstance(node.func, ast.Name) and node.func.id == "User"
-            if is_user_constructor and arguments.get("id", 0) > 0:
-                found.add(f"User(id={arguments['id']})")
-            if "user_id" in arguments:
-                found.add(f"user_id={arguments['user_id']}")
-        elif arguments.get("user_id") == 1:
-            found.add("user_id=1")
+        is_user_constructor = isinstance(node.func, ast.Name) and node.func.id == "User"
+        if is_user_constructor and arguments.get("id", 0) > 0:
+            found.add(f"User(id={arguments['id']})")
+        if "user_id" in arguments:
+            found.add(f"user_id={arguments['user_id']}")
 
     return found
 
@@ -92,7 +88,7 @@ def _scope_files(scope: str) -> list[Path]:
     """List the Python modules that participate in one scan scope.
 
     Args:
-        scope: Either ``"tests"`` or ``"app"``.
+        scope: Either ``"tests"``.
 
     Returns:
         Sorted module paths, excluding this guard's own file.
@@ -105,11 +101,11 @@ def _scope_files(scope: str) -> list[Path]:
 
 
 def current_hardcoded_ids() -> dict[str, dict[str, list[str]]]:
-    """Compute today's hardcoded-ID literals across ``tests/`` and ``app/``.
+    """Compute today's hardcoded-ID literals across ``tests/``.
 
     Returns:
-        Mapping of scope to a mapping of repository-relative module path to the
-        sorted literals it contains.
+        Mapping of scope to a mapping of repository-relative module path to
+        the sorted literals it contains.
     """
     violations: dict[str, dict[str, list[str]]] = {}
     for scope in _SCOPE_DIRECTORIES:
