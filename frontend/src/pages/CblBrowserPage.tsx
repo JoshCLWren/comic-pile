@@ -1145,7 +1145,7 @@ export default function CblBrowserPage() {
                                       Include
                                     </label>
                                   )}
-                                  {entry.adoption_class === 'ambiguous_unresolved' && (
+                                  {entry.adoption_decision === 'unresolved' && (
                                     <button
                                       type="button"
                                       disabled={isCommitting}
