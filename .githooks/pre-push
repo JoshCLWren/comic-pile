@@ -77,5 +77,5 @@ bash scripts/lint.sh
 
 echo ""
 echo "Pre-push lint passed, including the static hardcoded-ID guard."
-echo "Backend product pytest, Vitest, and the rendered UI audit run in CI, not on push."
+echo "Backend product pytest is retired from required CI during the Rust cutover; Vitest and the rendered UI audit remain CI gates."
 printf '%s\n' "$HEAD_SHA" > "$VERIFY_STAMP"

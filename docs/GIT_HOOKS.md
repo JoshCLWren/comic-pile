@@ -45,8 +45,8 @@ Runs automatically before each push to remote.
 - Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
 - Includes the static hardcoded-ID guard (`pytest tests/test_hardcoded_ids.py -q --no-cov`)
 
-The backend product pytest suite, frontend Vitest suite, and rendered UI audit
-run in CI, not on push.
+Backend product pytest is retired from required CI during the Rust cutover;
+Vitest and the rendered UI audit remain CI gates.
 
 **What happens on failure:**
 - Push is aborted
