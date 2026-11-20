@@ -303,6 +303,39 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
         return Ok(true);
     }
 
+    // All embedded migrations are already applied. Verify that the recorded
+    // checksums match the embedded migrations to detect SQL changes without
+    // version bumps. If checksums differ, the applied migration files have
+    // changed and we need to re-run to get the updated schema.
+    let embedded: std::collections::BTreeMap<i32, (u64, String)> = runner()
+        .get_migrations()
+        .iter()
+        .map(|m| (m.version(), (m.checksum(), m.name().to_string())))
+        .collect();
+    let recorded: std::collections::BTreeMap<i32, (u64, String)> = client
+        .query(
+            "SELECT version, checksum, migration_file_name FROM public.refinery_schema_history",
+            &[],
+        )
+        .await?
+        .iter()
+        .map(|row| {
+            (
+                row.get::<_, i32>("version"),
+                (
+                    row.get::<_, u64>("checksum"),
+                    row.get::<_, String>("migration_file_name"),
+                ),
+            )
+        })
+        .collect();
+
+    // If any checksum or filename differs, the migration files have changed
+    // and we need to re-run with the new SQL.
+    if embedded != recorded {
+        return Ok(true);
+    }
+
     Ok(alembic_revisions(client).await?.as_deref() != Some(&[BASELINE_ALEMBIC_HEAD.to_string()]))
 }
 
