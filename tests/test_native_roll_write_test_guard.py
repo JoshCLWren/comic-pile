@@ -373,6 +373,15 @@ def _unit_tests_write_path(module: str, handler: str) -> bool:
     return any(re.search(pattern, tests) for pattern in references)
 
 
+def _is_delegated(module: str, handler: str) -> bool:
+    """Return whether the mounted handler is an approved delegated write."""
+    resolved_module = _resolve_handler_module(module, handler)
+    return (module, handler) in DELEGATED_WRITE_TESTS or (
+        resolved_module,
+        handler,
+    ) in DELEGATED_WRITE_TESTS
+
+
 def _tests_write_path(module: str, handler: str) -> bool:
     """Return whether the module or an existing HTTP test covers the write path.
 
@@ -380,6 +389,9 @@ def _tests_write_path(module: str, handler: str) -> bool:
     handler write path (the historical bar), or the route is proven by an
     existing DB-backed HTTP integration test — the evidence the guard already
     requires elsewhere. New baseline entries should not be needed for either.
+
+    Delegated handlers stay fail-closed even when an HTTP test hits the
+    mounted route: without the production delegation the write is unproven.
 
     Args:
         module: Rust module name mounted on a POST route.
@@ -390,6 +402,8 @@ def _tests_write_path(module: str, handler: str) -> bool:
     """
     if _unit_tests_write_path(module, handler):
         return True
+    if _is_delegated(module, handler):
+        return False
     return _http_tests_write_path(module, handler)
 
 
