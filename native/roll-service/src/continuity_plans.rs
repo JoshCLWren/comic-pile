@@ -128,9 +128,9 @@ pub struct ContinuityPlanResponse {
     pub name: String,
     #[serde(rename = "ordering_mode")]
     pub ordering_mode: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub lanes: Vec<ContinuityPlanLane>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub nodes: Vec<ContinuityPlanNode>,
     pub created_at: String,
     pub updated_at: String,
