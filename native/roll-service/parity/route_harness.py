@@ -205,10 +205,9 @@ async def _role_statement_count(connection: AsyncConnection, *, toplevel: bool) 
             setting = await connection.execute(text("SHOW pg_stat_statements.track"))
             if setting.scalar_one() != "all":
                 return None
-            if not toplevel:
-                # Verify nested tracking is enabled to ensure nested counts are accurate
-                if setting.scalar_one() != "all":
-                    return None
+        elif not toplevel:
+            # This branch is unreachable, but kept for structural consistency if needed
+            return None
         row = await connection.execute(
             text(
                 "SELECT COALESCE(SUM(s.calls), 0) FROM pg_stat_statements s "
