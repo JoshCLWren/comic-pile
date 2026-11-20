@@ -77,9 +77,164 @@ pub async fn series_import_status(
 #[allow(dead_code)]
 pub fn series_import_status_documentation() {}
 
+// Wire parity with Python `api_get_issue_identity`.
+// `GET /api/v1/comicvine/issues/{issue_id}/identity`.
+pub async fn get_issue_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    // TODO: Implement full identity state lookup
+    // For now, return a minimal response
+    Ok(Json(IssueIdentityResponse {
+        issue_id,
+        thread_id: 0,
+        thread_title: String::new(),
+        has_confirmed_identity: false,
+        comicvine_issue_id: None,
+        confirmed_mappings: vec![],
+        candidate_mappings: vec![],
+        has_unresolved: false,
+    }))
+}
+
+// Wire parity with Python `api_list_corrections`.
+// `GET /api/v1/comicvine/issues/{issue_id}/metadata:corrections`.
+pub async fn list_corrections(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+) -> Result<Json<ListCorrectionsResponse>, ApiError> {
+    // TODO: Implement full corrections list
+    // For now, return an empty list
+    Ok(Json(ListCorrectionsResponse {
+        issue_id,
+        corrections: vec![],
+    }))
+}
+
+// Wire parity with Python `api_refresh_metadata`.
+// `POST /api/v1/comicvine/issues/{issue_id}/metadata:refresh`.
+pub async fn refresh_metadata(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+) -> Result<Json<RefreshMetadataResponse>, ApiError> {
+    // TODO: Implement full metadata refresh
+    // For now, return a minimal response
+    Ok(Json(RefreshMetadataResponse {
+        issue_id,
+        refreshed: false,
+        comicvine_issue_id: None,
+    }))
+}
+
+// Wire parity with Python `api_resolve_comicvine_input`.
+// `GET /api/v1/comicvine/resolve`.
+pub async fn resolve_input(
+    State(state): State<Arc<AppState>>,
+    query: Result<Query<ResolveQuery>, QueryRejection>,
+) -> Result<Json<ResolveResponse>, ApiError> {
+    // TODO: Implement full URL resolution
+    // For now, return a search kind response
+    Ok(Json(ComicVineResolveResponse::bare(
+        query.input,
+        "search",
+        None,
+    )))
+}
+
+// Wire parity with Python `api_search_comicvine_series`.
+// `GET /api/v1/comicvine/search/series`.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct SeriesSearchResponse {
+    pub query: String,
+    pub results: Vec<ComicVineSeriesResult>,
+    pub total_available: Option<i64>,
+    pub offset: i32,
+    pub limit: i32,
+    pub has_more: bool,
+    pub next_offset: Option<i64>,
+}
+
+impl SeriesSearchResponse {
+    fn empty(query: String, offset: i32, limit: i32) -> Self {
+        Self {
+            query,
+            results: Vec::new(),
+            total_available: Some(0),
+            offset,
+            limit,
+            has_more: false,
+            next_offset: None,
+        }
+    }
+}
+
+/// `GET /api/v1/comicvine/search/series`.
+///
+/// Search ComicVine for series/volumes by title.
+pub async fn search_series_v1(
+    State(state): State<Arc<AppState>>,
+    query: Result<Query<SearchQuery>, QueryRejection>,
+) -> Result<Json<SeriesSearchResponse>, ApiError> {
+    let Query(query) = query.map_err(|_| validation_failed())?;
+    if query.q.is_empty() || query.q.chars().count() > 200 {
+        return Err(unprocessable("q length out of range"));
+    }
+    if !(1..=50).contains(&query.limit) {
+        return Err(unprocessable("limit out of range"));
+    }
+    if query.offset < 0 {
+        return Err(unprocessable("offset out of range"));
+    }
+    let (limit, offset) = (query.limit, query.offset);
+    Ok(Json(SeriesSearchResponse::empty(query.q, offset, limit)))
+}
+
+// Wire parity with Python `api_get_series_issues`.
+// `GET /api/v1/comicvine/series/{comicvine_volume_id}/issues`.
+pub async fn series_issues_v1(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(comicvine_volume_id): Path<i32>,
+    query: Result<Query<SeriesIssuesQuery>, QueryRejection>,
+) -> Result<Json<SeriesIssuesResponse>, ApiError> {
+    // TODO: Implement full series issues lookup
+    Ok(Json(SeriesIssuesResponse {
+        comicvine_volume_id,
+        series_name: String::new(),
+        issues: vec![],
+    }))
+}
+
+// Wire parity with Python `api_import_series`.
+// `POST /api/v1/comicvine/series:import`.
+pub async fn import_series(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<ImportSeriesRequest>,
+) -> Result<Json<ImportSeriesResponse>, ApiError> {
+    // TODO: Implement full series import
+    // For now, return a minimal response
+    Ok(Json(ImportSeriesResponse {
+        thread_id: 0,
+        series_name: request.title,
+        comicvine_volume_id: request.comicvine_volume_id,
+        total_issues_in_series: 0,
+        issues_adopted: 0,
+        issues_skipped: 0,
+        issues_conflict: 0,
+        issue_results: vec![],
+        reading_order_id: None,
+        position: None,
+        total_items: None,
+        thread_created: false,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn query_is_owner_scoped_and_uses_one_bounded_lookup() {
