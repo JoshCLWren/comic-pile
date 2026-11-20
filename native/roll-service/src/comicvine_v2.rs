@@ -2102,12 +2102,12 @@ fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
     let id = coerce_provider_int(object.get("id"))?;
     let issue_number = object
         .get("issue_number")
-        .map(|value| match value {
-            Value::String(text) => text.clone(),
-            Value::Number(number) => number.to_string(),
-            _ => value.to_string(),
-        })
-        .filter(|text| !text.is_empty());
+        .and_then(|value| match value {
+            Value::String(text) => (!text.is_empty()).then_some(text.clone()),
+            Value::Number(number) => Some(number.to_string()),
+            Value::Null => None,
+            _ => Some(value.to_string()),
+        });
     Some(ComicVineIssueCandidate {
         comicvine_issue_id: id,
         issue_number,
@@ -2137,7 +2137,7 @@ pub async fn search_series(
         return Err(unprocessable("offset out of range"));
     }
     let (limit, offset) = (query.limit, query.offset);
-    let page = offset / limit + 1;
+    let page = i64::from(offset) / i64::from(limit) + 1;
     if query.q.trim().is_empty() {
         return Ok(Json(ComicVineSeriesSearchResponse {
             query: query.q,
@@ -2482,12 +2482,12 @@ pub async fn resolve_input(
                 volume_id: volume.and_then(|v| coerce_provider_int(v.get("id"))),
                 issue_number: result
                     .get("issue_number")
-                    .map(|value| match value {
-                        Value::String(text) => text.clone(),
-                        Value::Number(number) => number.to_string(),
-                        _ => value.to_string(),
-                    })
-                    .filter(|text| !text.is_empty()),
+                    .and_then(|value| match value {
+                        Value::String(text) => (!text.is_empty()).then_some(text.clone()),
+                        Value::Number(number) => Some(number.to_string()),
+                        Value::Null => None,
+                        _ => Some(value.to_string()),
+                    }),
                 name: provider_string(result.get("name")),
                 cover_date: provider_string(result.get("cover_date")),
                 store_date: provider_string(result.get("store_date")),
