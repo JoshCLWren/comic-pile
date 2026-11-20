@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -94,6 +95,75 @@ WRITE_SQL_RE = re.compile(
     r"\b(?:INSERT\s+INTO|UPDATE\s+[A-Za-z_][A-Za-z0-9_]*\s+SET|DELETE\s+FROM)\b",
     re.IGNORECASE,
 )
+HTTP_TEST_ROOT = REPOSITORY_ROOT / "native" / "roll-service" / "tests"
+# A mounted route with its concrete method, used to find DB-backed HTTP tests
+# that already exercise the handler through the production router. Axum allows
+# chained method routers (``get(a).delete(b)``), so parse the path and method
+# calls separately instead of requiring a single ``route(path, method(fn))``
+# shape.
+ROUTE_PREFIX_RE = re.compile(r'\.route\(\s*"(?P<path>[^"]+)"\s*,')
+ROUTE_METHOD_RE = re.compile(
+    r'(?P<method>post|patch|put|delete)\(\s*'
+    r'(?P<handler>(?:[a-z_0-9]+::)*[a-z_0-9]+)\s*\)'
+)
+
+
+def _route_shape(path: str) -> re.Pattern[str]:
+    """Match a mounted route template against concrete request URIs in tests.
+
+    ``{param}`` segments are replaced by a non-quote wildcard so a test using
+    ``/api/v2/issues/7/cards`` proves the ``/api/v2/issues/{issue_id}/cards``
+    route without duplicating the template in the guard.
+    """
+    segments = [
+        r'[^"\']+' if segment.startswith("{") and segment.endswith("}") else re.escape(segment)
+        for segment in path.split("/")
+    ]
+    return re.compile(r'"' + "/".join(segments) + r'"')
+
+
+@lru_cache(maxsize=1)
+def _db_backed_http_test_sources() -> dict[str, str]:
+    """Return DB-backed Rust HTTP integration tests keyed by file stem."""
+    sources: dict[str, str] = {}
+    if not HTTP_TEST_ROOT.is_dir():
+        return sources
+    for path in sorted(HTTP_TEST_ROOT.glob("*.rs")):
+        source = path.read_text(encoding="utf-8")
+        if (
+            any(marker in source for marker in DB_TEST_MARKERS)
+            and "router(" in source
+            and "oneshot(" in source
+        ):
+            sources[path.stem] = source
+    return sources
+
+
+@lru_cache(maxsize=1)
+def _route_registrations() -> tuple[tuple[str, str, str, str], ...]:
+    """Return (module, handler, method, path) for every mounted mutation."""
+    source = _lib_source()
+    prefixes = [(match.start(), match.group("path")) for match in ROUTE_PREFIX_RE.finditer(source)]
+    registrations: list[tuple[str, str, str, str]] = []
+    for match in ROUTE_METHOD_RE.finditer(source):
+        preceding = [path for position, path in prefixes if position < match.start()]
+        if not preceding:
+            continue
+        module, _, handler = match.group("handler").rpartition("::")
+        registrations.append((module, handler, match.group("method").upper(), preceding[-1]))
+    return tuple(registrations)
+
+
+def _http_route_test_evidence(module: str, handler: str) -> tuple[str, str] | None:
+    """Return (test file, method) when a DB-backed HTTP test exercises a route."""
+    for route_module, route_handler, method, path in _route_registrations():
+        if (route_module, route_handler) != (module, handler):
+            continue
+        route_re = _route_shape(path)
+        for test_file, source in _db_backed_http_test_sources().items():
+            if method in source and route_re.search(source):
+                return test_file, method
+    return None
 
 
 def _lib_source() -> str:
@@ -238,6 +308,13 @@ def _tests_write_path(module: str, handler: str) -> bool:
     else:
         if _integration_tests_write_path(module, handler) or _integration_tests_write_path(
             resolved_module, handler
+        ):
+            return True
+        # Existing DB-backed Rust HTTP integration tests exercise the mounted
+        # router through ``router(...).oneshot(...)``. Recognise them by the
+        # exact method + route shape instead of demanding a separate exemption.
+        if _http_route_test_evidence(resolved_module, handler) or _http_route_test_evidence(
+            module, handler
         ):
             return True
         tests = _test_module(resolved_module)
