@@ -1472,7 +1472,7 @@ export default function CblBrowserPage() {
             onClick={confirmCommit}
             className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black"
           >
-            Add reading order
+            {selectedAdoptionTarget ? 'Update Reading Plan' : 'Add reading order'}
           </button>
           <button
             type="button"
