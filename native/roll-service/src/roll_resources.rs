@@ -828,7 +828,8 @@ mod tests {
         );
         assert_eq!(ints(&eligible, "issue_ids"), vec![200, 300, 400, 500, 600]);
 
-        // Browser snoozes still leave the queue before the die bound.
+        // Browser snoozes now remove faces from the die-bounded window; with
+        // only six candidates on d6 there is no deeper rank to draw from.
         let (status, snoozed) = fixture
             .get("/api/v2/roll/eligible-issue-ids?snoozed=20", Some(&token))
             .await;
