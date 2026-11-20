@@ -1,7 +1,7 @@
 {
   "family": "reading-mode",
   "owned_path_patterns": [
-    "^/api/v1/reading\\-mode(?:/.*)?$"
+    "^/api/v2/reading\\-mode(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -13,36 +13,44 @@
   },
   "operations": [
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/reading-mode",
+      "path": "/api/v2/reading-mode",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-mode$",
-      "exclude_from_inventory": true
+      "src": "^/api/v2/reading\\-mode$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335
     },
     {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/reading-mode",
+      "bucket": "operations",
+      "method": "PUT",
+      "path": "/api/v2/reading-mode",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-mode$",
-      "exclude_from_inventory": true
+      "src": "^/api/v2/reading\\-mode$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/reading-mode/dismiss-suggestion",
+      "path": "/api/v2/reading-mode/suggestion-dismissals",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-mode/dismiss\\-suggestion$",
-      "exclude_from_inventory": true
+      "src": "^/api/v2/reading\\-mode/suggestion\\-dismissals$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/reading-mode/suggest",
+      "path": "/api/v2/reading-mode/suggestions",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-mode/suggest$",
-      "exclude_from_inventory": true
+      "src": "^/api/v2/reading\\-mode/suggestions$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335
     }
   ]
 }

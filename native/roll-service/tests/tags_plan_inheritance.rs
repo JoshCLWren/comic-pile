@@ -2,7 +2,7 @@
 //! Database-backed regression for issue #5265 (MQA-TAG-005): a Reading Plan's
 //! tags must be inherited by every member issue, including the plan's sole
 //! unread / next-unread issue. The plan page renders issue chips from the bulk
-//! `GET /api/v1/tags/effective/thread/{thread_id}/issues/` read, so both the
+//! `GET /api/v2/tags/effective/threads/{thread_id}/issues` read, so both the
 //! bulk and single-issue effective reads are asserted for read and unread
 //! members alike.
 //!
@@ -166,7 +166,7 @@ async fn create_and_assign_plan_tag(
     let (status, created) = authed(
         state,
         "POST",
-        "/api/v1/tags/",
+        "/api/v2/tags",
         token,
         csrf,
         Some(json!({"name": name, "color": "red"})),
@@ -178,7 +178,7 @@ async fn create_and_assign_plan_tag(
         let (status, assigned) = authed(
             state,
             "POST",
-            &format!("/api/v1/tags/{tag_id}/assign/"),
+            &format!("/api/v2/tags/{tag_id}/assignments"),
             token,
             csrf,
             Some(json!({"target_type": target_type, "target_id": target_id})),
@@ -263,7 +263,7 @@ async fn bulk_thread_issues_read_inherits_plan_tags_for_unread_next_issue() {
     let (status, body) = authed(
         &state,
         "GET",
-        "/api/v1/tags/effective/thread/1/issues/",
+        "/api/v2/tags/effective/threads/1/issues",
         &token,
         &csrf,
         None,
@@ -291,7 +291,7 @@ async fn single_issue_read_inherits_plan_tags_for_unread_next_issue() {
     let (status, body) = authed(
         &state,
         "GET",
-        "/api/v1/tags/effective/issue/2/",
+        "/api/v2/tags/effective/issues/2",
         &token,
         &csrf,
         None,
@@ -313,7 +313,7 @@ async fn bulk_read_inherits_plan_tags_from_linked_authoritative_list_for_unread_
     let (status, body) = authed(
         &state,
         "GET",
-        "/api/v1/tags/effective/thread/1/issues/",
+        "/api/v2/tags/effective/threads/1/issues",
         &token,
         &csrf,
         None,
@@ -343,7 +343,7 @@ async fn single_read_inherits_plan_tags_from_linked_authoritative_list_for_unrea
     let (status, body) = authed(
         &state,
         "GET",
-        "/api/v1/tags/effective/issue/2/",
+        "/api/v2/tags/effective/issues/2",
         &token,
         &csrf,
         None,
@@ -452,7 +452,7 @@ async fn foreign_plan_and_linked_list_never_leak_as_inheritance_source() {
     let (status, assigned) = authed(
         &state,
         "POST",
-        &format!("/api/v1/tags/{tag_id}/assign/"),
+        &format!("/api/v2/tags/{tag_id}/assignments"),
         &token,
         &csrf,
         Some(json!({"target_type": "ContinuityPlan", "target_id": 3})),
@@ -463,7 +463,7 @@ async fn foreign_plan_and_linked_list_never_leak_as_inheritance_source() {
     let (status, body) = authed(
         &state,
         "GET",
-        "/api/v1/tags/effective/thread/1/issues/",
+        "/api/v2/tags/effective/threads/1/issues",
         &token,
         &csrf,
         None,
@@ -516,7 +516,7 @@ async fn bulk_unassign_keeps_list_member_in_still_inherited_ids() {
     let (status, assigned) = authed(
         &state,
         "POST",
-        &format!("/api/v1/tags/{tag_id}/assign/"),
+        &format!("/api/v2/tags/{tag_id}/assignments"),
         &token,
         &csrf,
         Some(json!({"target_type": "Issue", "target_id": 2})),
@@ -527,7 +527,7 @@ async fn bulk_unassign_keeps_list_member_in_still_inherited_ids() {
     let (status, body) = authed(
         &state,
         "POST",
-        &format!("/api/v1/tags/{tag_id}/bulk-unassign/"),
+        &format!("/api/v2/tags/{tag_id}/unassignment-batches"),
         &token,
         &csrf,
         Some(json!({"target_type": "Issue", "target_ids": [2]})),

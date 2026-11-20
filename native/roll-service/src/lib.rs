@@ -1064,11 +1064,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(dismiss_pending::dismiss_pending),
         )
         .route(
-            "/api/v1/users/me/preferences",
+            "/api/v2/users/me/preferences",
             get(preferences::get_user_preferences),
         )
         .route(
-            "/api/v1/users/me/preferences",
+            "/api/v2/users/me/preferences",
             patch(preferences::patch_user_preferences),
         )
         .route(
@@ -1226,49 +1226,49 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/releases/{release_id}/retract",
             post(releases::retract),
         )
-        .route("/api/v1/tags/", get(tags::list_tags))
-        .route("/api/v1/tags/", post(tags::create_tag))
+        .route("/api/v2/tags", get(tags::list_tags))
+        .route("/api/v2/tags", post(tags::create_tag))
         .route(
-            "/api/v1/tags/effective/issue/{issue_id}/",
+            "/api/v2/tags/effective/issues/{issue_id}",
             get(tags::effective_for_issue),
         )
         .route(
-            "/api/v1/tags/effective/plan/{plan_id}/",
+            "/api/v2/tags/effective/plans/{plan_id}",
             get(tags::effective_for_plan),
         )
         .route(
-            "/api/v1/tags/effective/thread/{thread_id}/",
+            "/api/v2/tags/effective/threads/{thread_id}",
             get(tags::effective_for_thread),
         )
         .route(
-            "/api/v1/tags/effective/thread/{thread_id}/issues/",
+            "/api/v2/tags/effective/threads/{thread_id}/issues",
             get(tags::thread_issues_effective),
         )
-        .route("/api/v1/tags/{tag_id}/", get(tags::get_tag))
-        .route("/api/v1/tags/{tag_id}/", put(tags::update_tag))
-        .route("/api/v1/tags/{tag_id}/", delete(tags::delete_tag))
-        .route("/api/v1/tags/{tag_id}/assign/", post(tags::assign_tag))
+        .route("/api/v2/tags/{tag_id}", get(tags::get_tag))
+        .route("/api/v2/tags/{tag_id}", patch(tags::update_tag))
+        .route("/api/v2/tags/{tag_id}", delete(tags::delete_tag))
+        .route("/api/v2/tags/{tag_id}/usage", get(tags::get_tag_usage))
+        .route("/api/v2/tags/{tag_id}/assignments", post(tags::assign_tag))
         .route(
-            "/api/v1/tags/{tag_id}/bulk-assign/",
+            "/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}",
+            delete(tags::unassign_tag),
+        )
+        .route(
+            "/api/v2/tags/{tag_id}/assignment-batches",
             post(tags::bulk_assign_tag),
         )
         .route(
-            "/api/v1/tags/{tag_id}/bulk-unassign/",
+            "/api/v2/tags/{tag_id}/unassignment-batches",
             post(tags::bulk_unassign_tag),
         )
+        .route("/api/v2/reading-mode", get(reading_mode::get_reading_mode))
+        .route("/api/v2/reading-mode", put(reading_mode::set_reading_mode))
         .route(
-            "/api/v1/tags/{tag_id}/unassign/",
-            delete(tags::unassign_tag),
-        )
-        .route("/api/v1/tags/{tag_id}/usage/", get(tags::get_tag_usage))
-        .route("/api/v1/reading-mode", get(reading_mode::get_reading_mode))
-        .route("/api/v1/reading-mode", post(reading_mode::set_reading_mode))
-        .route(
-            "/api/v1/reading-mode/dismiss-suggestion",
+            "/api/v2/reading-mode/suggestion-dismissals",
             post(reading_mode::dismiss_reading_mode_suggestion),
         )
         .route(
-            "/api/v1/reading-mode/suggest",
+            "/api/v2/reading-mode/suggestions",
             post(reading_mode::suggest_reading_mode),
         )
         .route(

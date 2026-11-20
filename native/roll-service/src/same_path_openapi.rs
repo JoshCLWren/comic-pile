@@ -4,6 +4,7 @@ use utoipa::OpenApi;
 
 #[derive(utoipa::OpenApi)]
 #[openapi(paths(
+    crate::dismiss_pending::dismiss_pending_documentation,
     crate::reading_mode::get_reading_mode_documentation,
     crate::reading_mode::set_reading_mode_documentation,
     crate::reading_mode::dismiss_reading_mode_suggestion_documentation,

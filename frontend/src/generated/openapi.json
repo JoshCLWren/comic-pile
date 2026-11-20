@@ -20728,141 +20728,6 @@
         ]
       }
     },
-    "/api/v1/reading-mode": {
-      "get": {
-        "operationId": "get_reading_mode_documentation",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingModeResponse"
-                }
-              }
-            },
-            "description": "Current reading-mode state"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "reading-mode"
-        ]
-      },
-      "post": {
-        "operationId": "set_reading_mode_documentation",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingModeSetRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingModeResponse"
-                }
-              }
-            },
-            "description": "Newly stored reading-mode state"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "422": {
-            "description": "Invalid source, quiz resolution, or mode values"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "reading-mode"
-        ]
-      }
-    },
-    "/api/v1/reading-mode/dismiss-suggestion": {
-      "post": {
-        "operationId": "dismiss_reading_mode_suggestion_documentation",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingModeResponse"
-                }
-              }
-            },
-            "description": "Unchanged reading-mode state with suggestion cleared"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "reading-mode"
-        ]
-      }
-    },
-    "/api/v1/reading-mode/suggest": {
-      "post": {
-        "operationId": "suggest_reading_mode_documentation",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingModeResponse"
-                }
-              }
-            },
-            "description": "Reading-mode state with suggestion enabled"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "reading-mode"
-        ]
-      }
-    },
     "/api/v1/reading-order-groups/": {
       "get": {
         "operationId": "dependency_groups_list",
@@ -21689,554 +21554,6 @@
         "summary": "Documentation-only operation for the mounted releases retract handler.",
         "tags": [
           "releases"
-        ]
-      }
-    },
-    "/api/v1/tags/": {
-      "get": {
-        "operationId": "list_tags_documentation",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TagListResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      },
-      "post": {
-        "operationId": "create_tag_documentation",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateTagRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateTagResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      }
-    },
-    "/api/v1/tags/effective/issue/{issue_id}/": {
-      "get": {
-        "operationId": "effective_issue_documentation",
-        "parameters": [
-          {
-            "description": "Issue id",
-            "in": "path",
-            "name": "issue_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EffectiveTagsResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      }
-    },
-    "/api/v1/tags/effective/plan/{plan_id}/": {
-      "get": {
-        "operationId": "effective_plan_documentation",
-        "parameters": [
-          {
-            "description": "Plan id",
-            "in": "path",
-            "name": "plan_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EffectiveTagsResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      }
-    },
-    "/api/v1/tags/effective/thread/{thread_id}/": {
-      "get": {
-        "operationId": "effective_thread_documentation",
-        "parameters": [
-          {
-            "description": "Thread id",
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EffectiveTagsResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      }
-    },
-    "/api/v1/tags/effective/thread/{thread_id}/issues/": {
-      "get": {
-        "operationId": "effective_thread_issues_documentation",
-        "parameters": [
-          {
-            "description": "Thread id",
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadIssuesEffectiveTagsResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      }
-    },
-    "/api/v1/tags/{tag_id}/": {
-      "delete": {
-        "operationId": "delete_tag_documentation",
-        "parameters": [
-          {
-            "description": "Tag id",
-            "in": "path",
-            "name": "tag_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TagDeleteResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      },
-      "get": {
-        "operationId": "get_tag_documentation",
-        "parameters": [
-          {
-            "description": "Tag id",
-            "in": "path",
-            "name": "tag_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Tag"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      },
-      "put": {
-        "operationId": "update_tag_documentation",
-        "parameters": [
-          {
-            "description": "Tag id",
-            "in": "path",
-            "name": "tag_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateTagRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Tag"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      }
-    },
-    "/api/v1/tags/{tag_id}/assign/": {
-      "post": {
-        "operationId": "assign_tag_documentation",
-        "parameters": [
-          {
-            "description": "Tag id",
-            "in": "path",
-            "name": "tag_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AssignTagRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TagAssignmentResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      }
-    },
-    "/api/v1/tags/{tag_id}/bulk-assign/": {
-      "post": {
-        "operationId": "bulk_assign_tag_documentation",
-        "parameters": [
-          {
-            "description": "Tag id",
-            "in": "path",
-            "name": "tag_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkAssignRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkAssignResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      }
-    },
-    "/api/v1/tags/{tag_id}/bulk-unassign/": {
-      "post": {
-        "operationId": "bulk_unassign_tag_documentation",
-        "parameters": [
-          {
-            "description": "Tag id",
-            "in": "path",
-            "name": "tag_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkAssignRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkAssignResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      }
-    },
-    "/api/v1/tags/{tag_id}/unassign/": {
-      "delete": {
-        "operationId": "unassign_tag_documentation",
-        "parameters": [
-          {
-            "description": "Tag id",
-            "in": "path",
-            "name": "tag_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AssignTagRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TagAssignmentResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
-        ]
-      }
-    },
-    "/api/v1/tags/{tag_id}/usage/": {
-      "get": {
-        "operationId": "usage_tag_documentation",
-        "parameters": [
-          {
-            "description": "Tag id",
-            "in": "path",
-            "name": "tag_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TagUsageResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "tags"
         ]
       }
     },
@@ -23910,81 +23227,6 @@
         "summary": "Documentation-only operation for the batch blocking explanation.",
         "tags": [
           "dependencies"
-        ]
-      }
-    },
-    "/api/v1/users/me/preferences": {
-      "get": {
-        "operationId": "get_user_preferences_documentation",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserPreferencesResponse"
-                }
-              }
-            },
-            "description": "The authenticated user's preferences"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for reading user preferences.",
-        "tags": [
-          "users"
-        ]
-      },
-      "patch": {
-        "operationId": "patch_user_preferences_documentation",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UserPreferencesPatchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserPreferencesResponse"
-                }
-              }
-            },
-            "description": "The user's preferences after the update"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "422": {
-            "description": "Unknown theme id"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for updating user preferences.",
-        "tags": [
-          "users"
         ]
       }
     },
@@ -27259,6 +26501,141 @@
         ]
       }
     },
+    "/api/v2/reading-mode": {
+      "get": {
+        "operationId": "get_reading_mode_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            },
+            "description": "Current reading-mode state"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "reading-mode"
+        ]
+      },
+      "put": {
+        "operationId": "set_reading_mode_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingModeSetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            },
+            "description": "Newly stored reading-mode state"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid source, quiz resolution, or mode values"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "reading-mode"
+        ]
+      }
+    },
+    "/api/v2/reading-mode/suggestion-dismissals": {
+      "post": {
+        "operationId": "dismiss_reading_mode_suggestion_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            },
+            "description": "Unchanged reading-mode state with suggestion cleared"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "reading-mode"
+        ]
+      }
+    },
+    "/api/v2/reading-mode/suggestions": {
+      "post": {
+        "operationId": "suggest_reading_mode_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            },
+            "description": "Reading-mode state with suggestion enabled"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "reading-mode"
+        ]
+      }
+    },
     "/api/v2/reading-orders/": {
       "get": {
         "operationId": "reading_orders_list",
@@ -28093,6 +27470,563 @@
         ]
       }
     },
+    "/api/v2/tags": {
+      "get": {
+        "operationId": "list_tags_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagListResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      },
+      "post": {
+        "operationId": "create_tag_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTagResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v2/tags/effective/issues/{issue_id}": {
+      "get": {
+        "operationId": "effective_issue_documentation",
+        "parameters": [
+          {
+            "description": "Issue id",
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveTagsResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v2/tags/effective/plans/{plan_id}": {
+      "get": {
+        "operationId": "effective_plan_documentation",
+        "parameters": [
+          {
+            "description": "Plan id",
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveTagsResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v2/tags/effective/threads/{thread_id}": {
+      "get": {
+        "operationId": "effective_thread_documentation",
+        "parameters": [
+          {
+            "description": "Thread id",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveTagsResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v2/tags/effective/threads/{thread_id}/issues": {
+      "get": {
+        "operationId": "effective_thread_issues_documentation",
+        "parameters": [
+          {
+            "description": "Thread id",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssuesEffectiveTagsResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}": {
+      "delete": {
+        "operationId": "delete_tag_documentation",
+        "parameters": [
+          {
+            "description": "Tag id",
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagDeleteResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      },
+      "get": {
+        "operationId": "get_tag_documentation",
+        "parameters": [
+          {
+            "description": "Tag id",
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tag"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      },
+      "patch": {
+        "operationId": "update_tag_documentation",
+        "parameters": [
+          {
+            "description": "Tag id",
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tag"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}/assignment-batches": {
+      "post": {
+        "operationId": "bulk_assign_tag_documentation",
+        "parameters": [
+          {
+            "description": "Tag id",
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkAssignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkAssignResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}/assignments": {
+      "post": {
+        "operationId": "assign_tag_documentation",
+        "parameters": [
+          {
+            "description": "Tag id",
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagAssignmentResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}": {
+      "delete": {
+        "operationId": "unassign_tag_documentation",
+        "parameters": [
+          {
+            "description": "Tag id",
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Target type",
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Target id",
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagAssignmentResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}/unassignment-batches": {
+      "post": {
+        "operationId": "bulk_unassign_tag_documentation",
+        "parameters": [
+          {
+            "description": "Tag id",
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkAssignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkAssignResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}/usage": {
+      "get": {
+        "operationId": "usage_tag_documentation",
+        "parameters": [
+          {
+            "description": "Tag id",
+            "in": "path",
+            "name": "tag_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagUsageResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "tags"
+        ]
+      }
+    },
     "/api/v2/threads": {
       "get": {
         "operationId": "list_threads_documentation",
@@ -28395,6 +28329,81 @@
         "summary": "Documentation-only operation for the undo restore.",
         "tags": [
           "undo"
+        ]
+      }
+    },
+    "/api/v2/users/me/preferences": {
+      "get": {
+        "operationId": "get_user_preferences_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesResponse"
+                }
+              }
+            },
+            "description": "The authenticated user's preferences"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for reading user preferences.",
+        "tags": [
+          "users"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_user_preferences_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPreferencesPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesResponse"
+                }
+              }
+            },
+            "description": "The user's preferences after the update"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Unknown theme id"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for updating user preferences.",
+        "tags": [
+          "users"
         ]
       }
     },

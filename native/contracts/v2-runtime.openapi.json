@@ -4046,6 +4046,141 @@
         ]
       }
     },
+    "/api/v2/reading-mode": {
+      "get": {
+        "tags": [
+          "reading-mode"
+        ],
+        "operationId": "get_reading_mode_documentation",
+        "responses": {
+          "200": {
+            "description": "Current reading-mode state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "reading-mode"
+        ],
+        "operationId": "set_reading_mode_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingModeSetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Newly stored reading-mode state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid source, quiz resolution, or mode values"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-mode/suggestion-dismissals": {
+      "post": {
+        "tags": [
+          "reading-mode"
+        ],
+        "operationId": "dismiss_reading_mode_suggestion_documentation",
+        "responses": {
+          "200": {
+            "description": "Unchanged reading-mode state with suggestion cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-mode/suggestions": {
+      "post": {
+        "tags": [
+          "reading-mode"
+        ],
+        "operationId": "suggest_reading_mode_documentation",
+        "responses": {
+          "200": {
+            "description": "Reading-mode state with suggestion enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingModeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/reading-orders/": {
       "get": {
         "tags": [
@@ -4880,6 +5015,563 @@
         ]
       }
     },
+    "/api/v2/tags": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "list_tags_documentation",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "create_tag_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTagResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/tags/effective/issues/{issue_id}": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "effective_issue_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Issue id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveTagsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/tags/effective/plans/{plan_id}": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "effective_plan_documentation",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Plan id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveTagsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/tags/effective/threads/{thread_id}": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "effective_thread_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveTagsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/tags/effective/threads/{thread_id}/issues": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "effective_thread_issues_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssuesEffectiveTagsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "get_tag_documentation",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Tag id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tag"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "delete_tag_documentation",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Tag id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagDeleteResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "update_tag_documentation",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Tag id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tag"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}/assignment-batches": {
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "bulk_assign_tag_documentation",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Tag id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkAssignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkAssignResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}/assignments": {
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "assign_tag_documentation",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Tag id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagAssignmentResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}": {
+      "delete": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "unassign_tag_documentation",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Tag id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "target_type",
+            "in": "path",
+            "description": "Target type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "path",
+            "description": "Target id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagAssignmentResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}/unassignment-batches": {
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "bulk_unassign_tag_documentation",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Tag id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkAssignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkAssignResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/tags/{tag_id}/usage": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "operationId": "usage_tag_documentation",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Tag id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagUsageResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/threads": {
       "get": {
         "tags": [
@@ -5184,6 +5876,81 @@
           }
         ]
       }
+    },
+    "/api/v2/users/me/preferences": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Documentation-only operation for reading user preferences.",
+        "operationId": "get_user_preferences_documentation",
+        "responses": {
+          "200": {
+            "description": "The authenticated user's preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Documentation-only operation for updating user preferences.",
+        "operationId": "patch_user_preferences_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPreferencesPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The user's preferences after the update",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Unknown theme id"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -5316,6 +6083,22 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "AssignTagRequest": {
+        "type": "object",
+        "required": [
+          "target_type",
+          "target_id"
+        ],
+        "properties": {
+          "target_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_type": {
+            "type": "string"
           }
         }
       },
@@ -6097,6 +6880,73 @@
           "complete",
           "unavailable"
         ]
+      },
+      "BulkAssignRequest": {
+        "type": "object",
+        "required": [
+          "target_type",
+          "target_ids"
+        ],
+        "properties": {
+          "target_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "target_type": {
+            "type": "string"
+          }
+        }
+      },
+      "BulkAssignResponse": {
+        "type": "object",
+        "required": [
+          "tag_id",
+          "target_type",
+          "requested_ids",
+          "affected_ids",
+          "already_ids",
+          "still_inherited_ids"
+        ],
+        "properties": {
+          "affected_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "already_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "requested_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "still_inherited_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "tag_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        }
       },
       "CblAdoptionCommitRequest": {
         "type": "object",
@@ -6950,6 +7800,48 @@
           }
         },
         "additionalProperties": false
+      },
+      "CreateTagRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "include_near_matches": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateTagResponse": {
+        "type": "object",
+        "required": [
+          "tag",
+          "redirected_to_global",
+          "near_matches"
+        ],
+        "properties": {
+          "near_matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NearMatch"
+            }
+          },
+          "redirected_to_global": {
+            "type": "boolean"
+          },
+          "tag": {
+            "$ref": "#/components/schemas/Tag"
+          }
+        }
       },
       "Creator": {
         "type": "object",
@@ -9387,6 +10279,58 @@
           "issue"
         ]
       },
+      "EffectiveTag": {
+        "type": "object",
+        "required": [
+          "tag",
+          "direct",
+          "sources"
+        ],
+        "properties": {
+          "direct": {
+            "type": "boolean"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InheritanceSource"
+            }
+          },
+          "tag": {
+            "$ref": "#/components/schemas/Tag"
+          }
+        }
+      },
+      "EffectiveTagsResponse": {
+        "type": "object",
+        "required": [
+          "target_type",
+          "target_id",
+          "direct_tags",
+          "effective_tags"
+        ],
+        "properties": {
+          "direct_tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tag"
+            }
+          },
+          "effective_tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EffectiveTag"
+            }
+          },
+          "target_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        }
+      },
       "ForgotPasswordRequest": {
         "type": "object",
         "description": "Request body for an enumeration-safe password-recovery email.",
@@ -9680,6 +10624,26 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "InheritanceSource": {
+        "type": "object",
+        "required": [
+          "target_type",
+          "target_id",
+          "display_name"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_type": {
+            "type": "string"
           }
         }
       },
@@ -10302,6 +11266,34 @@
             "format": "date-time"
           },
           "visibility": {
+            "type": "string"
+          }
+        }
+      },
+      "NearMatch": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "color",
+          "normalized_name",
+          "scope"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "normalized_name": {
+            "type": "string"
+          },
+          "scope": {
             "type": "string"
           }
         }
@@ -11962,6 +12954,72 @@
           }
         },
         "additionalProperties": false
+      },
+      "ReadingModeResponse": {
+        "type": "object",
+        "description": "Current reading-mode state for the active session (wire response).",
+        "required": [
+          "suggested"
+        ],
+        "properties": {
+          "bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "suggested": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ReadingModeSetRequest": {
+        "type": "object",
+        "description": "Set request: `source` is required; `answers` (quiz) or resolved\n`bandwidth`+`intent` (manual) supplies the mode, as in Python.",
+        "required": [
+          "source"
+        ],
+        "properties": {
+          "answers": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "string"
+          }
+        }
       },
       "ReadingOrderAdoptRequest": {
         "type": "object",
@@ -14133,6 +15191,160 @@
           }
         }
       },
+      "Tag": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "normalized_name",
+          "scope",
+          "color",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "normalized_name": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "TagAssignmentResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "tag_id",
+          "target_type",
+          "target_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tag_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        }
+      },
+      "TagDeleteResponse": {
+        "type": "object",
+        "required": [
+          "tag_id",
+          "assignments_removed",
+          "references_removed_by_consumers"
+        ],
+        "properties": {
+          "assignments_removed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "references_removed_by_consumers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "tag_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TagListResponse": {
+        "type": "object",
+        "required": [
+          "tags"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tag"
+            }
+          }
+        }
+      },
+      "TagUsageResponse": {
+        "type": "object",
+        "required": [
+          "tag_id",
+          "total_assignments",
+          "assignments_by_target_type",
+          "references_removed_by_consumers"
+        ],
+        "properties": {
+          "assignments_by_target_type": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "references_removed_by_consumers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "tag_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_assignments": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "ThreadDependenciesResponse": {
         "type": "object",
         "description": "Wire parity with Python `ThreadDependenciesResponse`\n(`app/schemas/dependency.py`): the `blocking` list holds edges where this\nthread's issues block others, `blocked_by` holds edges where this thread's\nissues are blocked. Each entry is the enriched `DependencyResponse`.",
@@ -14202,6 +15414,25 @@
           "total_count": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "ThreadIssuesEffectiveTagsResponse": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "issues"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EffectiveTagsResponse"
+            }
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -14799,6 +16030,52 @@
               "integer",
               "null"
             ],
+            "format": "int32"
+          }
+        }
+      },
+      "UpdateTagRequest": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "UserPreferencesPatchRequest": {
+        "type": "object",
+        "description": "Partial update of the authenticated user's preferences.\n\n`theme` is optional: when omitted or explicit JSON null the current\npreference is left unchanged and a missing row is seeded with the\ndefault, exactly like the Python `UserPreferencesPatchRequest`.",
+        "properties": {
+          "theme": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "UserPreferencesResponse": {
+        "type": "object",
+        "description": "Current preference values for the authenticated user.",
+        "required": [
+          "theme",
+          "user_id"
+        ],
+        "properties": {
+          "theme": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
             "format": "int32"
           }
         }
