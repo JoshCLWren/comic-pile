@@ -435,11 +435,11 @@ def _tests_write_path(module: str, handler: str) -> bool:
         True when the module's tests reference the handler write path.
     """
     resolved_module = _resolve_handler_module(module, handler)
-    if resolved_module and _http_tests_write_path(resolved_module, handler):
-        return True
     delegate = DELEGATED_WRITE_TESTS.get((module, handler)) or DELEGATED_WRITE_TESTS.get(
         (resolved_module, handler)
     )
+    if delegate is None and resolved_module and _http_tests_write_path(resolved_module, handler):
+        return True
     if delegate is not None:
         writer_module, writer = delegate
         if not resolved_module:
