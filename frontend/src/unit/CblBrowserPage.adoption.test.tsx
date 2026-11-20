@@ -198,6 +198,115 @@ describe('CblBrowserPage adoption', () => {
     })
   })
 
+  it('requires an explicit target for a same-named Reading Plan', async () => {
+    const user = userEvent.setup()
+    mockListPlans.mockResolvedValue([
+      {
+        id: 88,
+        name: 'Ultimate Universe',
+        ordering_mode: 'informational',
+        lane_count: 1,
+        step_count: 12,
+        source_paths: [],
+        updated_at: '2026-11-20T00:00:00Z',
+      },
+    ])
+    mockCommit.mockResolvedValue({ id: 88, name: 'Ultimate Universe' })
+    mockApplyCommitted.mockResolvedValue(undefined)
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    const target = await screen.findByRole('radio', {
+      name: 'Update Ultimate Universe (Reading Plan #88)',
+    })
+    expect(target).not.toBeChecked()
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+    expect(
+      screen.getByText('Choose the exact Reading Plan to update before adding this source.'),
+    ).toBeInTheDocument()
+    expect(mockCommitNew).not.toHaveBeenCalled()
+
+    await user.click(target)
+    const update = screen.getByRole('button', { name: 'Update selected Reading Plan' })
+    expect(update).toBeEnabled()
+    await user.click(update)
+    expect(screen.getByRole('heading', { name: 'Update this Reading Plan?' })).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Update Ultimate Universe (Reading Plan #88) with Ultimate Universe? Only the checked entries are applied; Cancel leaves it unchanged.',
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Update Reading Plan' }))
+    await waitFor(() => {
+      expect(mockCommit).toHaveBeenCalledWith(
+        7,
+        88,
+        expect.objectContaining({ total_positions: 2 }),
+        { series_decisions: {}, entry_decisions: {}, overlap_decisions: [] },
+      )
+    })
+    expect(mockCommitNew).not.toHaveBeenCalled()
+  })
+
+  it('requires confirmation before updating a plan already linked to the source', async () => {
+    const user = userEvent.setup()
+    mockListPlans.mockResolvedValue([
+      {
+        id: 89,
+        name: 'Curated Ultimate Reading',
+        ordering_mode: 'informational',
+        lane_count: 1,
+        step_count: 2,
+        source_paths: ['Ultimate.cbl'],
+        updated_at: '2026-11-20T00:00:00Z',
+      },
+    ])
+    mockCommit.mockResolvedValue({ id: 89, name: 'Curated Ultimate Reading' })
+    mockApplyCommitted.mockResolvedValue(undefined)
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    const target = await screen.findByRole('radio', {
+      name: 'Update Curated Ultimate Reading (Reading Plan #89)',
+    })
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+    await user.click(target)
+    await user.click(screen.getByRole('button', { name: 'Update selected Reading Plan' }))
+    expect(
+      screen.getByText(
+        'Update Curated Ultimate Reading (Reading Plan #89) with Ultimate Universe? Only the checked entries are applied; Cancel leaves it unchanged.',
+      ),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Update Reading Plan' }))
+
+    await waitFor(() => {
+      expect(mockCommit).toHaveBeenCalledWith(7, 89, expect.anything(), expect.anything())
+    })
+    expect(mockCommitNew).not.toHaveBeenCalled()
+  })
+
+  it('keeps Add blocked until the existing Reading Plan check succeeds', async () => {
+    const user = userEvent.setup()
+    mockListPlans.mockRejectedValueOnce(new Error('plans unavailable')).mockResolvedValue([])
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    expect(await screen.findByRole('button', { name: 'Retry Reading Plan check' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+    expect(
+      screen.getByText('Check existing Reading Plans before adding this source.'),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Retry Reading Plan check' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeEnabled()
+    })
+  })
+
   it('keeps an in-flight commit tracked when Back changes the source view (#4136)', async () => {
     const user = userEvent.setup()
     let resolveCommit: (value: { id: number; name: string }) => void = () => undefined
