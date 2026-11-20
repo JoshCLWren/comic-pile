@@ -386,7 +386,9 @@ def test_settled_pr_without_date_fails_closed():
     )
     d = by_name(decisions)["factory/46-5102-nodate"]
     assert not d.eligible
-    assert any("waiting period since merge/abandonment cannot be established" in r for r in d.reasons)
+    assert any(
+        "waiting period since merge/abandonment cannot be established" in r for r in d.reasons
+    )
 
 
 def test_old_closed_pr_after_full_wait_is_eligible():
