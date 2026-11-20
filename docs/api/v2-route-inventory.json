@@ -1714,7 +1714,7 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-      "v1_total": 42,
+      "v1_total": 40,
       "v1_shadowed_by_rust": 0,
       "v1_live_python": 13,
       "v1_orphaned": 0,
@@ -1722,7 +1722,7 @@
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
-      "total_python_surface": 42,
+      "total_python_surface": 40,
       "total_shadowed_by_rust": 0,
       "total_live_python": 13,
       "total_orphaned": 0
@@ -2098,32 +2098,6 @@
         ],
         "method": "GET",
         "path": "/api/v1/reading-order-groups/{group_id}/plans",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "native Rust",
-        "owning_issue": 4853,
-        "consumers": [
-          "frontend/src/services/api-taste.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/taste/discoveries",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "native Rust",
-        "owning_issue": 4853,
-        "consumers": [
-          "frontend/src/services/api-taste.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "native Rust",
         "verified_against": "vercel.json"
