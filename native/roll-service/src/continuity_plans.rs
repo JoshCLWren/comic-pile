@@ -915,16 +915,27 @@ async fn rebuild_plan_membership(
     }
 
     let mut source_ids: BTreeMap<String, i32> = BTreeMap::new();
-    for path in source_paths.keys() {
-        let row = tx
-            .query_one(
-                "INSERT INTO reading_plan_sources (plan_id, raw_source_path, recorded_at)
-                 VALUES ($1, $2, NOW()) RETURNING id",
-                &[&plan_id, path],
-            )
-            .await
-            .map_err(db::query_error)?;
-        source_ids.insert(path.clone(), row.get(0));
+    if !source_paths.is_empty() {
+        let paths: Vec<String> = source_paths.keys().cloned().collect();
+        let placeholders: Vec<String> = paths
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("($1, ${}, NOW())", i + 2))
+            .collect();
+        let query = format!(
+            "INSERT INTO reading_plan_sources (plan_id, raw_source_path, recorded_at) VALUES {} RETURNING raw_source_path, id",
+            placeholders.join(", ")
+        );
+        let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = vec![&plan_id];
+        for path in &paths {
+            params.push(path);
+        }
+        let rows = tx.query(&query, &params).await.map_err(db::query_error)?;
+        for row in rows {
+            let path: String = row.get(0);
+            let id: i32 = row.get(1);
+            source_ids.insert(path, id);
+        }
     }
 
     for node in nodes {
