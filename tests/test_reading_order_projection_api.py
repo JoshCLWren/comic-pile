@@ -486,3 +486,31 @@ async def test_existing_entries_are_marked_existing_in_preview(
     assert body["entries"][0]["source"] == "existing"
 
 
+async def test_strict_empty_plan_previews_as_empty(
+    projection_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A Strict plan with 0 lanes and 0 steps is a valid empty plan (#5614).
+
+    It persists through ``ContinuityPlanWrite`` and its projection is an empty
+    sequence rather than a malformed-plan conflict.
+    """
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    payload = _build_plan_payload(mode="strict_sequential", lanes=[], nodes=[])
+    plan = await _make_plan(async_db, user_id=user.id, payload=payload)
+    order = await _make_reading_order(async_db, user_id=user.id)
+    await async_db.commit()
+
+    preview = await projection_client.post(
+        f"/api/v1/continuity-plans/{plan.id}/reading-orders/project-preview",
+        json={"reading_order_id": order.id},
+    )
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["plan_id"] == plan.id
+    assert body["plan_ordering_mode"] == "strict_sequential"
+    assert body["entries"] == []
+    assert body["conflicts"] == []
+    assert body["total_positions"] == 0
+    assert body["dropped_node_ids"] == []
+
+
