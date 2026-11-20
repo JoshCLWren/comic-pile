@@ -27,9 +27,7 @@ BASELINE_PATH = Path(__file__).resolve().parent / "hardcoded_ids_baseline.json"
 _GUARD_FILE_NAME = Path(__file__).name
 
 _SCOPE_DIRECTORIES = {"tests": REPOSITORY_ROOT / "tests"}
-# ``app`` remains a scanner mode for the retired Python-application rule, but
-# there is no longer an app/ directory to walk in the repository baseline.
-_SCAN_SCOPES = {"tests", "app"}
+_SCAN_SCOPES = {"tests"}
 
 
 def _named_int_arguments(node: ast.Call) -> dict[str, int]:
