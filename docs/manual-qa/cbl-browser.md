@@ -22,11 +22,13 @@
 
 **Expected:** Only the approved changes occur; no unrelated order, excluded comic or list is silently regenerated, replaced or added.
 
+**Atomic adoption and retry safety (owner clarification 2026-11-20):** A large import either commits **all** approved entries and membership changes atomically or leaves the old list unchanged, with truthful errors. After an ambiguous network timeout, inspect authoritative adoption receipts before retrying to avoid duplicate or partial imports. Do not treat partially adopted items as acceptable success. Tracked by [#5522](https://github.com/JoshCLWren/comic-pile/issues/5522).
+
 ## MQA-CBL-004: Imported lists agree with Roll rules
 
 **Test:** Inspect a QA list with known strict/loose gates after the Reading List model is active and compare Roll offers.
 
-**Expected:** Result honors the list's actual gates and prerequisites; ordinary loose-list adjacency is never silently compiled into hard blocks.
+**Expected:** Result honors the list's actual gates and prerequisites; ordinary loose-list adjacency is never silently compiled into hard blocks. **Only Option E Reading Lists determine execution**. Old continuity-plan detail pages and dependency rows cannot declare an unread issue available, blocked, or eligible by inventing a second evaluator. Test the actual canonical list frontier, overlap constraints, holds, exclusions, and prerequisites; orphaned/legacy Plan display retirement belongs to [#3678](https://github.com/JoshCLWren/comic-pile/issues/3678).
 
 ## MQA-CBL-005: Same-name adoption cannot overwrite an existing list
 
