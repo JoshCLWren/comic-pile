@@ -1068,27 +1068,31 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v1/comicvine/issues/{issue_id}/metadata:refresh",
-            get(comicvine_resolution::refresh_metadata),
+            post(comicvine_resolution::refresh_metadata),
         )
         .route(
             "/api/v1/comicvine/issues/{issue_id}/metadata:revert",
-            get(comicvine_resolution::revert_correction),
+            post(comicvine_resolution::revert_correction),
         )
         .route(
             "/api/v1/comicvine/issues/{issue_id}/identity:confirm",
-            get(comicvine_resolution::confirm_identity),
+            post(comicvine_resolution::confirm_identity),
         )
         .route(
             "/api/v1/comicvine/issues/{issue_id}/identity:replace",
-            get(comicvine_resolution::replace_identity),
+            post(comicvine_resolution::replace_identity),
         )
         .route(
             "/api/v1/comicvine/issues/{issue_id}/metadata:correct",
-            get(comicvine_resolution::apply_correction),
+            post(comicvine_resolution::apply_correction),
         )
         .route(
             "/api/v1/comicvine/issues:import",
-            get(comicvine_resolution::import_issue),
+            post(comicvine_resolution::import_issue),
+        )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/identity",
+            delete(comicvine_resolution::remove_identity),
         )
         .route(
             "/api/v1/comicvine/resolve",
@@ -1104,7 +1108,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v1/comicvine/series:import",
-            get(comicvine_resolution::import_series),
+            post(comicvine_resolution::import_series),
         )
         // Canonical native v2 ComicVine read routes (#4835, split chunk A).
         .route(
