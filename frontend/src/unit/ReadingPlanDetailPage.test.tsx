@@ -533,8 +533,10 @@ describe('ReadingPlanDetailPage', () => {
   it('refreshes the Available now series titles when the tab regains focus after a rename (#5615)', async () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Age of Apocalypse' })
-    expect(screen.getByText('X-Men #95')).toBeInTheDocument()
-    expect(screen.getByText('X-Men · Next unread issue #95')).toBeInTheDocument()
+    const available = screen.getByTestId('available-now')
+    expect(within(available).getByText('X-Men #95')).toBeInTheDocument()
+    expect(within(available).getByText('X-Men · Next unread issue #95')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Read next issue' })).toHaveTextContent('X-Men #95')
 
     // The thread is renamed in another tab. The shared server data is fresh by
     // the time the plan reader view refetches on focus (#5486); every label in
@@ -552,8 +554,10 @@ describe('ReadingPlanDetailPage', () => {
       focusManager.setFocused(true)
     })
     await waitFor(() => {
-      expect(screen.getByText('X-Men QA B3 #95')).toBeInTheDocument()
-      expect(screen.getByText('X-Men QA B3 · Next unread issue #95')).toBeInTheDocument()
+      const updated = screen.getByTestId('available-now')
+      expect(within(updated).getByText('X-Men QA B3 #95')).toBeInTheDocument()
+      expect(within(updated).getByText('X-Men QA B3 · Next unread issue #95')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Read next issue' })).toHaveTextContent('X-Men QA B3 #95')
     })
   })
 })
