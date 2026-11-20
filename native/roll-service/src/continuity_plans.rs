@@ -66,7 +66,70 @@ pub struct ContinuityPlanLane {
     pub migration_contract: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+/// Coerce an explicit `null` convergence gate to an empty list.
+///
+/// Python's `ContinuityPlanNode` declares `convergence_gate` with a
+/// `BeforeValidator` that maps `None` to `[]`; a defaulted Rust `Vec` accepts a
+/// missing field but rejects an explicit `null`, so the native writer needs the
+/// same coercion to keep the wire contract identical.
+fn deserialize_convergence_gate<'de, D>(
+    deserializer: D,
+) -> Result<Vec<serde_json::Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Option::<Vec<serde_json::Value>>::deserialize(deserializer)?.unwrap_or_default())
+}
+
+/// Deserialization shadow for [`ContinuityPlanNode`].
+///
+/// The checkpoint target fields are wrapped in an extra `Option` so an omitted
+/// field is distinguishable from an explicit `null` (or an explicit empty list).
+/// Python's `preserve_checkpoint_targets` keys off Pydantic's
+/// `model_fields_set`, so the native writer must know whether the client
+/// actually supplied those fields before it can preserve stored targets.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ContinuityPlanNodeRaw {
+    id: String,
+    #[serde(rename = "node_type")]
+    node_type: String,
+    #[serde(rename = "ref_id")]
+    ref_id: i32,
+    #[serde(rename = "lane_id")]
+    lane_id: String,
+    position: i32,
+    #[serde(default)]
+    label: Option<String>,
+    #[serde(default)]
+    source_role: Option<String>,
+    #[serde(default)]
+    source_confidence: Option<String>,
+    #[serde(default)]
+    source_explanation: Option<String>,
+    #[serde(default)]
+    source_paths: Option<Vec<String>>,
+    #[serde(default)]
+    source_cbl_placements: Option<Vec<serde_json::Value>>,
+    #[serde(default)]
+    source_story_arc_ids: Option<Vec<String>>,
+    #[serde(default)]
+    source_target_story_arc_id: Option<String>,
+    #[serde(default)]
+    reader_role: Option<String>,
+    #[serde(default)]
+    reader_optional: Option<bool>,
+    #[serde(default)]
+    is_checkpoint: bool,
+    #[serde(default)]
+    checkpoint_target_ref_id: Option<Option<i32>>,
+    #[serde(default)]
+    checkpoint_target_ref_ids: Option<Option<Vec<i32>>>,
+    #[serde(default, deserialize_with = "deserialize_convergence_gate")]
+    convergence_gate: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ContinuityPlanNode {
     pub id: String,
@@ -105,6 +168,49 @@ pub struct ContinuityPlanNode {
     pub checkpoint_target_ref_ids: Vec<i32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub convergence_gate: Vec<serde_json::Value>,
+    /// Internal presence flag for the checkpoint target fields; never on the wire.
+    #[serde(skip)]
+    pub checkpoint_targets_supplied: bool,
+}
+
+impl<'de> Deserialize<'de> for ContinuityPlanNode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = ContinuityPlanNodeRaw::deserialize(deserializer)?;
+        if raw.checkpoint_target_ref_ids.is_some_and(Option::is_none) {
+            return Err(serde::de::Error::custom(
+                "checkpoint_target_ref_ids must be an array",
+            ));
+        }
+        Ok(ContinuityPlanNode {
+            id: raw.id,
+            node_type: raw.node_type,
+            ref_id: raw.ref_id,
+            lane_id: raw.lane_id,
+            position: raw.position,
+            label: raw.label,
+            source_role: raw.source_role,
+            source_confidence: raw.source_confidence,
+            source_explanation: raw.source_explanation,
+            source_paths: raw.source_paths,
+            source_cbl_placements: raw.source_cbl_placements,
+            source_story_arc_ids: raw.source_story_arc_ids,
+            source_target_story_arc_id: raw.source_target_story_arc_id,
+            reader_role: raw.reader_role,
+            reader_optional: raw.reader_optional,
+            is_checkpoint: raw.is_checkpoint,
+            checkpoint_target_ref_id: raw.checkpoint_target_ref_id.flatten(),
+            checkpoint_target_ref_ids: raw
+                .checkpoint_target_ref_ids
+                .flatten()
+                .unwrap_or_default(),
+            convergence_gate: raw.convergence_gate,
+            checkpoint_targets_supplied: raw.checkpoint_target_ref_id.is_some()
+                || raw.checkpoint_target_ref_ids.is_some(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
