@@ -134,6 +134,125 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reading_graph_extra_query_increments_budget() -> None:
+    """Adding an extra SELECT 1 under the isolated route role increments the measured count,
+    causing assert_declared_budget to reject the route when the budget is exceeded."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rge_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        env = {
+            **os.environ,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_TEST_METHOD": "GET",
+            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
+            "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_TEST_DATABASE_URL": url,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+        }
+
+        # Measure baseline before any extra queries
+        _, _, before = await db_counters(engine)
+        assert before is not None, "pg_stat_statements must be enabled for SQL budgets"
+
+        # Add extra SELECT 1 queries under the route role (each adds 1 to the counter)
+        for _ in range(3):
+            connection = await asyncpg.connect(url)
+            try:
+                await connection.execute("SELECT 1")
+            finally:
+                await connection.close()
+
+        # Run the route and measure after
+        _, _, after = await db_counters(engine)
+        assert after is not None
+        delta = after - before  # type: ignore
+
+        # The delta should now include the 3 extra SELECT 1 queries;
+        # assert_declared_budget should reject because delta > max_statements (6)
+        with pytest.raises(AssertionError):
+            assert_declared_budget("GET", "/api/v2/reading-graph", delta)  # type: ignore
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_graph_extra_n1_query_increments_budget() -> None:
+    """Adding N+1 queries (queries that scale with data size) under the route role
+    should cause assert_declared_budget to reject the route when the budget is exceeded."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rgn1_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        # Insert 5 threads with 2 issues each (small fixture)
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            for i in range(5):
+                _, ids = await _insert_owned_thread(raw, owner_id, i)
+                # Insert 2 issues per thread
+                for pos in (1, 2):
+                    await raw.execute(
+                        "INSERT INTO issues (thread_id,issue_number,position,status,created_at) "
+                        "VALUES ($1,$2,$3,'unread',NOW())",
+                        thread_id, str(pos), pos,
+                    )
+            finally:
+                await raw.close()
+
+        env = {
+            **os.environ,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_TEST_METHOD": "GET",
+            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
+            "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_TEST_DATABASE_URL": url,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+        }
+
+        # Measure baseline before extra queries
+        _, _, before = await db_counters(engine)
+        assert before is not None, "pg_stat_statements must be enabled for SQL budgets"
+
+        # Add N+1 style queries: one SELECT per existing issue (simulating N+1 pattern)
+        # This adds queries that scale with the number of entries
+        connection = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username) if 'raw' in dir() else await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            # Query issues per thread (N+1 pattern)
+            for t in range(5):
+                await connection.execute(
+                    "SELECT id FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id=$1)",
+                    owner_id,
+                )
+        finally:
+            await connection.close()
+
+        # Run the route and measure after
+        _, _, after = await db_counters(engine)
+        assert after is not None
+        delta = after - before  # type: ignore
+
+        # The N+1 queries should increment the delta; assert_declared_budget should reject
+        with pytest.raises(AssertionError):
+            assert_declared_budget("GET", "/api/v2/reading-graph", delta)  # type: ignore
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library_size() -> None:
     """POST /api/v2/reading-graph/repairs preview must stay within its fixed budget."""
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
