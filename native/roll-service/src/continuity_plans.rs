@@ -1842,12 +1842,26 @@ pub async fn list_continuity_plans(
         .await
         .map_err(db::query_error)?;
 
-    let mut plans = Vec::with_capacity(rows.len());
+    // First pass: collect all source paths and list_ids across all plans
+    struct PlanSourceInfo {
+        plan_id: i32,
+        name: String,
+        ordering_mode: String,
+        lane_count: i32,
+        step_count: i32,
+        source_paths: Vec<String>,
+        list_ids: Vec<i32>,
+        updated_at: DateTime<Utc>,
+    }
+
+    let mut plan_infos: Vec<PlanSourceInfo> = Vec::with_capacity(rows.len());
+    let mut all_list_ids: HashSet<i32> = HashSet::new();
+
     for row in &rows {
         let lanes_json_val: serde_json::Value = row.get(3);
         let lanes_json: Vec<serde_json::Value> =
             serde_json::from_value(lanes_json_val).unwrap_or_default();
-        let lane_count = lanes_json.len().max(1);
+        let lane_count = lanes_json.len().max(1) as i32;
 
         let nodes_json_val: serde_json::Value = row.get(4);
         let nodes: Vec<serde_json::Value> =
@@ -1876,8 +1890,7 @@ pub async fn list_continuity_plans(
             }
         }
 
-        // Python `load_reading_plan_source_names`: resolve `custom-cbl:<id>`
-        // references to names of Reading Lists owned by this user only.
+        // Collect custom-cbl list ids for bulk lookup
         let list_ids: Vec<i32> = source_paths
             .iter()
             .filter_map(|path| {
@@ -1885,31 +1898,61 @@ pub async fn list_continuity_plans(
                     .and_then(|rest| rest.parse::<i32>().ok())
             })
             .collect();
+        for id in &list_ids {
+            all_list_ids.insert(*id);
+        }
+
+        plan_infos.push(PlanSourceInfo {
+            plan_id: row.get(0),
+            name: row.get(1),
+            ordering_mode: row.get(2),
+            lane_count,
+            step_count,
+            source_paths,
+            list_ids,
+            updated_at: row.get::<_, DateTime<Utc>>(5),
+        });
+    }
+
+    // Bulk load all custom-cbl list names in a single query
+    let mut source_names_map: HashMap<String, String> = HashMap::new();
+    if !all_list_ids.is_empty() {
+        let list_ids_vec: Vec<i32> = all_list_ids.into_iter().collect();
+        let name_rows = conn
+            .query(
+                "SELECT id, name FROM custom_cbl_lists \
+                 WHERE user_id = $1 AND id = ANY($2::int[])",
+                &[&user.id(), &list_ids_vec],
+            )
+            .await
+            .map_err(db::query_error)?;
+        for name_row in &name_rows {
+            let id: i32 = name_row.get(0);
+            let name: String = name_row.get(1);
+            source_names_map.insert(format!("custom-cbl:{}", id), name);
+        }
+    }
+
+    // Second pass: build response using bulk-loaded names
+    let mut plans = Vec::with_capacity(plan_infos.len());
+    for info in plan_infos {
         let mut source_names = serde_json::Map::new();
-        if !list_ids.is_empty() {
-            let name_rows = conn
-                .query(
-                    "SELECT id, name FROM custom_cbl_lists \
-                     WHERE user_id = $1 AND id = ANY($2::int[])",
-                    &[&user.id(), &list_ids],
-                )
-                .await
-                .map_err(db::query_error)?;
-            for name_row in &name_rows {
-                let path = format!("custom-cbl:{}", name_row.get::<_, i32>(0));
-                source_names.insert(path, serde_json::json!(name_row.get::<_, String>(1)));
+        for list_id in &info.list_ids {
+            let path = format!("custom-cbl:{}", list_id);
+            if let Some(name) = source_names_map.get(&path) {
+                source_names.insert(path, serde_json::json!(name));
             }
         }
 
         plans.push(ContinuityPlanListItem {
-            id: row.get(0),
-            name: row.get(1),
-            ordering_mode: row.get(2),
-            lane_count: lane_count as i32,
-            step_count,
-            source_paths,
+            id: info.plan_id,
+            name: info.name,
+            ordering_mode: info.ordering_mode,
+            lane_count: info.lane_count,
+            step_count: info.step_count,
+            source_paths: info.source_paths,
             source_names: serde_json::Value::Object(source_names),
-            updated_at: iso_utc(row.get::<_, DateTime<Utc>>(5)),
+            updated_at: iso_utc(info.updated_at),
         });
     }
 
