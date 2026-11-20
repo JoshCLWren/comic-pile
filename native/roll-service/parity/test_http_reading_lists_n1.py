@@ -62,13 +62,23 @@ async def _counters(engine) -> tuple[int, int]:
     return statements, nested
 
 
-async def _measure(engine, env: dict[str, str]) -> tuple[dict[str, object], int, int]:
-    """Run one route invocation and return its body, top-level delta, nested delta."""
+async def _measure(
+    engine, env: dict[str, str], operation: tuple[str, str]
+) -> tuple[dict[str, object], int, int]:
+    """Run one route invocation; return its body and measured top-level/nested deltas."""
     assert await _statement_tracking() == "all", "pg_stat_statements.track must be 'all'"
     statements_before, nested_before = await _counters(engine)
     response, _, _, _ = await run_rust_example(BINARY, env)
     statements_after, nested_after = await _counters(engine)
-    return response, statements_after - statements_before, nested_after - nested_before
+    statements_delta = statements_after - statements_before
+    nested_delta = nested_after - nested_before
+    print(
+        f"route-harness route={operation[0]} {operation[1]} "
+        f"status={response.get('status')} db_statements={statements_delta} "
+        f"db_nested_statements={nested_delta}",
+        flush=True,
+    )
+    return response, statements_delta, nested_delta
 
 
 async def _injected_statements(engine, count: int) -> int:
@@ -211,7 +221,7 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
             await raw.close()
 
         env = _run_env(token, "GET", "/api/v2/reading-lists")
-        small, small_delta, small_nested = await _measure(engine, env)
+        small, small_delta, small_nested = await _measure(engine, env, operation)
         assert small.get("status") == 200, small
         small_body = small.get("body")
         assert isinstance(small_body, list) and len(small_body) == 5
@@ -230,7 +240,7 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
         finally:
             await raw.close()
 
-        large, large_delta, large_nested = await _measure(engine, env)
+        large, large_delta, large_nested = await _measure(engine, env, operation)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, list) and len(large_body) == 200
@@ -268,7 +278,7 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
             await raw.close()
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}")
-        small, small_delta, small_nested = await _measure(engine, env)
+        small, small_delta, small_nested = await _measure(engine, env, operation)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, dict)
@@ -293,7 +303,7 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
         finally:
             await raw.close()
 
-        large, large_delta, large_nested = await _measure(engine, env)
+        large, large_delta, large_nested = await _measure(engine, env, operation)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
@@ -332,7 +342,7 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
             await raw.close()
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}/reader")
-        small, small_delta, small_nested = await _measure(engine, env)
+        small, small_delta, small_nested = await _measure(engine, env, operation)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, dict)
@@ -362,7 +372,7 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
         finally:
             await raw.close()
 
-        large, large_delta, large_nested = await _measure(engine, env)
+        large, large_delta, large_nested = await _measure(engine, env, operation)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict)
@@ -402,12 +412,12 @@ async def test_delete_reading_list_statements_bounded() -> None:
             await raw.close()
 
         small_env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{small_id}")
-        small, small_delta, small_nested = await _measure(engine, small_env)
+        small, small_delta, small_nested = await _measure(engine, small_env, operation)
         assert small.get("status") == 204, small
         assert small.get("body") is None
 
         large_env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
-        large, large_delta, large_nested = await _measure(engine, large_env)
+        large, large_delta, large_nested = await _measure(engine, large_env, operation)
         assert large.get("status") == 204, large
         assert large.get("body") is None
 
@@ -459,7 +469,7 @@ async def test_create_reading_list_statements_do_not_grow_with_entry_count() -> 
             {"name": "Small", "mode": "loose", "issue_ids": issue_ids_small}
         )
         env = _run_env(token, "POST", "/api/v2/reading-lists", body=body_small)
-        small, small_delta, small_nested = await _measure(engine, env)
+        small, small_delta, small_nested = await _measure(engine, env, operation)
         assert small.get("status") == 201, small
         small_body = small.get("body")
         assert isinstance(small_body, dict)
@@ -481,7 +491,7 @@ async def test_create_reading_list_statements_do_not_grow_with_entry_count() -> 
             {"name": "Large", "mode": "loose", "issue_ids": issue_ids_large}
         )
         large_env = _run_env(token, "POST", "/api/v2/reading-lists", body=body_large)
-        large, large_delta, large_nested = await _measure(engine, large_env)
+        large, large_delta, large_nested = await _measure(engine, large_env, operation)
         assert large.get("status") == 201, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
@@ -531,7 +541,7 @@ async def test_update_reading_list_statements_do_not_grow_with_entry_count() -> 
             {"name": "Update small", "mode": "loose", "issue_ids": issue_ids_small}
         )
         env = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_small)
-        small, small_delta, small_nested = await _measure(engine, env)
+        small, small_delta, small_nested = await _measure(engine, env, operation)
         assert small.get("status") == 200, small
         small_body = small.get("body")
         assert isinstance(small_body, dict)
@@ -553,7 +563,7 @@ async def test_update_reading_list_statements_do_not_grow_with_entry_count() -> 
             {"name": "Update large", "mode": "loose", "issue_ids": full_ids[:200]}
         )
         large_env = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_large)
-        large, large_delta, large_nested = await _measure(engine, large_env)
+        large, large_delta, large_nested = await _measure(engine, large_env, operation)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
@@ -596,7 +606,7 @@ async def test_injected_extra_query_and_n_plus_1_fail_reading_list_budget() -> N
             await raw.close()
 
         env = _run_env(token, "GET", "/api/v2/reading-lists")
-        response, measured, _ = await _measure(engine, env)
+        response, measured, _ = await _measure(engine, env, operation)
         assert response.get("status") == 200, response
         assert_declared_budget(operation[0], operation[1], measured)
 

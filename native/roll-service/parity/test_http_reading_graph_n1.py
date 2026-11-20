@@ -62,13 +62,23 @@ async def _counters(engine) -> tuple[int, int]:
     return statements, nested
 
 
-async def _measure(engine, env: dict[str, str]) -> tuple[dict[str, object], int, int]:
-    """Run one route invocation and return its body, top-level delta, nested delta."""
+async def _measure(
+    engine, env: dict[str, str], operation: tuple[str, str]
+) -> tuple[dict[str, object], int, int]:
+    """Run one route invocation; return its body and measured top-level/nested deltas."""
     assert await _statement_tracking() == "all", "pg_stat_statements.track must be 'all'"
     statements_before, nested_before = await _counters(engine)
     response, _, _, _ = await run_rust_example(BINARY, env)
     statements_after, nested_after = await _counters(engine)
-    return response, statements_after - statements_before, nested_after - nested_before
+    statements_delta = statements_after - statements_before
+    nested_delta = nested_after - nested_before
+    print(
+        f"route-harness route={operation[0]} {operation[1]} "
+        f"status={response.get('status')} db_statements={statements_delta} "
+        f"db_nested_statements={nested_delta}",
+        flush=True,
+    )
+    return response, statements_delta, nested_delta
 
 
 async def _injected_statements(engine, count: int) -> int:
@@ -207,7 +217,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
             token = _token(username, jti=f"jti-{uuid4().hex}")
 
         env = _run_env(token, "GET", "/api/v2/reading-graph")
-        small_response, small_delta, small_nested = await _measure(engine, env)
+        small_response, small_delta, small_nested = await _measure(engine, env, operation)
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
         assert isinstance(small_body, dict)
@@ -225,7 +235,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         finally:
             await raw.close()
 
-        large_response, large_delta, large_nested = await _measure(engine, env)
+        large_response, large_delta, large_nested = await _measure(engine, env, operation)
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict)
@@ -264,7 +274,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
 
         body = json.dumps({"action": "delete_list", "list_id": list_id, "confirm": False})
         env = _run_env(token, "POST", "/api/v2/reading-graph/repairs", body=body)
-        small_response, small_delta, small_nested = await _measure(engine, env)
+        small_response, small_delta, small_nested = await _measure(engine, env, operation)
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
         assert isinstance(small_body, dict)
@@ -290,7 +300,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         finally:
             await raw.close()
 
-        large_response, large_delta, large_nested = await _measure(engine, env)
+        large_response, large_delta, large_nested = await _measure(engine, env, operation)
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict)
@@ -335,7 +345,7 @@ async def test_reading_graph_repairs_confirm_statements_do_not_grow_with_library
             {"action": "delete_list", "list_id": small_list, "confirm": True}
         )
         env = _run_env(token, "POST", "/api/v2/reading-graph/repairs", body=small_body)
-        small_response, small_delta, small_nested = await _measure(engine, env)
+        small_response, small_delta, small_nested = await _measure(engine, env, operation)
         assert small_response.get("status") == 200, small_response
         small_result = small_response.get("body")
         assert isinstance(small_result, dict)
@@ -368,7 +378,7 @@ async def test_reading_graph_repairs_confirm_statements_do_not_grow_with_library
             {"action": "delete_list", "list_id": large_list, "confirm": True}
         )
         large_env = _run_env(token, "POST", "/api/v2/reading-graph/repairs", body=large_body)
-        large_response, large_delta, large_nested = await _measure(engine, large_env)
+        large_response, large_delta, large_nested = await _measure(engine, large_env, operation)
         assert large_response.get("status") == 200, large_response
         large_result = large_response.get("body")
         assert isinstance(large_result, dict)
@@ -414,7 +424,7 @@ async def test_injected_extra_query_and_n_plus_1_fail_reading_graph_budget() -> 
             await raw.close()
 
         env = _run_env(token, "GET", "/api/v2/reading-graph")
-        response, measured, _ = await _measure(engine, env)
+        response, measured, _ = await _measure(engine, env, operation)
         assert response.get("status") == 200, response
         assert_declared_budget(operation[0], operation[1], measured)
 
