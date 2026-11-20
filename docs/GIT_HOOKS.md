@@ -74,17 +74,10 @@ Make them executable:
 chmod +x .git/hooks/pre-commit .git/hooks/pre-push
 ```
 
-## Bypassing Hooks
+## Never Bypass Hooks
 
-**Not recommended**, but if you need to bypass:
-
-```bash
-# Bypass pre-commit hook
-git commit --no-verify
-
-# Bypass pre-push hook
-git push --no-verify
-```
+`--no-verify` is prohibited. If a hook blocks a commit or push, fix the reported
+failure and rerun the relevant focused validation; do not skip the hook.
 
 ## Why Hooks Exist
 
