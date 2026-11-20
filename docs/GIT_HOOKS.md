@@ -51,7 +51,7 @@ push; CI runs them.
 **What happens on failure:**
 - Push is aborted
 - You'll see which check failed
-- Can bypass with `git push --no-verify` (not recommended)
+- Fix the reported issue and rerun the command
 
 ## Installation
 
