@@ -437,12 +437,13 @@
         "application_statements": 11,
         "transaction_control_statements": 2,
         "total_statements": 13,
-        "grows_with_data": true,
-        "basis": "auth 1 + lock 1 + old entries load 1 + owned-issue check 1 + list update 1 + entries delete 1 + one entry insert 1 + graph_preflight 1 + new entries load 1 + list reload 1 (+2 tx control); grows with entry count",
-        "max_statements": 13,
+        "grows_with_data": false,
+        "basis": "auth 1 + lock 1 + list lock 1 + old entries 1 + owned check 1 + update 1 + delete 1 + one set-based entry insert 1 + graph_preflight 1 + new entries 1 + list reload 1 (+2 tx control); fixed across entry counts",
+        "max_statements": 15,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
