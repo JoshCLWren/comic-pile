@@ -735,7 +735,7 @@ pub async fn search_series_v1(
 ) -> Result<Json<ComicVineSeriesSearchResponse>, ApiError> {
     let Query(q) = query.map_err(|_| ApiError::Unprocessable("Validation failed".to_string()))?;
     Ok(Json(ComicVineSeriesSearchResponse::empty(
-        q.query, q.offset, q.limit,
+        q.q, q.offset, q.limit,
     )))
 }
 

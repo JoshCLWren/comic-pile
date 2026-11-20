@@ -72,7 +72,7 @@ pub struct ComicVineSeriesSearchResponse {
 }
 
 impl ComicVineSeriesSearchResponse {
-    fn empty(query: String, offset: i32, limit: i32) -> Self {
+    pub(crate) fn empty(query: String, offset: i32, limit: i32) -> Self {
         Self {
             query,
             results: Vec::new(),
@@ -121,7 +121,7 @@ pub struct ComicVineResolveResponse {
 }
 
 impl ComicVineResolveResponse {
-    fn bare(input: String, kind: &str, validation_error: Option<&str>) -> Self {
+    pub(crate) fn bare(input: String, kind: &str, validation_error: Option<&str>) -> Self {
         Self {
             input,
             kind: kind.to_owned(),
