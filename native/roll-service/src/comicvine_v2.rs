@@ -938,7 +938,7 @@ pub async fn apply_correction(
     // Get the raw JSON value first to distinguish between missing field (null)
     // and field value is null in JSON. Python stores "None" string for the latter.
     let provider_value: Option<String> = tx
-        .query_opt::<_, Row, _>(
+        .query_opt::<_, tokio_postgres::Row, _>(
             "SELECT e.metadata_json -> $2 as raw_value, e.metadata_json ->> $2 as str_value \
              FROM external_identities e \
              JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
