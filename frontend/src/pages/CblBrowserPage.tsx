@@ -733,6 +733,25 @@ export default function CblBrowserPage() {
     }
   }
 
+  const matchingAdoptionPlans = useMemo(() => {
+    if (!selectedSource || !selectedSourceTitle) return []
+    const normalizedTitle = selectedSourceTitle.trim().toLowerCase()
+    return (plansQuery.data ?? []).filter(
+      (plan) =>
+        planMatchesSource(plan, selectedSource) ||
+        plan.name.trim().toLowerCase() === normalizedTitle,
+    )
+  }, [plansQuery.data, selectedSource, selectedSourceTitle])
+  const selectedAdoptionTarget =
+    matchingAdoptionPlans.find((plan) => plan.id === adoptionTargetId) ?? null
+  const mustChooseAdoptionTarget = matchingAdoptionPlans.length > 0
+  const sourceAlreadyAdopted = selectedSource
+    ? matchingAdoptionPlans.some((plan) => planMatchesSource(plan, selectedSource))
+    : false
+  const planCheckPending =
+    selectedSource !== null && (plansQuery.isPending || plansQuery.isFetching)
+  const planCheckFailed = selectedSource !== null && plansQuery.isError
+
   const summary = preview?.summary
   const needsAttentionCount =
     (summary?.unresolved_count ?? 0) + (summary?.awaiting_opt_in_count ?? 0)
@@ -744,24 +763,24 @@ export default function CblBrowserPage() {
         ? 'Refresh the preview before adding it.'
         : needsAttentionCount > 0
           ? `${countPhraseWithArticle(needsAttentionCount, 'entry still needs', 'entries still need')} attention before this source can be added.`
-          : graphCycleErrors.length > 0
-            ? 'Resolve the reading-order loop before adding this source.'
-            : graphLoading
-              ? 'Checking the reading graph…'
-              : (summary?.final_adopted_count ?? 0) === 0
-                ? 'Nothing is selected to add.'
-                : isCommitting
-                  ? null
-                  : null
+          : planCheckPending
+            ? 'Checking existing Reading Plans…'
+            : planCheckFailed
+              ? 'Check existing Reading Plans before adding this source.'
+              : mustChooseAdoptionTarget && selectedAdoptionTarget === null
+                ? 'Choose the exact Reading Plan to update before adding this source.'
+                : graphCycleErrors.length > 0
+                  ? 'Resolve the reading-order loop before adding this source.'
+                  : graphLoading
+                    ? 'Checking the reading graph…'
+                    : (summary?.final_adopted_count ?? 0) === 0
+                      ? 'Nothing is selected to add.'
+                      : null
   const commitBlocked = commitBlockedReason !== null || isCommitting || !preview
   const consequenceLine =
     preview && summary
       ? `${countPhraseWithArticle(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhraseWithArticle(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
       : null
-  const selectedSourceTitle = selectedSource
-    ? (displayCblSourceTitle(selectedSource.name, selectedSource.source_path) ??
-      FALLBACK_SOURCE_TITLE)
-    : null
 
   const firstShown =
     browsePage && browsePage.items.length > 0
