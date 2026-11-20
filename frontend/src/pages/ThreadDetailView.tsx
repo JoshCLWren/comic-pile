@@ -251,26 +251,31 @@ export default function ThreadDetailView() {
     }
   }, [threadId, requestedIssueId, location.key, hasIssueParam])
 
+  // A rename in another tab must be reconciled as soon as this view regains
+  // focus. Listen directly as well as opting the individual queries into
+  // TanStack focus refetching: some browsers deliver only one of these events
+  // for a tab switch, and the Next issue line must not wait for staleTime.
+  useEffect(() => {
+    function onViewFocus() {
+      if (document.visibilityState !== 'visible') return
+      void refetch()
+      void boundaryQuery.refetch()
+      void legacyBlockingInfo.refetch()
+      void issueCardsQuery.refetch()
+    }
+    document.addEventListener('visibilitychange', onViewFocus)
+    window.addEventListener('focus', onViewFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onViewFocus)
+      window.removeEventListener('focus', onViewFocus)
+    }
+  }, [refetch, boundaryQuery.refetch, legacyBlockingInfo.refetch, issueCardsQuery.refetch])
+
   // Deep-link arrival (#3626): jump straight to the exact canonical issue named
   // by `?issue=<issue_id>`, focus it so keyboard and assistive-technology users
   // start at the issue the link named, and mark it as the arrival target so it
   // is visually identifiable. Issue ids are canonical, so identically numbered
   // comics in other series cannot be targeted by mistake.
-  // Ensure cross-tab rename/title changes are reflected promptly when this
-  // tab becomes visible again (MQA-THREAD-SYNC follow-up).
-  useEffect(() => {
-    function onVisible() {
-      if (document.visibilityState === 'visible') {
-        void refetch()
-        void boundaryQuery.refetch()
-        void legacyBlockingInfo.refetch()
-        void issueCardsQuery.refetch()
-      }
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [refetch, boundaryQuery, legacyBlockingInfo, issueCardsQuery])
-
   useEffect(() => {
     // The thread tag editor can be opened by an inherited-source link while a
     // deep link names an issue row. The editor owns focus then; scrolling and
