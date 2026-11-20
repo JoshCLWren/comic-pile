@@ -361,6 +361,20 @@ pub struct SeriesSearchResponse {
     pub next_offset: Option<i64>,
 }
 
+impl SeriesSearchResponse {
+    fn empty(query: String, offset: i32, limit: i32) -> Self {
+        Self {
+            query,
+            results: Vec::new(),
+            total_available: Some(0),
+            offset,
+            limit,
+            has_more: false,
+            next_offset: None,
+        }
+    }
+}
+
 /// `GET /api/v1/comicvine/search/series`.
 ///
 /// Wire parity with Python `api_search_comicvine_series`.
