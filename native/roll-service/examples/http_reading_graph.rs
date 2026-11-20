@@ -8,6 +8,37 @@ use comicpile_roll_service::{config::Config, router, AppState};
 use std::sync::Arc;
 use tower::ServiceExt;
 
+/// Deliberately extend the measured request with controlled regression SQL.
+/// This exists only in the disposable HTTP example, never in the service router.
+async fn inject_controlled_queries() -> Result<(), Box<dyn std::error::Error>> {
+    let mode = std::env::var("RUST_ROLL_TEST_QUERY_INJECTION").unwrap_or_default();
+    if mode.is_empty() {
+        return Ok(());
+    }
+    let database_url = std::env::var("RUST_ROLL_DATABASE_URL")?;
+    let (client, connection) =
+        tokio_postgres::connect(&database_url, tokio_postgres::NoTls).await?;
+    let connection_task = tokio::spawn(connection);
+    match mode.as_str() {
+        "extra" => {
+            client.simple_query("SELECT 1").await?;
+        }
+        "per-row" => {
+            let rows = client.query("SELECT id FROM issues ORDER BY id", &[]).await?;
+            for row in rows {
+                let issue_id: i32 = row.get(0);
+                client
+                    .execute("SELECT id FROM issues WHERE id=$1", &[&issue_id])
+                    .await?;
+            }
+        }
+        _ => return Err(format!("unknown query injection mode: {mode}").into()),
+    }
+    drop(client);
+    connection_task.await??;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token = std::env::var("RUST_ROLL_TEST_TOKEN")?;
