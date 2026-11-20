@@ -769,10 +769,14 @@ export default function CblBrowserPage() {
   }
 
   const confirmCommit = () => {
-    if (!selectedSource || !preview || isCommitting || graphCycleErrors.length > 0 || graphLoading || pendingOverlaps.length > 0 || staleReview) return
+    if (!selectedSource || !preview || commitBlocked || pendingOverlaps.length > 0) return
     setConfirmOpen(false)
     setCommitSourceId(selectedSource.id)
-    commitMutation.mutate({ source: selectedSource, preview })
+    commitMutation.mutate({
+      source: selectedSource,
+      preview,
+      targetPlanId: selectedAdoptionTarget?.id ?? null,
+    })
   }
 
   return (
