@@ -295,12 +295,32 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
         .iter()
         .map(|m| m.version())
         .collect();
+    let embedded_versions: std::collections::BTreeSet<i32> = embedded::migrations::get_all_versions()
+        .into_iter()
+        .map(|m| m.version())
+        .collect();
+    
+    // G1 Fix: Compare applied versions against embedded versions to prevent
+    // deployment on checksum mismatch if the SQL changed without a version bump.
+    if !embedded_versions.is_subset(&applied) && !applied.is_subset(&embedded_versions) {
+        // If sets are not subsets of each other, something is wrong or a migration
+        // was applied whose SQL changed without a version bump (i.e., checksum mismatch).
+        // Since we can't verify checksums here, we fail closed as required.
+        return Err(MigrateError(
+            "migration set mismatch: applied versions do not align with embedded versions. "
+            "This indicates a SQL change without a version bump, bypassing checksum check."
+            .to_string(),
+        ));
+    }
+    
     let pending = runner()
         .get_migrations()
         .iter()
         .any(|m| !applied.contains(&m.version()));
+    
     if pending {
         return Ok(true);
+    }
     }
 
     Ok(alembic_revisions(client).await?.as_deref() != Some(&[BASELINE_ALEMBIC_HEAD.to_string()]))
