@@ -2303,15 +2303,15 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-      "v1_total": 40,
+      "v1_total": 41,
       "v1_shadowed_by_rust": 0,
       "v1_live_python": 13,
       "v1_orphaned": 0,
-      "unversioned_total": 0,
+      "unversioned_total": 1,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
-      "total_python_surface": 40,
+      "total_python_surface": 42,
       "total_shadowed_by_rust": 0,
       "total_live_python": 13,
       "total_orphaned": 0
@@ -2321,6 +2321,19 @@
       "dest": "/api/native_roll.rs"
     },
     "v1_operations": [
+      {
+        "runtime": "native-rust",
+        "status": "live",
+        "owning_issue": 4852,
+        "consumers": [
+          "frontend/src/services/api-bug-reports.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/bug-reports/",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
       {
         "runtime": "native-rust",
         "status": "target",
@@ -2908,7 +2921,21 @@
         "verified_against": "vercel.json"
       }
     ],
-    "unversioned_operations": []
+    "unversioned_operations": [
+      {
+        "runtime": "native-rust",
+        "status": "live",
+        "owning_issue": 4852,
+        "consumers": [
+          "frontend/src/services/api-bug-reports.ts"
+        ],
+        "method": "POST",
+        "path": "/api/bug-reports/",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      }
+    ]
   },
   "retired_legacy_operations": [
     {
