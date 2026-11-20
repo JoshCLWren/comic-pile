@@ -523,7 +523,7 @@ async fn graph_preflight(
         .map(|list| (list.list_id, list.name.clone()))
         .collect();
     ValidatedReadingInputs::new(inputs.clone(), &names)
-        .map_err(|error| crate::reading_graph::cycle_conflict(error, &inputs))?;
+        .map_err(|error| crate::reading_graph::custom_cbl_cycle_conflict(error, &inputs))?;
     Ok(inputs)
 }
 
