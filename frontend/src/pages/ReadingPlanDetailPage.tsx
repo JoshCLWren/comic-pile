@@ -32,6 +32,17 @@ function issueLabel(issue: ReadingPlanReaderIssue): string {
   return issue.label?.trim() ? issue.label : `${issue.thread_title} #${issue.issue_number}`
 }
 
+/** Prefer the focus-refreshed card title, but never relabel a different exact issue (#5615). */
+function currentIssueTitle(
+  issue: { thread_id: number; issue_number: string; thread_title: string },
+  card?: IssueCard | null,
+): string {
+  if (!card || card.thread_id !== issue.thread_id || card.issue_number !== issue.issue_number) {
+    return issue.thread_title
+  }
+  return card.thread_title.trim() ? card.thread_title : issue.thread_title
+}
+
 export function availabilityLabel(issue: ReadingPlanReaderIssue): string {
   if (issue.availability === 'excluded') return 'Excluded from collection'
   if (issue.availability === 'inactive') return 'Series is inactive'
@@ -49,23 +60,24 @@ function PlanIssueBlockers({ blockers, blockerCards }: {
   const [expanded, setExpanded] = useState(false)
   const first = blockers[0]
   if (!first) return null
+  const firstTitle = currentIssueTitle(first, blockerCards.get(first.issue_id))
   const remaining = blockers.length - 1
   return (
     <div className="mt-2 text-sm text-[var(--theme-text-muted)]" data-testid="plan-issue-blockers">
       <p>
         Read{' '}
         <Link
-          aria-label={`Open ${first.thread_title} issue #${first.issue_number}`}
+          aria-label={`Open ${firstTitle} issue #${first.issue_number}`}
           to={threadIssueRoutePath(first.thread_id, first.issue_id)}
           className="font-semibold text-[var(--theme-continuity-accent)] underline"
         >
-          {first.thread_title} #{first.issue_number}
+          {firstTitle} #{first.issue_number}
         </Link>{' '}
         first.
       </p>
       <CompactIssueCardTrigger
         issueId={first.issue_id}
-        threadTitle={first.thread_title}
+        threadTitle={firstTitle}
         issueNumber={first.issue_number}
         status="unread"
         card={blockerCards.get(first.issue_id)}
@@ -83,25 +95,28 @@ function PlanIssueBlockers({ blockers, blockerCards }: {
           </button>
           {expanded && (
             <ul className="mt-2 space-y-2" aria-label="Other reading requirements">
-              {blockers.slice(1).map((blocker, index) => (
-                <li key={`${blocker.issue_id}-${index}`}>
-                  <Link
-                    aria-label={`Open ${blocker.thread_title} issue #${blocker.issue_number}`}
-                    to={threadIssueRoutePath(blocker.thread_id, blocker.issue_id)}
-                    className="text-[var(--theme-continuity-accent)] underline"
-                  >
-                    {blocker.thread_title} #{blocker.issue_number}
-                  </Link>
-                  <CompactIssueCardTrigger
-                    issueId={blocker.issue_id}
-                    threadTitle={blocker.thread_title}
-                    issueNumber={blocker.issue_number}
-                    status="unread"
-                    card={blockerCards.get(blocker.issue_id)}
-                    hideTitle
-                  />
-                </li>
-              ))}
+              {blockers.slice(1).map((blocker, index) => {
+                const title = currentIssueTitle(blocker, blockerCards.get(blocker.issue_id))
+                return (
+                  <li key={`${blocker.issue_id}-${index}`}>
+                    <Link
+                      aria-label={`Open ${title} issue #${blocker.issue_number}`}
+                      to={threadIssueRoutePath(blocker.thread_id, blocker.issue_id)}
+                      className="text-[var(--theme-continuity-accent)] underline"
+                    >
+                      {title} #{blocker.issue_number}
+                    </Link>
+                    <CompactIssueCardTrigger
+                      issueId={blocker.issue_id}
+                      threadTitle={title}
+                      issueNumber={blocker.issue_number}
+                      status="unread"
+                      card={blockerCards.get(blocker.issue_id)}
+                      hideTitle
+                    />
+                  </li>
+                )
+              })}
             </ul>
           )}
         </>
@@ -119,15 +134,7 @@ function IssueRow({ issue, sourceNames, card, blockerCards }: {
   const isRead = issue.availability === 'read'
   const isBlocked = issue.availability === 'blocked'
   const isAvailable = issue.availability === 'available'
-  // The issue-card batch is refetched on tab focus (#5486) and keeps the freshest
-  // canonical series title. The reader view can still lag a rename made in
-  // another tab, so row labels follow a card that is definitely for this exact
-  // issue. A mismatched card must never relabel a different series.
-  const matchingCard =
-    card && card.thread_id === issue.thread_id && card.issue_number === issue.issue_number
-      ? card
-      : null
-  const displayTitle = matchingCard?.thread_title?.trim() ? matchingCard.thread_title : issue.thread_title
+  const displayTitle = currentIssueTitle(issue, card)
   const displayIssue = issue.label?.trim() ? issue : { ...issue, thread_title: displayTitle }
   return (
     <li
@@ -238,6 +245,10 @@ export default function ReadingPlanDetailPage() {
   const memberThreads = useMemo(() => {
     const view = readerQuery.data
     if (!view) return []
+    const freshTitles = new Map<number, string>()
+    for (const card of cardsByIssue.values()) {
+      if (card.thread_id > 0 && card.thread_title.trim()) freshTitles.set(card.thread_id, card.thread_title)
+    }
     const byId = new Map<number, { id: number; title: string }>()
     const issues = [
       ...view.available_now,
@@ -246,11 +257,14 @@ export default function ReadingPlanDetailPage() {
     ]
     for (const issue of issues) {
       if (issue.thread_id > 0 && !byId.has(issue.thread_id)) {
-        byId.set(issue.thread_id, { id: issue.thread_id, title: issue.thread_title })
+        byId.set(issue.thread_id, {
+          id: issue.thread_id,
+          title: freshTitles.get(issue.thread_id) ?? issue.thread_title,
+        })
       }
     }
     return Array.from(byId.values())
-  }, [readerQuery.data])
+  }, [readerQuery.data, cardsByIssue])
 
   if (planId == null) {
     return (
@@ -336,7 +350,7 @@ export default function ReadingPlanDetailPage() {
           {continueIssue && (
             <CompactIssueCardTrigger
               issueId={continueIssue.issue_id}
-              threadTitle={continueIssue.thread_title}
+              threadTitle={currentIssueTitle(continueIssue, cardsByIssue.get(continueIssue.issue_id))}
               issueNumber={continueIssue.issue_number}
               status={continueIssue.availability === 'read' ? 'read' : 'unread'}
               card={cardsByIssue.get(continueIssue.issue_id)}
