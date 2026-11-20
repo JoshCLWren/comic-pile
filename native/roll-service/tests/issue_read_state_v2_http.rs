@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-//! Handler-level HTTP regressions for the same-path issue read-state, move and
-//! reader-context routes (#4832 part C).
+//! Handler-level HTTP regressions for the native v2 issue read-state, position
+//! and reader-context resources (moved from the retired v1 action URLs).
 //!
 //! Exercises auth, ownership scoping, ordering and error mapping through the
 //! mounted router against the canonical disposable PostgreSQL schema. Requires
@@ -316,6 +316,14 @@ fn mark(path: &str, token: &str, csrf: &str) -> Request<Body> {
     post(path, token, csrf, None)
 }
 
+fn unmark(path: &str, token: &str, csrf: &str) -> Request<Body> {
+    authed("DELETE", path, token, csrf, None)
+}
+
+fn move_req(path: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Body> {
+    authed("PUT", path, token, csrf, body)
+}
+
 fn row(
     status: &str,
     queue_position: i32,
@@ -340,12 +348,12 @@ fn row(
 async fn every_operation_requires_authentication() {
     let (state, _token, _csrf, _user_id, _guard) = setup_user("irs-auth").await;
     for (method, path) in [
-        ("GET", "/api/v1/issues/1/reader-context"),
-        ("POST", "/api/v1/issues/1:markRead"),
-        ("POST", "/api/v1/issues/1:markUnread"),
-        ("POST", "/api/v1/issues/1:move"),
-        ("POST", "/api/v1/issues:bulkMarkRead"),
-        ("POST", "/api/v1/issues:bulkMarkUnread"),
+        ("GET", "/api/v2/issues/1/reader-context"),
+        ("POST", "/api/v2/issues/1/read-markers"),
+        ("DELETE", "/api/v2/issues/1/read-markers"),
+        ("PUT", "/api/v2/issues/1/position"),
+        ("POST", "/api/v2/issue-read-markers"),
+        ("POST", "/api/v2/issue-read-marker-removals"),
     ] {
         let (status, body) = send(
             &state,
@@ -391,7 +399,11 @@ async fn mark_read_walks_a_series_to_completion_and_renumbers_the_queue() {
 
     let (status, body) = send(
         &state,
-        mark(&format!("/api/v1/issues/{}:markRead", a[0]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", a[0]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
@@ -402,7 +414,11 @@ async fn mark_read_walks_a_series_to_completion_and_renumbers_the_queue() {
 
     let (status, body) = send(
         &state,
-        mark(&format!("/api/v1/issues/{}:markRead", a[0]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", a[0]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -413,7 +429,11 @@ async fn mark_read_walks_a_series_to_completion_and_renumbers_the_queue() {
 
     let (status, _) = send(
         &state,
-        mark(&format!("/api/v1/issues/{}:markRead", a[1]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", a[1]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -463,7 +483,11 @@ async fn completing_an_excluded_series_keeps_it_excluded_without_renumbering() {
     let (active, _) = series(&conn, user_id, "Active", 3, "active", &[("1", "unread")]).await;
     let (status, _) = send(
         &state,
-        mark(&format!("/api/v1/issues/{}:markRead", e[0]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", e[0]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -494,8 +518,8 @@ async fn mark_unread_reactivates_a_completed_series_and_moves_the_pointer_back()
 
     let (status, body) = send(
         &state,
-        mark(
-            &format!("/api/v1/issues/{}:markUnread", d[1]),
+        unmark(
+            &format!("/api/v2/issues/{}/read-markers", d[1]),
             &token,
             &csrf,
         ),
@@ -514,8 +538,8 @@ async fn mark_unread_reactivates_a_completed_series_and_moves_the_pointer_back()
     // An earlier issue becomes the new frontier.
     let (status, _) = send(
         &state,
-        mark(
-            &format!("/api/v1/issues/{}:markUnread", d[0]),
+        unmark(
+            &format!("/api/v2/issues/{}/read-markers", d[0]),
             &token,
             &csrf,
         ),
@@ -529,8 +553,8 @@ async fn mark_unread_reactivates_a_completed_series_and_moves_the_pointer_back()
 
     let (status, body) = send(
         &state,
-        mark(
-            &format!("/api/v1/issues/{}:markUnread", d[0]),
+        unmark(
+            &format!("/api/v2/issues/{}/read-markers", d[0]),
             &token,
             &csrf,
         ),
@@ -562,7 +586,11 @@ async fn read_state_changes_refresh_the_blocked_flag_in_the_same_transaction() {
 
     let (status, _) = send(
         &state,
-        mark(&format!("/api/v1/issues/{}:markRead", k[0]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", k[0]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -570,8 +598,8 @@ async fn read_state_changes_refresh_the_blocked_flag_in_the_same_transaction() {
 
     let (status, _) = send(
         &state,
-        mark(
-            &format!("/api/v1/issues/{}:markUnread", k[0]),
+        unmark(
+            &format!("/api/v2/issues/{}/read-markers", k[0]),
             &token,
             &csrf,
         ),
@@ -599,25 +627,47 @@ async fn single_mark_and_move_hide_foreign_issues_behind_the_same_404() {
     let (_mine, m) = series(&conn, user_id, "Mine", 1, "active", &[("1", "unread")]).await;
     let before = thread_row(&conn, foreign).await;
 
-    for (path, body) in [
-        (format!("/api/v1/issues/{}:markRead", f[0]), None),
-        (format!("/api/v1/issues/{}:markUnread", f[1]), None),
+    for (method, path, body) in [
         (
-            format!("/api/v1/issues/{}:move", f[0]),
+            "POST",
+            format!("/api/v2/issues/{}/read-markers", f[0]),
+            None,
+        ),
+        (
+            "DELETE",
+            format!("/api/v2/issues/{}/read-markers", f[1]),
+            None,
+        ),
+        (
+            "PUT",
+            format!("/api/v2/issues/{}/position", f[0]),
             Some(json!({"after_issue_id": null})),
         ),
         (
-            format!("/api/v1/issues/{}:move", m[0]),
+            "PUT",
+            format!("/api/v2/issues/{}/position", m[0]),
             Some(json!({"after_issue_id": f[0]})),
         ),
-        ("/api/v1/issues/999999:markRead".to_string(), None),
+        (
+            "POST",
+            "/api/v2/issues/999999/read-markers".to_string(),
+            None,
+        ),
     ] {
-        let (status, response) = send(&state, post(&path, &token, &csrf, body)).await;
-        assert_eq!(status, StatusCode::NOT_FOUND, "{path}: {response:?}");
+        let (status, response) = send(&state, authed(method, &path, &token, &csrf, body)).await;
+        assert_eq!(
+            status,
+            StatusCode::NOT_FOUND,
+            "{method} {path}: {response:?}"
+        );
     }
     let (status, body) = send(
         &state,
-        mark(&format!("/api/v1/issues/{}:markRead", f[0]), &token, &csrf),
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", f[0]),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(
@@ -630,7 +680,7 @@ async fn single_mark_and_move_hide_foreign_issues_behind_the_same_404() {
     let (status, body) = send(
         &state,
         get(
-            &format!("/api/v1/issues/{}/reader-context", f[0]),
+            &format!("/api/v2/issues/{}/reader-context", f[0]),
             &token,
             &csrf,
         ),
@@ -705,7 +755,7 @@ async fn bulk_mark_read_is_atomic_and_records_one_event_per_entry() {
         let (status, body) = send(
             &state,
             post(
-                "/api/v1/issues:bulkMarkRead",
+                "/api/v2/issue-read-markers",
                 &token,
                 &csrf,
                 Some(json!({"issue_ids": ids})),
@@ -720,7 +770,7 @@ async fn bulk_mark_read_is_atomic_and_records_one_event_per_entry() {
     let (status, body) = send(
         &state,
         post(
-            "/api/v1/issues:bulkMarkRead",
+            "/api/v2/issue-read-markers",
             &token,
             &csrf,
             Some(json!({"issue_ids": [g[0], a[0], b[0], b[1], a[0]]})),
@@ -784,7 +834,7 @@ async fn bulk_mark_unread_reactivates_completed_series_with_not_started_progress
     let (status, body) = send(
         &state,
         post(
-            "/api/v1/issues:bulkMarkUnread",
+            "/api/v2/issue-read-marker-removals",
             &token,
             &csrf,
             Some(json!({"issue_ids": [u[0]]})),
@@ -802,7 +852,7 @@ async fn bulk_mark_unread_reactivates_completed_series_with_not_started_progress
     let (status, body) = send(
         &state,
         post(
-            "/api/v1/issues:bulkMarkUnread",
+            "/api/v2/issue-read-marker-removals",
             &token,
             &csrf,
             Some(json!({"issue_ids": [d[1], d[0]]})),
@@ -834,7 +884,7 @@ async fn bulk_mark_unread_seats_reactivated_series_after_retained_queue_position
     let (status, body) = send(
         &state,
         post(
-            "/api/v1/issues:bulkMarkUnread",
+            "/api/v2/issue-read-marker-removals",
             &token,
             &csrf,
             Some(json!({"issue_ids": [l[0], k[0]]})),
@@ -865,31 +915,31 @@ async fn bulk_errors_follow_request_order() {
     let (read_id, unread_id) = (ids[0], ids[1]);
     let cases = [
         (
-            "bulkMarkRead",
+            "issue-read-markers",
             json!([read_id, 2147483648_i64]),
             StatusCode::BAD_REQUEST,
             format!("Issue {read_id} is already marked as read"),
         ),
         (
-            "bulkMarkRead",
+            "issue-read-markers",
             json!([2147483648_i64, read_id]),
             StatusCode::NOT_FOUND,
             "Issue 2147483648 not found".to_string(),
         ),
         (
-            "bulkMarkRead",
+            "issue-read-markers",
             json!([unread_id, 999_999, read_id]),
             StatusCode::NOT_FOUND,
             "Issue 999999 not found".to_string(),
         ),
         (
-            "bulkMarkUnread",
+            "issue-read-marker-removals",
             json!([unread_id, 2147483648_i64]),
             StatusCode::BAD_REQUEST,
             format!("Issue {unread_id} is already marked as unread"),
         ),
         (
-            "bulkMarkUnread",
+            "issue-read-marker-removals",
             json!([read_id, 999_999, unread_id]),
             StatusCode::NOT_FOUND,
             "Issue 999999 not found".to_string(),
@@ -899,7 +949,7 @@ async fn bulk_errors_follow_request_order() {
         let (status, body) = send(
             &state,
             post(
-                &format!("/api/v1/issues:{op}"),
+                &format!("/api/v2/{op}"),
                 &token,
                 &csrf,
                 Some(json!({"issue_ids": issue_ids})),
@@ -942,8 +992,8 @@ async fn move_reorders_and_refreshes_the_thread_counters() {
     // Move issue 4 to the top: becomes the first unread issue.
     let (status, body) = send(
         &state,
-        post(
-            &format!("/api/v1/issues/{}:move", a[3]),
+        move_req(
+            &format!("/api/v2/issues/{}/position", a[3]),
             &token,
             &csrf,
             Some(json!({"after_issue_id": null})),
@@ -960,8 +1010,8 @@ async fn move_reorders_and_refreshes_the_thread_counters() {
     // Move after another issue.
     let (status, _) = send(
         &state,
-        post(
-            &format!("/api/v1/issues/{}:move", a[3]),
+        move_req(
+            &format!("/api/v2/issues/{}/position", a[3]),
             &token,
             &csrf,
             Some(json!({"after_issue_id": a[1]})),
@@ -975,8 +1025,8 @@ async fn move_reorders_and_refreshes_the_thread_counters() {
     // Anchoring on itself changes nothing but still succeeds.
     let (status, _) = send(
         &state,
-        post(
-            &format!("/api/v1/issues/{}:move", a[2]),
+        move_req(
+            &format!("/api/v2/issues/{}/position", a[2]),
             &token,
             &csrf,
             Some(json!({"after_issue_id": a[2]})),
@@ -990,8 +1040,8 @@ async fn move_reorders_and_refreshes_the_thread_counters() {
     for anchor in [o[0], f[0], 999_999] {
         let (status, body) = send(
             &state,
-            post(
-                &format!("/api/v1/issues/{}:move", a[2]),
+            move_req(
+                &format!("/api/v2/issues/{}/position", a[2]),
                 &token,
                 &csrf,
                 Some(json!({"after_issue_id": anchor})),
@@ -1017,12 +1067,16 @@ async fn validation_errors_use_the_production_detail_after_authentication() {
 
     let expected = json!({"detail": "Validation failed"});
 
-    let (status, body) = send(&state, mark("/api/v1/issues/abc:markRead", &token, &csrf)).await;
+    let (status, body) = send(
+        &state,
+        mark("/api/v2/issues/abc/read-markers", &token, &csrf),
+    )
+    .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body, expected);
     let (status, body) = send(
         &state,
-        get("/api/v1/issues/abc/reader-context", &token, &csrf),
+        get("/api/v2/issues/abc/reader-context", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
@@ -1030,8 +1084,8 @@ async fn validation_errors_use_the_production_detail_after_authentication() {
 
     let (status, body) = send(
         &state,
-        post(
-            &format!("/api/v1/issues/{}:move", a[0]),
+        move_req(
+            &format!("/api/v2/issues/{}/position", a[0]),
             &token,
             &csrf,
             Some(json!({})),
@@ -1042,8 +1096,8 @@ async fn validation_errors_use_the_production_detail_after_authentication() {
     assert_eq!(body, expected);
     let (status, body) = send(
         &state,
-        post(
-            "/api/v1/issues/x:move",
+        move_req(
+            "/api/v2/issues/x/position",
             &token,
             &csrf,
             Some(json!({"after_issue_id": 0})),
@@ -1054,15 +1108,15 @@ async fn validation_errors_use_the_production_detail_after_authentication() {
     assert_eq!(body, expected);
 
     for (path, payload) in [
-        ("/api/v1/issues:bulkMarkRead", json!({"issue_ids": []})),
+        ("/api/v2/issue-read-markers", json!({"issue_ids": []})),
         (
-            "/api/v1/issues:bulkMarkUnread",
+            "/api/v2/issue-read-marker-removals",
             json!({"issue_ids": (1..=101).collect::<Vec<i32>>()}),
         ),
-        ("/api/v1/issues:bulkMarkRead", json!({})),
-        ("/api/v1/issues:bulkMarkRead", json!({"issue_ids": "1"})),
+        ("/api/v2/issue-read-markers", json!({})),
+        ("/api/v2/issue-read-markers", json!({"issue_ids": "1"})),
         (
-            "/api/v1/issues:bulkMarkRead",
+            "/api/v2/issue-read-markers",
             json!({"issue_ids": [1, "x", null]}),
         ),
     ] {
@@ -1070,19 +1124,19 @@ async fn validation_errors_use_the_production_detail_after_authentication() {
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{path}");
         assert_eq!(body, expected, "{path}");
     }
-    // Wrong method / unknown action on the issue segment is a 405, like Starlette.
-    for path in [
-        format!("/api/v1/issues/{}", a[0]),
-        format!("/api/v1/issues/{}:bogus", a[0]),
+    // Wrong methods on v2 resource paths are a 405 with the Starlette-style detail body.
+    for (method, path) in [
+        ("GET", format!("/api/v2/issues/{}/read-markers", a[0])),
+        ("POST", format!("/api/v2/issues/{}/position", a[0])),
     ] {
-        let (status, body) = send(&state, mark(&path, &token, &csrf)).await;
+        let (status, body) = send(&state, authed(method, &path, &token, &csrf, None)).await;
         assert_eq!(
             (status, body),
             (
                 StatusCode::METHOD_NOT_ALLOWED,
                 json!({"detail": "Method Not Allowed"})
             ),
-            "{path}"
+            "{method} {path}"
         );
     }
     assert_eq!(issue_state(&conn, a[0]).await, ("unread".into(), false));
@@ -1209,7 +1263,7 @@ async fn reader_context_reports_series_crossovers_local_chain_and_edges() {
     let (status, body) = send(
         &state,
         get(
-            &format!("/api/v1/issues/{}/reader-context", m[2]),
+            &format!("/api/v2/issues/{}/reader-context", m[2]),
             &token,
             &csrf,
         ),
@@ -1303,7 +1357,7 @@ async fn reader_context_reports_series_crossovers_local_chain_and_edges() {
     let (status, body) = send(
         &state,
         get(
-            &format!("/api/v1/issues/{}/reader-context", m[5]),
+            &format!("/api/v2/issues/{}/reader-context", m[5]),
             &token,
             &csrf,
         ),
@@ -1434,8 +1488,8 @@ async fn mark_unread_and_roll_offer_patch_on_same_thread_do_not_deadlock() {
             send(
                 &state,
                 authed(
-                    "POST",
-                    &format!("/api/v1/issues/{issue_id}:markUnread"),
+                    "DELETE",
+                    &format!("/api/v2/issues/{issue_id}/read-markers"),
                     &token,
                     &csrf,
                     None,

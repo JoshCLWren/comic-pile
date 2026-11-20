@@ -592,134 +592,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/continuity-plans/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["continuity_plans_list"];
-        put?: never;
-        post: operations["continuity_plans_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/continuity-plans/from-reading-order": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["continuity_plans_adopt_reading_order"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/continuity-plans/release-sources/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["release_sources_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/continuity-plans/release-sources/{source_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["release_sources_delete"];
-        options?: never;
-        head?: never;
-        patch: operations["release_sources_update"];
-        trace?: never;
-    };
-    "/api/v1/continuity-plans/{plan_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["continuity_plans_get"];
-        put: operations["continuity_plans_update"];
-        post?: never;
-        delete: operations["continuity_plans_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["continuity_plans_link_dependency"];
-        delete: operations["continuity_plans_unlink_dependency"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/continuity-plans/{plan_id}/membership": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["continuity_plans_membership"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["continuity_plans_project_to_reading_order"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
         parameters: {
             query?: never;
@@ -730,38 +602,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/continuity-plans/{plan_id}/release-sources/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["release_sources_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/continuity-plans/{plan_id}/release-sources/reader": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["release_sources_list_reader"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -828,166 +668,6 @@ export interface paths {
         get: operations["get_summaries_documentation"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/dependencies/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["create_legacy_dependency"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/dependencies/blocked": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_blocked_legacy_dependencies"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/dependencies/{dependency_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_legacy_dependency"];
-        put?: never;
-        post?: never;
-        delete: operations["delete_legacy_dependency"];
-        options?: never;
-        head?: never;
-        patch: operations["update_legacy_dependency"];
-        trace?: never;
-    };
-    "/api/v1/identity-inbox": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/search/issues": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["search_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/{mapping_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/{mapping_id}/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["confirm_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/{mapping_id}/defer": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["defer_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/{mapping_id}/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["reject_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/{mapping_id}/skip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["skip_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1162,26 +842,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/issues/{issue_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Documentation-only operation for the mounted single-issue read.
-         * @description Return one owner-scoped issue. Wire parity with Python GET /api/v1/issues/{issue_id}: {id, thread_id, issue_number, position, status, read_at, created_at}. Missing or foreign issues return 404 with the Python detail text.
-         */
-        get: operations["get_issue_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/issues/{issue_id}/comicvine": {
         parameters: {
             query?: never;
@@ -1207,113 +867,11 @@ export interface paths {
         };
         /**
          * Documentation-only operation for the mounted issue-dependencies read.
-         * @description Return owner-scoped incoming and outgoing dependency edges for one issue. Wire parity with Python GET /api/v1/issues/{issue_id}/dependencies: {issue_id, incoming, outgoing}, each edge carrying dependency_id, source_issue_id, source_issue_number, source_thread_id, source_thread_title. Bounded to two edge queries; no per-row fan-out.
+         * @description Return owner-scoped incoming and outgoing dependency edges for one issue: {issue_id, incoming, outgoing}, each edge carrying dependency_id, source_issue_id, source_issue_number, source_thread_id, source_thread_title. Bounded to two edge queries; no per-row fan-out.
          */
-        get: operations["get_issue_dependencies_documentation"];
+        get: operations["get_issue_dependencies_documentation___api_v1_issues__issue_id__dependencies"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues/{issue_id}/reader-context": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for reader context. */
-        get: operations["issue_read_state_reader_context"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues/{issue_id}:markRead": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for `:markRead`. */
-        post: operations["issue_read_state_mark_read"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues/{issue_id}:markUnread": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for `:markUnread`. */
-        post: operations["issue_read_state_mark_unread"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues/{issue_id}:move": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for `:move`. */
-        post: operations["issue_read_state_move"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues:bulkMarkRead": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for `:bulkMarkRead`. */
-        post: operations["issue_read_state_bulk_mark_read"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues:bulkMarkUnread": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for `:bulkMarkUnread`. */
-        post: operations["issue_read_state_bulk_mark_unread"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1470,72 +1028,6 @@ export interface paths {
         get: operations["dependency_groups_list_plans"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reading-orders/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for the list handler. */
-        get: operations["reading_orders_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reading-orders/{reading_order_id}/items": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for the insert handler. */
-        post: operations["reading_orders_insert_item"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reading-plan-sync/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["reading_plan_sync_status"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reading-plan-sync/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["reading_plan_sync"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2190,40 +1682,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/undo/{session_id}/snapshots": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for the versioned undo snapshots. */
-        get: operations["list_undo_snapshots_v1_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/undo/{session_id}/undo/{snapshot_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for the versioned undo apply. */
-        post: operations["undo_to_snapshot_v1_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/users/me/taste-signals": {
         parameters: {
             query?: never;
@@ -2413,6 +1871,198 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/comicvine/issues/{issue_id}/identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_issue_identity_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/issues/{issue_id}/metadata:corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_corrections_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["resolve_input_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/search/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["search_series_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/series/{comicvine_volume_id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["comicvine_series_issues_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/continuity-plans/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["continuity_plans_list"];
+        put?: never;
+        post: operations["continuity_plans_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/continuity-plans/from-reading-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["continuity_plans_adopt_reading_order"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/continuity-plans/release-sources/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["release_sources_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/continuity-plans/release-sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["release_sources_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["release_sources_update"];
+        trace?: never;
+    };
+    "/api/v2/continuity-plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["continuity_plans_get"];
+        put: operations["continuity_plans_update"];
+        post?: never;
+        delete: operations["continuity_plans_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["continuity_plans_link_dependency"];
+        delete: operations["continuity_plans_unlink_dependency"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/continuity-plans/{plan_id}/membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["continuity_plans_membership"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/continuity-plans/{plan_id}/reader": {
         parameters: {
             query?: never;
@@ -2429,6 +2079,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/continuity-plans/{plan_id}/reading-orders/project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["continuity_plans_project_to_reading_order"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/continuity-plans/{plan_id}/recovery": {
         parameters: {
             query?: never;
@@ -2439,6 +2105,38 @@ export interface paths {
         get: operations["preview_documentation"];
         put?: never;
         post: operations["relink_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/continuity-plans/{plan_id}/release-sources/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["release_sources_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/continuity-plans/{plan_id}/release-sources/reader": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["release_sources_list_reader"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2658,7 +2356,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/dependencies/blocked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_blocked_legacy_dependencies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/dependencies/{dependency_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_legacy_dependency"];
+        put?: never;
+        post?: never;
+        /**
+         * Documentation-only operation for the mounted dependency delete.
+         * @description Delete one owner-scoped dependency and refresh denormalized blocked flags. Issues, read state, ratings and history are preserved.
+         */
+        delete: operations["delete_dependency_documentation"];
+        options?: never;
+        head?: never;
+        patch: operations["update_legacy_dependency"];
+        trace?: never;
+    };
+    "/api/v2/identity-inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/issue-matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["search_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/{mapping_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/{mapping_id}/confirmations": {
         parameters: {
             query?: never;
             header?: never;
@@ -2667,12 +2449,90 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
-        /**
-         * Documentation-only operation for the mounted dependency delete.
-         * @description Delete one owner-scoped dependency and refresh denormalized blocked flags. Issues, read state, ratings and history are preserved.
-         */
-        delete: operations["delete_dependency_documentation"];
+        post: operations["confirm_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/{mapping_id}/deferrals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["defer_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/{mapping_id}/rejections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reject_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/{mapping_id}/skips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["skip_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issue-read-marker-removals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for removing read markers in bulk. */
+        post: operations["issue_read_state_bulk_mark_unread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issue-read-markers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for creating read markers in bulk. */
+        post: operations["issue_read_state_bulk_mark_read"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2702,7 +2562,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Documentation-only operation for the mounted single-issue read.
+         * @description Return one owner-scoped issue: {id, thread_id, issue_number, position, status, read_at, created_at}. Missing or foreign issues return 404 with the Python detail text.
+         */
+        get: operations["get_issue_documentation"];
         put?: never;
         post?: never;
         /**
@@ -2724,6 +2588,78 @@ export interface paths {
             cookie?: never;
         };
         get: operations["issue_intelligence_docs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issues/{issue_id}/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the mounted issue-dependencies read.
+         * @description Return owner-scoped incoming and outgoing dependency edges for one issue: {issue_id, incoming, outgoing}, each edge carrying dependency_id, source_issue_id, source_issue_number, source_thread_id, source_thread_title. Bounded to two edge queries; no per-row fan-out.
+         */
+        get: operations["get_issue_dependencies_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issues/{issue_id}/position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Documentation-only operation for setting an issue position. */
+        put: operations["issue_read_state_move"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issues/{issue_id}/read-markers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for creating an issue read marker. */
+        post: operations["issue_read_state_mark_read"];
+        /** Documentation-only operation for deleting an issue read marker. */
+        delete: operations["issue_read_state_mark_unread"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issues/{issue_id}/reader-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for reader context. */
+        get: operations["issue_read_state_reader_context"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3042,6 +2978,72 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["suggest_reading_mode_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-orders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for the list handler. */
+        get: operations["reading_orders_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-orders/{reading_order_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the insert handler. */
+        post: operations["reading_orders_insert_item"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-plan-sync/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reading_plan_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-plan-sync/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reading_plan_sync_status"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3547,6 +3549,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/undo/{session_id}/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for the undo snapshots list. */
+        get: operations["list_undo_snapshots_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the undo restore. */
+        post: operations["undo_to_snapshot_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/users/me/preferences": {
         parameters: {
             query?: never;
@@ -3744,12 +3780,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ActionRequest: {
-            /** Format: int32 */
-            external_identity_id?: number | null;
-            rejection_reason?: string | null;
-            search_query?: string | null;
-        };
         ActivityItem: {
             /** Format: int32 */
             die_after?: number | null;
@@ -4794,7 +4824,7 @@ export interface components {
             lanes?: components["schemas"]["ContinuityPlanLane"][];
             name: string;
             nodes?: components["schemas"]["ContinuityPlanNode"][];
-            ordering_mode: string;
+            ordering_mode?: string;
         };
         ContinuityReleaseSourceResponse: {
             created_at: string;
@@ -5855,6 +5885,11 @@ export interface components {
             rejection_reason?: string | null;
             status: string;
         };
+        /** @description Body for confirming an identity inbox candidate. */
+        IdentityInboxConfirmRequest: {
+            /** Format: int32 */
+            external_identity_id: number;
+        };
         IdentityInboxItem: {
             candidates: components["schemas"]["IdentityInboxCandidate"][];
             /** Format: double */
@@ -5873,6 +5908,12 @@ export interface components {
             /** Format: double */
             updated_at?: number | null;
             why_stopped: string;
+        };
+        /** @description Body for rejecting an identity inbox candidate. */
+        IdentityInboxRejectRequest: {
+            /** Format: int32 */
+            external_identity_id: number;
+            rejection_reason: string;
         };
         IdentityInboxResponse: {
             items: components["schemas"]["IdentityInboxItem"][];
@@ -6230,7 +6271,7 @@ export interface components {
             /** Format: int32 */
             total_count: number;
         };
-        /** @description Request body for `POST /api/v1/issues/{issue_id}:move`. */
+        /** @description Request body for `PUT /api/v2/issues/{issue_id}/position`. */
         IssueMoveRequest: {
             /**
              * Format: int32
@@ -6438,6 +6479,27 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
+        NativeCanonicalCorrection: {
+            canonical_value: string;
+            created_at: string;
+            /** Format: int32 */
+            created_by: number;
+            field_name: string;
+            /** Format: int32 */
+            id: number;
+            provenance: string;
+            provider_value?: string | null;
+        };
+        NativeComicVineIssueCandidate: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            cover_date?: string | null;
+            image_url?: string | null;
+            issue_number?: string | null;
+            name?: string | null;
+            site_detail_url?: string | null;
+            store_date?: string | null;
+        };
         /** @description Compact confirmed ComicVine mapping health for one queue row. */
         NativeComicVineMappingHealth: {
             /** Format: int32 */
@@ -6451,6 +6513,63 @@ export interface components {
             status: string;
             /** Format: int32 */
             tracked_issue_count: number;
+        };
+        NativeComicVineResolveResponse: {
+            input: string;
+            issue?: components["schemas"]["NativeComicVineResolvedIssue"] | null;
+            issues: components["schemas"]["NativeComicVineIssueCandidate"][];
+            /** @description `issue`, `volume` or `search`. */
+            kind: string;
+            validation_error?: string | null;
+            volume?: components["schemas"]["NativeComicVineSeriesResult"] | null;
+        };
+        NativeComicVineResolvedIssue: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            cover_date?: string | null;
+            image_url?: string | null;
+            issue_number?: string | null;
+            name?: string | null;
+            series_name?: string | null;
+            site_detail_url?: string | null;
+            store_date?: string | null;
+            /** Format: int32 */
+            volume_id?: number | null;
+        };
+        NativeComicVineSeriesIssuesResponse: {
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            issues: components["schemas"]["NativeComicVineIssueCandidate"][];
+            series_name: string;
+        };
+        NativeComicVineSeriesResult: {
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            image_url?: string | null;
+            /** Format: int32 */
+            issue_count?: number | null;
+            name: string;
+            publisher?: string | null;
+            site_detail_url?: string | null;
+            /** Format: int32 */
+            start_year?: number | null;
+        };
+        NativeComicVineSeriesSearchResponse: {
+            has_more: boolean;
+            /** Format: int32 */
+            limit: number;
+            /**
+             * Format: int64
+             * @description `offset + results` can exceed `i32` at the accepted offset bound, so
+             *     paging arithmetic is widened (#4636390843).
+             */
+            next_offset?: number | null;
+            /** Format: int32 */
+            offset: number;
+            query: string;
+            results: components["schemas"]["NativeComicVineSeriesResult"][];
+            /** Format: int64 */
+            total_available?: number | null;
         };
         /** @description Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`. */
         NativeDependencyGroupDetailMemberResponse: {
@@ -6524,6 +6643,29 @@ export interface components {
             /** Format: int32 */
             issue_id: number;
         };
+        NativeIssueIdentityMapping: {
+            comicvine_id: string;
+            /** Format: double */
+            confidence?: number | null;
+            created_at?: string | null;
+            evidence_source?: string | null;
+            /** Format: int32 */
+            external_identity_id: number;
+            provider: string;
+            status: string;
+        };
+        NativeIssueIdentityResponse: {
+            candidate_mappings: components["schemas"]["NativeIssueIdentityMapping"][];
+            comicvine_issue_id?: string | null;
+            confirmed_mappings: components["schemas"]["NativeIssueIdentityMapping"][];
+            has_confirmed_identity: boolean;
+            has_unresolved: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
         /** @description One issue row (Python `IssueResponse`). */
         NativeIssueResponse: {
             created_at: string;
@@ -6536,6 +6678,11 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
+        };
+        NativeMetadataCorrectionsResponse: {
+            corrections: components["schemas"]["NativeCanonicalCorrection"][];
+            /** Format: int32 */
+            issue_id: number;
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
         NativeMigrateToIssuesRequest: {
@@ -10356,295 +10503,6 @@ export interface operations {
             };
         };
     };
-    continuity_plans_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContinuityPlanListItem"][];
-                };
-            };
-        };
-    };
-    continuity_plans_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ContinuityPlanWrite"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContinuityPlanResponse"];
-                };
-            };
-        };
-    };
-    continuity_plans_adopt_reading_order: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReadingOrderAdoptRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContinuityPlanResponse"];
-                };
-            };
-        };
-    };
-    release_sources_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReleaseSourceCreate"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
-                };
-            };
-        };
-    };
-    release_sources_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                source_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    release_sources_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                source_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReleaseSourceUpdate"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
-                };
-            };
-        };
-    };
-    continuity_plans_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContinuityPlanResponse"];
-                };
-            };
-        };
-    };
-    continuity_plans_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ContinuityPlanWrite"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContinuityPlanResponse"];
-                };
-            };
-        };
-    };
-    continuity_plans_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    continuity_plans_link_dependency: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-                dependency_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReadingPlanDependencyLinkRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingPlanDependencyLink"];
-                };
-            };
-        };
-    };
-    continuity_plans_unlink_dependency: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-                dependency_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    continuity_plans_membership: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingPlanMembershipResponse"];
-                };
-            };
-        };
-    };
-    continuity_plans_project_to_reading_order: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NativeReadingOrderProjectionRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
-                };
-            };
-        };
-    };
     preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post: {
         parameters: {
             query?: never;
@@ -10697,48 +10555,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    release_sources_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"][];
-                };
-            };
-        };
-    };
-    release_sources_list_reader: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingPlanReleaseSourceStatus"][];
-                };
             };
         };
     };
@@ -10922,377 +10738,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    create_legacy_dependency: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DependencyCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Created dependency */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DependencyResponse"];
-                };
-            };
-            /** @description Invalid dependency */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Reading constraint cycle: nothing was changed */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    list_blocked_legacy_dependencies: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Blocked thread ids */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": number[];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_legacy_dependency: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Dependency id */
-                dependency_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Dependency */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DependencyResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Dependency not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    delete_legacy_dependency: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Dependency id */
-                dependency_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Dependency not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    update_legacy_dependency: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Dependency id */
-                dependency_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DependencyNoteUpdate"];
-            };
-        };
-        responses: {
-            /** @description Dependency */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DependencyResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Dependency not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Note must be at most 255 characters or validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    list_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxResponse"];
-                };
-            };
-        };
-    };
-    search_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxSearchResponse"];
-                };
-            };
-        };
-    };
-    get_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mapping id */
-                mapping_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxResponse"];
-                };
-            };
-        };
-    };
-    confirm_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mapping id */
-                mapping_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ActionRequest"];
-            };
-        };
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-        };
-    };
-    defer_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mapping id */
-                mapping_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-        };
-    };
-    reject_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mapping id */
-                mapping_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ActionRequest"];
-            };
-        };
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-        };
-    };
-    skip_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mapping id */
-                mapping_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
             };
         };
     };
@@ -11740,50 +11185,6 @@ export interface operations {
             };
         };
     };
-    get_issue_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Issue identifier */
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Issue detail */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IssueDetailResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     issue_intelligence_docs___api_v1_issues__issue_id__comicvine: {
         parameters: {
             query?: never;
@@ -11821,7 +11222,7 @@ export interface operations {
             };
         };
     };
-    get_issue_dependencies_documentation: {
+    get_issue_dependencies_documentation___api_v1_issues__issue_id__dependencies: {
         parameters: {
             query?: never;
             header?: never;
@@ -11851,336 +11252,6 @@ export interface operations {
             };
             /** @description Issue not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_reader_context: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Issue identifier */
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Bounded reader context */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReaderContextResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_mark_read: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Issue identifier */
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Issue marked read and the thread counters refreshed */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue is already marked as read */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_mark_unread: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Issue identifier */
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Issue marked unread; a completed thread is reactivated */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue is already marked as unread */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_move: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Issue identifier */
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IssueMoveRequest"];
-            };
-        };
-        responses: {
-            /** @description Issue moved within its thread */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue or anchor issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_bulk_mark_read: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IssueBulkRequest"];
-            };
-        };
-        responses: {
-            /** @description Every issue marked read atomically */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description An issue is already marked as read */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_bulk_mark_unread: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IssueBulkRequest"];
-            };
-        };
-        responses: {
-            /** @description Every issue marked unread atomically */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description An issue is already marked as unread */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12804,173 +11875,6 @@ export interface operations {
                 content?: never;
             };
             /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    reading_orders_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Reading orders owned by the caller, ordered by name */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingOrderListResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    reading_orders_insert_item: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                reading_order_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InsertReadingOrderItemRequest"];
-            };
-        };
-        responses: {
-            /** @description Thread seated at the requested position */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InsertReadingOrderItemResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Reading order or thread not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request payload failed validation */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    reading_plan_sync_status: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Sync state for every release source owned by the caller */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncStatusResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    reading_plan_sync: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SyncRequest"];
-            };
-        };
-        responses: {
-            /** @description User-triggered sync report */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid request */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14524,103 +13428,6 @@ export interface operations {
             };
         };
     };
-    list_undo_snapshots_v1_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned reading session */
-                session_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Session restore snapshots */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UndoSnapshotsResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    undo_to_snapshot_v1_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned reading session */
-                session_id: number;
-                /** @description Snapshot to restore */
-                snapshot_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Restored session */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UndoApplyResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Session or snapshot not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Only the latest rating can be undone */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     list_taste_signals_documentation: {
         parameters: {
             query?: never;
@@ -15078,6 +13885,487 @@ export interface operations {
             };
         };
     };
+    get_issue_identity_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned identity state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_corrections_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active corrections */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeMetadataCorrectionsResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolve_input_documentation: {
+        parameters: {
+            query: {
+                /** @description Search text or ComicVine URL */
+                input: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resolved input */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeComicVineResolveResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_series_documentation: {
+        parameters: {
+            query: {
+                /** @description Series title query */
+                q: string;
+                /** @description Maximum results (1-50, default 10) */
+                limit?: number;
+                /** @description Zero-based offset */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated series search */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeComicVineSeriesSearchResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    comicvine_series_issues_documentation: {
+        parameters: {
+            query?: {
+                /** @description Pre-fetched series name */
+                series_name?: string;
+            };
+            header?: never;
+            path: {
+                /** @description ComicVine volume ID */
+                comicvine_volume_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Volume issue roster */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeComicVineSeriesIssuesResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plans_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanListItem"][];
+                };
+            };
+        };
+    };
+    continuity_plans_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityPlanWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+        };
+    };
+    continuity_plans_adopt_reading_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderAdoptRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+        };
+    };
+    release_sources_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseSourceCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
+                };
+            };
+        };
+    };
+    release_sources_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release source deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    release_sources_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseSourceUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
+                };
+            };
+        };
+    };
+    continuity_plans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+        };
+    };
+    continuity_plans_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityPlanWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated continuity plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+            /** @description Stale expected_updated_at: detail.code is plan_version_conflict and detail.expected_updated_at is the current version; reload before retrying */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plans_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plan deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plans_link_dependency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingPlanDependencyLinkRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPlanDependencyLink"];
+                };
+            };
+        };
+    };
+    continuity_plans_unlink_dependency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dependency unlinked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plans_membership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPlanMembershipResponse"];
+                };
+            };
+        };
+    };
     read_documentation: {
         parameters: {
             query?: never;
@@ -15119,6 +14407,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    continuity_plans_project_to_reading_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeReadingOrderProjectionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
+                };
             };
         };
     };
@@ -15211,6 +14524,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    release_sources_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"][];
+                };
+            };
+        };
+    };
+    release_sources_list_reader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPlanReleaseSourceStatus"][];
+                };
             };
         };
     };
@@ -15754,6 +15109,70 @@ export interface operations {
             };
         };
     };
+    list_blocked_legacy_dependencies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Blocked thread ids */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": number[];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_legacy_dependency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Dependency id */
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dependency */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependencyResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dependency not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     delete_dependency_documentation: {
         parameters: {
             query?: never;
@@ -15796,6 +15215,343 @@ export interface operations {
             };
         };
     };
+    update_legacy_dependency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Dependency id */
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyNoteUpdate"];
+            };
+        };
+        responses: {
+            /** @description Dependency */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependencyResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dependency not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Note must be at most 255 characters or validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_documentation: {
+        parameters: {
+            query?: {
+                /** @description Items to skip (default 0) */
+                offset?: number;
+                /** @description Page size, 1-100 (default 50) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxResponse"];
+                };
+            };
+        };
+    };
+    search_documentation: {
+        parameters: {
+            query: {
+                /** @description Non-blank search text, at most 200 UTF-8 bytes (required) */
+                q: string;
+                /** @description Maximum results, 1-50 (default 10) */
+                limit?: number;
+                /** @description Issue id echoed back in the response (default 0) */
+                issue_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxSearchResponse"];
+                };
+            };
+        };
+    };
+    get_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxResponse"];
+                };
+            };
+        };
+    };
+    confirm_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentityInboxConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    defer_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    reject_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentityInboxRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    skip_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    issue_read_state_bulk_mark_unread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueBulkRequest"];
+            };
+        };
+        responses: {
+            /** @description Every issue marked unread atomically */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An issue is already marked as unread */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_bulk_mark_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueBulkRequest"];
+            };
+        };
+        responses: {
+            /** @description Every issue marked read atomically */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An issue is already marked as read */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     issue_cards_documentation: {
         parameters: {
             query?: never;
@@ -15820,6 +15576,50 @@ export interface operations {
             };
             /** @description Invalid or unbounded issue id list */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_issue_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDetailResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15954,6 +15754,266 @@ export interface operations {
             };
             /** @description Issue is not owned by the reader */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_issue_dependencies_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue dependencies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDependenciesResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_move: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Issue moved within its thread */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue or anchor issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_mark_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue marked read and the thread counters refreshed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue is already marked as read */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_mark_unread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue marked unread; a completed thread is reactivated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue is already marked as unread */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_reader_context: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded reader context */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReaderContextResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17068,6 +17128,173 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadingModeResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reading_orders_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reading orders owned by the caller, ordered by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderListResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reading_orders_insert_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reading_order_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InsertReadingOrderItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Thread seated at the requested position */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsertReadingOrderItemResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading order or thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reading_plan_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncRequest"];
+            };
+        };
+        responses: {
+            /** @description User-triggered sync report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reading_plan_sync_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sync state for every release source owned by the caller */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStatusResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -18266,6 +18493,103 @@ export interface operations {
             };
             /** @description Invalid reading snapshot */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_undo_snapshots_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned reading session */
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session restore snapshots */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UndoSnapshotsResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    undo_to_snapshot_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned reading session */
+                session_id: number;
+                /** @description Snapshot to restore */
+                snapshot_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UndoApplyResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session or snapshot not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only the latest rating can be undone */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

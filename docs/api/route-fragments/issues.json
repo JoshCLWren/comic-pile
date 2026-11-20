@@ -2,7 +2,9 @@
   "family": "issues",
   "owned_path_patterns": [
     "^/api/v1/issues(?::.*|/.*)?$",
-    "^/api/v2/issues(?:/.*)?$"
+    "^/api/v2/issues(?:/.*)?$",
+    "^/api/v2/issue\\-read\\-markers(?:/.*)?$",
+    "^/api/v2/issue\\-read\\-marker\\-removals(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -77,17 +79,110 @@
       ]
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/issues/{issue_id}",
+      "path": "/api/v2/issues/{issue_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/issues/[0-9]+$",
+      "src": "^/api/v2/issues/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/issues/{issue_id}/dependencies",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/issues/[0-9]+/dependencies$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/issues/{issue_id}/reader-context",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/issues/[0-9]+/reader\\-context$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
         "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-reader-context.ts"
-      ],
-      "exclude_from_inventory": true
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/issues/{issue_id}/read-markers",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/issues/[0-9]+/read\\-markers$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "DELETE",
+      "path": "/api/v2/issues/{issue_id}/read-markers",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/issues/[0-9]+/read\\-markers$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "PUT",
+      "path": "/api/v2/issues/{issue_id}/position",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/issues/[0-9]+/position$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/issue-read-markers",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/issue\\-read\\-markers$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/issue-read-marker-removals",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/issue\\-read\\-marker\\-removals$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
     },
     {
       "bucket": "v1_operations",

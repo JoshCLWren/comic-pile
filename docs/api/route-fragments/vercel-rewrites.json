@@ -12,6 +12,7 @@
     "custom-cbl",
     "demo",
     "dependencies",
+    "identity-inbox",
     "issue-identity-cbl-catalog",
     "issue-identity",
     "issues",
@@ -32,6 +33,21 @@
     "undo"
   ],
   "routes": [
+    {
+      "src": "^/api/v2/continuity-plans/[0-9]+/reader$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/continuity-plans/[0-9]+/recovery$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
     {
       "src": "^/api/v2/creators/(?!compare$|discoveries$|summaries$|team\\-chemistry$)[^/]+$",
       "methods": [
