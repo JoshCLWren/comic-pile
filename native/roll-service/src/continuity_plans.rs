@@ -3949,7 +3949,9 @@ mod tests {
             serde_json::from_str(r#"{"name":"Plan","lanes":[],"nodes":[]}"#)
                 .expect("omitted ordering_mode must deserialize");
         assert_eq!(payload.ordering_mode, "informational");
-        payload.validate_structure().expect("defaulted mode is valid");
+        payload
+            .validate_structure()
+            .expect("defaulted mode is valid");
     }
 
     fn lane(id: &str, order: i32) -> ContinuityPlanLane {
