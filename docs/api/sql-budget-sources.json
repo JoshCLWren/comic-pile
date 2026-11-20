@@ -4,22 +4,6 @@
   "operations": [
     {
       "method": "GET",
-      "path": "/api/v2/analytics/metrics",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "auth folded into one owner-scoped metrics statement; set-based",
-        "grows_with_data": false,
-        "max_statements": 2,
-        "proof_reference": "native/roll-service/src/analytics.rs",
-        "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_analytics_metrics_n1.py",
-        "runtime_overhead_statements": 1
-      }
-    },
-    {
-      "method": "GET",
       "path": "/api/v2/auth/csrf",
       "sql_budget": {
         "application_statements": 0,
@@ -194,30 +178,28 @@
       "method": "POST",
       "path": "/api/v2/dependencies/",
       "sql_budget": {
-        "application_statements": 12,
+        "application_statements": 10,
         "transaction_control_statements": 2,
-        "total_statements": 14,
-        "basis": "auth extractor 2 (connection-recovery checkout probe + user lookup) + handler checkout probe 1 + advisory lock 1 + source owned-issue 1 + target owned-issue 1 + duplicate check 1 + next-unread check 1 + insert 1 + refresh_blocked_threads 2 + graph_preflight Option E snapshot 1 (+2 tx control); measured 14, set-based",
+        "total_statements": 12,
+        "basis": "auth extractor 1 + advisory lock 1 + source owned-issue 1 + target owned-issue 1 + duplicate check 1 + next-unread check 1 + insert 1 + refresh_blocked_threads 2 + graph_preflight Option E snapshot 1 (+2 tx control); set-based",
         "grows_with_data": false,
-        "max_statements": 14,
+        "max_statements": 12,
         "proof_reference": "native/roll-service/src/dependencies.rs",
-        "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_create_dependency_n1.py"
+        "measurement_status": "pending-fixture"
       }
     },
     {
       "method": "DELETE",
       "path": "/api/v2/dependencies/{dependency_id}",
       "sql_budget": {
-        "application_statements": 7,
+        "application_statements": 5,
         "transaction_control_statements": 2,
-        "total_statements": 9,
-        "basis": "auth extractor 2 (connection-recovery checkout probe + user lookup) + handler checkout probe 1 + advisory lock 1 + owner-scoped delete 1 + refresh_blocked_threads 2 (+2 tx control); measured 9, set-based",
+        "total_statements": 7,
+        "basis": "auth extractor 1 + advisory lock 1 + owner-scoped delete 1 + refresh_blocked_threads 2 (+2 tx control); set-based",
         "grows_with_data": false,
-        "max_statements": 9,
+        "max_statements": 7,
         "proof_reference": "native/roll-service/src/dependencies.rs",
-        "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_delete_dependency_n1.py"
+        "measurement_status": "pending-fixture"
       }
     },
     {
@@ -240,45 +222,43 @@
       "method": "DELETE",
       "path": "/api/v2/issues/{issue_id}",
       "sql_budget": {
-        "application_statements": 16,
+        "application_statements": 14,
         "transaction_control_statements": 2,
-        "total_statements": 18,
-        "basis": "auth extractor 2 (connection-recovery checkout probe + user lookup) + handler checkout probe 1 + reader lock 1 + issue lookup 1 + thread lock 1 + reference_names 5 (lists, plans, node-plans, dependencies, events) + delete 1 + position reseat 1 + recreate tracking 1 + graph_preflight 1 + audit event 1 (+2 tx control); measured 18, set-based",
+        "total_statements": 16,
+        "basis": "auth extractor 1 + reader lock 1 + issue lookup 1 + thread lock 1 + reference_names 5 (lists, plans, node-plans, dependencies, events) + delete 1 + position reseat 1 + recreate tracking 1 + graph_preflight 1 + audit event 1 (+2 tx control); set-based",
         "grows_with_data": false,
-        "max_statements": 18,
+        "max_statements": 16,
         "proof_reference": "native/roll-service/src/issue_mutation.rs",
-        "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_delete_issue_n1.py"
+        "measurement_status": "pending-fixture"
       }
     },
     {
       "method": "PATCH",
       "path": "/api/v2/issues/{issue_id}",
       "sql_budget": {
-        "application_statements": 33,
+        "application_statements": 25,
         "transaction_control_statements": 2,
-        "total_statements": 35,
-        "grows_with_data": false,
-        "basis": "measured maximum across status-only, rating-only, idempotency replay, error and roll_offer branches; roll_offer completion is the worst case (advisory lock, owner/issue locks, idempotency, status/rating writes, refresh, audit, snapshot, die advance) plus 3 auth/checkout probe statements and 2 tx control; set-based, no per-row growth",
-        "max_statements": 35,
+        "total_statements": 27,
+        "grows_with_data": true,
+        "basis": "approximate worst-case for persist (advisory lock, owner/issue locks, idempotency, status/rating writes, refresh, audit, snapshot); refine via parity harness",
+        "max_statements": 27,
         "proof_reference": "native/roll-service/src/issue_mutation.rs",
-        "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_issue_patch_branches_n1.py"
+        "measurement_status": "partial-branch",
+        "measured_test_reference": "native/roll-service/parity/test_http_issue_read_rate_n1.py"
       }
     },
     {
       "method": "GET",
       "path": "/api/v2/issues/{issue_id}/comicvine",
       "sql_budget": {
-        "application_statements": 2,
+        "application_statements": 1,
         "transaction_control_statements": 0,
-        "total_statements": 2,
-        "basis": "auth folded into one owner-scoped statement 1 + connection-recovery checkout probe 1; measured 2, set-based",
+        "total_statements": 1,
+        "basis": "auth folded into one owner-scoped statement; set-based",
         "grows_with_data": false,
-        "max_statements": 2,
+        "max_statements": 1,
         "proof_reference": "native/roll-service/src/comicvine_issue.rs",
-        "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_comicvine_issue_n1.py"
+        "measurement_status": "pending-fixture"
       }
     },
     {
