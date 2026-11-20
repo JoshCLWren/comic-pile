@@ -929,19 +929,36 @@ pub async fn apply_correction(
     let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
 
+    // Python behavior: str(identity_metadata.get(field_name, "")) or None
+    // This converts None JSON values to the string "None", absent keys/empty strings to None.
+    // Use jsonb_typeof and jsonb ? to distinguish null from absent.
     let provider_value: Option<String> = tx
-        .query_opt(
-            "SELECT e.metadata_json ->> $2 \
-             FROM external_identities e \
-             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
-             WHERE m.issue_id = $1 AND m.status = 'confirmed' \
-             LIMIT 1",
+        .query_opt::<_, Row, _>(
+            r#"
+            SELECT 
+                CASE 
+                    WHEN e.metadata_json ? $2 AND jsonb_typeof(e.metadata_json -> $2) = 'null' 
+                    THEN 'None'
+                    WHEN e.metadata_json ? $2 
+                    THEN e.metadata_json ->> $2
+                    ELSE NULL
+                END
+            FROM external_identities e
+            JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id
+            WHERE m.issue_id = $1 AND m.status = 'confirmed'
+            LIMIT 1
+        "#,
             &[&issue_id, &request.field_name],
         )
         .await
         .map_err(db::query_error)?
-        .and_then(|row| row.get::<_, Option<String>>(0))
-        .filter(|value| !value.is_empty());
+        .map(|row| row.get::<_, Option<String>>(0))
+        .transpose()
+        .map_err(db::query_error)?
+        .and_then(|value| match value.as_deref() {
+            Some("") | None => None,
+            Some(v) => Some(v.to_owned()),
+        });
 
     tx.execute(
         "INSERT INTO issue_metadata_corrections \
