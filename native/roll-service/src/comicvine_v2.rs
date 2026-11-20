@@ -953,7 +953,6 @@ pub async fn apply_correction(
             &[&issue_id, &request.field_name],
         )
         .await
-        .map_err(db::query_error)?
         .map(|row| {
             let key_exists: bool = row.get(0);
             let value: String = row.get(1);
@@ -966,7 +965,8 @@ pub async fn apply_correction(
             } else {
                 Some(value)
             }
-        });
+        })
+        .map_err(db::query_error)?;
 
     tx.execute(
         "INSERT INTO issue_metadata_corrections \
