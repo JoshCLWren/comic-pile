@@ -652,7 +652,7 @@ describe('CblBrowserPage adoption', () => {
       code: 'ECONNABORTED',
     })
     mockCommitNew.mockRejectedValue(timeout)
-    mockListPlans.mockResolvedValue([
+    mockListPlans.mockResolvedValueOnce([]).mockResolvedValue([
       {
         id: 88,
         name: 'Ultimate Universe',
