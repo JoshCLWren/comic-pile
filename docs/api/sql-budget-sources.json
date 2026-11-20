@@ -355,14 +355,15 @@
       "path": "/api/v2/reading-graph/repairs",
       "sql_budget": {
         "application_statements": 6,
-        "transaction_control_statements": 2,
-        "total_statements": 8,
+        "transaction_control_statements": 4,
+        "total_statements": 10,
         "grows_with_data": false,
-        "basis": "preview path: option diagnostics 1 (+2 tx) or confirm path adds lock+delete+reload; worst case shown; refine via parity harness",
-        "max_statements": 8,
+        "basis": "confirmed worst case: auth 1 + lock 1 + locked snapshot 1 + unlinked check 1 + delete 1 + fresh snapshot 1 (+4 tx control); preview is smaller; both measured",
+        "max_statements": 13,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py",
+        "runtime_overhead_statements": 3
       }
     },
     {
