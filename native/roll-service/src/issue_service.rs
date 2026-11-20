@@ -1368,7 +1368,7 @@ mod tests {
                          '{"primary_image":"https://comicvine.example/covers/issue2.jpg"}'::json,
                          now(), now()),
                         (52, 'comicvine', 'issue', '4000-44',
-                         '{"image":{"super_url":"https://comicvine.example/covers/dependent.jpg"}}'::json,
+                         '{"primary_image":null,"raw_provider_payload":{"image":{"small_url":"","thumb_url":"https://comicvine.example/covers/dependent.jpg"}}}'::json,
                          now(), now());
                  INSERT INTO issue_external_identity_mappings
                      (id, issue_id, external_identity_id, status, evidence_json,
@@ -1682,6 +1682,13 @@ mod tests {
         let direct = card(&tx, user, 102).await.unwrap();
         assert_eq!(direct.comicvine_issue_id.as_deref(), Some("4000-43"));
         assert_eq!(direct.cover_image_url, covers.items[0].cover_image_url);
+        // #5624: deep-hydrated metadata can retain artwork only in the raw
+        // provider payload. Single-card and bounded batch reads must agree.
+        let direct_thumbnail = card(&tx, user, 301).await.unwrap();
+        assert_eq!(
+            direct_thumbnail.cover_image_url,
+            covers.items[1].cover_image_url
+        );
         tx.rollback().await.unwrap();
     }
 
