@@ -1,6 +1,6 @@
 //! Owner-scoped identity reconciliation inbox.
 //!
-//! Rust replacement for the Python `/api/v2/identity-inbox/*` routes. The HTTP
+//! Rust replacement for the Python `/api/v1/identity-inbox/*` routes. The HTTP
 //! method and exact path are preserved; only the implementation moves.
 
 use crate::{
@@ -77,24 +77,6 @@ pub struct IdentityInboxResponse {
     pub total: i64,
     pub offset: i64,
     pub limit: i64,
-}
-
-// OpenAPI-only body schema: `confirm` deserializes the shared `ActionRequest`
-// and answers 400 when `external_identity_id` is missing.
-/// Body for confirming an identity inbox candidate.
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
-pub struct IdentityInboxConfirmRequest {
-    pub external_identity_id: i32,
-}
-
-// OpenAPI-only body schema: `reject` answers 400 when `external_identity_id`
-// is missing or `rejection_reason` is missing or blank.
-/// Body for rejecting an identity inbox candidate.
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
-pub struct IdentityInboxRejectRequest {
-    pub external_identity_id: i32,
-    #[schema(min_length = 1, pattern = r"\S")]
-    pub rejection_reason: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
@@ -1129,12 +1111,8 @@ pub async fn skip(
 // Documentation-only operations for OpenAPI
 #[utoipa::path(
     get,
-    path = "/api/v2/identity-inbox",
+    path = "/api/v1/identity-inbox",
     tag = "identity-inbox",
-    params(
-        ("offset" = Option<i64>, Query, minimum = 0, description = "Items to skip (default 0)"),
-        ("limit" = Option<i64>, Query, minimum = 1, maximum = 100, description = "Page size, 1-100 (default 50)")
-    ),
     responses((status = 200, description = "ok", body = IdentityInboxResponse)),
     security(("HTTPBearer" = []))
 )]
@@ -1143,13 +1121,8 @@ pub fn list_documentation() {}
 
 #[utoipa::path(
     get,
-    path = "/api/v2/identity-inbox/issue-matches",
+    path = "/api/v1/identity-inbox/search/issues",
     tag = "identity-inbox",
-    params(
-        ("q" = String, Query, min_length = 1, description = "Non-blank search text, at most 200 UTF-8 bytes (required)"),
-        ("limit" = Option<i64>, Query, minimum = 1, maximum = 50, description = "Maximum results, 1-50 (default 10)"),
-        ("issue_id" = Option<i32>, Query, description = "Issue id echoed back in the response (default 0)")
-    ),
     responses((status = 200, description = "ok", body = IdentityInboxSearchResponse)),
     security(("HTTPBearer" = []))
 )]
@@ -1158,7 +1131,7 @@ pub fn search_documentation() {}
 
 #[utoipa::path(
     get,
-    path = "/api/v2/identity-inbox/{mapping_id}",
+    path = "/api/v1/identity-inbox/{mapping_id}",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
     responses((status = 200, description = "ok", body = IdentityInboxResponse)),
@@ -1169,10 +1142,10 @@ pub fn get_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v2/identity-inbox/{mapping_id}/confirmations",
+    path = "/api/v1/identity-inbox/{mapping_id}/confirm",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
-    request_body = IdentityInboxConfirmRequest,
+    request_body = ActionRequest,
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),
     security(("HTTPBearer" = []))
 )]
@@ -1181,7 +1154,7 @@ pub fn confirm_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v2/identity-inbox/{mapping_id}/deferrals",
+    path = "/api/v1/identity-inbox/{mapping_id}/defer",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),
@@ -1192,10 +1165,10 @@ pub fn defer_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v2/identity-inbox/{mapping_id}/rejections",
+    path = "/api/v1/identity-inbox/{mapping_id}/reject",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
-    request_body = IdentityInboxRejectRequest,
+    request_body = ActionRequest,
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),
     security(("HTTPBearer" = []))
 )]
@@ -1204,7 +1177,7 @@ pub fn reject_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v2/identity-inbox/{mapping_id}/skips",
+    path = "/api/v1/identity-inbox/{mapping_id}/skip",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),

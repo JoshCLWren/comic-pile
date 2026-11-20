@@ -1,246 +1,15 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "ComicPile native issue read-state v2 API",
-    "description": "Generated contract for the native issue read-state, position and reader-context resources.",
+    "title": "ComicPile native same-path issue read-state API",
+    "description": "Generated contract for the native issue read-state, move and reader-context handlers that retain their original method and path.",
     "license": {
       "name": ""
     },
-    "version": "2.0.0"
+    "version": "1.0.0"
   },
   "paths": {
-    "/api/v2/issue-read-marker-removals": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for removing read markers in bulk.",
-        "operationId": "issue_read_state_bulk_mark_unread",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Every issue marked unread atomically"
-          },
-          "400": {
-            "description": "An issue is already marked as unread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/issue-read-markers": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for creating read markers in bulk.",
-        "operationId": "issue_read_state_bulk_mark_read",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Every issue marked read atomically"
-          },
-          "400": {
-            "description": "An issue is already marked as read"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/issues/{issue_id}/position": {
-      "put": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for setting an issue position.",
-        "operationId": "issue_read_state_move",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueMoveRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Issue moved within its thread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue or anchor issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/issues/{issue_id}/read-markers": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for creating an issue read marker.",
-        "operationId": "issue_read_state_mark_read",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Issue marked read and the thread counters refreshed"
-          },
-          "400": {
-            "description": "Issue is already marked as read"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for deleting an issue read marker.",
-        "operationId": "issue_read_state_mark_unread",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Issue marked unread; a completed thread is reactivated"
-          },
-          "400": {
-            "description": "Issue is already marked as unread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/issues/{issue_id}/reader-context": {
+    "/api/v1/issues/{issue_id}/reader-context": {
       "get": {
         "tags": [
           "issues"
@@ -289,6 +58,239 @@
           }
         ]
       }
+    },
+    "/api/v1/issues/{issue_id}:markRead": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:markRead`.",
+        "operationId": "issue_read_state_mark_read",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Issue marked read and the thread counters refreshed"
+          },
+          "400": {
+            "description": "Issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}:markUnread": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:markUnread`.",
+        "operationId": "issue_read_state_mark_unread",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Issue marked unread; a completed thread is reactivated"
+          },
+          "400": {
+            "description": "Issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}:move": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:move`.",
+        "operationId": "issue_read_state_move",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueMoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Issue moved within its thread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue or anchor issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues:bulkMarkRead": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:bulkMarkRead`.",
+        "operationId": "issue_read_state_bulk_mark_read",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Every issue marked read atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues:bulkMarkUnread": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:bulkMarkUnread`.",
+        "operationId": "issue_read_state_bulk_mark_unread",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Every issue marked unread atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -313,7 +315,7 @@
       },
       "IssueMoveRequest": {
         "type": "object",
-        "description": "Request body for `PUT /api/v2/issues/{issue_id}/position`.",
+        "description": "Request body for `POST /api/v1/issues/{issue_id}:move`.",
         "required": [
           "after_issue_id"
         ],

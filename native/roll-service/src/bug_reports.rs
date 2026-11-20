@@ -432,7 +432,7 @@ fn json_error_pos(err: &serde_json::Error, body: &[u8]) -> usize {
 /// This is the single source of truth shared by the 422 validator and the
 /// serde deserializer so accepted values can never be rejected later by
 /// `from_value` with a fabricated `value_error`.
-pub(crate) fn pydantic_lax_int(value: &serde_json::Value) -> Option<i128> {
+fn pydantic_lax_int(value: &serde_json::Value) -> Option<i128> {
     if let Some(flag) = value.as_bool() {
         return Some(i128::from(flag));
     }

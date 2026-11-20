@@ -10,8 +10,8 @@ import type { SessionSnapshotsResponse } from '../types'
 export function createUndoApi(client: HttpClient) {
   return {
     undo: (sessionId: number | string, snapshotId: number | string) =>
-      client.post<void>(`/v2/undo/${sessionId}/snapshots/${snapshotId}/restore`),
-    listSnapshots: (sessionId: number | string) => client.get<SessionSnapshotsResponse>(`/v2/undo/${sessionId}/snapshots`),
+      client.post<void>(`/v1/undo/${sessionId}/undo/${snapshotId}`),
+    listSnapshots: (sessionId: number | string) => client.get<SessionSnapshotsResponse>(`/v1/undo/${sessionId}/snapshots`),
   }
 }
 

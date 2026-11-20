@@ -74,6 +74,550 @@
         ]
       }
     },
+    "/api/v1/continuity-plans/": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityPlanListItem"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/from-reading-order": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_adopt_reading_order",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderAdoptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/release-sources/": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSourceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/release-sources/{source_id}": {
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_delete",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {}
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_update",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSourceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_get",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_update",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_delete",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {}
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_link_dependency",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingPlanDependencyLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanDependencyLink"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_unlink_dependency",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {}
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/membership": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_membership",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanMembershipResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+      "post": {
+        "tags": [
+          "reading-orders"
+        ],
+        "operationId": "continuity_plans_project_to_reading_order",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/release-sources/": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_list",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/release-sources/reader": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_list_reader",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/continuity-rules/": {
       "get": {
         "tags": [
@@ -228,6 +772,479 @@
         ],
         "responses": {
           "204": {}
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dependencies/": {
+      "post": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "create_legacy_dependency",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created dependency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid dependency"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "409": {
+            "description": "Reading constraint cycle: nothing was changed"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dependencies/blocked": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "list_blocked_legacy_dependencies",
+        "responses": {
+          "200": {
+            "description": "Blocked thread ids",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dependencies/{dependency_id}": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "get_legacy_dependency",
+        "parameters": [
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "description": "Dependency id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dependency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "delete_legacy_dependency",
+        "parameters": [
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "description": "Dependency id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "update_legacy_dependency",
+        "parameters": [
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "description": "Dependency id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyNoteUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dependency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          },
+          "422": {
+            "description": "Note must be at most 255 characters or validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox": {
+      "get": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "list_documentation",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/search/issues": {
+      "get": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "search_documentation",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxSearchResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}": {
+      "get": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "get_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/confirm": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "confirm_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/defer": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "defer_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/reject": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "reject_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/skip": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "skip_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
         },
         "security": [
           {
@@ -963,687 +1980,6 @@
         }
       }
     },
-    "/api/v2/comicvine/issues/{issue_id}/identity": {
-      "get": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "get_issue_identity_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "ComicPile issue ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Owned identity state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueIdentityResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Issue not owned"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/issues/{issue_id}/metadata:corrections": {
-      "get": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "list_corrections_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "ComicPile issue ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Active corrections",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MetadataCorrectionsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Issue not owned"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/resolve": {
-      "get": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "resolve_input_documentation",
-        "parameters": [
-          {
-            "name": "input",
-            "in": "query",
-            "description": "Search text or ComicVine URL",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Resolved input",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ComicVineResolveResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/search/series": {
-      "get": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "search_series_documentation",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "description": "Series title query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum results (1-50, default 10)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Zero-based offset",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated series search",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ComicVineSeriesSearchResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/series/{comicvine_volume_id}/issues": {
-      "get": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "comicvine_series_issues_documentation",
-        "parameters": [
-          {
-            "name": "comicvine_volume_id",
-            "in": "path",
-            "description": "ComicVine volume ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "series_name",
-            "in": "query",
-            "description": "Pre-fetched series name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Volume issue roster",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ComicVineSeriesIssuesResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/continuity-plans/": {
-      "get": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_list",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ContinuityPlanListItem"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_create",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ContinuityPlanWrite"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityPlanResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/continuity-plans/from-reading-order": {
-      "post": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_adopt_reading_order",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingOrderAdoptRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityPlanResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/continuity-plans/release-sources/": {
-      "post": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "release_sources_create",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReleaseSourceCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/continuity-plans/release-sources/{source_id}": {
-      "delete": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "release_sources_delete",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Release source deleted"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "release_sources_update",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReleaseSourceUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/continuity-plans/{plan_id}": {
-      "get": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_get",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityPlanResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "put": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_update",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ContinuityPlanWrite"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Updated continuity plan",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityPlanResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Stale expected_updated_at: detail.code is plan_version_conflict and detail.expected_updated_at is the current version; reload before retrying"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_delete",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Plan deleted"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
-      "post": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_link_dependency",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "dependency_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingPlanDependencyLinkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingPlanDependencyLink"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_unlink_dependency",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "dependency_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Dependency unlinked"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/continuity-plans/{plan_id}/membership": {
-      "get": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_membership",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingPlanMembershipResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v2/continuity-plans/{plan_id}/reader": {
       "get": {
         "tags": [
@@ -1681,51 +2017,6 @@
           },
           "409": {
             "description": "Plan missing its authoritative Reading List"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/continuity-plans/{plan_id}/reading-orders/project": {
-      "post": {
-        "tags": [
-          "reading-orders"
-        ],
-        "operationId": "continuity_plans_project_to_reading_order",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -1826,82 +2117,6 @@
           },
           "409": {
             "description": "Stale preview or different authoritative list"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/continuity-plans/{plan_id}/release-sources/": {
-      "get": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "release_sources_list",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/continuity-plans/{plan_id}/release-sources/reader": {
-      "get": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "release_sources_list_reader",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
-                  }
-                }
-              }
-            }
           }
         },
         "security": [
@@ -2645,80 +2860,7 @@
         ]
       }
     },
-    "/api/v2/dependencies/blocked": {
-      "get": {
-        "tags": [
-          "dependencies"
-        ],
-        "operationId": "list_blocked_legacy_dependencies",
-        "responses": {
-          "200": {
-            "description": "Blocked thread ids",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "integer",
-                    "format": "int32"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v2/dependencies/{dependency_id}": {
-      "get": {
-        "tags": [
-          "dependencies"
-        ],
-        "operationId": "get_legacy_dependency",
-        "parameters": [
-          {
-            "name": "dependency_id",
-            "in": "path",
-            "description": "Dependency id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Dependency",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Dependency not found"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
       "delete": {
         "tags": [
           "dependencies"
@@ -2747,462 +2889,6 @@
           },
           "404": {
             "description": "Dependency not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "dependencies"
-        ],
-        "operationId": "update_legacy_dependency",
-        "parameters": [
-          {
-            "name": "dependency_id",
-            "in": "path",
-            "description": "Dependency id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DependencyNoteUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Dependency",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Dependency not found"
-          },
-          "422": {
-            "description": "Note must be at most 255 characters or validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/identity-inbox": {
-      "get": {
-        "tags": [
-          "identity-inbox"
-        ],
-        "operationId": "list_documentation",
-        "parameters": [
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Items to skip (default 0)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Page size, 1-100 (default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "maximum": 100,
-              "minimum": 1
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/identity-inbox/issue-matches": {
-      "get": {
-        "tags": [
-          "identity-inbox"
-        ],
-        "operationId": "search_documentation",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "description": "Non-blank search text, at most 200 UTF-8 bytes (required)",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum results, 1-50 (default 10)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "maximum": 50,
-              "minimum": 1
-            }
-          },
-          {
-            "name": "issue_id",
-            "in": "query",
-            "description": "Issue id echoed back in the response (default 0)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxSearchResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/identity-inbox/{mapping_id}": {
-      "get": {
-        "tags": [
-          "identity-inbox"
-        ],
-        "operationId": "get_documentation",
-        "parameters": [
-          {
-            "name": "mapping_id",
-            "in": "path",
-            "description": "Mapping id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/identity-inbox/{mapping_id}/confirmations": {
-      "post": {
-        "tags": [
-          "identity-inbox"
-        ],
-        "operationId": "confirm_documentation",
-        "parameters": [
-          {
-            "name": "mapping_id",
-            "in": "path",
-            "description": "Mapping id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IdentityInboxConfirmRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/identity-inbox/{mapping_id}/deferrals": {
-      "post": {
-        "tags": [
-          "identity-inbox"
-        ],
-        "operationId": "defer_documentation",
-        "parameters": [
-          {
-            "name": "mapping_id",
-            "in": "path",
-            "description": "Mapping id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/identity-inbox/{mapping_id}/rejections": {
-      "post": {
-        "tags": [
-          "identity-inbox"
-        ],
-        "operationId": "reject_documentation",
-        "parameters": [
-          {
-            "name": "mapping_id",
-            "in": "path",
-            "description": "Mapping id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IdentityInboxRejectRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/identity-inbox/{mapping_id}/skips": {
-      "post": {
-        "tags": [
-          "identity-inbox"
-        ],
-        "operationId": "skip_documentation",
-        "parameters": [
-          {
-            "name": "mapping_id",
-            "in": "path",
-            "description": "Mapping id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/issue-read-marker-removals": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for removing read markers in bulk.",
-        "operationId": "issue_read_state_bulk_mark_unread",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Every issue marked unread atomically"
-          },
-          "400": {
-            "description": "An issue is already marked as unread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/issue-read-markers": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for creating read markers in bulk.",
-        "operationId": "issue_read_state_bulk_mark_read",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Every issue marked read atomically"
-          },
-          "400": {
-            "description": "An issue is already marked as read"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -3255,52 +2941,6 @@
       }
     },
     "/api/v2/issues/{issue_id}": {
-      "get": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for the mounted single-issue read.",
-        "description": "Return one owner-scoped issue: {id, thread_id, issue_number, position, status, read_at, created_at}. Missing or foreign issues return 404 with the Python detail text.",
-        "operationId": "get_issue_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Issue detail",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueDetailResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
       "delete": {
         "tags": [
           "issues"
@@ -3440,247 +3080,6 @@
           },
           "404": {
             "description": "Issue is not owned by the reader"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/issues/{issue_id}/dependencies": {
-      "get": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for the mounted issue-dependencies read.",
-        "description": "Return owner-scoped incoming and outgoing dependency edges for one issue: {issue_id, incoming, outgoing}, each edge carrying dependency_id, source_issue_id, source_issue_number, source_thread_id, source_thread_title. Bounded to two edge queries; no per-row fan-out.",
-        "operationId": "get_issue_dependencies_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Issue dependencies",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueDependenciesResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/issues/{issue_id}/position": {
-      "put": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for setting an issue position.",
-        "operationId": "issue_read_state_move",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueMoveRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Issue moved within its thread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue or anchor issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/issues/{issue_id}/read-markers": {
-      "post": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for creating an issue read marker.",
-        "operationId": "issue_read_state_mark_read",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Issue marked read and the thread counters refreshed"
-          },
-          "400": {
-            "description": "Issue is already marked as read"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for deleting an issue read marker.",
-        "operationId": "issue_read_state_mark_unread",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Issue marked unread; a completed thread is reactivated"
-          },
-          "400": {
-            "description": "Issue is already marked as unread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/issues/{issue_id}/reader-context": {
-      "get": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for reader context.",
-        "operationId": "issue_read_state_reader_context",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "Owned Issue identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Bounded reader context",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReaderContextResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -4855,172 +4254,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReadingModeResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/reading-orders/": {
-      "get": {
-        "tags": [
-          "reading-orders"
-        ],
-        "summary": "Documentation-only operation for the list handler.",
-        "operationId": "reading_orders_list",
-        "responses": {
-          "200": {
-            "description": "Reading orders owned by the caller, ordered by name",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderListResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/reading-orders/{reading_order_id}/items": {
-      "post": {
-        "tags": [
-          "reading-orders"
-        ],
-        "summary": "Documentation-only operation for the insert handler.",
-        "operationId": "reading_orders_insert_item",
-        "parameters": [
-          {
-            "name": "reading_order_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InsertReadingOrderItemRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Thread seated at the requested position",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InsertReadingOrderItemResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Reading order or thread not found"
-          },
-          "422": {
-            "description": "Request payload failed validation"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/reading-plan-sync/runs": {
-      "post": {
-        "tags": [
-          "reading-plan-sync"
-        ],
-        "operationId": "reading_plan_sync",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SyncRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "User-triggered sync report",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SyncResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "422": {
-            "description": "Invalid request"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/reading-plan-sync/status": {
-      "get": {
-        "tags": [
-          "reading-plan-sync"
-        ],
-        "operationId": "reading_plan_sync_status",
-        "responses": {
-          "200": {
-            "description": "Sync state for every release source owned by the caller",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SyncStatusResponse"
                 }
               }
             }
@@ -6462,113 +5695,6 @@
         ]
       }
     },
-    "/api/v2/undo/{session_id}/snapshots": {
-      "get": {
-        "tags": [
-          "undo"
-        ],
-        "summary": "Documentation-only operation for the undo snapshots list.",
-        "operationId": "list_undo_snapshots_documentation",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Owned reading session",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Session restore snapshots",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UndoSnapshotsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore": {
-      "post": {
-        "tags": [
-          "undo"
-        ],
-        "summary": "Documentation-only operation for the undo restore.",
-        "operationId": "undo_to_snapshot_documentation",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Owned reading session",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "snapshot_id",
-            "in": "path",
-            "description": "Snapshot to restore",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Restored session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UndoApplyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session or snapshot not found"
-          },
-          "409": {
-            "description": "Only the latest rating can be undone"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v2/users/me/preferences": {
       "get": {
         "tags": [
@@ -6647,6 +5773,30 @@
   },
   "components": {
     "schemas": {
+      "ActionRequest": {
+        "type": "object",
+        "properties": {
+          "external_identity_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "rejection_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "search_query": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "ActivityItem": {
         "type": "object",
         "required": [
@@ -7616,45 +6766,6 @@
           }
         }
       },
-      "CanonicalCorrection": {
-        "type": "object",
-        "required": [
-          "id",
-          "field_name",
-          "canonical_value",
-          "provenance",
-          "created_by",
-          "created_at"
-        ],
-        "properties": {
-          "canonical_value": {
-            "type": "string"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "created_by": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "field_name": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "provenance": {
-            "type": "string"
-          },
-          "provider_value": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "CblAdoptionCommitRequest": {
         "type": "object",
         "required": [
@@ -7795,54 +6906,6 @@
           }
         }
       },
-      "ComicVineIssueCandidate": {
-        "type": "object",
-        "required": [
-          "comicvine_issue_id"
-        ],
-        "properties": {
-          "comicvine_issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "cover_date": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "image_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "site_detail_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "store_date": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "ComicVineMappingHealth": {
         "type": "object",
         "description": "Compact confirmed ComicVine mapping health for one queue row.",
@@ -7877,234 +6940,6 @@
           "tracked_issue_count": {
             "type": "integer",
             "format": "int32"
-          }
-        }
-      },
-      "ComicVineResolveResponse": {
-        "type": "object",
-        "required": [
-          "input",
-          "kind",
-          "issues"
-        ],
-        "properties": {
-          "input": {
-            "type": "string"
-          },
-          "issue": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ComicVineResolvedIssue"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ComicVineIssueCandidate"
-            }
-          },
-          "kind": {
-            "type": "string",
-            "description": "`issue`, `volume` or `search`."
-          },
-          "validation_error": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "volume": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ComicVineSeriesResult"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
-      "ComicVineResolvedIssue": {
-        "type": "object",
-        "required": [
-          "comicvine_issue_id"
-        ],
-        "properties": {
-          "comicvine_issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "cover_date": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "image_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "series_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "site_detail_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "store_date": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "volume_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "ComicVineSeriesIssuesResponse": {
-        "type": "object",
-        "required": [
-          "comicvine_volume_id",
-          "series_name",
-          "issues"
-        ],
-        "properties": {
-          "comicvine_volume_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ComicVineIssueCandidate"
-            }
-          },
-          "series_name": {
-            "type": "string"
-          }
-        }
-      },
-      "ComicVineSeriesResult": {
-        "type": "object",
-        "required": [
-          "comicvine_volume_id",
-          "name"
-        ],
-        "properties": {
-          "comicvine_volume_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "image_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issue_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "name": {
-            "type": "string"
-          },
-          "publisher": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "site_detail_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "start_year": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "ComicVineSeriesSearchResponse": {
-        "type": "object",
-        "required": [
-          "query",
-          "results",
-          "offset",
-          "limit",
-          "has_more"
-        ],
-        "properties": {
-          "has_more": {
-            "type": "boolean"
-          },
-          "limit": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "next_offset": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "`offset + results` can exceed `i32` at the accepted offset bound, so\npaging arithmetic is widened (#4636390843)."
-          },
-          "offset": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "query": {
-            "type": "string"
-          },
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ComicVineSeriesResult"
-            }
-          },
-          "total_available": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
           }
         }
       },
@@ -8521,7 +7356,8 @@
       "ContinuityPlanWrite": {
         "type": "object",
         "required": [
-          "name"
+          "name",
+          "ordering_mode"
         ],
         "properties": {
           "expected_updated_at": {
@@ -11405,19 +10241,6 @@
           }
         }
       },
-      "IdentityInboxConfirmRequest": {
-        "type": "object",
-        "description": "Body for confirming an identity inbox candidate.",
-        "required": [
-          "external_identity_id"
-        ],
-        "properties": {
-          "external_identity_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "IdentityInboxItem": {
         "type": "object",
         "required": [
@@ -11484,25 +10307,6 @@
           },
           "why_stopped": {
             "type": "string"
-          }
-        }
-      },
-      "IdentityInboxRejectRequest": {
-        "type": "object",
-        "description": "Body for rejecting an identity inbox candidate.",
-        "required": [
-          "external_identity_id",
-          "rejection_reason"
-        ],
-        "properties": {
-          "external_identity_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "rejection_reason": {
-            "type": "string",
-            "minLength": 1,
-            "pattern": "\\S"
           }
         }
       },
@@ -11673,70 +10477,6 @@
           }
         },
         "additionalProperties": false
-      },
-      "InsertReadingOrderItemRequest": {
-        "type": "object",
-        "description": "Python `InsertReadingOrderItemRequest`.",
-        "required": [
-          "thread_id",
-          "position"
-        ],
-        "properties": {
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "InsertReadingOrderItemResponse": {
-        "type": "object",
-        "description": "Python `InsertReadingOrderItemResponse`.",
-        "required": [
-          "reading_order_id",
-          "thread_id",
-          "position",
-          "total_items"
-        ],
-        "properties": {
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "reading_order_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "total_items": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "IssueBulkRequest": {
-        "type": "object",
-        "description": "Request body for the bulk read-state operations.",
-        "required": [
-          "issue_ids"
-        ],
-        "properties": {
-          "issue_ids": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "maxItems": 100,
-            "minItems": 1
-          }
-        }
       },
       "IssueCard": {
         "type": "object",
@@ -11942,98 +10682,6 @@
           }
         }
       },
-      "IssueIdentityMapping": {
-        "type": "object",
-        "required": [
-          "external_identity_id",
-          "provider",
-          "comicvine_id",
-          "status"
-        ],
-        "properties": {
-          "comicvine_id": {
-            "type": "string"
-          },
-          "confidence": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "created_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "evidence_source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "external_identity_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        }
-      },
-      "IssueIdentityResponse": {
-        "type": "object",
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "has_confirmed_identity",
-          "confirmed_mappings",
-          "candidate_mappings",
-          "has_unresolved"
-        ],
-        "properties": {
-          "candidate_mappings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IssueIdentityMapping"
-            }
-          },
-          "comicvine_issue_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "confirmed_mappings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IssueIdentityMapping"
-            }
-          },
-          "has_confirmed_identity": {
-            "type": "boolean"
-          },
-          "has_unresolved": {
-            "type": "boolean"
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        }
-      },
       "IssueIntelligence": {
         "type": "object",
         "description": "Wire parity with Python's ComicVineIssueIntelligence.",
@@ -12153,24 +10801,6 @@
           "total_count": {
             "type": "integer",
             "format": "int32"
-          }
-        }
-      },
-      "IssueMoveRequest": {
-        "type": "object",
-        "description": "Request body for `PUT /api/v2/issues/{issue_id}/position`.",
-        "required": [
-          "after_issue_id"
-        ],
-        "properties": {
-          "after_issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Move after this issue. `null` moves the issue to position 1.",
-            "minimum": 1
           }
         }
       },
@@ -12334,25 +10964,6 @@
             }
           }
         ]
-      },
-      "MetadataCorrectionsResponse": {
-        "type": "object",
-        "required": [
-          "issue_id",
-          "corrections"
-        ],
-        "properties": {
-          "corrections": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CanonicalCorrection"
-            }
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
       },
       "MinimalReleaseResponse": {
         "type": "object",
@@ -13254,404 +11865,6 @@
               "null"
             ],
             "format": "int32"
-          }
-        }
-      },
-      "ReaderContextCrossover": {
-        "type": "object",
-        "description": "Python `ReaderContextCrossover`.",
-        "required": [
-          "id",
-          "name",
-          "applies_to_current_issue",
-          "membership_kind",
-          "ratings_count",
-          "read_count"
-        ],
-        "properties": {
-          "applies_to_current_issue": {
-            "type": "boolean"
-          },
-          "average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "membership_kind": {
-            "type": "string",
-            "description": "`issue` or `thread`."
-          },
-          "name": {
-            "type": "string"
-          },
-          "next_member": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ReaderContextCrossoverNextMember"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "ratings_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "read_count": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "ReaderContextCrossoverMembership": {
-        "type": "object",
-        "description": "Python `ReaderContextCrossoverMembership`.",
-        "required": [
-          "id",
-          "name"
-        ],
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "name": {
-            "type": "string"
-          }
-        }
-      },
-      "ReaderContextCrossoverNextMember": {
-        "type": "object",
-        "description": "Python `ReaderContextCrossoverNextMember`.",
-        "required": [
-          "issue_id",
-          "issue_number"
-        ],
-        "properties": {
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          }
-        }
-      },
-      "ReaderContextEdge": {
-        "type": "object",
-        "description": "Python `ReaderContextEdge`.",
-        "required": [
-          "id",
-          "kind",
-          "source_issue_id",
-          "target_issue_id"
-        ],
-        "properties": {
-          "explanation": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "kind": {
-            "type": "string",
-            "description": "`dependency` or `continuity`."
-          },
-          "note": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "source_issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_label": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_status": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_thread_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "source_thread_title": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "target_issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "target_issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "target_label": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "target_status": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "target_thread_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "target_thread_title": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "ReaderContextLocalChain": {
-        "type": "object",
-        "description": "Python `ReaderContextLocalChain`.",
-        "required": [
-          "issues",
-          "edges"
-        ],
-        "properties": {
-          "edges": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReaderContextEdge"
-            }
-          },
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReaderContextLocalIssue"
-            }
-          }
-        }
-      },
-      "ReaderContextLocalIssue": {
-        "type": "object",
-        "description": "Python `ReaderContextLocalIssue`.",
-        "required": [
-          "issue_id",
-          "issue_number",
-          "position",
-          "status",
-          "relation",
-          "crossover_memberships"
-        ],
-        "properties": {
-          "crossover_memberships": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReaderContextCrossoverMembership"
-            }
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "relation": {
-            "type": "string",
-            "description": "`previous`, `current`, `next` or `future`."
-          },
-          "status": {
-            "type": "string"
-          }
-        }
-      },
-      "ReaderContextPreviousIssue": {
-        "type": "object",
-        "description": "Python `ReaderContextPreviousIssue`.",
-        "required": [
-          "issue_id",
-          "issue_number"
-        ],
-        "properties": {
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          }
-        }
-      },
-      "ReaderContextRecentRating": {
-        "type": "object",
-        "description": "Python `ReaderContextRecentRating`.",
-        "required": [
-          "issue_id",
-          "issue_number",
-          "rating"
-        ],
-        "properties": {
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "rating": {
-            "type": "number",
-            "format": "double"
-          }
-        }
-      },
-      "ReaderContextResponse": {
-        "type": "object",
-        "description": "Python `ReaderContextResponse`.",
-        "required": [
-          "issue_id",
-          "series",
-          "crossovers",
-          "local_chain"
-        ],
-        "properties": {
-          "crossovers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReaderContextCrossover"
-            }
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "local_chain": {
-            "$ref": "#/components/schemas/ReaderContextLocalChain"
-          },
-          "series": {
-            "$ref": "#/components/schemas/ReaderContextSeries"
-          }
-        }
-      },
-      "ReaderContextSeries": {
-        "type": "object",
-        "description": "Python `ReaderContextSeries`.",
-        "required": [
-          "identity_source",
-          "ratings_count",
-          "recent_ratings"
-        ],
-        "properties": {
-          "average_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "canonical_series_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "highest_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "identity_source": {
-            "type": "string",
-            "description": "`comicvine` or `unavailable`."
-          },
-          "lowest_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "previous_issue": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ReaderContextPreviousIssue"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "ratings_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "recent_ratings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReaderContextRecentRating"
-            }
-          },
-          "series_name": {
-            "type": [
-              "string",
-              "null"
-            ]
           }
         }
       },
@@ -14611,21 +12824,6 @@
         },
         "additionalProperties": false
       },
-      "ReadingOrderListResponse": {
-        "type": "object",
-        "description": "Python `ReadingOrderListResponse`.",
-        "required": [
-          "reading_orders"
-        ],
-        "properties": {
-          "reading_orders": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ReadingOrderSummary"
-            }
-          }
-        }
-      },
       "ReadingOrderProjectionConflict": {
         "type": "object",
         "required": [
@@ -14795,34 +12993,6 @@
           "updated_count": {
             "type": "integer",
             "format": "int32"
-          }
-        }
-      },
-      "ReadingOrderSummary": {
-        "type": "object",
-        "description": "One row of the reading-orders list (Python `ReadingOrderSummary`).",
-        "required": [
-          "id",
-          "name",
-          "total_items"
-        ],
-        "properties": {
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "name": {
-            "type": "string"
-          },
-          "total_items": {
-            "type": "integer",
-            "format": "int64"
           }
         }
       },
@@ -16039,141 +14209,6 @@
           }
         }
       },
-      "SessionActiveThread": {
-        "type": "object",
-        "description": "Active thread projection.",
-        "required": [
-          "id",
-          "title",
-          "format",
-          "issues_remaining",
-          "queue_position",
-          "tags"
-        ],
-        "properties": {
-          "format": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issues_read": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "issues_remaining": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "last_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "last_rolled_result": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "next_issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "next_issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "queue_position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "reading_progress": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionTag"
-            }
-          },
-          "title": {
-            "type": "string"
-          },
-          "total_issues": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "SessionBandwidthState": {
-        "type": "object",
-        "description": "Canonical bandwidth state.",
-        "properties": {
-          "active_bandwidth": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "confidence": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "mode_version": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "predicted_bandwidth": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "SessionDetailsResponse": {
         "type": "object",
         "description": "Full session details response with events and narrative summary.",
@@ -16327,43 +14362,6 @@
           }
         }
       },
-      "SessionIntentState": {
-        "type": "object",
-        "description": "Canonical intent state.",
-        "properties": {
-          "active_intent": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "confidence": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "mode_version": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "predicted_intent": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "SessionSnapshotItem": {
         "type": "object",
         "required": [
@@ -16414,98 +14412,6 @@
             "items": {
               "$ref": "#/components/schemas/SessionSnapshotItem"
             }
-          }
-        }
-      },
-      "SessionTag": {
-        "type": "object",
-        "description": "Direct visible tag.",
-        "required": [
-          "id",
-          "name",
-          "normalized_name",
-          "scope",
-          "color",
-          "created_at",
-          "updated_at"
-        ],
-        "properties": {
-          "color": {
-            "type": "string"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "name": {
-            "type": "string"
-          },
-          "normalized_name": {
-            "type": "string"
-          },
-          "owner_user_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "scope": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        }
-      },
-      "SessionThreadSummary": {
-        "type": "object",
-        "description": "Compact thread summary.",
-        "required": [
-          "id",
-          "title"
-        ],
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "title": {
-            "type": "string"
-          }
-        }
-      },
-      "SourceSyncFailure": {
-        "type": "object",
-        "required": [
-          "source_id",
-          "plan_id",
-          "thread_id",
-          "volume_id",
-          "error"
-        ],
-        "properties": {
-          "error": {
-            "type": "string"
-          },
-          "plan_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "source_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "volume_id": {
-            "type": "integer",
-            "format": "int32"
           }
         }
       },
@@ -16561,191 +14467,6 @@
               "integer",
               "null"
             ],
-            "format": "int32"
-          }
-        }
-      },
-      "SyncReport": {
-        "type": "object",
-        "required": [
-          "total_sources",
-          "enabled_sources",
-          "checked_sources",
-          "successful_sources",
-          "failed_sources",
-          "issues_checked",
-          "created_issues",
-          "reused_issues",
-          "future_skips",
-          "unknown_date_skips",
-          "conflicts",
-          "issue_failures",
-          "failures"
-        ],
-        "properties": {
-          "checked_sources": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "conflicts": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "created_issues": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "enabled_sources": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "excluded_issues": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "excluded_sources": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "failed_sources": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "failures": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SourceSyncFailure"
-            }
-          },
-          "future_skips": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "issue_failures": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "issues_checked": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "reused_issues": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "skipped_sources": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "successful_sources": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "total_sources": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "unknown_date_skips": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "SyncRequest": {
-        "type": "object",
-        "required": [
-          "as_of"
-        ],
-        "properties": {
-          "as_of": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "refresh": {
-            "type": "boolean"
-          }
-        }
-      },
-      "SyncResponse": {
-        "type": "object",
-        "required": [
-          "success",
-          "message",
-          "result"
-        ],
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "result": {
-            "$ref": "#/components/schemas/SyncReport"
-          },
-          "success": {
-            "type": "boolean"
-          }
-        }
-      },
-      "SyncStatusResponse": {
-        "type": "object",
-        "required": [
-          "total_sources",
-          "enabled_sources",
-          "sources"
-        ],
-        "properties": {
-          "enabled_sources": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "sources": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SyncStatusSource"
-            }
-          },
-          "total_sources": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "SyncStatusSource": {
-        "type": "object",
-        "required": [
-          "id",
-          "reading_plan_id",
-          "thread_id",
-          "external_identity_id",
-          "provider_volume_id",
-          "enabled"
-        ],
-        "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
-          "external_identity_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "last_synced_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "provider_volume_id": {
-            "type": "string"
-          },
-          "reading_plan_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "thread_id": {
-            "type": "integer",
             "format": "int32"
           }
         }
@@ -17245,221 +14966,6 @@
           },
           "token_type": {
             "type": "string"
-          }
-        }
-      },
-      "UndoApplyResponse": {
-        "type": "object",
-        "description": "Full session response matching Python SessionResponse.",
-        "required": [
-          "id",
-          "started_at",
-          "start_die",
-          "user_id",
-          "ladder_path",
-          "current_die",
-          "has_restore_point",
-          "snapshot_count",
-          "snoozed_thread_ids",
-          "snoozed_threads",
-          "skipped_thread_ids",
-          "skipped_threads",
-          "reading_mode_suggested"
-        ],
-        "properties": {
-          "active_thread": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SessionActiveThread"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "bandwidth": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SessionBandwidthState"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "current_die": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "has_restore_point": {
-            "type": "boolean"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "intent": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SessionIntentState"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "ladder_path": {
-            "type": "string"
-          },
-          "last_rolled_result": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "manual_die": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "pending_thread_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "reading_bandwidth": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_intent": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_suggested": {
-            "type": "boolean"
-          },
-          "skipped_thread_ids": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "skipped_threads": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionThreadSummary"
-            }
-          },
-          "snapshot_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "snoozed_thread_ids": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "snoozed_threads": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionThreadSummary"
-            }
-          },
-          "start_die": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "started_at": {
-            "type": "string"
-          },
-          "timezone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "user_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "UndoSnapshotItem": {
-        "type": "object",
-        "description": "Snapshot item in the list response.",
-        "required": [
-          "id",
-          "session_id",
-          "created_at"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "event_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "session_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "UndoSnapshotsResponse": {
-        "type": "object",
-        "description": "Undo snapshots list response.",
-        "required": [
-          "session_id",
-          "snapshots"
-        ],
-        "properties": {
-          "session_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "snapshots": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UndoSnapshotItem"
-            }
           }
         }
       },

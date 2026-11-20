@@ -84,7 +84,7 @@ test.describe('Issue #2104 zero readiness network requests', () => {
     )
     expect(memberResponse.ok(), await memberResponse.text()).toBeTruthy()
 
-    const planResponse = await page.request.post('/api/v2/continuity-plans/', {
+    const planResponse = await page.request.post('/api/v1/continuity-plans/', {
       headers,
       data: {
         name: 'Zero Readiness Plan',

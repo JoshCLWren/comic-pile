@@ -9,21 +9,21 @@
 //! binary. No frontend URL changes.
 //!
 //! Routes cut over:
-//! * `GET /api/v2/continuity-plans/` - list plans
-//! * `POST /api/v2/continuity-plans/` - create plan
-//! * `POST /api/v2/continuity-plans/from-reading-order` - adopt reading order
-//! * `POST /api/v2/continuity-plans/release-sources/` - create release source
-//! * `DELETE /api/v2/continuity-plans/release-sources/{source_id}` - delete release source
-//! * `PATCH /api/v2/continuity-plans/release-sources/{source_id}` - update release source
-//! * `DELETE /api/v2/continuity-plans/{plan_id}` - delete plan
-//! * `GET /api/v2/continuity-plans/{plan_id}` - get plan
-//! * `PUT /api/v2/continuity-plans/{plan_id}` - update plan
-//! * `DELETE /api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}` - unlink dependency
-//! * `POST /api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}` - link dependency
-//! * `GET /api/v2/continuity-plans/{plan_id}/membership` - get membership
-//! * `POST /api/v2/continuity-plans/{plan_id}/reading-orders/project` - project to reading order
-//! * `GET /api/v2/continuity-plans/{plan_id}/release-sources/` - list release sources
-//! * `GET /api/v2/continuity-plans/{plan_id}/release-sources/reader` - reader-facing release sources
+//! * `GET /api/v1/continuity-plans/` - list plans
+//! * `POST /api/v1/continuity-plans/` - create plan
+//! * `POST /api/v1/continuity-plans/from-reading-order` - adopt reading order
+//! * `POST /api/v1/continuity-plans/release-sources/` - create release source
+//! * `DELETE /api/v1/continuity-plans/release-sources/{source_id}` - delete release source
+//! * `PATCH /api/v1/continuity-plans/release-sources/{source_id}` - update release source
+//! * `DELETE /api/v1/continuity-plans/{plan_id}` - delete plan
+//! * `GET /api/v1/continuity-plans/{plan_id}` - get plan
+//! * `PUT /api/v1/continuity-plans/{plan_id}` - update plan
+//! * `DELETE /api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}` - unlink dependency
+//! * `POST /api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}` - link dependency
+//! * `GET /api/v1/continuity-plans/{plan_id}/membership` - get membership
+//! * `POST /api/v1/continuity-plans/{plan_id}/reading-orders/project` - project to reading order
+//! * `GET /api/v1/continuity-plans/{plan_id}/release-sources/` - list release sources
+//! * `GET /api/v1/continuity-plans/{plan_id}/release-sources/reader` - reader-facing release sources
 //!
 //! Wire contracts mirror Python (`app/schemas/continuity_plan.py`,
 //! `app/schemas/reading_plan_release_source.py`, `app/schemas/reading_order.py`)
@@ -118,18 +118,11 @@ pub struct ContinuityPlanNode {
     pub convergence_gate: Vec<serde_json::Value>,
 }
 
-fn default_ordering_mode() -> String {
-    "informational".to_string()
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ContinuityPlanWrite {
     pub name: String,
-    // The retired Python schema defaulted this field to "informational".
-    // Keep that wire contract for the v2 Rust route so clients that omit it
-    // keep working after the cutover (see #5528 CodeRabbit review).
-    #[serde(rename = "ordering_mode", default = "default_ordering_mode")]
+    #[serde(rename = "ordering_mode")]
     pub ordering_mode: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lanes: Vec<ContinuityPlanLane>,
@@ -1734,12 +1727,12 @@ async fn refresh_blocked_state(state: &AppState, user_id: i32) -> Result<(), Api
 }
 
 // ============================================================================
-// GET /api/v2/continuity-plans/ - List plans
+// GET /api/v1/continuity-plans/ - List plans
 // ============================================================================
 
 #[utoipa::path(
     get,
-    path = "/api/v2/continuity-plans/",
+    path = "/api/v1/continuity-plans/",
     tag = "continuity-plans",
     operation_id = "continuity_plans_list",
     responses(
@@ -1842,12 +1835,12 @@ pub async fn list_continuity_plans(
 }
 
 // ============================================================================
-// POST /api/v2/continuity-plans/ - Create plan
+// POST /api/v1/continuity-plans/ - Create plan
 // ============================================================================
 
 #[utoipa::path(
     post,
-    path = "/api/v2/continuity-plans/",
+    path = "/api/v1/continuity-plans/",
     tag = "continuity-plans",
     operation_id = "continuity_plans_create",
     request_body = ContinuityPlanWrite,
@@ -1989,12 +1982,12 @@ pub async fn create_continuity_plan(
 }
 
 // ============================================================================
-// GET /api/v2/continuity-plans/{plan_id} - Get plan
+// GET /api/v1/continuity-plans/{plan_id} - Get plan
 // ============================================================================
 
 #[utoipa::path(
     get,
-    path = "/api/v2/continuity-plans/{plan_id}",
+    path = "/api/v1/continuity-plans/{plan_id}",
     tag = "continuity-plans",
     operation_id = "continuity_plans_get",
     params(("plan_id" = i32, Path, description = "Continuity plan identifier")),
@@ -2048,12 +2041,12 @@ pub async fn get_continuity_plan(
 }
 
 // ============================================================================
-// PUT /api/v2/continuity-plans/{plan_id} - Update plan
+// PUT /api/v1/continuity-plans/{plan_id} - Update plan
 // ============================================================================
 
 #[utoipa::path(
     put,
-    path = "/api/v2/continuity-plans/{plan_id}",
+    path = "/api/v1/continuity-plans/{plan_id}",
     tag = "continuity-plans",
     operation_id = "continuity_plans_update",
     params(("plan_id" = i32, Path, description = "Continuity plan identifier")),
@@ -2259,12 +2252,12 @@ pub async fn update_continuity_plan(
 }
 
 // ============================================================================
-// DELETE /api/v2/continuity-plans/{plan_id} - Delete plan
+// DELETE /api/v1/continuity-plans/{plan_id} - Delete plan
 // ============================================================================
 
 #[utoipa::path(
     delete,
-    path = "/api/v2/continuity-plans/{plan_id}",
+    path = "/api/v1/continuity-plans/{plan_id}",
     tag = "continuity-plans",
     operation_id = "continuity_plans_delete",
     params(("plan_id" = i32, Path, description = "Continuity plan identifier")),
@@ -2357,12 +2350,12 @@ pub async fn delete_continuity_plan(
 }
 
 // ============================================================================
-// POST /api/v2/continuity-plans/from-reading-order - Adopt reading order
+// POST /api/v1/continuity-plans/from-reading-order - Adopt reading order
 // ============================================================================
 
 #[utoipa::path(
     post,
-    path = "/api/v2/continuity-plans/from-reading-order",
+    path = "/api/v1/continuity-plans/from-reading-order",
     tag = "continuity-plans",
     operation_id = "continuity_plans_adopt_reading_order",
     request_body = ReadingOrderAdoptRequest,
@@ -2546,7 +2539,7 @@ pub async fn adopt_reading_order(
 }
 
 // ============================================================================
-// GET /api/v2/continuity-plans/{plan_id}/membership - Get membership
+// GET /api/v1/continuity-plans/{plan_id}/membership - Get membership
 // ============================================================================
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -2602,7 +2595,7 @@ pub struct ReadingPlanMembershipResponse {
 
 #[utoipa::path(
     get,
-    path = "/api/v2/continuity-plans/{plan_id}/membership",
+    path = "/api/v1/continuity-plans/{plan_id}/membership",
     tag = "continuity-plans",
     operation_id = "continuity_plans_membership",
     params(("plan_id" = i32, Path, description = "Continuity plan identifier")),
@@ -2764,7 +2757,7 @@ pub async fn get_continuity_plan_membership(
 }
 
 // ============================================================================
-// POST /api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id} - Link dependency
+// POST /api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id} - Link dependency
 // ============================================================================
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -2786,7 +2779,7 @@ pub struct ReadingPlanDependencyLinkRequest {
 
 #[utoipa::path(
     post,
-    path = "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+    path = "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
     tag = "continuity-plans",
     operation_id = "continuity_plans_link_dependency",
     params(
@@ -2907,12 +2900,12 @@ pub async fn link_plan_dependency_edge(
 }
 
 // ============================================================================
-// DELETE /api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id} - Unlink dependency
+// DELETE /api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id} - Unlink dependency
 // ============================================================================
 
 #[utoipa::path(
     delete,
-    path = "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+    path = "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
     tag = "continuity-plans",
     operation_id = "continuity_plans_unlink_dependency",
     params(
@@ -2977,12 +2970,12 @@ pub async fn unlink_plan_dependency_edge(
 }
 
 // ============================================================================
-// POST /api/v2/continuity-plans/{plan_id}/reading-orders/project - Project to reading order
+// POST /api/v1/continuity-plans/{plan_id}/reading-orders/project - Project to reading order
 // ============================================================================
 
 #[utoipa::path(
     post,
-    path = "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
+    path = "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
     tag = "reading-orders",
     operation_id = "continuity_plans_project_to_reading_order",
     params(("plan_id" = i32, Path, description = "Continuity plan identifier")),
@@ -3291,12 +3284,12 @@ pub async fn confirm_plan_projection(
 }
 
 // ============================================================================
-// POST /api/v2/continuity-plans/release-sources/ - Create release source
+// POST /api/v1/continuity-plans/release-sources/ - Create release source
 // ============================================================================
 
 #[utoipa::path(
     post,
-    path = "/api/v2/continuity-plans/release-sources/",
+    path = "/api/v1/continuity-plans/release-sources/",
     tag = "reading-plan-release-sources",
     operation_id = "release_sources_create",
     request_body = ReleaseSourceCreate,
@@ -3442,12 +3435,12 @@ pub async fn create_release_source(
 }
 
 // ============================================================================
-// GET /api/v2/continuity-plans/{plan_id}/release-sources/ - List release sources
+// GET /api/v1/continuity-plans/{plan_id}/release-sources/ - List release sources
 // ============================================================================
 
 #[utoipa::path(
     get,
-    path = "/api/v2/continuity-plans/{plan_id}/release-sources/",
+    path = "/api/v1/continuity-plans/{plan_id}/release-sources/",
     tag = "reading-plan-release-sources",
     operation_id = "release_sources_list",
     params(("plan_id" = i32, Path, description = "Continuity plan identifier")),
@@ -3528,12 +3521,12 @@ pub async fn list_release_sources(
 }
 
 // ============================================================================
-// GET /api/v2/continuity-plans/{plan_id}/release-sources/reader - List reader-facing release sources
+// GET /api/v1/continuity-plans/{plan_id}/release-sources/reader - List reader-facing release sources
 // ============================================================================
 
 #[utoipa::path(
     get,
-    path = "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
+    path = "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
     tag = "reading-plan-release-sources",
     operation_id = "release_sources_list_reader",
     params(("plan_id" = i32, Path, description = "Continuity plan identifier")),
@@ -3621,12 +3614,12 @@ pub async fn list_release_sources_for_reader(
 }
 
 // ============================================================================
-// PATCH /api/v2/continuity-plans/release-sources/{source_id} - Update release source
+// PATCH /api/v1/continuity-plans/release-sources/{source_id} - Update release source
 // ============================================================================
 
 #[utoipa::path(
     patch,
-    path = "/api/v2/continuity-plans/release-sources/{source_id}",
+    path = "/api/v1/continuity-plans/release-sources/{source_id}",
     tag = "reading-plan-release-sources",
     operation_id = "release_sources_update",
     params(("source_id" = i32, Path, description = "Release source identifier")),
@@ -3755,12 +3748,12 @@ pub async fn update_release_source(
 }
 
 // ============================================================================
-// DELETE /api/v2/continuity-plans/release-sources/{source_id} - Delete release source
+// DELETE /api/v1/continuity-plans/release-sources/{source_id} - Delete release source
 // ============================================================================
 
 #[utoipa::path(
     delete,
-    path = "/api/v2/continuity-plans/release-sources/{source_id}",
+    path = "/api/v1/continuity-plans/release-sources/{source_id}",
     tag = "reading-plan-release-sources",
     operation_id = "release_sources_delete",
     params(("source_id" = i32, Path, description = "Release source identifier")),
@@ -3906,53 +3899,40 @@ fn extract_provider_display(metadata_json: Option<serde_json::Value>) -> serde_j
 // established `continuity_rules` documentation pattern.
 // ============================================================================
 
-#[utoipa::path(get, path = "/api/v2/continuity-plans/", tag = "continuity-plans", operation_id = "continuity_plans_list", responses((status = 200, body = Vec<ContinuityPlanListItem>)), security(("HTTPBearer" = [])))]
+#[utoipa::path(get, path = "/api/v1/continuity-plans/", tag = "continuity-plans", operation_id = "continuity_plans_list", responses((status = 200, body = Vec<ContinuityPlanListItem>)), security(("HTTPBearer" = [])))]
 pub fn list_documentation() {}
-#[utoipa::path(post, path = "/api/v2/continuity-plans/", tag = "continuity-plans", operation_id = "continuity_plans_create", request_body = ContinuityPlanWrite, responses((status = 201, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
+#[utoipa::path(post, path = "/api/v1/continuity-plans/", tag = "continuity-plans", operation_id = "continuity_plans_create", request_body = ContinuityPlanWrite, responses((status = 201, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
 pub fn create_documentation() {}
-#[utoipa::path(get, path = "/api/v2/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_get", params(("plan_id" = i32, Path)), responses((status = 200, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
+#[utoipa::path(get, path = "/api/v1/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_get", params(("plan_id" = i32, Path)), responses((status = 200, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
 pub fn get_documentation() {}
-#[utoipa::path(put, path = "/api/v2/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_update", params(("plan_id" = i32, Path)), request_body = ContinuityPlanWrite, responses((status = 200, description = "Updated continuity plan", body = ContinuityPlanResponse), (status = 409, description = "Stale expected_updated_at: detail.code is plan_version_conflict and detail.expected_updated_at is the current version; reload before retrying")), security(("HTTPBearer" = [])))]
+#[utoipa::path(put, path = "/api/v1/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_update", params(("plan_id" = i32, Path)), request_body = ContinuityPlanWrite, responses((status = 200, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
 pub fn update_documentation() {}
-#[utoipa::path(delete, path = "/api/v2/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_delete", params(("plan_id" = i32, Path)), responses((status = 204, description = "Plan deleted")), security(("HTTPBearer" = [])))]
+#[utoipa::path(delete, path = "/api/v1/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_delete", params(("plan_id" = i32, Path)), responses((status = 204)), security(("HTTPBearer" = [])))]
 pub fn delete_documentation() {}
-#[utoipa::path(post, path = "/api/v2/continuity-plans/from-reading-order", tag = "continuity-plans", operation_id = "continuity_plans_adopt_reading_order", request_body = ReadingOrderAdoptRequest, responses((status = 201, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
+#[utoipa::path(post, path = "/api/v1/continuity-plans/from-reading-order", tag = "continuity-plans", operation_id = "continuity_plans_adopt_reading_order", request_body = ReadingOrderAdoptRequest, responses((status = 201, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
 pub fn adopt_reading_order_documentation() {}
-#[utoipa::path(get, path = "/api/v2/continuity-plans/{plan_id}/membership", tag = "continuity-plans", operation_id = "continuity_plans_membership", params(("plan_id" = i32, Path)), responses((status = 200, body = ReadingPlanMembershipResponse)), security(("HTTPBearer" = [])))]
+#[utoipa::path(get, path = "/api/v1/continuity-plans/{plan_id}/membership", tag = "continuity-plans", operation_id = "continuity_plans_membership", params(("plan_id" = i32, Path)), responses((status = 200, body = ReadingPlanMembershipResponse)), security(("HTTPBearer" = [])))]
 pub fn membership_documentation() {}
-#[utoipa::path(post, path = "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}", tag = "continuity-plans", operation_id = "continuity_plans_link_dependency", params(("plan_id" = i32, Path), ("dependency_id" = i32, Path)), request_body = ReadingPlanDependencyLinkRequest, responses((status = 201, body = ReadingPlanDependencyLink)), security(("HTTPBearer" = [])))]
+#[utoipa::path(post, path = "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}", tag = "continuity-plans", operation_id = "continuity_plans_link_dependency", params(("plan_id" = i32, Path), ("dependency_id" = i32, Path)), request_body = ReadingPlanDependencyLinkRequest, responses((status = 201, body = ReadingPlanDependencyLink)), security(("HTTPBearer" = [])))]
 pub fn link_dependency_documentation() {}
-#[utoipa::path(delete, path = "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}", tag = "continuity-plans", operation_id = "continuity_plans_unlink_dependency", params(("plan_id" = i32, Path), ("dependency_id" = i32, Path)), responses((status = 204, description = "Dependency unlinked")), security(("HTTPBearer" = [])))]
+#[utoipa::path(delete, path = "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}", tag = "continuity-plans", operation_id = "continuity_plans_unlink_dependency", params(("plan_id" = i32, Path), ("dependency_id" = i32, Path)), responses((status = 204)), security(("HTTPBearer" = [])))]
 pub fn unlink_dependency_documentation() {}
-#[utoipa::path(post, path = "/api/v2/continuity-plans/{plan_id}/reading-orders/project", tag = "reading-orders", operation_id = "continuity_plans_project_to_reading_order", params(("plan_id" = i32, Path)), request_body = ReadingOrderProjectionRequest, responses((status = 200, body = ReadingOrderProjectionResult)), security(("HTTPBearer" = [])))]
+#[utoipa::path(post, path = "/api/v1/continuity-plans/{plan_id}/reading-orders/project", tag = "reading-orders", operation_id = "continuity_plans_project_to_reading_order", params(("plan_id" = i32, Path)), request_body = ReadingOrderProjectionRequest, responses((status = 200, body = ReadingOrderProjectionResult)), security(("HTTPBearer" = [])))]
 pub fn project_reading_order_documentation() {}
-#[utoipa::path(post, path = "/api/v2/continuity-plans/release-sources/", tag = "continuity-plans", operation_id = "release_sources_create", request_body = ReleaseSourceCreate, responses((status = 201, body = ReleaseSourceResponse)), security(("HTTPBearer" = [])))]
+#[utoipa::path(post, path = "/api/v1/continuity-plans/release-sources/", tag = "continuity-plans", operation_id = "release_sources_create", request_body = ReleaseSourceCreate, responses((status = 201, body = ReleaseSourceResponse)), security(("HTTPBearer" = [])))]
 pub fn release_source_create_documentation() {}
-#[utoipa::path(get, path = "/api/v2/continuity-plans/{plan_id}/release-sources/", tag = "continuity-plans", operation_id = "release_sources_list", params(("plan_id" = i32, Path)), responses((status = 200, body = Vec<ReleaseSourceResponse>)), security(("HTTPBearer" = [])))]
+#[utoipa::path(get, path = "/api/v1/continuity-plans/{plan_id}/release-sources/", tag = "continuity-plans", operation_id = "release_sources_list", params(("plan_id" = i32, Path)), responses((status = 200, body = Vec<ReleaseSourceResponse>)), security(("HTTPBearer" = [])))]
 pub fn release_source_list_documentation() {}
-#[utoipa::path(get, path = "/api/v2/continuity-plans/{plan_id}/release-sources/reader", tag = "continuity-plans", operation_id = "release_sources_list_reader", params(("plan_id" = i32, Path)), responses((status = 200, body = Vec<ReadingPlanReleaseSourceStatus>)), security(("HTTPBearer" = [])))]
+#[utoipa::path(get, path = "/api/v1/continuity-plans/{plan_id}/release-sources/reader", tag = "continuity-plans", operation_id = "release_sources_list_reader", params(("plan_id" = i32, Path)), responses((status = 200, body = Vec<ReadingPlanReleaseSourceStatus>)), security(("HTTPBearer" = [])))]
 pub fn release_source_list_reader_documentation() {}
-#[utoipa::path(patch, path = "/api/v2/continuity-plans/release-sources/{source_id}", tag = "continuity-plans", operation_id = "release_sources_update", params(("source_id" = i32, Path)), request_body = ReleaseSourceUpdate, responses((status = 200, body = ReleaseSourceResponse)), security(("HTTPBearer" = [])))]
+#[utoipa::path(patch, path = "/api/v1/continuity-plans/release-sources/{source_id}", tag = "continuity-plans", operation_id = "release_sources_update", params(("source_id" = i32, Path)), request_body = ReleaseSourceUpdate, responses((status = 200, body = ReleaseSourceResponse)), security(("HTTPBearer" = [])))]
 pub fn release_source_update_documentation() {}
-#[utoipa::path(delete, path = "/api/v2/continuity-plans/release-sources/{source_id}", tag = "continuity-plans", operation_id = "release_sources_delete", params(("source_id" = i32, Path)), responses((status = 204, description = "Release source deleted")), security(("HTTPBearer" = [])))]
+#[utoipa::path(delete, path = "/api/v1/continuity-plans/release-sources/{source_id}", tag = "continuity-plans", operation_id = "release_sources_delete", params(("source_id" = i32, Path)), responses((status = 204)), security(("HTTPBearer" = [])))]
 pub fn release_source_delete_documentation() {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The retired Python schema defaulted `ordering_mode` to "informational";
-    /// a v2 caller that still omits it must keep working after the cutover.
-    #[test]
-    fn plan_write_defaults_ordering_mode_to_informational() {
-        let payload: ContinuityPlanWrite =
-            serde_json::from_str(r#"{"name":"Plan","lanes":[],"nodes":[]}"#)
-                .expect("omitted ordering_mode must deserialize");
-        assert_eq!(payload.ordering_mode, "informational");
-        payload
-            .validate_structure()
-            .expect("defaulted mode is valid");
-    }
 
     fn lane(id: &str, order: i32) -> ContinuityPlanLane {
         ContinuityPlanLane {

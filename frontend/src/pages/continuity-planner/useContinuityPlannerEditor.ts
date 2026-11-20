@@ -129,14 +129,14 @@ export function useContinuityPlannerEditor({
     }
     if (planLoaded && groupsLoaded && !threadsPending && !planHydrated && planData) {
       const loadedLanes = (
-        (planData.lanes ?? []).length > 0
-          ? (planData.lanes ?? [])
+        planData.lanes.length > 0
+          ? planData.lanes
           : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
       )
         .map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
         .sort((a, b) => a.order - b.order)
       const hydrated = hydrateLabels(
-        [...(planData.nodes ?? [])].sort((a, b) => a.position - b.position),
+        [...planData.nodes].sort((a, b) => a.position - b.position),
         groups,
         threads,
       )

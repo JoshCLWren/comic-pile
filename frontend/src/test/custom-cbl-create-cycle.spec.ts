@@ -20,7 +20,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     const issues = await issuesResponse.json() as { issues: Array<{ id: number }> }
     const first = issues.issues[0].id
     const second = issues.issues[1].id
-    const planResponse = await page.request.post('/api/v2/continuity-plans/', { headers, data: {
+    const planResponse = await page.request.post('/api/v1/continuity-plans/', { headers, data: {
       name: `Cycle feedback ${suffix}`, ordering_mode: 'informational',
       lanes: [{ id: 'main', name: 'Main', order: 0 }],
       nodes: [{ id: 'first', node_type: 'issue', ref_id: first, lane_id: 'main', position: 0 }],

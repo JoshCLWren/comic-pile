@@ -46,13 +46,13 @@ export interface IdentityInboxRejectPayload {
 
 export const identityInboxApi = {
   list: (offset: number, limit: number) =>
-    api.get<IdentityInboxResponse>('/v2/identity-inbox', { params: { offset, limit } }),
+    api.get<IdentityInboxResponse>('/v1/identity-inbox', { params: { offset, limit } }),
   confirm: (mappingId: number, payload: IdentityInboxConfirmPayload) =>
-    api.post<void>(`/v2/identity-inbox/${mappingId}/confirmations`, payload),
+    api.post<void>(`/v1/identity-inbox/${mappingId}/confirm`, payload),
   reject: (mappingId: number, payload: IdentityInboxRejectPayload) =>
-    api.post<void>(`/v2/identity-inbox/${mappingId}/rejections`, payload),
+    api.post<void>(`/v1/identity-inbox/${mappingId}/reject`, payload),
   defer: (mappingId: number) =>
-    api.post<void>(`/v2/identity-inbox/${mappingId}/deferrals`),
+    api.post<void>(`/v1/identity-inbox/${mappingId}/defer`),
   skip: (mappingId: number) =>
-    api.post<void>(`/v2/identity-inbox/${mappingId}/skips`),
+    api.post<void>(`/v1/identity-inbox/${mappingId}/skip`),
 }

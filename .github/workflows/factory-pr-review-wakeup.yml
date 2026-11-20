@@ -44,7 +44,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: JoshCLWren/rotisserie
-          ref: f74f612d4e7a6dec65a9c17f76596c1eb567a19e
+          ref: 8f917f8f73b6255207a7b7038280d843ba07bb7b
           path: .rotisserie/runtime
           persist-credentials: false
       - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime

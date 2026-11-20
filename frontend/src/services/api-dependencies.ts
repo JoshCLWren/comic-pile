@@ -35,11 +35,11 @@ export function createIssueDependenciesApi(client: HttpClient) {
  */
 export function createDependenciesApi(client: HttpClient) {
   return {
-    listBlockedThreadIds: () => client.get<number[]>('/v2/dependencies/blocked'),
+    listBlockedThreadIds: () => client.get<number[]>('/v1/dependencies/blocked'),
     listThreadDependencies: (threadId: number) =>
       client.get<ThreadDependenciesResponse>(`/v1/threads/${threadId}/dependencies`),
     getIssueDependencies: (issueId: number) =>
-      client.get<IssueDependenciesResponse>(`/v2/issues/${issueId}/dependencies`),
+      client.get<IssueDependenciesResponse>(`/v1/issues/${issueId}/dependencies`),
     getBlockingInfo: (threadId: number) =>
       client.post<BlockingInfoResponse>(`/v1/threads/${threadId}:getBlockingInfo`),
     getBatchBlockingInfo: (threadIds: number[]) =>
@@ -55,7 +55,7 @@ export function createDependenciesApi(client: HttpClient) {
       }),
     deleteDependency: (dependencyId: number) => client.delete<void>(`/v2/dependencies/${dependencyId}`),
     updateDependency: (dependencyId: number, note: string | null) =>
-      client.patch<Dependency, { note: string | null }>(`/v2/dependencies/${dependencyId}`, { note }),
+      client.patch<Dependency, { note: string | null }>(`/v1/dependencies/${dependencyId}`, { note }),
   }
 }
 

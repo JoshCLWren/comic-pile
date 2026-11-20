@@ -141,7 +141,7 @@ async fn create_plan(
     authed_json(
         state,
         "POST",
-        "/api/v2/continuity-plans/",
+        "/api/v1/continuity-plans/",
         token,
         csrf,
         Some(body),
@@ -172,7 +172,7 @@ async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() 
     let (status, listed) = authed_json(
         &state,
         "GET",
-        "/api/v2/continuity-plans/",
+        "/api/v1/continuity-plans/",
         &token,
         &csrf,
         None,
@@ -188,7 +188,7 @@ async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() 
     let (status, fetched) = authed_json(
         &state,
         "GET",
-        &format!("/api/v2/continuity-plans/{plan_id}"),
+        &format!("/api/v1/continuity-plans/{plan_id}"),
         &token,
         &csrf,
         None,
@@ -200,7 +200,7 @@ async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() 
     let (status, membership) = authed_json(
         &state,
         "GET",
-        &format!("/api/v2/continuity-plans/{plan_id}/membership"),
+        &format!("/api/v1/continuity-plans/{plan_id}/membership"),
         &token,
         &csrf,
         None,
@@ -220,7 +220,7 @@ async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() 
     let (status, updated) = authed_json(
         &state,
         "PUT",
-        &format!("/api/v2/continuity-plans/{plan_id}"),
+        &format!("/api/v1/continuity-plans/{plan_id}"),
         &token,
         &csrf,
         Some(update),
@@ -232,7 +232,7 @@ async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() 
     let (status, _) = authed_json(
         &state,
         "DELETE",
-        &format!("/api/v2/continuity-plans/{plan_id}"),
+        &format!("/api/v1/continuity-plans/{plan_id}"),
         &token,
         &csrf,
         None,
@@ -242,7 +242,7 @@ async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() 
     let (status, _) = authed_json(
         &state,
         "GET",
-        &format!("/api/v2/continuity-plans/{plan_id}"),
+        &format!("/api/v1/continuity-plans/{plan_id}"),
         &token,
         &csrf,
         None,
@@ -282,7 +282,7 @@ async fn link_dependency_is_idempotent_and_uses_composite_pk_contract() {
     assert_eq!(status, StatusCode::CREATED, "{created}");
     let plan_id = created["id"].as_i64().expect("plan id");
 
-    let link_uri = format!("/api/v2/continuity-plans/{plan_id}/dependencies/710021");
+    let link_uri = format!("/api/v1/continuity-plans/{plan_id}/dependencies/710021");
     let (status, linked) = authed_json(
         &state,
         "POST",
@@ -327,7 +327,7 @@ async fn link_dependency_is_idempotent_and_uses_composite_pk_contract() {
     let (status, missing) = authed_json(
         &state,
         "POST",
-        &format!("/api/v2/continuity-plans/{plan_id}/dependencies/999999"),
+        &format!("/api/v1/continuity-plans/{plan_id}/dependencies/999999"),
         &token,
         &csrf,
         Some(json!({})),
@@ -339,7 +339,7 @@ async fn link_dependency_is_idempotent_and_uses_composite_pk_contract() {
     let (status, unowned) = authed_json(
         &state,
         "POST",
-        &format!("/api/v2/continuity-plans/{plan_id}/dependencies/710022"),
+        &format!("/api/v1/continuity-plans/{plan_id}/dependencies/710022"),
         &token,
         &csrf,
         Some(json!({})),
@@ -393,7 +393,7 @@ async fn plan_detail_overlays_membership_and_fills_labels() {
     let (status, fetched) = authed_json(
         &state,
         "GET",
-        &format!("/api/v2/continuity-plans/{plan_id}"),
+        &format!("/api/v1/continuity-plans/{plan_id}"),
         &token,
         &csrf,
         None,
@@ -447,7 +447,7 @@ async fn plan_list_includes_cbl_placement_paths_and_source_names() {
     let (status, listed) = authed_json(
         &state,
         "GET",
-        "/api/v2/continuity-plans/",
+        "/api/v1/continuity-plans/",
         &token,
         &csrf,
         None,
@@ -488,7 +488,7 @@ async fn plan_updated_at_is_iso_and_version_check_is_timezone_aware() {
         "updated_at must carry a timezone: {updated_at}"
     );
 
-    let uri = format!("/api/v2/continuity-plans/{plan_id}");
+    let uri = format!("/api/v1/continuity-plans/{plan_id}");
 
     // The exact ISO token returned by GET must be accepted (GET-then-PUT).
     let mut matching = simple_plan(json!([]));
@@ -580,7 +580,7 @@ async fn empty_plan_reader_opens_as_editable_without_recovery_409() {
     let (status, saved) = authed_json(
         &state,
         "PUT",
-        &format!("/api/v2/continuity-plans/{plan_id}"),
+        &format!("/api/v1/continuity-plans/{plan_id}"),
         &token,
         &csrf,
         Some(json!({
@@ -713,7 +713,7 @@ async fn strict_plan_linked_to_loose_list_keeps_explicit_ordering_mode() {
     let (status, listed) = authed_json(
         &state,
         "GET",
-        "/api/v2/continuity-plans/",
+        "/api/v1/continuity-plans/",
         &token,
         &csrf,
         None,
@@ -879,7 +879,7 @@ async fn authoring_save_preserves_removed_list_authority() {
     let (status, saved) = authed_json(
         &state,
         "PUT",
-        &format!("/api/v2/continuity-plans/{plan_id}"),
+        &format!("/api/v1/continuity-plans/{plan_id}"),
         &token,
         &csrf,
         Some(json!({
@@ -977,7 +977,7 @@ async fn concurrent_authoring_saves_keep_source_history() {
             "expected_updated_at": created["updated_at"]
         })
     };
-    let uri = format!("/api/v2/continuity-plans/{plan_id}");
+    let uri = format!("/api/v1/continuity-plans/{plan_id}");
     let (first, second) = tokio::join!(
         authed_json(&state, "PUT", &uri, &token, &csrf, Some(payload("race A"))),
         authed_json(&state, "PUT", &uri, &token, &csrf, Some(payload("race B"))),
@@ -1077,7 +1077,7 @@ async fn repeated_authoring_saves_do_not_duplicate_preserved_placements() {
         })
     };
 
-    let uri = format!("/api/v2/continuity-plans/{plan_id}");
+    let uri = format!("/api/v1/continuity-plans/{plan_id}");
     let (status, first) = authed_json(
         &state,
         "PUT",

@@ -275,40 +275,40 @@ export interface ReleaseSourceUpdateRequest {
 export function createContinuityPlansApi(client: HttpClient) {
   return {
     list: (): Promise<ContinuityPlanListItem[]> =>
-      client.get<ContinuityPlanListItem[]>('/v2/continuity-plans/'),
+      client.get<ContinuityPlanListItem[]>('/v1/continuity-plans/'),
     create: (payload: ContinuityPlanWrite) =>
-      client.post<ContinuityPlan, ContinuityPlanWrite>('/v2/continuity-plans/', payload),
+      client.post<ContinuityPlan, ContinuityPlanWrite>('/v1/continuity-plans/', payload),
     get: (planId: number) =>
-      client.get<ContinuityPlan>(`/v2/continuity-plans/${planId}`),
+      client.get<ContinuityPlan>(`/v1/continuity-plans/${planId}`),
     getReader: (planId: number) =>
       client.get<ReadingPlanReaderView>(`/v2/continuity-plans/${planId}/reader`),
     listReleaseSources: (planId: number) =>
       client.get<ReadingPlanReleaseSourceStatus[]>(
-        `/v2/continuity-plans/${planId}/release-sources/reader`,
+        `/v1/continuity-plans/${planId}/release-sources/reader`,
       ),
     createReleaseSource: (payload: ReleaseSourceCreateRequest) =>
       client.post<ReadingPlanReleaseSource, ReleaseSourceCreateRequest>(
-        '/v2/continuity-plans/release-sources/',
+        '/v1/continuity-plans/release-sources/',
         payload,
       ),
     updateReleaseSource: (sourceId: number, payload: ReleaseSourceUpdateRequest) =>
       client.patch<ReadingPlanReleaseSourceStatus>(
-        `/v2/continuity-plans/release-sources/${sourceId}`,
+        `/v1/continuity-plans/release-sources/${sourceId}`,
         payload,
       ),
     updateReleaseSourceEnabled: (sourceId: number, enabled: boolean) =>
       client.patch<ReadingPlanReleaseSourceStatus>(
-        `/v2/continuity-plans/release-sources/${sourceId}`,
+        `/v1/continuity-plans/release-sources/${sourceId}`,
         { enabled },
       ),
     getSyncStatus: () =>
-      client.get<SyncStatusResponse>('/v2/reading-plan-sync/status'),
+      client.get<SyncStatusResponse>('/v1/reading-plan-sync/status'),
     syncReleaseSources: (payload: SyncRequest) =>
-      client.post<SyncResponse>('/v2/reading-plan-sync/runs', payload),
+      client.post<SyncResponse>('/v1/reading-plan-sync/sync', payload),
     update: (planId: number, payload: ContinuityPlanWrite) =>
-      client.put<ContinuityPlan, ContinuityPlanWrite>(`/v2/continuity-plans/${planId}`, payload),
+      client.put<ContinuityPlan, ContinuityPlanWrite>(`/v1/continuity-plans/${planId}`, payload),
     delete: (planId: number) =>
-      client.delete<void>(`/v2/continuity-plans/${planId}`),
+      client.delete<void>(`/v1/continuity-plans/${planId}`),
   }
 }
 

@@ -41,7 +41,7 @@ describe('authentication transitions', () => {
       'GET /api/v2/auth/me x1',
     ])
     expect(rows.some(row => row.startsWith('POST /api/v2/auth/refresh'))).toBe(false)
-    expect(rows.filter(row => row.startsWith('GET /api/v2/identity-inbox'))).toHaveLength(1)
+    expect(rows.filter(row => row.startsWith('GET /api/v1/identity-inbox'))).toHaveLength(1)
 
     currentUser = OTHER_USER
   })

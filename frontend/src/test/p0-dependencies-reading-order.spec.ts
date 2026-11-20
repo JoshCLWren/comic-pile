@@ -47,7 +47,7 @@ async function createDependency(
   const sourceIssue = sourceIssues.sort((a, b) => b.position - a.position)[0]
   const targetIssue = targetIssues.sort((a, b) => a.position - b.position)[0]
 
-  const response = await page.request.post('/api/v2/dependencies/', {
+  const response = await page.request.post('/api/v1/dependencies/', {
     data: {
       source_type: 'issue',
       source_id: sourceIssue.id,
@@ -193,7 +193,7 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
 
     const token = await getAuthToken(page)
     const csrf = await getCsrfToken(page, token)
-    const depResponse = await page.request.post('/api/v2/dependencies/', {
+    const depResponse = await page.request.post('/api/v1/dependencies/', {
       data: {
         source_type: 'issue',
         source_id: issuesA[0].id,
@@ -208,7 +208,7 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     })
     expect(depResponse.ok()).toBeTruthy()
 
-    const depsResponse = await page.request.get(`/api/v2/issues/${issuesB[0].id}/dependencies`, {
+    const depsResponse = await page.request.get(`/api/v1/issues/${issuesB[0].id}/dependencies`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(depsResponse.ok()).toBeTruthy()
@@ -243,7 +243,7 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
 
     const depId = allDeps[0].id
     const csrf = await getCsrfToken(page, token)
-    const deleteResponse = await page.request.delete(`/api/v2/dependencies/${depId}`, {
+    const deleteResponse = await page.request.delete(`/api/v1/dependencies/${depId}`, {
       headers: {
         Authorization: `Bearer ${token}`,
         'X-CSRF-Token': csrf,

@@ -1400,7 +1400,7 @@ async fn reorder_and_set_current_issue_on_same_thread_do_not_deadlock() {
             send(
                 &state,
                 post(
-                    &format!("/api/v2/issues/{issue_id}/read-markers"),
+                    &format!("/api/v1/issues/{issue_id}:markRead"),
                     &token,
                     &csrf,
                     None,

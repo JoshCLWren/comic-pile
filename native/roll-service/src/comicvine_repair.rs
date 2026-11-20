@@ -26,7 +26,7 @@ const PROVIDER_TIMEOUT: Duration = Duration::from_secs(5);
 const COMPLETE_FRESH_DAYS: i64 = 30;
 const EMPTY_CREDIT_RECHECK_DAYS: i64 = 7;
 
-pub(crate) const FIELDS: &str = "id,name,issue_number,cover_date,store_date,image,volume,person_credits,character_credits,team_credits,story_arc_credits,date_last_updated";
+const FIELDS: &str = "id,name,issue_number,cover_date,store_date,image,volume,person_credits,character_credits,team_credits,story_arc_credits,date_last_updated";
 const CLAIM: &str = r#"
 WITH candidate AS (
   SELECT id FROM comicvine_metadata_refresh_requests
@@ -101,7 +101,7 @@ pub struct DrainReport {
 }
 
 #[derive(Debug)]
-pub(crate) enum ProviderFailure {
+enum ProviderFailure {
     RateLimited(u32),
     Unavailable,
     Timeout,
@@ -254,51 +254,12 @@ fn provider_timestamp(value: &Value) -> Option<String> {
     )
 }
 
-/// Raw outcome of one ComicVine exchange, before a caller applies its own
-/// throttle and envelope policy (the repair worker and the browser routes
-/// mirror different retired Python clients).
-#[derive(Debug)]
-pub(crate) enum Exchange {
-    /// A decoded JSON body from a 2xx response.
-    Payload(Value),
-    /// HTTP 403, 420 or 429 with the raw `Retry-After` header, if any.
-    Throttled {
-        status: u16,
-        retry_after: Option<String>,
-    },
-}
-
-/// One repair-worker provider call: 429/403 are throttles whose
-/// `Retry-After` is clamped to 60..=3600 s, other non-2xx statuses (420
-/// included) are unavailable, and the envelope must carry `status_code: 1`.
-pub(crate) async fn provider_response(
+async fn provider_response(
     outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
     extra_query: &str,
     api_key: &str,
 ) -> Result<Value, ProviderFailure> {
-    match provider_exchange(outbound, resource, extra_query, api_key).await? {
-        Exchange::Throttled {
-            status: 429 | 403,
-            retry_after,
-        } => Err(ProviderFailure::RateLimited(
-            retry_after
-                .and_then(|h| h.parse::<u32>().ok())
-                .unwrap_or(60)
-                .clamp(60, 3600),
-        )),
-        Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
-        Exchange::Payload(payload) if payload["status_code"].as_i64() == Some(1) => Ok(payload),
-        Exchange::Payload(_) => Err(ProviderFailure::Unavailable),
-    }
-}
-
-pub(crate) async fn provider_exchange(
-    outbound: &Arc<dyn OutboundHttp>,
-    resource: &str,
-    extra_query: &str,
-    api_key: &str,
-) -> Result<Exchange, ProviderFailure> {
     // Callers construct only trusted resource names and numeric query values.
     // Fail closed on unexpected credential syntax rather than sending an unescaped secret.
     if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
@@ -325,18 +286,15 @@ pub(crate) async fn provider_exchange(
             ProviderFailure::Unavailable
         })?;
         let status = response.status;
-        if status == StatusCode::TOO_MANY_REQUESTS
-            || status == StatusCode::FORBIDDEN
-            || status.as_u16() == 420
-        {
-            return Ok(Exchange::Throttled {
-                status: status.as_u16(),
-                retry_after: response
-                    .headers
-                    .get("retry-after")
-                    .and_then(|h| h.to_str().ok())
-                    .map(str::to_owned),
-            });
+        if status == StatusCode::TOO_MANY_REQUESTS || status == StatusCode::FORBIDDEN {
+            let retry = response
+                .headers
+                .get("retry-after")
+                .and_then(|h| h.to_str().ok())
+                .and_then(|h| h.parse::<u32>().ok())
+                .unwrap_or(60)
+                .clamp(60, 3600);
+            return Err(ProviderFailure::RateLimited(retry));
         }
         if !status.is_success() {
             return Err(ProviderFailure::Unavailable);
@@ -374,7 +332,10 @@ pub(crate) async fn provider_exchange(
             );
             ProviderFailure::InvalidPayload
         })?;
-        Ok(Exchange::Payload(payload))
+        if payload["status_code"].as_i64() != Some(1) {
+            return Err(ProviderFailure::Unavailable);
+        }
+        Ok(payload)
     };
     tokio::time::timeout(PROVIDER_TIMEOUT, exchange)
         .await

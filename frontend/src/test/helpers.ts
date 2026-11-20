@@ -481,7 +481,7 @@ export async function createThread(
               if (issuesListResponse.ok()) {
                 const issuesData = await issuesListResponse.json();
                 for (const issue of issuesData.issues) {
-                  await page.request.post(`/api/v2/issues/${issue.id}/read-markers`, {
+                  await page.request.post(`/api/v1/issues/${issue.id}:markRead`, {
                     headers: {
                       ...authHeaders,
                       'X-CSRF-Token': csrfToken,

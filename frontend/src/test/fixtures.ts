@@ -268,7 +268,7 @@ function isExpectedAnonymousAuthProbe(message: string): boolean {
     '/v2/auth/me',
     '/v2/auth/refresh',
     '/threads/',
-    '/v2/dependencies/blocked',
+    '/v1/dependencies/blocked',
   ];
   const normalizedMessage = message.replace(/\/api(?=\/)/g, '');
   const normalizedProbePaths = anonymousProbePaths.map((path) => path.replace(/\/api(?=\/)/g, ''));

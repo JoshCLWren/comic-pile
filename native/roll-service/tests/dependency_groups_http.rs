@@ -569,7 +569,7 @@ async fn group_writers_serialize_with_sibling_issue_and_queue_writes() {
                 &state,
                 authed(
                     "POST",
-                    &format!("/api/v2/issues/{issue_id}/read-markers"),
+                    &format!("/api/v1/issues/{issue_id}:markRead"),
                     &token,
                     &csrf,
                     None,
@@ -700,7 +700,7 @@ async fn add_issue_range_serializes_with_sibling_issue_write() {
                 &state,
                 authed(
                     "POST",
-                    &format!("/api/v2/issues/{issue_id}/read-markers"),
+                    &format!("/api/v1/issues/{issue_id}:markRead"),
                     &token,
                     &csrf,
                     None,
@@ -771,7 +771,7 @@ async fn remove_member_serializes_with_sibling_issue_write() {
                 &state,
                 authed(
                     "POST",
-                    &format!("/api/v2/issues/{issue_id}/read-markers"),
+                    &format!("/api/v1/issues/{issue_id}:markRead"),
                     &token,
                     &csrf,
                     None,
@@ -834,7 +834,7 @@ async fn set_group_order_serializes_with_sibling_issue_write() {
                 &state,
                 authed(
                     "POST",
-                    &format!("/api/v2/issues/{issue1}/read-markers"),
+                    &format!("/api/v1/issues/{issue1}:markRead"),
                     &token,
                     &csrf,
                     None,
@@ -900,7 +900,7 @@ async fn delete_group_serializes_with_sibling_issue_write() {
                 &state,
                 authed(
                     "POST",
-                    &format!("/api/v2/issues/{issue_id}/read-markers"),
+                    &format!("/api/v1/issues/{issue_id}:markRead"),
                     &token,
                     &csrf,
                     None,

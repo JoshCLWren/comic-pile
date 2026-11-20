@@ -238,19 +238,19 @@ test('real taste and bug-report fragments cannot regress to Python ingress', () 
 test('real session and undo fragments retain native-only supported operations', () => {
   const sessions = liveFragment('sessions');
   const undo = liveFragment('undo');
-
   // Session details/snapshots moved to the resource-shaped v2 surface; the
   // legacy v1/unversioned single-session and list reads are retired (#4343,
-  // #4839). Undo snapshots/restore are served on the native v2 surface.
+  // #4839). Undo keeps its native same-path contracts.
   const expectedSessions = [
     ['GET', '/api/v2/reading-sessions/{session_id}/details'],
     ['GET', '/api/v2/reading-sessions/{session_id}/snapshots'],
   ];
-  const undoExpected = [
-    ['GET', '/api/v2/undo/{session_id}/snapshots'],
-    ['POST', '/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore'],
+  const expectedUndo = [
+    ['GET', '/api/undo/{session_id}/snapshots'],
+    ['POST', '/api/undo/{session_id}/undo/{snapshot_id}'],
+    ['GET', '/api/v1/undo/{session_id}/snapshots'],
+    ['POST', '/api/v1/undo/{session_id}/undo/{snapshot_id}'],
   ];
-
   assert.equal(sessions.operations.length, expectedSessions.length);
   for (const [method, route] of expectedSessions) {
     const op = liveOperation(sessions, method, route);
@@ -258,16 +258,12 @@ test('real session and undo fragments retain native-only supported operations', 
     assert.equal(op.bucket, 'operations', route);
     assert.ok(op.consumers.includes('frontend/src/services/api-sessions.ts'), route);
   }
-
-  assert.equal(undo.operations.length, undoExpected.length);
-  for (const [method, route] of undoExpected) {
+  for (const [method, route] of expectedUndo) {
     const op = liveOperation(undo, method, route);
-    assert.equal(op.bucket, 'operations', route);
     assert.equal(op.dest, '/api/native_roll.rs', route);
-    assert.equal(op.runtime, 'native-rust', route);
+    assert.equal(op.exclude_from_inventory, true, route);
     assert.equal(op.owning_issue, 4839, route);
   }
-
   assert.ok(![...sessions.operations, ...undo.operations].some(
     op => op.path.includes('current-session') || op.path.includes('restore-session-start'),
   ));
@@ -308,24 +304,22 @@ test('real releases and dependency fragments retain declared browser routes', ()
   }
 });
 
-test('identity-inbox v2 resources retain all seven native contracts and Rust ingress', () => {
+test('retired identity-inbox handlers retain all seven native same-path contracts', () => {
   const native = JSON.parse(readFileSync(
-    path.join(repoRoot, 'native/contracts/v2-runtime.openapi.json'), 'utf8',
+    path.join(repoRoot, 'native/contracts/same-path-runtime.openapi.json'), 'utf8',
   ));
-  const fragment = liveFragment('identity-inbox');
   const expected = [
-    ['GET', '/api/v2/identity-inbox'],
-    ['GET', '/api/v2/identity-inbox/issue-matches'],
-    ['GET', '/api/v2/identity-inbox/{mapping_id}'],
-    ['POST', '/api/v2/identity-inbox/{mapping_id}/confirmations'],
-    ['POST', '/api/v2/identity-inbox/{mapping_id}/deferrals'],
-    ['POST', '/api/v2/identity-inbox/{mapping_id}/rejections'],
-    ['POST', '/api/v2/identity-inbox/{mapping_id}/skips'],
+    ['GET', '/api/v1/identity-inbox'],
+    ['GET', '/api/v1/identity-inbox/search/issues'],
+    ['GET', '/api/v1/identity-inbox/{mapping_id}'],
+    ['POST', '/api/v1/identity-inbox/{mapping_id}/confirm'],
+    ['POST', '/api/v1/identity-inbox/{mapping_id}/defer'],
+    ['POST', '/api/v1/identity-inbox/{mapping_id}/reject'],
+    ['POST', '/api/v1/identity-inbox/{mapping_id}/skip'],
   ];
   for (const [method, route] of expected) {
     const op = native.paths[route]?.[method.toLowerCase()];
     assert.ok(op?.operationId, 'missing native operationId for ' + method + ' ' + route);
     assert.ok(Object.keys(op.responses).some(code => code.startsWith('2')), route);
-    assert.equal(liveOperation(fragment, method, route).dest, '/api/native_roll.rs', route);
   }
 });

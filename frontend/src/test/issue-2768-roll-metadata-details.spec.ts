@@ -87,13 +87,13 @@ async function installRoutes(page: Page, intelligence: ComicVineIssueIntelligenc
   await page.route('**/v1/reading-order-groups/threads/*/groups', (route) =>
     route.fulfill({ json: [] }),
   )
-  await page.route('**/v2/issues/*/reader-context', (route) =>
+  await page.route('**/v1/issues/*/reader-context', (route) =>
     route.fulfill({ json: minimalReaderContext() }),
   )
   await page.route('**/v1/issues/*/comicvine', (route) =>
     route.fulfill({ json: intelligence }),
   )
-  await page.route('**/v2/comicvine/issues/*/identity', (route) =>
+  await page.route('**/v1/comicvine/issues/*/identity', (route) =>
     route.fulfill({ json: confirmedIdentity() }),
   )
 }
