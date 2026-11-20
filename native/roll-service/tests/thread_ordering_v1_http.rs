@@ -1259,7 +1259,7 @@ async fn session_state(state: &Arc<AppState>, user_id: i32) -> (Option<i32>, Vec
 #[tokio::test]
 async fn roll_rerolls_shrink_top_die_without_backfill_and_reset_restores_pool() {
     let (state, token, csrf, user_id, _guard) = setup_user("tord-no-backfill").await;
-    let ids = rollable_threads(&state.pool.get().await.unwrap(), user_id, 6).await;
+    let ids = rollable_threads(&state.pool.get().await.unwrap(), user_id, 22).await;
 
     let (die_status, die_body) = send(
         &state,
@@ -1269,8 +1269,8 @@ async fn roll_rerolls_shrink_top_die_without_backfill_and_reset_restores_pool() 
             &csrf,
             Some(json!({
                 "kind": "manual_select",
-                "die": 4,
-                "idempotency_key": "no-backfill-manual-d4"
+                "die": 20,
+                "idempotency_key": "no-backfill-manual-d20"
             })),
         ),
     )

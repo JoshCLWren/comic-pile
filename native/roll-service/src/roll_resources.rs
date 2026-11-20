@@ -825,7 +825,7 @@ mod tests {
         );
         assert_eq!(ints(&eligible, "issue_ids"), vec![200, 300, 400, 500, 600]);
 
-        // Browser snoozes still leave the queue before the die bound.
+        // The projected d6 window is bounded before browser snoozes are removed.
         let (status, snoozed) = fixture
             .get("/api/v2/roll/eligible-issue-ids?snoozed=20", Some(&token))
             .await;
