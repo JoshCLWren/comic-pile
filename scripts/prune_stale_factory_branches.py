@@ -272,9 +272,31 @@ def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
     carry ``state``, ``mergedAt`` and ``closedAt`` so the post-merge/abandonment
     wait is measured from the real event rather than from the last commit.
     """
+    return fetch_branch_pr_records(repo, None)
+
+
+def fetch_branch_pr_records(
+    repo: str, branch: str | None
+) -> dict[str, list[dict[str, object]]]:
+    """Fetch the complete open+closed PR history for one branch, or all branches.
+
+    Args:
+        repo: GitHub repository slug (``owner/name``) for PR lookups.
+        branch: Single head branch name to scope the query to, or ``None`` to
+            return the entire repository PR history.
+
+    Returns:
+        A mapping of head branch name to its normalized PR records. When
+        ``branch`` is supplied the returned mapping contains at most that one
+        key, so the fresh apply-time safety recheck does not re-download every
+        page of the whole repository.
+    """
+    endpoint = f"repos/{repo}/pulls?state=all&per_page=100"
+    if branch is not None:
+        endpoint = f"{endpoint}&head={repo}:{branch}"
     proc = run([
         "gh", "api", "--paginate", "--slurp",
-        f"repos/{repo}/pulls?state=all&per_page=100",
+        endpoint,
     ], check=False)
     if proc.returncode != 0:
         raise RuntimeError(f"unable to list PRs: {proc.stderr.strip() or proc.stdout.strip()}")
@@ -928,7 +950,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 fresh_protected = fetch_protected_branches(args.repo)
                 fresh_protected.update({default_branch, "main", "master", "gh-pages"})
-                fresh_pr_records = fetch_pr_records(args.repo)
+                fresh_pr_records = fetch_branch_pr_records(args.repo, decision.branch)
                 fresh_live_refs = local_worktree_branches(repo_root)
 
                 def fresh_lease_lookup(issue_number: int) -> LeaseSignal | None:

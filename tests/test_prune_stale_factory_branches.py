@@ -462,6 +462,36 @@ def test_fetch_issue_retired_uses_supported_pagination_query(monkeypatch):
     assert any(arg.endswith("comments?per_page=100") for arg in cmd)
 
 
+def test_fetch_branch_pr_records_scopes_query_to_single_branch(monkeypatch):
+    """The apply-time recheck must fetch only the branch's own PR history.
+
+    A full-repository download on every deletion repeats the entire open+closed
+    history for each candidate (74+ times in the saved report), burning shared
+    GitHub API quota and adding network waits. Scoping the fresh lookup to the
+    branch being deleted preserves the same safety check without that cost.
+    """
+    calls = []
+
+    def fake_run(cmd, *, check=True):
+        calls.append(cmd)
+        return _FakeResult([[
+            {
+                "number": 9,
+                "state": "open",
+                "head": {"ref": "factory/9-1-open"},
+                "merged_at": None,
+                "closed_at": None,
+            }
+        ]])
+
+    monkeypatch.setattr(prune, "run", fake_run)
+    records = prune.fetch_branch_pr_records("owner/repo", "factory/9-1-open")
+    cmd = calls[0]
+    assert any(arg.endswith("pulls?state=all&per_page=100&head=owner/repo:factory/9-1-open") for arg in cmd)
+    assert "--limit" not in cmd
+    assert records["factory/9-1-open"][0]["state"] == "OPEN"
+
+
 def test_normalize_repo_slug_accepts_common_remote_forms() -> None:
     """Normalize owner/name, SSH, and HTTPS remote forms for comparison."""
     assert prune.normalize_repo_slug("JoshCLWren/comic-pile") == "joshclwren/comic-pile"
