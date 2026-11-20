@@ -462,6 +462,41 @@ def test_fetch_issue_retired_uses_supported_pagination_query(monkeypatch):
     assert any(arg.endswith("comments?per_page=100") for arg in cmd)
 
 
+def test_fetch_pr_records_for_branch_scopes_to_head(monkeypatch):
+    """Fresh deletion checks should fetch PR history for one branch only."""
+    calls = []
+
+    def fake_run(cmd, *, check=True):
+        calls.append(cmd)
+        return _FakeResult([[
+            {
+                "number": 17,
+                "state": "open",
+                "head": {"ref": "factory/17-keep"},
+                "draft": False,
+                "merged_at": None,
+                "closed_at": None,
+                "updated_at": "2026-11-01T00:00:00Z",
+                "labels": [],
+                "title": "keep",
+                "html_url": "https://example.test/pr/17",
+            }
+        ]])
+
+    monkeypatch.setattr(prune, "run", fake_run)
+    records = prune.fetch_pr_records_for_branch("owner/repo", "factory/17-keep")
+    cmd = calls[0]
+    assert "--paginate" in cmd and "--slurp" in cmd
+    assert "--limit" not in cmd
+    assert any("state=all" in arg for arg in cmd)
+    assert any("head=owner:factory/17-keep" in arg for arg in cmd)
+    assert len(records) == 1
+    assert records[0]["headRefName"] == "factory/17-keep"
+    assert records[0]["state"] == "OPEN"
+    assert records[0]["open_pr"] is False if "open_pr" in records[0] else True
+    assert records[0]["number"] == 17
+
+
 def test_normalize_repo_slug_accepts_common_remote_forms() -> None:
     """Normalize owner/name, SSH, and HTTPS remote forms for comparison."""
     assert prune.normalize_repo_slug("JoshCLWren/comic-pile") == "joshclwren/comic-pile"
