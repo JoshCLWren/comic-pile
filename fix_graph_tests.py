@@ -7,12 +7,11 @@ import re
 with open('native/roll-service/parity/test_http_reading_graph_n1.py', 'r') as f:
     content = f.read()
 
-# G3: Change graph status from "cycle" to "ok" (two locations)
+# G3: Change graph status from "cycle" to "ok" (two locations - replace all)
 content = content.replace(
     'assert isinstance(graph, dict) and graph.get("status") == "cycle"',
     'assert isinstance(graph, dict) and graph.get("status") == "ok"'
 )
-# There are two occurrences; the replace() method replaces ALL occurrences, which is what we want
 
 # G4: Add db_nested_statements to import
 content = content.replace(
@@ -20,8 +19,10 @@ content = content.replace(
     'from route_harness import assert_declared_budget, cargo_example_path, db_counters, db_nested_statements, run_rust_example'
 )
 
-# G5+G6: New test functions to append at the end
-new_tests = '''\pytest.mark.asyncio
+# G5+G6+G7: New test functions to append at the end
+new_tests = """
+
+@pytest.mark.asyncio
 async def test_reading_graph_extra_query_increments_budget() -> None:
     """Adding an extra SELECT 1 under the isolated route role increments the measured count,
     causing assert_declared_budget to reject the route when the budget is exceeded."""
@@ -69,7 +70,6 @@ async def test_reading_graph_extra_query_increments_budget() -> None:
     finally:
         await engine.dispose()
 
-
 @pytest.mark.asyncio
 async def test_reading_graph_extra_n1_query_increments_budget() -> None:
     """Adding N+1 queries (queries that scale with data size) under the route role
@@ -99,7 +99,6 @@ async def test_reading_graph_extra_n1_query_increments_budget() -> None:
                     )
             finally:
                 await raw.close()
-
         env = {
             **os.environ,
             "RUST_ROLL_TEST_TOKEN": token,
@@ -137,7 +136,6 @@ async def test_reading_graph_extra_n1_query_increments_budget() -> None:
             assert_declared_budget("GET", "/api/v2/reading-graph", delta)  # type: ignore
     finally:
         await engine.dispose()
-
 
 @pytest.mark.asyncio
 async def test_reading_graph_confirmed_repairs_do_not_grow_with_library_size() -> None:
@@ -274,7 +272,6 @@ async def test_reading_graph_confirmed_repairs_do_not_grow_with_library_size() -
     finally:
         await engine.dispose()
 
-
 @pytest.mark.asyncio
 async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library_size() -> None:
     """POST /api/v2/reading-graph/repairs preview must stay within its fixed budget."""
@@ -375,14 +372,14 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
-        assert small_delta is not None and large_delta is not None, "pg_stat_statements is required")
+        assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
         assert_declared_budget("POST", "/api/v2/reading-graph/repairs", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
-'''
+"""
 
-# Append new tests at the end (ensure content ends with newline)
+# Append new tests at the end
 if not content.endswith('\n'):
     content += '\n'
 content += new_tests
