@@ -2105,7 +2105,8 @@ fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
         .map(|value| match value {
             Value::String(text) => text.clone(),
             Value::Number(number) => number.to_string(),
-            _ => value.to_string(),
+            Value::Null => String::from("Unknown"),
+            _ => String::from("Unknown"),
         })
         .filter(|text| !text.is_empty());
     Some(ComicVineIssueCandidate {
