@@ -405,7 +405,8 @@ enum ParsedResource {
 
 /// Parse a pasted ComicVine URL into a trusted resource reference. Only the
 /// canonical host and the `4000-` (issue) / `4050-` (volume) terminal segment
-/// are accepted. Query strings, trailing slashes and `http` are tolerated.
+/// are accepted. Query strings, trailing slashes and `http`/`https` are tolerated.
+/// `ftp://` and other schemes are rejected to match Python behavior.
 fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     let value = raw.trim();
     if value.is_empty() {
@@ -416,6 +417,11 @@ fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     } else {
         format!("https://{value}")
     };
+    let scheme = with_scheme.split_once("://")?.0.to_ascii_lowercase();
+    // Match Python: only http and https schemes are accepted
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
     let after_scheme = with_scheme.split_once("://")?.1;
     let authority = after_scheme.split('/').next()?;
     let host = authority
@@ -2102,13 +2108,12 @@ fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
     let id = coerce_provider_int(object.get("id"))?;
     let issue_number = object
         .get("issue_number")
-        .map(|value| match value {
-            Value::String(text) => text.clone(),
-            Value::Number(number) => number.to_string(),
-            Value::Null => String::from("Unknown"),
-            _ => String::from("Unknown"),
-        })
-        .filter(|text| !text.is_empty());
+        .and_then(|value| match value {
+            Value::String(text) if !text.is_empty() => Some(text.clone()),
+            Value::Number(number) => Some(number.to_string()),
+            Value::Null | None => None,
+            _ => None,
+        });
     Some(ComicVineIssueCandidate {
         comicvine_issue_id: id,
         issue_number,
@@ -2138,7 +2143,13 @@ pub async fn search_series(
         return Err(unprocessable("offset out of range"));
     }
     let (limit, offset) = (query.limit, query.offset);
-    let page = offset / limit + 1;
+    // Prevent overflow: bound offset to max value that won't overflow when adding
+    // up to the max ComicVine page size (100). Use checked arithmetic for safety.
+    let max_offset = i32::MAX - 100;
+    if offset > max_offset {
+        return Err(unprocessable("offset too large"));
+    }
+    let page = (offset as i64 / limit as i64 + 1) as i32;
     if query.q.trim().is_empty() {
         return Ok(Json(ComicVineSeriesSearchResponse {
             query: query.q,
@@ -2180,7 +2191,7 @@ pub async fn search_series(
         .collect();
     let total =
         coerce_provider_int(payload.get("number_of_total_results")).unwrap_or(results.len() as i32);
-    let loaded = offset + results.len() as i32;
+    let loaded = offset.checked_add(results.len() as i32).unwrap_or(i32::MAX);
     let has_more = loaded < total;
     Ok(Json(ComicVineSeriesSearchResponse {
         query: query.q,
@@ -2483,12 +2494,12 @@ pub async fn resolve_input(
                 volume_id: volume.and_then(|v| coerce_provider_int(v.get("id"))),
                 issue_number: result
                     .get("issue_number")
-                    .map(|value| match value {
-                        Value::String(text) => text.clone(),
-                        Value::Number(number) => number.to_string(),
-                        _ => value.to_string(),
-                    })
-                    .filter(|text| !text.is_empty()),
+                    .and_then(|value| match value {
+                        Value::String(text) if !text.is_empty() => Some(text.clone()),
+                        Value::Number(number) => Some(number.to_string()),
+                        Value::Null | None => None,
+                        _ => None,
+                    }),
                 name: provider_string(result.get("name")),
                 cover_date: provider_string(result.get("cover_date")),
                 store_date: provider_string(result.get("store_date")),
