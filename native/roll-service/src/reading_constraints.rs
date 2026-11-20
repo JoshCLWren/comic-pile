@@ -1404,6 +1404,7 @@ mod tests {
 
         let mut reader_authored = snapshot;
         reader_authored.prerequisites[0].origin = "reader".into();
+        reader_authored.prerequisites[0].provenance.clear();
         let ValidationError::Cycle { message, edges } = validate(&reader_authored).unwrap_err()
         else {
             panic!("expected a reader-authored cycle")
