@@ -629,6 +629,102 @@ async fn empty_plan_reader_opens_as_editable_without_recovery_409() {
     );
 }
 
+/// #5614: creating a Strict plan with 0 lanes and 0 steps must save as an
+/// empty plan and open editable. The zero-lane creation previously failed
+/// with a bare 422 ("strict sequential plans must use exactly one lane").
+#[tokio::test]
+async fn strict_empty_plan_creates_opens_and_adds_issue() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-strict-empty").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "QA strict empty plan",
+            "ordering_mode": "strict_sequential",
+            "lanes": [],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+    assert_eq!(created["ordering_mode"], "strict_sequential", "{created}");
+
+    // The saved plan opens as an empty plan, not a 409 recovery screen.
+    let (status, reader) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader}");
+    assert_eq!(reader["ordering_mode"], "strict_sequential", "{reader}");
+    assert_eq!(reader["progress"]["total_issues"], 0, "{reader}");
+    assert_eq!(reader["progress"]["read_issues"], 0, "{reader}");
+    assert_eq!(reader["available_now"], json!([]), "{reader}");
+    assert_eq!(reader["lanes"], json!([]), "{reader}");
+
+    // Save an issue through the same authoring path the legacy editor uses.
+    // The editor hydrates the empty plan with a default lane, so saving
+    // writes one lane and the issue.
+    let user_id = user_id_for(&state, "cp-strict-empty").await;
+    seed_thread_issue(&state, user_id, 546241, 546251, "QA Strict Series", "1").await;
+    let (status, saved) = authed_json(
+        &state,
+        "PUT",
+        &format!("/api/v2/continuity-plans/{plan_id}"),
+        &token,
+        &csrf,
+        Some(json!({
+            "name": "QA strict empty plan",
+            "ordering_mode": "strict_sequential",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": [{
+                "id": "issue-546251",
+                "node_type": "issue",
+                "ref_id": 546251,
+                "lane_id": "main",
+                "position": 0,
+                "label": "QA Strict Series #1"
+            }],
+            "expected_updated_at": created["updated_at"]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+
+    let (status, reopened) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reopened}");
+    assert_eq!(
+        reopened["lanes"].as_array().map(Vec::len),
+        Some(1),
+        "{reopened}"
+    );
+    assert_eq!(reopened["lanes"][0]["id"], "main", "{reopened}");
+    assert_eq!(
+        reopened["lanes"][0]["issues"][0]["issue_id"], 546251,
+        "{reopened}"
+    );
+    assert_eq!(
+        reopened["lanes"][0]["issues"][0]["issue_number"], "1",
+        "{reopened}"
+    );
+}
+
 /// Issue #4724: a saved Strict plan linked to a loose (or stale) Reading List
 /// must keep displaying Strict. The List stays the sole authority for
 /// *execution*, but `ordering_mode` is the plan's explicit saved display intent
