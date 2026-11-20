@@ -263,42 +263,37 @@ def remote_github_repo(repo_root: Path, remote: str) -> str | None:
     return slug
 
 
-def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
-    """Fetch the complete open+closed PR history grouped by branch name.
-
-    Raises on lookup failure so cleanup cannot proceed with incomplete safety
-    data. Pagination is followed to completion: a capped list would let an old
-    open PR fall outside the result and lose its protection. Normalized records
-    carry ``state``, ``mergedAt`` and ``closedAt`` so the post-merge/abandonment
-    wait is measured from the real event rather than from the last commit.
+def fetch_pr_records_for_branch(repo: str, branch_name: str) -> list[dict[str, object]]:
+    """Fetch PR history specifically for one branch.
+    
+    Returns a list of PR records for the given branch name.
     """
-    proc = run([
-        "gh", "api", "--paginate", "--slurp",
-        f"repos/{repo}/pulls?state=all&per_page=100",
-    ], check=False)
+    proc = run(
+        [
+            "gh", "api",
+            f"repos/{repo}/pulls?head={branch_name}&state=all&per_page=100",
+            "--paginate",
+            "--slurp",
+        ],
+        check=False,
+    )
     if proc.returncode != 0:
-        raise RuntimeError(f"unable to list PRs: {proc.stderr.strip() or proc.stdout.strip()}")
+        raise RuntimeError(f"unable to fetch PRs for {branch_name}: {proc.stderr.strip() or proc.stdout.strip()}")
     try:
         pages = json.loads(proc.stdout or "[]")
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"unable to parse PR list: {exc}") from exc
-    if not isinstance(pages, list):
-        raise RuntimeError("PR list response was not a list")
-    by_head: dict[str, list[dict[str, object]]] = {}
+        raise RuntimeError(f"unable to parse PR list for {branch_name}: {exc}") from exc
+    
+    records: list[dict[str, object]] = []
     for page in pages:
         if not isinstance(page, list):
-            raise RuntimeError("PR list page was not a list")
+            continue
         for pr in page:
             if not isinstance(pr, dict):
-                raise RuntimeError("PR list contained a non-object entry")
-            head_obj = pr.get("head")
-            ref = head_obj.get("ref") if isinstance(head_obj, dict) else None
-            head = ref if isinstance(ref, str) else ""
-            if not head:
                 continue
-            record: dict[str, object] = {
+            records.append({
                 "number": pr.get("number"),
-                "headRefName": head,
+                "headRefName": pr.get("head", {}).get("ref") if isinstance(pr.get("head"), dict) else "",
                 "state": str(pr.get("state") or "OPEN").upper(),
                 "isDraft": bool(pr.get("draft")),
                 "mergedAt": pr.get("merged_at"),
@@ -307,9 +302,8 @@ def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
                 "labels": pr.get("labels") or [],
                 "title": pr.get("title"),
                 "url": pr.get("html_url"),
-            }
-            by_head.setdefault(head, []).append(record)
-    return by_head
+            })
+    return records
 
 
 def fetch_protected_branches(repo: str) -> set[str]:
