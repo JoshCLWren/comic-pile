@@ -10,8 +10,9 @@
 //! preserved so the existing React consumers need only switch their base path
 //! from `/api/v1` to `/api/v2`.
 //!
-//! Python handlers remain mounted until authenticated production traffic proves
-//! the native v2 ingress; deployed Vercel rewrites shadow them after cutover.
+//! The legacy `/api/v1/creators*` handlers, their Python mounts and their
+//! Vercel ingress exceptions are retired; these v2 resources are the only
+//! browser-facing creator API surface.
 
 #![forbid(unsafe_code)]
 
