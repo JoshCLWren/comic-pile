@@ -622,6 +622,25 @@ async fn reorder_rewrites_positions_and_validates() {
         .map(|r| r.0)
         .collect();
     assert_eq!(order, vec!["3", "1", "2"]);
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "PUT",
+            &format!("/api/v2/threads/{thread}/issue-order"),
+            &token,
+            &csrf,
+            Some(json!({"issue_ids": [ids[1], ids[2], ids[0]]})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+    let order: Vec<String> = positions(&conn, thread)
+        .await
+        .into_iter()
+        .map(|row| row.0)
+        .collect();
+    assert_eq!(order, vec!["2", "3", "1"]);
 }
 
 #[tokio::test]

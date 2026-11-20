@@ -948,6 +948,38 @@ async fn overlap_decisions_accept_non_numeric_comicvine_volume_keys() {
         }),
         "saved non-numeric overlap decision missing: {body}"
     );
+
+    let decision_id = decisions[0]["id"].as_i64().expect("decision id");
+    let (status, body) = send(
+        &fixture.state,
+        Request::builder()
+            .method("DELETE")
+            .uri(format!(
+                "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}"
+            ))
+            .header(header::AUTHORIZATION, format!("Bearer {}", fixture.token))
+            .header("x-csrf-token", &fixture.csrf)
+            .header(header::COOKIE, format!("csrf_token={}", fixture.csrf))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["decisions"], json!([]));
+    let remaining: i64 = fixture
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT count(*) FROM custom_cbl_overlap_decisions WHERE id = $1",
+            &[&(decision_id as i32)],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(remaining, 0);
 }
 
 #[tokio::test]

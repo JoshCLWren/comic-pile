@@ -188,6 +188,21 @@ async fn bulk_exclude_and_restore_manage_grouped_queue_membership() {
     excluded_ids.sort_unstable();
     assert_eq!(excluded_ids, vec![t1, t2]);
 
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/queue-exclusions/status:check",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({"thread_ids": [t3, t1, t2, t1]})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["excluded_thread_ids"], json!([t1, t2]));
+    assert_eq!(body["active_thread_ids"], json!([t3]));
+
     // Excluded listing exposes provenance and groups the removed threads.
     let (status, body) = send(
         &ctx.state,
