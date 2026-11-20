@@ -28,6 +28,7 @@ import {
   mockBrowse,
   mockPreview,
   mockPlan,
+  mockCommit,
   mockCommitNew,
   mockGraphPreview,
   mockListPlans,
