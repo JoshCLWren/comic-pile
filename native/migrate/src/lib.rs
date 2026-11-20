@@ -289,9 +289,10 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
         };
     }
 
-    let applied: std::collections::BTreeSet<i32> = runner()
+    let applied_migrations = runner()
         .get_applied_migrations_async(client)
-        .await?
+        .await?;
+    let applied: std::collections::BTreeSet<i32> = applied_migrations
         .iter()
         .map(|m| m.version())
         .collect();
@@ -300,6 +301,24 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
         .iter()
         .any(|m| !applied.contains(&m.version()));
     if pending {
+        return Ok(true);
+    }
+
+    // Verify that applied migration SQL matches embedded migrations.
+    // If SQL changed without a version bump, needs_work must report true so
+    // deployment does not skip the checksum/up step, which would bypass
+    // validation and allow migrations that disagree with the database's
+    // recorded history.
+    let applied_checksums: std::collections::BTreeSet<Vec<u8>> = applied_migrations
+        .iter()
+        .map(|m| m.checksum())
+        .collect();
+    let embedded_checksums: std::collections::BTreeSet<Vec<u8>> = runner()
+        .get_migrations()
+        .iter()
+        .map(|m| m.checksum())
+        .collect();
+    if applied_checksums != embedded_checksums {
         return Ok(true);
     }
 
