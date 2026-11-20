@@ -23,6 +23,28 @@ pub struct SeriesImportStatusResponse {
     pub issue_count: Option<i32>,
 }
 
+/// Issue identity response matching Python api_get_issue_identity wire contract.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct IssueIdentityResponse {
+    pub issue_id: i32,
+    pub thread_id: i32,
+    pub thread_title: String,
+    pub has_confirmed_identity: bool,
+    pub comicvine_issue_id: Option<String>,
+    pub confirmed_mappings: vec![IssueIdentityMapping],
+    pub candidate_mappings: vec![IssueIdentityMapping],
+    pub has_unresolved: bool,
+}
+
+/// Issue identity mapping reference.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct IssueIdentityMapping {
+    pub external_identity_id: i32,
+    pub provider: String,
+    pub provider_key: String,
+    pub is_confirmed: bool,
+}
+
 const STATUS_SQL: &str = "SELECT t.id, t.title, t.total_issues FROM threads t JOIN thread_external_series_mappings m ON m.thread_id = t.id JOIN external_identities e ON e.id = m.external_identity_id WHERE t.user_id = $1 AND m.status = 'confirmed' AND e.entity_type = 'series' AND e.provider = 'comicvine' AND e.external_id = $2 ORDER BY m.id LIMIT 1";
 
 /// `GET /api/v1/comicvine/series/{comicvine_volume_id}/import-status`.
@@ -75,6 +97,42 @@ pub async fn series_import_status(
 )]
 #[allow(dead_code)]
 pub fn series_import_status_documentation() {}
+
+/// `GET /api/v1/comicvine/issues/{issue_id}/identity`.
+///
+/// Stub handler for native v1 comicvine identity route.
+pub async fn get_issue_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    Ok(Json(IssueIdentityResponse {
+        issue_id,
+        thread_id: 0,
+        thread_title: String::new(),
+        has_confirmed_identity: false,
+        comicvine_issue_id: None,
+        confirmed_mappings: vec![],
+        candidate_mappings: vec![],
+        has_unresolved: false,
+    }))
+}
+
+/// OpenAPI documentation for the get_issue_identity operation.
+#[utoipa::path(
+    get,
+    path = "/api/v1/comicvine/issues/{issue_id}/identity",
+    params(("issue_id" = i32, Path, description = "ComicVine issue ID")),
+    tag = "comicvine-resolution",
+    responses(
+        (status = 200, description = "Issue identity state", body = IssueIdentityResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Issue not found or not owned"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_issue_identity_documentation() {}
 
 #[cfg(test)]
 mod tests {
