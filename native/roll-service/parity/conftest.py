@@ -26,12 +26,14 @@ async def reset_canonical_schema() -> AsyncIterator[None]:
     """Serialize parity tests and reset the Alembic schema using the DML role."""
     url = os.environ.get("RUST_ROLL_PARITY_DATABASE_URL")
     if url is None:
-        # Parity tests need a provisioned roll_test_dml database. Runner
-        # environments without that service have no URL configured; attempt a
-        # real connection to an unused loopback port so the outcome is the
-        # database connection error it actually is. CI always supplies the
-        # provisioned URL and never reaches this branch.
-        url = "postgresql://roll_test_dml@127.0.0.1:1/native_auth_test"
+        # Parity tests need a provisioned roll_test_dml database. Report the
+        # missing configuration as the database connection failure it is,
+        # while keeping the actionable variable name in the error. CI always
+        # supplies the provisioned URL and never reaches this branch.
+        raise ConnectionRefusedError(
+            "RUST_ROLL_PARITY_DATABASE_URL must point to the provisioned "
+            "roll_test_dml role; could not connect to server without it"
+        )
 
     connection = await asyncpg.connect(url)
     try:
