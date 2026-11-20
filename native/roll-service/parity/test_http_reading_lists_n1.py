@@ -181,6 +181,7 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
             await raw.close()
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}")
+        nested_before = await db_nested_statements(engine)
         _, _, before = await db_counters(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
@@ -190,7 +191,9 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
         assert body.get("issue_count") == 5
         assert isinstance(body.get("entries"), list) and len(body["entries"]) == 5
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested_delta = (nested_after - nested_before) if nested_after is not None and nested_before is not None else None
 
         raw = await asyncpg.connect(url)
         try:
@@ -206,6 +209,7 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
@@ -213,10 +217,15 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
         assert len(large_body.get("entries", [])) == 200
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested_delta = (nested_after2 - nested_before2) if nested_after2 is not None and nested_before2 is not None else None
 
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert small_nested_delta is not None, "nested statements must be measurable"
+        assert large_nested_delta is not None, "nested statements must be measurable"
+        assert small_nested_delta == 0, f"small fixture should have 0 nested statements, got {small_nested_delta}"
+        assert large_nested_delta == 0, f"large fixture should have 0 nested statements, got {large_nested_delta}"
     finally:
         await engine.dispose()
 
@@ -246,6 +255,7 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
             await raw.close()
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}/reader")
+        nested_before = await db_nested_statements(engine)
         _, _, before = await db_counters(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
@@ -257,7 +267,9 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
         assert isinstance(entries, list) and len(entries) == 5
         assert all(e.get("availability") in {"available", "later", "blocked", "read", "excluded", "inactive"} for e in entries)
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested_delta = (nested_after - nested_before) if nested_after is not None and nested_before is not None else None
 
         raw = await asyncpg.connect(url)
         try:
@@ -273,6 +285,7 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
@@ -280,10 +293,15 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
         assert len(large_body.get("entries", [])) == 200
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested_delta = (nested_after2 - nested_before2) if nested_after2 is not None and nested_before2 is not None else None
 
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}/reader", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert small_nested_delta is not None, "nested statements must be measurable"
+        assert large_nested_delta is not None, "nested statements must be measurable"
+        assert small_nested_delta == 0, f"small fixture should have 0 nested statements, got {small_nested_delta}"
+        assert large_nested_delta == 0, f"large fixture should have 0 nested statements, got {large_nested_delta}"
     finally:
         await engine.dispose()
 
@@ -311,13 +329,16 @@ async def test_delete_reading_list_statements_bounded() -> None:
                 await raw.close()
 
         small_id = await _seed_one()
+        nested_before = await db_nested_statements(engine)
         env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{small_id}")
         _, _, before = await db_counters(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 204, small
         assert small.get("body") is None
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested_delta = (nested_after - nested_before) if nested_after is not None and nested_before is not None else None
 
         large_id = await _seed_one()
         # grow unrelated data
@@ -332,14 +353,20 @@ async def test_delete_reading_list_statements_bounded() -> None:
 
         env2 = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 204, large
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested_delta = (nested_after2 - nested_before2) if nested_after2 is not None and nested_before2 is not None else None
 
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert small_nested_delta is not None, "nested statements must be measurable"
+        assert large_nested_delta is not None, "nested statements must be measurable"
+        assert small_nested_delta == 0, f"small fixture should have 0 nested statements, got {small_nested_delta}"
+        assert large_nested_delta == 0, f"large fixture should have 0 nested statements, got {large_nested_delta}"
     finally:
         await engine.dispose()
 
@@ -368,6 +395,7 @@ async def test_create_reading_list_statements_respect_budget() -> None:
             await raw.close()
 
         body_small = json.dumps({"name": "Small", "mode": "loose", "issue_ids": issue_ids_small})
+        nested_before = await db_nested_statements(engine)
         env = _run_env(token, "POST", "/api/v2/reading-lists", body=body_small)
         _, _, before = await db_counters(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
@@ -378,7 +406,9 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         assert small_body.get("issue_count") == 5
         assert len(small_body.get("entries", [])) == 5
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested_delta = (nested_after - nested_before) if nested_after is not None and nested_before is not None else None
 
         raw = await asyncpg.connect(url)
         try:
@@ -393,15 +423,21 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         body_large = json.dumps({"name": "Large", "mode": "loose", "issue_ids": issue_ids_large})
         env2 = _run_env(token, "POST", "/api/v2/reading-lists", body=body_large)
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 201, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested_delta = (nested_after2 - nested_before2) if nested_after2 is not None and nested_before2 is not None else None
 
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta)
+        assert small_nested_delta is not None, "nested statements must be measurable"
+        assert large_nested_delta is not None, "nested statements must be measurable"
+        assert small_nested_delta == 0, f"small fixture should have 0 nested statements, got {small_nested_delta}"
+        assert large_nested_delta == 0, f"large fixture should have 0 nested statements, got {large_nested_delta}"
     finally:
         await engine.dispose()
 
