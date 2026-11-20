@@ -2100,14 +2100,15 @@ fn series_result(value: &Value, fallback_id: Option<i32>) -> Option<ComicVineSer
 fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
     let object = value.as_object()?;
     let id = coerce_provider_int(object.get("id"))?;
+    // Python behavior: issue_number null -> None, number -> string, string -> string
     let issue_number = object
         .get("issue_number")
-        .map(|value| match value {
-            Value::String(text) => text.clone(),
-            Value::Number(number) => number.to_string(),
-            _ => value.to_string(),
-        })
-        .filter(|text| !text.is_empty());
+        .and_then(|value| match value {
+            Value::String(text) => Some(text.clone()),
+            Value::Number(number) => Some(number.to_string()),
+            Value::Null => None, // Python preserves None when cover_date is null
+            _ => None,
+        });
     Some(ComicVineIssueCandidate {
         comicvine_issue_id: id,
         issue_number,
