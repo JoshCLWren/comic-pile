@@ -2111,7 +2111,7 @@ fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
         .and_then(|value| match value {
             Value::String(text) if !text.is_empty() => Some(text.clone()),
             Value::Number(number) => Some(number.to_string()),
-            Value::Null | None => None,
+            Value::Null => None,
             _ => None,
         });
     Some(ComicVineIssueCandidate {
@@ -2497,7 +2497,7 @@ pub async fn resolve_input(
                     .and_then(|value| match value {
                         Value::String(text) if !text.is_empty() => Some(text.clone()),
                         Value::Number(number) => Some(number.to_string()),
-                        Value::Null | None => None,
+                        Value::Null => None,
                         _ => None,
                     }),
                 name: provider_string(result.get("name")),
