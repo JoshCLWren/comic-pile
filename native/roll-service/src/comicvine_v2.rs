@@ -1074,6 +1074,13 @@ async fn link_confirmed(
 /// (`uq_comicvine_metadata_refresh_identity`), so a finished row (completed,
 /// no_credits or failed) is reopened instead of colliding (#4631578606); a
 /// pending, running or deferred row is left alone.
+///
+/// Lock order (#4638065822): the caller already holds the identity row (the
+/// upsert), while the repair worker's `PERSIST` locks the request row and
+/// then the identity row. To never wait in the opposite order, the request
+/// row is only ever taken with `SKIP LOCKED`: a row some other transaction
+/// holds is being claimed or persisted right now, so this best-effort
+/// enqueue skips it instead of waiting.
 async fn enqueue_hydration_if_needed(
     tx: &Transaction<'_>,
     identity_id: i32,
@@ -1091,16 +1098,36 @@ async fn enqueue_hydration_if_needed(
     if !crate::comicvine_repair::needs_provider_fetch(&metadata, chrono::Utc::now()) {
         return Ok(());
     }
+    let reopened = tx
+        .query_opt(
+            "WITH claimable AS ( \
+                SELECT id FROM comicvine_metadata_refresh_requests \
+                WHERE external_identity_id = $1 FOR UPDATE SKIP LOCKED \
+             ), reopened AS ( \
+                UPDATE comicvine_metadata_refresh_requests r \
+                SET state = 'pending', attempts = 0, next_attempt_at = now(), \
+                    lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
+                    updated_at = now() \
+                FROM claimable c \
+                WHERE r.id = c.id AND r.state NOT IN ('pending', 'running', 'deferred') \
+             ) \
+             SELECT 1 FROM claimable",
+            &[&identity_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if reopened.is_some() {
+        return Ok(());
+    }
+    // No unlocked row: create one unless a row exists that another
+    // transaction holds (a worker claiming or persisting it).
     tx.execute(
         "INSERT INTO comicvine_metadata_refresh_requests \
             (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
-         VALUES ($1, 'pending', 0, now(), now(), now()) \
-         ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity \
-         DO UPDATE SET state = 'pending', attempts = 0, next_attempt_at = now(), \
-                       lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
-                       updated_at = now() \
-         WHERE comicvine_metadata_refresh_requests.state \
-               NOT IN ('pending', 'running', 'deferred')",
+         SELECT $1, 'pending', 0, now(), now(), now() \
+         WHERE NOT EXISTS (SELECT 1 FROM comicvine_metadata_refresh_requests \
+                           WHERE external_identity_id = $1) \
+         ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
         &[&identity_id],
     )
     .await

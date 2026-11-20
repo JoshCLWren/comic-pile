@@ -1887,7 +1887,8 @@ async fn wait_for_queue_lock_waiters(
         let waiting: i64 = tx
             .query_one(
                 "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted \
-                 AND classid = 699001 AND objid = $1::int4::oid",
+                 AND classid = 699001 AND objid = $1::int4::oid \
+                 AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
                 &[&user_id],
             )
             .await
@@ -2623,4 +2624,106 @@ async fn imports_serialize_with_sibling_queue_writers() {
         positions[0], positions[1],
         "imports must not share a queue slot"
     );
+}
+
+/// #4638065822: the repair worker's `PERSIST` holds the refresh-request row
+/// and then updates the identity row. A confirmation already holds the
+/// identity row, so it must never wait on that request row. While another
+/// session holds the request row (as a worker does), the confirmation must
+/// finish without becoming a lock waiter, leave the running job alone, and
+/// release the identity row for the worker's update.
+#[tokio::test]
+async fn confirmation_never_waits_on_a_refresh_row_the_repair_worker_holds() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-repair-race", 4, None).await;
+    let (i, identity) = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Repair race").await;
+        let i = issue(&conn, t, "1", 1).await;
+        let identity: i32 = conn
+            .query_one(
+                "INSERT INTO external_identities (provider, entity_type, external_id, \
+                 external_url, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'issue', '9700', NULL, '{}'::json, now(), now()) RETURNING id",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        conn.execute(
+            "INSERT INTO comicvine_metadata_refresh_requests \
+                (external_identity_id, state, attempts, next_attempt_at, lease_expires_at, \
+                 created_at, updated_at) \
+             VALUES ($1, 'running', 1, now(), now() + interval '120 seconds', now(), now())",
+            &[&identity],
+        )
+        .await
+        .unwrap();
+        (i, identity)
+    };
+    let mut worker = state.pool.get().await.unwrap();
+    let worker_tx = worker.transaction().await.unwrap();
+    worker_tx
+        .query_one(
+            "SELECT id FROM comicvine_metadata_refresh_requests \
+             WHERE external_identity_id = $1 FOR UPDATE",
+            &[&identity],
+        )
+        .await
+        .unwrap();
+    let pending = spawn_send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 9700})),
+        ),
+    );
+    // Deterministic: poll until the request finishes, failing the moment any
+    // session waits on a row or transaction lock (no sleeps, no deadlines).
+    while !pending.is_finished() {
+        let waiters: i64 = worker_tx
+            .query_one(
+                "SELECT count(*) FROM pg_stat_activity \
+                 WHERE datname = current_database() AND cardinality(pg_blocking_pids(pid)) > 0",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(
+            waiters, 0,
+            "the confirmation waited on the worker's request row"
+        );
+        tokio::task::yield_now().await;
+    }
+    let (status, body) = pending.await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["comicvine_issue_id"], "9700");
+    // The worker's PERSIST step can now update the identity row.
+    worker_tx
+        .execute(
+            "UPDATE external_identities SET updated_at = now() WHERE id = $1",
+            &[&identity],
+        )
+        .await
+        .unwrap();
+    let job: (String, i32) = {
+        let row = worker_tx
+            .query_one(
+                "SELECT state, attempts FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&identity],
+            )
+            .await
+            .unwrap();
+        (row.get(0), row.get(1))
+    };
+    assert_eq!(
+        job,
+        ("running".to_owned(), 1),
+        "the running job is untouched"
+    );
+    worker_tx.commit().await.unwrap();
 }
