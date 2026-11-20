@@ -12,7 +12,14 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    SQL_BUDGET_SOURCES,
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-graph-n1-secret"
 BINARY = str(cargo_example_path("http_reading_graph"))
@@ -45,6 +52,105 @@ async def _insert_owned_thread(raw: asyncpg.Connection, owner_id: int, index: in
         )
         issue_ids.append(issue_id)
     return thread_id, issue_ids
+
+
+async def _seed_cycle(raw: asyncpg.Connection, owner_id: int) -> int:
+    """Seed one reader-owned list/dependency cycle and return the list id."""
+    issue_ids = [
+        row["id"]
+        for row in await raw.fetch(
+            "SELECT id FROM issues WHERE thread_id IN "
+            "(SELECT id FROM threads WHERE user_id=$1) ORDER BY id LIMIT 2",
+            owner_id,
+        )
+    ]
+    assert len(issue_ids) == 2, "cycle fixture needs two owned issues"
+    list_id = await raw.fetchval(
+        "INSERT INTO custom_cbl_lists (user_id,name,description,mode,created_at,updated_at) "
+        "VALUES ($1,'Cycle List',NULL,'strict',NOW(),NOW()) RETURNING id",
+        owner_id,
+    )
+    issue_a, issue_b = issue_ids
+    await raw.execute(
+        "INSERT INTO custom_cbl_entries (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped) "
+        "VALUES ($1,$2,1,NOW(),false,'[]','none',false), ($1,$3,2,NOW(),false,'[]','none',false)",
+        list_id,
+        issue_b,
+        issue_a,
+    )
+    await raw.execute(
+        "INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,created_at) "
+        "VALUES ($1,$2,'reader','A',NOW())",
+        issue_a,
+        issue_b,
+    )
+    return list_id
+
+
+def _budget_maximum(method: str, path: str) -> int:
+    """Read one declared maximum from the editable SQL budget source."""
+    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
+    matching = [
+        entry
+        for entry in document["operations"]
+        if entry["method"] == method and entry["path"] == path
+    ]
+    assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
+    return int(matching[0]["sql_budget"]["max_statements"])
+
+
+def _assert_route_budget(
+    method: str,
+    path: str,
+    small: int | None,
+    large: int | None,
+) -> None:
+    """Apply the same maximum and no-growth checks used by the route tests."""
+    assert_declared_budget(method, path, small, large)
+    assert small is not None and large is not None
+    assert large <= small + 2, f"statement count grew: {small} -> {large}"
+
+
+async def _measured_route(
+    engine,
+    env: dict[str, str],
+    *,
+    url: str,
+    fixture: str,
+    extra_statements: int = 0,
+    per_row_ids: tuple[int, ...] = (),
+) -> tuple[dict[str, object], int, int]:
+    """Measure one invocation's top-level and nested statements separately.
+
+    Optional injected queries run under the same isolated service role inside
+    the measurement window to prove the budget checks reject regressions.
+    """
+    nested_before = await db_nested_statements(engine)
+    _, _, before = await db_counters(engine)
+    response, _, _, _ = await run_rust_example(BINARY, env)
+    if extra_statements or per_row_ids:
+        connection = await asyncpg.connect(url)
+        try:
+            for _ in range(extra_statements):
+                await connection.execute("SELECT 1")
+            for row_id in per_row_ids:
+                await connection.fetchval("SELECT $1::int", row_id)
+        finally:
+            await connection.close()
+    _, _, after = await db_counters(engine)
+    nested_after = await db_nested_statements(engine)
+    assert before is not None and after is not None, "pg_stat_statements is required"
+    assert nested_before is not None and nested_after is not None, (
+        "pg_stat_statements.track must be all; track=top hides nested statements"
+    )
+    statements, nested = after - before, nested_after - nested_before
+    assert statements >= 0 and nested >= 0
+    print(
+        f"route-budget route={env['RUST_ROLL_TEST_URI']} fixture={fixture} "
+        f"db_statements={statements} db_nested_statements={nested}",
+        flush=True,
+    )
+    return response, statements, nested
 
 
 @pytest.mark.asyncio
