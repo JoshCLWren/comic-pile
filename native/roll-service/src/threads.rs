@@ -1238,6 +1238,11 @@ issue_cover AS (
                NULLIF(BTRIM(ei.metadata_json#>>'{image,medium_url}'), ''),
                NULLIF(BTRIM(ei.metadata_json#>>'{image,small_url}'), ''),
                NULLIF(BTRIM(ei.metadata_json#>>'{image,thumb_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{raw_provider_payload,image,original_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{raw_provider_payload,image,super_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{raw_provider_payload,image,medium_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{raw_provider_payload,image,small_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{raw_provider_payload,image,thumb_url}'), ''),
                NULLIF(BTRIM(ei.metadata_json->>'cover_image_url'), '')
            ) AS cover_url
     FROM page p
