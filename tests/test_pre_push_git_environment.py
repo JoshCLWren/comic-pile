@@ -71,5 +71,10 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
     result = subprocess.run(
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert not gate_log.exists() or gate_log.read_text() == ""
+    # The hook should fail when leaked Git environment variables are present
+    assert result.returncode != 0, f"Hook should fail due to leaked Git environment variables: {result.stdout} {result.stderr}"
+    assert gate_log.exists(), "gate_log file should exist"
+    assert "Leaked GIT_DIR" in gate_log.read_text(), "GIT_DIR leak not detected"
+    assert "Leaked GIT_WORK_TREE" in gate_log.read_text(), "GIT_WORK_TREE leak not detected"
+    assert "Leaked GIT_INDEX_FILE" in gate_log.read_text(), "GIT_INDEX_FILE leak not detected"
+    assert "Leaked GIT_CONFIG_PARAMETERS" in gate_log.read_text(), "GIT_CONFIG_PARAMETERS leak not detected"
