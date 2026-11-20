@@ -255,13 +255,16 @@ export default function ThreadDetailView() {
   // focus. Listen directly as well as opting the individual queries into
   // TanStack focus refetching: some browsers deliver only one of these events
   // for a tab switch, and the Next issue line must not wait for staleTime.
+  const refetchBoundaries = boundaryQuery.refetch
+  const refetchLegacyBlockingInfo = legacyBlockingInfo.refetch
+  const refetchIssueCards = issueCardsQuery.refetch
   useEffect(() => {
     function onViewFocus() {
       if (document.visibilityState !== 'visible') return
       void refetch()
-      void boundaryQuery.refetch()
-      void legacyBlockingInfo.refetch()
-      void issueCardsQuery.refetch()
+      void refetchBoundaries()
+      void refetchLegacyBlockingInfo()
+      void refetchIssueCards()
     }
     document.addEventListener('visibilitychange', onViewFocus)
     window.addEventListener('focus', onViewFocus)
@@ -269,7 +272,7 @@ export default function ThreadDetailView() {
       document.removeEventListener('visibilitychange', onViewFocus)
       window.removeEventListener('focus', onViewFocus)
     }
-  }, [refetch, boundaryQuery.refetch, legacyBlockingInfo.refetch, issueCardsQuery.refetch])
+  }, [refetch, refetchBoundaries, refetchLegacyBlockingInfo, refetchIssueCards])
 
   // Deep-link arrival (#3626): jump straight to the exact canonical issue named
   // by `?issue=<issue_id>`, focus it so keyboard and assistive-technology users
