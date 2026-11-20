@@ -37,7 +37,7 @@ vi.mock('../hooks/useThread', async () => {
   return { ...actual, useUpdateThread: vi.fn() }
 })
 vi.mock('../services/api-threads', () => ({
-  threadsApi: { get: vi.fn() },
+  threadsApi: { get: vi.fn(), update: vi.fn() },
 }))
 vi.mock('../services/api-dependencies', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-dependencies')>()
