@@ -199,6 +199,9 @@ export const queryKeys = {
      * every snoozed-value variant rather than one exact key.
      */
     eligibleIssueIdsAll: () => ['roll', 'eligible-issue-ids'] as const,
+    /** Representative series covers for the bounded Roll snooze shelf. */
+    snoozedSeriesCovers: (threadIds: readonly number[]) =>
+      ['roll', 'snoozed-series-covers', [...new Set(threadIds)].sort((a, b) => a - b)] as const,
     issueCards: (issueIds: readonly number[]) =>
       ['roll', 'issue-cards', [...new Set(issueIds)]] as const,
     /**

@@ -8,7 +8,7 @@
 
 **Test:** Find it in the inbox, inspect candidates, confirm correct identity, and reload thread.
 
-**Expected:** Only the chosen issue gets the approved mapping; inbox and thread indicators update.
+**Expected:** Each candidate displays its own ComicVine cover using the shared cover component (or a shared placeholder when provider art is missing), never the current owned issue's cover or a different candidate's art. No candidate image implies a confirmed mapping. Only the chosen issue gets the approved mapping; inbox and thread indicators update.
 
 ## MQA-IDENTITY-002: Unsafe candidates can be deferred
 
