@@ -374,7 +374,7 @@ async fn upsert_external_identity(
 /// Link an issue to an external identity mapping.
 async fn link_issue_external_identity(
     tx: &Transaction<'_>,
-    user: i32,
+    _user: i32,
     issue_id: i32,
     external_identity_id: i32,
     status: &str,
