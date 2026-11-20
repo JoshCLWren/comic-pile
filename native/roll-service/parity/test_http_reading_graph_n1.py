@@ -9,7 +9,7 @@ from uuid import uuid4
 import asyncpg
 import pytest
 from jose import jwt
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
 from route_harness import (
@@ -54,14 +54,15 @@ async def _insert_owned_thread(raw: asyncpg.Connection, owner_id: int, index: in
     return thread_id, issue_ids
 
 
-async def _seed_cycle(raw: asyncpg.Connection, owner_id: int) -> int:
+async def _seed_cycle(raw: asyncpg.Connection, owner_id: int, offset: int = 0) -> int:
     """Seed one reader-owned list/dependency cycle and return the list id."""
     issue_ids = [
         row["id"]
         for row in await raw.fetch(
             "SELECT id FROM issues WHERE thread_id IN "
-            "(SELECT id FROM threads WHERE user_id=$1) ORDER BY id LIMIT 2",
+            "(SELECT id FROM threads WHERE user_id=$1) ORDER BY id OFFSET $2 LIMIT 2",
             owner_id,
+            offset,
         )
     ]
     assert len(issue_ids) == 2, "cycle fixture needs two owned issues"
@@ -112,7 +113,7 @@ def _assert_route_budget(
 
 
 async def _measured_route(
-    engine,
+    engine: AsyncEngine,
     env: dict[str, str],
     *,
     url: str,
@@ -193,16 +194,15 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
             "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
-        _, _, before = await db_counters(engine)
-        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        small_response, small_delta, small_nested = await _measured_route(
+            engine, env, url=url, fixture="small"
+        )
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
         assert isinstance(small_body, dict)
         assert small_body.get("status") == "ok"
         assert small_body.get("cycles") == []
         assert isinstance(small_body.get("affected_lists"), list)
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
         try:
@@ -212,20 +212,20 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         finally:
             await raw.close()
 
-        _, _, before2 = await db_counters(engine)
-        large_response, _, _, _ = await run_rust_example(BINARY, env)
+        large_response, large_delta, large_nested = await _measured_route(
+            engine, env, url=url, fixture="large"
+        )
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict)
         assert large_body.get("status") == "ok"
         assert large_body.get("cycles") == []
         assert large_body.get("unresolved_reference_count") == 0
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
-        assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
-        assert_declared_budget("GET", "/api/v2/reading-graph", small_delta, large_delta)
-        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        _assert_route_budget("GET", "/api/v2/reading-graph", small_delta, large_delta)
+        assert large_nested <= small_nested + 2, (
+            f"nested statements grew: {small_nested} -> {large_nested}"
+        )
     finally:
         await engine.dispose()
 
@@ -265,24 +265,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            issue_ids = [r["id"] for r in await raw.fetch("SELECT id FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id=$1) ORDER BY id", owner_id)]
-            list_id = await raw.fetchval(
-                "INSERT INTO custom_cbl_lists (user_id,name,description,mode,created_at,updated_at) "
-                "VALUES ($1,'Cycle List',NULL,'strict',NOW(),NOW()) RETURNING id",
-                owner_id,
-            )
-            # Create a cycle: strict list order issue_b -> issue_a and prerequisite issue_a -> issue_b.
-            issue_a, issue_b = issue_ids[0], issue_ids[1]
-            await raw.execute(
-                "INSERT INTO custom_cbl_entries (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped) "
-                "VALUES ($1,$2,1,NOW(),false,'[]','none',false), ($1,$3,2,NOW(),false,'[]','none',false)",
-                list_id, issue_b, issue_a,
-            )
-            await raw.execute(
-                "INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,created_at) "
-                "VALUES ($1,$2,'reader','A',NOW())",
-                issue_a, issue_b,
-            )
+            list_id = await _seed_cycle(raw, owner_id)
         finally:
             await raw.close()
 
@@ -296,19 +279,25 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
             "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
-        _, _, before = await db_counters(engine)
-        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        small_response, small_delta, small_nested = await _measured_route(
+            engine, env, url=url, fixture="preview-small"
+        )
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
         assert isinstance(small_body, dict)
         assert small_body.get("applied") is False
         assert small_body.get("status_before") == "cycle"
         assert small_body.get("status_after") == "ok"
+        # Preview returns the projected graph after the proposed repair; nothing
+        # is persisted, so the cycle remains in the database.
         graph = small_body.get("graph")
-        assert isinstance(graph, dict) and graph.get("status") == "cycle"
-        assert any(r.get("action") == "delete_list" and r.get("list_id") == list_id for r in graph.get("repairs", []))
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
+        assert isinstance(graph, dict) and graph.get("status") == "ok"
+        assert graph.get("repairs") == []
+        raw = await asyncpg.connect(url)
+        try:
+            assert await raw.fetchval("SELECT count(*) FROM custom_cbl_lists WHERE id=$1", list_id) == 1
+        finally:
+            await raw.close()
 
         raw = await asyncpg.connect(url)
         try:
@@ -318,20 +307,20 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         finally:
             await raw.close()
 
-        _, _, before2 = await db_counters(engine)
-        large_response, _, _, _ = await run_rust_example(BINARY, env)
+        large_response, large_delta, large_nested = await _measured_route(
+            engine, env, url=url, fixture="preview-large"
+        )
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict)
         assert large_body.get("applied") is False
         assert large_body.get("status_before") == "cycle"
         large_graph = large_body.get("graph")
-        assert isinstance(large_graph, dict) and large_graph.get("status") == "cycle"
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        assert isinstance(large_graph, dict) and large_graph.get("status") == "ok"
 
-        assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
-        assert_declared_budget("POST", "/api/v2/reading-graph/repairs", small_delta, large_delta)
-        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        _assert_route_budget("POST", "/api/v2/reading-graph/repairs", small_delta, large_delta)
+        assert large_nested <= small_nested + 2, (
+            f"nested statements grew: {small_nested} -> {large_nested}"
+        )
     finally:
         await engine.dispose()
