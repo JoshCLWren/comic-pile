@@ -310,14 +310,15 @@ async def test_delete_reading_list_statements_bounded() -> None:
         _, _, after = await db_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
 
+        # Seed a second list with many entries (50) to cover long-list deletion
         large_id = await _seed_one()
-        # grow unrelated data
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            for i in range(20, 120):
-                _, ids = await _insert_owned_thread(raw, owner_id, i)
-                await _insert_list(raw, owner_id, f"X-{i}", [ids[0]])
+            # Seed the target list with 50 entries to verify per-entry budget holds
+            for i in range(50):
+                _, ids = await _insert_owned_thread(raw, owner_id, i + 200)
+                await _insert_list(raw, owner_id, f"LongList-{i}", [ids[0]])
         finally:
             await raw.close()
 
