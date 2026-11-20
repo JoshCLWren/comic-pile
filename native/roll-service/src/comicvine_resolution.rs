@@ -114,6 +114,52 @@ pub async fn get_issue_identity(
     }))
 }
 
+/// Correction canonical data matching Python api_list_corrections wire contract.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct CanonicalCorrection {
+    pub correction_id: i32,
+    pub field: String,
+    pub old_value: String,
+    pub new_value: String,
+    pub applied: bool,
+}
+
+/// `GET /api/v1/comicvine/issues/{issue_id}/metadata:corrections`.
+///
+/// Stub handler for native v1 comicvine corrections list route.
+pub async fn list_corrections(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+) -> Result<Json<ListCorrectionsResponse>, ApiError> {
+    Ok(Json(ListCorrectionsResponse {
+        issue_id,
+        corrections: vec![],
+    }))
+}
+
+/// List corrections response matching Python api_list_corrections wire contract.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ListCorrectionsResponse {
+    pub issue_id: i32,
+    pub corrections: vec![CanonicalCorrection],
+}
+
+/// OpenAPI documentation for the list_corrections operation.
+#[utoipa::path(
+    get,
+    path = "/api/v1/comicvine/issues/{issue_id}/metadata:corrections",
+    params(("issue_id" = i32, Path, description = "ComicVine issue ID")),
+    tag = "comicvine-resolution",
+    responses(
+        (status = 200, description = "List of corrections", body = ListCorrectionsResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_corrections_documentation() {}
+
 /// OpenAPI documentation for the get_issue_identity operation.
 #[utoipa::path(
     get,
