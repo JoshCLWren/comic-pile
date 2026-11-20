@@ -174,7 +174,8 @@ def local_worktree_branches(repo_root: Path) -> set[str]:
 
 def remote_default_branch(repo_root: Path, remote: str = "origin") -> str:
     """Resolve the default branch for a remote."""
-    proc = run(["git", "-C", str(repo_root), "symbolic-ref", f"refs/remotes/{remote}/HEAD"], check=False)
+    proc = run(["git", "-C", str(repo_root), "symbolic-ref", f"refs/remotes/{remote}/HEAD"],
+    check=False)
     if proc.returncode == 0:
         ref = proc.stdout.strip()
         prefix = f"refs/remotes/{remote}/"
