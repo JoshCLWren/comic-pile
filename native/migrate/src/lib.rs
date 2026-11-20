@@ -289,18 +289,47 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
         };
     }
 
-    let applied: std::collections::BTreeSet<i32> = runner()
-        .get_applied_migrations_async(client)
-        .await?
+    let migration_runner = runner();
+    let applied = migration_runner.get_applied_migrations_async(client).await?;
+    let embedded = migration_runner.get_migrations();
+    let applied_by_version: std::collections::BTreeMap<i32, &refinery::Migration> = applied
         .iter()
-        .map(|m| m.version())
+        .map(|migration| (migration.version(), migration))
         .collect();
-    let pending = runner()
-        .get_migrations()
+
+    // A version-only comparison is not enough: refinery's `up` rejects an
+    // applied migration whose name or checksum diverges from the embedded SQL.
+    // If `plan` reported "no work" in that case, deployment would skip `up`
+    // and bypass that checksum gate entirely. Compare both directions here so
+    // the plan either schedules the write path or fails closed before deploy.
+    for migration in embedded {
+        match applied_by_version.get(&migration.version()) {
+            None => return Ok(true),
+            Some(recorded)
+                if recorded.name() == migration.name()
+                    && recorded.checksum() == migration.checksum() => {}
+            Some(recorded) => {
+                return Err(MigrateError(format!(
+                    "migration {} diverges from recorded history: recorded name {:?} checksum {}, \
+                     embedded name {:?} checksum {}; run `up` to surface the refinery divergence error",
+                    migration.version(),
+                    recorded.name(),
+                    recorded.checksum(),
+                    migration.name(),
+                    migration.checksum(),
+                )));
+            }
+        }
+    }
+    if applied
         .iter()
-        .any(|m| !applied.contains(&m.version()));
-    if pending {
-        return Ok(true);
+        .any(|recorded| !embedded.iter().any(|m| m.version() == recorded.version()))
+    {
+        return Err(MigrateError(
+            "recorded migration history contains versions not present in the embedded \
+             migrations; refusing to skip the migration write path"
+                .to_string(),
+        ));
     }
 
     Ok(alembic_revisions(client).await?.as_deref() != Some(&[BASELINE_ALEMBIC_HEAD.to_string()]))
