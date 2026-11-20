@@ -1359,6 +1359,9 @@ mod tests {
                          now(), now()),
                         (52, 'comicvine', 'issue', '4000-44',
                          '{"image":{"super_url":"https://comicvine.example/covers/dependent.jpg"}}'::json,
+                         now(), now()),
+                        (53, 'comicvine', 'issue', '4000-45',
+                         '{"image":{"thumb_url":"https://comicvine.example/covers/thumb.jpg"}}'::json,
                          now(), now());
                  INSERT INTO issue_external_identity_mappings
                      (id, issue_id, external_identity_id, status, evidence_json,
