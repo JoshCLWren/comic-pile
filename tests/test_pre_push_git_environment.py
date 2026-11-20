@@ -92,7 +92,7 @@ touch "$CHECKS_RAN_MARKER"
     assert result.returncode == 0, result.stdout + result.stderr
     assert lint_log.exists(), "The lint stub and its Git environment checks did not run"
     assert lint_log.read_text() == "lint\n"
-    assert test_gate_log.read_text() == "", (
+    assert not test_gate_log.exists() or test_gate_log.read_text() == "", (
         f"Product test gates ran during pre-push: {test_gate_log.read_text()!r}"
     )
     # Verify the environment checks within the lint stub actually ran,
