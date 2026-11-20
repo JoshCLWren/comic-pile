@@ -930,8 +930,9 @@ pub async fn apply_correction(
     owned_issue(&tx, user.id(), issue_id).await?;
 
     // Python behavior: str(metadata.get(field, "")) or None
-    // This converts None/null to the string "None", and missing keys to None.
-    // Use jsonb_typeof to check if the key exists and its type.
+    // - Key missing or value null in JSON -> None/null
+    // - Key exists with value -> string representation
+    // Use jsonb_typeof to distinguish between missing key and null value.
     let provider_value: Option<String> = tx
         .query_one(
             "SELECT metadata_json ? $2 AS key_exists, \
@@ -951,7 +952,9 @@ pub async fn apply_correction(
         .map(|row: (bool, String)| {
             let (key_exists, value) = row;
             if !key_exists {
-                None // Key doesn't exist -> None
+                None // Key doesn't exist -> None (serializes to JSON null)
+            } else if value == "None" {
+                Some("None".to_string()) // JSON null value -> string "None"
             } else if value.is_empty() {
                 None // Empty string (not "None") -> None
             } else {
