@@ -132,7 +132,7 @@ function planDetail(planId: number) {
 }
 
 function responseFor(method: string, path: string, query: CanonicalQuery) {
-  if (method === 'POST' && path === '/api/v1/identity-inbox/1/confirm') {
+  if (method === 'POST' && path === '/api/v2/identity-inbox/1/confirmations') {
     inboxTotal -= 1
     return undefined
   }
@@ -144,7 +144,7 @@ function responseFor(method: string, path: string, query: CanonicalQuery) {
   if (/^\/api\/v1\/continuity-plans\/\d+$/.test(path)) {
     return planDetail(Number(path.split('/')[4]))
   }
-  if (path === '/api/v1/identity-inbox') {
+  if (path === '/api/v2/identity-inbox') {
     return inboxPage(Number(query.offset?.[0] ?? 0), Number(query.limit?.[0] ?? 20))
   }
   if (path === '/api/v2/threads' || path === '/api/v1/threads/') {
@@ -201,9 +201,9 @@ const TAGS_CATALOG = GET('/api/v2/tags')
 const CUSTOM_LISTS = GET('/api/v2/reading-lists')
 const CUSTOM_LIST_SEVEN = GET('/api/v2/reading-lists/7')
 const EXCLUDED_THREADS = GET('/api/v1/threads/excluded/threads', { page_size: 50, sort: 'created' })
-const INBOX_FIRST_PAGE = GET('/api/v1/identity-inbox', { offset: 0, limit: 20 })
-const INBOX_SECOND_PAGE = GET('/api/v1/identity-inbox', { offset: 20, limit: 20 })
-const INBOX_STATUS_PROBE = GET('/api/v1/identity-inbox', { offset: 0, limit: 1 })
+const INBOX_FIRST_PAGE = GET('/api/v2/identity-inbox', { offset: 0, limit: 20 })
+const INBOX_SECOND_PAGE = GET('/api/v2/identity-inbox', { offset: 20, limit: 20 })
+const INBOX_STATUS_PROBE = GET('/api/v2/identity-inbox', { offset: 0, limit: 1 })
 
 beforeEach(() => {
   requests.length = 0
@@ -446,7 +446,7 @@ describe('/identity-inbox', () => {
     await userEvent.click(screen.getByRole('button', { name: /Mister Miracle/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'Confirm' }))
     await waitFor(() => expect(count(INBOX_FIRST_PAGE)).toBe(1))
-    expect(urls()).toContain('POST /api/v1/identity-inbox/1/confirm')
+    expect(urls()).toContain('POST /api/v2/identity-inbox/1/confirmations')
     expect(count(INBOX_STATUS_PROBE)).toBe(0)
     await waitFor(() => expect(screen.getByTestId('badge-total')).toHaveTextContent('24'))
   })

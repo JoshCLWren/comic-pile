@@ -783,21 +783,24 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}",
             post(thread_ordering::post_thread_action),
         )
-        // Same single-segment technique for `{issue_id}:markRead|markUnread|move`.
         .route(
-            "/api/v1/issues/{issue_id}",
-            post(issue_read_state::post_issue_action),
+            "/api/v2/issues/{issue_id}/read-markers",
+            post(issue_read_state::create_read_marker).delete(issue_read_state::delete_read_marker),
         )
         .route(
-            "/api/v1/issues:bulkMarkRead",
-            post(issue_read_state::bulk_mark_issues_read),
+            "/api/v2/issues/{issue_id}/position",
+            put(issue_read_state::put_issue_position),
         )
         .route(
-            "/api/v1/issues:bulkMarkUnread",
-            post(issue_read_state::bulk_mark_issues_unread),
+            "/api/v2/issue-read-markers",
+            post(issue_read_state::create_read_markers),
         )
         .route(
-            "/api/v1/issues/{issue_id}/reader-context",
+            "/api/v2/issue-read-marker-removals",
+            post(issue_read_state::remove_read_markers),
+        )
+        .route(
+            "/api/v2/issues/{issue_id}/reader-context",
             get(reader_context::get_issue_reader_context),
         )
         .route(
@@ -968,29 +971,29 @@ pub fn router(state: Arc<AppState>) -> Router {
             patch(legacy_dependencies::update),
         )
         .route("/api/v2/activity", get(activity::list_activity))
-        .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
+        .route("/api/v2/identity-inbox", get(identity_inbox::list_inbox))
         .route(
-            "/api/v1/identity-inbox/search/issues",
+            "/api/v2/identity-inbox/issue-matches",
             get(identity_inbox::search_issues),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}",
+            "/api/v2/identity-inbox/{mapping_id}",
             get(identity_inbox::get_inbox_item),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/confirm",
+            "/api/v2/identity-inbox/{mapping_id}/confirmations",
             post(identity_inbox::confirm),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/defer",
+            "/api/v2/identity-inbox/{mapping_id}/deferrals",
             post(identity_inbox::defer),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/reject",
+            "/api/v2/identity-inbox/{mapping_id}/rejections",
             post(identity_inbox::reject),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/skip",
+            "/api/v2/identity-inbox/{mapping_id}/skips",
             post(identity_inbox::skip),
         )
         // Issue Identity / CBL Adoption family (#4843).
@@ -1030,7 +1033,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
         )
-        .route("/api/v1/issues/{issue_id}", get(issue_read::get_issue))
+        .route("/api/v2/issues/{issue_id}", get(issue_read::get_issue))
         .route(
             "/api/v1/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
@@ -1048,7 +1051,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(comicvine_resolution::series_import_status),
         )
         .route(
-            "/api/v1/issues/{issue_id}/dependencies",
+            "/api/v2/issues/{issue_id}/dependencies",
             get(issue_read::get_issue_dependencies),
         )
         .route(

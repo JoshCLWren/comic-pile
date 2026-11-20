@@ -27,8 +27,6 @@ use utoipa::OpenApi;
     crate::session_details::get_session_details_documentation,
     crate::undo_snapshots::list_undo_snapshots_documentation,
     crate::undo_apply::undo_to_snapshot_documentation,
-    crate::issue_read::get_issue_documentation,
-    crate::issue_read::get_issue_dependencies_documentation,
     crate::threads::get_thread_detail_documentation,
     crate::threads::get_bare_thread_detail_documentation,
     crate::taste_discoveries::list_documentation,
@@ -90,7 +88,6 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         // client types after the shadowed Python handlers retire (#5440).
         .merge_from(crate::thread_ordering::ThreadOrderingApi::openapi())
         .merge_from(crate::thread_issues::ThreadIssuesApi::openapi())
-        .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
         .merge_from(crate::dependency_groups::DependencyGroupsApi::openapi());
 
     // Each alias is mounted to the identical handler in the native router.
@@ -273,56 +270,6 @@ mod tests {
             assert!(
                 operation["responses"][success].is_object(),
                 "{method} {path} has no {success} response"
-            );
-        }
-    }
-
-    /// The issue read-state and reader-context cutover (#4832 part C) keeps its
-    /// original v1 URLs, so every operation must stay in the same-path document
-    /// to survive retirement of the shadowed Python handlers.
-    #[test]
-    fn same_path_contract_documents_issue_read_state_operations() {
-        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
-        let paths = document["paths"].as_object().expect("paths");
-        for (path, method, operation_id) in [
-            (
-                "/api/v1/issues/{issue_id}:markRead",
-                "post",
-                "issue_read_state_mark_read",
-            ),
-            (
-                "/api/v1/issues/{issue_id}:markUnread",
-                "post",
-                "issue_read_state_mark_unread",
-            ),
-            (
-                "/api/v1/issues/{issue_id}:move",
-                "post",
-                "issue_read_state_move",
-            ),
-            (
-                "/api/v1/issues:bulkMarkRead",
-                "post",
-                "issue_read_state_bulk_mark_read",
-            ),
-            (
-                "/api/v1/issues:bulkMarkUnread",
-                "post",
-                "issue_read_state_bulk_mark_unread",
-            ),
-            (
-                "/api/v1/issues/{issue_id}/reader-context",
-                "get",
-                "issue_read_state_reader_context",
-            ),
-        ] {
-            let operation = &paths[path][method];
-            assert!(operation.is_object(), "missing {method} {path} in contract");
-            assert_eq!(operation["operationId"], operation_id);
-            assert!(
-                operation["responses"]["204"].is_object()
-                    || operation["responses"]["200"].is_object(),
-                "{method} {path} has no success response"
             );
         }
     }

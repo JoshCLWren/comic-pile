@@ -308,22 +308,24 @@ test('real releases and dependency fragments retain declared browser routes', ()
   }
 });
 
-test('retired identity-inbox handlers retain all seven native same-path contracts', () => {
+test('identity-inbox v2 resources retain all seven native contracts and Rust ingress', () => {
   const native = JSON.parse(readFileSync(
-    path.join(repoRoot, 'native/contracts/same-path-runtime.openapi.json'), 'utf8',
+    path.join(repoRoot, 'native/contracts/v2-runtime.openapi.json'), 'utf8',
   ));
+  const fragment = liveFragment('identity-inbox');
   const expected = [
-    ['GET', '/api/v1/identity-inbox'],
-    ['GET', '/api/v1/identity-inbox/search/issues'],
-    ['GET', '/api/v1/identity-inbox/{mapping_id}'],
-    ['POST', '/api/v1/identity-inbox/{mapping_id}/confirm'],
-    ['POST', '/api/v1/identity-inbox/{mapping_id}/defer'],
-    ['POST', '/api/v1/identity-inbox/{mapping_id}/reject'],
-    ['POST', '/api/v1/identity-inbox/{mapping_id}/skip'],
+    ['GET', '/api/v2/identity-inbox'],
+    ['GET', '/api/v2/identity-inbox/issue-matches'],
+    ['GET', '/api/v2/identity-inbox/{mapping_id}'],
+    ['POST', '/api/v2/identity-inbox/{mapping_id}/confirmations'],
+    ['POST', '/api/v2/identity-inbox/{mapping_id}/deferrals'],
+    ['POST', '/api/v2/identity-inbox/{mapping_id}/rejections'],
+    ['POST', '/api/v2/identity-inbox/{mapping_id}/skips'],
   ];
   for (const [method, route] of expected) {
     const op = native.paths[route]?.[method.toLowerCase()];
     assert.ok(op?.operationId, 'missing native operationId for ' + method + ' ' + route);
     assert.ok(Object.keys(op.responses).some(code => code.startsWith('2')), route);
+    assert.equal(liveOperation(fragment, method, route).dest, '/api/native_roll.rs', route);
   }
 });

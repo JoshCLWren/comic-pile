@@ -188,7 +188,7 @@ test('Option E explains strict Julix blockers consistently and supports direct l
     await listReader.screenshot({ path: `test-results/option-e-reader-${width}-${theme}.png` })
   }
   if (!enabled) {
-    const marked = await page.request.post(`/api/v1/issues/${firstIssue}:markRead`, { headers })
+    const marked = await page.request.post(`/api/v2/issues/${firstIssue}/read-markers`, { headers })
     expect(marked.ok(), await marked.text()).toBeTruthy()
     await page.goto(`/thread/${later.id}`)
     await expect(page.getByRole('region', { name: 'Next issue availability' })).toContainText('Next unread: #1')
