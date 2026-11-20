@@ -1281,8 +1281,8 @@ async fn converted_legacy_cycle_does_not_block_creation_but_reader_cycle_does() 
         path.iter().any(|edge| {
             edge["source_issue_name"] == "X-Force #3"
                 && edge["target_issue_name"] == "X-Force #1"
-                && edge["source_thread_id"] == _series
-                && edge["target_thread_id"] == _series
+                && edge["source_thread_id"] == series
+                && edge["target_thread_id"] == series
                 && edge["prerequisite_origin"] == "reader"
                 && edge["origin"].as_str().unwrap().contains("prerequisite")
         }),
