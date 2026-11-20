@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import asyncpg
 import pytest_asyncio
+
+# Parity tests import the canonical Python models from the repository root.
+# pytest only adds this directory to sys.path when invoked with a native/ file
+# path, so make the root importable without relying on an external PYTHONPATH.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 _PARITY_DATABASE_LOCK = 4_535_000_002
 
