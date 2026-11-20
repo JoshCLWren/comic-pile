@@ -215,10 +215,16 @@ fn normalized_metadata(
     }
     let image = obj.get("image").and_then(Value::as_object);
     let cover = image.and_then(|v| {
-        ["original_url", "super_url", "medium_url", "small_url"]
-            .iter()
-            .filter_map(|k| v.get(*k).and_then(Value::as_str))
-            .find(|s| !s.is_empty())
+        [
+            "original_url",
+            "super_url",
+            "medium_url",
+            "small_url",
+            "thumb_url",
+        ]
+        .iter()
+        .filter_map(|k| v.get(*k).and_then(Value::as_str))
+        .find(|s| !s.is_empty())
     });
     let person = compact_refs(&result["person_credits"]);
     let present = person.as_array().is_some_and(|v| !v.is_empty());
