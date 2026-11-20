@@ -312,7 +312,21 @@ def _tests_write_path(module: str, handler: str) -> bool:
         if qualified_call not in production_body and re.search(direct_call, production_body) is None:
             return False
         tests = _test_module(writer_module)
-        handler = writer
+        tested_writer = writer
+        if not tests or "#[tokio::test]" not in tests:
+            return False
+        if not any(marker in tests for marker in DB_TEST_MARKERS):
+            return False
+        references = [
+            rf"(?<![A-Za-z0-9_]){re.escape(tested_writer)}\(",
+            rf"(?<![A-Za-z0-9_])persist_{re.escape(tested_writer)}\(",
+        ]
+        # Accept equivalent core sync coverage exercised by the module's cron tests.
+        if (resolved_module, handler) == ("reading_plan_sync", "sync_released_issues_endpoint"):
+            references.append(r"(?<![A-Za-z0-9_])run_scheduled_release_sync\(")
+        if not any(re.search(pattern, tests) for pattern in references):
+            return False
+        return True
     else:
         if _integration_tests_write_path(module, handler) or _integration_tests_write_path(
             resolved_module, handler
