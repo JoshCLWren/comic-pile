@@ -126,6 +126,46 @@ function renderPage() {
   )
 }
 
+function canonicalNextBoundary(title: string) {
+  return {
+    threads: { 1: {
+      thread_id: 1,
+      state: 'available',
+      summary: `${title} #1 is available next.`,
+      blockers: [],
+      next: { issue: {
+        issue_id: 401,
+        thread_id: 1,
+        thread_title: title,
+        issue_number: '1',
+        label: `${title} #1`,
+        volume_label: null,
+      } },
+    } },
+  }
+}
+
+function canonicalNextCard(title: string): IssueCard {
+  return {
+    issue_id: 401,
+    thread_id: 1,
+    thread_title: title,
+    issue_number: '1',
+    status: 'unread',
+    rating: null,
+    mapping_state: 'confirmed',
+    has_confirmed_identity: true,
+    cover_image_url: 'https://comicvine.example/saga-1.jpg',
+  }
+}
+
+function setVisibilityState(state: DocumentVisibilityState): void {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value: state,
+  })
+}
+
 it('renders a thread without legacy rating content', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
