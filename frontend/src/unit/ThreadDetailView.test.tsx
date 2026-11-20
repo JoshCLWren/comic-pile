@@ -274,12 +274,17 @@ it('updates the Next issue title immediately after a same-tab rename and rename 
     next_unread_issue_number: '1',
     notes: null,
   })
-  mockedThreadsApiGet.mockImplementation(async () => currentThread() as never)
+  mockedThreadsApiGet.mockImplementation(
+    // SAFETY: the fixture supplies every thread field this rename scenario reads.
+    async () => currentThread() as never,
+  )
   mockedThreadsApiUpdate.mockImplementation(async (_id, data) => {
     currentTitle = data.title ?? currentTitle
+    // SAFETY: the update response uses the same complete thread fixture as the read.
     return currentThread() as never
   })
   vi.mocked(readingBoundariesApi.batch).mockImplementation(
+    // SAFETY: the canonical boundary fixture supplies the complete Next-issue projection.
     async () => canonicalNextBoundary(currentTitle) as never,
   )
   const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockImplementation(
