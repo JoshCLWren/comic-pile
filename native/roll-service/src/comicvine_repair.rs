@@ -1232,6 +1232,25 @@ mod tests {
         assert!(normalized_metadata(&incomplete, 29319).is_err());
     }
     #[test]
+    fn thumbnail_only_artwork_survives_roster_and_deep_normalization() {
+        let result = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
+            "cover_date":"1988-03-01", "store_date":"1988-03-24",
+            "image":{"small_url":"", "thumb_url":"https://cv.example/thumb.jpg"},
+            "volume":{"id": 4001,"name":"Hellblazer"},
+            "person_credits":[], "character_credits":[], "team_credits":[],
+            "story_arc_credits":[], "date_last_updated":"2020-01-01T00:00:00+00:00"});
+        assert_eq!(
+            normalize_roster_issue_metadata(&result)["primary_image"],
+            json!("https://cv.example/thumb.jpg")
+        );
+        let (metadata, _, _, _) = normalized_metadata(&result, 29319).unwrap();
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://cv.example/thumb.jpg")
+        );
+    }
+
+    #[test]
     fn provider_timestamp_accepts_rfc3339_and_comicvine_space_format() {
         assert_eq!(
             provider_timestamp(&json!("2020-01-01T00:00:00+00:00")).as_deref(),

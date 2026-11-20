@@ -3148,6 +3148,20 @@ mod tests {
     }
 
     #[test]
+    fn roster_normalization_preserves_thumbnail_only_cover() {
+        let normalized = normalize_roster_issue(&json!({
+            "id": 99,
+            "issue_number": "5",
+            "volume": {"id": 9, "name": "Detective Comics"},
+            "image": {"small_url": "", "thumb_url": "https://cv.example/thumb.jpg"}
+        }));
+        assert_eq!(
+            normalized["primary_image"],
+            json!("https://cv.example/thumb.jpg")
+        );
+    }
+
+    #[test]
     fn roster_pages_are_validated_like_python() {
         assert!(matches!(
             roster_page(&json!({"number_of_total_results": 5}), 9),
