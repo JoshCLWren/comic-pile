@@ -2001,7 +2001,8 @@ async fn series_import_serializes_with_sibling_queue_writer() {
     let (state, token, csrf, user_id, _guard) =
         setup_user_with("cvv2-series-sibling", 8, None).await;
     set_key(true);
-    let (volume_id, existing_thread_id) = {
+    let volume_id = 77;
+    let existing_thread_id = {
         let conn = state.pool.get().await.unwrap();
         let thread_id = thread(&conn, user_id, "Reused").await;
         let _issue = issue(&conn, thread_id, "1", 1).await;
@@ -2027,7 +2028,7 @@ async fn series_import_serializes_with_sibling_queue_writer() {
         )
         .await
         .unwrap();
-        (volume_id, thread_id)
+        thread_id
     };
     provider_ok(
         &state,
@@ -2071,10 +2072,11 @@ async fn series_import_serializes_with_sibling_queue_writer() {
     let sibling_thread = body["thread_id"].as_i64().unwrap() as i32;
     assert_ne!(sibling_thread, existing_thread_id, "sibling import gets its own thread");
     let conn = state.pool.get().await.unwrap();
+    let thread_ids = vec![existing_thread_id, sibling_thread];
     let positions: Vec<i32> = conn
         .query(
             "SELECT queue_position FROM threads WHERE id = ANY($1) ORDER BY id",
-            &[&[existing_thread_id, sibling_thread]],
+            &[&thread_ids],
         )
         .await
         .unwrap()
