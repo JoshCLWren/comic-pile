@@ -1914,8 +1914,14 @@ pub async fn create_continuity_plan(
     }
 
     // Create the plan
-    let lanes_json: Vec<serde_json::Value> = payload
-        .lanes
+    // Strip client-supplied migration_contract — Python strips incoming contracts
+    // in both create and update because later migration checks trust this field
+    // as server-written proof.
+    let mut lanes_for_storage = payload.lanes.clone();
+    for lane in &mut lanes_for_storage {
+        lane.migration_contract = None;
+    }
+    let lanes_json: Vec<serde_json::Value> = lanes_for_storage
         .iter()
         .map(|l| serde_json::to_value(l).unwrap_or_default())
         .collect();
@@ -2172,6 +2178,7 @@ pub async fn update_continuity_plan(
     }
 
     // Preserve server-owned migration proof across ordinary lane replacement.
+    // Strip client-supplied contracts; only server-written contracts are trusted.
     let mut server_contracts: std::collections::HashMap<String, serde_json::Value> =
         std::collections::HashMap::new();
     if let Some(lanes) = prior_lanes.as_array() {
@@ -2189,6 +2196,9 @@ pub async fn update_continuity_plan(
     for lane in &mut payload.lanes {
         if let Some(contract) = server_contracts.get(&lane.id) {
             lane.migration_contract = Some(contract.clone());
+        } else {
+            // Strip any client-supplied contract for lanes without server contract
+            lane.migration_contract = None;
         }
     }
 
@@ -2229,16 +2239,53 @@ pub async fn update_continuity_plan(
         }
     }
 
+    // Check if this is an identity editor payload (nodes match membership view).
+    // Python preserves leftover nodes_json when submitted nodes match the membership
+    // view returned by GET, so non-issue nodes and annotations hidden by that view
+    // are not permanently removed when only renaming the plan.
+    let editor_nodes = editor_nodes_for_plan(&tx, plan_id, &prior_nodes).await?;
+    let is_identity_payload = {
+        let mut matches = true;
+        if editor_nodes.len() != payload.nodes.len() {
+            matches = false;
+        } else {
+            for (editor, incoming) in editor_nodes.iter().zip(payload.nodes.iter()) {
+                if editor.id != incoming.id
+                    || editor.node_type != incoming.node_type
+                    || editor.ref_id != incoming.ref_id
+                    || editor.lane_id != incoming.lane_id
+                    || editor.position != incoming.position
+                    || editor.label != incoming.label
+                    || editor.reader_role != incoming.reader_role
+                    || editor.reader_optional != incoming.reader_optional
+                    || editor.is_checkpoint != incoming.is_checkpoint
+                    || editor.checkpoint_target_ref_id != incoming.checkpoint_target_ref_id
+                    || editor.checkpoint_target_ref_ids != incoming.checkpoint_target_ref_ids
+                    || editor.convergence_gate != incoming.convergence_gate
+                {
+                    matches = false;
+                    break;
+                }
+            }
+        }
+        matches
+    };
+
     let lanes_json: Vec<serde_json::Value> = payload
         .lanes
         .iter()
         .map(|l| serde_json::to_value(l).unwrap_or_default())
         .collect();
-    let nodes_json: Vec<serde_json::Value> = payload
-        .nodes
-        .iter()
-        .map(|n| serde_json::to_value(n).unwrap_or_default())
-        .collect();
+    let nodes_json: Vec<serde_json::Value> = if is_identity_payload {
+        // Preserve prior nodes_json (including non-issue nodes and annotations)
+        prior_nodes.as_array().cloned().unwrap_or_default()
+    } else {
+        payload
+            .nodes
+            .iter()
+            .map(|n| serde_json::to_value(n).unwrap_or_default())
+            .collect()
+    };
     let lanes_value = serde_json::Value::Array(lanes_json);
     let nodes_value = serde_json::Value::Array(nodes_json);
 
@@ -4023,7 +4070,7 @@ mod tests {
             reader_optional: None,
             is_checkpoint: false,
             checkpoint_target_ref_id: None,
-            checkpoint_target_ref_ids: Vec::new(),
+            checkpoint_target_ref_ids: None,
             convergence_gate: Vec::new(),
         }
     }
