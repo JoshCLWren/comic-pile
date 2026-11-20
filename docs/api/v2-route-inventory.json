@@ -572,7 +572,8 @@
         "grows_with_data": false,
         "max_statements": 4,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
       },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -598,7 +599,8 @@
         "basis": "preview path: option diagnostics 1 (+2 tx) or confirm path adds lock+delete+reload; worst case shown; refine via parity harness",
         "max_statements": 8,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
       }
     },
     {
@@ -618,7 +620,8 @@
         "grows_with_data": false,
         "max_statements": 2,
         "proof_reference": "native/roll-service/src/reading_list.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
       },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -641,7 +644,8 @@
         "basis": "auth 1 + lock 1 + owned-issue check 1 + list insert 1 + graph_preflight 1 + entries load 1 + one entry insert 1 (+2 tx control); grows with entry count",
         "max_statements": 9,
         "proof_reference": "native/roll-service/src/reading_list.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
       },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -664,7 +668,8 @@
         "grows_with_data": false,
         "max_statements": 6,
         "proof_reference": "native/roll-service/src/reading_list.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
       },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -687,7 +692,8 @@
         "grows_with_data": false,
         "max_statements": 3,
         "proof_reference": "native/roll-service/src/reading_list.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
       },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -710,7 +716,8 @@
         "basis": "auth 1 + lock 1 + old entries load 1 + owned-issue check 1 + list update 1 + entries delete 1 + one entry insert 1 + graph_preflight 1 + new entries load 1 + list reload 1 (+2 tx control); grows with entry count",
         "max_statements": 13,
         "proof_reference": "native/roll-service/src/reading_list.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
       },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
@@ -733,7 +740,8 @@
         "grows_with_data": false,
         "max_statements": 6,
         "proof_reference": "native/roll-service/src/reading_list.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
       },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
