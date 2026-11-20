@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '../query/queryKeys'
 import {
@@ -27,10 +27,16 @@ function findMatchingAdoptionPlans(
   sourceTitle: string | null,
 ): ContinuityPlanListItem[] {
   if (!source || !sourceTitle) return []
-  const normalizedTitle = sourceTitle.trim().toLowerCase()
+  const sourceNames = new Set(
+    [
+      source.name,
+      sourceTitle,
+      `CBL adoption for ${source.source_path}`,
+    ].map((name) => name.trim().toLowerCase()),
+  )
   return plans.filter(
     (plan) =>
-      planMatchesSource(plan, source) || plan.name.trim().toLowerCase() === normalizedTitle,
+      planMatchesSource(plan, source) || sourceNames.has(plan.name.trim().toLowerCase()),
   )
 }
 
@@ -39,21 +45,24 @@ export function useCblAdoptionTarget(
   source: CBLSourceListDiscoveryItem | null,
   sourceTitle: string | null,
 ) {
-  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null)
   const sourceId = source?.id ?? null
-  useEffect(() => {
-    setSelectedPlanId(null)
-  }, [sourceId])
-
+  const [selection, setSelection] = useState<{
+    sourceId: number
+    planId: number
+  } | null>(null)
   const plansQuery = useQuery({
-    queryKey: queryKeys.readingPlans.list(),
+    queryKey: queryKeys.cblSources.adoptionTargets(sourceId ?? 0),
     queryFn: continuityPlansApi.list,
     enabled: sourceId !== null,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    retry: false,
   })
   const matchingPlans = useMemo(
     () => findMatchingAdoptionPlans(plansQuery.data ?? [], source, sourceTitle),
     [plansQuery.data, source, sourceTitle],
   )
+  const selectedPlanId = selection?.sourceId === sourceId ? selection.planId : null
   const selectedPlan = matchingPlans.find((plan) => plan.id === selectedPlanId) ?? null
 
   return {
@@ -67,7 +76,9 @@ export function useCblAdoptionTarget(
     planCheckPending: sourceId !== null && (plansQuery.isPending || plansQuery.isFetching),
     planCheckFailed: sourceId !== null && plansQuery.isError,
     mustChooseTarget: matchingPlans.length > 0,
-    chooseTarget: setSelectedPlanId,
-    resetTarget: () => setSelectedPlanId(null),
+    chooseTarget: (planId: number) => {
+      if (sourceId !== null) setSelection({ sourceId, planId })
+    },
+    resetTarget: () => setSelection(null),
   }
 }
