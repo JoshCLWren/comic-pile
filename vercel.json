@@ -400,20 +400,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/taste/discoveries$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "^/api/v2/creators/(?!compare$|discoveries$|summaries$|team\\-chemistry$)[^/]+$",
       "methods": [
         "GET"
