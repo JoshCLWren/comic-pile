@@ -223,23 +223,24 @@ fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
         .route("/api/metrics", get(native_metrics))
-        .route("/api/v1/identity-inbox", get(native_dispatch))
-        .route("/api/v1/identity-inbox/search/issues", get(native_dispatch))
-        .route("/api/v1/identity-inbox/{mapping_id}", get(native_dispatch))
+        .route("/api/v1/metrics", get(native_metrics))
+        .route("/api/v2/identity-inbox", get(native_dispatch))
+        .route("/api/v2/identity-inbox/issue-matches", get(native_dispatch))
+        .route("/api/v2/identity-inbox/{mapping_id}", get(native_dispatch))
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/confirm",
+            "/api/v2/identity-inbox/{mapping_id}/confirmations",
             post(native_dispatch),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/defer",
+            "/api/v2/identity-inbox/{mapping_id}/deferrals",
             post(native_dispatch),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/reject",
+            "/api/v2/identity-inbox/{mapping_id}/rejections",
             post(native_dispatch),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/skip",
+            "/api/v2/identity-inbox/{mapping_id}/skips",
             post(native_dispatch),
         )
         .route(
@@ -257,14 +258,9 @@ fn app() -> Router {
             "/api/v2/reading-sessions/{session_id}/details",
             get(native_dispatch),
         )
-        .route("/api/undo/{session_id}/snapshots", get(native_dispatch))
-        .route("/api/v1/undo/{session_id}/snapshots", get(native_dispatch))
+        .route("/api/v2/undo/{session_id}/snapshots", get(native_dispatch))
         .route(
-            "/api/undo/{session_id}/undo/{snapshot_id}",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+            "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
             post(native_dispatch),
         )
         .route("/api/v2/roll/dice-command", post(native_dispatch))
@@ -296,14 +292,14 @@ fn app() -> Router {
         .route("/api/v2/roll/eligible-issue-ids", get(native_dispatch))
         .route("/api/v2/demo-roll", get(native_demo))
         .route("/api/v2/reading-boundaries", post(native_dispatch))
-        .route("/api/v1/reading-orders/", get(native_dispatch))
+        .route("/api/v2/reading-orders/", get(native_dispatch))
         .route(
-            "/api/v1/reading-orders/{reading_order_id}/items",
+            "/api/v2/reading-orders/{reading_order_id}/items",
             post(native_dispatch),
         )
         .route("/api/v1/cron/release-sync", get(native_dispatch))
-        .route("/api/v1/reading-plan-sync/status", get(native_dispatch))
-        .route("/api/v1/reading-plan-sync/sync", post(native_dispatch))
+        .route("/api/v2/reading-plan-sync/status", get(native_dispatch))
+        .route("/api/v2/reading-plan-sync/runs", post(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))
@@ -370,20 +366,12 @@ fn app() -> Router {
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))
+        .route("/api/v2/dependencies/blocked", get(native_dispatch))
         .route(
             "/api/v2/dependencies/{dependency_id}",
-            delete(native_dispatch),
-        )
-        .route("/api/v1/dependencies/blocked", get(native_dispatch))
-        .route("/api/v1/dependencies/", post(native_dispatch))
-        .route("/api/v1/dependencies/{dependency_id}", get(native_dispatch))
-        .route(
-            "/api/v1/dependencies/{dependency_id}",
-            patch(native_dispatch),
-        )
-        .route(
-            "/api/v1/dependencies/{dependency_id}",
-            delete(native_dispatch),
+            get(native_dispatch)
+                .patch(native_dispatch)
+                .delete(native_dispatch),
         )
         .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))
         .route(
@@ -450,12 +438,16 @@ fn app() -> Router {
         )
         .route("/api/v2/analytics/metrics", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
-        .route("/api/v1/issues/{issue_id}", get(native_dispatch))
-        .route("/api/v1/issues/{issue_id}", post(native_dispatch))
-        .route("/api/v1/issues:bulkMarkRead", post(native_dispatch))
-        .route("/api/v1/issues:bulkMarkUnread", post(native_dispatch))
+        .route("/api/v2/issues/{issue_id}", get(native_dispatch))
         .route(
-            "/api/v1/issues/{issue_id}/reader-context",
+            "/api/v2/issues/{issue_id}/read-markers",
+            post(native_dispatch).delete(native_dispatch),
+        )
+        .route("/api/v2/issues/{issue_id}/position", put(native_dispatch))
+        .route("/api/v2/issue-read-markers", post(native_dispatch))
+        .route("/api/v2/issue-read-marker-removals", post(native_dispatch))
+        .route(
+            "/api/v2/issues/{issue_id}/reader-context",
             get(native_dispatch),
         )
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
@@ -499,8 +491,24 @@ fn app() -> Router {
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(native_dispatch),
         )
+        // Canonical native v2 ComicVine read routes (#4835, split chunk A).
+        .route("/api/v2/comicvine/search/series", get(native_dispatch))
+        .route("/api/v2/comicvine/resolve", get(native_dispatch))
         .route(
-            "/api/v1/issues/{issue_id}/dependencies",
+            "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+            get(native_dispatch),
+        )
+        // Native v2 ComicVine routes (#4835, split chunk B).
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/issues/{issue_id}/dependencies",
             get(native_dispatch),
         )
         .route(
@@ -515,52 +523,46 @@ fn app() -> Router {
             "/api/v1/continuity-rules/{rule_id}",
             delete(native_dispatch),
         )
-        .route("/api/v1/continuity-plans/", get(native_dispatch))
-        .route("/api/v1/continuity-plans/", post(native_dispatch))
         .route(
-            "/api/v1/continuity-plans/from-reading-order",
+            "/api/v2/continuity-plans/",
+            get(native_dispatch).post(native_dispatch),
+        )
+        .route(
+            "/api/v2/continuity-plans/from-reading-order",
             post(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/",
+            "/api/v2/continuity-plans/release-sources/",
             post(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/{source_id}",
-            patch(native_dispatch),
+            "/api/v2/continuity-plans/release-sources/{source_id}",
+            patch(native_dispatch).delete(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/{source_id}",
-            delete(native_dispatch),
-        )
-        .route("/api/v1/continuity-plans/{plan_id}", get(native_dispatch))
-        .route("/api/v1/continuity-plans/{plan_id}", put(native_dispatch))
-        .route(
-            "/api/v1/continuity-plans/{plan_id}",
-            delete(native_dispatch),
+            "/api/v2/continuity-plans/{plan_id}",
+            get(native_dispatch)
+                .put(native_dispatch)
+                .delete(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/membership",
+            "/api/v2/continuity-plans/{plan_id}/membership",
             get(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            post(native_dispatch).delete(native_dispatch),
+        )
+        .route(
+            "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
             post(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
-            delete(native_dispatch),
-        )
-        .route(
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/",
             get(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
             get(native_dispatch),
         )
         .route("/api/v2/releases", get(native_dispatch))
@@ -813,11 +815,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn v1_issue_read_ingress_preserves_same_path_and_requires_auth() {
+    async fn v2_issue_read_ingress_reaches_rust_and_requires_auth() {
         for uri in [
-            "/api/v1/issues/7",
+            "/api/v2/issues/7",
             "/api/v1/issues/7/comicvine",
-            "/api/v1/issues/7/dependencies",
+            "/api/v2/issues/7/dependencies",
         ] {
             let mut router = app();
             let response = router
@@ -852,14 +854,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn v1_issue_read_state_ingress_preserves_same_path_and_requires_auth() {
+    async fn v2_issue_read_state_ingress_reaches_rust_and_requires_auth() {
         for (method, uri) in [
-            ("GET", "/api/v1/issues/7/reader-context"),
-            ("POST", "/api/v1/issues/7:markRead"),
-            ("POST", "/api/v1/issues/7:markUnread"),
-            ("POST", "/api/v1/issues/7:move"),
-            ("POST", "/api/v1/issues:bulkMarkRead"),
-            ("POST", "/api/v1/issues:bulkMarkUnread"),
+            ("GET", "/api/v2/issues/7/reader-context"),
+            ("POST", "/api/v2/issues/7/read-markers"),
+            ("DELETE", "/api/v2/issues/7/read-markers"),
+            ("PUT", "/api/v2/issues/7/position"),
+            ("POST", "/api/v2/issue-read-markers"),
+            ("POST", "/api/v2/issue-read-marker-removals"),
         ] {
             let mut router = app();
             let response = router
@@ -1130,6 +1132,41 @@ mod tests {
             response.headers().get("x-comicpile-api-runtime").unwrap(),
             "rust"
         );
+    }
+
+    #[tokio::test]
+    async fn comicvine_v2_ingress_preserves_canonical_paths_and_requires_auth() {
+        for (method, uri) in [
+            ("GET", "/api/v2/comicvine/search/series?q=batman"),
+            ("GET", "/api/v2/comicvine/resolve?input=batman"),
+            ("GET", "/api/v2/comicvine/series/42/issues"),
+            ("GET", "/api/v2/comicvine/issues/7/identity"),
+            ("GET", "/api/v2/comicvine/issues/7/metadata:corrections"),
+            // Ingress samples for every native v2 ComicVine operation.
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} must be served by the native ingress"
+            );
+        }
     }
 
     #[tokio::test]

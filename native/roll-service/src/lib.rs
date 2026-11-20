@@ -9,8 +9,10 @@ pub mod catalog_commit;
 pub mod catalog_series_mapping_preview;
 pub mod cbl_catalog;
 pub mod comicvine_issue;
+pub mod comicvine_limits;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
+pub mod comicvine_v2;
 pub mod config;
 pub mod continuity_plans;
 pub mod continuity_plans_project_preview;
@@ -135,6 +137,8 @@ pub struct AppState {
     /// Effective Option E setting (see [`option_e_setting`]); injectable so
     /// tests choose it per state instead of mutating process environment.
     pub option_e: bool,
+    /// Cache, rolling budget and cooldown for browser-called ComicVine routes.
+    pub comicvine_limits: comicvine_limits::ComicVineLimits,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -220,6 +224,7 @@ impl AppState {
             connection_recovery: true,
             outbound,
             option_e: config.option_e,
+            comicvine_limits: comicvine_limits::ComicVineLimits::default(),
         })
     }
 
@@ -498,6 +503,8 @@ fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
         "/api/v1/cron/release-sync" => {
             reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
         }
+        // Volume rosters page through ComicVine before answering (#4835).
+        path if comicvine_v2::needs_roster_deadline(path) => comicvine_v2::ROSTER_REQUEST_DEADLINE,
         _ => default_timeout,
     }
 }
@@ -703,22 +710,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/reading-sessions/{session_id}/details",
             get(session_details::get_session_details),
         )
-        // Undo snapshots list (issue #4839)
+        // Undo snapshots list and restore (issues #4839, #4838/#4335)
         .route(
-            "/api/undo/{session_id}/snapshots",
+            "/api/v2/undo/{session_id}/snapshots",
             get(undo_snapshots::list_undo_snapshots),
         )
         .route(
-            "/api/v1/undo/{session_id}/snapshots",
-            get(undo_snapshots::list_undo_snapshots),
-        )
-        // Undo apply snapshot (issue #4839)
-        .route(
-            "/api/undo/{session_id}/undo/{snapshot_id}",
-            post(undo_apply::undo_to_snapshot),
-        )
-        .route(
-            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+            "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
             post(undo_apply::undo_to_snapshot),
         )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
@@ -730,11 +728,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(reading_boundary::reading_boundary_batch_v2),
         )
         .route(
-            "/api/v1/reading-orders/",
+            "/api/v2/reading-orders/",
             get(reading_orders::list_reading_orders),
         )
         .route(
-            "/api/v1/reading-orders/{reading_order_id}/items",
+            "/api/v2/reading-orders/{reading_order_id}/items",
             post(reading_orders::insert_reading_order_item),
         )
         .route(
@@ -742,11 +740,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(reading_plan_sync::scheduled_release_sync_cron),
         )
         .route(
-            "/api/v1/reading-plan-sync/status",
+            "/api/v2/reading-plan-sync/status",
             get(reading_plan_sync::get_sync_status),
         )
         .route(
-            "/api/v1/reading-plan-sync/sync",
+            "/api/v2/reading-plan-sync/runs",
             post(reading_plan_sync::sync_released_issues_endpoint),
         )
         .route(
@@ -791,21 +789,24 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}",
             post(thread_ordering::post_thread_action),
         )
-        // Same single-segment technique for `{issue_id}:markRead|markUnread|move`.
         .route(
-            "/api/v1/issues/{issue_id}",
-            post(issue_read_state::post_issue_action),
+            "/api/v2/issues/{issue_id}/read-markers",
+            post(issue_read_state::create_read_marker).delete(issue_read_state::delete_read_marker),
         )
         .route(
-            "/api/v1/issues:bulkMarkRead",
-            post(issue_read_state::bulk_mark_issues_read),
+            "/api/v2/issues/{issue_id}/position",
+            put(issue_read_state::put_issue_position),
         )
         .route(
-            "/api/v1/issues:bulkMarkUnread",
-            post(issue_read_state::bulk_mark_issues_unread),
+            "/api/v2/issue-read-markers",
+            post(issue_read_state::create_read_markers),
         )
         .route(
-            "/api/v1/issues/{issue_id}/reader-context",
+            "/api/v2/issue-read-marker-removals",
+            post(issue_read_state::remove_read_markers),
+        )
+        .route(
+            "/api/v2/issues/{issue_id}/reader-context",
             get(reader_context::get_issue_reader_context),
         )
         .route(
@@ -964,46 +965,41 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(dependencies::delete_dependency),
         )
         .route(
-            "/api/v1/dependencies/blocked",
+            "/api/v2/dependencies/blocked",
             get(legacy_dependencies::blocked),
         )
-        .route("/api/v1/dependencies/", post(legacy_dependencies::create))
         .route(
-            "/api/v1/dependencies/{dependency_id}",
+            "/api/v2/dependencies/{dependency_id}",
             get(legacy_dependencies::get),
         )
         .route(
-            "/api/v1/dependencies/{dependency_id}",
+            "/api/v2/dependencies/{dependency_id}",
             patch(legacy_dependencies::update),
         )
-        .route(
-            "/api/v1/dependencies/{dependency_id}",
-            delete(legacy_dependencies::delete),
-        )
         .route("/api/v2/activity", get(activity::list_activity))
-        .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
+        .route("/api/v2/identity-inbox", get(identity_inbox::list_inbox))
         .route(
-            "/api/v1/identity-inbox/search/issues",
+            "/api/v2/identity-inbox/issue-matches",
             get(identity_inbox::search_issues),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}",
+            "/api/v2/identity-inbox/{mapping_id}",
             get(identity_inbox::get_inbox_item),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/confirm",
+            "/api/v2/identity-inbox/{mapping_id}/confirmations",
             post(identity_inbox::confirm),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/defer",
+            "/api/v2/identity-inbox/{mapping_id}/deferrals",
             post(identity_inbox::defer),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/reject",
+            "/api/v2/identity-inbox/{mapping_id}/rejections",
             post(identity_inbox::reject),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/skip",
+            "/api/v2/identity-inbox/{mapping_id}/skips",
             post(identity_inbox::skip),
         )
         // Issue Identity / CBL Adoption family (#4843).
@@ -1043,7 +1039,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
         )
-        .route("/api/v1/issues/{issue_id}", get(issue_read::get_issue))
+        .route("/api/v2/issues/{issue_id}", get(issue_read::get_issue))
         .route(
             "/api/v1/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
@@ -1060,8 +1056,30 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(comicvine_resolution::series_import_status),
         )
+        // Canonical native v2 ComicVine read routes (#4835, split chunk A).
         .route(
-            "/api/v1/issues/{issue_id}/dependencies",
+            "/api/v2/comicvine/search/series",
+            get(comicvine_v2::search_series),
+        )
+        .route(
+            "/api/v2/comicvine/resolve",
+            get(comicvine_v2::resolve_input),
+        )
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+            get(comicvine_v2::series_issues),
+        )
+        // Native v2 ComicVine routes (#4835, split chunk B).
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity",
+            get(comicvine_v2::get_issue_identity),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+            get(comicvine_v2::list_corrections),
+        )
+        .route(
+            "/api/v2/issues/{issue_id}/dependencies",
             get(issue_read::get_issue_dependencies),
         )
         .route(
@@ -1159,63 +1177,63 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         // Continuity plans v1 routes (cutover from Python)
         .route(
-            "/api/v1/continuity-plans/",
+            "/api/v2/continuity-plans/",
             get(continuity_plans::list_continuity_plans),
         )
         .route(
-            "/api/v1/continuity-plans/",
+            "/api/v2/continuity-plans/",
             post(continuity_plans::create_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}",
+            "/api/v2/continuity-plans/{plan_id}",
             get(continuity_plans::get_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}",
+            "/api/v2/continuity-plans/{plan_id}",
             put(continuity_plans::update_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}",
+            "/api/v2/continuity-plans/{plan_id}",
             delete(continuity_plans::delete_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/membership",
+            "/api/v2/continuity-plans/{plan_id}/membership",
             get(continuity_plans::get_continuity_plan_membership),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
             post(continuity_plans::link_plan_dependency_edge),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
             delete(continuity_plans::unlink_plan_dependency_edge),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+            "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
             post(continuity_plans::confirm_plan_projection),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/",
             get(continuity_plans::list_release_sources),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
             get(continuity_plans::list_release_sources_for_reader),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/",
+            "/api/v2/continuity-plans/release-sources/",
             post(continuity_plans::create_release_source),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/{source_id}",
+            "/api/v2/continuity-plans/release-sources/{source_id}",
             patch(continuity_plans::update_release_source),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/{source_id}",
+            "/api/v2/continuity-plans/release-sources/{source_id}",
             delete(continuity_plans::delete_release_source),
         )
         .route(
-            "/api/v1/continuity-plans/from-reading-order",
+            "/api/v2/continuity-plans/from-reading-order",
             post(continuity_plans::adopt_reading_order),
         )
         .route(
@@ -1361,6 +1379,20 @@ mod tests {
         assert_eq!(
             request_timeout_for("/api/v2/maintenance/comicvine-metadata-repairs", default),
             Duration::from_secs(50)
+        );
+        for roster_read in [
+            "/api/v2/comicvine/series/42/issues",
+            "/api/v2/comicvine/resolve",
+        ] {
+            assert_eq!(
+                request_timeout_for(roster_read, default),
+                comicvine_v2::ROSTER_REQUEST_DEADLINE,
+                "{roster_read}"
+            );
+        }
+        assert_eq!(
+            request_timeout_for("/api/v2/comicvine/search/series", default),
+            default
         );
         assert_eq!(
             request_timeout_for("/api/v1/roll/bootstrap", default),

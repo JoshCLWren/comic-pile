@@ -592,7 +592,7 @@ export interface SetCurrentIssueResponse {
 export type BugReportResponse = components['schemas']['BugReportResponse']
 
 /**
- * Reader-context response from GET /v1/issues/{issue_id}/reader-context
+ * Reader-context response from GET /v2/issues/{issue_id}/reader-context
  * As defined in issue #1401
  */
 export interface ReaderContextResponse {

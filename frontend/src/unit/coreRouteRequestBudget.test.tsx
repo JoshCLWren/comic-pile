@@ -466,7 +466,7 @@ describe('core route request budgets', () => {
       'GET /v2/users/me/preferences': 1,
     })
     expect(requestCounts(adapterCalls)).toEqual({
-      'GET /v1/identity-inbox?limit=1&offset=0': 1,
+      'GET /v2/identity-inbox?limit=1&offset=0': 1,
     })
   })
 

@@ -121,10 +121,10 @@ pub async fn list_undo_snapshots(
     }))
 }
 
-/// Documentation-only operation for the unversioned undo snapshots.
+/// Documentation-only operation for the undo snapshots list.
 #[utoipa::path(
     get,
-    path = "/api/undo/{session_id}/snapshots",
+    path = "/api/v2/undo/{session_id}/snapshots",
     tag = "undo",
     params(("session_id" = i32, Path, description = "Owned reading session")),
     responses(
@@ -138,30 +138,10 @@ pub async fn list_undo_snapshots(
 #[allow(dead_code)]
 pub fn list_undo_snapshots_documentation() {}
 
-/// Documentation-only operation for the versioned undo snapshots.
-#[utoipa::path(
-    get,
-    path = "/api/v1/undo/{session_id}/snapshots",
-    tag = "undo",
-    params(("session_id" = i32, Path, description = "Owned reading session")),
-    responses(
-        (status = 200, description = "Session restore snapshots", body = UndoSnapshotsResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Session not found"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn list_undo_snapshots_v1_documentation() {}
-
-/// OpenAPI document for the undo snapshots same-path surface.
+/// OpenAPI document for the undo snapshots surface.
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(
-        list_undo_snapshots_documentation,
-        list_undo_snapshots_v1_documentation
-    ),
+    paths(list_undo_snapshots_documentation),
     components(schemas(
         UndoSnapshotItem,
         UndoSnapshotsResponse
@@ -194,21 +174,18 @@ mod tests {
     use utoipa::OpenApi;
 
     #[test]
-    fn undo_snapshots_openapi_covers_both_same_paths() {
+    fn undo_snapshots_openapi_covers_v2_path() {
         let document = serde_json::to_value(UndoSnapshotsApi::openapi()).expect("openapi");
         let paths = document["paths"].as_object().expect("paths");
-        assert!(paths.contains_key("/api/undo/{session_id}/snapshots"));
-        assert!(paths.contains_key("/api/v1/undo/{session_id}/snapshots"));
-        for path in [
-            "/api/undo/{session_id}/snapshots",
-            "/api/v1/undo/{session_id}/snapshots",
-        ] {
-            let operation = &document["paths"][path]["get"];
-            assert!(operation["operationId"].is_string());
-            assert!(operation["responses"]["200"].as_object().is_some());
-            assert!(operation["responses"]["404"].as_object().is_some());
-            assert!(operation["security"].is_array());
-        }
+        let path = "/api/v2/undo/{session_id}/snapshots";
+        assert!(paths.contains_key(path));
+        assert!(!paths.contains_key("/api/undo/{session_id}/snapshots"));
+        assert!(!paths.contains_key("/api/v1/undo/{session_id}/snapshots"));
+        let operation = &document["paths"][path]["get"];
+        assert!(operation["operationId"].is_string());
+        assert!(operation["responses"]["200"].as_object().is_some());
+        assert!(operation["responses"]["404"].as_object().is_some());
+        assert!(operation["security"].is_array());
         assert!(document["components"]["schemas"]["UndoSnapshotsResponse"].is_object());
         assert!(document["components"]["schemas"]["UndoSnapshotItem"].is_object());
     }

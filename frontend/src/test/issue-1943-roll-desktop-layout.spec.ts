@@ -222,13 +222,13 @@ async function installRatingRoutes(page: Page, state: RatingStateRoutes): Promis
   await page.route('**/v1/reading-order-groups/threads/*/groups', (route) =>
     route.fulfill({ json: state.groups }),
   )
-  await page.route('**/v1/issues/*/reader-context', (route) =>
+  await page.route('**/v2/issues/*/reader-context', (route) =>
     route.fulfill({ json: state.readerContext }),
   )
   await page.route('**/v1/issues/*/comicvine', (route) =>
     route.fulfill({ json: state.comicvine }),
   )
-  await page.route('**/v1/comicvine/issues/*/identity', (route) =>
+  await page.route('**/v2/comicvine/issues/*/identity', (route) =>
     route.fulfill({ json: state.identity }),
   )
 }
