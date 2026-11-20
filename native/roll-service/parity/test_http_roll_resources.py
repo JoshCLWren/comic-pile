@@ -265,6 +265,26 @@ async def test_scoped_roll_resources_match_the_canonical_schema() -> None:
             "pool_reason": "ready",
         }
 
+        # Snoozing every face of the d4 window exhausts the pool instead of
+        # refilling from the two deeper-ranked candidates (MQA-ROLL-014).
+        exhausted = await _run_example(
+            {
+                **env,
+                "RUST_ROLL_TEST_URI": "/api/v2/roll/eligible-issue-ids?"
+                + urlencode(
+                    {"snoozed": ",".join(str(thread_id) for thread_id in owner_thread_ids[:4])}
+                ),
+            }
+        )
+        assert exhausted["status"] == 200, exhausted
+        assert exhausted["eligible_statements"] == 1, exhausted
+        assert exhausted["body"] == {
+            "die": 4,
+            "issue_ids": [],
+            "thread_ids": [],
+            "pool_reason": "ready",
+        }
+
         malformed = await _run_example(
             {
                 **env,
