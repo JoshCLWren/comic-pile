@@ -508,7 +508,9 @@ def active_lease(signal: LeaseSignal | None, now: datetime) -> tuple[bool, str |
     if owner is None:
         # Multiple owners or no owner: multiple means ambiguous/unsafe.
         owners = sorted(
-            label for label in signal.labels if OWNER_RE.fullmatch(label) and label != "factory:unowned"
+            label
+            for label in signal.labels
+            if OWNER_RE.fullmatch(label) and label != "factory:unowned"
         )
         if len(owners) > 1:
             return True, f"ambiguous active owners on {signal.target}"
@@ -861,8 +863,17 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo", help="GitHub repo (owner/name) for PR/issue/protection lookups")
     p.add_argument("--remote", default="origin", help="Git remote to inspect (default: origin)")
-    p.add_argument("--age-days", type=int, default=DEFAULT_AGE_DAYS, help="Minimum age in days (default: 14)")
-    p.add_argument("--apply", action="store_true", help="Delete eligible remote branches (default: dry-run)")
+    p.add_argument(
+        "--age-days",
+        type=int,
+        default=DEFAULT_AGE_DAYS,
+        help="Minimum age in days (default: 14)",
+    )
+    p.add_argument(
+        "--apply",
+        action="store_true",
+        help="Delete eligible remote branches (default: dry-run)",
+    )
     p.add_argument("--format", choices=("text", "json"), default="text", help="Report format")
     p.add_argument("--report-file", help="Write report output to this file")
     p.add_argument("--all-branches", action="store_true", help="Evaluate all remote branches, not just factory/local/backup scope")
