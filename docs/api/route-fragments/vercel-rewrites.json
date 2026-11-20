@@ -11,6 +11,7 @@
     "custom-cbl",
     "demo",
     "dependencies",
+    "identity-inbox",
     "issue-identity-cbl-catalog",
     "issues",
     "metrics",
@@ -145,6 +146,55 @@
     },
     {
       "src": "^/api/v1/dependencies/blocked$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/identity\\-inbox$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/identity\\-inbox/[^/]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/identity\\-inbox/[^/]+/confirm$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/identity\\-inbox/[^/]+/defer$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/identity\\-inbox/[^/]+/reject$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/identity\\-inbox/[^/]+/skip$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/identity\\-inbox/search/issues$",
       "methods": [
         "GET"
       ],
