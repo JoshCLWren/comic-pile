@@ -800,40 +800,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/creators": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Document the same-path native creators list using its actual response type. */
-        get: operations["list_creators_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/creators/summaries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Document native creator summaries with the mounted query and response types. */
-        get: operations["get_summaries_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/dependencies/": {
         parameters: {
             query?: never;
@@ -10842,82 +10808,6 @@ export interface operations {
         requestBody?: never;
         responses: {
             204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    list_creators_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                search: string | null;
-                sort: string | null;
-                limit: number | null;
-                offset: number | null;
-                min_ratings: number | null;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Creator list */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatorListResponse"];
-                };
-            };
-            /** @description Invalid filters */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_summaries_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                keys: string | null;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Creator summaries */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatorSummariesResponse"];
-                };
-            };
-            /** @description Invalid creator keys */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
                 headers: {
                     [name: string]: unknown;
                 };
