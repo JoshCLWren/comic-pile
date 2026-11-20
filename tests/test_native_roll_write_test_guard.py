@@ -94,7 +94,7 @@ WRITE_SQL_RE = re.compile(
     re.IGNORECASE,
 )
 ROUTE_REGISTRATION_RE = re.compile(
-    r'\.route\(\s*"(?P<route>[^"]+)"\s*,\s*(?P<body>(?:(?:get|post|patch|put|delete|head|options)\s*\([^()]*\))(?:\s*\.\s*(?:get|post|patch|put|delete|head|options)\s*\([^()]*\))*)\s*\)',
+    r'\.route\(\s*"(?P<route>[^"]+)"\s*,\s*(?P<body>(?:(?:get|post|patch|put|delete|head|options)\s*\([^()]*\))(?:\s*\.\s*(?:get|post|patch|put|delete|head|options)\s*\([^()]*\))*)\s*,?\s*\)',
     re.DOTALL | re.IGNORECASE,
 )
 ROUTE_HANDLER_RE = re.compile(
