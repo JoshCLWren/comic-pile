@@ -264,10 +264,8 @@ export default function ThreadDetailView() {
       void issueCardsQuery.refetch()
     }
     document.addEventListener('visibilitychange', onViewFocus)
-    window.addEventListener('focus', onViewFocus)
     return () => {
       document.removeEventListener('visibilitychange', onViewFocus)
-      window.removeEventListener('focus', onViewFocus)
     }
   }, [refetch, boundaryQuery.refetch, legacyBlockingInfo.refetch, issueCardsQuery.refetch])
 
