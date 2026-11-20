@@ -1115,7 +1115,7 @@ async fn editor_nodes_for_plan(
                 reader_optional: row.get(6),
                 is_checkpoint: row.get(7),
                 checkpoint_target_ref_id: None,
-                checkpoint_target_ref_ids: Vec::new(),
+                checkpoint_target_ref_ids: None,
                 convergence_gate: Vec::new(),
             }
         });
@@ -1488,7 +1488,7 @@ async fn compile_plan_rules(
         let mut filtered_targets: Vec<(String, i32)> = Vec::new();
         for (target_kind, target_ref_id) in targets {
             let should_skip = if node.node_type == "issue" && target_kind == "issue" {
-                if let (Some((source_thread, source_pos)), Some((target_thread, target_pos))) = (
+                if let (Some(&(source_thread, source_pos)), Some(&(target_thread, target_pos))) = (
                     issue_thread_pos.get(&node.ref_id),
                     issue_thread_pos.get(&target_ref_id),
                 ) {
@@ -2356,7 +2356,7 @@ pub async fn update_continuity_plan(
     for node in &payload.nodes {
         if node.is_checkpoint && node.node_type == "issue" {
             if let Some((checkpoint_issue_id, targets)) = existing_targets_by_source.get(&node.ref_id) {
-                existing_checkpoint_targets.insert(node.id.clone(), (Some(*checkpoint_issue_id), targets.clone()));
+                existing_checkpoint_targets.insert(node.id.clone(), (*checkpoint_issue_id, targets.clone()));
             }
         }
     }
