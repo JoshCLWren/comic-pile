@@ -349,8 +349,8 @@ fn parse_snoozed(raw: Option<&str>) -> Result<HashSet<i32>, ApiError> {
 
 /// Select the eligible identifiers the next offer can draw from.
 ///
-/// The die bounds the pool and the browser's temporary snoozes leave the queue
-/// before that bound, exactly as [`crate::roll_pool::offer_frontiers`] does for
+/// The die bounds the original pool before the browser's temporary snoozes are
+/// removed, exactly as [`crate::roll_pool::offer_frontiers`] does for
 /// `POST /api/v2/roll/offer`. When the reader has an unacted-on offer, the next
 /// offer snoozes it first: that steps the die up and excludes the pending
 /// thread, so the read projects the same outcome without persisting an event.
@@ -786,7 +786,7 @@ mod tests {
         assert_eq!(ints(&snoozed_eligible, "issue_ids"), vec![100, 400]);
         assert_eq!(ints(&snoozed_eligible, "thread_ids"), vec![10, 40]);
 
-        // A pool that is empty only because every eligible thread was
+        // A pool that is empty only because every top-die face was
         // browser-snoozed still reports `ready`, from the candidates before
         // the snoozes, so the frontend snoozed copy owns that explanation
         // rather than a blocked/completed empty-pool message.
