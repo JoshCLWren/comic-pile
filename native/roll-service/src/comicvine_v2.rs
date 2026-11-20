@@ -27,7 +27,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-use tokio_postgres::Transaction;
+use tokio_postgres::{Row, Transaction};
 
 // ---------------------------------------------------------------------------
 // Wire contract (mirrors app/schemas/comicvine_resolution.py).
@@ -933,7 +933,7 @@ pub async fn apply_correction(
     // This converts None JSON values to the string "None", absent keys/empty strings to None.
     // Use jsonb_typeof and jsonb ? to distinguish null from absent.
     let provider_value: Option<String> = tx
-        .query_opt::<Option<String>>(
+        .query_opt::<Row>(
             r#"
             SELECT 
                 CASE 
@@ -951,6 +951,9 @@ pub async fn apply_correction(
             &[&issue_id, &request.field_name],
         )
         .await
+        .map_err(db::query_error)?
+        .map(|row| row.get::<_, Option<String>>(0))
+        .transpose()
         .map_err(db::query_error)?
         .and_then(|value| match value.as_deref() {
             Some("") | None => None,
