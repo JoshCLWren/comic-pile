@@ -4719,6 +4719,56 @@
         ]
       }
     },
+    "/api/v2/comicvine/issues:import": {
+      "post": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "import_issue_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Imported thread, issue and identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportIssueResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "403": {
+            "description": "CSRF validation failed"
+          },
+          "404": {
+            "description": "Reading order not found"
+          },
+          "409": {
+            "description": "ComicVine issue already exists for this reader"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/comicvine/resolve": {
       "get": {
         "tags": [
