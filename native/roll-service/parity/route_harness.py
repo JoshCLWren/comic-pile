@@ -36,6 +36,28 @@ BLOCK_BYTES = 8192
 SQL_BUDGET_SOURCES = Path(__file__).resolve().parents[3] / "docs/api/sql-budget-sources.json"
 
 
+def declared_budget_max(method: str, path: str) -> int:
+    """Return the declared maximum statement count for one native route.
+
+    Args:
+        method: HTTP method of the declared operation.
+        path: Route path of the declared operation.
+
+    Returns:
+        The absolute ``max_statements`` from the editable source budget.
+    """
+    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
+    matching = [
+        entry
+        for entry in document["operations"]
+        if entry["method"] == method and entry["path"] == path
+    ]
+    assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
+    maximum = matching[0]["sql_budget"]["max_statements"]
+    assert isinstance(maximum, int) and maximum >= 0
+    return maximum
+
+
 def assert_declared_budget(method: str, path: str, *measurements: int | None) -> None:
     """Fail when a measured native route exceeds its declared source budget.
 
@@ -47,15 +69,7 @@ def assert_declared_budget(method: str, path: str, *measurements: int | None) ->
     Returns:
         None; invalid measurements raise AssertionError.
     """
-    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
-    matching = [
-        entry
-        for entry in document["operations"]
-        if entry["method"] == method and entry["path"] == path
-    ]
-    assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
-    maximum = matching[0]["sql_budget"]["max_statements"]
-    assert isinstance(maximum, int) and maximum >= 0
+    maximum = declared_budget_max(method, path)
     for measured in measurements:
         assert measured is not None, "pg_stat_statements must measure every covered route"
         assert measured <= maximum, (
@@ -78,7 +92,7 @@ class RouteMeasurement:
     db_bytes: int
     db_statements: int | None
     db_nested_statements: int | None
-    body: dict[str, object]
+    body: dict[str, object] | list[object] | None
 
 
 async def _role_statement_count(connection: AsyncConnection, *, toplevel: bool) -> int | None:
@@ -214,7 +228,7 @@ async def measure_route(
     xacts_after, blocks_after, statements_after = await db_counters(engine)
     nested_after = await db_nested_statements(engine)
     body = result.get("body")
-    assert isinstance(body, dict)
+    assert body is None or isinstance(body, (dict, list))
     measurement = RouteMeasurement(
         route=route,
         fixture=fixture,
