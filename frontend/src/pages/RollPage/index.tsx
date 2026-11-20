@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '../../query/queryKeys'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import {
@@ -14,6 +15,7 @@ import {
   useDismissPending,
   useOverrideRoll,
   useRoll,
+  useUnsnooze,
   useSetDie,
 } from '../../hooks/useRoll'
 import { useSnooze } from '../../hooks/useSnooze'
@@ -43,6 +45,7 @@ import { useToast } from '../../contexts/useToast'
 import { invalidateAfterUndo, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
 import { resolveRollSelectedDie } from './selectedDie'
 import { ThreadPool } from './components/ThreadPool'
+import { resolveSnoozedSeriesCovers } from './resolveSnoozedSeriesCovers'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
 import { RollModals } from './components/RollModals'
@@ -128,6 +131,7 @@ export default function RollPage() {
   const snoozeMutation = useSnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
+  const unsnoozeMutation = useUnsnooze()
   const shuffleQueueMutation = useShuffleQueue()
   const rateMutation = useRate()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
@@ -220,6 +224,7 @@ export default function RollPage() {
     state,
     snoozeMutation,
     rerollMutation: rollMutation,
+    unsnoozeMutation,
     enterRatingView: rating.enterRatingView,
     refetchBootstrap,
     onRefreshFailed: reportSnoozeRefreshFailed,
@@ -236,6 +241,7 @@ export default function RollPage() {
       snoozeMutation,
       moveToFrontMutation,
       moveToBackMutation,
+      unsnoozeMutation,
       shuffleQueueMutation,
     },
     refetchBootstrap,
@@ -337,6 +343,16 @@ export default function RollPage() {
   })
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
+  // Snoozed bootstrap summaries have no owned issue id. Reuse cached
+  // series projections, then at most one bounded Queue page; never scan an
+  // arbitrary number of pages just to paint a shelf thumbnail.
+  const snoozedCoverQuery = useQuery({
+    queryKey: queryKeys.roll.snoozedSeriesCovers(snoozedThreads.map((thread) => thread.id)),
+    queryFn: () => resolveSnoozedSeriesCovers(snoozedThreads, queryClient),
+    enabled: state.snoozedExpanded && snoozedThreads.length > 0 && !state.isRatingView,
+    // Reopening after mapping corrections must never retain a stale cover.
+    staleTime: 0,
+  })
   // Derived die drives the pool cutoff and 3D model; scoped-only with a d6
   // default (see `resolveRollSelectedDie` above).
   const effectiveDie = selectedDie
@@ -531,6 +547,7 @@ export default function RollPage() {
 
               snoozedThreads={snoozedThreads}
               snoozedCount={bootstrap?.snoozed_count ?? snoozedThreads.length}
+              snoozedCovers={snoozedCoverQuery.data}
               eligibleThreadIds={scopedEligibleIssueIds?.thread_ids ?? null}
               issueCards={scopedIssueCards ?? null}
               snoozedExpanded={state.snoozedExpanded}

@@ -13,7 +13,7 @@ import {
   useQueueThreads,
   useShuffleQueue,
 } from '../hooks/useQueue'
-import { useSession } from '../hooks/useSession'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useSnooze } from '../hooks/useSnooze'
 import {
   useCreateThread,
@@ -41,6 +41,7 @@ vi.mock('../hooks/useThread', () => ({
 vi.mock('../hooks/useQueue', () => ({
   useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
   useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
+  useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToPosition: vi.fn(),
@@ -48,7 +49,7 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
+vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
@@ -76,7 +77,7 @@ vi.mock('../contexts/useToast', () => ({
 }))
 
 const mockedUseQueueThreads = cast<ReturnType<typeof vi.fn>>(vi.mocked(useQueueThreads))
-const mockedUseSession = cast<ReturnType<typeof vi.fn>>(vi.mocked(useSession))
+const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
 const mockedUseSnooze = cast<ReturnType<typeof vi.fn>>(vi.mocked(useSnooze))
 
 class NoopIntersectionObserver {
@@ -161,7 +162,7 @@ it('offers a retry affordance when the next-page fetch fails', async () => {
     nextPageToken: 'page-2',
     loadMore,
   })
-  mockedUseSession.mockReturnValue({
+  mockedUseRollBootstrap.mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: vi.fn(),
   })
@@ -197,7 +198,7 @@ it('does not offer a retry affordance when there is no further page', async () =
     nextPageToken: null,
     loadMore: vi.fn().mockResolvedValue(undefined),
   })
-  mockedUseSession.mockReturnValue({
+  mockedUseRollBootstrap.mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: vi.fn(),
   })

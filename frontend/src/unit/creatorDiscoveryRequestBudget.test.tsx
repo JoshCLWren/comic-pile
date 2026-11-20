@@ -201,16 +201,16 @@ function makeCreatorPage(overrides: Partial<CreatorListResponse> = {}): CreatorL
 }
 
 const creatorHandlers = {
-  'GET /api/v1/creators': () => ({ data: makeCreatorPage() }),
-  'GET /api/v1/creators/team-chemistry': () => ({ data: teamChemistryFixture() }),
-  'GET /api/v1/creators/compare': () => ({ data: comparisonFixture() }),
-  'GET /api/v1/creators/creator%3A7': () => ({ data: creatorDetailFixture() }),
+  'GET /api/v2/creators': () => ({ data: makeCreatorPage() }),
+  'GET /api/v2/creators/team-chemistry': () => ({ data: teamChemistryFixture() }),
+  'GET /api/v2/creators/compare': () => ({ data: comparisonFixture() }),
+  'GET /api/v2/creators/creator%3A7': () => ({ data: creatorDetailFixture() }),
   'GET /api/v1/issue-identity/cbl-sources/browse': () => ({ data: cblBrowseFixture() }),
 } satisfies Record<string, LedgerHandler>
 
 function teamChemistryRequests() {
   return ledger.requests.filter(
-    (request) => request.url === 'GET /api/v1/creators/team-chemistry',
+    (request) => request.url === 'GET /api/v2/creators/team-chemistry',
   )
 }
 
@@ -310,7 +310,7 @@ describe('creator detail request budget', () => {
 
     expect(await screen.findByRole('heading', { name: 'Test Creator' })).toBeInTheDocument()
     expect(ledger.requests.map((request) => request.url)).toEqual([
-      'GET /api/v1/creators/creator%3A7?limit=50',
+      'GET /api/v2/creators/creator%3A7?limit=50',
     ])
     expect(teamChemistryRequests()).toHaveLength(0)
 
@@ -354,7 +354,7 @@ describe('creator search request and rendering contract', () => {
     installDomainLedger(
       {
         ...creatorHandlers,
-        'GET /api/v1/creators': (request) => {
+        'GET /api/v2/creators': (request) => {
           const term = request.query.search?.[0]?.toLowerCase() ?? ''
           const minimum = Number(request.query.min_ratings?.[0] ?? 0)
           const offset = Number(request.query.offset?.[0] ?? 0)
@@ -474,7 +474,7 @@ describe('creator request lifecycle', () => {
     const first = render(element)
     expect(await screen.findByRole('heading', { name: 'Creators you rated' })).toBeInTheDocument()
     await waitFor(() => expect(ledger.requests).toHaveLength(1))
-    expect(ledger.requests[0]?.url).toBe('GET /api/v1/creators?limit=20&sort=name')
+    expect(ledger.requests[0]?.url).toBe('GET /api/v2/creators?limit=20&sort=name')
     // #4500 integration: the library-wide team-chemistry read stays inert on
     // the default browse view until its own disclosure is opened.
     expect(teamChemistryRequests()).toHaveLength(0)
@@ -504,7 +504,7 @@ describe('comparison and CBL discovery request budgets', () => {
 
     await waitFor(() => expect(ledger.requests).toHaveLength(1))
     expect(ledger.requests[0]?.url).toBe(
-      'GET /api/v1/creators/compare?keys=creator%3A12%2Ccreator%3A7',
+      'GET /api/v2/creators/compare?keys=creator%3A12%2Ccreator%3A7',
     )
   })
 
@@ -543,6 +543,8 @@ describe('comparison and CBL discovery request budgets', () => {
         'GET /api/v2/threads': () => ({
           data: { threads: [], next_page_token: null, active_count: 0 },
         }),
+        'GET /api/v2/auth/csrf': () => ({ data: { csrf_token: 'test-csrf' } }),
+        'POST /api/v2/issues/cards': () => ({ data: { items: [] } }),
       },
       'cold crossovers',
     )
@@ -555,13 +557,24 @@ describe('comparison and CBL discovery request budgets', () => {
     )
 
     expect(await screen.findByRole('button', { name: /Annihilation/ })).toBeInTheDocument()
+    // Cold load fetches only the group list: collapsed groups render no issue
+    // cards, so their ids must not trigger metadata fetches (#4445).
     await waitFor(() => expect(ledger.requests).toHaveLength(1))
-    expect(ledger.requests[0]?.url).toBe('GET /api/v1/reading-order-groups/')
+    expect(ledger.requests.map((request) => request.url)).toEqual([
+      'GET /api/v1/reading-order-groups/',
+    ])
 
     ledger.beginAction('expand crossover')
     fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
 
-    await waitFor(() => expect(ledger.requests).toHaveLength(2))
-    expect(ledger.requests[1]?.url).toBe('GET /api/v2/threads?page_size=100')
+    // Expansion starts the bounded all-series read and exactly one bounded
+    // issue-card batch for the visible rows (CSRF precedes the POST); never
+    // one request per member row.
+    await waitFor(() => expect(ledger.requests).toHaveLength(4))
+    expect(ledger.requests.slice(1).map((request) => request.url).sort()).toEqual([
+      'GET /api/v2/auth/csrf',
+      'GET /api/v2/threads?page_size=100',
+      'POST /api/v2/issues/cards',
+    ].sort())
   })
 })

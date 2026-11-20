@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import type { CrossoverApiDeps } from '../hooks/useCrossovers'
+import { issueCardsApi } from '../services/issueCardsApi'
 
 const groupsApi = {
   list: vi.fn(),
@@ -52,6 +53,8 @@ const annihilation = {
     { id: 2, issue_id: null, thread_id: 22, series_title: 'Nova', issue_number: null },
   ],
 }
+
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -131,6 +134,32 @@ describe('CrossoversPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Annihilation 2 members/ }))
     expect(await screen.findByRole('button', { name: 'Rename' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+  })
+
+  it('batches card metadata only for the expanded group, not collapsed groups', async () => {
+    const fetchCards = vi.mocked(issueCardsApi.fetchCards)
+    fetchCards.mockClear()
+    fetchCards.mockResolvedValue([])
+    groupsApi.list.mockResolvedValue([
+      annihilation,
+      {
+        ...annihilation,
+        id: 8,
+        name: 'Secret Wars',
+        memberships: [
+          { id: 3, issue_id: 88, thread_id: null, series_title: 'Avengers', issue_number: '1' },
+        ],
+      },
+    ])
+
+    renderPage()
+    await screen.findByText(/Annihilation/)
+    expect(fetchCards).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /Annihilation 2 members/ }))
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledWith([11]))
+    // The collapsed group's issue is never fetched just to render the list.
+    expect(fetchCards).not.toHaveBeenCalledWith([88])
   })
 
   it('renames and deletes an existing crossover', async () => {

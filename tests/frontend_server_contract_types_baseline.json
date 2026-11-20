@@ -18,17 +18,12 @@
   ],
   "frontend/src/services/api-comicvine.ts": [
     "CanonicalCorrection",
-    "ComicVineComicPileMatch",
-    "ComicVineCreator",
     "ComicVineIssueCandidate",
-    "ComicVineIssueIntelligence",
-    "ComicVineRelatedIssue",
     "ComicVineResolveResponse",
     "ComicVineResolvedIssue",
     "ComicVineSeriesIssuesResponse",
     "ComicVineSeriesResult",
     "ComicVineSeriesSearchResponse",
-    "ComicVineStoryArc",
     "IssueIdentityMapping",
     "IssueIdentityResponse",
     "MetadataCorrectionsResponse",
@@ -49,10 +44,6 @@
     "SyncResponse",
     "SyncStatusResponse",
     "SyncStatusSource"
-  ],
-  "frontend/src/services/api-continuity-rules.ts": [
-    "ContinuityRuleCreate",
-    "ContinuityRuleResponse"
   ],
   "frontend/src/services/api-creators.ts": [
     "CreatorDetailResponse",
@@ -130,9 +121,6 @@
     "ThreadReadingOrdersResponse"
   ],
   "frontend/src/services/api-series-mapping.ts": [
-    "SeriesMappingCommitRequest",
-    "SeriesMappingCommitResponse",
-    "SeriesMappingCommitSeriesMapping",
     "SeriesMappingPreviewCounts",
     "SeriesMappingPreviewProviderSeries",
     "SeriesMappingPreviewRequest",
@@ -167,9 +155,6 @@
     "CreatorMetricCalculation",
     "CreatorMetricDrilldown",
     "CreatorMetricIssue",
-    "CreatorRatingDistributionDrilldown",
-    "CreatorRoleDrilldown",
-    "CreatorSeriesDrilldown",
     "CreatorTeamChemistryResponse",
     "CreatorTeamCoverage",
     "CreatorTeamIssueRef",
@@ -189,9 +174,5 @@
     "RollResponse",
     "SetCurrentIssueResponse",
     "SnoozeCorrectionInfo"
-  ],
-  "frontend/src/types/rollBootstrap.ts": [
-    "RollPrerequisiteSwitchRequest",
-    "RollPrerequisiteSwitchResponse"
   ]
 }

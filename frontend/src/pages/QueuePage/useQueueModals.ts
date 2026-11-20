@@ -17,7 +17,7 @@ interface QueueModalsParams {
   onCreated: () => Promise<void>
   onUpdated: () => Promise<void>
   onReactivated: () => Promise<void>
-  refetchSession: () => Promise<void>
+  refetchRollState: () => Promise<void>
   submitCreate: (input: ThreadCreatePayload) => Promise<{ id?: number }>
   submitEdit: (input: {
     id: number
@@ -107,7 +107,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
     onCreated,
     onUpdated,
     onReactivated,
-    refetchSession,
+    refetchRollState,
     submitCreate,
     submitEdit,
     submitReactivate,
@@ -477,7 +477,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
     async (migratedThread: Thread) => {
       try {
         await onUpdated()
-        await refetchSession()
+        await refetchRollState()
       } catch (error) {
         console.error('Failed to refresh data after migration:', error)
         showToast('Failed to refresh data. Please refresh the page.', 'error')
@@ -486,7 +486,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
       setThreadToMigrate(null)
       setEditingThread(migratedThread)
     },
-    [onUpdated, refetchSession, showToast],
+    [onUpdated, refetchRollState, showToast],
   )
 
   const handleMigrationSkip = useCallback(() => {

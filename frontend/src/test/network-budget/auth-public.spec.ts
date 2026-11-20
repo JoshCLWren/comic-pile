@@ -96,14 +96,14 @@ test('a stored token still validates and redirects away from the credential form
       body: JSON.stringify({ id: 7, username: 'browser-reader', email: 'browser@example.test' }),
     }),
   )
-  await page.route('**/api/v1/users/me/preferences', route =>
+  await page.route('**/api/v2/users/me/preferences', route =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ theme: 'classic', user_id: 7 }),
     }),
   )
-  await page.route('**/api/v1/identity-inbox**', route =>
+  await page.route('**/api/v2/identity-inbox**', route =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

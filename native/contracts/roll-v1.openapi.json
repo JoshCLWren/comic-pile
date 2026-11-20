@@ -1,0 +1,164 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ComicPile native same-path Roll v1 API",
+    "description": "Generated contract for the native Roll handlers that retain their original method and path.",
+    "license": {
+      "name": ""
+    },
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/roll/events/{event_id}/recommendation-explanation": {
+      "get": {
+        "tags": [
+          "roll"
+        ],
+        "summary": "Also mount the legacy-handler alias.",
+        "operationId": "recommendation_explanation_legacy_documentation",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Roll event identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ordered explanation factors for the roll event",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationExplanationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Event does not exist or belongs to another reader"
+          },
+          "422": {
+            "description": "Event is not a roll event"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/roll/events/{event_id}/recommendation-explanation": {
+      "get": {
+        "tags": [
+          "roll"
+        ],
+        "summary": "Documentation-only operation for the mounted v1 same-path read.",
+        "operationId": "recommendation_explanation_documentation",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Roll event identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ordered explanation factors for the roll event",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationExplanationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Event does not exist or belongs to another reader"
+          },
+          "422": {
+            "description": "Event is not a roll event"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ExplainableFactor": {
+        "type": "object",
+        "description": "One human-readable explanation element returned by the API.",
+        "required": [
+          "code",
+          "label"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable code identifying the factor family."
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional extended context or sub-note."
+          },
+          "label": {
+            "type": "string",
+            "description": "Short user-facing description."
+          }
+        }
+      },
+      "RecommendationExplanationResponse": {
+        "type": "object",
+        "description": "Aggregate recommendation explanation for a single roll event.",
+        "required": [
+          "event_id",
+          "factors"
+        ],
+        "properties": {
+          "event_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The roll event whose recommendation context was explained."
+          },
+          "factors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExplainableFactor"
+            },
+            "description": "Ordered list of human-readable explanation elements."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

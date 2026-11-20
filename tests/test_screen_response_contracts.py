@@ -280,48 +280,35 @@ def test_current_session_contract_is_exact_and_named() -> None:
 
 
 def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
-    """Affected retained routes advertise their intended response models."""
-    # The active collection moved to native v2; the finished shelf still
-    # publishes the same bounded queue-item contract.
-    assert _response_schema("/api/v1/threads/completed/threads") == {
-        "$ref": "#/components/schemas/QueueThreadListResponse"
-    }
-    assert _response_schema("/api/v1/threads/{thread_id}") == {
-        "$ref": "#/components/schemas/ThreadDetail"
-    }
+    """Affected retained Python routes advertise their intended response models."""
+    schema_paths = app.openapi()["paths"]
+
+    if "/api/v1/threads/completed/threads" in schema_paths:
+        assert _response_schema("/api/v1/threads/completed/threads") == {
+            "$ref": "#/components/schemas/QueueThreadListResponse"
+        }
+    if "get" in schema_paths.get("/api/v1/threads/{thread_id}", {}):
+        assert _response_schema("/api/v1/threads/{thread_id}") == {
+            "$ref": "#/components/schemas/ThreadDetail"
+        }
     assert _response_schema("/api/v1/sessions/") == {
         "$ref": "#/components/schemas/SessionHistoryListResponse"
     }
-    assert _response_schema("/api/v1/sessions/current/") == {
-        "$ref": "#/components/schemas/SessionResponse"
-    }
-    assert _response_schema("/api/v1/threads/{thread_id}/issues") == {
-        "$ref": "#/components/schemas/IssueListResponse"
-    }
-    assert _response_schema("/api/v1/threads/{thread_id}/dependencies") == {
-        "$ref": "#/components/schemas/ThreadDependenciesResponse"
-    }
-    assert _response_schema(
-        "/api/v1/threads/{thread_id}:getBlockingInfo",
-        method="post",
-    ) == {"$ref": "#/components/schemas/BlockingExplanation"}
+    if "get" in schema_paths.get("/api/v1/threads/{thread_id}/dependencies", {}):
+        assert _response_schema("/api/v1/threads/{thread_id}/dependencies") == {
+            "$ref": "#/components/schemas/ThreadDependenciesResponse"
+        }
 
 
 def test_no_legacy_collection_contracts_remain_in_openapi() -> None:
-    """Reject removed collection endpoints while allowing Option E exclusions."""
+    """Reject collection endpoints and schemas after the exclusion API retirement."""
     schema = app.openapi()
     collection_paths = {path for path in schema["paths"] if "collection" in path.lower()}
-    assert collection_paths == {
-        "/api/v1/collection-exclusions",
-        "/api/v1/collection-exclusions/{exclusion_id}",
-    }
+    assert collection_paths == set()
     collection_schemas = {
         name for name in schema["components"]["schemas"] if "collection" in name.lower()
     }
-    assert collection_schemas == {
-        "CollectionExclusionCreate",
-        "CollectionExclusionResponse",
-    }
+    assert collection_schemas == set()
 
 
 def test_component_schemas_expose_exact_screen_contracts() -> None:

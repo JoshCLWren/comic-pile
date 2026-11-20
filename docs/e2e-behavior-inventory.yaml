@@ -174,7 +174,6 @@ behaviors:
     status: covered
     specs:
       - "issue-1943-roll-desktop-layout.spec.ts"
-      - "issue-1944-roll-layout-invariants.spec.ts"
       - "issue-2919-roll-desktop-layout-overlap.spec.ts"
       - "issue-2942-roll-layout-invariants.spec.ts"
       - "issue-2992-roll-density-guard.spec.ts"
@@ -278,13 +277,6 @@ behaviors:
     status: covered
     specs: ["issue-3429-bootstrap-recovery.spec.ts"]
 
-  - id: MOBILE-002
-    area: mobile
-    behavior: "Blocked Roll content stays usable on narrow mobile screens"
-    priority: P1
-    status: covered
-    specs: ["issue-2468-mobile-blocked-roll.spec.ts"]
-
   - id: MOBILE-003
     area: mobile
     behavior: "Narrow rating actions keep contained touch targets at tablet and phone widths"
@@ -316,13 +308,6 @@ behaviors:
     status: covered
     specs: ["reading-mode-acceptance.spec.ts", "reading-mode-quiz.spec.ts"]
 
-  - id: PLAN-001
-    area: feature
-    behavior: "Reading-plan CBL golden path and browser CBL flows work end to end"
-    priority: P1
-    status: covered
-    specs: ["reading-plan-cbl-golden-path.spec.ts", "cbl-browser.spec.ts"]
-
   # ---- Secondary features (P2) ----
   - id: CONT-001
     area: feature
@@ -343,7 +328,7 @@ behaviors:
     behavior: "Planner selections and dialogs stay visible and reachable at tablet widths"
     priority: P2
     status: covered
-    specs: ["issue-2299-planner-selected-title.spec.ts", "issue-2296-fix-issue-modal.spec.ts"]
+    specs: ["issue-2299-planner-selected-title.spec.ts"]
 
   - id: THEME-001
     area: feature

@@ -18,7 +18,7 @@ A recorded row is `METHOD /api/path?sorted-query xCOUNT`:
 
 ```text
 GET /api/v2/auth/me x1
-GET /api/v1/identity-inbox?limit=1&offset=0 x1
+GET /api/v2/identity-inbox?limit=1&offset=0 x1
 GET /api/v1/releases/?limit=20&offset=0 x1
 ```
 
@@ -54,8 +54,15 @@ Query keys and values are sorted, so parameter order never changes a budget.
 - Exact counts only; no timings, snapshots, or retry suppression.
 - Measure one UI action per window with `perform()` / `navigate()`; never
   assert a whole session as one number.
-- `settle()` waits for auth bootstrap, lazy chunk, and three stable request
-  turns, so it is deterministic without sleep-based waits.
+- Determinism by construction: `appNetworkHarness.tsx` imports every route
+  chunk once at module load, so `React.lazy` never waits on a cold transform.
+  `settle()` flushes event-loop turns (a macrotask boundary drains microtasks)
+  until one full turn changes nothing observable: requests, in-flight count,
+  auth status, route, and rendered text. `settleUntil(condition, description)`
+  waits on an explicit observable such as the redirect target. There are no
+  timeouts, retries, or fixed "settle N turns" windows; the flush cap is only a
+  runaway-loop failure guard. A flaky test here is deleted and redesigned this
+  way, never patched with longer waits.
 - Do not add private HTTP caching, feature flags, or disabled tests to make a
   budget pass. Fix the caller or record an allocated shared-file request.
 - StrictMode, warm navigation, focus/visibility, redirect, and cross-account

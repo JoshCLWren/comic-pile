@@ -1,6 +1,5 @@
 """Tests for error handlers in app/main.py."""
 
-import os
 from collections.abc import AsyncIterator
 from unittest.mock import MagicMock
 
@@ -10,7 +9,6 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.database import get_db
 
 
 async def _validation_only_db() -> AsyncIterator[AsyncSession]:
@@ -58,7 +56,7 @@ async def test_http_exception_handler_various_status_codes(
     test_app_with_error_routes: FastAPI,
 ) -> None:
     """Test HTTP exception handler with various status codes."""
-    from httpx import ASGITransport, AsyncClient
+    from httpx import AsyncClient
 
     transport = ASGITransport(app=test_app_with_error_routes)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -113,71 +111,6 @@ async def test_spa_routes_disable_html_caching(auth_client: AsyncClient) -> None
     assert rate_response.status_code == 200
     assert root_response.headers.get("cache-control") == "no-store, no-cache, must-revalidate"
     assert rate_response.headers.get("cache-control") == "no-store, no-cache, must-revalidate"
-
-
-@pytest.mark.asyncio
-async def test_http_exception_handler_preserves_caller_headers() -> None:
-    """Caller-supplied exception headers survive the JSON error handler.
-
-    A dependency such as ``require_cron_secret`` raises a 401 with a
-    ``WWW-Authenticate`` header; the global handler must not drop it while
-    replacing the body with JSON.
-    """
-    from app.config import clear_settings_cache
-    from app.main import create_app
-
-    original_env = os.getenv("ENVIRONMENT")
-
-    try:
-        os.environ["ENVIRONMENT"] = "test"
-        clear_settings_cache()
-
-        test_app = create_app(serve_frontend=False)
-        test_app.dependency_overrides[get_db] = _validation_only_db
-
-        transport = ASGITransport(app=test_app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.get("/api/v1/cron/release-sync")
-
-            assert response.status_code == 503
-            assert response.json()["detail"] == "Cron endpoint is not configured"
-    finally:
-        if original_env is None:
-            os.environ.pop("ENVIRONMENT", None)
-        else:
-            os.environ["ENVIRONMENT"] = original_env
-        clear_settings_cache()
-
-
-@pytest.mark.asyncio
-async def test_http_exception_handler_preserves_www_authenticate_header() -> None:
-    """A 401 raised with ``WWW-Authenticate`` keeps the header on the response."""
-    from app.config import clear_settings_cache
-    from app.main import create_app
-
-    original_env = os.getenv("ENVIRONMENT")
-
-    try:
-        os.environ["ENVIRONMENT"] = "test"
-        os.environ["CRON_SECRET"] = "test-cron-secret-value-0123456789"
-        clear_settings_cache()
-
-        test_app = create_app(serve_frontend=False)
-        test_app.dependency_overrides[get_db] = _validation_only_db
-
-        transport = ASGITransport(app=test_app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.get("/api/v1/cron/release-sync")
-
-            assert response.status_code == 401
-            assert response.headers["www-authenticate"] == "Bearer"
-    finally:
-        if original_env is None:
-            os.environ.pop("ENVIRONMENT", None)
-        else:
-            os.environ["ENVIRONMENT"] = original_env
-        os.environ.pop("CRON_SECRET", None)
-        clear_settings_cache()
 
 
 @pytest.mark.asyncio

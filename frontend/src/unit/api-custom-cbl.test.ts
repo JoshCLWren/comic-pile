@@ -64,10 +64,10 @@ describe('customCBLApi', () => {
     await expect(customCBLApi.searchIssues('Starman')).resolves.toEqual(matches)
     await expect(customCBLApi.searchIssues('Starman', 12)).resolves.toEqual(matches)
 
-    expect(client.get).toHaveBeenNthCalledWith(1, '/v1/custom-cbls/issue-search', {
+    expect(client.get).toHaveBeenNthCalledWith(1, '/v2/reading-lists/issue-candidates', {
       params: { q: 'Starman', limit: 30 },
     })
-    expect(client.get).toHaveBeenNthCalledWith(2, '/v1/custom-cbls/issue-search', {
+    expect(client.get).toHaveBeenNthCalledWith(2, '/v2/reading-lists/issue-candidates', {
       params: { q: 'Starman', limit: 12 },
     })
   })
@@ -92,12 +92,12 @@ describe('customCBLApi', () => {
 
     expect(client.post).toHaveBeenNthCalledWith(
       1,
-      '/v1/custom-cbls/9/reading-plans/18:apply',
+      '/v2/reading-lists/9/reading-plans/18/applications',
       { lane_id: null },
     )
     expect(client.post).toHaveBeenNthCalledWith(
       2,
-      '/v1/custom-cbls/9/reading-plans/18:apply',
+      '/v2/reading-lists/9/reading-plans/18/applications',
       { lane_id: 'main' },
     )
   })
@@ -108,7 +108,7 @@ describe('customCBLApi', () => {
 
     await expect(customCBLApi.exportXml(9)).resolves.toBe(xml)
 
-    expect(client.get).toHaveBeenCalledWith('/v1/custom-cbls/9/export', {
+    expect(client.get).toHaveBeenCalledWith('/v2/reading-lists/9/export', {
       responseType: 'text',
     })
   })

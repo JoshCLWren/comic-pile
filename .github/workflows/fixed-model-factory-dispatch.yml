@@ -108,6 +108,15 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: f74f612d4e7a6dec65a9c17f76596c1eb567a19e
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Initialize run-local scheduling memory
         run: echo "FACTORY_DISCOVERY_DIR=$RUNNER_TEMP/factory-discovery" >> "$GITHUB_ENV"
@@ -208,13 +217,23 @@ jobs:
       # repository's shared GITHUB_TOKEN budget. Writes keep the workflow
       # token, so no extra workflows are ever triggered. Absent or
       # under-permissioned Apps are a silent no-op.
+      # Resolve the existing App's client ID from authenticated GitHub metadata.
+      - name: Resolve existing read-only App client ID
+        id: read_app_identity
+        if: ${{ env.FACTORY_READER_APP_ID != '' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          FACTORY_APP_ID: ${{ secrets.FACTORY_READER_APP_ID }}
+          FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_READER_APP_PRIVATE_KEY }}
+        run: python3 .github/scripts/factory_app_client_id.py
       - name: Mint optional read-only factory App token
         id: read_token
-        if: ${{ env.FACTORY_READER_APP_ID != '' }}
+        if: ${{ steps.read_app_identity.outputs.client_id != '' }}
         continue-on-error: true
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.FACTORY_READER_APP_ID }}
+          client-id: ${{ steps.read_app_identity.outputs.client_id }}
           private-key: ${{ secrets.FACTORY_READER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
@@ -304,6 +323,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ inputs.target }}
           ACTION: ${{ inputs.action }}
+          # Keep targeted issue/PR handoffs on the same credential-availability
+          # contract as roster dispatch. These booleans prove configuration;
+          # no provider secret is ever passed to the controller.
+          FACTORY_HAS_NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY != '' }}
+          FACTORY_HAS_Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY != '' }}
+          FACTORY_HAS_OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY != '' }}
+          FACTORY_HAS_MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY != '' }}
+          FACTORY_HAS_ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY != '' }}
+          FACTORY_HAS_REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY != '' }}
+          FACTORY_HAS_POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY != '' }}
+          FACTORY_HAS_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
+          FACTORY_HAS_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY != '' }}
+          FACTORY_HAS_AION_API_KEY: ${{ secrets.AION_API_KEY != '' }}
+          FACTORY_HAS_COHERE_API_KEY: ${{ secrets.COHERE_API_KEY != '' }}
+          FACTORY_HAS_TYPHOON_API_KEY: ${{ secrets.TYPHOON_API_KEY != '' }}
+          FACTORY_HAS_AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY != '' }}
+          FACTORY_HAS_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          FACTORY_HAS_OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY != '' }}
+          FACTORY_HAS_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' }}
+          FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
         run: |
           set -Eeuo pipefail
           if ! [[ "$TARGET" =~ ^(issue|pr):([1-9][0-9]*)$ ]]; then
@@ -336,15 +375,6 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 .github/scripts/factory_migration_lane.py reconcile
-
-      - name: Retire exact-head PR attempts with exhausted no-progress repairs
-        if: steps.api_budget.outputs.allow == 'true' && !inputs.target
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -Eeuo pipefail
-          python3 .github/scripts/factory_no_progress_retirement.py
 
       - name: Check main health (block merges onto red main)
         if: steps.api_budget.outputs.allow == 'true' && !inputs.target
@@ -430,7 +460,7 @@ jobs:
           fi
 
           for candidate in "${ready_prs[@]}"; do
-            IFS=$'\t' read -r pr head pr_labels <<< "$candidate"
+            IFS=$'\t' read -r pr head _ <<< "$candidate"
             [[ -n "$pr" && -n "$head" ]] || continue
             if ! authorization="$(python3 "$review_controller" authorized --pr "$pr")"; then
               echo "Unable to verify semantic authorization for PR #${pr}; leaving it open" >&2
@@ -595,7 +625,7 @@ jobs:
           export FACTORY_ATTEMPT_HISTORY_CACHE="$history_cache_dir/comments.json"
           dispatch_assigned_worker() {
             local worker="$1"
-            local assignment kind attempt=1
+            local assignment kind reason attempt=1
 
             if ! assignment="$(python3 "$controller" assign --worker "$worker" --batch-reconciled)"; then
               echo "Factory ${worker}: controller assignment failed" >&2
@@ -604,8 +634,12 @@ jobs:
             kind="$(jq -r '.kind // empty' <<< "$assignment" 2>/dev/null || true)"
             case "$kind" in
               none)
-                echo "Factory ${worker}: no executable control-plane assignment"
-                consecutive_idle=$((consecutive_idle + 1))
+                reason="$(jq -r '.reason // "no_work"' <<< "$assignment" 2>/dev/null || echo no_work)"
+                if [[ "$reason" == "worker_unavailable" ]]; then
+                  echo "Factory ${worker}: unavailable this tick; trying next worker"
+                else
+                  echo "Factory ${worker}: no executable control-plane assignment"
+                fi
                 return 0
                 ;;
               issue|pr) ;;
@@ -616,7 +650,6 @@ jobs:
                 ;;
             esac
 
-            consecutive_idle=0
             echo "Factory ${worker} assignment: ${assignment}"
             while (( attempt <= 3 )); do
               echo "Starting Factory ${worker} (dispatch attempt ${attempt}/3)"
@@ -748,12 +781,6 @@ jobs:
           echo "Dispatching workers through centralized assignment: $workers"
           dispatched_count=0
           dispatch_failures=0
-          # Each `assign` re-evaluates the whole executable pool (~20 GitHub
-          # reads). Once several differently-sourced workers in a row find
-          # nothing, the shared pool is empty for this tick; stop instead of
-          # repeating the same reads for every remaining slot.
-          consecutive_idle=0
-          idle_stop="${FACTORY_IDLE_ASSIGN_STOP:-3}"
           budget_deferred=false
           budget_unreadable=false
           while IFS= read -r worker; do
@@ -772,10 +799,6 @@ jobs:
             if (( remaining_core < 450 )); then
               echo "::warning::REST quota reached worker reserve; deferring remaining workers"
               budget_deferred=true
-              break
-            fi
-            if (( consecutive_idle >= idle_stop )); then
-              echo "${consecutive_idle} consecutive workers found no executable work; ending this tick's batch"
               break
             fi
             dispatch_assigned_worker "$worker" || dispatch_failures=$((dispatch_failures + 1))

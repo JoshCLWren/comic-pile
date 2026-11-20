@@ -1,5 +1,5 @@
 //! Authenticated series-mapping commit (same-path Rust cutover for #4846).
-//! Preserves the Python wire contract: POST /api/v1/catalog/series-mappings/commit.
+//! Preserves the Python wire contract: POST /api/v2/series-mapping-commits.
 //! Preview token verification and plan/state-digest revalidation must remain
 //! compatible with the Python preview implementation until #4842 migrates preview.
 
@@ -8,7 +8,7 @@ use axum::{
     extract::{Json as AxumJson, State},
     Json,
 };
-use hmac::{Hmac, Mac};
+use hmac::{digest::KeyInit, Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -74,7 +74,7 @@ fn unauthorized(code: &str) -> ApiError {
     ApiError::Unauthorized(code.to_string())
 }
 
-fn now_f64() -> f64 {
+pub(crate) fn now_f64() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -95,7 +95,7 @@ fn hex_digest(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn hmac_sha256_hex(secret: &str, message: &str) -> Result<String, ApiError> {
+pub(crate) fn hmac_sha256_hex(secret: &str, message: &str) -> Result<String, ApiError> {
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
         .map_err(|_| ApiError::Internal("signature unavailable".to_string()))?;
     mac.update(message.as_bytes());
@@ -136,7 +136,7 @@ fn python_json_string(value: &str) -> String {
     ascii
 }
 
-fn canonical_json(v: &Value) -> String {
+pub(crate) fn canonical_json(v: &Value) -> String {
     match v {
         Value::Null => "null".to_string(),
         Value::Bool(b) => if *b { "true" } else { "false" }.to_string(),
@@ -246,7 +246,7 @@ async fn replay_receipt(
 /// OpenAPI path documentation for the series-mapping commit endpoint.
 #[utoipa::path(
     post,
-    path = "/api/v1/catalog/series-mappings/commit",
+    path = "/api/v2/series-mapping-commits",
     request_body = CommitRequest,
     responses(
         (status = 200, description = "Commit result", body = CommitResponse),
@@ -320,6 +320,7 @@ pub async fn commit_series_mapping_handler(
 
     // Rebuild plan and validate digest - delegate to plan builder
     let plan = build_plan_for_commit(
+        &state.outbound,
         &conn,
         user.id(),
         origin_issue_id,
@@ -553,7 +554,8 @@ async fn assert_no_confirmed_mapping_conflict(
 // Plan building - compatibility layer. This must produce the same state_digest
 // as Python for the same DB state. A full port is large; we implement the
 // DB-backed core and compute the digest in the same format.
-async fn build_plan_for_commit(
+pub(crate) async fn build_plan_for_commit(
+    outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
     origin_issue_id: i32,
@@ -566,6 +568,7 @@ async fn build_plan_for_commit(
     // flows as exercised by existing tests. It queries the same tables Python queries.
     // The digest format must match _plan_state_digest exactly.
     build_plan_db(
+        outbound,
         conn,
         user_id,
         origin_issue_id,
@@ -594,7 +597,16 @@ fn plan_state_digest(
         format!("basis={scope_basis}"),
     ];
     for row in rows {
-        let row_id = row.get("row_id").and_then(|v| v.as_str()).unwrap_or("");
+        // Python binds the digest to `_preview_row_id(issue_id)` — always the
+        // `issue:` prefix, never the `roster:` inventory prefix — so recompute
+        // it here instead of trusting the row's display row_id.
+        let row_id = match row.get("issue_id") {
+            Some(Value::Null) | None => "issue:None".to_string(),
+            Some(v) => match v.as_i64() {
+                Some(id) => format!("issue:{id}"),
+                None => format!("issue:{}", v.as_str().unwrap_or("None")),
+            },
+        };
         let issue_number = row
             .get("issue_number")
             .and_then(|v| v.as_str())
@@ -679,6 +691,7 @@ fn unavailable_plan(origin_issue_id: i32, basis: &str, scope_mode: &str) -> Valu
 // commit-time revalidation this is the same logic. We implement DB-only rebuild
 // covering the test scenarios and common cases.
 async fn build_plan_db(
+    outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
     origin_issue_id: i32,
@@ -722,6 +735,7 @@ async fn build_plan_db(
 
     if scope_mode == "queue_thread_bootstrap" {
         return build_queue_bootstrap_plan_db(
+            outbound,
             conn,
             user_id,
             origin_issue_id,
@@ -821,8 +835,11 @@ async fn build_plan_db(
         if origin_confirmed || linked_thread {
             // This lookup is best-effort only for locally confirmed series:
             // Python falls back to local rows on provider 503.
-            if let Ok((provider_info, roster)) =
-                crate::comicvine_repair::catalog_volume_roster(provider_series_external_id).await
+            if let Ok((provider_info, roster)) = crate::comicvine_repair::catalog_volume_roster(
+                outbound,
+                provider_series_external_id,
+            )
+            .await
             {
                 if let (Some(local), Some(fetched)) = (
                     series_info.as_mut().and_then(Value::as_object_mut),
@@ -881,7 +898,8 @@ async fn build_plan_db(
         // A brand-new provider volume is a normal valid preview. Rebuild its
         // complete roster instead of turning every signed preview into a 409.
         let (provider_series, fetched_roster) =
-            crate::comicvine_repair::catalog_volume_roster(provider_series_external_id).await?;
+            crate::comicvine_repair::catalog_volume_roster(outbound, provider_series_external_id)
+                .await?;
         series_info = Some(provider_series);
         issues_with_mappings = fetched_roster.clone();
         roster_rows = fetched_roster;
@@ -1363,6 +1381,7 @@ fn derive_scope_key_str(rows: &[Value], origin_issue_id: i32) -> String {
 
 #[allow(clippy::too_many_arguments)]
 async fn build_queue_bootstrap_plan_db(
+    outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
     origin_issue_id: i32,
@@ -1383,7 +1402,8 @@ async fn build_queue_bootstrap_plan_db(
     // The Queue preview relies on an actual, complete provider roster to
     // prove cardinality. Do not replace that evidence with local guesses.
     let (series_info, roster) =
-        crate::comicvine_repair::catalog_volume_roster(provider_series_external_id).await?;
+        crate::comicvine_repair::catalog_volume_roster(outbound, provider_series_external_id)
+            .await?;
     if roster.is_empty() {
         return Ok(unavailable_plan(
             origin_issue_id,
@@ -2239,7 +2259,10 @@ mod tests {
             )
             .await
             .expect("seed second valid mapping for origin issue");
+        let fake_outbound: std::sync::Arc<dyn crate::outbound::OutboundHttp> =
+            std::sync::Arc::new(crate::outbound::RecordingFakeOutbound::new());
         let plan = build_plan_db(
+            &fake_outbound,
             &connection,
             1,
             100,
@@ -2471,7 +2494,7 @@ mod tests {
     #[test]
     fn plan_digest_format() {
         let rows = vec![serde_json::json!({
-            "row_id": "issue:1", "issue_number": "1", "classification": "safe_exact_match",
+            "row_id": "issue:1", "issue_id": 1, "issue_number": "1", "classification": "safe_exact_match",
             "current_mapping_status": null, "provider": "comicvine", "external_id": "99",
             "thread_id": 5, "metadata_refresh_required": false
         })];
@@ -2486,5 +2509,360 @@ mod tests {
         );
         let expected_parts = "mode=confirmed_origin\nprovider=comicvine\nseries=123\norigin=1\nscope=exact:1:1\nbasis=exact_match_found\nissue:1|1|safe_exact_match||comicvine|99|5|False";
         assert_eq!(d, sha256_hex(expected_parts));
+    }
+
+    /// The commit path revalidates the Python-signed preview token, so the
+    /// digest it recomputes must equal Python's `_plan_state_digest` for the
+    /// same plan — including provider-inventory rows, whose `row_id` carries
+    /// the `roster:` prefix while Python binds the digest to `issue:{pid}`.
+    /// Expected values were produced by the production Python implementation
+    /// (stdlib only) for a 33-issue unconfirmed New Teen Titans (1980) thread
+    /// whose volume also holds the unmatched issues 34 and 35.
+    #[test]
+    fn plan_digest_matches_python_with_inventory_rows() {
+        let mut rows = Vec::new();
+        for i in 1..=33_i32 {
+            rows.push(serde_json::json!({
+                "row_id": format!("issue:{}", 1000 + i),
+                "issue_id": 1000 + i,
+                "issue_number": i.to_string(),
+                "classification": "safe_exact_match",
+                "current_mapping_status": null,
+                "provider": "comicvine",
+                "external_id": (5000 + i).to_string(),
+                "thread_id": 77,
+                "metadata_refresh_required": false,
+            }));
+        }
+        for (pid, number) in [(6001_i32, "34"), (6002_i32, "35")] {
+            rows.push(serde_json::json!({
+                "row_id": format!("roster:{pid}"),
+                "issue_id": pid,
+                "issue_number": number,
+                "classification": "unresolved",
+                "current_mapping_status": "unresolved",
+                "provider": "comicvine",
+                "external_id": pid.to_string(),
+                "thread_id": null,
+                "metadata_refresh_required": false,
+            }));
+        }
+        let d = plan_state_digest(
+            "comicvine",
+            "4321",
+            1010,
+            Some("exact:1010:1"),
+            "queue_thread_bootstrap_exact_match",
+            &rows,
+            "queue_thread_bootstrap",
+        );
+        assert_eq!(
+            d,
+            "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3"
+        );
+    }
+
+    /// #5170: the commit path must accept the 33-issue "New Teen Titans (1980)"
+    /// bootstrap preview end to end. The preview token below was minted by the
+    /// production Python implementation for this exact fixture (see the
+    /// `plan_digest_matches_python_with_inventory_rows` vector); the commit
+    /// revalidates against a rebuilt plan, so any digest drift fails as
+    /// `preview_stale`.
+    const NTT_PREVIEW_TOKEN: &str = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35"], "classification_digest": "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "55e0c0bfb4503be9038b790ee31a3e5111af3007dff3b012b6c2fb994afff620"}"#;
+
+    /// Same fixture plus an owned "Annual 1" row (issue 1040) that classifies as
+    /// `excluded_special`; minted by the production Python implementation.
+    const NTT_WITH_ANNUAL_PREVIEW_TOKEN: &str = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "Annual 1"], "classification_digest": "2f3ab052b3edd5cca76a9f3540ebd19c89fe2b72c6bb9bf43061e7b8e82279de", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "494886e582a5af26e0673ff4006a53b7da5170e6e0d7052bdc37ee1a06309869"}"#;
+
+    fn teen_titans_series_info() -> Value {
+        serde_json::json!({
+            "id": "4321",
+            "name": "New Teen Titans (1980)",
+            "publisher": {"id": 9, "name": "DC Comics"},
+            "start_year": 1980,
+            "count_of_issues": 35,
+            "site_detail_url": "https://comicvine.gamespot.com/volume/4050-4321/",
+            "image": null,
+        })
+    }
+
+    fn teen_titans_roster() -> Vec<Value> {
+        let mut roster = Vec::new();
+        for n in 1..=33_i32 {
+            let pid = 5000 + n;
+            roster.push(serde_json::json!({
+                "issue_id": pid,
+                "issue_number": n.to_string(),
+                "title": format!("Issue {n}"),
+                "thread_id": null,
+                "thread_title": null,
+                "current_mapping_status": "unresolved",
+                "provider": "comicvine",
+                "external_id": pid.to_string(),
+                "classification": "unresolved",
+                "_roster_only": true,
+                "_provider_metadata": {"name": format!("Issue {n}"), "issue_number": n.to_string()},
+            }));
+        }
+        for (pid, number) in [(6001_i32, "34"), (6002_i32, "35")] {
+            roster.push(serde_json::json!({
+                "issue_id": pid,
+                "issue_number": number,
+                "title": format!("Issue {number}"),
+                "thread_id": null,
+                "thread_title": null,
+                "current_mapping_status": "unresolved",
+                "provider": "comicvine",
+                "external_id": pid.to_string(),
+                "classification": "unresolved",
+                "_roster_only": true,
+                "_provider_metadata": {"name": format!("Issue {number}"), "issue_number": number},
+            }));
+        }
+        roster
+    }
+
+    async fn seed_teen_titans(connection: &tokio_postgres::Client) {
+        connection
+            .batch_execute(
+                r#"INSERT INTO users (id, username, created_at, is_admin)
+                 VALUES (1, 'ntt-commit-test', now(), false);
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, queue_position, status,
+                      total_issues, created_at, is_blocked, is_test, manual_creator_credits,
+                      queue_position_is_manual)
+                 VALUES (77, 1, 'New Teen Titans', 'Comic', 0, 1, 'active', 33, now(), false,
+                         false, '[]', false);"#,
+            )
+            .await
+            .expect("seed teen titans thread");
+        for n in 1..=33_i32 {
+            connection
+                .execute(
+                    "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+                     VALUES ($1, 77, $2, 'unread', now(), $3)",
+                    &[&(1000 + n), &n.to_string(), &n],
+                )
+                .await
+                .expect("seed teen titans issue");
+        }
+    }
+
+    fn commit_request(
+        token: &str,
+        idempotency_key: &str,
+        approved_row_ids: Vec<String>,
+    ) -> CommitRequest {
+        CommitRequest {
+            preview_token: token.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+            approved_row_ids,
+        }
+    }
+
+    async fn commit(
+        state: &std::sync::Arc<AppState>,
+        request: CommitRequest,
+    ) -> Result<Json<CommitResponse>, ApiError> {
+        commit_series_mapping_handler(
+            State(state.clone()),
+            crate::auth::AuthenticatedUser::for_test(1),
+            AxumJson(request),
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn bootstrap_clean_preview_commits_replays_and_stays_confirmed() {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _db = crate::test_support::reset_for_test(&state).await;
+        let connection = state.pool.get().await.expect("connection");
+        seed_teen_titans(&connection).await;
+        crate::test_support::install_test_volume_roster(
+            "4321",
+            teen_titans_series_info(),
+            teen_titans_roster(),
+        );
+
+        let approved: Vec<String> = (1001..=1033).map(|id| format!("issue:{id}")).collect();
+        let response = commit(
+            &state,
+            commit_request(NTT_PREVIEW_TOKEN, "ntt-clean-commit", approved.clone()),
+        )
+        .await;
+        let Json(response) = match response {
+            Ok(ok) => ok,
+            Err(err) => panic!("clean 33-issue preview must commit, got {}", err.detail()),
+        };
+        let expected_ids: Vec<i32> = (1001..=1033).collect();
+        assert_eq!(response.confirmed_issue_ids, expected_ids);
+        assert_eq!(response.needs_review_issue_ids, Vec::<i32>::new());
+        assert_eq!(response.series_mapping.status, "confirmed");
+        assert_eq!(
+            response.series_mapping.evidence_source,
+            "user_series_confirmation"
+        );
+
+        // Reload: confirmed mappings and the thread-series link survive.
+        let confirmed: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issue_external_identity_mappings m
+                 JOIN issues i ON i.id = m.issue_id
+                 WHERE i.thread_id = 77 AND m.status = 'confirmed'",
+                &[],
+            )
+            .await
+            .expect("reload mappings")
+            .get(0);
+        assert_eq!(confirmed, 33);
+        let series_link: bool = connection
+            .query_one(
+                "SELECT EXISTS (
+                   SELECT 1 FROM thread_external_series_mappings tsm
+                   JOIN external_identities e ON e.id = tsm.external_identity_id
+                   WHERE tsm.thread_id = 77 AND tsm.status = 'confirmed'
+                     AND e.entity_type = 'series' AND e.external_id = '4321'
+                 )",
+                &[],
+            )
+            .await
+            .expect("reload series link")
+            .get(0);
+        assert!(series_link);
+
+        // Retry with the same key and rows: replay returns the same logical result.
+        let replay = commit(
+            &state,
+            commit_request(NTT_PREVIEW_TOKEN, "ntt-clean-commit", approved.clone()),
+        )
+        .await;
+        let Json(replay) = match replay {
+            Ok(ok) => ok,
+            Err(err) => panic!("identical replay must succeed, got {}", err.detail()),
+        };
+        assert_eq!(
+            serde_json::to_value(&response).expect("original response JSON"),
+            serde_json::to_value(&replay).expect("replay response JSON"),
+        );
+
+        // Same key with a changed material request conflicts and keeps the
+        // original receipt.
+        let mut shortened = approved.clone();
+        shortened.pop();
+        let changed = commit(
+            &state,
+            commit_request(NTT_PREVIEW_TOKEN, "ntt-clean-commit", shortened),
+        )
+        .await;
+        assert!(matches!(
+            changed,
+            Err(ApiError::Conflict(code)) if code == ERROR_IDEMPOTENCY_CONFLICT
+        ));
+
+        crate::test_support::clear_test_volume_roster("4321");
+    }
+
+    #[tokio::test]
+    async fn bootstrap_commit_rejects_unapproved_rows_with_zero_writes() {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _db = crate::test_support::reset_for_test(&state).await;
+        let connection = state.pool.get().await.expect("connection");
+        seed_teen_titans(&connection).await;
+        connection
+            .execute(
+                "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (1040, 77, 'Annual 1', 'unread', now(), 40)",
+                &[],
+            )
+            .await
+            .expect("seed annual issue");
+        crate::test_support::install_test_volume_roster(
+            "4321",
+            teen_titans_series_info(),
+            teen_titans_roster(),
+        );
+
+        // Approving the excluded_special annual alongside safe rows is rejected
+        // before any write: unsafe rows must never be bulk-confirmed.
+        let mut with_annual: Vec<String> = (1001..=1033).map(|id| format!("issue:{id}")).collect();
+        with_annual.push("issue:1040".to_string());
+        let rejected = commit(
+            &state,
+            commit_request(
+                NTT_WITH_ANNUAL_PREVIEW_TOKEN,
+                "ntt-annual-reject",
+                with_annual,
+            ),
+        )
+        .await;
+        assert!(matches!(
+            rejected,
+            Err(ApiError::Unprocessable(code)) if code == ERROR_INVALID_APPROVED_ROW
+        ));
+        let writes: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issue_external_identity_mappings m
+                 JOIN issues i ON i.id = m.issue_id
+                 WHERE i.thread_id = 77",
+                &[],
+            )
+            .await
+            .expect("count mappings")
+            .get(0);
+        assert_eq!(writes, 0, "rejected commit must not persist any mapping");
+
+        // Provider inventory rows can never be approved either.
+        let rejected_inventory = commit(
+            &state,
+            commit_request(
+                NTT_WITH_ANNUAL_PREVIEW_TOKEN,
+                "ntt-inventory-reject",
+                vec!["roster:6001".to_string()],
+            ),
+        )
+        .await;
+        assert!(matches!(
+            rejected_inventory,
+            Err(ApiError::Unprocessable(code)) if code == ERROR_INVALID_APPROVED_ROW
+        ));
+
+        // The clean approvable subset still carries a valid token, and the
+        // annual remains unmapped: unsafe rows are never bulk-confirmed.
+        let annual_flag: bool = connection
+            .query_one(
+                "SELECT EXISTS (
+                   SELECT 1 FROM issue_external_identity_mappings m
+                   WHERE m.issue_id = 1040
+                 )",
+                &[],
+            )
+            .await
+            .expect("annual unmapped")
+            .get(0);
+        assert!(!annual_flag);
+
+        crate::test_support::clear_test_volume_roster("4321");
+    }
+
+    #[test]
+    fn python_preview_token_verifies_in_rust() {
+        let token = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35"], "classification_digest": "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "55e0c0bfb4503be9038b790ee31a3e5111af3007dff3b012b6c2fb994afff620"}"#;
+        let payload =
+            verify_preview_token("synthetic-native-test", token, 1).expect("python-minted token");
+        assert_eq!(payload["scope_key"], "exact:1010:1");
+        assert_eq!(payload["scope_mode"], "queue_thread_bootstrap");
+        assert_eq!(
+            payload["classification_digest"],
+            "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3"
+        );
+        // Tampering invalidates the signature.
+        let tampered = token.replace("exact:1010:1", "exact:1010:2");
+        assert!(verify_preview_token("synthetic-native-test", &tampered, 1).is_err());
+        // A different user cannot replay the preview.
+        assert!(verify_preview_token("synthetic-native-test", token, 2).is_err());
     }
 }

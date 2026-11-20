@@ -1,0 +1,23 @@
+# Rotisserie adopter configuration for Comic Pile.
+# Factory code lives in https://github.com/JoshCLWren/rotisserie/tree/main/factory.
+schema_version = 1
+
+[repository]
+host = "github.com"
+owner = "JoshCLWren"
+name = "comic-pile"
+
+[production]
+url = "https://comic-pile.vercel.app"
+
+[markers]
+# Existing issue and PR markers use this namespace; changing it orphans live claims.
+namespace = "comic-pile-factory"
+
+# Providers merge over Rotisserie's factory/defaults/providers.toml.
+[providers.gemini-free]
+provider = "google"
+credential = "GEMINI_API_KEY"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/openai"
+name = "Google Gemini API Free"
+headers = { "x-goog-api-client" = "comic-pile-factory-oai/1.0" }

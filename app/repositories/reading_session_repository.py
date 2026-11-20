@@ -10,13 +10,12 @@ qualifier so an auth change cannot mistake them for login-session revocation.
 See ``docs/READING_SESSION_NAMING.md``.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, ReadingSession, Snapshot, Thread
-from app.models.thread import normalize_format_value
+from app.models import Event, ReadingSession, Snapshot
 
 
 async def get_reading_session(db: AsyncSession, reading_session_id: int) -> ReadingSession | None:
@@ -344,22 +343,6 @@ async def detach_pending_thread_references_from_reading_sessions(
     )
 
 
-async def null_event_thread_references(db: AsyncSession, thread_ids: set[int]) -> None:
-    """Null out thread references on events pointing at deleted threads.
-
-    Args:
-        db: Database session.
-        thread_ids: Thread IDs whose event references should be nulled.
-    """
-    await db.execute(
-        update(Event)
-        .where(
-            Event.thread_id.in_(thread_ids) | Event.selected_thread_id.in_(thread_ids)
-        )
-        .values(thread_id=None, selected_thread_id=None)
-    )
-
-
 async def snapshot_thread_titles(db: AsyncSession, reading_session_id: int) -> dict[int, str]:
     """Recover last-known thread titles from a session's snapshots.
 
@@ -401,193 +384,3 @@ async def snapshot_thread_titles(db: AsyncSession, reading_session_id: int) -> d
                     titles[thread_id] = title
     return titles
 
-
-async def restore_reading_session_start(
-    db: AsyncSession,
-    session: ReadingSession,
-    snapshot: Snapshot,
-    user_id: int,
-) -> tuple[ReadingSession, list[Thread]]:
-    """Restore session to its initial state at session start.
-
-    Args:
-        db: Database session.
-        session: The owned session being restored.
-        snapshot: The "Session start" snapshot to replay.
-        user_id: The session owner for thread scoping.
-
-    Returns:
-        Tuple of (restored session, affected threads).
-    """
-    from app.repositories.thread_repository import threads_by_ids, delete_threads_by_ids
-    from app.models import Issue
-    from sqlalchemy import delete
-
-    # Get current threads for the user
-    current_threads_result = await db.execute(
-        select(Thread).where(Thread.user_id == user_id)
-    )
-    current_threads = current_threads_result.scalars().all()
-    current_thread_ids = {thread.id for thread in current_threads}
-
-    # Get thread IDs from snapshot
-    snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
-
-    # Delete threads that don't exist in the snapshot
-    threads_to_delete = current_thread_ids - snapshot_thread_ids
-    if threads_to_delete:
-        await null_event_thread_references(db, threads_to_delete)
-        await delete_threads_by_ids(db, threads_to_delete, user_id)
-
-    # Batch load existing threads to avoid N+1
-    existing_threads_map = await threads_by_ids(db, snapshot_thread_ids)
-
-    # Batch delete all issues for snapshot threads (recreated or cleared)
-    if snapshot_thread_ids:
-        await db.execute(delete(Issue).where(Issue.thread_id.in_(snapshot_thread_ids)))
-
-    # Get threads from snapshot (both existing and new)
-    affected_threads = []
-
-    for thread_id, state in snapshot.thread_states.items():
-        thread_id_int = int(thread_id)
-        thread = existing_threads_map.get(thread_id_int)
-        
-        if thread:
-            # Update existing thread
-            if "title" in state:
-                thread.title = state["title"]
-            if "format" in state:
-                thread.format = normalize_format_value(state["format"])
-            thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
-            thread.last_rating = state.get("last_rating", thread.last_rating)
-            thread.queue_position = state.get("queue_position", thread.queue_position)
-            thread.queue_position_is_manual = state.get(
-                "queue_position_is_manual", thread.queue_position_is_manual
-            )
-            thread.status = state.get("status", thread.status)
-            if "notes" in state:
-                thread.notes = state["notes"]
-            if "is_test" in state:
-                thread.is_test = state["is_test"]
-            if state.get("last_activity_at"):
-                thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
-
-            # Handle issue states
-            if "issue_states" in state and state["issue_states"] is not None:
-                # Issues already batch-deleted above; recreate from snapshot
-                max_position = 0
-                for issue_state in state["issue_states"]:
-                    position = issue_state.get("position", max_position + 1)
-                    if position > max_position:
-                        max_position = position
-                    issue = Issue(
-                        id=issue_state["id"],
-                        thread_id=thread_id_int,
-                        issue_number=issue_state["number"],
-                        status=issue_state["status"],
-                        read_at=datetime.fromisoformat(issue_state["read_at"])
-                        if issue_state["read_at"]
-                        else None,
-                        created_at=datetime.now(UTC),
-                        position=position,
-                    )
-                    db.add(issue)
-                
-                thread.total_issues = state.get("total_issues")
-                thread.next_unread_issue_id = state.get("next_unread_issue_id")
-                thread.reading_progress = state.get("reading_progress")
-            else:
-                # Clear migrated state when restoring to legacy (issues batch-deleted above)
-                thread.total_issues = None
-                thread.next_unread_issue_id = None
-                thread.reading_progress = None
-                thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
-        else:
-            # Create new thread
-            new_thread = Thread(
-                id=thread_id_int,
-                title=state.get("title", "Unknown Thread"),
-                format=normalize_format_value(state.get("format", "comic")),
-                issues_remaining=state.get("issues_remaining", 0),
-                last_rating=state.get("last_rating"),
-                queue_position=state.get("queue_position", 1),
-                queue_position_is_manual=state.get("queue_position_is_manual", False),
-                status=state.get("status", "active"),
-                notes=state.get("notes"),
-                is_test=state.get("is_test", False),
-                user_id=state.get("user_id", user_id),
-                created_at=datetime.fromisoformat(state["created_at"])
-                if state.get("created_at")
-                else datetime.now(UTC),
-            )
-            
-            if state.get("last_activity_at"):
-                new_thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
-            
-            db.add(new_thread)
-
-            # Handle issue states for new thread
-            if "issue_states" in state and state["issue_states"] is not None:
-                max_position = 0
-                for issue_state in state["issue_states"]:
-                    position = issue_state.get("position", max_position + 1)
-                    if position > max_position:
-                        max_position = position
-                    issue = Issue(
-                        id=issue_state["id"],
-                        thread_id=thread_id_int,
-                        issue_number=issue_state["number"],
-                        status=issue_state["status"],
-                        read_at=datetime.fromisoformat(issue_state["read_at"])
-                        if issue_state["read_at"]
-                        else None,
-                        created_at=datetime.now(UTC),
-                        position=position,
-                    )
-                    db.add(issue)
-                
-                new_thread.total_issues = state.get("total_issues")
-                new_thread.next_unread_issue_id = state.get("next_unread_issue_id")
-                new_thread.reading_progress = state.get("reading_progress")
-            else:
-                new_thread.issues_remaining = state.get("issues_remaining", 0)
-
-        affected_threads.append(thread if thread else new_thread)
-
-    # Restore session state
-    if snapshot.session_state:
-        session.start_die = snapshot.session_state.get("start_die", session.start_die)
-        session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
-        session.active_bandwidth = snapshot.session_state.get(
-            "active_bandwidth", session.active_bandwidth
-        )
-        session.predicted_bandwidth = snapshot.session_state.get(
-            "predicted_bandwidth", session.predicted_bandwidth
-        )
-        session.bandwidth_confidence = snapshot.session_state.get(
-            "bandwidth_confidence", session.bandwidth_confidence
-        )
-        session.bandwidth_source = snapshot.session_state.get(
-            "bandwidth_source", session.bandwidth_source
-        )
-        session.bandwidth_version = snapshot.session_state.get(
-            "bandwidth_version", session.bandwidth_version
-        )
-        session.active_intent = snapshot.session_state.get(
-            "active_intent", session.active_intent
-        )
-        session.predicted_intent = snapshot.session_state.get(
-            "predicted_intent", session.predicted_intent
-        )
-        session.intent_confidence = snapshot.session_state.get(
-            "intent_confidence", session.intent_confidence
-        )
-        session.intent_source = snapshot.session_state.get(
-            "intent_source", session.intent_source
-        )
-        session.intent_version = snapshot.session_state.get(
-            "intent_version", session.intent_version
-        )
-
-    return session, affected_threads

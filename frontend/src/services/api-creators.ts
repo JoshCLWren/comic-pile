@@ -214,7 +214,7 @@ export function createCreatorsApi(client: HttpClient) {
         queryParams.offset = params.offset
       }
       return client.get<CreatorDetailResponse>(
-        `/v1/creators/${encodeURIComponent(creatorKey)}`,
+        `/v2/creators/${encodeURIComponent(creatorKey)}`,
         { params: queryParams, ...RECOVERY_CONFIG },
       )
     },
@@ -232,7 +232,7 @@ export function createCreatorsApi(client: HttpClient) {
         queryParams.offset = params.offset
       }
       return client.get<CreatorSeriesIssueListResponse>(
-        `/v1/creators/${encodeURIComponent(creatorKey)}/series/${encodeURIComponent(seriesKey)}/issues`,
+        `/v2/creators/${encodeURIComponent(creatorKey)}/series/${encodeURIComponent(seriesKey)}/issues`,
         { params: queryParams, ...RECOVERY_CONFIG },
       )
     },
@@ -259,7 +259,7 @@ export function createCreatorsApi(client: HttpClient) {
       if (signal) {
         config.signal = signal
       }
-      return client.get<CreatorListResponse>('/v1/creators', config)
+      return client.get<CreatorListResponse>('/v2/creators', config)
     },
   }
 }

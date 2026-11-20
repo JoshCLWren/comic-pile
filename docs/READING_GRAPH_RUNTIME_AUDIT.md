@@ -1,5 +1,11 @@
 # Reading Graph Runtime Audit
 
+> **Status: historical.**
+>
+> Historical audit: the `app/api/*.py` and `app/continuity_blocking.py` paths cited below describe the Python runtime as measured on 2026-09-17, before the Rust v2 cutover. They are retained as point-in-time evidence, not as pointers to current code. The current Rust equivalents live under `native/roll-service/src/` (for example `reading_blocker_projection.rs`, `reading_eligibility.rs`, and `roll_offer.rs`).
+
+<!-- docs-path-check: historical -->
+
 This document audits the current Roll runtime blocking logic against the frozen architecture in
 `docs/READING_GRAPH_ADR.md` (issue #2536).
 

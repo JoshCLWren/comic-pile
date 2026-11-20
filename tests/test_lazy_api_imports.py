@@ -30,12 +30,8 @@ ENTRY_PATH = REPOSITORY_ROOT / "api" / "index.py"
 
 #: Modules that must stay unimported until a non-ping request needs them.
 DEFERRED_ROUTER_MODULES = (
-    "app.api.roll",
     "app.api.thread",
     "app.api.session",
-    "app.api.continuity_plan",
-    "app.api.continuity_rule",
-    "app.api.roll_recovery_switch",
 )
 
 #: Dependency sub-router route reachable only once the sub-routers are composed.
