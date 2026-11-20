@@ -106,13 +106,13 @@ pub async fn confirm_identity(
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
     let comicvine_issue_id = request.comicvine_issue_id;
     let identity = confirm_comicvine_identity(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         issue_id,
         comicvine_issue_id,
     ).await?;
     let state_response = get_issue_identity_state(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         issue_id,
     ).await?;
@@ -131,14 +131,14 @@ pub async fn replace_identity(
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
     let comicvine_issue_id = request.comicvine_issue_id;
     let response = replace_comicvine_identity(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         issue_id,
         comicvine_issue_id,
         request.reason.as_deref(),
     ).await?;
     let state_response = get_issue_identity_state(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         issue_id,
     ).await?;
@@ -155,16 +155,16 @@ pub async fn apply_correction(
     Path(issue_id): Path<i32>,
     Json(request): Json<MetadataCorrectionRequest>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
-    await get_owned_issue_or_404(db::checkout(&state.dbstate), user.id(), issue_id).await;
+    await get_owned_issue_or_404(db::checkout(db::checkout(&state.dbstate)state), user.id(), issue_id).await;
     let correction = apply_metadata_correction(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         issue_id=issue_id,
         request=request,
     ).await?;
     await db::commit(&state).await.map_err(db::query_error)?;
     let state_response = get_issue_identity_state(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         issue_id,
     ).await?;
@@ -181,7 +181,7 @@ pub async fn list_corrections(
     Path(issue_id): Path<i32>,
 ) -> Result<Json<ListCorrectionsResponse>, ApiError> {
     let response = list_metadata_corrections(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         issue_id,
     ).await?;
@@ -198,7 +198,7 @@ pub async fn refresh_metadata(
     Path(issue_id): Path<i32>,
 ) -> Result<Json<RefreshMetadataResponse>, ApiError> {
     let refreshed = request_provider_refresh(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         issue_id,
     ).await?;
@@ -216,19 +216,19 @@ pub async fn revert_correction(
     Json(request): Json<MetadataCorrectionRevertRequest>,
 ) -> Result<Json<RevertCorrectionResponse>, ApiError> {
     revert_metadata_correction(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         issue_id,
         request.correction_id,
     ).await?;
     await db::commit(&state).await.map_err(db::query_error)?;
     let corrections = list_metadata_corrections(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         issue_id,
     ).await?;
     let state_response = get_issue_identity_state(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         issue_id,
     ).await?;
@@ -245,7 +245,7 @@ pub async fn import_issue(
     Json(request): Json<ImportIssueRequest>,
 ) -> Result<Json<ImportIssueResponse>, ApiError> {
     let result = import_comicvine_issue(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         request=request,
     ).await?;
@@ -274,13 +274,15 @@ pub async fn resolve_input(
         let error = looks_like_url(trimmed).then_some(NOT_A_COMICVINE_URL);
         return Ok(Json(ComicVineResolveResponse::bare(input, "search", error)));
     };
-    let Some(key) = provider_key() else {
-        return Ok(Json(ComicVineResolveResponse::bare(
-            input,
-            parsed.kind(),
-            Some(PROVIDER_NOT_CONFIGURED),
-        )));
-    };
+    if let Some(key) = provider_key() {
+    // use key
+} else {
+    return Ok(Json(ComicVineResolveResponse::bare(
+        input,
+        parsed.kind(),
+        Some(PROVIDER_NOT_CONFIGURED),
+    )));
+}
     let mut response = ComicVineResolveResponse::bare(input, parsed.kind(), None);
     let resolved = match parsed {
         ParsedResource::Issue(id) => state
@@ -356,14 +358,13 @@ pub async fn search_series_v1(
     let (limit, offset) = (query.limit, query.offset);
     let page = i64::from(offset) / i64::from(limit) + 1;
     let key = provider_key();
-    let k = match key {
-        Some(k) if !query.q.trim().is_empty() => k,
-        _ => {
-            return Ok(Json(SeriesSearchResponse::empty(
-                query.q, offset, limit,
-            )))
-        }
-    };
+    // Python lets provider errors escape to the global handler: a generic 500.
+    if key.is_none() || query.q.trim().is_empty() {
+        return Ok(Json(SeriesSearchResponse::empty(
+            query.q, offset, limit,
+        )));
+    }
+    let key = key.unwrap();
     let extra = format!(
         "&query={}&resources=volume&limit={limit}&page={page}\
          &field_list=id,name,publisher,start_year,count_of_issues,site_detail_url,image",
@@ -428,7 +429,7 @@ pub async fn import_series(
     Json(request): Json<ImportSeriesRequest>,
 ) -> Result<Json<ImportSeriesResponse>, ApiError> {
     let result = import_comicvine_series(
-        db::checkout(&state.dbstate),
+        db::checkout(db::checkout(&state.dbstate)state),
         user_id=user.id(),
         request=request,
     ).await?;
