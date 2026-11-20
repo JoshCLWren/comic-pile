@@ -1706,6 +1706,38 @@ async fn malformed_requests_use_the_production_validation_contract() {
             None,
         ),
         ("GET", "/api/v2/comicvine/resolve".to_owned(), None),
+        // #4835 audit: the remaining golden upper bounds from the Python
+        // request models. Each is one character/unit past its maximum.
+        (
+            "GET",
+            format!("/api/v2/comicvine/search/series?q={}", "q".repeat(201)),
+            None,
+        ),
+        (
+            "GET",
+            format!("/api/v2/comicvine/resolve?input={}", "x".repeat(1001)),
+            None,
+        ),
+        (
+            "POST",
+            format!("/api/v2/comicvine/issues/{i}/metadata:correct"),
+            Some(json!({"field_name": "x".repeat(101), "canonical_value": "y"})),
+        ),
+        (
+            "POST",
+            format!("/api/v2/comicvine/issues/{i}/identity:replace"),
+            Some(json!({"comicvine_issue_id": 1, "reason": "x".repeat(501)})),
+        ),
+        (
+            "POST",
+            "/api/v2/comicvine/issues:import".to_owned(),
+            Some(json!({"title": "X", "comicvine_issue_id": 1, "issue_number": "x".repeat(51)})),
+        ),
+        (
+            "POST",
+            "/api/v2/comicvine/series:import".to_owned(),
+            Some(json!({"comicvine_volume_id": 1, "already_read_count": -1})),
+        ),
     ] {
         let (status, got) = send(&state, call(method, &path, &token, &csrf, body)).await;
         assert_eq!(
