@@ -259,7 +259,7 @@ def _routes_by_handler() -> dict[tuple[str, str], list[str]]:
     """
     result: dict[tuple[str, str], list[str]] = {}
     for route_path, tail in _route_call_tails():
-        for method, handler in _ROUTE_METHOD_RE.findall(tail):
+        for _method, handler in _ROUTE_METHOD_RE.findall(tail):
             module, _, name = handler.rpartition("::")
             resolved = _resolve_handler_module(module, name)
             result.setdefault((resolved, name), []).append(route_path)
