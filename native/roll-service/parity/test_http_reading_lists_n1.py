@@ -352,13 +352,16 @@ async def test_delete_reading_list_statements_bounded() -> None:
             await raw.close()
 
         # Create a large list with many entries to test long-list deletion budget
-        large_list_ids = []
-        for i in range(20, 120):
-            _, thread_ids = await _insert_owned_thread(raw, owner_id, i)
-            large_list_id = await _insert_list(raw, owner_id, f"LargeList-{i}", [thread_ids[0]])
-            large_list_ids.append(large_list_id)
+        raw2 = await asyncpg.connect(url)
+        try:
+            owner_id = await raw2.fetchval("SELECT id FROM users WHERE username=$1", username)
+            large_list_ids = []
+            for i in range(20, 120):
+                _, thread_ids = await _insert_owned_thread(raw2, owner_id, i)
+                large_list_id = await _insert_list(raw2, owner_id, f"LargeList-{i}", [thread_ids[0]])
+                large_list_ids.append(large_list_id)
         finally:
-            await raw.close()
+            await raw2.close()
 
         env2 = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
         _, _, before2 = await db_counters(engine)
