@@ -42,24 +42,14 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
     (repository / "pyproject.toml").touch()
     (repository / "frontend" / "node_modules").mkdir(parents=True)
     (repository / "scripts").mkdir()
-    (repository / "scripts" / "lint.sh").write_text("""#!/bin/bash
-set -e
-
-# Check for leaked Git repository-local environment variables
-# These variables can escape from the parent worktree into sub-repositories
-# created by the pre-push hook, causing tests to pass incorrectly.
-for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do
-    if [[ -v "$variable" ]]; then
-        echo "Leaked $variable" >&2
-        LEAKED=1
-    fi
-done
-
-# Signal that Git environment checks completed successfully
-printf "Git env checks completed\\n" >> "$GATE_LOG"
-
-exit 0
-""")
+    (repository / "scripts" / "lint.sh").write_text(
+        "#!/bin/bash\n"
+        "set -eu\n"
+        "for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do\n"
+        '  if [[ -v "$variable" ]]; then echo "Leaked $variable" >&2; exit 1; fi\n'
+        "done\n"
+        'printf "%s\\n" "lint" >> "$GATE_LOG"\n'
+    )
     tools_directory = tmp_path / "tools"
     tools_directory.mkdir()
     for tool in ("python", "pnpm"):
@@ -89,7 +79,7 @@ exit 0
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert gate_log.exists() and gate_log.read_text().strip() != "", (
-        f"Git environment checks did not run; gate_log is empty or missing. "
-        f"Content: {gate_log.read_text()!r}"
+    recorded_gates = gate_log.read_text().splitlines()
+    assert recorded_gates == ["lint"], (
+        f"only scripts/lint.sh may run on push; recorded gates: {recorded_gates!r}"
     )

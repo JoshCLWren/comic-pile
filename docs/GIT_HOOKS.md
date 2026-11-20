@@ -4,11 +4,10 @@ This repository uses git hooks to enforce code quality checks.
 
 ## Principle: fix what hooks flag
 
-Hooks run fast static checks (lint/format/types). Tests are not run in git
-hooks; CI is the test gate. If a hook blocks you, fix the lint failure. Owner
-policy (2026-11-18): factory agents may push feature branches with
-`git push --no-verify` when a local hook blocks them, then open a PR so CI runs.
-Never force-push or push to main.
+Hooks run fast static checks (lint/format/types). Product test suites are not
+run in git hooks; CI is the test gate. If a hook blocks you, fix the failure it
+reports. Do not use `--no-verify` to bypass hooks. Never force-push or push to
+main.
 
 ## Available Hooks
 
@@ -36,15 +35,18 @@ still chain to `.git/hooks/pre-commit`.
 **What happens on failure:**
 - Commit is aborted
 - You'll see which linting step failed
-- Can bypass with `git commit --no-verify` (not recommended)
+- Fix the reported issue and rerun the command
 
 ### Pre-Push Hook
 Runs automatically before each push to remote.
 
 **What it does:**
-- Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
+- Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint), which
+  includes the static hardcoded-ID guard (`pytest tests/test_hardcoded_ids.py`)
+  as part of the Python lint gate
 
-No tests run on push (no pytest, vitest, or UI audit). CI runs the tests.
+Product test suites (Vitest, rendered UI audit, backend pytest) do not run on
+push; CI runs them.
 
 **What happens on failure:**
 - Push is aborted
@@ -74,15 +76,8 @@ chmod +x .git/hooks/pre-commit .git/hooks/pre-push
 
 ## Bypassing Hooks
 
-**Not recommended**, but if you need to bypass:
-
-```bash
-# Bypass pre-commit hook
-git commit --no-verify
-
-# Bypass pre-push hook
-git push --no-verify
-```
+Do not bypass hooks with `--no-verify`. If a hook blocks your commit or push,
+fix the underlying issue it reports.
 
 ## Why Hooks Exist
 
