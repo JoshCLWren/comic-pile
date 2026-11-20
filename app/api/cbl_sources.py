@@ -1,4 +1,4 @@
-"""CBL reading-graph preview (still served by Python until #5342)."""
+"""Legacy Python CBL reading-graph preview handler (retired in favor of native Rust same-path)."""
 
 from __future__ import annotations
 

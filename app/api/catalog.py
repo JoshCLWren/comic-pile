@@ -1,4 +1,4 @@
-"""Python catalog series-mapping preview; commits are implemented by Rust."""
+"""Legacy Python catalog series-mapping preview handler (retired in favor of native Rust same-path)."""
 
 from typing import Annotated
 
