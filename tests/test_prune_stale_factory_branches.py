@@ -342,7 +342,11 @@ def test_recently_closed_pr_waits_full_period_even_with_old_commit():
         [branch("factory/46-5100-abandoned", age=old_commit)],
         open_pr_heads={
             "factory/46-5100-abandoned": [
-                {"number": 700, "state": "CLOSED", "closedAt": (NOW - timedelta(days=2)).isoformat()},
+                {
+                    "number": 700,
+                    "state": "CLOSED",
+                    "closedAt": (NOW - timedelta(days=2)).isoformat(),
+                },
             ]
         },
     )
@@ -358,7 +362,11 @@ def test_recently_merged_pr_waits_full_period_even_with_old_commit():
         [branch("factory/46-5101-merged", age=old_commit)],
         open_pr_heads={
             "factory/46-5101-merged": [
-                {"number": 701, "state": "MERGED", "mergedAt": (NOW - timedelta(days=3)).isoformat()},
+                {
+                    "number": 701,
+                    "state": "MERGED",
+                    "mergedAt": (NOW - timedelta(days=3)).isoformat(),
+                },
             ]
         },
         merged_names={"factory/46-5101-merged"},
