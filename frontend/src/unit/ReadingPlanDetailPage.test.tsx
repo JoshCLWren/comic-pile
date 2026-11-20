@@ -538,16 +538,13 @@ describe('ReadingPlanDetailPage', () => {
     expect(within(available).getByText('X-Men · Next unread issue #95')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Read next issue' })).toHaveTextContent('X-Men #95')
 
-    // The thread is renamed in another tab. The shared server data is fresh by
-    // the time the plan reader view refetches on focus (#5486); every label in
-    // the Available now section must show the new series title.
-    const renamed = { ...availableIssue, thread_title: 'X-Men QA B3' }
-    mockGetReader.mockResolvedValue({
-      ...readerView,
-      available_now: [renamed],
-      lanes: [{ id: 'main', name: 'Main', order: 0, issues: [renamed, blockedIssue, laterIssue] }],
-    })
-    fetchCards.mockImplementation(async (ids) => ids.map((id) => ({ ...cardFor(id), thread_title: 'X-Men QA B3' })))
+    // The thread is renamed in another tab. The focus refetch refreshes the
+    // issue-card batch while the reader view's cached series titles can still
+    // lag (#5615). Every Available now label must follow the fresh card title.
+    fetchCards.mockImplementation(async (ids) => ids.map((id) =>
+      id === availableIssue.issue_id
+        ? { ...cardFor(id), thread_title: 'X-Men QA B3' }
+        : cardFor(id)))
 
     await act(async () => {
       focusManager.setFocused(false)
