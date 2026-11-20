@@ -263,6 +263,62 @@ def remote_github_repo(repo_root: Path, remote: str) -> str | None:
     return slug
 
 
+def _normalize_pr_record(pr: Mapping[str, object]) -> dict[str, object]:
+    """Normalize one GitHub PR payload for pruning safety evaluation.
+
+    Args:
+        pr: Raw PR mapping returned by the GitHub REST API.
+
+    Returns:
+        Record carrying state, draft, event dates and labels so the
+        post-merge/abandonment wait is measured from the real event.
+    """
+    head_obj = pr.get("head")
+    ref = head_obj.get("ref") if isinstance(head_obj, dict) else None
+    return {
+        "number": pr.get("number"),
+        "headRefName": ref if isinstance(ref, str) else "",
+        "state": str(pr.get("state") or "OPEN").upper(),
+        "isDraft": bool(pr.get("draft")),
+        "mergedAt": pr.get("merged_at"),
+        "closedAt": pr.get("closed_at"),
+        "updatedAt": pr.get("updated_at"),
+        "labels": pr.get("labels") or [],
+        "title": pr.get("title"),
+        "url": pr.get("html_url"),
+    }
+
+
+def _parse_pr_pages(payload: str, label: str) -> list[dict[str, object]]:
+    """Parse a ``--slurp`` GitHub PR response into normalized records.
+
+    Args:
+        payload: Raw stdout from a paginated ``gh api`` PR listing.
+        label: Human-readable lookup label used in error messages.
+
+    Returns:
+        Normalized PR records across all returned pages.
+
+    Raises:
+        RuntimeError: When the response is missing, malformed or has a bad page.
+    """
+    try:
+        pages = json.loads(payload or "[]")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"unable to parse PR list for {label}: {exc}") from exc
+    if not isinstance(pages, list):
+        raise RuntimeError(f"PR list for {label} was not a list")
+    records: list[dict[str, object]] = []
+    for page in pages:
+        if not isinstance(page, list):
+            raise RuntimeError(f"PR list page for {label} was not a list")
+        for pr in page:
+            if not isinstance(pr, dict):
+                raise RuntimeError(f"PR list for {label} contained a non-object entry")
+            records.append(_normalize_pr_record(pr))
+    return records
+
+
 def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
     """Fetch the complete open+closed PR history grouped by branch name.
 
@@ -278,38 +334,43 @@ def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
     ], check=False)
     if proc.returncode != 0:
         raise RuntimeError(f"unable to list PRs: {proc.stderr.strip() or proc.stdout.strip()}")
-    try:
-        pages = json.loads(proc.stdout or "[]")
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"unable to parse PR list: {exc}") from exc
-    if not isinstance(pages, list):
-        raise RuntimeError("PR list response was not a list")
     by_head: dict[str, list[dict[str, object]]] = {}
-    for page in pages:
-        if not isinstance(page, list):
-            raise RuntimeError("PR list page was not a list")
-        for pr in page:
-            if not isinstance(pr, dict):
-                raise RuntimeError("PR list contained a non-object entry")
-            head_obj = pr.get("head")
-            ref = head_obj.get("ref") if isinstance(head_obj, dict) else None
-            head = ref if isinstance(ref, str) else ""
-            if not head:
-                continue
-            record: dict[str, object] = {
-                "number": pr.get("number"),
-                "headRefName": head,
-                "state": str(pr.get("state") or "OPEN").upper(),
-                "isDraft": bool(pr.get("draft")),
-                "mergedAt": pr.get("merged_at"),
-                "closedAt": pr.get("closed_at"),
-                "updatedAt": pr.get("updated_at"),
-                "labels": pr.get("labels") or [],
-                "title": pr.get("title"),
-                "url": pr.get("html_url"),
-            }
+    for record in _parse_pr_pages(proc.stdout, repo):
+        head = record["headRefName"]
+        if isinstance(head, str) and head:
             by_head.setdefault(head, []).append(record)
     return by_head
+
+
+def fetch_branch_pr_records(repo: str, branch: str) -> list[dict[str, object]]:
+    """Fetch the complete open+closed PR history for a single head branch.
+
+    The apply-time recheck needs only the PRs whose head is the candidate
+    branch. Using GitHub's ``head`` filter avoids re-downloading the whole
+    repository PR history for every candidate, while ``state=all`` and full
+    pagination retain the same older-open-PR protection as the full inventory.
+
+    Args:
+        repo: GitHub repository slug (``owner/name``).
+        branch: Head branch name whose PR history is needed.
+
+    Returns:
+        Normalized PR records for that branch across all states and pages.
+
+    Raises:
+        RuntimeError: If the lookup fails or the response is malformed.
+    """
+    owner = repo.split("/", 1)[0]
+    head = f"{owner}:{branch}"
+    proc = run([
+        "gh", "api", "--paginate", "--slurp",
+        f"repos/{repo}/pulls?state=all&head={head}&per_page=100",
+    ], check=False)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"unable to list PRs for {head}: {proc.stderr.strip() or proc.stdout.strip()}"
+        )
+    return _parse_pr_pages(proc.stdout, head)
 
 
 def fetch_protected_branches(repo: str) -> set[str]:
@@ -928,7 +989,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 fresh_protected = fetch_protected_branches(args.repo)
                 fresh_protected.update({default_branch, "main", "master", "gh-pages"})
-                fresh_pr_records = fetch_pr_records(args.repo)
+                # Scope the fresh safety recheck to this branch's own PR history
+                # instead of re-downloading every PR in the repository for each
+                # candidate (see Greptile finding on repeated full history reads).
+                fresh_pr_records = {
+                    decision.branch: fetch_branch_pr_records(args.repo, decision.branch)
+                }
                 fresh_live_refs = local_worktree_branches(repo_root)
 
                 def fresh_lease_lookup(issue_number: int) -> LeaseSignal | None:

@@ -444,6 +444,34 @@ def test_fetch_pr_records_paginates_all_states_without_a_result_cap(monkeypatch)
     assert records["factory/9-1-open"][0]["state"] == "OPEN"
 
 
+def test_fetch_branch_pr_records_scopes_query_to_one_branch(monkeypatch):
+    """Apply-time rechecks fetch only the candidate branch's complete PR history."""
+    calls = []
+
+    def fake_run(cmd, *, check=True):
+        calls.append(cmd)
+        return _FakeResult([[
+            {
+                "number": 42,
+                "state": "open",
+                "head": {"ref": "local-factory/i4749"},
+                "merged_at": None,
+                "closed_at": None,
+            }
+        ]])
+
+    monkeypatch.setattr(prune, "run", fake_run)
+    records = prune.fetch_branch_pr_records("owner/repo", "local-factory/i4749")
+    cmd = calls[0]
+    assert "--paginate" in cmd and "--slurp" in cmd
+    assert any("state=all" in arg for arg in cmd)
+    assert any("head=owner:local-factory/i4749" in arg for arg in cmd)
+    assert not any(arg.endswith("pulls?state=all&per_page=100") for arg in cmd)
+    assert len(records) == 1
+    assert records[0]["number"] == 42
+    assert records[0]["state"] == "OPEN"
+
+
 def test_fetch_issue_retired_uses_supported_pagination_query(monkeypatch):
     """GitHub CLI pagination size belongs in the endpoint query, not a flag."""
     calls = []
