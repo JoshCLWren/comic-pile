@@ -1333,7 +1333,7 @@ async fn roll_rerolls_shrink_top_die_without_backfill_and_reset_restores_pool() 
                 Some(json!({
                     "idempotency_key": format!("no-backfill-offer-{}", browser_snoozes.len() + 1),
                     "expected_pending_thread_id": pending,
-                    "snoozed_thread_ids": browser_snoozes,
+                    "snoozed_thread_ids": browser_snoozes.clone(),
                 })),
             ),
         )
