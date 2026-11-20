@@ -737,6 +737,14 @@ pub async fn update_reading_list(
     .await
     .map_err(db::query_error)?;
 
+    // Validate every entry in memory, then insert all entries with one
+    // set-based statement so SQL cost stays fixed regardless of entry count.
+    let mut entry_issue_ids: Vec<i32> = Vec::with_capacity(request.issue_ids.len());
+    let mut entry_positions: Vec<i32> = Vec::with_capacity(request.issue_ids.len());
+    let mut entry_checkpoints: Vec<bool> = Vec::with_capacity(request.issue_ids.len());
+    let mut entry_targets: Vec<String> = Vec::with_capacity(request.issue_ids.len());
+    let mut entry_gates: Vec<String> = Vec::with_capacity(request.issue_ids.len());
+    let mut entry_skipped: Vec<bool> = Vec::with_capacity(request.issue_ids.len());
     for (position, issue_id) in request.issue_ids.iter().enumerate() {
         let old = old_by_issue.get(issue_id);
         let intent = request
@@ -796,14 +804,33 @@ pub async fn update_reading_list(
             );
             ApiError::Internal("Invalid checkpoint".into())
         })?;
-        tx.execute(
-            "INSERT INTO custom_cbl_entries
-             (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[&list_id, issue_id, &(position as i32), &(!targets.is_empty()),
-              &targets_json, &gate, &skipped],
-        ).await.map_err(db::query_error)?;
+        entry_issue_ids.push(*issue_id);
+        entry_positions.push(position as i32);
+        entry_checkpoints.push(!targets.is_empty());
+        entry_targets.push(targets_json);
+        entry_gates.push(gate.to_string());
+        entry_skipped.push(skipped);
     }
+    tx.execute(
+        "INSERT INTO custom_cbl_entries
+            (list_id, issue_id, position, created_at, is_checkpoint,
+             checkpoint_target_issue_ids, gate, skipped)
+         SELECT $1, issue_id, position, NOW(), is_checkpoint,
+                targets::text::json, gate, skipped
+         FROM unnest($2::int[], $3::int[], $4::bool[], $5::text[], $6::text[], $7::bool[])
+              AS t(issue_id, position, is_checkpoint, targets, gate, skipped)",
+        &[
+            &list_id,
+            &entry_issue_ids,
+            &entry_positions,
+            &entry_checkpoints,
+            &entry_targets,
+            &entry_gates,
+            &entry_skipped,
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
 
     graph_preflight(&tx, user).await?;
     let entries = load_entries(&tx, list_id).await?;
