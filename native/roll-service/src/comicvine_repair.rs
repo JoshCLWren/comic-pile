@@ -287,11 +287,11 @@ fn parse_retry_after(header: &str, now: chrono::DateTime<chrono::Utc>) -> Option
 }
 
 /// Convert Python's float cooldown to the whole-second `RateLimited(u32)`
-/// representation: round partial seconds up, never collapse a parsed throttle
-/// to zero, and saturate above `u32::MAX` (a representability bound, not the
-/// retired 3600s policy cap).
+/// representation: round partial seconds up, keep Python's non-negative
+/// `max(0.0, retry_after)` behavior, and saturate above `u32::MAX` (a
+/// representability bound, not the retired 3600s policy cap).
 fn whole_seconds(seconds: f64) -> u32 {
-    seconds.ceil().max(1.0).min(u32::MAX as f64) as u32
+    seconds.ceil().max(0.0).min(u32::MAX as f64) as u32
 }
 
 pub(crate) async fn provider_response(
@@ -1504,6 +1504,11 @@ mod tests {
         assert_eq!(
             throttled(provider_failure(StatusCode::TOO_MANY_REQUESTS, Some("0.25")).await),
             Some(1)
+        );
+        // Python clamps a negative header to a zero-length cooldown.
+        assert_eq!(
+            throttled(provider_failure(StatusCode::TOO_MANY_REQUESTS, Some("-5")).await),
+            Some(0)
         );
     }
 

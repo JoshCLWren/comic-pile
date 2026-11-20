@@ -378,11 +378,7 @@ fn python_str(value: &Value) -> String {
         Value::String(text) => text.clone(),
         Value::Array(items) => format!(
             "[{}]",
-            items
-                .iter()
-                .map(python_repr)
-                .collect::<Vec<_>>()
-                .join(", ")
+            items.iter().map(python_repr).collect::<Vec<_>>().join(", ")
         ),
         Value::Object(map) => format!(
             "{{{}}}",
@@ -1340,7 +1336,10 @@ pub async fn import_issue(
             "INSERT INTO issues \
                 (thread_id, issue_number, position, status, created_at) \
              VALUES ($1, $2, 1, 'unread', now()) RETURNING id",
-            &[&thread_id, &import_issue_number(request.issue_number.as_deref())],
+            &[
+                &thread_id,
+                &import_issue_number(request.issue_number.as_deref()),
+            ],
         )
         .await
         .map_err(db::query_error)?;
@@ -2300,7 +2299,7 @@ pub async fn search_series(
         return Err(unprocessable("offset out of range"));
     }
     let (limit, offset) = (query.limit, query.offset);
-    let page = offset / limit + 1;
+    let page = search_page(offset, limit);
     if query.q.trim().is_empty() {
         return Ok(Json(ComicVineSeriesSearchResponse {
             query: query.q,
@@ -2340,18 +2339,17 @@ pub async fn search_series(
         .flatten()
         .filter_map(|row| series_result(row, None))
         .collect();
-    let total =
-        coerce_provider_int(payload.get("number_of_total_results")).unwrap_or(results.len() as i32);
-    let loaded = offset + results.len() as i32;
-    let has_more = loaded < total;
+    let total = coerce_provider_int(payload.get("number_of_total_results"))
+        .unwrap_or_else(|| i32::try_from(results.len()).unwrap_or(i32::MAX));
+    let cursor = search_cursor(offset, results.len(), total);
     Ok(Json(ComicVineSeriesSearchResponse {
         query: query.q,
         results,
         total_available: Some(total),
         offset,
         limit,
-        has_more,
-        next_offset: has_more.then_some(loaded),
+        has_more: cursor.has_more,
+        next_offset: cursor.next_offset,
     }))
 }
 
@@ -2635,28 +2633,7 @@ pub async fn resolve_input(
             else {
                 return Ok(failure());
             };
-            let volume = result.get("volume").and_then(Value::as_object);
-            let resolved = ComicVineResolvedIssue {
-                comicvine_issue_id: id,
-                series_name: volume
-                    .and_then(|v| v.get("name"))
-                    .and_then(Value::as_str)
-                    .map(str::to_owned),
-                volume_id: volume.and_then(|v| coerce_provider_int(v.get("id"))),
-                issue_number: result
-                    .get("issue_number")
-                    .map(|value| match value {
-                        Value::String(text) => text.clone(),
-                        Value::Number(number) => number.to_string(),
-                        _ => value.to_string(),
-                    })
-                    .filter(|text| !text.is_empty()),
-                name: provider_string(result.get("name")),
-                cover_date: provider_string(result.get("cover_date")),
-                store_date: provider_string(result.get("store_date")),
-                image_url: provider_image_url(result.get("image")),
-                site_detail_url: provider_string(result.get("site_detail_url")),
-            };
+            let resolved = resolved_issue(id, &result);
             Ok(Json(ComicVineResolveResponse {
                 input: query.input,
                 kind: "issue".to_owned(),
@@ -3063,6 +3040,183 @@ mod tests {
         assert_eq!(candidate.comicvine_issue_id, 99);
         assert_eq!(candidate.issue_number.as_deref(), Some("12"));
         assert_eq!(candidate.image_url.as_deref(), Some("thumb.jpg"));
+    }
+
+    #[test]
+    fn rejects_non_http_comicvine_url_schemes() {
+        assert_eq!(
+            parse_comicvine_url("ftp://comicvine.gamespot.com/issue/4000-42/"),
+            None
+        );
+        assert_eq!(
+            parse_comicvine_url("javascript://comicvine.gamespot.com/4050-7/"),
+            None
+        );
+        assert_eq!(
+            parse_comicvine_url("HTTPS://comicvine.gamespot.com/issue/4000-42/"),
+            Some(ParsedResource::Issue(42))
+        );
+        assert_eq!(
+            parse_comicvine_url("http://comicvine.gamespot.com/volume/4050-7/"),
+            Some(ParsedResource::Volume(7))
+        );
+        assert_eq!(
+            parse_comicvine_url("comicvine.gamespot.com/issue/4000-42/"),
+            Some(ParsedResource::Issue(42))
+        );
+    }
+
+    #[test]
+    fn issue_numbers_follow_python_str_null_and_bool_forms() {
+        let candidate = issue_candidate(&json!({"id": 1, "issue_number": null})).unwrap();
+        assert_eq!(candidate.issue_number, None);
+        let candidate = issue_candidate(&json!({"id": 1, "issue_number": true})).unwrap();
+        assert_eq!(candidate.issue_number.as_deref(), Some("True"));
+        let candidate = issue_candidate(&json!({"id": 1, "issue_number": false})).unwrap();
+        assert_eq!(candidate.issue_number.as_deref(), Some("False"));
+        let candidate = issue_candidate(&json!({"id": 1, "issue_number": 12})).unwrap();
+        assert_eq!(candidate.issue_number.as_deref(), Some("12"));
+        let candidate = issue_candidate(&json!({"id": 1, "issue_number": ""})).unwrap();
+        assert_eq!(candidate.issue_number.as_deref(), Some(""));
+
+        let resolved = resolved_issue(9, &json!({"issue_number": null}));
+        assert_eq!(resolved.issue_number, None);
+        let resolved = resolved_issue(9, &json!({"issue_number": true}));
+        assert_eq!(resolved.issue_number.as_deref(), Some("True"));
+        let resolved = resolved_issue(9, &json!({"issue_number": 12.5}));
+        assert_eq!(resolved.issue_number.as_deref(), Some("12.5"));
+        let resolved = resolved_issue(9, &json!({"issue_number": "12"}));
+        assert_eq!(resolved.issue_number.as_deref(), Some("12"));
+    }
+
+    #[test]
+    fn metadata_provider_value_matches_python_str() {
+        let metadata = json!({
+            "issue_number": null,
+            "name": "Batman",
+            "blank": "",
+            "read": true,
+            "flag": false,
+            "count": 0,
+            "credits": ["Alan", true, null, {"n": 1}],
+        });
+        assert_eq!(
+            python_metadata_string(Some(&metadata), "issue_number").as_deref(),
+            Some("None")
+        );
+        assert_eq!(
+            python_metadata_string(Some(&metadata), "name").as_deref(),
+            Some("Batman")
+        );
+        assert_eq!(python_metadata_string(Some(&metadata), "blank"), None);
+        assert_eq!(
+            python_metadata_string(Some(&metadata), "read").as_deref(),
+            Some("True")
+        );
+        assert_eq!(
+            python_metadata_string(Some(&metadata), "flag").as_deref(),
+            Some("False")
+        );
+        assert_eq!(
+            python_metadata_string(Some(&metadata), "count").as_deref(),
+            Some("0")
+        );
+        assert_eq!(
+            python_metadata_string(Some(&metadata), "credits").as_deref(),
+            Some("['Alan', True, None, {'n': 1}]")
+        );
+        assert_eq!(python_metadata_string(Some(&metadata), "missing"), None);
+        assert_eq!(python_metadata_string(Some(&json!(null)), "name"), None);
+        assert_eq!(python_metadata_string(None, "name"), None);
+    }
+
+    #[test]
+    fn import_issue_number_defaults_for_empty_strings() {
+        assert_eq!(import_issue_number(None), "1");
+        assert_eq!(import_issue_number(Some("")), "1");
+        assert_eq!(import_issue_number(Some("12")), "12");
+        assert_eq!(import_issue_number(Some("  ")), "  ");
+    }
+
+    #[test]
+    fn search_paging_helpers_handle_near_max_offsets() {
+        assert_eq!(search_page(0, 10), 1);
+        assert_eq!(search_page(20, 10), 3);
+        assert_eq!(search_page(i32::MAX, 1), i64::from(i32::MAX) + 1);
+        assert_eq!(search_page(i32::MAX, 3), i64::from(i32::MAX) / 3 + 1);
+
+        let cursor = search_cursor(10, 5, 100);
+        assert!(cursor.has_more);
+        assert_eq!(cursor.next_offset, Some(15));
+
+        let cursor = search_cursor(i32::MAX, 4, i32::MAX);
+        assert!(!cursor.has_more);
+        assert_eq!(cursor.next_offset, None);
+
+        let cursor = search_cursor(i32::MAX - 5, 2, i32::MAX);
+        assert!(cursor.has_more);
+        assert_eq!(cursor.next_offset, Some(i32::MAX - 3));
+
+        let cursor = search_cursor(i32::MAX, usize::MAX, i32::MAX);
+        assert!(!cursor.has_more);
+        assert_eq!(cursor.next_offset, None);
+    }
+
+    #[test]
+    fn duplicate_roster_ids_report_the_linked_issue_number() {
+        let all = vec![
+            SimIssue {
+                id: Some(10),
+                number: "1".to_owned(),
+                position: 1,
+                original_position: 1,
+                confirmed_cv: Some("77".to_owned()),
+            },
+            SimIssue {
+                id: Some(11),
+                number: "2".to_owned(),
+                position: 2,
+                original_position: 2,
+                confirmed_cv: None,
+            },
+        ];
+        let entries = vec![
+            SimEntry {
+                cv_id: 77,
+                number: "1".to_owned(),
+                outcome: SimOutcome::Created(0),
+            },
+            SimEntry {
+                cv_id: 77,
+                number: "2".to_owned(),
+                outcome: SimOutcome::Reused(0),
+            },
+            SimEntry {
+                cv_id: 77,
+                number: "3".to_owned(),
+                outcome: SimOutcome::ReusedExisting(10),
+            },
+            SimEntry {
+                cv_id: 78,
+                number: "4".to_owned(),
+                outcome: SimOutcome::Error("bad row".to_owned()),
+            },
+        ];
+        let (results, counts) = assemble_import_results(&entries, &all);
+        assert_eq!(results[0].issue_number.as_deref(), Some("1"));
+        assert_eq!(results[1].issue_number.as_deref(), Some("1"));
+        assert_eq!(results[1].issue_id, Some(10));
+        assert_eq!(results[2].issue_number.as_deref(), Some("1"));
+        assert_eq!(results[3].issue_number.as_deref(), Some("4"));
+        assert_eq!(
+            (
+                counts.adopted,
+                counts.skipped,
+                counts.conflicts,
+                counts.created
+            ),
+            (1, 2, 0, 1)
+        );
     }
 
     #[test]
