@@ -337,6 +337,15 @@ export default function CblBrowserPage() {
     gcTime: 20 * 60 * 1000, // 20 minutes
   })
 
+  // A general adoption can reuse a plan that already contains this source.
+  // Load the reader's plans before enabling Add so that reuse is always an
+  // explicit, named choice rather than a hidden side effect.
+  const plansQuery = useQuery({
+    queryKey: queryKeys.readingPlans.list(),
+    queryFn: continuityPlansApi.list,
+    enabled: selectedSource !== null,
+  })
+
   const commitMutation = useMutation({
     mutationFn: ({
       source,
