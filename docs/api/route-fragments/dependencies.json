@@ -2,7 +2,9 @@
   "family": "dependencies",
   "owned_path_patterns": [
     "^/api/v2/dependencies(?:/.*)?$",
-    "^/api/v1/.*dependencies(?:/.*)?$"
+    "^/api/v2/continuity-plans/[^/]+/dependencies/[^/]+$",
+    "^/api/v1/issues/[0-9]+/dependencies$",
+    "^/api/v1/threads/.*dependencies(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -25,6 +27,45 @@
     },
     {
       "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/dependencies/blocked",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/dependencies/blocked$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/dependencies/{dependency_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/dependencies/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "PATCH",
+      "path": "/api/v2/dependencies/{dependency_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/dependencies/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
       "method": "DELETE",
       "path": "/api/v2/dependencies/{dependency_id}",
       "dest": "/api/native_roll.rs",
@@ -37,89 +78,32 @@
       ]
     },
     {
-      "bucket": "v1_operations",
-      "method": "DELETE",
-      "path": "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+/dependencies/[^/]+$",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/dependencies/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4838,
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "exclude_from_inventory": true
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "bucket": "operations",
+      "method": "DELETE",
+      "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+/dependencies/[^/]+$",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/dependencies/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4838,
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/dependencies/",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/dependencies/$",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts"
-      ],
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/dependencies/blocked",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/dependencies/blocked$",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts"
-      ],
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "DELETE",
-      "path": "/api/v1/dependencies/{dependency_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/dependencies/[0-9]+$",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts"
-      ],
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/dependencies/{dependency_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/dependencies/[0-9]+$",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts"
-      ],
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "PATCH",
-      "path": "/api/v1/dependencies/{dependency_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/dependencies/[0-9]+$",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts"
-      ],
-      "exclude_from_inventory": true
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -127,6 +111,8 @@
       "path": "/api/v1/issues/{issue_id}/dependencies",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/issues/[0-9]+/dependencies$",
+      "runtime": "native-rust",
+      "status": "target",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-issues.ts",
@@ -140,6 +126,8 @@
       "path": "/api/v1/threads/{thread_id}/dependencies",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/threads/[0-9]+/dependencies$",
+      "runtime": "native-rust",
+      "status": "target",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-dependency-groups.ts",
@@ -156,6 +144,8 @@
       "path": "/api/v1/threads/{thread_id}/issue-dependencies",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
+      "runtime": "native-rust",
+      "status": "target",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-dependency-groups.ts",

@@ -61,10 +61,8 @@ use utoipa::OpenApi;
         crate::dependencies::delete_dependency_documentation,
         crate::dependencies::get_thread_dependencies_documentation,
         crate::legacy_dependencies::blocked_documentation,
-        crate::legacy_dependencies::create_documentation,
         crate::legacy_dependencies::get_documentation,
         crate::legacy_dependencies::update_documentation,
-        crate::legacy_dependencies::delete_documentation,
         crate::issue_mutation::create_issues_documentation,
         crate::issue_mutation::delete_issue_documentation,
         crate::issue_mutation::issue_order_documentation,
@@ -346,7 +344,11 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::issue_service::IssueApi::openapi())
         .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
         .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
-        .merge_from(crate::custom_cbl::CustomCblApi::openapi());
+        .merge_from(crate::custom_cbl::CustomCblApi::openapi())
+        .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
+        .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
+        .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())
+        .merge_from(crate::undo_apply::UndoApplyApi::openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.
@@ -528,15 +530,15 @@ mod tests {
     fn continuity_plans_same_path_operations_and_schemas_are_documented() {
         let document = document();
         for path in [
-            "/api/v1/continuity-plans/",
-            "/api/v1/continuity-plans/from-reading-order",
-            "/api/v1/continuity-plans/{plan_id}",
-            "/api/v1/continuity-plans/{plan_id}/membership",
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
-            "/api/v1/continuity-plans/release-sources/",
-            "/api/v1/continuity-plans/release-sources/{source_id}",
-            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            "/api/v2/continuity-plans/",
+            "/api/v2/continuity-plans/from-reading-order",
+            "/api/v2/continuity-plans/{plan_id}",
+            "/api/v2/continuity-plans/{plan_id}/membership",
+            "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
+            "/api/v2/continuity-plans/release-sources/",
+            "/api/v2/continuity-plans/release-sources/{source_id}",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/",
         ] {
             assert!(
                 document["paths"].get(path).is_some(),
