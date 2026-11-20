@@ -3,6 +3,10 @@
 use utoipa::OpenApi;
 
 #[derive(utoipa::OpenApi)]
+// Both v1 same-path documentation families intentionally dropped from this list:
+// #5532 moved issue read-state/identity-inbox reads to canonical v2, and #5528
+// moved continuity-plans/reading-plan-sync/undo to v2. Keep both removals when
+// re-resolving the merge; those operations now live only in the v2 contract.
 #[openapi(paths(
     crate::dismiss_pending::dismiss_pending_documentation,
     crate::reading_mode::get_reading_mode_documentation,
