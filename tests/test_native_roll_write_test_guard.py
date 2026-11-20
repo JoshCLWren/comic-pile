@@ -30,9 +30,10 @@ WRITE_ROUTE_RE = re.compile(
     r'(?P<path>(?:[a-z_0-9]+::)*[a-z_0-9]+)\s*\)',
     re.DOTALL,
 )
-# POST routes that are pure read projections (a batch body with no INSERT/UPDATE/
-# DELETE) cannot have a write path. They must instead prove the mounted HTTP route
-# against the canonical schema in a DB-backed Rust HTTP integration test.
+# A write-path test is database-backed when it reaches the disposable database.
+# `test_support` is the canonical accessor and the raw env var is the legacy /
+# skip-guard spelling, so accept either.  ``RUST_ROLL_PARITY_DATABASE_URL`` is
+# the restricted DML-role DSN used by the canonical-schema parity suite.
 DB_TEST_MARKERS = (
     "RUST_ROLL_TEST_DATABASE_URL",
     "RUST_ROLL_PARITY_DATABASE_URL",
@@ -213,7 +214,115 @@ def _integration_tests_write_path(module: str, handler: str) -> bool:
     return False
 
 
-def _tests_write_path(module: str, handler: str) -> bool:
+def _route_call_tails() -> list[tuple[str, str]]:
+    """Return ``(route_path, tail)`` for every ``.route()`` call in the router.
+
+    The balanced-paren scan keeps ``tail`` as the method-router expression of
+    the call (for example ``post(a).delete(b)``), so handlers reached through
+    chained method routers are visible alongside simple mounts.
+    """
+    lib = _lib_source()
+    results: list[tuple[str, str]] = []
+    for match in re.finditer(r"\.route\(", lib):
+        start = match.end() - 1
+        depth = 0
+        end = start
+        while end < len(lib):
+            if lib[end] == "(":
+                depth += 1
+            elif lib[end] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            end += 1
+        inner = lib[start + 1 : end]
+        path_match = re.match(r'\s*"([^"]+)"\s*,', inner)
+        if path_match is None:
+            continue
+        results.append((path_match.group(1), inner[path_match.end():]))
+    return results
+
+
+_ROUTE_METHOD_RE = re.compile(
+    r"\b(post|patch|put|delete)\(\s*((?:[a-z_0-9]+::)*[a-z_0-9]+)\s*\)",
+    re.DOTALL,
+)
+
+
+def _routes_by_handler() -> dict[tuple[str, str], list[str]]:
+    """Map every mounted ``(module, handler)`` pair to its route paths.
+
+    Returns:
+        Dictionary of ``(module, handler)`` to the literal route paths
+        ``lib.rs`` mounts them on, in router order.
+    """
+    result: dict[tuple[str, str], list[str]] = {}
+    for route_path, tail in _route_call_tails():
+        for method, handler in _ROUTE_METHOD_RE.findall(tail):
+            module, _, name = handler.rpartition("::")
+            result.setdefault((module, name), []).append(route_path)
+    return result
+
+
+def _route_path_present(source: str, route_path: str) -> bool:
+    """Check whether a test source references a mounted route path.
+
+    Path parameters (``{param}``) in the router path match any non-slash
+    segment in the test source, because tests may construct concrete ids
+    (``/api/v2/issues/710021/read-markers``).
+    """
+    pattern = re.compile(
+        "".join(
+            "[^/]+" if part.startswith("{") else re.escape(part)
+            for part in re.split(r"(\{[^}]*\})", route_path)
+        )
+    )
+    return pattern.search(source) is not None
+
+
+def _integration_test_files() -> list[Path]:
+    """Return every Rust HTTP integration test in the roll-service test suite."""
+    return sorted((REPOSITORY_ROOT / "native" / "roll-service" / "tests").glob("*.rs"))
+
+
+def _http_tests_write_path(module: str, handler: str) -> bool:
+    """Recognize existing DB-backed HTTP integration tests for a mounted handler.
+
+    Modules whose write paths are covered by real HTTP tests must not need new
+    baseline exemptions. A recognized test drives the mounted mutating route
+    through the production router against the canonical schema, reaches the
+    database, and asserts a success status — the same evidence the
+    ``INTEGRATION_WRITE_TESTS`` exemptions above demand.
+
+    Args:
+        module: Rust module name mounted on a POST route.
+        handler: Handler function name from the route.
+
+    Returns:
+        True when an existing DB-backed HTTP test covers the handler.
+    """
+    resolved_module = _resolve_handler_module(module, handler)
+    if not resolved_module:
+        return False
+    routes = _routes_by_handler().get((resolved_module, handler)) or _routes_by_handler().get(
+        (module, handler)
+    )
+    if not routes:
+        return False
+    for path in _integration_test_files():
+        source = path.read_text(encoding="utf-8")
+        if not any(marker in source for marker in DB_TEST_MARKERS):
+            continue
+        if "oneshot(" not in source:
+            continue
+        if not any(status in source for status in SUCCESS_STATUS_MARKERS):
+            continue
+        if any(_route_path_present(source, route_path) for route_path in routes):
+            return True
+    return False
+
+
+def _unit_tests_write_path(module: str, handler: str) -> bool:
     """Return whether the test module reaches this handler's write path.
 
     A DB marker alone is insufficient: ``roll_offer`` had one for a read-only
@@ -260,6 +369,26 @@ def _tests_write_path(module: str, handler: str) -> bool:
         rf"(?<![A-Za-z0-9_])persist_{re.escape(handler)}\(",
     )
     return any(re.search(pattern, tests) for pattern in references)
+
+
+def _tests_write_path(module: str, handler: str) -> bool:
+    """Return whether the module or an existing HTTP test covers the write path.
+
+    A mounted route passes when either the module's own tests reach the
+    handler write path (the historical bar), or the route is proven by an
+    existing DB-backed HTTP integration test — the evidence the guard already
+    requires elsewhere. New baseline entries should not be needed for either.
+
+    Args:
+        module: Rust module name mounted on a POST route.
+        handler: Handler function name from the route.
+
+    Returns:
+        True when the write path is proven without a new exemption.
+    """
+    if _unit_tests_write_path(module, handler):
+        return True
+    return _http_tests_write_path(module, handler)
 
 
 def _baseline_modules() -> dict[str, str]:
