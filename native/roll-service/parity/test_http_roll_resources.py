@@ -255,12 +255,33 @@ async def test_scoped_roll_resources_match_the_canonical_schema() -> None:
         )
         assert snoozed["status"] == 200, snoozed
         assert snoozed["eligible_statements"] == 1, snoozed
-        # Browser snoozes leave the queue before the die bound, exactly as the
-        # offer does, so the pool backfills from beyond the snoozed window.
+        # The die bounds the pool before the browser snoozes are applied
+        # (MQA-ROLL-014): snoozing two of the four faces leaves two, and ranks
+        # 5-6 never backfill into the vacated faces.
         assert snoozed["body"] == {
             "die": 4,
-            "issue_ids": owner_issue_ids[2:6],
-            "thread_ids": owner_thread_ids[2:6],
+            "issue_ids": owner_issue_ids[2:4],
+            "thread_ids": owner_thread_ids[2:4],
+            "pool_reason": "ready",
+        }
+
+        # Snoozing every face of the d4 window exhausts the pool instead of
+        # refilling from the two deeper-ranked candidates (MQA-ROLL-014).
+        exhausted = await _run_example(
+            {
+                **env,
+                "RUST_ROLL_TEST_URI": "/api/v2/roll/eligible-issue-ids?"
+                + urlencode(
+                    {"snoozed": ",".join(str(thread_id) for thread_id in owner_thread_ids[:4])}
+                ),
+            }
+        )
+        assert exhausted["status"] == 200, exhausted
+        assert exhausted["eligible_statements"] == 1, exhausted
+        assert exhausted["body"] == {
+            "die": 4,
+            "issue_ids": [],
+            "thread_ids": [],
             "pool_reason": "ready",
         }
 
