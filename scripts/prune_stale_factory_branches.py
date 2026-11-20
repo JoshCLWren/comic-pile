@@ -174,22 +174,28 @@ def local_worktree_branches(repo_root: Path) -> set[str]:
 
 def remote_default_branch(repo_root: Path, remote: str = "origin") -> str:
     """Resolve the default branch for a remote."""
-    proc = run(["git", "-C", str(repo_root), "symbolic-ref", f"refs/remotes/{remote}/HEAD"], check=False)
+    ref_prefix = f"refs/remotes/{remote}/HEAD"
+    proc = run(["git", "-C", str(repo_root), "symbolic-ref", ref_prefix], check=False)
     if proc.returncode == 0:
         ref = proc.stdout.strip()
         prefix = f"refs/remotes/{remote}/"
         if ref.startswith(prefix):
             return ref[len(prefix):]
     for candidate in ("main", "master"):
-        if run(["git", "-C", str(repo_root), "rev-parse", "--verify", f"{remote}/{candidate}"], check=False).returncode == 0:
+        candidate_ref = f"{remote}/{candidate}"
+        if run(
+            ["git", "-C", str(repo_root), "rev-parse", "--verify", candidate_ref],
+            check=False,
+        ).returncode == 0:
             return candidate
     return "main"
 
 
 def list_remote_branches(repo_root: Path, remote: str = "origin") -> list[BranchInfo]:
     """List remote branches with commit metadata."""
+    ref_filter = f"refs/remotes/{remote}"
     fmt = "%(refname:short)\t%(objectname)\t%(committerdate:iso-strict)"
-    proc = run(["git", "-C", str(repo_root), "for-each-ref", f"refs/remotes/{remote}", f"--format={fmt}"])
+    proc = run(["git", "-C", str(repo_root), "for-each-ref", ref_filter, f"--format={fmt}"])
     branches: list[BranchInfo] = []
     prefix = f"{remote}/"
     for line in proc.stdout.splitlines():
@@ -365,7 +371,11 @@ def fetch_issue_signal(repo: str, issue_number: int) -> LeaseSignal | None:
         for label in (issue.get("labels") or [])
         if isinstance(label, dict) and label.get("name")
     }
-    owners = sorted(label for label in labels if OWNER_RE.fullmatch(label) and label != "factory:unowned")
+    owners = sorted(
+    label
+    for label in labels
+    if OWNER_RE.fullmatch(label) and label != "factory:unowned"
+)
     owner = owners[0] if len(owners) == 1 else (owners[0] if owners else None)
     updated_at = parse_iso8601(str(issue.get("updated_at") or issue.get("updatedAt") or ""))
     return LeaseSignal(
@@ -415,9 +425,12 @@ def active_lease(signal: LeaseSignal | None, now: datetime) -> tuple[bool, str |
     owner = signal.owner
     if owner is None:
         # Multiple owners or no owner: multiple means ambiguous/unsafe.
-        owners = sorted(
-            label for label in signal.labels if OWNER_RE.fullmatch(label) and label != "factory:unowned"
-        )
+        filtered_labels = [
+            label
+            for label in signal.labels
+            if OWNER_RE.fullmatch(label) and label != "factory:unowned"
+        ]
+        owners = sorted(filtered_labels)
         if len(owners) > 1:
             return True, f"ambiguous active owners on {signal.target}"
         return False, None
@@ -769,11 +782,24 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo", help="GitHub repo (owner/name) for PR/issue/protection lookups")
     p.add_argument("--remote", default="origin", help="Git remote to inspect (default: origin)")
-    p.add_argument("--age-days", type=int, default=DEFAULT_AGE_DAYS, help="Minimum age in days (default: 14)")
-    p.add_argument("--apply", action="store_true", help="Delete eligible remote branches (default: dry-run)")
+    p.add_argument(
+        "--age-days",
+        type=int,
+        default=DEFAULT_AGE_DAYS,
+        help="Minimum age in days (default: 14)",
+    )
+    p.add_argument(
+        "--apply",
+        action="store_true",
+        help="Delete eligible remote branches (default: dry-run)",
+    )
     p.add_argument("--format", choices=("text", "json"), default="text", help="Report format")
     p.add_argument("--report-file", help="Write report output to this file")
-    p.add_argument("--all-branches", action="store_true", help="Evaluate all remote branches, not just factory/local/backup scope")
+    p.add_argument(
+        "--all-branches",
+        action="store_true",
+        help="Evaluate all remote branches, not just factory/local/backup scope",
+    )
     return p
 
 
@@ -815,9 +841,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     # apply decisions are made against current remote state.
     fetch_proc = run(["git", "-C", str(repo_root), "fetch", remote, "--prune"], check=False)
     if fetch_proc.returncode != 0:
-        raise SystemExit(
-            f"error: unable to refresh remote refs: {fetch_proc.stderr.strip() or fetch_proc.stdout.strip()}"
-        )
+        stderr = fetch_proc.stderr.strip()
+        stdout = fetch_proc.stdout.strip()
+        message = stderr if stdout is None or not stderr else stdout
+        raise SystemExit(f"error: unable to refresh remote refs: {message}")
 
     branches = list_remote_branches(repo_root, remote)
     if not args.all_branches:
