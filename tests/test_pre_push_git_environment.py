@@ -42,7 +42,12 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
     (repository / "pyproject.toml").touch()
     (repository / "frontend" / "node_modules").mkdir(parents=True)
     (repository / "scripts").mkdir()
-    (repository / "scripts" / "lint.sh").write_text("exit 0\n")
+    (repository / "scripts" / "lint.sh").write_text(
+        "#!/bin/bash\n"
+        "set -eu\n"
+        "python -c 'pass'\n"
+        'pnpm --version >/dev/null\n'
+    )
     tools_directory = tmp_path / "tools"
     tools_directory.mkdir()
     for tool in ("python", "pnpm"):
@@ -72,4 +77,11 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert not gate_log.exists() or gate_log.read_text() == ""
+    # The lint stub must have run (and thus executed the leaked-Git-environment
+    # checks); a missing or empty gate log means the environment checks went unused.
+    assert gate_log.exists(), "pre-push lint did not run, so the Git isolation checks never executed"
+    log = gate_log.read_text()
+    assert log.strip() != "", "pre-push lint ran but no tool stubs were invoked"
+    # No product test commands ran on push: backend pytest, Vitest, or the UI audit.
+    for token in ("pytest", "vitest", "ui audit", "playwright"):
+        assert token not in log, f"a test command ran on push: {token!r}"
