@@ -235,7 +235,7 @@ export const comicVineApi = {
   getIssueIntelligence: (issueId: number) =>
     api.get<ComicVineIssueIntelligence | null>(`/v2/issues/${issueId}/comicvine`),
   importIssue: (payload: ComicVineImportIssuePayload) =>
-    api.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v1/comicvine/issues:import', payload),
+    api.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v2/comicvine/issues:import', payload),
   importSeries: (payload: ComicVineImportSeriesPayload) =>
     // A series import adopts every provider issue for one volume, so a long run
     // routinely outlasts the shared 10s client default. The server keeps working

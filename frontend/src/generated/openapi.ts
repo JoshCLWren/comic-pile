@@ -1983,6 +1983,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/comicvine/issues:import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["import_issue_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/comicvine/resolve": {
         parameters: {
             query?: never;
@@ -6721,6 +6737,37 @@ export interface components {
             /** Format: int32 */
             id: number;
             name: string;
+        };
+        /**
+         * @description Python `ImportIssueRequest`: `title` 1-200 characters (stored stripped),
+         *     `comicvine_issue_id > 0`, `issue_number` at most 50 characters, and the
+         *     optional reading-order ids `> 0`.
+         */
+        NativeImportIssueRequest: {
+            /** Format: int32 */
+            anchor_after_thread_id?: number | null;
+            /** Format: int32 */
+            anchor_before_thread_id?: number | null;
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            issue_number?: string | null;
+            /** Format: int32 */
+            reading_order_id?: number | null;
+            title: string;
+        };
+        NativeImportIssueResponse: {
+            /** Format: int32 */
+            external_identity_id: number;
+            /** Format: int32 */
+            issue_id: number;
+            /** Format: int32 */
+            position?: number | null;
+            /** Format: int32 */
+            reading_order_id?: number | null;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int32 */
+            total_items?: number | null;
         };
         /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
         NativeIssueCreatorsEntry: {
@@ -14434,6 +14481,65 @@ export interface operations {
             };
             /** @description Issue not owned */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    import_issue_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeImportIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Imported thread, issue and identity */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeImportIssueResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description ComicVine issue already exists for this reader */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
