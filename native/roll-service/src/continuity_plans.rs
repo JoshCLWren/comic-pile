@@ -101,17 +101,29 @@ pub struct ContinuityPlanNode {
     pub is_checkpoint: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint_target_ref_id: Option<i32>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub checkpoint_target_ref_ids: Vec<i32>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checkpoint_target_ref_ids: Option<Vec<i32>>,
+    #[serde(default, deserialize_with = "deserialize_convergence_gate", skip_serializing_if = "Vec::is_empty")]
     pub convergence_gate: Vec<serde_json::Value>,
+}
+
+fn deserialize_convergence_gate<'de, D>(deserializer: D) -> Result<Vec<serde_json::Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    if value.is_null() {
+        Ok(Vec::new())
+    } else {
+        Vec::deserialize(value).map_err(serde::de::Error::custom)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ContinuityPlanWrite {
     pub name: String,
-    #[serde(rename = "ordering_mode")]
+    #[serde(rename = "ordering_mode", default = "default_ordering_mode")]
     pub ordering_mode: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lanes: Vec<ContinuityPlanLane>,
@@ -119,6 +131,10 @@ pub struct ContinuityPlanWrite {
     pub nodes: Vec<ContinuityPlanNode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expected_updated_at: Option<String>,
+}
+
+fn default_ordering_mode() -> String {
+    "informational".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -146,7 +162,7 @@ pub struct ContinuityPlanListItem {
     pub lane_count: i32,
     #[serde(rename = "step_count")]
     pub step_count: i32,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub source_paths: Vec<String>,
     #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub source_names: serde_json::Value,
@@ -1190,7 +1206,10 @@ fn decode_rule(row: &tokio_postgres::Row) -> StoredRule {
     }
 }
 
-fn checkpoint_edges(nodes: &[ContinuityPlanNode]) -> Vec<CompiledEdge> {
+fn checkpoint_edges(
+    nodes: &[ContinuityPlanNode],
+    existing_targets: &std::collections::HashMap<String, (Option<i32>, Vec<i32>)>,
+) -> Vec<CompiledEdge> {
     use std::collections::{BTreeSet, HashMap};
 
     let mut by_lane: HashMap<&str, Vec<&ContinuityPlanNode>> = HashMap::new();
@@ -1211,15 +1230,28 @@ fn checkpoint_edges(nodes: &[ContinuityPlanNode]) -> Vec<CompiledEdge> {
         if !node.is_checkpoint {
             continue;
         }
-        let mut explicit: BTreeSet<i32> = node.checkpoint_target_ref_ids.iter().copied().collect();
-        if let Some(target) = node.checkpoint_target_ref_id {
-            explicit.insert(target);
-        }
         let checkpoint_issue_id = if node.node_type == "issue" {
             Some(node.ref_id)
         } else {
             None
         };
+
+        // Check if target fields were explicitly provided in the incoming payload
+        let has_explicit_ref_id = node.checkpoint_target_ref_id.is_some();
+        let has_explicit_ref_ids = node.checkpoint_target_ref_ids.is_some();
+
+        let mut explicit: BTreeSet<i32> = BTreeSet::new();
+        if has_explicit_ref_ids {
+            if let Some(ref ids) = node.checkpoint_target_ref_ids {
+                explicit.extend(ids.iter().copied());
+            }
+        }
+        if has_explicit_ref_id {
+            if let Some(target) = node.checkpoint_target_ref_id {
+                explicit.insert(target);
+            }
+        }
+
         if !explicit.is_empty() {
             for target in explicit {
                 let target_node = match by_issue.get(&target) {
@@ -1240,6 +1272,36 @@ fn checkpoint_edges(nodes: &[ContinuityPlanNode]) -> Vec<CompiledEdge> {
             }
             continue;
         }
+
+        // No explicit targets provided - preserve existing targets if available
+        if let Some((existing_ref_id, existing_ref_ids)) = existing_targets.get(&node.id) {
+            let mut preserved: BTreeSet<i32> = BTreeSet::new();
+            if let Some(ref_id) = existing_ref_id {
+                preserved.insert(*ref_id);
+            }
+            preserved.extend(existing_ref_ids.iter().copied());
+
+            for target in preserved {
+                let target_node = match by_issue.get(&target) {
+                    Some(value) => *value,
+                    None => continue,
+                };
+                if target_node.ref_id == node.ref_id {
+                    continue;
+                }
+                edges.push(CompiledEdge {
+                    source_type: node.node_type.clone(),
+                    source_id: node.ref_id,
+                    target_type: target_node.node_type.clone(),
+                    target_id: target_node.ref_id,
+                    satisfaction: "checkpoint".into(),
+                    extra: checkpoint_issue_id.map(EdgeExtra::Checkpoint),
+                });
+            }
+            continue;
+        }
+
+        // Fallback: redirect to next node in lane (legacy behavior for new checkpoints)
         let lane_nodes = by_lane
             .get(node.lane_id.as_str())
             .cloned()
@@ -1276,6 +1338,7 @@ async fn compile_plan_rules(
     nodes: &[ContinuityPlanNode],
     ordering_mode: &str,
     prior_ordering_mode: Option<&str>,
+    existing_checkpoint_targets: Option<&std::collections::HashMap<String, (Option<i32>, Vec<i32>)>>,
 ) -> Result<(), ApiError> {
     use std::collections::{HashMap, HashSet};
 
@@ -1336,7 +1399,7 @@ async fn compile_plan_rules(
     }
 
     // 2. Checkpoint rules from explicitly flagged nodes.
-    edges_to_add.extend(checkpoint_edges(nodes));
+    edges_to_add.extend(checkpoint_edges(nodes, existing_checkpoint_targets.unwrap_or(&std::collections::HashMap::new())));
 
     // 3. Convergence rules: a node waits for every gate target.
     let nodes_by_id: HashMap<&str, &ContinuityPlanNode> =
@@ -1912,6 +1975,7 @@ pub async fn create_continuity_plan(
         plan_id,
         &payload.nodes,
         &payload.ordering_mode,
+        None,
         None,
     )
     .await
