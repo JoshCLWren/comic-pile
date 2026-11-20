@@ -1301,3 +1301,1091 @@ async fn identity_reads_require_auth_and_use_the_validation_contract() {
         assert_eq!(body, json!({"detail": "Validation failed"}), "{path}");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Chunk C: identity and correction writes.
+// ---------------------------------------------------------------------------
+
+fn call(method: &str, path: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Body> {
+    let builder = Request::builder()
+        .method(method)
+        .uri(path)
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header("x-csrf-token", csrf)
+        .header(header::COOKIE, format!("csrf_token={csrf}"));
+    match body {
+        Some(body) => builder
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap(),
+        None => builder.body(Body::empty()).unwrap(),
+    }
+}
+
+#[tokio::test]
+async fn identity_writes_require_authentication_and_csrf() {
+    let (state, token, _csrf, _user, _guard) = setup_user("cvv2-write-auth").await;
+    for (method, path) in [
+        ("DELETE", "/api/v2/comicvine/issues/1/identity"),
+        ("POST", "/api/v2/comicvine/issues/1/identity:confirm"),
+        ("POST", "/api/v2/comicvine/issues/1/identity:replace"),
+        ("POST", "/api/v2/comicvine/issues/1/metadata:correct"),
+        ("POST", "/api/v2/comicvine/issues/1/metadata:revert"),
+        ("POST", "/api/v2/comicvine/issues/1/metadata:refresh"),
+    ] {
+        // Unauthenticated, with a matching CSRF pair so only auth can reject.
+        let request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header("x-csrf-token", "pair")
+            .header(header::COOKIE, "csrf_token=pair")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from("{}"))
+            .unwrap();
+        let (status, body) = send(&state, request).await;
+        assert_eq!(
+            status,
+            StatusCode::UNAUTHORIZED,
+            "{method} {path}: {body:?}"
+        );
+        // Authenticated but missing the CSRF pair: 403 before any handler work.
+        let request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from("{}"))
+            .unwrap();
+        let (status, body) = send(&state, request).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{method} {path}: {body:?}");
+    }
+    let conn = state.pool.get().await.unwrap();
+    let written: i64 = conn
+        .query_one(
+            "SELECT (SELECT count(*) FROM issue_external_identity_mappings) \
+                  + (SELECT count(*) FROM issue_metadata_corrections)",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(written, 0, "rejected requests never write");
+}
+
+#[tokio::test]
+async fn identity_confirm_replace_remove_flow_matches_python() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-identity").await;
+    set_key(false);
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Saga").await;
+    let i = issue(&conn, t, "1", 1).await;
+    let base = format!("/api/v2/comicvine/issues/{i}");
+
+    // Empty state.
+    let (status, body) = send(
+        &state,
+        call("GET", &format!("{base}/identity"), &token, &csrf, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["issue_id"], i);
+    assert_eq!(body["thread_id"], t);
+    assert_eq!(body["thread_title"], "Saga");
+    assert_eq!(body["has_confirmed_identity"], false);
+    assert_eq!(body["comicvine_issue_id"], Value::Null);
+    assert_eq!(body["confirmed_mappings"], json!([]));
+    assert_eq!(body["has_unresolved"], false);
+
+    // Removing before confirming: 400 with the Python message.
+    let (status, body) = send(
+        &state,
+        call("DELETE", &format!("{base}/identity"), &token, &csrf, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["detail"],
+        format!("No confirmed ComicVine identity mapping found for issue {i}")
+    );
+
+    // Confirm.
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 1111})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["has_confirmed_identity"], true);
+    assert_eq!(body["comicvine_issue_id"], "1111");
+    let mapping = &body["confirmed_mappings"][0];
+    assert_eq!(mapping["provider"], "comicvine");
+    assert_eq!(mapping["comicvine_id"], "1111");
+    assert_eq!(mapping["status"], "confirmed");
+    assert_eq!(mapping["confidence"], 1.0);
+    assert_eq!(mapping["evidence_source"], "user_confirmed");
+    assert!(mapping["created_at"].as_str().unwrap().ends_with('Z'));
+    // Confirming queues exactly one deep-metadata refresh for the identity.
+    let queued: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM comicvine_metadata_refresh_requests WHERE state = 'pending'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(queued, 1);
+    // Re-confirming the same id is idempotent and does not queue a second job.
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 1111})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let queued: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM comicvine_metadata_refresh_requests",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(queued, 1);
+
+    // A different confirmed id on the same issue is a 400, not a silent swap.
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 2222})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["detail"],
+        "issue already has a confirmed comicvine identity"
+    );
+
+    // Replace rejects the old mapping (with the reason) and confirms the new one.
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/identity:replace"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 2222, "reason": "wrong volume"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["comicvine_issue_id"], "2222");
+    assert_eq!(body["confirmed_mappings"].as_array().unwrap().len(), 1);
+    let rejected: (String, Option<String>) = {
+        let row = conn
+            .query_one(
+                "SELECT m.status, m.rejection_reason FROM issue_external_identity_mappings m \
+                 JOIN external_identities e ON e.id = m.external_identity_id \
+                 WHERE m.issue_id = $1 AND e.external_id = '1111'",
+                &[&i],
+            )
+            .await
+            .unwrap();
+        (row.get(0), row.get(1))
+    };
+    assert_eq!(
+        rejected,
+        ("rejected".to_owned(), Some("wrong volume".to_owned()))
+    );
+
+    // Refresh reports the confirmed id.
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/metadata:refresh"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({"issue_id": i, "refreshed": true, "comicvine_issue_id": "2222"})
+    );
+
+    // Remove: mapping becomes unresolved with evidence and confidence cleared.
+    let (status, body) = send(
+        &state,
+        call("DELETE", &format!("{base}/identity"), &token, &csrf, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["has_confirmed_identity"], false);
+    assert_eq!(body["has_unresolved"], true);
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/metadata:refresh"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({"issue_id": i, "refreshed": false, "comicvine_issue_id": null})
+    );
+
+    // Replace with the default reason when none is supplied.
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 3333})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/identity:replace"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 4444})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let reason: Option<String> = conn
+        .query_one(
+            "SELECT m.rejection_reason FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE m.issue_id = $1 AND e.external_id = '3333'",
+            &[&i],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(reason.as_deref(), Some("replaced by user"));
+}
+
+#[tokio::test]
+async fn identity_mutations_are_owner_scoped() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-owner").await;
+    set_key(false);
+    let (other_token, other_csrf, other_id) = register_extra_user(&state, "cvv2-other").await;
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Mine").await;
+    let i = issue(&conn, t, "1", 1).await;
+    let base = format!("/api/v2/comicvine/issues/{i}");
+    let _ = other_id;
+    let missing = format!("Issue {i} not found");
+    for (method, path, body) in [
+        ("GET", format!("{base}/identity"), None),
+        ("DELETE", format!("{base}/identity"), None),
+        (
+            "POST",
+            format!("{base}/identity:confirm"),
+            Some(json!({"comicvine_issue_id": 5})),
+        ),
+        (
+            "POST",
+            format!("{base}/identity:replace"),
+            Some(json!({"comicvine_issue_id": 5})),
+        ),
+        ("POST", format!("{base}/metadata:refresh"), None),
+        (
+            "POST",
+            format!("{base}/metadata:correct"),
+            Some(json!({"field_name": "name", "canonical_value": "x"})),
+        ),
+        ("GET", format!("{base}/metadata:corrections"), None),
+        (
+            "POST",
+            format!("{base}/metadata:revert"),
+            Some(json!({"correction_id": 1})),
+        ),
+    ] {
+        let (status, resp) =
+            send(&state, call(method, &path, &other_token, &other_csrf, body)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{method} {path}: {resp:?}");
+        assert_eq!(resp["detail"], missing, "{method} {path}");
+    }
+    // Nothing was written for the non-owner.
+    let count: i64 = conn
+        .query_one("SELECT count(*) FROM issue_external_identity_mappings", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 0);
+    let _ = (token, csrf);
+}
+
+#[tokio::test]
+async fn concurrent_confirms_leave_exactly_one_confirmed_identity() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-race", 8, None).await;
+    set_key(false);
+    // An 8-connection pool lets the four transactions really overlap; the
+    // reader's queue lock is what serializes them (#4631578582).
+    let (t, i) = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Race").await;
+        let i = issue(&conn, t, "1", 1).await;
+        (t, i)
+    };
+    let _ = t;
+    let path = format!("/api/v2/comicvine/issues/{i}/identity:confirm");
+    let mut handles = Vec::new();
+    for cv in [7001, 7002, 7003, 7004] {
+        let state = state.clone();
+        let (token, csrf, path) = (token.clone(), csrf.clone(), path.clone());
+        handles.push(tokio::spawn(async move {
+            send(
+                &state,
+                call(
+                    "POST",
+                    &path,
+                    &token,
+                    &csrf,
+                    Some(json!({"comicvine_issue_id": cv})),
+                ),
+            )
+            .await
+        }));
+    }
+    let mut ok = 0;
+    for handle in handles {
+        let (status, body) = handle.await.unwrap();
+        match status {
+            StatusCode::OK => ok += 1,
+            StatusCode::BAD_REQUEST => {
+                assert_eq!(
+                    body["detail"],
+                    "issue already has a confirmed comicvine identity"
+                )
+            }
+            other => panic!("unexpected {other}: {body:?}"),
+        }
+    }
+    assert_eq!(ok, 1, "exactly one concurrent confirm may win");
+    let conn = state.pool.get().await.unwrap();
+    let confirmed: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM issue_external_identity_mappings WHERE issue_id = $1 AND status = 'confirmed'",
+            &[&i],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(confirmed, 1);
+}
+
+#[tokio::test]
+async fn metadata_corrections_apply_list_revert() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-corr").await;
+    set_key(false);
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Corr").await;
+    let i = issue(&conn, t, "1", 1).await;
+    let identity: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
+             created_at, updated_at) VALUES ('comicvine', 'issue', '9001', $1, NOW(), NOW()) RETURNING id",
+            &[&json!({"name": "Provider Name"})],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
+         created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
+        &[&i, &identity],
+    )
+    .await
+    .unwrap();
+    let base = format!("/api/v2/comicvine/issues/{i}");
+
+    let (status, body) = send(
+        &state,
+        call(
+            "GET",
+            &format!("{base}/metadata:corrections"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({"issue_id": i, "corrections": []}));
+
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/metadata:correct"),
+            &token,
+            &csrf,
+            Some(json!({"field_name": "name", "canonical_value": "My Name", "reason": "typo"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let correction = &body["corrections"][0];
+    assert_eq!(correction["field_name"], "name");
+    assert_eq!(correction["provider_value"], "Provider Name");
+    assert_eq!(correction["canonical_value"], "My Name");
+    assert_eq!(correction["provenance"], "user_correction");
+    assert_eq!(correction["created_by"], user_id);
+    assert!(correction["created_at"].as_str().unwrap().ends_with('Z'));
+    let cid = correction["id"].as_i64().unwrap();
+
+    // A field the provider never supplied stores no provider value.
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/metadata:correct"),
+            &token,
+            &csrf,
+            Some(json!({"field_name": "cover_date", "canonical_value": "2020-01-01"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["corrections"][1]["provider_value"], Value::Null);
+
+    // Revert is soft; a second revert of the same id is a 400.
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/metadata:revert"),
+            &token,
+            &csrf,
+            Some(json!({"correction_id": cid})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["corrections"].as_array().unwrap().len(), 1);
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/metadata:revert"),
+            &token,
+            &csrf,
+            Some(json!({"correction_id": cid})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["detail"], format!("Correction {cid} not found"));
+}
+
+#[tokio::test]
+async fn identity_removal_and_readd_leave_thread_series_metadata_untouched() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-5487").await;
+    set_key(false);
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Superman").await;
+    let i = issue(&conn, t, "4", 1).await;
+    let metadata = json!({"volume": {"id": 4050, "name": "Superman (2018)"}, "publisher": {"name": "DC Comics"}, "start_year": 2023});
+    let series_identity: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
+             created_at, updated_at) VALUES ('comicvine', 'series', '4050', $1, NOW(), NOW()) RETURNING id",
+            &[&metadata],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO thread_external_series_mappings (thread_id, external_identity_id, status, \
+         confidence, created_at, updated_at) VALUES ($1, $2, 'confirmed', 1.0, NOW(), NOW())",
+        &[&t, &series_identity],
+    )
+    .await
+    .unwrap();
+    let snapshot = |conn: Conn| async move {
+        let row = conn
+            .query_one(
+                "SELECT m.status, m.confidence, e.metadata_json FROM thread_external_series_mappings m \
+                 JOIN external_identities e ON e.id = m.external_identity_id WHERE m.thread_id = $1",
+                &[&t],
+            )
+            .await
+            .unwrap();
+        (
+            row.get::<_, String>(0),
+            row.get::<_, Option<f64>>(1),
+            row.get::<_, Value>(2),
+        )
+    };
+    let before = snapshot(state.pool.get().await.unwrap()).await;
+    let base = format!("/api/v2/comicvine/issues/{i}/identity");
+    for step in 0..2 {
+        let (status, _) = send(
+            &state,
+            call(
+                "POST",
+                &format!("{base}:confirm"),
+                &token,
+                &csrf,
+                Some(json!({"comicvine_issue_id": 8800 + step})),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let (status, _) = send(&state, call("DELETE", &base, &token, &csrf, None)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(snapshot(state.pool.get().await.unwrap()).await, before);
+    }
+}
+
+type Pending = tokio::task::JoinHandle<(StatusCode, Value)>;
+
+/// Deterministic signal that `expected` requests are blocked on the reader's
+/// queue advisory lock: poll `pg_locks` for ungranted waiters on that exact
+/// key. No sleeps or deadlines. A writer that skips the queue lock never
+/// becomes a waiter and instead runs to completion, which fails the test
+/// immediately instead of hanging it.
+async fn wait_for_queue_lock_waiters(
+    tx: &deadpool_postgres::Transaction<'_>,
+    user_id: i32,
+    expected: i64,
+    pending: &[&Pending],
+) {
+    loop {
+        let waiting: i64 = tx
+            .query_one(
+                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted \
+                 AND classid = 699001 AND objid = $1::int4::oid \
+                 AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
+                &[&user_id],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        if waiting >= expected {
+            return;
+        }
+        assert!(
+            pending.iter().all(|handle| !handle.is_finished()),
+            "a writer finished while the reader's queue lock was held: it never took the queue lock"
+        );
+        tokio::task::yield_now().await;
+    }
+}
+
+async fn hold_queue_lock(
+    conn: &mut deadpool_postgres::Object,
+    user_id: i32,
+) -> deadpool_postgres::Transaction<'_> {
+    let tx = conn.transaction().await.unwrap();
+    tx.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&699001_i32, &user_id],
+    )
+    .await
+    .unwrap();
+    tx
+}
+
+fn spawn_send(state: &Arc<AppState>, request: Request<Body>) -> Pending {
+    let state = state.clone();
+    tokio::spawn(async move { send(&state, request).await })
+}
+
+/// Holds the reader's queue advisory lock in one session and proves a request
+/// is blocked on it BEFORE it takes any thread/issue row lock (lock order:
+/// queue lock first, then row locks; #5398/#5419). While the request waits, a
+/// second session must still be able to `FOR UPDATE NOWAIT` the issue row.
+async fn assert_queue_lock_precedes_row_locks(
+    state: &Arc<AppState>,
+    user_id: i32,
+    issue_id: i32,
+    request: Request<Body>,
+) -> (StatusCode, Value) {
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let pending = spawn_send(state, request);
+    wait_for_queue_lock_waiters(&tx, user_id, 1, &[&pending]).await;
+    tx.query_one(
+        "SELECT id FROM issues WHERE id = $1 FOR UPDATE NOWAIT",
+        &[&issue_id],
+    )
+    .await
+    .expect("writer took an issue row lock before the queue lock");
+    tx.commit().await.unwrap();
+    drop(holder);
+    pending.await.unwrap()
+}
+
+#[tokio::test]
+async fn identity_writers_take_the_queue_lock_before_row_locks() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-lockorder").await;
+    set_key(false);
+    let (t, i) = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Locks").await;
+        (t, issue(&conn, t, "1", 1).await)
+    };
+    let _ = t;
+    let (status, body) = assert_queue_lock_precedes_row_locks(
+        &state,
+        user_id,
+        i,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 9101})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let (status, body) = assert_queue_lock_precedes_row_locks(
+        &state,
+        user_id,
+        i,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:replace"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 9102, "reason": "wrong"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let (status, body) = assert_queue_lock_precedes_row_locks(
+        &state,
+        user_id,
+        i,
+        call(
+            "DELETE",
+            &format!("/api/v2/comicvine/issues/{i}/identity"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["has_confirmed_identity"], false);
+}
+#[tokio::test]
+async fn confirmation_reopens_finished_refresh_jobs_instead_of_failing() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-refresh").await;
+    set_key(false);
+    for (n, finished) in ["failed", "completed", "no_credits"]
+        .into_iter()
+        .enumerate()
+    {
+        let cv = 9200 + n as i32;
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, &format!("Refresh {finished}")).await;
+        let i = issue(&conn, t, "1", 1).await;
+        let identity: i32 = conn
+            .query_one(
+                "INSERT INTO external_identities (provider, entity_type, external_id, external_url, \
+                 metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'issue', $1, 'https://comicvine.gamespot.com/', '{}'::jsonb, now(), now()) \
+                 RETURNING id",
+                &[&cv.to_string()],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        conn.execute(
+            "INSERT INTO comicvine_metadata_refresh_requests \
+                (external_identity_id, state, attempts, next_attempt_at, last_error, completed_at, \
+                 created_at, updated_at) \
+             VALUES ($1, $2, 4, now() + interval '1 day', 'old', now(), now(), now())",
+            &[&identity, &finished],
+        )
+        .await
+        .unwrap();
+        drop(conn);
+        let (status, body) = send(
+            &state,
+            call(
+                "POST",
+                &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+                &token,
+                &csrf,
+                Some(json!({"comicvine_issue_id": cv})),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{finished}: {body:?}");
+        assert_eq!(body["has_confirmed_identity"], true);
+        let conn = state.pool.get().await.unwrap();
+        let row = conn
+            .query_one(
+                "SELECT state, attempts, last_error, completed_at IS NULL \
+                 FROM comicvine_metadata_refresh_requests WHERE external_identity_id = $1",
+                &[&identity],
+            )
+            .await
+            .unwrap();
+        assert_eq!(row.get::<_, String>(0), "pending", "{finished}");
+        assert_eq!(row.get::<_, i32>(1), 0);
+        assert_eq!(row.get::<_, Option<String>>(2), None);
+        assert!(row.get::<_, bool>(3));
+    }
+}
+
+#[tokio::test]
+async fn identity_writers_serialize_with_sibling_queue_writers() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-siblings", 8, None).await;
+    set_key(false);
+    let (confirm_issue, deleted_issue) = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Siblings").await;
+        (issue(&conn, t, "1", 1).await, issue(&conn, t, "2", 2).await)
+    };
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let confirm = spawn_send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{confirm_issue}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 9301})),
+        ),
+    );
+    let delete = spawn_send(
+        &state,
+        call(
+            "DELETE",
+            &format!("/api/v2/issues/{deleted_issue}"),
+            &token,
+            &csrf,
+            None,
+        ),
+    );
+    wait_for_queue_lock_waiters(&tx, user_id, 2, &[&confirm, &delete]).await;
+    tx.commit().await.unwrap();
+    drop(holder);
+    let (status, body) = confirm.await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["comicvine_issue_id"], "9301");
+    let (status, body) = delete.await.unwrap();
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+    let conn = state.pool.get().await.unwrap();
+    let remaining: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM issues WHERE id = $1",
+            &[&deleted_issue],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(remaining, 0, "the sibling issue delete committed");
+}
+#[tokio::test]
+async fn request_coercion_matches_the_python_models() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-lax").await;
+    set_key(false);
+    let issues: Vec<i32> = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Lax").await;
+        let mut ids = Vec::new();
+        for n in 1..=5 {
+            ids.push(issue(&conn, t, &n.to_string(), n).await);
+        }
+        ids
+    };
+    let confirm = |issue: i32, body: Value| {
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{issue}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(body),
+        )
+    };
+    for (issue, body, expected_id) in [
+        (issues[0], json!({"comicvine_issue_id": "9401"}), "9401"),
+        (issues[1], json!({"comicvine_issue_id": 9402.0}), "9402"),
+        (issues[2], json!({"comicvine_issue_id": true}), "1"),
+        (issues[3], json!({"comicvine_issue_id": 0}), "0"),
+    ] {
+        let (status, got) = send(&state, confirm(issue, body.clone())).await;
+        assert_eq!(status, StatusCode::OK, "{body}: {got:?}");
+        assert_eq!(got["comicvine_issue_id"], expected_id, "{body}");
+    }
+    let (status, got) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{}.0/identity:replace", issues[3]),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": -7})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{got:?}");
+    assert_eq!(got["comicvine_issue_id"], "-7");
+
+    let (status, got) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{}/metadata:correct", issues[4]),
+            &token,
+            &csrf,
+            Some(json!({"field_name": "", "canonical_value": ""})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{got:?}");
+    assert_eq!(got["corrections"][0]["field_name"], "");
+
+    let expected = json!({"detail": "Validation failed"});
+    for (path, body) in [
+        (
+            format!("/api/v2/comicvine/issues/{}/identity:confirm", issues[4]),
+            json!({"comicvine_issue_id": 5.5}),
+        ),
+        (
+            format!("/api/v2/comicvine/issues/{}/identity:confirm", issues[4]),
+            json!({"comicvine_issue_id": null}),
+        ),
+        (
+            format!("/api/v2/comicvine/issues/{}/metadata:correct", issues[4]),
+            json!({"field_name": "a", "canonical_value": "b", "reason": "x".repeat(501)}),
+        ),
+        (
+            format!("/api/v2/comicvine/issues/{}/identity:replace", issues[4]),
+            json!({"comicvine_issue_id": 1, "reason": "x".repeat(501)}),
+        ),
+        (
+            format!("/api/v2/comicvine/issues/{}/identity:confirm", issues[4]),
+            json!({}),
+        ),
+        (
+            format!("/api/v2/comicvine/issues/{}/metadata:correct", issues[4]),
+            json!({"field_name": "a", "canonical_value": 5}),
+        ),
+        (
+            format!("/api/v2/comicvine/issues/{}/metadata:revert", issues[4]),
+            json!({"correction_id": "x"}),
+        ),
+        (
+            format!("/api/v2/comicvine/issues/{}/metadata:correct", issues[4]),
+            json!({"field_name": "f".repeat(101), "canonical_value": "b"}),
+        ),
+    ] {
+        let (status, got) = send(
+            &state,
+            call("POST", &path, &token, &csrf, Some(body.clone())),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{path} {body}: {got:?}"
+        );
+        assert_eq!(got, expected, "{path} {body}");
+    }
+}
+
+/// Python `str(metadata_json.get(field, "")) or None` (#4636390879), with
+/// the identity metadata stored as raw JSON text so object key order is the
+/// document's, as Python's `json.loads` keeps it.
+#[tokio::test]
+async fn correction_provider_values_use_python_str() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-provider-str").await;
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Str").await;
+    let i = issue(&conn, t, "1", 1).await;
+    let identity: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
+             created_at, updated_at) VALUES ('comicvine', 'issue', '9601', \
+             '{\"cover_date\": null, \"flag\": true, \"count\": 3, \"ratio\": 1.0, \
+               \"volume\": {\"name\": \"Saga\", \"id\": 9}, \"tags\": [1, \"it''s\", null], \
+               \"empty\": \"\", \"name\": \"Pilot\"}'::json, NOW(), NOW()) RETURNING id",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
+         created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
+        &[&i, &identity],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+    let path = format!("/api/v2/comicvine/issues/{i}/metadata:correct");
+    for (field, expected) in [
+        ("cover_date", json!("None")),
+        ("flag", json!("True")),
+        ("count", json!("3")),
+        ("ratio", json!("1.0")),
+        ("volume", json!("{'name': 'Saga', 'id': 9}")),
+        ("tags", json!("[1, \"it's\", None]")),
+        ("empty", Value::Null),
+        ("missing", Value::Null),
+        ("name", json!("Pilot")),
+    ] {
+        let (status, body) = send(
+            &state,
+            call(
+                "POST",
+                &path,
+                &token,
+                &csrf,
+                Some(json!({"field_name": field, "canonical_value": "x"})),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{field}: {body:?}");
+        let last = body["corrections"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()
+            .clone();
+        assert_eq!(last["field_name"], field);
+        assert_eq!(last["provider_value"], expected, "{field}");
+    }
+}
+
+/// #4638065822: the repair worker's `PERSIST` holds the refresh-request row
+/// and then updates the identity row. A confirmation already holds the
+/// identity row, so it must never wait on that request row. While another
+/// session holds the request row (as a worker does), the confirmation must
+/// finish without becoming a lock waiter, leave the running job alone, and
+/// release the identity row for the worker's update.
+#[tokio::test]
+async fn confirmation_never_waits_on_a_refresh_row_the_repair_worker_holds() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-repair-race", 4, None).await;
+    let (i, identity) = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Repair race").await;
+        let i = issue(&conn, t, "1", 1).await;
+        let identity: i32 = conn
+            .query_one(
+                "INSERT INTO external_identities (provider, entity_type, external_id, \
+                 external_url, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'issue', '9700', NULL, '{}'::json, now(), now()) RETURNING id",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        conn.execute(
+            "INSERT INTO comicvine_metadata_refresh_requests \
+                (external_identity_id, state, attempts, next_attempt_at, lease_expires_at, \
+                 created_at, updated_at) \
+             VALUES ($1, 'running', 1, now(), now() + interval '120 seconds', now(), now())",
+            &[&identity],
+        )
+        .await
+        .unwrap();
+        (i, identity)
+    };
+    let mut worker = state.pool.get().await.unwrap();
+    let worker_tx = worker.transaction().await.unwrap();
+    worker_tx
+        .query_one(
+            "SELECT id FROM comicvine_metadata_refresh_requests \
+             WHERE external_identity_id = $1 FOR UPDATE",
+            &[&identity],
+        )
+        .await
+        .unwrap();
+    let pending = spawn_send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 9700})),
+        ),
+    );
+    // Deterministic: poll until the request finishes, failing the moment any
+    // session waits on a row or transaction lock (no sleeps, no deadlines).
+    while !pending.is_finished() {
+        let waiters: i64 = worker_tx
+            .query_one(
+                "SELECT count(*) FROM pg_stat_activity \
+                 WHERE datname = current_database() AND cardinality(pg_blocking_pids(pid)) > 0",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(
+            waiters, 0,
+            "the confirmation waited on the worker's request row"
+        );
+        tokio::task::yield_now().await;
+    }
+    let (status, body) = pending.await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["comicvine_issue_id"], "9700");
+    // The worker's PERSIST step can now update the identity row.
+    worker_tx
+        .execute(
+            "UPDATE external_identities SET updated_at = now() WHERE id = $1",
+            &[&identity],
+        )
+        .await
+        .unwrap();
+    let job: (String, i32) = {
+        let row = worker_tx
+            .query_one(
+                "SELECT state, attempts FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&identity],
+            )
+            .await
+            .unwrap();
+        (row.get(0), row.get(1))
+    };
+    assert_eq!(
+        job,
+        ("running".to_owned(), 1),
+        "the running job is untouched"
+    );
+    worker_tx.commit().await.unwrap();
+}

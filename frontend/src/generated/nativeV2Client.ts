@@ -23,6 +23,15 @@ export function compactQuery(
   return Object.keys(params).length > 0 ? params : undefined
 }
 
+export interface ApplyCorrectionRequest {
+  path: {
+    issue_id: number
+  }
+  body: components['schemas']['NativeMetadataCorrectionRequest']
+}
+
+export type ApplyCorrectionResponse = components['schemas']['NativeMetadataCorrectionsResponse']
+
 export interface ApplyCustomCblRequest {
   path: {
     list_id: number
@@ -120,6 +129,15 @@ export interface ConfirmRequest {
 }
 
 export type ConfirmResponse = components['schemas']['IdentityInboxActionResponse']
+
+export interface ConfirmIdentityRequest {
+  path: {
+    issue_id: number
+  }
+  body: components['schemas']['NativeConfirmIdentityRequest']
+}
+
+export type ConfirmIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
 
 export interface ContinuityPlansAdoptReadingOrderRequest {
   body: components['schemas']['ReadingOrderAdoptRequest']
@@ -781,6 +799,14 @@ export interface RefreshRequest {
 
 export type RefreshResponse = components['schemas']['TokenResponse']
 
+export interface RefreshMetadataRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type RefreshMetadataResponse = components['schemas']['NativeMetadataRefreshResponse']
+
 export interface RegisterRequest {
   body: components['schemas']['RegisterRequest']
 }
@@ -894,11 +920,28 @@ export interface RelinkRequest {
 
 export type RelinkResponse = components['schemas']['PlanRelinkResult']
 
+export interface RemoveIdentityRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type RemoveIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
+
 export interface RepairRequest {
   body: components['schemas']['ReadingGraphRepairRequest']
 }
 
 export type RepairResponse = components['schemas']['ReadingGraphRepairResponse']
+
+export interface ReplaceIdentityRequest {
+  path: {
+    issue_id: number
+  }
+  body: components['schemas']['NativeReplaceIdentityRequest']
+}
+
+export type ReplaceIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
 
 export interface ResetRequest {
   body: components['schemas']['ResetDiceRequest']
@@ -919,6 +962,15 @@ export interface ResolveInputRequest {
 }
 
 export type ResolveInputResponse = components['schemas']['NativeComicVineResolveResponse']
+
+export interface RevertCorrectionRequest {
+  path: {
+    issue_id: number
+  }
+  body: components['schemas']['NativeMetadataCorrectionRevertRequest']
+}
+
+export type RevertCorrectionResponse = components['schemas']['NativeMetadataCorrectionsResponse']
 
 export interface RoleRequest {
   path: {
@@ -1107,6 +1159,7 @@ export interface UsageTagRequest {
 export type UsageTagResponse = components['schemas']['TagUsageResponse']
 
 export interface NativeV2Client {
+  applyCorrection(args: ApplyCorrectionRequest): Promise<ApplyCorrectionResponse>
   applyCustomCbl(args: ApplyCustomCblRequest): Promise<ApplyCustomCblResponse>
   assignTag(args: AssignTagRequest): Promise<AssignTagResponse>
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
@@ -1118,6 +1171,7 @@ export interface NativeV2Client {
   commit(args: CommitRequest): Promise<CommitResponse>
   compare(args?: CompareRequest): Promise<CompareResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
+  confirmIdentity(args: ConfirmIdentityRequest): Promise<ConfirmIdentityResponse>
   continuityPlansAdoptReadingOrder(args: ContinuityPlansAdoptReadingOrderRequest): Promise<ContinuityPlansAdoptReadingOrderResponse>
   continuityPlansCreate(args: ContinuityPlansCreateRequest): Promise<ContinuityPlansCreateResponse>
   continuityPlansDelete(args: ContinuityPlansDeleteRequest): Promise<ContinuityPlansDeleteResponse>
@@ -1214,6 +1268,7 @@ export interface NativeV2Client {
   readingPlanSync(args: ReadingPlanSyncRequest): Promise<ReadingPlanSyncResponse>
   readingPlanSyncStatus(): Promise<ReadingPlanSyncStatusResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
+  refreshMetadata(args: RefreshMetadataRequest): Promise<RefreshMetadataResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
   reject(args: RejectRequest): Promise<RejectResponse>
   releaseSourcesCreate(args: ReleaseSourcesCreateRequest): Promise<ReleaseSourcesCreateResponse>
@@ -1227,10 +1282,13 @@ export interface NativeV2Client {
   releasesReconcile(args: ReleasesReconcileRequest): Promise<ReleasesReconcileResponse>
   releasesRetract(args: ReleasesRetractRequest): Promise<ReleasesRetractResponse>
   relink(args: RelinkRequest): Promise<RelinkResponse>
+  removeIdentity(args: RemoveIdentityRequest): Promise<RemoveIdentityResponse>
   repair(args: RepairRequest): Promise<RepairResponse>
+  replaceIdentity(args: ReplaceIdentityRequest): Promise<ReplaceIdentityResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
   resolveInput(args: ResolveInputRequest): Promise<ResolveInputResponse>
+  revertCorrection(args: RevertCorrectionRequest): Promise<RevertCorrectionResponse>
   role(args: RoleRequest): Promise<RoleResponse>
   saveOverlapDecision(args: SaveOverlapDecisionRequest): Promise<SaveOverlapDecisionResponse>
   search(args: SearchRequest): Promise<SearchResponse>
@@ -1257,6 +1315,12 @@ export interface NativeV2Client {
 
 export function createNativeV2Client(client: HttpClient): NativeV2Client {
   return {
+    applyCorrection(args: ApplyCorrectionRequest) {
+      return client.post<ApplyCorrectionResponse, ApplyCorrectionRequest['body']>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:correct`,
+        args.body,
+      )
+    },
     applyCustomCbl(args: ApplyCustomCblRequest) {
       return client.post<ApplyCustomCblResponse, ApplyCustomCblRequest['body']>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/reading-plans/${encodeURIComponent(String(args.path.plan_id))}/applications`,
@@ -1320,6 +1384,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     confirm(args: ConfirmRequest) {
       return client.post<ConfirmResponse, ConfirmRequest['body']>(
         `/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/confirmations`,
+        args.body,
+      )
+    },
+    confirmIdentity(args: ConfirmIdentityRequest) {
+      return client.post<ConfirmIdentityResponse, ConfirmIdentityRequest['body']>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity:confirm`,
         args.body,
       )
     },
@@ -1800,6 +1870,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    refreshMetadata(args: RefreshMetadataRequest) {
+      return client.post<RefreshMetadataResponse>(`/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:refresh`)
+    },
     register(args: RegisterRequest) {
       return client.post<RegisterResponse, RegisterRequest['body']>(
         "/v2/auth/register",
@@ -1876,9 +1949,20 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    removeIdentity(args: RemoveIdentityRequest) {
+      return client.delete<RemoveIdentityResponse>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity`,
+      )
+    },
     repair(args: RepairRequest) {
       return client.post<RepairResponse, RepairRequest['body']>(
         "/v2/reading-graph/repairs",
+        args.body,
+      )
+    },
+    replaceIdentity(args: ReplaceIdentityRequest) {
+      return client.post<ReplaceIdentityResponse, ReplaceIdentityRequest['body']>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity:replace`,
         args.body,
       )
     },
@@ -1898,6 +1982,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<ResolveInputResponse>(
         "/v2/comicvine/resolve",
         { params: compactQuery(args.query) },
+      )
+    },
+    revertCorrection(args: RevertCorrectionRequest) {
+      return client.post<RevertCorrectionResponse, RevertCorrectionRequest['body']>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:revert`,
+        args.body,
       )
     },
     role(args: RoleRequest) {

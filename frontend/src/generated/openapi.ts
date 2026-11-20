@@ -1881,6 +1881,54 @@ export interface paths {
         get: operations["get_issue_identity_documentation"];
         put?: never;
         post?: never;
+        delete: operations["remove_identity_documentation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/issues/{issue_id}/identity:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["confirm_identity_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/issues/{issue_id}/identity:replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["replace_identity_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/issues/{issue_id}/metadata:correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["apply_correction_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1897,6 +1945,38 @@ export interface paths {
         get: operations["list_corrections_documentation"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/issues/{issue_id}/metadata:refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refresh_metadata_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/issues/{issue_id}/metadata:revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revert_correction_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6571,6 +6651,11 @@ export interface components {
             /** Format: int64 */
             total_available?: number | null;
         };
+        /** @description Python `ConfirmIdentityRequest` (lax `int`). */
+        NativeConfirmIdentityRequest: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+        };
         /** @description Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`. */
         NativeDependencyGroupDetailMemberResponse: {
             issue?: components["schemas"]["IssueDetailResponse"] | null;
@@ -6679,10 +6764,30 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        /**
+         * @description Python `MetadataCorrectionRequest`: unconstrained `str` fields (empty is
+         *     accepted), `reason` `max_length=500`.
+         */
+        NativeMetadataCorrectionRequest: {
+            canonical_value: string;
+            field_name: string;
+            reason?: string | null;
+        };
+        /** @description Python `MetadataCorrectionRevertRequest` (lax `int`). */
+        NativeMetadataCorrectionRevertRequest: {
+            /** Format: int32 */
+            correction_id: number;
+        };
         NativeMetadataCorrectionsResponse: {
             corrections: components["schemas"]["NativeCanonicalCorrection"][];
             /** Format: int32 */
             issue_id: number;
+        };
+        NativeMetadataRefreshResponse: {
+            comicvine_issue_id?: string | null;
+            /** Format: int32 */
+            issue_id: number;
+            refreshed: boolean;
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
         NativeMigrateToIssuesRequest: {
@@ -6816,6 +6921,12 @@ export interface components {
         NativeReadingOrderProjectionRequest: {
             /** Format: int32 */
             reading_order_id: number;
+        };
+        /** @description Python `ReplaceIdentityRequest` (`reason` `max_length=500`). */
+        NativeReplaceIdentityRequest: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            reason?: string | null;
         };
         /** @description Response body: the Python `RollResponse` projection for a manual pick. */
         NativeRollResponse: {
@@ -13929,6 +14040,250 @@ export interface operations {
             };
         };
     };
+    remove_identity_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Identity removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    confirm_identity_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeConfirmIdentityRequest"];
+            };
+        };
+        responses: {
+            /** @description Confirmed identity state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    replace_identity_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeReplaceIdentityRequest"];
+            };
+        };
+        responses: {
+            /** @description Replaced identity state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    apply_correction_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeMetadataCorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Active corrections after the write */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeMetadataCorrectionsResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_corrections_documentation: {
         parameters: {
             query?: never;
@@ -13952,6 +14307,126 @@ export interface operations {
             };
             /** @description Invalid or revoked access token */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refresh_metadata_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Confirmed identity to refresh */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeMetadataRefreshResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revert_correction_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeMetadataCorrectionRevertRequest"];
+            };
+        };
+        responses: {
+            /** @description Active corrections after the revert */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeMetadataCorrectionsResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

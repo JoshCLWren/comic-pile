@@ -47,6 +47,7 @@ pub mod outbound;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 mod preview_validation;
+pub(crate) mod python_text;
 pub mod queue;
 pub mod queue_exclusions;
 pub mod reader_context;
@@ -1073,11 +1074,32 @@ pub fn router(state: Arc<AppState>) -> Router {
         // Native v2 ComicVine routes (#4835, split chunk B).
         .route(
             "/api/v2/comicvine/issues/{issue_id}/identity",
-            get(comicvine_v2::get_issue_identity),
+            get(comicvine_v2::get_issue_identity).delete(comicvine_v2::remove_identity),
         )
         .route(
             "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
             get(comicvine_v2::list_corrections),
+        )
+        // Native v2 ComicVine routes (#4835, split chunk C).
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity:confirm",
+            post(comicvine_v2::confirm_identity),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity:replace",
+            post(comicvine_v2::replace_identity),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:correct",
+            post(comicvine_v2::apply_correction),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
+            post(comicvine_v2::revert_correction),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
+            post(comicvine_v2::refresh_metadata),
         )
         .route(
             "/api/v2/issues/{issue_id}/dependencies",

@@ -643,7 +643,7 @@ fn provider_newer_than_deep_fetch(metadata: &Value) -> bool {
 /// Must mirror comicvine_issue.rs freshness exactly: a provider revision
 /// newer than the deep fetch is always stale; complete rows use 30 days;
 /// empty-credit rows use 7 days. Malformed/absent timestamps are stale.
-fn needs_provider_fetch(metadata: &Value, now: chrono::DateTime<chrono::Utc>) -> bool {
+pub(crate) fn needs_provider_fetch(metadata: &Value, now: chrono::DateTime<chrono::Utc>) -> bool {
     if !has_complete_provider_payload(metadata) {
         return true;
     }

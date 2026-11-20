@@ -261,17 +261,17 @@ export const comicVineApi = {
   getIssueIdentity: (issueId: number) =>
     api.get<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity`),
   confirmIdentity: (issueId: number, comicvineIssueId: number) =>
-    api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:confirm`, { comicvine_issue_id: comicvineIssueId }),
+    api.post<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity:confirm`, { comicvine_issue_id: comicvineIssueId }),
   replaceIdentity: (issueId: number, comicvineIssueId: number, reason?: string) =>
-    api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:replace`, { comicvine_issue_id: comicvineIssueId, reason }),
+    api.post<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity:replace`, { comicvine_issue_id: comicvineIssueId, reason }),
   refreshMetadata: (issueId: number) =>
-    api.post<MetadataRefreshResponse>(`/v1/comicvine/issues/${issueId}/metadata:refresh`),
+    api.post<MetadataRefreshResponse>(`/v2/comicvine/issues/${issueId}/metadata:refresh`),
   applyCorrection: (issueId: number, fieldName: string, canonicalValue: string, reason?: string) =>
-    api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:correct`, { field_name: fieldName, canonical_value: canonicalValue, reason }),
+    api.post<MetadataCorrectionsResponse>(`/v2/comicvine/issues/${issueId}/metadata:correct`, { field_name: fieldName, canonical_value: canonicalValue, reason }),
   listCorrections: (issueId: number) =>
     api.get<MetadataCorrectionsResponse>(`/v2/comicvine/issues/${issueId}/metadata:corrections`),
   revertCorrection: (issueId: number, correctionId: number) =>
-    api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:revert`, { correction_id: correctionId }),
+    api.post<MetadataCorrectionsResponse>(`/v2/comicvine/issues/${issueId}/metadata:revert`, { correction_id: correctionId }),
   removeIdentity: (issueId: number) =>
-    api.delete<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity`),
+    api.delete<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity`),
 }
