@@ -120,7 +120,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert small_nested is not None, "Nested statement count required for small fixture"
         assert large_nested is not None, "Nested statement count required for large fixture"
     finally:
-        await engine.dispose.
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -238,7 +238,7 @@ async def test_reading_graph_n1_query_exceeds_budget() -> None:
         with pytest.raises(AssertionError):
             assert_declared_budget("GET", "/api/v2/reading-graph", delta, delta)  # delta should exceed max
     finally:
-        await engine.dispose.
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -454,7 +454,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert small_nested is not None, "Nested statement count required for small fixture"
         assert large_nested is not None, "Nested statement count required for large fixture"
     finally:
-        await engine.dispose.
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -572,7 +572,7 @@ async def test_reading_graph_n1_query_exceeds_budget() -> None:
         with pytest.raises(AssertionError):
             assert_declared_budget("GET", "/api/v2/reading-graph", delta, delta)  # delta should exceed max
     finally:
-        await engine.dispose.
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
