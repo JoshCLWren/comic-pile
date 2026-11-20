@@ -829,6 +829,7 @@ describe('CblBrowserPage adoption', () => {
       cbl_entry_id: 102,
       issue_number: '120',
       series_name: 'X-Men (1963)',
+      series_group_id: 'group-x-men',
       adoption_class: 'existing',
       adoption_decision: 'unresolved',
       adopted: false,
