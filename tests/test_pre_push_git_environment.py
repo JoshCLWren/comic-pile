@@ -83,4 +83,17 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert not gate_log.exists() or gate_log.read_text() == ""
+
+    # The fake lint script is guaranteed to run, so its presence in the gate log
+    # proves the leaked-Git-environment checks executed (and passed). A hook that
+    # stops clearing Git's repository-local settings fails the stub, not just the
+    # incidental tool checks.
+    gate_entries = gate_log.read_text().splitlines() if gate_log.exists() else []
+    assert "lint" in gate_entries, (
+        "scripts/lint.sh stub did not run, so the Git environment checks never ran: "
+        f"{result.stdout}{result.stderr}"
+    )
+    # Tool stubs record every invocation, so any test gate that runs on push is
+    # visible as an entry besides the lint marker.
+    test_invocations = [entry for entry in gate_entries if entry != "lint"]
+    assert not test_invocations, f"test gates ran on push: {test_invocations}"
