@@ -96,6 +96,21 @@ def test_pre_push_rejects_leaked_git_environment(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
     subprocess.run(["git", "init", "-q", str(repository)], env=environment, check=True)
+    subprocess.run(
+        ["git", "-C", str(repository), "config", "user.email", "test@example.com"],
+        env=environment,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repository), "config", "user.name", "Test"],
+        env=environment,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repository), "commit", "--allow-empty", "-m", "seed"],
+        env=environment,
+        check=True,
+    )
     (repository / "pyproject.toml").touch()
     (repository / "frontend" / "node_modules").mkdir(parents=True)
     (repository / "scripts").mkdir()
@@ -107,9 +122,15 @@ def test_pre_push_rejects_leaked_git_environment(tmp_path: Path) -> None:
         "done\n"
         'printf "%s\\n" "lint" >> "$GATE_LOG"\n'
     )
+    tools_directory = tmp_path / "tools"
+    tools_directory.mkdir()
+    pnpm = tools_directory / "pnpm"
+    pnpm.write_text("#!/bin/bash\nexit 0\n")
+    pnpm.chmod(0o755)
     gate_log = tmp_path / "gates.log"
     environment.update(
         {
+            "PATH": f"{tools_directory}:{environment['PATH']}",
             "VIRTUAL_ENV": str(tmp_path / "venv"),
             "GIT_DIR": str(repository / ".git"),
             "GIT_WORK_TREE": str(repository),
