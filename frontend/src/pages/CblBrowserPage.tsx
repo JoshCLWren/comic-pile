@@ -9,7 +9,10 @@ import TriStateCheckbox from '../components/TriStateCheckbox'
 import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
-import { continuityPlansApi } from '../services/api-continuity-plans'
+import {
+  continuityPlansApi,
+  type ContinuityPlanListItem,
+} from '../services/api-continuity-plans'
 import { CblSourceDetailPanel } from '../components/CblSourceDetailPanel'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
