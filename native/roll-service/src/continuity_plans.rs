@@ -572,7 +572,9 @@ impl ContinuityPlanWrite {
         }
 
         if self.ordering_mode == "strict_sequential" {
-            if self.lanes.len() != 1 {
+            // A strict plan uses exactly one lane when it has lanes; the empty
+            // plan (0 lanes, 0 steps) is a valid empty plan (#5614).
+            if self.lanes.len() > 1 {
                 return Err(unprocessable(
                     "strict sequential plans must use exactly one lane",
                 ));
@@ -3098,7 +3100,10 @@ pub async fn confirm_plan_projection(
 
     let mut ordered = nodes.clone();
     if ordering_mode == "strict_sequential" {
-        if lane_orders.len() != 1 {
+        // The empty plan (0 lanes, 0 steps) is a valid strict plan (#5614);
+        // it projects as an empty sequence, so only more than one lane is
+        // malformed.
+        if lane_orders.len() > 1 {
             tx.rollback().await.map_err(db::query_error)?;
             return Err(domain_conflict(serde_json::json!({
                 "code": "malformed_plan",
