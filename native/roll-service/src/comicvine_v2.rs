@@ -954,7 +954,7 @@ pub async fn apply_correction(
         .map_err(db::query_error)?
         .map(|row| row.get::<_, Option<String>>(0))
         .unwrap_or(None)
-        .and_then(|value| match value.as_deref() {
+        .and_then(|value| match value.as_ref() {
             Some("") | None => None,
             Some(v) => Some(v.to_owned()),
         });
