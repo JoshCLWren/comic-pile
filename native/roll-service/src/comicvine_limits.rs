@@ -89,9 +89,15 @@ impl ComicVineLimits {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn admit(&self, bucket: &str, cache_key: &str, now: Instant) -> Admission {
+    /// `fresh` is Python `request(..., refresh=True)`: no cached payload is
+    /// served before the live call (budget and cooldown still apply).
+    fn admit(&self, bucket: &str, cache_key: &str, fresh: bool, now: Instant) -> Admission {
         let mut inner = self.lock();
-        let cached = inner.cache.get(cache_key).cloned();
+        let cached = if fresh {
+            None
+        } else {
+            inner.cache.get(cache_key).cloned()
+        };
         if let Some((stored, value)) = &cached {
             if now.saturating_duration_since(*stored) < CACHE_TTL {
                 return Admission::Cached(value.clone());
@@ -206,12 +212,39 @@ impl ComicVineLimits {
         extra_query: &str,
         api_key: &str,
     ) -> Result<Value, ProviderFailure> {
+        self.call_with(outbound, resource, extra_query, api_key, false)
+            .await
+    }
+
+    /// Python `request(..., refresh=True)` for series import, which must see
+    /// the provider's current volume and roster: never served from the cache
+    /// up front. A live 429/420 still falls back to a cached payload, like
+    /// Python's throttle path; the budget and cooldown still apply.
+    pub(crate) async fn call_fresh(
+        &self,
+        outbound: &Arc<dyn OutboundHttp>,
+        resource: &str,
+        extra_query: &str,
+        api_key: &str,
+    ) -> Result<Value, ProviderFailure> {
+        self.call_with(outbound, resource, extra_query, api_key, true)
+            .await
+    }
+
+    async fn call_with(
+        &self,
+        outbound: &Arc<dyn OutboundHttp>,
+        resource: &str,
+        extra_query: &str,
+        api_key: &str,
+        fresh: bool,
+    ) -> Result<Value, ProviderFailure> {
         let bucket = resource.split('/').next().unwrap_or(resource);
         let cache_key = format!("{resource}?{extra_query}");
         // The same timestamp bounds admission and the request's start, so a
         // sibling 429 observed while this call is in flight is never cleared.
         let request_started_at = Instant::now();
-        match self.admit(bucket, &cache_key, request_started_at) {
+        match self.admit(bucket, &cache_key, fresh, request_started_at) {
             Admission::Cached(value) | Admission::Denied(_, Some(value)) => return Ok(value),
             Admission::Denied(wait, None) => return Err(ProviderFailure::RateLimited(wait)),
             Admission::Go => {}
@@ -286,7 +319,7 @@ mod tests {
     use serde_json::json;
 
     fn go(limits: &ComicVineLimits, bucket: &str, key: &str, now: Instant) -> bool {
-        limits.admit(bucket, key, now) == Admission::Go
+        limits.admit(bucket, key, false, now) == Admission::Go
     }
 
     #[test]
@@ -297,7 +330,7 @@ mod tests {
             assert!(go(&limits, "search", &format!("k{n}"), start));
         }
         assert!(matches!(
-            limits.admit("search", "other", start),
+            limits.admit("search", "other", false, start),
             Admission::Denied(wait, None) if wait == 3600
         ));
         assert!(
@@ -316,7 +349,7 @@ mod tests {
             (90, None)
         );
         assert_eq!(
-            limits.admit("issues", "k", start + Duration::from_secs(10)),
+            limits.admit("issues", "k", false, start + Duration::from_secs(10)),
             Admission::Denied(80, None)
         );
         assert!(go(&limits, "issues", "k", start + Duration::from_secs(91)));
@@ -356,7 +389,7 @@ mod tests {
             base + Duration::from_secs(15),
         );
         assert_eq!(
-            limits.admit("search", "next", base + Duration::from_secs(20)),
+            limits.admit("search", "next", false, base + Duration::from_secs(20)),
             Admission::Denied(82, None)
         );
 
@@ -386,7 +419,7 @@ mod tests {
         assert!(go(&limits, "search", "q", start));
         limits.record_success("search", "q".into(), &payload, start, start);
         assert_eq!(
-            limits.admit("search", "q", start + Duration::from_secs(60)),
+            limits.admit("search", "q", false, start + Duration::from_secs(60)),
             Admission::Cached(payload.clone())
         );
         // Past the TTL a live call is attempted again.
@@ -399,12 +432,12 @@ mod tests {
             (120, Some(payload.clone()))
         );
         assert_eq!(
-            limits.admit("search", "q", later + Duration::from_secs(1)),
+            limits.admit("search", "q", false, later + Duration::from_secs(1)),
             Admission::Denied(119, Some(payload))
         );
         // A request with no cached payload is refused while cooling down.
         assert_eq!(
-            limits.admit("search", "other", later + Duration::from_secs(1)),
+            limits.admit("search", "other", false, later + Duration::from_secs(1)),
             Admission::Denied(119, None)
         );
     }
@@ -510,5 +543,27 @@ mod tests {
         ] {
             assert_eq!(browser_envelope_ok(&payload), ok, "{payload}");
         }
+    }
+
+    /// Python `refresh=True`: a cached payload is never served up front, but
+    /// the budget and cooldown still gate the live call.
+    #[test]
+    fn fresh_calls_skip_the_cache_but_keep_budget_and_cooldown() {
+        let limits = ComicVineLimits::default();
+        let start = Instant::now();
+        let payload = json!({"status_code": 1});
+        limits.record_success("volume", "v".into(), &payload, start, start);
+        let soon = start + Duration::from_secs(1);
+        assert_eq!(
+            limits.admit("volume", "v", false, soon),
+            Admission::Cached(payload)
+        );
+        assert_eq!(limits.admit("volume", "v", true, soon), Admission::Go);
+        limits.record_throttle("volume", "v", Some(30.0), soon);
+        assert_eq!(
+            limits.admit("volume", "v", true, soon + Duration::from_secs(1)),
+            Admission::Denied(29, None),
+            "a fresh call never gets the stale payload while cooling down"
+        );
     }
 }

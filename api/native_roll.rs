@@ -501,10 +501,39 @@ fn app() -> Router {
         // Native v2 ComicVine routes (#4835, split chunk B).
         .route(
             "/api/v2/comicvine/issues/{issue_id}/identity",
-            get(native_dispatch),
+            get(native_dispatch).delete(native_dispatch),
         )
         .route(
             "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+            get(native_dispatch),
+        )
+        // Native v2 ComicVine routes (#4835, split chunk C).
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity:confirm",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity:replace",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:correct",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
+            post(native_dispatch),
+        )
+        // Native v2 ComicVine routes (#4835, split chunk D).
+        .route("/api/v2/comicvine/issues:import", post(native_dispatch))
+        // Native v2 ComicVine routes (#4835, split chunk E).
+        .route("/api/v2/comicvine/series:import", post(native_dispatch))
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
             get(native_dispatch),
         )
         .route(
@@ -1144,7 +1173,16 @@ mod tests {
             ("GET", "/api/v2/comicvine/resolve?input=batman"),
             ("GET", "/api/v2/comicvine/series/42/issues"),
             ("GET", "/api/v2/comicvine/issues/7/identity"),
+            ("DELETE", "/api/v2/comicvine/issues/7/identity"),
             ("GET", "/api/v2/comicvine/issues/7/metadata:corrections"),
+            ("POST", "/api/v2/comicvine/issues/7/identity:confirm"),
+            ("POST", "/api/v2/comicvine/issues/7/identity:replace"),
+            ("POST", "/api/v2/comicvine/issues/7/metadata:correct"),
+            ("POST", "/api/v2/comicvine/issues/7/metadata:revert"),
+            ("POST", "/api/v2/comicvine/issues/7/metadata:refresh"),
+            ("POST", "/api/v2/comicvine/issues:import"),
+            ("POST", "/api/v2/comicvine/series:import"),
+            ("GET", "/api/v2/comicvine/series/42/import-status"),
             // Ingress samples for every native v2 ComicVine operation.
         ] {
             let mut router = app();

@@ -1007,6 +1007,242 @@
             "HTTPBearer": []
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "remove_identity_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "ComicPile issue ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Identity removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueIdentityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identity or correction conflict"
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "403": {
+            "description": "CSRF validation failed"
+          },
+          "404": {
+            "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/comicvine/issues/{issue_id}/identity:confirm": {
+      "post": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "confirm_identity_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "ComicPile issue ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmIdentityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Confirmed identity state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueIdentityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identity or correction conflict"
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "403": {
+            "description": "CSRF validation failed"
+          },
+          "404": {
+            "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/comicvine/issues/{issue_id}/identity:replace": {
+      "post": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "replace_identity_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "ComicPile issue ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceIdentityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Replaced identity state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueIdentityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identity or correction conflict"
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "403": {
+            "description": "CSRF validation failed"
+          },
+          "404": {
+            "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/comicvine/issues/{issue_id}/metadata:correct": {
+      "post": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "apply_correction_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "ComicPile issue ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataCorrectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Active corrections after the write",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataCorrectionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identity or correction conflict"
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "403": {
+            "description": "CSRF validation failed"
+          },
+          "404": {
+            "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v2/comicvine/issues/{issue_id}/metadata:corrections": {
@@ -1043,6 +1279,170 @@
           },
           "404": {
             "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/comicvine/issues/{issue_id}/metadata:refresh": {
+      "post": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "refresh_metadata_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "ComicPile issue ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Confirmed identity to refresh",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataRefreshResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identity or correction conflict"
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "403": {
+            "description": "CSRF validation failed"
+          },
+          "404": {
+            "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/comicvine/issues/{issue_id}/metadata:revert": {
+      "post": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "revert_correction_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "ComicPile issue ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetadataCorrectionRevertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Active corrections after the revert",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataCorrectionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Identity or correction conflict"
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "403": {
+            "description": "CSRF validation failed"
+          },
+          "404": {
+            "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/comicvine/issues:import": {
+      "post": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "import_issue_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Imported thread, issue and identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportIssueResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "403": {
+            "description": "CSRF validation failed"
+          },
+          "404": {
+            "description": "Reading order not found"
+          },
+          "409": {
+            "description": "ComicVine issue already exists for this reader"
           },
           "422": {
             "description": "Validation failed"
@@ -1159,6 +1559,49 @@
         ]
       }
     },
+    "/api/v2/comicvine/series/{comicvine_volume_id}/import-status": {
+      "get": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "series_import_status_v2_documentation",
+        "parameters": [
+          {
+            "name": "comicvine_volume_id",
+            "in": "path",
+            "description": "ComicVine volume ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned import status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesImportStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/comicvine/series/{comicvine_volume_id}/issues": {
       "get": {
         "tags": [
@@ -1202,6 +1645,62 @@
           },
           "422": {
             "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/comicvine/series:import": {
+      "post": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "import_series_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportSeriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Imported or reused series thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportSeriesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Series has no issues or already_read_count is too large"
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "403": {
+            "description": "CSRF validation failed"
+          },
+          "404": {
+            "description": "Reading order not found"
+          },
+          "422": {
+            "description": "Validation failed"
+          },
+          "502": {
+            "description": "ComicVine returned an error or an incomplete roster"
+          },
+          "503": {
+            "description": "ComicVine is not configured"
           }
         },
         "security": [
@@ -8230,6 +8729,19 @@
           }
         }
       },
+      "ConfirmIdentityRequest": {
+        "type": "object",
+        "description": "Python `ConfirmIdentityRequest` (lax `int`).",
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "ContinuityPlanLane": {
         "type": "object",
         "required": [
@@ -11641,6 +12153,242 @@
           }
         }
       },
+      "ImportIssueRequest": {
+        "type": "object",
+        "description": "Python `ImportIssueRequest`: `title` 1-200 characters (stored stripped),\n`comicvine_issue_id > 0`, `issue_number` at most 50 characters, and the\noptional reading-order ids `> 0`.",
+        "required": [
+          "title",
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "anchor_after_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "anchor_before_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "ImportIssueResponse": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "issue_id",
+          "external_identity_id"
+        ],
+        "properties": {
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ImportSeriesIssueResult": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_id",
+          "outcome",
+          "hydration"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conflict_detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hydration": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "type": "string"
+          }
+        }
+      },
+      "ImportSeriesRequest": {
+        "type": "object",
+        "required": [
+          "comicvine_volume_id"
+        ],
+        "properties": {
+          "already_read_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "anchor_after_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "anchor_before_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ImportSeriesResponse": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "series_name",
+          "comicvine_volume_id",
+          "total_issues_in_series",
+          "issues_adopted",
+          "issues_skipped",
+          "issues_conflict",
+          "issue_results",
+          "thread_created"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportSeriesIssueResult"
+            }
+          },
+          "issues_adopted": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issues_conflict": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issues_skipped": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "thread_created": {
+            "type": "boolean"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_issues_in_series": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "InheritanceSource": {
         "type": "object",
         "required": [
@@ -12335,6 +13083,41 @@
           }
         ]
       },
+      "MetadataCorrectionRequest": {
+        "type": "object",
+        "description": "Python `MetadataCorrectionRequest`: unconstrained `str` fields (empty is\naccepted), `reason` `max_length=500`.",
+        "required": [
+          "field_name",
+          "canonical_value"
+        ],
+        "properties": {
+          "canonical_value": {
+            "type": "string"
+          },
+          "field_name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "MetadataCorrectionRevertRequest": {
+        "type": "object",
+        "description": "Python `MetadataCorrectionRevertRequest` (lax `int`).",
+        "required": [
+          "correction_id"
+        ],
+        "properties": {
+          "correction_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "MetadataCorrectionsResponse": {
         "type": "object",
         "required": [
@@ -12351,6 +13134,28 @@
           "issue_id": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "MetadataRefreshResponse": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "refreshed"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "refreshed": {
+            "type": "boolean"
           }
         }
       },
@@ -15515,6 +16320,25 @@
           },
           "visibility": {
             "type": "string"
+          }
+        }
+      },
+      "ReplaceIdentityRequest": {
+        "type": "object",
+        "description": "Python `ReplaceIdentityRequest` (`reason` `max_length=500`).",
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

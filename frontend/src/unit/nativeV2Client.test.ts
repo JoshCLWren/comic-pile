@@ -332,6 +332,46 @@ const clientCases: ClientCase[] = [
     method: 'patch',
     expectedArgs: ['/v2/users/me/preferences', { theme: 'ink-gold' }],
   },
+  {
+    name: 'imports one ComicVine issue on the canonical v2 route',
+    invoke: (client) =>
+      client.importIssue({
+        body: {
+          comicvine_issue_id: 4050,
+          title: 'Saga #1',
+          issue_number: '1',
+          anchor_before_thread_id: 7,
+        },
+      }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/comicvine/issues:import',
+      {
+        comicvine_issue_id: 4050,
+        title: 'Saga #1',
+        issue_number: '1',
+        anchor_before_thread_id: 7,
+      },
+    ],
+  },
+  {
+    name: 'imports a whole ComicVine series on the canonical v2 route',
+    invoke: (client) =>
+      client.importSeries({
+        body: { comicvine_volume_id: 4050, already_read_count: 3, reading_order_id: 12 },
+      }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/comicvine/series:import',
+      { comicvine_volume_id: 4050, already_read_count: 3, reading_order_id: 12 },
+    ],
+  },
+  {
+    name: 'reads ComicVine series import status by encoded volume id on v2',
+    invoke: (client) => client.seriesImportStatusV2({ path: { comicvine_volume_id: 4050 } }),
+    method: 'get',
+    expectedArgs: ['/v2/comicvine/series/4050/import-status'],
+  },
 ]
 
 afterEach(() => {
