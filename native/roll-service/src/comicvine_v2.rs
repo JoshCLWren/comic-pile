@@ -2100,8 +2100,11 @@ fn series_result(value: &Value, fallback_id: Option<i32>) -> Option<ComicVineSer
 fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
     let object = value.as_object()?;
     let id = coerce_provider_int(object.get("id"))?;
+    // Python behavior: str(issue_number) if issue_number is not None else None.
+    // Value::Null would become "null" text, but Python preserves None.
     let issue_number = object
         .get("issue_number")
+        .filter(|v| !matches!(v, Value::Null))
         .map(|value| match value {
             Value::String(text) => text.clone(),
             Value::Number(number) => number.to_string(),
@@ -2137,7 +2140,11 @@ pub async fn search_series(
         return Err(unprocessable("offset out of range"));
     }
     let (limit, offset) = (query.limit, query.offset);
-    let page = offset / limit + 1;
+    // Bounded arithmetic: offset / limit + 1 with checked math to prevent overflow.
+    // Python behavior: page = offset // limit + 1 (Python floor division).
+    // For offset=2147483647, limit=1: 2147483647 / 1 + 1 overflows i32 in debug,
+    // wraps in release. Use usize/i64 for the calculation.
+    let page = (offset as i64 / *limit as i64 + 1) as i32;
     if query.q.trim().is_empty() {
         return Ok(Json(ComicVineSeriesSearchResponse {
             query: query.q,
