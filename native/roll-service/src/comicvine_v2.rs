@@ -954,8 +954,9 @@ pub async fn apply_correction(
         )
         .await
         .map_err(db::query_error)?
-        .map(|row: (bool, String)| {
-            let (key_exists, value) = row;
+        .map(|row| {
+            let key_exists: bool = row.get(0);
+            let value: String = row.get(1);
             if !key_exists {
                 None // Key doesn't exist -> None (serializes to JSON null)
             } else if value == "None" {
