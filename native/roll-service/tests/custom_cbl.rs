@@ -858,6 +858,43 @@ async fn apply_reuse_clears_stale_checkpoint_target_ref_id() {
 }
 
 #[tokio::test]
+async fn membership_checks_are_owner_scoped_and_honor_excluded_list() {
+    let fixture = setup().await;
+    let (status, body) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        "/api/v2/reading-lists",
+        json!({"name": "Membership List", "issue_ids": [910201]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let list_id = body["id"].as_i64().expect("list id");
+
+    let (status, body) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        "/api/v2/reading-lists/memberships:check",
+        json!({"thread_ids": [910102, 910101, 910101]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["thread_ids"], json!([910101]));
+
+    let (status, body) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        "/api/v2/reading-lists/memberships:check",
+        json!({"thread_ids": [910101], "exclude_list_id": list_id}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["thread_ids"], json!([]));
+}
+
+#[tokio::test]
 async fn overlap_decisions_accept_non_numeric_comicvine_volume_keys() {
     let fixture = setup().await;
 
