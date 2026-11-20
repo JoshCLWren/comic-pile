@@ -671,16 +671,18 @@ mod tests {
         let snoozed = HashSet::from([2, 3]);
         let offer = offer_frontiers(&candidates, &snoozed, 4);
         let offer_ids: Vec<i32> = offer.iter().map(|item| item.issue_id).collect();
-        assert_eq!(offer_ids, vec![100, 400, 500, 600]);
+        // The d4 window is chosen first; snoozed faces are not backfilled
+        // from deeper ranks.
+        assert_eq!(offer_ids, vec![100, 400]);
         assert_eq!(
             offer_ids,
             candidates
                 .iter()
-                .filter(|item| !snoozed.contains(&item.thread_id))
                 .take(4)
+                .filter(|item| !snoozed.contains(&item.thread_id))
                 .map(|item| item.issue_id)
                 .collect::<Vec<_>>(),
-            "the offer leaves the snoozed queue before the die bound"
+            "the die bound is applied before the snoozes"
         );
     }
 
