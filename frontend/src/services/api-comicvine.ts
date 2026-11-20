@@ -243,13 +243,13 @@ export const comicVineApi = {
     // error" on an import that had already succeeded (#3445). This request gets
     // its own budget instead of raising the default for every other call.
     api.post<ComicVineImportSeriesResult, ComicVineImportSeriesPayload>(
-      '/v1/comicvine/series:import',
+      '/v2/comicvine/series:import',
       payload,
       { timeout: SERIES_IMPORT_TIMEOUT_MS },
     ),
   getSeriesImportStatus: (volumeId: number) =>
     api.get<ComicVineSeriesImportStatus>(
-      `/v1/comicvine/series/${volumeId}/import-status`,
+      `/v2/comicvine/series/${volumeId}/import-status`,
     ),
   searchSeries: (query: string, limit = 10, offset = 0) =>
     api.get<ComicVineSeriesSearchResponse>(`/v2/comicvine/search/series`, { params: { q: query, limit, offset } }),

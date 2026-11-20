@@ -2031,6 +2031,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/comicvine/series/{comicvine_volume_id}/import-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["series_import_status_v2_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/comicvine/series/{comicvine_volume_id}/issues": {
         parameters: {
             query?: never;
@@ -2041,6 +2057,22 @@ export interface paths {
         get: operations["comicvine_series_issues_documentation"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/series:import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["import_series_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6766,6 +6798,51 @@ export interface components {
             reading_order_id?: number | null;
             /** Format: int32 */
             thread_id: number;
+            /** Format: int32 */
+            total_items?: number | null;
+        };
+        NativeImportSeriesIssueResult: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            conflict_detail?: string | null;
+            hydration: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            outcome: string;
+        };
+        NativeImportSeriesRequest: {
+            /** Format: int32 */
+            already_read_count?: number;
+            /** Format: int32 */
+            anchor_after_thread_id?: number | null;
+            /** Format: int32 */
+            anchor_before_thread_id?: number | null;
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            /** Format: int32 */
+            reading_order_id?: number | null;
+        };
+        NativeImportSeriesResponse: {
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            issue_results: components["schemas"]["NativeImportSeriesIssueResult"][];
+            /** Format: int32 */
+            issues_adopted: number;
+            /** Format: int32 */
+            issues_conflict: number;
+            /** Format: int32 */
+            issues_skipped: number;
+            /** Format: int32 */
+            position?: number | null;
+            /** Format: int32 */
+            reading_order_id?: number | null;
+            series_name: string;
+            thread_created: boolean;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int32 */
+            total_issues_in_series: number;
             /** Format: int32 */
             total_items?: number | null;
         };
@@ -14632,6 +14709,43 @@ export interface operations {
             };
         };
     };
+    series_import_status_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicVine volume ID */
+                comicvine_volume_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned import status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesImportStatusResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     comicvine_series_issues_documentation: {
         parameters: {
             query?: {
@@ -14665,6 +14779,79 @@ export interface operations {
             };
             /** @description Validation failed */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    import_series_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeImportSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Imported or reused series thread */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeImportSeriesResponse"];
+                };
+            };
+            /** @description Series has no issues or already_read_count is too large */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description ComicVine returned an error or an incomplete roster */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description ComicVine is not configured */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

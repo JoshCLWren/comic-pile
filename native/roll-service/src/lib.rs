@@ -505,6 +505,10 @@ fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
         "/api/v1/cron/release-sync" => {
             reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
         }
+        // Series import fetches the volume and its full roster, then adopts
+        // every issue in one transaction; the browser allows 120 s
+        // (`SERIES_IMPORT_TIMEOUT_MS`), so the server must too (#4631578684).
+        "/api/v2/comicvine/series:import" => comicvine_v2::SERIES_IMPORT_REQUEST_DEADLINE,
         // Volume rosters page through ComicVine before answering (#4835).
         path if comicvine_v2::needs_roster_deadline(path) => comicvine_v2::ROSTER_REQUEST_DEADLINE,
         _ => default_timeout,
@@ -1106,6 +1110,15 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/comicvine/issues:import",
             post(comicvine_v2::import_issue),
         )
+        // Native v2 ComicVine routes (#4835, split chunk E).
+        .route(
+            "/api/v2/comicvine/series:import",
+            post(comicvine_v2::import_series),
+        )
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
+            get(comicvine_v2::series_import_status),
+        )
         .route(
             "/api/v2/issues/{issue_id}/dependencies",
             get(issue_read::get_issue_dependencies),
@@ -1423,6 +1436,14 @@ mod tests {
         }
         assert_eq!(
             request_timeout_for("/api/v2/comicvine/search/series", default),
+            default
+        );
+        assert_eq!(
+            request_timeout_for("/api/v2/comicvine/series:import", default),
+            Duration::from_secs(120)
+        );
+        assert_eq!(
+            request_timeout_for("/api/v2/comicvine/series/42/import-status", default),
             default
         );
         assert_eq!(

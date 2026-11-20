@@ -2728,6 +2728,820 @@ async fn confirmation_never_waits_on_a_refresh_row_the_repair_worker_holds() {
     worker_tx.commit().await.unwrap();
 }
 
+// ---------------------------------------------------------------------------
+// Chunk E: series import and v2 import status.
+// ---------------------------------------------------------------------------
+
+fn roster_row(id: i64, number: &str, volume: i64) -> Value {
+    json!({"id": id, "issue_number": number, "name": format!("Issue {number}"),
+           "site_detail_url": format!("https://comicvine.gamespot.com/issue/4000-{id}/"),
+           "volume": {"id": volume, "name": "Volume"}})
+}
+
+#[tokio::test]
+async fn import_series_adopts_roster_and_reuses_on_retry() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-series").await;
+    set_key(true);
+    let conn = state.pool.get().await.unwrap();
+
+    provider_ok(
+        &state,
+        json!({"results": {"id": 4242, "name": "The Series"}}),
+    );
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 3, "results": [
+        roster_row(1001, "1", 4242), roster_row(1002, "2", 4242), roster_row(1003, "3", 4242)]}),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 4242, "already_read_count": 1})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["series_name"], "The Series");
+    assert_eq!(body["thread_created"], true);
+    assert_eq!(body["total_issues_in_series"], 3);
+    assert_eq!(body["issues_adopted"], 3);
+    assert_eq!(body["issues_skipped"], 0);
+    assert_eq!(body["issues_conflict"], 0);
+    let first = &body["issue_results"][0];
+    assert_eq!(first["outcome"], "created");
+    assert_eq!(first["hydration"], "not_attempted");
+    assert_eq!(first["issue_number"], "1");
+    let thread_id = body["thread_id"].as_i64().unwrap() as i32;
+    let row = conn
+        .query_one(
+            "SELECT total_issues, issues_remaining, reading_progress, status, next_unread_issue_id \
+             FROM threads WHERE id = $1",
+            &[&thread_id],
+        )
+        .await
+        .unwrap();
+    assert_eq!(row.get::<_, Option<i32>>(0), Some(3));
+    assert_eq!(row.get::<_, Option<i32>>(1), Some(2));
+    assert_eq!(
+        row.get::<_, Option<String>>(2).as_deref(),
+        Some("in_progress")
+    );
+    assert_eq!(row.get::<_, String>(3), "active");
+    let statuses: Vec<String> = conn
+        .query(
+            "SELECT status FROM issues WHERE thread_id = $1 ORDER BY position",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| r.get(0))
+        .collect();
+    assert_eq!(statuses, ["read", "unread", "unread"]);
+    let events: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM events WHERE type = 'issues_created' AND thread_id = $1",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(events, 3);
+    // Provider calls were made with the shared credential against ComicVine only.
+    assert!(fake(&state)
+        .calls()
+        .iter()
+        .all(|c| c.host == "comicvine.gamespot.com"));
+
+    // Import-status now reports the thread.
+    let (status, body) = send(
+        &state,
+        call(
+            "GET",
+            "/api/v2/comicvine/series/4242/import-status",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["imported"], true);
+    assert_eq!(body["thread_id"], thread_id);
+    assert_eq!(body["issue_count"], 3);
+
+    // Retry reuses the thread and every issue; a new roster entry is adopted.
+    fake(&state).clear();
+    provider_ok(
+        &state,
+        json!({"results": {"id": 4242, "name": "The Series"}}),
+    );
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 4, "results": [
+        roster_row(1001, "1", 4242), roster_row(1002, "2", 4242), roster_row(1003, "3", 4242), roster_row(1004, "4", 4242)]}),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 4242})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["thread_created"], false);
+    assert_eq!(body["thread_id"], thread_id);
+    assert_eq!(body["issues_adopted"], 1);
+    assert_eq!(body["issues_skipped"], 3);
+    let threads: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM threads WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(threads, 1);
+
+    // A ComicVine issue already confirmed on another thread is a conflict, never moved.
+    let other = thread(&conn, user_id, "Elsewhere").await;
+    let elsewhere = issue(&conn, other, "1", 1).await;
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{elsewhere}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 2001})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    fake(&state).clear();
+    provider_ok(&state, json!({"results": {"id": 5151, "name": "Second"}}));
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 1, "results": [roster_row(2001, "1", 5151)]}),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 5151})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["issues_conflict"], 1);
+    assert_eq!(body["issue_results"][0]["outcome"], "conflict");
+    assert_eq!(body["issue_results"][0]["issue_id"], elsewhere);
+    assert_eq!(
+        body["issue_results"][0]["conflict_detail"],
+        format!("ComicVine issue 2001 is already confirmed on issue {elsewhere} of thread {other}")
+    );
+}
+
+#[tokio::test]
+async fn import_series_error_contract_and_reading_order() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-serr").await;
+    let conn = state.pool.get().await.unwrap();
+    let path = "/api/v2/comicvine/series:import";
+
+    set_key(false);
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            path,
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 1})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        body["detail"],
+        json!({"code": "provider_unavailable", "message": "ComicVine is not configured on this server"})
+    );
+
+    set_key(true);
+    // Unreachable provider (no canned response) -> 502 provider_failure.
+    fake(&state).clear();
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            path,
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 1})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY);
+    assert_eq!(body["detail"]["code"], "provider_failure");
+    assert_eq!(
+        body["detail"]["message"],
+        "Failed to fetch ComicVine series: ComicVineError"
+    );
+
+    provider_ok(&state, json!({"results": {"id": 1, "name": "  "}}));
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            path,
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 1})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY);
+    assert_eq!(
+        body["detail"],
+        json!({"code": "provider_failure", "message": "ComicVine series has no name"})
+    );
+
+    provider_ok(&state, json!({"results": {"id": 1, "name": "Empty"}}));
+    provider_ok(&state, json!({"number_of_total_results": 0, "results": []}));
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            path,
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 1})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["detail"],
+        json!({"code": "no_issues", "message": "ComicVine series has no issues"})
+    );
+
+    provider_ok(&state, json!({"results": {"id": 1, "name": "Two"}}));
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 2, "results": [roster_row(11, "1", 1), roster_row(12, "2", 1)]}),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            path,
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 1, "already_read_count": 3})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["detail"]["code"], "invalid_already_read_count");
+    assert_eq!(
+        body["detail"]["message"],
+        "already_read_count cannot exceed the series issue count (2)"
+    );
+
+    provider_ok(&state, json!({"results": {"id": 1, "name": "Two"}}));
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 2, "results": [roster_row(11, "1", 1), roster_row(12, "2", 1)]}),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            path,
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 1, "reading_order_id": 99999})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["detail"], "Reading order 99999 not found");
+    let none: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM threads WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(none, 0, "failed imports must not leave a thread behind");
+
+    // Reading-order placement with anchors.
+    let order: i32 = conn
+        .query_one(
+            "INSERT INTO reading_orders (user_id, name) VALUES ($1, 'O') RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let a = thread(&conn, user_id, "A").await;
+    conn.execute("INSERT INTO reading_order_items (reading_order_id, thread_id, position) VALUES ($1, $2, 1)", &[&order, &a])
+        .await
+        .unwrap();
+    provider_ok(&state, json!({"results": {"id": 1, "name": "Two"}}));
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 2, "results": [roster_row(11, "1", 1), roster_row(12, "2", 1)]}),
+    );
+    let (status, body) = send(
+        &state,
+        call("POST", path, &token, &csrf, Some(json!({"comicvine_volume_id": 1, "reading_order_id": order, "anchor_before_thread_id": a}))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(
+        (body["position"].as_i64(), body["total_items"].as_i64()),
+        (Some(2), Some(2))
+    );
+}
+
+#[tokio::test]
+async fn import_series_orders_numbered_issues_naturally_and_marks_all_read() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-natural").await;
+    set_key(true);
+    let conn = state.pool.get().await.unwrap();
+    provider_ok(&state, json!({"results": {"id": 77, "name": "Natural"}}));
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 3, "results": [
+        roster_row(31, "10", 77), roster_row(32, "2", 77), roster_row(33, "1", 77)]}),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 77, "already_read_count": 3})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let thread_id = body["thread_id"].as_i64().unwrap() as i32;
+    let numbers: Vec<String> = conn
+        .query(
+            "SELECT issue_number FROM issues WHERE thread_id = $1 ORDER BY position",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| r.get(0))
+        .collect();
+    assert_eq!(numbers, ["1", "2", "10"]);
+    let row = conn
+        .query_one("SELECT status, issues_remaining, reading_progress FROM threads WHERE id = $1 AND user_id = $2", &[&thread_id, &user_id])
+        .await
+        .unwrap();
+    assert_eq!(row.get::<_, String>(0), "completed");
+    assert_eq!(row.get::<_, Option<i32>>(1), Some(0));
+    assert_eq!(
+        row.get::<_, Option<String>>(2).as_deref(),
+        Some("completed")
+    );
+}
+
+#[tokio::test]
+async fn series_import_retry_into_a_reading_order_does_not_overcount_items() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-retrycount").await;
+    set_key(true);
+    let order: i32 = {
+        let conn = state.pool.get().await.unwrap();
+        let order: i32 = conn
+            .query_one(
+                "INSERT INTO reading_orders (user_id, name) VALUES ($1, 'O') RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        for n in 0..2 {
+            let t = thread(&conn, user_id, &format!("T{n}")).await;
+            conn.execute(
+                "INSERT INTO reading_order_items (reading_order_id, thread_id, position) VALUES ($1, $2, $3)",
+                &[&order, &t, &(n + 1)],
+            )
+            .await
+            .unwrap();
+        }
+        order
+    };
+    let mut totals = Vec::new();
+    for _ in 0..2 {
+        provider_ok(&state, json!({"results": {"id": 1, "name": "Two"}}));
+        provider_ok(
+            &state,
+            json!({"number_of_total_results": 2, "results": [roster_row(11, "1", 1), roster_row(12, "2", 1)]}),
+        );
+        let (status, body) = send(
+            &state,
+            call(
+                "POST",
+                "/api/v2/comicvine/series:import",
+                &token,
+                &csrf,
+                Some(json!({"comicvine_volume_id": 1, "reading_order_id": order})),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body:?}");
+        totals.push(body["total_items"].as_i64().unwrap());
+    }
+    assert_eq!(totals, vec![3, 3], "retry moves the entry; it adds none");
+}
+
+/// Concurrent sibling writers: while one session holds the reader's queue
+/// lock, `identity:confirm`, `issues:import` (twice) and the native
+/// `DELETE /api/v2/issues/{id}` writer all wait on that same lock (none takes
+/// a row lock first), then all complete once it is released: no deadlock, and
+/// the two imports get distinct queue positions.
+#[tokio::test]
+async fn malformed_roster_pages_fail_instead_of_truncating_the_import() {
+    let paged = PagedComicVine::new(88, 200, Some(100));
+    let (state, token, csrf, user_id, _guard) = paged_state("cvv2-malformed", &paged).await;
+    set_key(true);
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 88})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY, "{body:?}");
+    assert_eq!(
+        body["detail"],
+        json!({"code": "provider_failure", "message": "Failed to fetch series issues: ComicVineError"})
+    );
+    let conn = state.pool.get().await.unwrap();
+    let threads: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM threads WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(threads, 0, "a failed roster creates no thread or issues");
+    drop(conn);
+    let (status, body) = send(
+        &state,
+        call(
+            "GET",
+            "/api/v2/comicvine/series/88/issues?series_name=Named",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["series_name"], "Named");
+    assert_eq!(body["issues"], json!([]));
+}
+
+/// Golden values measured from the frozen Python request models (Pydantic v2
+/// lax mode, `app/schemas/comicvine_resolution.py`): ints accept `"5"`, `5.0`
+/// and `true`; confirm/replace ids have no `gt=0`; `field_name` and
+/// `canonical_value` are unconstrained; `reason` is `max_length=500`; an
+/// import `title` is bounded before `strip()`. Anything Python rejects is the
+/// generic `{"detail": "Validation failed"}` 422.
+
+#[tokio::test]
+async fn series_import_routes_require_auth_csrf_and_use_the_validation_contract() {
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-series-contract").await;
+    set_key(true);
+    let path = "/api/v2/comicvine/series:import";
+    let body = json!({"comicvine_volume_id": 1}).to_string();
+    let request = Request::builder()
+        .method("POST")
+        .uri(path)
+        .header("x-csrf-token", "pair")
+        .header(header::COOKIE, "csrf_token=pair")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.clone()))
+        .unwrap();
+    assert_eq!(send(&state, request).await.0, StatusCode::UNAUTHORIZED);
+    let request = Request::builder()
+        .method("POST")
+        .uri(path)
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body))
+        .unwrap();
+    assert_eq!(send(&state, request).await.0, StatusCode::FORBIDDEN);
+    let request = Request::builder()
+        .method("GET")
+        .uri("/api/v2/comicvine/series/1/import-status")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(send(&state, request).await.0, StatusCode::UNAUTHORIZED);
+    let expected = json!({"detail": "Validation failed"});
+    for body in [
+        json!({}),
+        json!({"comicvine_volume_id": 0}),
+        json!({"comicvine_volume_id": "x"}),
+        json!({"comicvine_volume_id": 1, "already_read_count": -1}),
+        json!({"comicvine_volume_id": 1, "reading_order_id": 0}),
+        json!({"comicvine_volume_id": 1, "anchor_before_thread_id": 1.5}),
+    ] {
+        let (status, got) = send(
+            &state,
+            call("POST", path, &token, &csrf, Some(body.clone())),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}: {got:?}");
+        assert_eq!(got, expected, "{body}");
+    }
+    for path in [
+        "/api/v2/comicvine/series/abc/import-status",
+        "/api/v2/comicvine/series/1.5/import-status",
+    ] {
+        let (status, got) = send(&state, get(path, &token, &csrf)).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{path}: {got:?}");
+        assert_eq!(got, expected, "{path}");
+    }
+    assert!(
+        fake(&state).calls().is_empty(),
+        "rejected requests never reach the provider"
+    );
+    // A volume nobody imported reports not imported.
+    let (status, got) = send(
+        &state,
+        get("/api/v2/comicvine/series/77/import-status", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        got,
+        json!({"comicvine_volume_id": 77, "imported": false, "thread_id": null, "series_name": null, "issue_count": null})
+    );
+}
+
+/// Series import must see the provider's current roster (Python
+/// `refresh=True`): a retry re-fetches the volume and roster instead of
+/// reusing the cached browse payloads.
+#[tokio::test]
+async fn series_import_fetches_fresh_provider_payloads() {
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-series-fresh").await;
+    set_key(true);
+    // A browse warms the cache for the volume roster.
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 1, "results": [roster_row(31, "1", 30)]}),
+    );
+    let (status, _) = send(
+        &state,
+        get(
+            "/api/v2/comicvine/series/30/issues?series_name=Thirty",
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let browsed = fake(&state).calls().len();
+    provider_ok(&state, json!({"results": {"id": 30, "name": "Thirty"}}));
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 2, "results": [roster_row(31, "1", 30), roster_row(32, "2", 30)]}),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 30})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(
+        fake(&state).calls().len(),
+        browsed + 2,
+        "volume and roster fetched live"
+    );
+    assert_eq!(
+        body["total_issues_in_series"], 2,
+        "the fresh roster, not the cached one"
+    );
+}
+
+/// Queue rows for a reused series import: one prior import, so the retry
+/// takes `FOR UPDATE` on the existing thread and its issues.
+async fn seed_imported_series(state: &Arc<AppState>, token: &str, csrf: &str, volume: i64) -> i32 {
+    provider_ok(state, json!({"results": {"id": volume, "name": "Locked"}}));
+    provider_ok(
+        state,
+        json!({"number_of_total_results": 1, "results": [roster_row(volume * 10 + 1, "1", volume)]}),
+    );
+    let (status, body) = send(
+        state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            token,
+            csrf,
+            Some(json!({"comicvine_volume_id": volume})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    body["thread_id"].as_i64().unwrap() as i32
+}
+
+fn queue_series_retry(state: &Arc<AppState>, volume: i64) {
+    provider_ok(state, json!({"results": {"id": volume, "name": "Locked"}}));
+    provider_ok(
+        state,
+        json!({"number_of_total_results": 2, "results": [
+            roster_row(volume * 10 + 1, "1", volume), roster_row(volume * 10 + 2, "2", volume)]}),
+    );
+}
+
+/// Lock order for `series:import` (Greptile 4636390898, brief rule 8): the
+/// reader's queue advisory lock is taken before any thread or issue row lock.
+/// While the queue lock is held, the import is a `pg_locks` waiter and the
+/// reused thread and issue rows are still lockable with `NOWAIT`.
+#[tokio::test]
+async fn series_import_takes_the_queue_lock_before_row_locks() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-series-lock", 4, None).await;
+    set_key(true);
+    let thread_id = seed_imported_series(&state, &token, &csrf, 61).await;
+    queue_series_retry(&state, 61);
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let pending = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 61})),
+        ),
+    );
+    wait_for_queue_lock_waiters(&tx, user_id, 1, &[&pending]).await;
+    tx.query_one(
+        "SELECT id FROM threads WHERE id = $1 FOR UPDATE NOWAIT",
+        &[&thread_id],
+    )
+    .await
+    .expect("series import locked the thread row before the queue lock");
+    tx.query(
+        "SELECT id FROM issues WHERE thread_id = $1 FOR UPDATE NOWAIT",
+        &[&thread_id],
+    )
+    .await
+    .expect("series import locked issue rows before the queue lock");
+    tx.commit().await.unwrap();
+    drop(holder);
+    let (status, body) = pending.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["thread_created"], false);
+    assert_eq!(body["issues_adopted"], 1);
+}
+
+/// `series:import` (reusing an existing thread) races sibling queue writers:
+/// an issue import, an identity confirmation on the reused thread's issue and
+/// a native issue delete all wait on the same queue lock, then every writer
+/// completes with no deadlock and consistent counters.
+#[tokio::test]
+async fn series_import_serializes_with_sibling_queue_writers() {
+    let (state, token, csrf, user_id, _guard) =
+        setup_user_with("cvv2-series-siblings", 8, None).await;
+    set_key(true);
+    let thread_id = seed_imported_series(&state, &token, &csrf, 62).await;
+    let (first_issue, deleted_issue) = {
+        let conn = state.pool.get().await.unwrap();
+        let first: i32 = conn
+            .query_one(
+                "SELECT id FROM issues WHERE thread_id = $1 ORDER BY position LIMIT 1",
+                &[&thread_id],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let other = thread(&conn, user_id, "Other").await;
+        (first, issue(&conn, other, "1", 1).await)
+    };
+    queue_series_retry(&state, 62);
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let series = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 62})),
+        ),
+    );
+    // The series import finishes its provider reads before it queues on the
+    // lock, so the siblings below never consume its canned responses.
+    wait_for_queue_lock_waiters(&tx, user_id, 1, &[&series]).await;
+    let import = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({"title": "Sibling", "comicvine_issue_id": 6299})),
+        ),
+    );
+    let confirm = spawn_send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{first_issue}/identity:replace"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 6298, "reason": "race"})),
+        ),
+    );
+    let delete = spawn_send(
+        &state,
+        call(
+            "DELETE",
+            &format!("/api/v2/issues/{deleted_issue}"),
+            &token,
+            &csrf,
+            None,
+        ),
+    );
+    wait_for_queue_lock_waiters(&tx, user_id, 4, &[&series, &import, &confirm, &delete]).await;
+    tx.commit().await.unwrap();
+    drop(holder);
+    let (status, body) = series.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let (status, body) = import.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let imported_thread = body["thread_id"].as_i64().unwrap() as i32;
+    let (status, body) = confirm.await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let (status, body) = delete.await.unwrap();
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+    let conn = state.pool.get().await.unwrap();
+    let row = conn
+        .query_one(
+            "SELECT t.total_issues, (SELECT count(*) FROM issues i WHERE i.thread_id = t.id)::int, \
+                    t.queue_position \
+             FROM threads t WHERE t.id = $1",
+            &[&thread_id],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        row.get::<_, Option<i32>>(0),
+        Some(row.get::<_, i32>(1)),
+        "counters match rows"
+    );
+    let positions: Vec<i32> = conn
+        .query(
+            "SELECT queue_position FROM threads WHERE id = ANY($1)",
+            &[&vec![thread_id, imported_thread]],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| r.get(0))
+        .collect();
+    assert_eq!(positions.len(), 2);
+    assert_ne!(
+        positions[0], positions[1],
+        "the import and the series thread do not share a slot"
+    );
+}
+
 /// Golden responses captured from the frozen Python handler
 /// (`app/api/comicvine_resolution.py::api_import_issue`, production error
 /// handlers, disposable local Postgres) for the same requests in the same
@@ -2904,6 +3718,222 @@ async fn import_issue_matches_responses_captured_from_python() {
                 "order_threads": order_threads,
             });
             assert_eq!(stored, case["stored"], "{name} stored rows");
+        }
+    }
+}
+
+/// Golden responses captured from the frozen Python handler
+/// (`app/api/comicvine_resolution.py::api_import_series`, production error
+/// handlers, a fake `ComicVineClient` serving each case's provider payloads,
+/// disposable local Postgres), replayed in order against Rust with the same
+/// provider payloads. Ids are normalized identically on both sides.
+const IMPORT_SERIES_GOLDEN: &str =
+    include_str!("fixtures/comicvine/import_series_python_golden.json");
+
+fn series_golden_normalize(value: &Value, order: i32) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(key, item)| {
+                    let normalized = match item.as_i64() {
+                        Some(id) if key == "reading_order_id" && id == i64::from(order) => {
+                            json!("$order")
+                        }
+                        Some(_)
+                            if matches!(
+                                key.as_str(),
+                                "thread_id" | "issue_id" | "reading_order_id"
+                            ) =>
+                        {
+                            json!(format!("<{key}>"))
+                        }
+                        _ => series_golden_normalize(item, order),
+                    };
+                    (key.clone(), normalized)
+                })
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|v| series_golden_normalize(v, order))
+                .collect(),
+        ),
+        Value::String(text) => {
+            let mut text = text.clone();
+            if let Some(at) = text.find(" is already confirmed on issue ") {
+                text.truncate(at);
+                text.push_str(" is already confirmed on issue <issue_id> of thread <thread_id>");
+            }
+            if text.starts_with("Reading order ") && text.ends_with(" not found") {
+                text = "Reading order <reading_order_id> not found".to_owned();
+            }
+            Value::String(text)
+        }
+        other => other.clone(),
+    }
+}
+
+#[tokio::test]
+async fn import_series_matches_responses_captured_from_python() {
+    let golden: Value = serde_json::from_str(IMPORT_SERIES_GOLDEN).unwrap();
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-gs").await;
+    let (other_token, other_csrf, _) = register_extra_user(&state, "cvv2-gso").await;
+    let (order, a, b) = {
+        let conn = state.pool.get().await.unwrap();
+        let order: i32 = conn
+            .query_one(
+                "INSERT INTO reading_orders (user_id, name) VALUES ($1, 'Arc') RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let mut threads = Vec::new();
+        for (pos, title) in [(1, "A"), (2, "B")] {
+            let id: i32 = conn
+                .query_one(
+                    "INSERT INTO threads (title, format, issues_remaining, total_issues, \
+                     queue_position, status, user_id) VALUES ($1, 'Comic', 1, 1, $2, 'active', $3) \
+                     RETURNING id",
+                    &[&title, &pos, &user_id],
+                )
+                .await
+                .unwrap()
+                .get(0);
+            conn.execute(
+                "INSERT INTO reading_order_items (reading_order_id, thread_id, position) \
+                 VALUES ($1, $2, $3)",
+                &[&order, &id, &pos],
+            )
+            .await
+            .unwrap();
+            threads.push(id);
+        }
+        (order, threads[0], threads[1])
+    };
+    let seeds = std::collections::HashMap::from([("$order", order), ("$a", a), ("$b", b)]);
+    let cases = golden["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 23, "every captured case is replayed");
+    // Set once the Python duplicate reading-order row (see below) exists in
+    // the captured state; later captured orders carry that extra row.
+    let mut python_duplicate_row = false;
+    for case in cases {
+        let name = case["name"].as_str().unwrap();
+        set_key(case["key"].as_bool().unwrap_or(true));
+        fake(&state).clear();
+        if let Some(provider) = case["provider"].as_object() {
+            // "error" queues nothing: the fake fails closed like an unreachable provider.
+            if let volume @ Value::Object(_) = &provider["volume"] {
+                provider_ok(&state, volume.clone());
+            }
+            if let Some(rows) = provider.get("roster").and_then(Value::as_array) {
+                provider_ok(
+                    &state,
+                    json!({"number_of_total_results": rows.len(), "results": rows}),
+                );
+            }
+        }
+        let body = golden_resolve(&case["body"], &seeds).to_string();
+        let builder = Request::builder()
+            .method("POST")
+            .uri("/api/v2/comicvine/series:import")
+            .header(header::CONTENT_TYPE, "application/json");
+        let builder = match case["actor"].as_str().unwrap() {
+            "owner" | "other" => {
+                let (token, csrf) = if case["actor"] == "owner" {
+                    (&token, &csrf)
+                } else {
+                    (&other_token, &other_csrf)
+                };
+                builder
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .header("x-csrf-token", csrf.as_str())
+                    .header(header::COOKIE, format!("csrf_token={csrf}"))
+            }
+            "nocsrf" => builder.header(header::AUTHORIZATION, format!("Bearer {token}")),
+            _ => builder
+                .header("x-csrf-token", "pair")
+                .header(header::COOKIE, "csrf_token=pair"),
+        };
+        let (status, response) = send(&state, builder.body(Body::from(body)).unwrap()).await;
+        let mut expected = case["response"].clone();
+        let mut expected_stored = case["stored"].clone();
+        if name == "into_reading_order_retry_does_not_overcount" {
+            // Intentional fix (Greptile 4632556513): Python's retry appended a
+            // second reading-order row for the same thread and reported 4
+            // items. Rust moves the existing entry instead, so the order keeps
+            // one row per thread and reports the real count.
+            assert_eq!(
+                expected["total_items"], 4,
+                "golden still records the Python bug"
+            );
+            assert_eq!(
+                expected_stored["order_threads"],
+                json!(["$new", "$new", "$a", "$b"])
+            );
+            expected["total_items"] = json!(3);
+            expected_stored["order_threads"] = json!(["$new", "$a", "$b"]);
+            python_duplicate_row = true;
+        } else if python_duplicate_row {
+            if let Some(threads) = expected_stored["order_threads"].as_array_mut() {
+                let duplicate = threads.iter().position(|t| t == "<other>").unwrap();
+                threads.remove(duplicate);
+            }
+        }
+        assert_eq!(
+            status.as_u16() as i64,
+            case["status"].as_i64().unwrap(),
+            "{name}: {response:?}"
+        );
+        assert_eq!(
+            series_golden_normalize(&response, order),
+            expected,
+            "{name}"
+        );
+        if status == StatusCode::CREATED {
+            let thread_id = response["thread_id"].as_i64().unwrap() as i32;
+            let conn = state.pool.get().await.unwrap();
+            let row = conn
+                .query_one(
+                    "SELECT title, total_issues, issues_remaining, status, reading_progress, \
+                     (SELECT position FROM issues WHERE id = t.next_unread_issue_id), \
+                     (SELECT count(*) FROM events WHERE thread_id = t.id AND type = 'issues_created')::int, \
+                     (SELECT count(*) FROM thread_external_series_mappings \
+                       WHERE thread_id = t.id AND status = 'confirmed')::int, \
+                     (SELECT array_agg(issue_number || '|' || position || '|' || status ORDER BY position, id) \
+                        FROM issues WHERE thread_id = t.id), \
+                     (SELECT array_agg(thread_id ORDER BY position) FROM reading_order_items \
+                       WHERE reading_order_id = $2) \
+                     FROM threads t WHERE t.id = $1",
+                    &[&thread_id, &order],
+                )
+                .await
+                .unwrap();
+            let order_threads: Vec<String> = row
+                .get::<_, Option<Vec<i32>>>(9)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|id| match id {
+                    id if id == a => "$a".to_owned(),
+                    id if id == b => "$b".to_owned(),
+                    id if id == thread_id => "$new".to_owned(),
+                    _ => "<other>".to_owned(),
+                })
+                .collect();
+            let stored = json!({
+                "title": row.get::<_, String>(0),
+                "total_issues": row.get::<_, Option<i32>>(1),
+                "issues_remaining": row.get::<_, i32>(2),
+                "status": row.get::<_, String>(3),
+                "reading_progress": row.get::<_, Option<String>>(4),
+                "next_unread_position": row.get::<_, Option<i32>>(5),
+                "created_events": row.get::<_, i32>(6),
+                "series_mappings": row.get::<_, i32>(7),
+                "issues": row.get::<_, Option<Vec<String>>>(8),
+                "order_threads": order_threads,
+            });
+            assert_eq!(stored, expected_stored, "{name} stored rows");
         }
     }
 }

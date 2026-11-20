@@ -16,9 +16,15 @@
 //! row (`FOR UPDATE OF i`), matching `thread_repository.py:155-158`.
 //! Chunk D adds the single-issue import (`import_comicvine_issue`), which
 //! takes the same queue lock before its duplicate check, queue-position
-//! assignment and reading-order insert. Series import moves in chunk E.
+//! assignment and reading-order insert. Chunk E adds the series import
+//! (`import_comicvine_series`) under the same lock order, and the canonical
+//! v2 import-status read.
 
-use crate::{auth::AuthenticatedUser, comicvine_repair::ProviderFailure, db, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser, comicvine_repair::ProviderFailure,
+    comicvine_resolution::SeriesImportStatusResponse, db, thread_issues::natural_issue_order,
+    ApiError, AppState,
+};
 use axum::{
     extract::{
         rejection::{JsonRejection, PathRejection, QueryRejection},
@@ -29,7 +35,11 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 use tokio_postgres::Transaction;
 
 /// Server deadline for the roster-backed reads (series issues and volume
@@ -39,6 +49,11 @@ use tokio_postgres::Transaction;
 /// is still succeeding (#4635551186). Matches the repair cron's 50 s budget;
 /// the browser waits slightly longer (`COMICVINE_ROSTER_TIMEOUT_MS`).
 pub const ROSTER_REQUEST_DEADLINE: Duration = Duration::from_secs(50);
+
+/// Server deadline for `series:import`: the volume read, the complete
+/// roster and the one-transaction adoption, matching the browser's 120 s
+/// `SERIES_IMPORT_TIMEOUT_MS` (#4631578684).
+pub const SERIES_IMPORT_REQUEST_DEADLINE: Duration = Duration::from_secs(120);
 
 /// True for the routes that need [`ROSTER_REQUEST_DEADLINE`].
 pub fn needs_roster_deadline(path: &str) -> bool {
@@ -245,6 +260,49 @@ pub struct ImportIssueResponse {
     pub reading_order_id: Option<i32>,
     pub position: Option<i32>,
     pub total_items: Option<i32>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ImportSeriesRequest {
+    #[serde(deserialize_with = "de_lax_i32")]
+    pub comicvine_volume_id: i32,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
+    pub reading_order_id: Option<i32>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
+    pub anchor_before_thread_id: Option<i32>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
+    pub anchor_after_thread_id: Option<i32>,
+    #[serde(default, deserialize_with = "de_lax_i32")]
+    pub already_read_count: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ImportSeriesIssueResult {
+    #[serde(deserialize_with = "de_lax_i32")]
+    pub comicvine_issue_id: i32,
+    pub issue_number: Option<String>,
+    pub issue_id: Option<i32>,
+    pub outcome: String,
+    pub hydration: String,
+    pub conflict_detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ImportSeriesResponse {
+    pub thread_id: i32,
+    pub series_name: String,
+    #[serde(deserialize_with = "de_lax_i32")]
+    pub comicvine_volume_id: i32,
+    pub total_issues_in_series: i32,
+    pub issues_adopted: i32,
+    pub issues_skipped: i32,
+    pub issues_conflict: i32,
+    pub issue_results: Vec<ImportSeriesIssueResult>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
+    pub reading_order_id: Option<i32>,
+    pub position: Option<i32>,
+    pub total_items: Option<i32>,
+    pub thread_created: bool,
 }
 
 /// Python `MetadataCorrectionRevertRequest` (lax `int`).
@@ -678,15 +736,23 @@ async fn fetch_roster_page(
     volume_id: i32,
     key: &str,
     offset: usize,
+    fresh: bool,
 ) -> Result<RosterPage, ProviderFailure> {
     let extra = format!(
         "&filter=volume:{volume_id}&limit={ROSTER_PAGE_SIZE}&offset={offset}\
          &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url,volume"
     );
-    let payload = state
-        .comicvine_limits
-        .call(&state.outbound, "issues", &extra, key)
-        .await?;
+    let payload = if fresh {
+        state
+            .comicvine_limits
+            .call_fresh(&state.outbound, "issues", &extra, key)
+            .await?
+    } else {
+        state
+            .comicvine_limits
+            .call(&state.outbound, "issues", &extra, key)
+            .await?
+    };
     roster_page(&payload, volume_id)
 }
 
@@ -696,12 +762,14 @@ async fn fetch_roster_page(
 /// offsets are fetched concurrently (at most [`ROSTER_PAGE_CONCURRENCY`] in
 /// flight) and assembled in offset order (#4635551186). Any malformed page
 /// fails the whole roster.
+/// `fresh` is Python `fetch_volume_issues(refresh=True)` (series import).
 async fn provider_roster(
     state: &Arc<AppState>,
     volume_id: i32,
     key: &str,
+    fresh: bool,
 ) -> Result<Vec<Value>, ProviderFailure> {
-    let first = fetch_roster_page(state, volume_id, key, 0).await?;
+    let first = fetch_roster_page(state, volume_id, key, 0, fresh).await?;
     let Some(total) = first.total else {
         let mut rows = first.rows;
         let mut last_len = rows.len();
@@ -710,7 +778,7 @@ async fn provider_roster(
             if pages >= MAX_ROSTER_PAGES {
                 return Err(ProviderFailure::InvalidPayload);
             }
-            let page = fetch_roster_page(state, volume_id, key, rows.len()).await?;
+            let page = fetch_roster_page(state, volume_id, key, rows.len(), fresh).await?;
             pages += 1;
             last_len = page.rows.len();
             rows.extend(page.rows);
@@ -738,7 +806,7 @@ async fn provider_roster(
             in_flight.spawn(async move {
                 (
                     index,
-                    fetch_roster_page(&state, volume_id, &key, offset).await,
+                    fetch_roster_page(&state, volume_id, &key, offset, fresh).await,
                 )
             });
             next += 1;
@@ -799,7 +867,7 @@ async fn series_issues_response(
         // Python schedules the roster and the volume read together, so the
         // two provider round trips overlap.
         let (roster, volume) = tokio::join!(
-            provider_roster(state, volume_id, key),
+            provider_roster(state, volume_id, key, false),
             provider_volume(state, volume_id, key)
         );
         let name = volume.ok().and_then(|volume| match volume {
@@ -808,7 +876,10 @@ async fn series_issues_response(
         });
         (roster, name.unwrap_or_else(fallback))
     } else {
-        (provider_roster(state, volume_id, key).await, series_name)
+        (
+            provider_roster(state, volume_id, key, false).await,
+            series_name,
+        )
     };
     let issues = match roster {
         Ok(rows) => rows.iter().filter_map(issue_candidate).collect(),
@@ -1796,6 +1867,831 @@ pub async fn import_issue(
 }
 
 // ---------------------------------------------------------------------------
+// Series import and status (chunk E).
+// ---------------------------------------------------------------------------
+
+/// Structured `{"code", "message"}` error body (Python `SeriesImportError`).
+fn series_import_error(status: StatusCode, code: &str, message: impl Into<String>) -> ApiError {
+    let message = message.into();
+    ApiError::StructuredDetail {
+        status,
+        message: message.clone(),
+        detail: serde_json::json!({ "code": code, "message": message }),
+    }
+}
+
+/// Python exception class name embedded in the `provider_failure` message.
+fn provider_failure_name(failure: &ProviderFailure) -> &'static str {
+    match failure {
+        ProviderFailure::Timeout => "TimeoutError",
+        _ => "ComicVineError",
+    }
+}
+
+/// Mirror of `comicvine_hydration.normalize_issue` for a roster row: the
+/// curated fields plus the complete raw provider row, so the existing deep
+/// refresh worker still sees the identity as incomplete.
+fn normalize_roster_issue(row: &Value) -> Value {
+    fn compact(value: Option<&Value>) -> Value {
+        let Some(object) = value.and_then(Value::as_object) else {
+            return Value::Null;
+        };
+        let mut out = serde_json::Map::new();
+        for key in ["id", "name", "api_detail_url", "site_detail_url"] {
+            if let Some(found) = object.get(key) {
+                out.insert(key.to_owned(), found.clone());
+            }
+        }
+        Value::Object(out)
+    }
+    fn compact_all(value: Option<&Value>) -> Value {
+        let Some(items) = value.and_then(Value::as_array) else {
+            return Value::Array(Vec::new());
+        };
+        Value::Array(
+            items
+                .iter()
+                .filter(|item| item.is_object())
+                .map(|item| {
+                    let mut compacted = compact(Some(item));
+                    if let (Some(map), Some(role)) = (
+                        compacted.as_object_mut(),
+                        item.as_object().and_then(|o| o.get("role")),
+                    ) {
+                        map.insert("role".to_owned(), role.clone());
+                    }
+                    compacted
+                })
+                .collect(),
+        )
+    }
+    let primary_image = row
+        .get("image")
+        .and_then(Value::as_object)
+        .and_then(|image| {
+            ["original_url", "super_url", "medium_url", "small_url"]
+                .iter()
+                .find_map(|key| {
+                    image
+                        .get(*key)
+                        .and_then(Value::as_str)
+                        .filter(|url| !url.is_empty())
+                })
+        })
+        .map(|url| Value::String(url.to_owned()))
+        .unwrap_or(Value::Null);
+    let field = |key: &str| row.get(key).cloned().unwrap_or(Value::Null);
+    serde_json::json!({
+        "name": field("name"),
+        "issue_number": field("issue_number"),
+        "cover_date": field("cover_date"),
+        "store_date": field("store_date"),
+        "volume": compact(row.get("volume")),
+        "primary_image": primary_image,
+        "creator_credits": compact_all(row.get("person_credits")),
+        "characters": compact_all(row.get("character_credits")),
+        "teams": compact_all(row.get("team_credits")),
+        "story_arcs": compact_all(row.get("story_arc_credits")),
+        "raw_provider_payload": row,
+    })
+}
+
+/// One thread issue (stored or about to be created) in the in-memory
+/// natural-order simulation that replaces Python's per-issue SQL.
+struct SimIssue {
+    id: Option<i32>,
+    number: String,
+    position: i32,
+    original_position: i32,
+    /// ComicVine external id of the confirmed identity already on the issue.
+    confirmed_cv: Option<String>,
+}
+
+/// Seat one new issue number exactly like `create_issue_in_natural_order`.
+fn sim_place(all: &mut Vec<SimIssue>, number: &str) -> usize {
+    let mut order: Vec<usize> = (0..all.len()).collect();
+    order.sort_by_key(|&i| (all[i].position, i));
+    let existing: Vec<String> = order.iter().map(|&i| all[i].number.clone()).collect();
+    let target_position = match natural_issue_order(&existing, &[number.to_owned()]) {
+        Some(natural) => {
+            let targets: HashMap<&str, i32> = natural
+                .iter()
+                .enumerate()
+                .map(|(index, label)| (label.as_str(), index as i32 + 1))
+                .collect();
+            for issue in all.iter_mut() {
+                if let Some(target) = targets.get(issue.number.as_str()) {
+                    issue.position = *target;
+                }
+            }
+            targets[number]
+        }
+        None => all.iter().map(|issue| issue.position).max().unwrap_or(0) + 1,
+    };
+    all.push(SimIssue {
+        id: None,
+        number: number.to_owned(),
+        position: target_position,
+        original_position: target_position,
+        confirmed_cv: None,
+    });
+    all.len() - 1
+}
+
+enum SimOutcome {
+    Created(usize),
+    Reused(usize),
+    ReusedExisting(i32),
+    Conflict {
+        issue: Option<usize>,
+        issue_id: Option<i32>,
+        detail: String,
+    },
+    Error(String),
+}
+
+struct SimEntry {
+    cv_id: i32,
+    number: String,
+    outcome: SimOutcome,
+}
+
+/// `POST /api/v2/comicvine/series:import` (Python `import_comicvine_series`).
+pub async fn import_series(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    request: Result<Json<ImportSeriesRequest>, JsonRejection>,
+) -> Result<(StatusCode, Json<ImportSeriesResponse>), ApiError> {
+    let Json(request) = request.map_err(|_| validation_failed())?;
+    if request.comicvine_volume_id <= 0 {
+        return Err(unprocessable("Invalid comicvine_volume_id"));
+    }
+    if request.already_read_count < 0 {
+        return Err(unprocessable("Invalid already_read_count"));
+    }
+    for id in [
+        request.reading_order_id,
+        request.anchor_before_thread_id,
+        request.anchor_after_thread_id,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if id <= 0 {
+            return Err(unprocessable("Invalid reading order anchor"));
+        }
+    }
+    let Some(key) = provider_key() else {
+        return Err(series_import_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "provider_unavailable",
+            "ComicVine is not configured on this server",
+        ));
+    };
+    let volume_id = request.comicvine_volume_id;
+    let volume = state
+        .comicvine_limits
+        .call_fresh(
+            &state.outbound,
+            &format!("volume/4050-{volume_id}"),
+            "",
+            &key,
+        )
+        .await
+        .map_err(|failure| {
+            series_import_error(
+                StatusCode::BAD_GATEWAY,
+                "provider_failure",
+                format!(
+                    "Failed to fetch ComicVine series: {}",
+                    provider_failure_name(&failure)
+                ),
+            )
+        })?;
+    let Some(volume_data) = volume.get("results").filter(|value| value.is_object()) else {
+        return Err(series_import_error(
+            StatusCode::BAD_GATEWAY,
+            "provider_failure",
+            "ComicVine series response did not contain valid data",
+        ));
+    };
+    let Some(series_name) = volume_data
+        .get("name")
+        .and_then(Value::as_str)
+        .filter(|name| !name.trim().is_empty())
+        .map(str::to_owned)
+    else {
+        return Err(series_import_error(
+            StatusCode::BAD_GATEWAY,
+            "provider_failure",
+            "ComicVine series has no name",
+        ));
+    };
+    let rows = provider_roster(&state, volume_id, &key, true)
+        .await
+        .map_err(|failure| {
+            series_import_error(
+                StatusCode::BAD_GATEWAY,
+                "provider_failure",
+                format!(
+                    "Failed to fetch series issues: {}",
+                    provider_failure_name(&failure)
+                ),
+            )
+        })?;
+    if rows.is_empty() {
+        return Err(series_import_error(
+            StatusCode::BAD_REQUEST,
+            "no_issues",
+            "ComicVine series has no issues",
+        ));
+    }
+    if request.already_read_count as usize > rows.len() {
+        return Err(series_import_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_already_read_count",
+            format!(
+                "already_read_count cannot exceed the series issue count ({})",
+                rows.len()
+            ),
+        ));
+    }
+
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    // Lock order: queue advisory lock first, then thread/issue row locks.
+    crate::queue::lock_queue(&tx, user.id()).await?;
+    if let Some(order_id) = request.reading_order_id {
+        owned_reading_order(&tx, user.id(), order_id).await?;
+    }
+    let user_id = user.id();
+    let external_volume_id = volume_id.to_string();
+    let reused_thread_id: Option<i32> = tx
+        .query_opt(
+            "SELECT t.id FROM thread_external_series_mappings m \
+             JOIN threads t ON t.id = m.thread_id \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE t.user_id = $1 AND m.status = 'confirmed' \
+               AND e.entity_type = 'series' AND e.provider = 'comicvine' \
+               AND e.external_id = $2 ORDER BY m.id LIMIT 1",
+            &[&user_id, &external_volume_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .map(|row| row.get(0));
+    let thread_created = reused_thread_id.is_none();
+
+    // (status, total_issues, next_unread_issue_id) of a reused thread, used for
+    // the Python adoption reopen rule below.
+    let mut reused_state: Option<(String, Option<i32>, Option<i32>)> = None;
+    let thread_id = match reused_thread_id {
+        Some(id) => {
+            let row = tx
+                .query_opt(
+                    "SELECT status, total_issues, next_unread_issue_id FROM threads \
+                     WHERE id = $1 AND user_id = $2 FOR UPDATE",
+                    &[&id, &user_id],
+                )
+                .await
+                .map_err(db::query_error)?
+                .ok_or_else(|| not_found(format!("Thread {id} not found")))?;
+            reused_state = Some((row.get(0), row.get(1), row.get(2)));
+            id
+        }
+        None => {
+            let next_position: i32 = tx
+                .query_one(
+                    "SELECT COALESCE(MAX(queue_position), 0) + 1 FROM threads WHERE user_id = $1",
+                    &[&user_id],
+                )
+                .await
+                .map_err(db::query_error)?
+                .get(0);
+            tx.query_one(
+                "INSERT INTO threads \
+                    (title, format, issues_remaining, total_issues, queue_position, status, \
+                     user_id, created_at, is_test, is_blocked) \
+                 VALUES ($1, 'Comic', 0, 0, $2, 'active', $3, now(), false, false) \
+                 RETURNING id",
+                &[&series_name.trim(), &next_position, &user_id],
+            )
+            .await
+            .map_err(db::query_error)?
+            .get(0)
+        }
+    };
+
+    let series_identity_id: i32 = tx
+        .query_one(
+            "INSERT INTO external_identities \
+                (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'series', $1, $2, '{}'::json, now(), now()) \
+             ON CONFLICT ON CONSTRAINT uq_external_identity_provider_entity \
+             DO UPDATE SET external_url = EXCLUDED.external_url \
+             RETURNING id",
+            &[
+                &external_volume_id,
+                &format!("https://comicvine.gamespot.com/volume/4050-{volume_id}/"),
+            ],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
+    tx.execute(
+        "INSERT INTO thread_external_series_mappings \
+            (thread_id, external_identity_id, status, evidence_source, confidence, \
+             created_at, updated_at) \
+         VALUES ($1, $2, 'confirmed', 'comicvine_series_import', 1.0, now(), now()) \
+         ON CONFLICT ON CONSTRAINT uq_thread_external_series_mapping \
+         DO UPDATE SET status = 'confirmed', evidence_source = EXCLUDED.evidence_source, \
+                       confidence = 1.0, updated_at = now()",
+        &[&thread_id, &series_identity_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    // ---- Preload every fact the per-issue adoption decisions need. --------
+    struct Roster {
+        index: usize,
+        cv_id: i32,
+        number: Option<String>,
+        url: Option<String>,
+        row: Value,
+    }
+    let roster: Vec<Roster> = rows
+        .iter()
+        .enumerate()
+        .filter_map(|(index, row)| {
+            let cv_id = row
+                .get("id")
+                .and_then(Value::as_i64)
+                .and_then(|id| i32::try_from(id).ok())?;
+            let number = match row.get("issue_number") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(text)) => Some(text.clone()),
+                Some(other) => Some(other.to_string()),
+            };
+            Some(Roster {
+                index,
+                cv_id,
+                number,
+                url: row
+                    .get("site_detail_url")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+                row: row.clone(),
+            })
+        })
+        .collect();
+    let cv_texts: Vec<String> = roster.iter().map(|r| r.cv_id.to_string()).collect();
+
+    // Confirmed owned mappings for the roster ids (lowest issue id wins).
+    let mut owned_confirmed: HashMap<String, (i32, i32)> = HashMap::new();
+    for row in tx
+        .query(
+            "SELECT e.external_id, i.id, i.thread_id FROM external_identities e \
+             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+             JOIN issues i ON i.id = m.issue_id \
+             JOIN threads t ON t.id = i.thread_id \
+             WHERE e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND e.external_id = ANY($1) AND m.status = 'confirmed' AND t.user_id = $2 \
+             ORDER BY i.id DESC",
+            &[&cv_texts, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?
+    {
+        owned_confirmed.insert(row.get(0), (row.get(1), row.get(2)));
+    }
+
+    // The thread's current issues, locked once, with their confirmed ComicVine id.
+    let mut all: Vec<SimIssue> = tx
+        .query(
+            "SELECT i.id, i.issue_number, i.position, \
+                    (SELECT e.external_id FROM issue_external_identity_mappings m \
+                       JOIN external_identities e ON e.id = m.external_identity_id \
+                      WHERE m.issue_id = i.id AND m.status = 'confirmed' \
+                        AND e.provider = 'comicvine' ORDER BY m.id LIMIT 1) \
+             FROM issues i WHERE i.thread_id = $1 ORDER BY i.position, i.id FOR UPDATE OF i",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(|row| SimIssue {
+            id: Some(row.get(0)),
+            number: row.get(1),
+            position: row.get(2),
+            original_position: row.get(2),
+            confirmed_cv: row.get(3),
+        })
+        .collect();
+    let existing_identity_ids: HashMap<String, i32> = tx
+        .query(
+            "SELECT external_id, id FROM external_identities \
+             WHERE provider = 'comicvine' AND entity_type = 'issue' AND external_id = ANY($1)",
+            &[&cv_texts],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+
+    // ---- Decide every adoption outcome in memory (no SQL in this loop). ---
+    let mut entries: Vec<SimEntry> = Vec::with_capacity(roster.len());
+    let mut linked_in_run: HashMap<i32, usize> = HashMap::new();
+    let mut identity_specs: Vec<(String, Option<String>, String)> = Vec::new();
+    let mut identity_seen: HashSet<String> = HashSet::new();
+    let mut links: Vec<(usize, String)> = Vec::new();
+    for item in &roster {
+        let number = item
+            .number
+            .clone()
+            .unwrap_or_else(|| (item.index + 1).to_string());
+        let cv_text = item.cv_id.to_string();
+        let outcome = if let Some(&sim) = linked_in_run.get(&item.cv_id) {
+            SimOutcome::Reused(sim)
+        } else if let Some(&(existing_id, existing_thread)) = owned_confirmed.get(&cv_text) {
+            if existing_thread != thread_id {
+                SimOutcome::Conflict {
+                    issue: None,
+                    issue_id: Some(existing_id),
+                    detail: format!(
+                        "ComicVine issue {} is already confirmed on issue {existing_id} of thread {existing_thread}",
+                        item.cv_id
+                    ),
+                }
+            } else {
+                SimOutcome::ReusedExisting(existing_id)
+            }
+        } else if number.chars().count() > 50 {
+            SimOutcome::Error(format!(
+                "issue number too long for ComicVine issue {}",
+                item.cv_id
+            ))
+        } else {
+            if identity_seen.insert(cv_text.clone()) {
+                let metadata = if existing_identity_ids.contains_key(&cv_text) {
+                    "{}".to_owned()
+                } else {
+                    normalize_roster_issue(&item.row).to_string()
+                };
+                identity_specs.push((cv_text.clone(), item.url.clone(), metadata));
+            }
+            let found = all.iter().position(|issue| issue.number == number);
+            let (sim, created) = match found {
+                Some(sim) => (sim, false),
+                None => (sim_place(&mut all, &number), true),
+            };
+            match all[sim].confirmed_cv.as_deref() {
+                Some(other) if other != cv_text => SimOutcome::Conflict {
+                    issue: Some(sim),
+                    issue_id: all[sim].id,
+                    detail: "issue already has a confirmed comicvine identity".to_owned(),
+                },
+                _ => {
+                    all[sim].confirmed_cv = Some(cv_text.clone());
+                    links.push((sim, cv_text.clone()));
+                    linked_in_run.insert(item.cv_id, sim);
+                    if created {
+                        SimOutcome::Created(sim)
+                    } else {
+                        SimOutcome::Reused(sim)
+                    }
+                }
+            }
+        };
+        entries.push(SimEntry {
+            cv_id: item.cv_id,
+            number,
+            outcome,
+        });
+    }
+
+    // ---- Apply the decisions with set-based statements. -------------------
+    let reposition_ids: Vec<i32> = all
+        .iter()
+        .filter(|issue| issue.id.is_some() && issue.position != issue.original_position)
+        .filter_map(|issue| issue.id)
+        .collect();
+    let reposition_positions: Vec<i32> = all
+        .iter()
+        .filter(|issue| issue.id.is_some() && issue.position != issue.original_position)
+        .map(|issue| issue.position)
+        .collect();
+    if !reposition_ids.is_empty() {
+        tx.execute(
+            "UPDATE issues i SET position = v.pos \
+             FROM unnest($1::int[], $2::int[]) AS v(id, pos) WHERE i.id = v.id",
+            &[&reposition_ids, &reposition_positions],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+    let new_indices: Vec<usize> = all
+        .iter()
+        .enumerate()
+        .filter(|(_, issue)| issue.id.is_none())
+        .map(|(index, _)| index)
+        .collect();
+    if !new_indices.is_empty() {
+        let numbers: Vec<String> = new_indices.iter().map(|&i| all[i].number.clone()).collect();
+        let positions: Vec<i32> = new_indices.iter().map(|&i| all[i].position).collect();
+        let inserted = tx
+            .query(
+                "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
+                 SELECT $1, v.n, v.p, 'unread', now() \
+                 FROM unnest($2::text[], $3::int[]) AS v(n, p) \
+                 RETURNING id, issue_number",
+                &[&thread_id, &numbers, &positions],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let ids_by_number: HashMap<String, i32> = inserted
+            .iter()
+            .map(|row| (row.get::<_, String>(1), row.get::<_, i32>(0)))
+            .collect();
+        for &index in &new_indices {
+            all[index].id = ids_by_number.get(&all[index].number).copied();
+        }
+    }
+
+    let mut identity_ids: HashMap<String, i32> = HashMap::new();
+    if !identity_specs.is_empty() {
+        let ext_ids: Vec<String> = identity_specs.iter().map(|s| s.0.clone()).collect();
+        let urls: Vec<Option<String>> = identity_specs.iter().map(|s| s.1.clone()).collect();
+        let metadata: Vec<String> = identity_specs.iter().map(|s| s.2.clone()).collect();
+        for row in tx
+            .query(
+                "INSERT INTO external_identities \
+                    (provider, entity_type, external_id, external_url, metadata_json, \
+                     created_at, updated_at) \
+                 SELECT 'comicvine', 'issue', v.eid, v.url, v.meta::json, now(), now() \
+                 FROM unnest($1::text[], $2::text[], $3::text[]) AS v(eid, url, meta) \
+                 ON CONFLICT ON CONSTRAINT uq_external_identity_provider_entity \
+                 DO UPDATE SET external_url = COALESCE(EXCLUDED.external_url, \
+                                                       external_identities.external_url) \
+                 RETURNING external_id, id",
+                &[&ext_ids, &urls, &metadata],
+            )
+            .await
+            .map_err(db::query_error)?
+        {
+            identity_ids.insert(row.get(0), row.get(1));
+        }
+    }
+    if !links.is_empty() {
+        let mut link_issue_ids = Vec::with_capacity(links.len());
+        let mut link_identity_ids = Vec::with_capacity(links.len());
+        for (sim, cv_text) in &links {
+            if let (Some(issue_id), Some(identity_id)) = (all[*sim].id, identity_ids.get(cv_text)) {
+                link_issue_ids.push(issue_id);
+                link_identity_ids.push(*identity_id);
+            }
+        }
+        tx.execute(
+            "INSERT INTO issue_external_identity_mappings \
+                (issue_id, external_identity_id, status, evidence_source, evidence_json, \
+                 confidence, rejection_reason, created_at, updated_at) \
+             SELECT v.issue_id, v.identity_id, 'confirmed', 'comicvine_issue_adoption', \
+                    '{}'::json, 1.0, NULL, now(), now() \
+             FROM unnest($1::int[], $2::int[]) AS v(issue_id, identity_id) \
+             ON CONFLICT ON CONSTRAINT uq_issue_external_identity_mapping \
+             DO UPDATE SET status = 'confirmed', evidence_source = EXCLUDED.evidence_source, \
+                           confidence = 1.0, rejection_reason = NULL, updated_at = now()",
+            &[&link_issue_ids, &link_identity_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
+    // Results, in roster order.
+    let mut issue_results = Vec::with_capacity(entries.len());
+    let (mut adopted, mut skipped, mut conflicts) = (0i32, 0i32, 0i32);
+    let mut created_count = 0i32;
+    for entry in &entries {
+        let (issue_id, outcome, detail) = match &entry.outcome {
+            SimOutcome::Created(sim) => {
+                adopted += 1;
+                created_count += 1;
+                (all[*sim].id, "created", None)
+            }
+            SimOutcome::Reused(sim) => {
+                skipped += 1;
+                (all[*sim].id, "reused", None)
+            }
+            SimOutcome::ReusedExisting(id) => {
+                skipped += 1;
+                (Some(*id), "reused", None)
+            }
+            SimOutcome::Conflict {
+                issue,
+                issue_id,
+                detail,
+            } => {
+                conflicts += 1;
+                (
+                    issue.and_then(|sim| all[sim].id).or(*issue_id),
+                    "conflict",
+                    Some(detail.clone()),
+                )
+            }
+            SimOutcome::Error(detail) => (None, "error", Some(detail.clone())),
+        };
+        issue_results.push(ImportSeriesIssueResult {
+            comicvine_issue_id: entry.cv_id,
+            issue_number: Some(entry.number.clone()),
+            issue_id,
+            outcome: outcome.to_owned(),
+            hydration: "not_attempted".to_owned(),
+            conflict_detail: detail,
+        });
+    }
+
+    if created_count > 0 {
+        // Python adoption reopens a completed reused thread at the queue front
+        // (once) before the shared derivation below makes it active again.
+        if let Some((status, total, next_unread)) = &reused_state {
+            if status == "completed" && total.is_some() && next_unread.is_none() {
+                tx.execute(
+                    "UPDATE threads SET queue_position = queue_position + 1 \
+                     WHERE user_id = $1 AND status = 'active'",
+                    &[&user_id],
+                )
+                .await
+                .map_err(db::query_error)?;
+                tx.execute(
+                    "UPDATE threads SET queue_position = 1 WHERE id = $1",
+                    &[&thread_id],
+                )
+                .await
+                .map_err(db::query_error)?;
+            }
+        }
+        tx.execute(
+            "INSERT INTO events (type, timestamp, thread_id) \
+             SELECT 'issues_created', now(), $1 FROM generate_series(1, $2::int)",
+            &[&thread_id, &created_count],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
+    // Mark the leading locally-adopted issues read, then derive the thread's
+    // canonical counters from the rows that actually exist.
+    let thread_issues = tx
+        .query(
+            "SELECT id, status FROM issues WHERE thread_id = $1 ORDER BY position, id",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let read_count = (request.already_read_count as usize).min(thread_issues.len());
+    let read_ids: Vec<i32> = thread_issues
+        .iter()
+        .take(read_count)
+        .map(|row| row.get(0))
+        .collect();
+    if !read_ids.is_empty() {
+        tx.execute(
+            "UPDATE issues SET status = 'read', read_at = now() WHERE id = ANY($1)",
+            &[&read_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+    let total_issues = thread_issues.len() as i32;
+    let unread: Vec<i32> = thread_issues
+        .iter()
+        .enumerate()
+        .filter(|(index, row)| *index >= read_count && row.get::<_, String>(1) == "unread")
+        .map(|(_, row)| row.get(0))
+        .collect();
+    let issues_remaining = unread.len() as i32;
+    let next_unread = unread.first().copied();
+    let reading_progress = if issues_remaining == 0 {
+        "completed"
+    } else if issues_remaining == total_issues {
+        "not_started"
+    } else {
+        "in_progress"
+    };
+    let derived_status = if next_unread.is_none() {
+        "completed"
+    } else {
+        "active"
+    };
+    tx.execute(
+        "UPDATE threads SET total_issues = $2, issues_remaining = $3, \
+            next_unread_issue_id = $4, reading_progress = $5, \
+            is_blocked = CASE WHEN $3 = 0 THEN false ELSE is_blocked END, \
+            status = CASE WHEN status = 'excluded' THEN status ELSE $6 END, \
+            queue_position_is_manual = CASE WHEN status <> 'excluded' AND $6 = 'completed' \
+                                            THEN false ELSE queue_position_is_manual END \
+         WHERE id = $1",
+        &[
+            &thread_id,
+            &total_issues,
+            &issues_remaining,
+            &next_unread,
+            &reading_progress,
+            &derived_status,
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
+    if created_count > 0 {
+        crate::issue_service::refresh_blocked_threads(&tx, user_id).await?;
+    }
+
+    let mut response = ImportSeriesResponse {
+        thread_id,
+        series_name,
+        comicvine_volume_id: volume_id,
+        total_issues_in_series: rows.len() as i32,
+        issues_adopted: adopted,
+        issues_skipped: skipped,
+        issues_conflict: conflicts,
+        issue_results,
+        reading_order_id: None,
+        position: None,
+        total_items: None,
+        thread_created,
+    };
+    if let Some(order_id) = request.reading_order_id {
+        let items = tx
+            .query(
+                "SELECT thread_id, position FROM reading_order_items \
+                 WHERE reading_order_id = $1 ORDER BY position, id",
+                &[&order_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let mut positions = HashMap::new();
+        for row in &items {
+            positions.insert(row.get::<_, i32>(0), row.get::<_, i32>(1));
+        }
+        let target = resolve_anchored_position(
+            &positions,
+            request.anchor_before_thread_id,
+            request.anchor_after_thread_id,
+            items.len(),
+        );
+        insert_into_reading_order(&tx, order_id, thread_id, target).await?;
+        // Count after the write: a retry moves the existing entry instead of
+        // adding one.
+        let total: i64 = tx
+            .query_one(
+                "SELECT count(*) FROM reading_order_items WHERE reading_order_id = $1",
+                &[&order_id],
+            )
+            .await
+            .map_err(db::query_error)?
+            .get(0);
+        response.reading_order_id = Some(order_id);
+        response.position = Some(target);
+        response.total_items = Some(total as i32);
+    }
+    tx.commit().await.map_err(db::query_error)?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// `GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status`: the
+/// canonical v2 path of the native v1 read, sharing its owner-scoped query.
+pub async fn series_import_status(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    comicvine_volume_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<SeriesImportStatusResponse>, ApiError> {
+    let comicvine_volume_id = path_int(comicvine_volume_id)?;
+    let connection = db::checkout(&state).await?;
+    let row = connection
+        .query_opt(
+            crate::comicvine_resolution::STATUS_SQL,
+            &[&user.id(), &comicvine_volume_id.to_string()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(Json(match row {
+        Some(row) => SeriesImportStatusResponse {
+            comicvine_volume_id,
+            imported: true,
+            thread_id: Some(row.get(0)),
+            series_name: Some(row.get(1)),
+            issue_count: row.get(2),
+        },
+        None => SeriesImportStatusResponse {
+            comicvine_volume_id,
+            imported: false,
+            thread_id: None,
+            series_name: None,
+            issue_count: None,
+        },
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // OpenAPI documentation. These no-op functions feed the canonical generated
 // v2 contract; handlers above never import documentation code at runtime.
 // ---------------------------------------------------------------------------
@@ -2013,6 +2909,41 @@ pub fn refresh_metadata_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn import_issue_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/series:import",
+    request_body = ImportSeriesRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 201, description = "Imported or reused series thread", body = ImportSeriesResponse),
+        (status = 400, description = "Series has no issues or already_read_count is too large"),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 403, description = "CSRF validation failed"),
+        (status = 404, description = "Reading order not found"),
+        (status = 422, description = "Validation failed"),
+        (status = 502, description = "ComicVine returned an error or an incomplete roster"),
+        (status = 503, description = "ComicVine is not configured"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn import_series_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
+    params(("comicvine_volume_id" = i32, Path, description = "ComicVine volume ID")),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Owned import status", body = SeriesImportStatusResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn series_import_status_v2_documentation() {}
 
 // ---------------------------------------------------------------------------
 // Focused unit tests (no database or provider required).
