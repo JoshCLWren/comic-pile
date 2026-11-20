@@ -1279,13 +1279,13 @@ async fn roll_rerolls_shrink_top_die_without_backfill_and_reset_restores_pool() 
 
     let initial = offer_value(&state, &token, &csrf, "no-backfill-offer-0", None).await;
     let mut pending = initial["thread_id"].as_i64().unwrap() as i32;
-    assert!(ids[..4].contains(&pending), "{initial:?}");
+    assert!(ids[..20].contains(&pending), "{initial:?}");
     let mut browser_snoozes = Vec::new();
 
     // The scoped read projects the next reroll: it excludes both the cookie
-    // snoozes and the pending offer. The original four-face window must shrink
-    // 3 -> 2 -> 1 -> 0 while ranks five and six stay out throughout.
-    for remaining in (0usize..4).rev() {
+    // snoozes and the pending offer. The original twenty-face window must
+    // shrink 19 -> ... -> 0 while ranks twenty-one and twenty-two stay out.
+    for remaining in (0usize..20).rev() {
         let query = if browser_snoozes.is_empty() {
             String::new()
         } else {
@@ -1308,7 +1308,7 @@ async fn roll_rerolls_shrink_top_die_without_backfill_and_reset_restores_pool() 
         )
         .await;
         assert_eq!(pool_status, StatusCode::OK, "{pool_body:?}");
-        assert_eq!(pool_body["die"].as_i64(), Some(4));
+        assert_eq!(pool_body["die"].as_i64(), Some(20));
         assert_eq!(pool_body["pool_reason"], "ready");
         let projected: Vec<i32> = pool_body["thread_ids"]
             .as_array()
@@ -1320,7 +1320,7 @@ async fn roll_rerolls_shrink_top_die_without_backfill_and_reset_restores_pool() 
         assert!(
             projected
                 .iter()
-                .all(|id| ids[..4].contains(id) && id != &pending),
+                .all(|id| ids[..20].contains(id) && id != &pending),
             "deeper ranks or the pending face leaked into {projected:?}"
         );
 
@@ -1363,10 +1363,10 @@ async fn roll_rerolls_shrink_top_die_without_backfill_and_reset_restores_pool() 
 
     // The exhausted offer rolls back its attempted snooze. Reset remains an
     // explicit fresh start: d6, no pending offer, no saved temporary snoozes,
-    // and all six eligible faces available under the reset die.
+    // and the first six eligible faces available under the reset die.
     assert_eq!(
         session_state(&state, user_id).await,
-        (Some(pending), browser_snoozes, 4)
+        (Some(pending), browser_snoozes, 20)
     );
     let (reset_status, reset_body) = send(
         &state,
@@ -1389,7 +1389,7 @@ async fn roll_rerolls_shrink_top_die_without_backfill_and_reset_restores_pool() 
     .await;
     assert_eq!(restored_status, StatusCode::OK, "{restored_body:?}");
     assert_eq!(restored_body["die"].as_i64(), Some(6));
-    assert_eq!(restored_body["thread_ids"], json!(ids));
+    assert_eq!(restored_body["thread_ids"], json!(ids[..6]));
 }
 
 #[tokio::test]
