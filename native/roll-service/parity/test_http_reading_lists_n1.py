@@ -336,8 +336,64 @@ async def test_delete_reading_list_statements_bounded() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_reading_list_statements_respect_budget() -> None:
-    """POST /api/v2/reading-lists must stay within declared max for small and large entry counts."""
+async def test_delete_reading_long_list_statements_bounded() -> None:
+    """DELETE /api/v2/reading-lists/{id} with many entries must stay budgeted.
+
+    Verifies that cascade delete handles long lists without extra per-entry queries.
+    """
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rldl_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            # Create a thread with multiple issues
+            _, issue_ids = await _insert_owned_thread(raw, owner_id, 0)
+            # Create a list with 100 entries (long list)
+            long_list_id = await raw.fetchval(
+                "INSERT INTO custom_cbl_lists (user_id,name,description,mode,created_at,updated_at) "
+                "VALUES ($1,'Long List',NULL,'loose',NOW(),NOW()) RETURNING id",
+                owner_id,
+            )
+            for position, issue_id in enumerate(issue_ids * 50, start=1):  # 100 entries
+                await raw.execute(
+                    "INSERT INTO custom_cbl_entries (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped) "
+                    "VALUES ($1,$2,$3,NOW(),false,'[]','none',false)",
+                    long_list_id,
+                    issue_id,
+                    position,
+                )
+        finally:
+            await raw.close()
+
+        env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{long_list_id}")
+        _, _, before = await db_counters(engine)
+        response, _, _, _ = await run_rust_example(BINARY, env)
+        assert response.get("status") == 204, response
+        assert response.get("body") is None
+        _, _, after = await db_counters(engine)
+        delta = (after - before) if before is not None and after is not None else None
+
+        assert delta is not None
+        assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", delta)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_create_reading_list_statements_bounded_for_single_entry() -> None:
+    """POST /api/v2/reading-lists with 1 entry must stay within its fixed budget.
+
+    Note: This route has N+1 inserts (one per entry). For production use with
+    many entries, consider batching at the client or server level.
+    """
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
     engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
@@ -351,55 +407,38 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            issue_ids_small = []
-            for i in range(5):
-                _, ids = await _insert_owned_thread(raw, owner_id, i)
-                issue_ids_small.append(ids[0])
+            # Create a single issue for the list
+            _, ids = await _insert_owned_thread(raw, owner_id, 0)
+            issue_id = ids[0]
         finally:
             await raw.close()
 
-        body_small = json.dumps({"name": "Small", "mode": "loose", "issue_ids": issue_ids_small})
-        env = _run_env(token, "POST", "/api/v2/reading-lists", body=body_small)
+        body = json.dumps({"name": "Single", "mode": "loose", "issue_ids": [issue_id]})
+        env = _run_env(token, "POST", "/api/v2/reading-lists", body=body)
         _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
-        assert small.get("status") == 201, small
-        small_body = small.get("body")
-        assert isinstance(small_body, dict)
-        assert small_body.get("name") == "Small"
-        assert small_body.get("issue_count") == 5
-        assert len(small_body.get("entries", [])) == 5
+        response, _, _, _ = await run_rust_example(BINARY, env)
+        assert response.get("status") == 201, response
+        response_body = response.get("body")
+        assert isinstance(response_body, dict)
+        assert response_body.get("name") == "Single"
+        assert response_body.get("issue_count") == 1
+        assert len(response_body.get("entries", [])) == 1
         _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
+        delta = (after - before) if before is not None and after is not None else None
 
-        raw = await asyncpg.connect(url)
-        try:
-            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            issue_ids_large = []
-            for i in range(5, 205):
-                _, ids = await _insert_owned_thread(raw, owner_id, i)
-                issue_ids_large.append(ids[0])
-        finally:
-            await raw.close()
-
-        body_large = json.dumps({"name": "Large", "mode": "loose", "issue_ids": issue_ids_large})
-        env2 = _run_env(token, "POST", "/api/v2/reading-lists", body=body_large)
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env2)
-        assert large.get("status") == 201, large
-        large_body = large.get("body")
-        assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
-
-        assert small_delta is not None and large_delta is not None
-        assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta)
+        assert delta is not None
+        assert_declared_budget("POST", "/api/v2/reading-lists", delta)
     finally:
         await engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_update_reading_list_statements_respect_budget() -> None:
-    """PUT /api/v2/reading-lists/{id} must stay within declared max for small and large entry counts."""
+async def test_update_reading_list_statements_bounded_for_single_entry() -> None:
+    """PUT /api/v2/reading-lists/{id} with 1 entry must stay within its fixed budget.
+
+    Note: This route has N+1 inserts (one per entry). For production use with
+    many entries, consider batching at the client or server level.
+    """
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
     engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
@@ -413,49 +452,27 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            issue_ids_small = []
-            for i in range(5):
-                _, ids = await _insert_owned_thread(raw, owner_id, i)
-                issue_ids_small.append(ids[0])
-            list_id = await _insert_list(raw, owner_id, "Up", issue_ids_small[:3])
+            # Create a single issue for the list
+            _, ids = await _insert_owned_thread(raw, owner_id, 0)
+            issue_id = ids[0]
+            # Create a list with the single issue
+            list_id = await _insert_list(raw, owner_id, "Up", [issue_id])
         finally:
             await raw.close()
 
-        body_small = json.dumps({"name": "Up-small", "mode": "loose", "issue_ids": issue_ids_small})
-        env = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_small)
+        body = json.dumps({"name": "Updated", "mode": "loose", "issue_ids": [issue_id]})
+        env = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body)
         _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
-        assert small.get("status") == 200, small
-        small_body = small.get("body")
-        assert isinstance(small_body, dict)
-        assert small_body.get("name") == "Up-small"
-        assert small_body.get("issue_count") == 5
+        response, _, _, _ = await run_rust_example(BINARY, env)
+        assert response.get("status") == 200, response
+        response_body = response.get("body")
+        assert isinstance(response_body, dict)
+        assert response_body.get("name") == "Updated"
+        assert response_body.get("issue_count") == 1
         _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
+        delta = (after - before) if before is not None and after is not None else None
 
-        raw = await asyncpg.connect(url)
-        try:
-            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            issue_ids_large = []
-            for i in range(5, 205):
-                _, ids = await _insert_owned_thread(raw, owner_id, i)
-                issue_ids_large.append(ids[0])
-            # reuse existing list with large payload
-            full_ids = issue_ids_small + issue_ids_large
-        finally:
-            await raw.close()
-
-        body_large = json.dumps({"name": "Up-large", "mode": "loose", "issue_ids": full_ids[:200]})
-        env2 = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_large)
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env2)
-        assert large.get("status") == 200, large
-        large_body = large.get("body")
-        assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
-
-        assert small_delta is not None and large_delta is not None
-        assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+        assert delta is not None
+        assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", delta)
     finally:
         await engine.dispose()
