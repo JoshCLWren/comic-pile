@@ -263,8 +263,68 @@ def remote_github_repo(repo_root: Path, remote: str) -> str | None:
     return slug
 
 
+def _pr_record(pr: Mapping[str, object]) -> dict[str, object] | None:
+    """Normalize one GitHub pull-request payload into a safety record.
+
+    Args:
+        pr: Raw pull-request object from the GitHub API.
+
+    Returns:
+        The normalized record, or ``None`` when the payload has no head ref.
+    """
+    head_obj = pr.get("head")
+    ref = head_obj.get("ref") if isinstance(head_obj, dict) else None
+    head = ref if isinstance(ref, str) else ""
+    if not head:
+        return None
+    return {
+        "number": pr.get("number"),
+        "headRefName": head,
+        "state": str(pr.get("state") or "OPEN").upper(),
+        "isDraft": bool(pr.get("draft")),
+        "mergedAt": pr.get("merged_at"),
+        "closedAt": pr.get("closed_at"),
+        "updatedAt": pr.get("updated_at"),
+        "labels": pr.get("labels") or [],
+        "title": pr.get("title"),
+        "url": pr.get("html_url"),
+    }
+
+
+def _group_pr_records(pages: object) -> dict[str, list[dict[str, object]]]:
+    """Group normalized PR records by head branch name.
+
+    Args:
+        pages: ``--slurp`` output: a list of API pages, each a list of PRs.
+
+    Returns:
+        Records keyed by head branch name.
+
+    Raises:
+        RuntimeError: If the payload is not the expected list-of-lists shape.
+    """
+    if not isinstance(pages, list):
+        raise RuntimeError("PR list response was not a list")
+    by_head: dict[str, list[dict[str, object]]] = {}
+    for page in pages:
+        if not isinstance(page, list):
+            raise RuntimeError("PR list page was not a list")
+        for pr in page:
+            if not isinstance(pr, dict):
+                raise RuntimeError("PR list contained a non-object entry")
+            record = _pr_record(pr)
+            if record is not None:
+                head = str(record["headRefName"])
+                by_head.setdefault(head, []).append(record)
+    return by_head
+
+
 def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
     """Fetch the complete open+closed PR history grouped by branch name.
+
+    This repository-wide inventory is used once, up front, so every candidate
+    branch can be evaluated. The fresh re-check before a deletion must not
+    repeat it; it uses :func:`fetch_branch_pr_records` instead.
 
     Raises on lookup failure so cleanup cannot proceed with incomplete safety
     data. Pagination is followed to completion: a capped list would let an old
@@ -282,34 +342,45 @@ def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
         pages = json.loads(proc.stdout or "[]")
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"unable to parse PR list: {exc}") from exc
-    if not isinstance(pages, list):
-        raise RuntimeError("PR list response was not a list")
-    by_head: dict[str, list[dict[str, object]]] = {}
-    for page in pages:
-        if not isinstance(page, list):
-            raise RuntimeError("PR list page was not a list")
-        for pr in page:
-            if not isinstance(pr, dict):
-                raise RuntimeError("PR list contained a non-object entry")
-            head_obj = pr.get("head")
-            ref = head_obj.get("ref") if isinstance(head_obj, dict) else None
-            head = ref if isinstance(ref, str) else ""
-            if not head:
-                continue
-            record: dict[str, object] = {
-                "number": pr.get("number"),
-                "headRefName": head,
-                "state": str(pr.get("state") or "OPEN").upper(),
-                "isDraft": bool(pr.get("draft")),
-                "mergedAt": pr.get("merged_at"),
-                "closedAt": pr.get("closed_at"),
-                "updatedAt": pr.get("updated_at"),
-                "labels": pr.get("labels") or [],
-                "title": pr.get("title"),
-                "url": pr.get("html_url"),
-            }
-            by_head.setdefault(head, []).append(record)
-    return by_head
+    return _group_pr_records(pages)
+
+
+def fetch_branch_pr_records(repo: str, branch: str) -> dict[str, list[dict[str, object]]]:
+    """Fetch the complete PR history for a single branch, grouped by branch name.
+
+    The fresh pre-delete check only needs the current branch's pull requests, so
+    this lookup narrows GitHub's PR list with the ``head`` filter instead of
+    downloading the repository's entire open+closed history once per deletion.
+    A branch name without ``user:`` matches that head ref in any fork, which can
+    only add protection. Pagination is still followed to completion: a capped
+    list would let an old open PR fall outside the result and lose its
+    protection.
+
+    Args:
+        repo: GitHub repository slug (``owner/name``).
+        branch: Head branch name whose complete PR history is fetched.
+
+    Returns:
+        Records keyed by head branch name, in the same record shape as
+        :func:`fetch_pr_records`.
+
+    Raises:
+        RuntimeError: If the lookup fails or returns an unusable response.
+    """
+    quoted_branch = quote(branch, safe="")
+    proc = run([
+        "gh", "api", "--paginate", "--slurp",
+        f"repos/{repo}/pulls?state=all&head={quoted_branch}&per_page=100",
+    ], check=False)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"unable to list PRs for {branch}: {proc.stderr.strip() or proc.stdout.strip()}"
+        )
+    try:
+        pages = json.loads(proc.stdout or "[]")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"unable to parse PR list for {branch}: {exc}") from exc
+    return _group_pr_records(pages)
 
 
 def fetch_protected_branches(repo: str) -> set[str]:
