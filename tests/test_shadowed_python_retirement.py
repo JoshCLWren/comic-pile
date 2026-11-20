@@ -45,9 +45,12 @@ def _assert_no_shadow_python_handlers(operations: set[tuple[str, str]]) -> None:
 def test_native_operations_have_no_shadow_python_handlers() -> None:
     """Retire every migrated alias while retaining unrelated Python operations."""
     operations = set(_operations(list(create_app(serve_frontend=False).routes)))
-    # 80 historical aliases plus the nine fully retired v1 creator URLs (the
-    # two v1 creator URLs with native same-path contracts were already counted)
-    # plus ten issue-identity/CBL adoption operations, plus the twenty
+    # 80 historical aliases (includes two v1 creator URLs with native same-path
+    # contracts: /api/v1/creators and /api/v1/creators/summaries), plus the
+    # nine remaining fully retired v1 creator URLs
+    # (compare, discoveries, team-chemistry, {creator_key}, four metric
+    # drilldowns, series issues = 11 creator URLs total), plus ten
+    # issue-identity/CBL adoption operations, plus the twenty
     # metrics/taste/reading-plan-sync/session/undo/custom-cbl operations
     # retired on main, plus five thread-issue operations removed here
     # (POST issues, reorder, migrateToIssues, migrateToIssuesSimple,
