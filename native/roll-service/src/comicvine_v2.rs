@@ -411,12 +411,14 @@ fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     if value.is_empty() {
         return None;
     }
-    let with_scheme = if value.contains("://") {
-        value.to_owned()
+    let after_scheme = if let Some((scheme, remainder)) = value.split_once("://") {
+        match scheme {
+            "http" | "https" => remainder,
+            _ => return None,
+        }
     } else {
-        format!("https://{value}")
+        value
     };
-    let after_scheme = with_scheme.split_once("://")?.1;
     let authority = after_scheme.split('/').next()?;
     let host = authority
         .rsplit('@')
@@ -931,7 +933,7 @@ pub async fn apply_correction(
 
     let provider_value: Option<String> = tx
         .query_opt(
-            "SELECT e.metadata_json ->> $2 \
+            "SELECT e.metadata_json -> $2 \
              FROM external_identities e \
              JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
              WHERE m.issue_id = $1 AND m.status = 'confirmed' \
@@ -940,8 +942,13 @@ pub async fn apply_correction(
         )
         .await
         .map_err(db::query_error)?
-        .and_then(|row| row.get::<_, Option<String>>(0))
-        .filter(|value| !value.is_empty());
+        .and_then(|row| row.get::<_, Option<Value>>(0))
+        .map(|value| match value {
+            Value::Null => Some("None".to_owned()),
+            Value::String(text) => (!text.is_empty()).then_some(text.clone()),
+            _ => Some(value.to_string()),
+        })
+        .flatten();
 
     tx.execute(
         "INSERT INTO issue_metadata_corrections \
@@ -1222,7 +1229,7 @@ pub async fn import_issue(
             "INSERT INTO issues \
                 (thread_id, issue_number, position, status, created_at) \
              VALUES ($1, $2, 1, 'unread', now()) RETURNING id",
-            &[&thread_id, &request.issue_number.as_deref().unwrap_or("1")],
+            &[&thread_id, &request.issue_number.as_deref().filter(|s| !s.is_empty()).unwrap_or("1")],
         )
         .await
         .map_err(db::query_error)?;
@@ -2179,8 +2186,8 @@ pub async fn search_series(
         .collect();
     let total =
         coerce_provider_int(payload.get("number_of_total_results")).unwrap_or(results.len() as i32);
-    let loaded = offset + results.len() as i32;
-    let has_more = loaded < total;
+    let loaded = i64::from(offset) + results.len() as i64;
+    let has_more = loaded < i64::from(total);
     Ok(Json(ComicVineSeriesSearchResponse {
         query: query.q,
         results,
@@ -2188,7 +2195,7 @@ pub async fn search_series(
         offset,
         limit,
         has_more,
-        next_offset: has_more.then_some(loaded),
+        next_offset: has_more.then_some(loaded).and_then(|n| i32::try_from(n).ok()),
     }))
 }
 

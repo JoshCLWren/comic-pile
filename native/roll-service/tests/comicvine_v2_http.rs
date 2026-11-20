@@ -1965,6 +1965,99 @@ async fn identity_and_import_writers_serialize_with_sibling_queue_writers() {
     );
 }
 
+/// Series import reuses an existing thread and, like every queue writer, takes
+/// the reader's queue advisory lock before any thread/issue row lock: it
+/// serializes alongside a sibling `issues:import` writer with no deadlock, and
+/// the two threads get distinct queue positions (#5398/#5419).
+#[tokio::test]
+async fn series_import_serializes_with_sibling_queue_writer() {
+    let (state, token, csrf, user_id, _guard) =
+        setup_user_with("cvv2-series-sibling", 8, None).await;
+    set_key(true);
+    let (volume_id, existing_thread_id) = {
+        let conn = state.pool.get().await.unwrap();
+        let thread_id = thread(&conn, user_id, "Reused").await;
+        let _issue = issue(&conn, thread_id, "1", 1).await;
+        let external_volume_id = volume_id.to_string();
+        let identity_id: i32 = conn
+            .query_one(
+                "INSERT INTO external_identities \
+                 (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'series', $1, $2, '{}'::jsonb, now(), now()) RETURNING id",
+                &[
+                    &external_volume_id,
+                    &format!("https://comicvine.gamespot.com/volume/4050-{volume_id}/"),
+                ],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        conn.execute(
+            "INSERT INTO thread_external_series_mappings \
+             (thread_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at) \
+             VALUES ($1, $2, 'confirmed', 'comicvine_series_import', 1.0, now(), now())",
+            &[&thread_id, &identity_id],
+        )
+        .await
+        .unwrap();
+        (volume_id, thread_id)
+    };
+    provider_ok(
+        &state,
+        json!({"status_code": 1, "error": "OK", "results": {"id": volume_id, "name": "Shared"}}),
+    );
+    provider_ok(&state, roster_page(volume_id, 1, 3, Some(3)));
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let series = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": volume_id})),
+        ),
+    );
+    let sibling = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({"title": "Sibling", "comicvine_issue_id": 9302})),
+        ),
+    );
+    wait_for_queue_lock_waiters(&tx, user_id, 2, &[&series, &sibling]).await;
+    tx.commit().await.unwrap();
+    drop(holder);
+    let (status, body) = series.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(
+        body["thread_id"].as_i64().unwrap() as i32,
+        existing_thread_id,
+        "series import reuses the existing thread"
+    );
+    let (status, body) = sibling.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let sibling_thread = body["thread_id"].as_i64().unwrap() as i32;
+    assert_ne!(sibling_thread, existing_thread_id, "sibling import gets its own thread");
+    let conn = state.pool.get().await.unwrap();
+    let positions: Vec<i32> = conn
+        .query(
+            "SELECT queue_position FROM threads WHERE id = ANY($1) ORDER BY id",
+            &[&[existing_thread_id, sibling_thread]],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(positions.len(), 2);
+    assert_ne!(positions[0], positions[1], "threads must not share a queue slot");
+}
+
 /// Order-independent fake ComicVine: `/issues` pages are synthesized from the
 /// request's `offset`, so concurrent page fetches cannot receive each other's
 /// payloads. Every response yields to the scheduler once before resolving,
