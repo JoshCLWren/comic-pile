@@ -198,6 +198,7 @@ export default function CblBrowserPage() {
   const [queryDraft, setQueryDraft] = useState(submittedQuery)
   const [customizing, setCustomizing] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [adoptionTargetId, setAdoptionTargetId] = useState<number | null>(null)
   const [seriesDecisions, setSeriesDecisions] = useState<Record<string, boolean>>({})
   const [entryDecisions, setEntryDecisions] = useState<Record<string, boolean>>({})
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
