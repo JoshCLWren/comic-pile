@@ -60,8 +60,6 @@ pub struct ImportIssueResponse {
     pub reading_order_id: Option<i32>,
     pub position: Option<i32>,
     pub total_items: Option<i32>,
-    #[serde(default)]
-    pub thread_created: bool,
 }
 
 /// Wire parity with Python `ImportSeriesResponse`.
