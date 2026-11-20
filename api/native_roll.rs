@@ -543,6 +543,12 @@ fn app() -> Router {
         )
         // Native v2 ComicVine routes (#4835, split chunk D).
         .route("/api/v2/comicvine/issues:import", post(native_dispatch))
+        // Native v2 ComicVine routes (#4835, split chunk E).
+        .route("/api/v2/comicvine/series:import", post(native_dispatch))
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
+            get(native_dispatch),
+        )
         .route(
             "/api/v2/issues/{issue_id}/dependencies",
             get(native_dispatch),
@@ -1194,6 +1200,8 @@ mod tests {
             ("POST", "/api/v2/comicvine/issues/7/metadata:revert"),
             ("POST", "/api/v2/comicvine/issues/7/metadata:refresh"),
             ("POST", "/api/v2/comicvine/issues:import"),
+            ("POST", "/api/v2/comicvine/series:import"),
+            ("GET", "/api/v2/comicvine/series/42/import-status"),
             // Ingress samples for every native v2 ComicVine operation.
         ] {
             let mut router = app();

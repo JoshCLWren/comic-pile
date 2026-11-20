@@ -542,6 +542,12 @@ export interface ImportIssueRequest {
 
 export type ImportIssueResponse = components['schemas']['NativeImportIssueResponse']
 
+export interface ImportSeriesRequest {
+  body: components['schemas']['NativeImportSeriesRequest']
+}
+
+export type ImportSeriesResponse = components['schemas']['NativeImportSeriesResponse']
+
 export interface InitializeSessionRequest {
   body: components['schemas']['InitializeSessionRequest']
 }
@@ -1037,6 +1043,14 @@ export interface SeriesImportStatusRequest {
 
 export type SeriesImportStatusResponse = components['schemas']['SeriesImportStatusResponse']
 
+export interface SeriesImportStatusV2Request {
+  path: {
+    comicvine_volume_id: number
+  }
+}
+
+export type SeriesImportStatusV2Response = components['schemas']['SeriesImportStatusResponse']
+
 export interface SeriesIssuesRequest {
   path: {
     creator_key: string
@@ -1214,6 +1228,7 @@ export interface NativeV2Client {
   getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
   getUserPreferences(): Promise<GetUserPreferencesResponse>
   importIssue(args: ImportIssueRequest): Promise<ImportIssueResponse>
+  importSeries(args: ImportSeriesRequest): Promise<ImportSeriesResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
@@ -1278,6 +1293,7 @@ export interface NativeV2Client {
   searchSeries(args: SearchSeriesRequest): Promise<SearchSeriesResponse>
   series(args: SeriesRequest): Promise<SeriesResponse>
   seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
+  seriesImportStatusV2(args: SeriesImportStatusV2Request): Promise<SeriesImportStatusV2Response>
   seriesIssues(args: SeriesIssuesRequest): Promise<SeriesIssuesResponse>
   setReadingMode(args: SetReadingModeRequest): Promise<SetReadingModeResponse>
   skip(args: SkipRequest): Promise<SkipResponse>
@@ -1661,6 +1677,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    importSeries(args: ImportSeriesRequest) {
+      return client.post<ImportSeriesResponse, ImportSeriesRequest['body']>(
+        "/v2/comicvine/series:import",
+        args.body,
+      )
+    },
     initializeSession(args: InitializeSessionRequest) {
       return client.post<InitializeSessionResponse, InitializeSessionRequest['body']>(
         "/v2/reading-sessions",
@@ -2004,6 +2026,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     seriesImportStatus(args: SeriesImportStatusRequest) {
       return client.get<SeriesImportStatusResponse>(
         `/v1/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
+      )
+    },
+    seriesImportStatusV2(args: SeriesImportStatusV2Request) {
+      return client.get<SeriesImportStatusV2Response>(
+        `/v2/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
       )
     },
     seriesIssues(args: SeriesIssuesRequest) {

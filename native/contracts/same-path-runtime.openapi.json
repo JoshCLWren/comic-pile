@@ -11892,6 +11892,155 @@
           }
         }
       },
+      "ImportSeriesIssueResult": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_id",
+          "outcome",
+          "hydration"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conflict_detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hydration": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "type": "string"
+          }
+        }
+      },
+      "ImportSeriesRequest": {
+        "type": "object",
+        "required": [
+          "comicvine_volume_id"
+        ],
+        "properties": {
+          "already_read_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "anchor_after_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "anchor_before_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ImportSeriesResponse": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "series_name",
+          "comicvine_volume_id",
+          "total_issues_in_series",
+          "issues_adopted",
+          "issues_skipped",
+          "issues_conflict",
+          "issue_results",
+          "thread_created"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportSeriesIssueResult"
+            }
+          },
+          "issues_adopted": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issues_conflict": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issues_skipped": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "thread_created": {
+            "type": "boolean"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_issues_in_series": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "InheritanceSource": {
         "type": "object",
         "required": [
