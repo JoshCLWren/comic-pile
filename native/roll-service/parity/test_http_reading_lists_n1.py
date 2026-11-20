@@ -331,9 +331,21 @@ async def test_delete_reading_list_statements_bounded() -> None:
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
-        assert small_delta is not None and large_delta is not None
+        # Also delete the large seeded list to verify long-list deletion is bounded
+        large_list_id = await _get_last_list_id(engine, owner_id)  # helper would be needed
+        # Instead, read the large list we just created and delete it
+        env3 = _run_env(token, "DELETE", f"/api/v2/reading-lists/LargeList")
+        _, _, before3 = await db_counters(engine)
+        large_list, _, _, _ = await run_rust_example(BINARY, env3)
+        assert large_list.get("status") == 204, large_list
+        _, _, after3 = await db_counters(engine)
+        large_list_delta = (after3 - before3) if before3 is not None and after3 is not None else None
+
+        assert small_delta is not None and large_delta is not None and large_list_delta is not None
         assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+        assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", small_delta, large_list_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert large_list_delta <= small_delta + 2, f"large list delta grew: {small_delta} -> {large_list_delta}"
     finally:
         await engine.dispose()
 
