@@ -42,7 +42,10 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
     (repository / "pyproject.toml").touch()
     (repository / "frontend" / "node_modules").mkdir(parents=True)
     (repository / "scripts").mkdir()
-    (repository / "scripts" / "lint.sh").write_text("exit 0\n")
+    (repository / "scripts" / "lint.sh").write_text(
+        "#!/bin/bash\npython --version\npnpm --version\n"
+    )
+    (repository / "scripts" / "lint.sh").chmod(0o755)
     tools_directory = tmp_path / "tools"
     tools_directory.mkdir()
     for tool in ("python", "pnpm"):
@@ -72,4 +75,7 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert not gate_log.exists() or gate_log.read_text() == ""
+    assert gate_log.exists(), "lint stub did not run; Git environment isolation checks never executed"
+    log_contents = gate_log.read_text()
+    assert log_contents, "lint stub ran but no tool stubs were invoked"
+    assert "pytest" not in log_contents, "test commands ran on push"
