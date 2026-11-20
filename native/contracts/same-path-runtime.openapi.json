@@ -4277,6 +4277,98 @@
         }
       }
     },
+    "/api/v2/comicvine/issues/{issue_id}/identity": {
+      "get": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "get_issue_identity_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "ComicPile issue ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned identity state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueIdentityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "404": {
+            "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/comicvine/issues/{issue_id}/metadata:corrections": {
+      "get": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "list_corrections_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "ComicPile issue ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active corrections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataCorrectionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "404": {
+            "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/comicvine/resolve": {
       "get": {
         "tags": [
