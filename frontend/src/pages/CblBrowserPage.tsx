@@ -1063,7 +1063,13 @@ export default function CblBrowserPage() {
                     : 'bg-[var(--theme-continuity-accent)] hover:bg-[var(--theme-continuity-accent)]/80'
                 }`}
               >
-                {isCommitting ? 'Adding reading order…' : 'Add this reading order'}
+                {isCommitting
+                  ? selectedAdoptionTarget
+                    ? 'Updating Reading Plan…'
+                    : 'Adding reading order…'
+                  : selectedAdoptionTarget
+                    ? 'Update selected Reading Plan'
+                    : 'Add this reading order'}
               </button>
               {commitBlockedReason && (
                 <p className="max-w-xs text-xs text-[var(--theme-text-muted)] flex items-center gap-1">
@@ -1447,13 +1453,15 @@ export default function CblBrowserPage() {
 
       <Modal
         isOpen={confirmOpen}
-        title="Add this reading order?"
+        title={selectedAdoptionTarget ? 'Update this Reading Plan?' : 'Add this reading order?'}
         onClose={() => setConfirmOpen(false)}
       >
         <p className="text-sm text-[var(--theme-text-muted)]">
-          {selectedSourceTitle
-            ? `Add ${selectedSourceTitle} as a Reading Plan? Cancel creates nothing.`
-            : 'Add this source as a Reading Plan? Cancel creates nothing.'}
+          {selectedAdoptionTarget
+            ? `Update ${selectedAdoptionTarget.name} (Reading Plan #${selectedAdoptionTarget.id}) with ${selectedSourceTitle ?? 'this source'}? Cancel leaves it unchanged.`
+            : selectedSourceTitle
+              ? `Add ${selectedSourceTitle} as a Reading Plan? Cancel creates nothing.`
+              : 'Add this source as a Reading Plan? Cancel creates nothing.'}
         </p>
         {consequenceLine && (
           <p className="mt-3 text-sm font-bold text-[var(--theme-text-primary)]">{consequenceLine}</p>
