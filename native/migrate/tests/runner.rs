@@ -193,7 +193,7 @@ async fn needs_work_detects_changed_applied_migration_sql() {
 
     client
         .execute(
-            "UPDATE public.refinery_schema_history SET checksum = 'tampered' WHERE version = 1",
+            "UPDATE public.refinery_schema_history SET name = 'tampered-v1' WHERE version = 1",
             &[],
         )
         .await
