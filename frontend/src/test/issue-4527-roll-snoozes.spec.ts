@@ -41,7 +41,9 @@ for (const count of [1, 25]) {
       if (path.endsWith('/roll/bootstrap')) {
         const cookie = (await request.allHeaders()).cookie ?? ''
         const excluded = cookie.includes('comicpile_roll_snoozes=%5B1%5D') ? [1] : []
-        const ids = Array.from({ length: count }, (_, i) => i + 1).filter(id => !excluded.includes(id)).slice(0, 20)
+        // MQA-ROLL-014: the die bounds the pool before the temporary snoozes
+        // are applied, so rank 21 never backfills a snoozed d20 face.
+        const ids = Array.from({ length: count }, (_, i) => i + 1).slice(0, 20).filter(id => !excluded.includes(id))
         return route.fulfill({ json: {
           session_id: 1, user_id: 1, current_die: 20, manual_die: null,
           pending_thread_id: pending || null, last_rolled_result: pending ? 1 : null,
@@ -76,10 +78,15 @@ for (const count of [1, 25]) {
       const pool = page.locator('[data-roll-pool]')
       await expect(pool).toBeVisible()
       await expect(pool.getByText('Daily Comic 1', { exact: true })).toHaveCount(0)
-      await expect(pool.getByText('Daily Comic 21', { exact: true })).toBeAttached()
+      // The snoozed d20 face shrinks the pool to 19; deeper ranks must not
+      // backfill it (MQA-ROLL-014).
+      await expect(pool.getByText('Daily Comic 21', { exact: true })).toHaveCount(0)
+      await expect(pool.locator('[aria-label^="Die face "]')).toHaveCount(19)
       await page.reload()
       await expect(page.locator('[data-roll-pool]')).toBeVisible()
       await expect(page.locator('[data-roll-pool]').getByText('Daily Comic 1', { exact: true })).toHaveCount(0)
+      await expect(page.locator('[data-roll-pool]').getByText('Daily Comic 21', { exact: true })).toHaveCount(0)
+      await expect(page.locator('[data-roll-pool] [aria-label^="Die face "]')).toHaveCount(19)
     }
   })
 }

@@ -1012,8 +1012,10 @@ pub async fn bootstrap_v2(
     let native_die = crate::dice_state::bootstrap_die_after_native_command(&conn, user).await?;
     // The die is no longer serialized; it still bounds the offer pool.
     let current_die = native_die.unwrap_or(active.current_die);
-    // Match the offer's browser-owned exclusions before the die limit.
-    // GET remains read-only; legacy durable backoff is display-only below.
+    // Match the offer's browser-owned exclusions after the die limit, so a
+    // snoozed face is removed from the bounded window instead of being
+    // backfilled from a deeper rank. GET remains read-only; legacy durable
+    // backoff is display-only below.
     let excluded = crate::roll_pool::browser_snoozes(&headers);
     let eligible = crate::roll_pool::offer_frontiers(&candidates, &excluded, current_die);
     // A single reason, derived from the same validated inputs, keeps the empty

@@ -349,9 +349,12 @@ fn parse_snoozed(raw: Option<&str>) -> Result<HashSet<i32>, ApiError> {
 
 /// Select the eligible identifiers the next offer can draw from.
 ///
-/// The die bounds the pool and the browser's temporary snoozes leave the queue
-/// before that bound, exactly as [`crate::roll_pool::offer_frontiers`] does for
-/// `POST /api/v2/roll/offer`. When the reader has an unacted-on offer, the next
+/// The die bounds the pool first and the browser's temporary snoozes then
+/// remove faces from that bounded window, exactly as
+/// [`crate::roll_pool::offer_frontiers`] does for `POST /api/v2/roll/offer`.
+/// A deeper-ranked thread never backfills a snoozed face (MQA-ROLL-014), so
+/// the returned pool can only shrink below the logical die. When the reader
+/// has an unacted-on offer, the next
 /// offer snoozes it first: that steps the die up and excludes the pending
 /// thread, so the read projects the same outcome without persisting an event.
 fn select_eligible(
