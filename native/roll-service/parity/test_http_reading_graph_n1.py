@@ -324,3 +324,217 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         )
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_graph_confirmed_repair_statements_and_persistence() -> None:
+    """Confirmed repairs must be measured and verified against persisted state."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rgcrn1_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+            for i in range(5):
+                thread = Thread(
+                    user_id=owner.id,
+                    title=f"Series {i + 1}",
+                    format="Comic",
+                    queue_position=i + 1,
+                    issues_remaining=2,
+                    total_issues=2,
+                    status="active",
+                )
+                db.add(thread)
+                await db.flush()
+                db.add_all(
+                    [
+                        Issue(
+                            thread_id=thread.id,
+                            issue_number=str(position),
+                            position=position,
+                            status="unread",
+                        )
+                        for position in (1, 2)
+                    ]
+                )
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            small_list_id = await _seed_cycle(raw, owner_id, offset=0)
+        finally:
+            await raw.close()
+
+        def confirm_env(list_id: int) -> dict[str, str]:
+            return {
+                **os.environ,
+                "RUST_ROLL_TEST_TOKEN": token,
+                "RUST_ROLL_TEST_METHOD": "POST",
+                "RUST_ROLL_TEST_URI": "/api/v2/reading-graph/repairs",
+                "RUST_ROLL_TEST_BODY": json.dumps(
+                    {"action": "delete_list", "list_id": list_id, "confirm": True}
+                ),
+                "RUST_ROLL_DATABASE_URL": url,
+                "RUST_ROLL_JWT_SECRET": SECRET,
+            }
+
+        small_response, small_delta, small_nested = await _measured_route(
+            engine, confirm_env(small_list_id), url=url, fixture="confirm-small"
+        )
+        assert small_response.get("status") == 200, small_response
+        small_body = small_response.get("body")
+        assert isinstance(small_body, dict)
+        assert small_body.get("applied") is True
+        assert small_body.get("status_before") == "cycle"
+        assert small_body.get("status_after") == "ok"
+        small_graph = small_body.get("graph")
+        assert isinstance(small_graph, dict) and small_graph.get("status") == "ok"
+
+        raw = await asyncpg.connect(url)
+        try:
+            assert (
+                await raw.fetchval(
+                    "SELECT count(*) FROM custom_cbl_lists WHERE id=$1", small_list_id
+                )
+                == 0
+            ), "confirmed repair must persist the list deletion"
+            for i in range(5, 200):
+                await _insert_owned_thread(raw, owner_id, i)
+            large_list_id = await _seed_cycle(raw, owner_id, offset=2)
+        finally:
+            await raw.close()
+
+        large_response, large_delta, large_nested = await _measured_route(
+            engine, confirm_env(large_list_id), url=url, fixture="confirm-large"
+        )
+        assert large_response.get("status") == 200, large_response
+        large_body = large_response.get("body")
+        assert isinstance(large_body, dict)
+        assert large_body.get("applied") is True
+        assert large_body.get("status_before") == "cycle"
+        assert large_body.get("status_after") == "ok"
+        large_graph = large_body.get("graph")
+        assert isinstance(large_graph, dict) and large_graph.get("status") == "ok"
+
+        raw = await asyncpg.connect(url)
+        try:
+            assert (
+                await raw.fetchval(
+                    "SELECT count(*) FROM custom_cbl_lists WHERE id=$1", large_list_id
+                )
+                == 0
+            ), "confirmed repair must persist the large-list deletion"
+        finally:
+            await raw.close()
+
+        _assert_route_budget("POST", "/api/v2/reading-graph/repairs", small_delta, large_delta)
+        assert large_nested <= small_nested + 2, (
+            f"nested statements grew: {small_nested} -> {large_nested}"
+        )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_graph_budget_rejects_injected_extra_query_and_n1() -> None:
+    """The route budget and growth checks reject real extra/per-row queries."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rgbn1_{uuid4().hex[:12]}"
+        thread_ids: list[int] = []
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+            for i in range(5):
+                thread = Thread(
+                    user_id=owner.id,
+                    title=f"Series {i + 1}",
+                    format="Comic",
+                    queue_position=i + 1,
+                    issues_remaining=2,
+                    total_issues=2,
+                    status="active",
+                )
+                db.add(thread)
+                await db.flush()
+                thread_ids.append(thread.id)
+                db.add_all(
+                    [
+                        Issue(
+                            thread_id=thread.id,
+                            issue_number=str(position),
+                            position=position,
+                            status="unread",
+                        )
+                        for position in (1, 2)
+                    ]
+                )
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        env = {
+            **os.environ,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_TEST_METHOD": "GET",
+            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
+            "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+        }
+        path = "/api/v2/reading-graph"
+        maximum = _budget_maximum("GET", path)
+        response, baseline, _ = await _measured_route(
+            engine, env, url=url, fixture="rejection-baseline"
+        )
+        assert response.get("status") == 200, response
+        assert baseline <= maximum, f"uninjected route already over budget: {baseline}"
+
+        # One extra query beyond the declared headroom must fail the budget.
+        _, with_extra, _ = await _measured_route(
+            engine,
+            env,
+            url=url,
+            fixture="rejection-extra-query",
+            extra_statements=maximum - baseline + 1,
+        )
+        assert with_extra == maximum + 1
+        with pytest.raises(AssertionError, match="declared maximum"):
+            _assert_route_budget("GET", path, with_extra, with_extra)
+
+        # A per-thread query (an N+1) must fail the same no-growth check.
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            for i in range(5, 200):
+                await _insert_owned_thread(raw, owner_id, i)
+            assert (
+                await raw.fetchval("SELECT count(*) FROM threads WHERE user_id=$1", owner_id)
+                == 200
+            )
+            all_thread_ids = [
+                row["id"]
+                for row in await raw.fetch(
+                    "SELECT id FROM threads WHERE user_id=$1 ORDER BY id", owner_id
+                )
+            ]
+        finally:
+            await raw.close()
+        _, small_n1, _ = await _measured_route(
+            engine, env, url=url, fixture="rejection-n1-small",
+            per_row_ids=tuple(thread_ids[:5]),
+        )
+        _, large_n1, _ = await _measured_route(
+            engine, env, url=url, fixture="rejection-n1-large",
+            per_row_ids=tuple(all_thread_ids),
+        )
+        assert large_n1 > small_n1 + 2, f"injected N+1 did not grow: {small_n1} -> {large_n1}"
+        with pytest.raises(AssertionError):
+            _assert_route_budget("GET", path, small_n1, large_n1)
+    finally:
+        await engine.dispose()

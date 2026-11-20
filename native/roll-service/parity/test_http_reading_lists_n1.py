@@ -9,10 +9,17 @@ from uuid import uuid4
 import asyncpg
 import pytest
 from jose import jwt
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    SQL_BUDGET_SOURCES,
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-lists-n1-secret"
 BINARY = str(cargo_example_path("http_reading_lists"))
@@ -79,6 +86,75 @@ def _run_env(token: str, method: str, uri: str, *, body: str | None = None) -> d
     return env
 
 
+def _budget_maximum(method: str, path: str) -> int:
+    """Read one declared maximum from the editable SQL budget source."""
+    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
+    matching = [
+        entry
+        for entry in document["operations"]
+        if entry["method"] == method and entry["path"] == path
+    ]
+    assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
+    return int(matching[0]["sql_budget"]["max_statements"])
+
+
+def _assert_route_budget(
+    method: str,
+    path: str,
+    small: int | None,
+    large: int | None,
+    *,
+    check_growth: bool = True,
+) -> None:
+    """Apply the same maximum and no-growth checks used by the route tests."""
+    assert_declared_budget(method, path, small, large)
+    assert small is not None and large is not None
+    if check_growth:
+        assert large <= small + 2, f"statement count grew: {small} -> {large}"
+
+
+async def _measured_route(
+    engine: AsyncEngine,
+    env: dict[str, str],
+    *,
+    url: str,
+    fixture: str,
+    extra_statements: int = 0,
+    per_row_ids: tuple[int, ...] = (),
+) -> tuple[dict[str, object], int, int]:
+    """Measure one invocation's top-level and nested statements separately.
+
+    Optional injected queries run under the same isolated service role inside
+    the measurement window to prove the budget checks reject regressions.
+    """
+    nested_before = await db_nested_statements(engine)
+    _, _, before = await db_counters(engine)
+    response, _, _, _ = await run_rust_example(BINARY, env)
+    if extra_statements or per_row_ids:
+        connection = await asyncpg.connect(url)
+        try:
+            for _ in range(extra_statements):
+                await connection.execute("SELECT 1")
+            for row_id in per_row_ids:
+                await connection.fetchval("SELECT $1::int", row_id)
+        finally:
+            await connection.close()
+    _, _, after = await db_counters(engine)
+    nested_after = await db_nested_statements(engine)
+    assert before is not None and after is not None, "pg_stat_statements is required"
+    assert nested_before is not None and nested_after is not None, (
+        "pg_stat_statements.track must be all; track=top hides nested statements"
+    )
+    statements, nested = after - before, nested_after - nested_before
+    assert statements >= 0 and nested >= 0
+    print(
+        f"route-budget route={env['RUST_ROLL_TEST_URI']} fixture={fixture} "
+        f"db_statements={statements} db_nested_statements={nested}",
+        flush=True,
+    )
+    return response, statements, nested
+
+
 @pytest.mark.asyncio
 async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> None:
     """GET /api/v2/reading-lists must stay set-based across list counts."""
@@ -112,14 +188,13 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
             await raw.close()
 
         env = _run_env(token, "GET", "/api/v2/reading-lists")
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small, small_delta, small_nested = await _measured_route(
+            engine, env, url=url, fixture="small"
+        )
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, list) and len(body) == 5
         assert body[0]["issue_count"] == 1
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
         try:
@@ -132,17 +207,17 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
         finally:
             await raw.close()
 
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env)
+        large, large_delta, large_nested = await _measured_route(
+            engine, env, url=url, fixture="large"
+        )
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, list) and len(large_body) == 200
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
-        assert small_delta is not None and large_delta is not None
-        assert_declared_budget("GET", "/api/v2/reading-lists", small_delta, large_delta)
-        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        _assert_route_budget("GET", "/api/v2/reading-lists", small_delta, large_delta)
+        assert large_nested <= small_nested + 2, (
+            f"nested statements grew: {small_nested} -> {large_nested}"
+        )
     finally:
         await engine.dispose()
 
@@ -172,16 +247,15 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
             await raw.close()
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}")
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small, small_delta, small_nested = await _measured_route(
+            engine, env, url=url, fixture="small"
+        )
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, dict)
         assert body.get("id") == list_id
         assert body.get("issue_count") == 5
         assert isinstance(body.get("entries"), list) and len(body["entries"]) == 5
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
         try:
