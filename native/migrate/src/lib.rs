@@ -289,10 +289,11 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
         };
     }
 
-    let applied_migrations = runner().get_applied_migrations_async(client).await?;
+    let runner = runner();
+    let applied_migrations = runner.get_applied_migrations_async(client).await?;
     let applied_versions: std::collections::BTreeSet<i32> =
         applied_migrations.iter().map(|m| m.version()).collect();
-    let embedded = runner().get_migrations();
+    let embedded = runner.get_migrations();
     let embedded_by_version: std::collections::BTreeMap<i32, _> =
         embedded.iter().map(|m| (m.version(), m)).collect();
     for applied_migration in &applied_migrations {
