@@ -367,6 +367,86 @@ fn provider_string(value: Option<&Value>) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// Python `str()` for a decoded JSON value: `None`/`True`/`False`, plain text
+/// for strings, and single-quoted reprs for nested objects and arrays.
+fn python_str(value: &Value) -> String {
+    match value {
+        Value::Null => "None".to_owned(),
+        Value::Bool(true) => "True".to_owned(),
+        Value::Bool(false) => "False".to_owned(),
+        Value::Number(number) => number.to_string(),
+        Value::String(text) => text.clone(),
+        Value::Array(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(python_repr)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Value::Object(map) => format!(
+            "{{{}}}",
+            map.iter()
+                .map(|(key, value)| format!("{}: {}", python_string_repr(key), python_repr(value)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
+fn python_repr(value: &Value) -> String {
+    match value {
+        Value::String(text) => python_string_repr(text),
+        other => python_str(other),
+    }
+}
+
+fn python_string_repr(text: &str) -> String {
+    let quote = if text.contains('\'') && !text.contains('"') {
+        '"'
+    } else {
+        '\''
+    };
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push(quote);
+    for character in text.chars() {
+        match character {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c == quote => {
+                out.push('\\');
+                out.push(c);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push(quote);
+    out
+}
+
+/// Python `str(issue_number) if issue_number is not None else None`.
+fn python_issue_number(value: Option<&Value>) -> Option<String> {
+    value.filter(|value| !value.is_null()).map(python_str)
+}
+
+/// Python `str(metadata.get(field, "")) or None` for a confirmed identity's
+/// metadata document. A non-object document stores no provider value.
+fn python_metadata_string(metadata: Option<&Value>, field: &str) -> Option<String> {
+    let object = metadata?.as_object()?;
+    let text = match object.get(field) {
+        Some(value) => python_str(value),
+        None => String::new(),
+    };
+    (!text.is_empty()).then_some(text)
+}
+
+/// Python `request.issue_number or "1"` treats an empty string as absent.
+fn import_issue_number(value: Option<&str>) -> &str {
+    value.filter(|number| !number.is_empty()).unwrap_or("1")
+}
+
 /// Best available provider image URL, in the Python handler's priority order.
 fn provider_image_url(value: Option<&Value>) -> Option<String> {
     let object = value?.as_object()?;
@@ -405,7 +485,8 @@ enum ParsedResource {
 
 /// Parse a pasted ComicVine URL into a trusted resource reference. Only the
 /// canonical host and the `4000-` (issue) / `4050-` (volume) terminal segment
-/// are accepted. Query strings, trailing slashes and `http` are tolerated.
+/// are accepted. Query strings, trailing slashes and case-insensitive `http` /
+/// `https` are tolerated; scheme-less input defaults to `https`.
 fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     let value = raw.trim();
     if value.is_empty() {
@@ -416,7 +497,11 @@ fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     } else {
         format!("https://{value}")
     };
-    let after_scheme = with_scheme.split_once("://")?.1;
+    let (scheme, after_scheme) = with_scheme.split_once("://")?;
+    // Python `urlsplit` rejects any scheme outside http/https.
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return None;
+    }
     let authority = after_scheme.split('/').next()?;
     let host = authority
         .rsplit('@')
@@ -463,6 +548,33 @@ fn encode_query(value: &str) -> String {
         }
     }
     encoded
+}
+
+/// ComicVine's 1-based `/search` page, widened to i64 so a near-`i32::MAX`
+/// offset cannot overflow (`offset // limit + 1`).
+fn search_page(offset: i32, limit: i32) -> i64 {
+    i64::from(offset) / i64::from(limit).max(1) + 1
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SearchCursor {
+    has_more: bool,
+    next_offset: Option<i32>,
+}
+
+/// Python's `loaded = offset + len(results)` compared against the i32 total,
+/// computed in i64 so neither the sum nor `next_offset` can wrap.
+fn search_cursor(offset: i32, result_count: usize, total: i32) -> SearchCursor {
+    let loaded = i64::from(offset).saturating_add(i64::try_from(result_count).unwrap_or(i64::MAX));
+    let has_more = loaded < i64::from(total);
+    SearchCursor {
+        has_more,
+        next_offset: if has_more {
+            i32::try_from(loaded).ok()
+        } else {
+            None
+        },
+    }
 }
 
 /// 1-based insertion position between neighbor anchors. Mirrors the Python
@@ -929,19 +1041,25 @@ pub async fn apply_correction(
     let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
 
-    let provider_value: Option<String> = tx
+    // Python reads the whole metadata JSONB document and stores
+    // `str(metadata.get(field, "")) or None`. PostgreSQL's `->>` would emit
+    // `true`/`false` and bare JSON text for objects, so the conversion happens
+    // in Rust instead. Ownership was already checked by `owned_issue` above.
+    let metadata: Option<Value> = tx
         .query_opt(
-            "SELECT e.metadata_json ->> $2 \
+            "SELECT e.metadata_json::text \
              FROM external_identities e \
              JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
              WHERE m.issue_id = $1 AND m.status = 'confirmed' \
+             ORDER BY m.id \
              LIMIT 1",
-            &[&issue_id, &request.field_name],
+            &[&issue_id],
         )
         .await
         .map_err(db::query_error)?
         .and_then(|row| row.get::<_, Option<String>>(0))
-        .filter(|value| !value.is_empty());
+        .and_then(|text| serde_json::from_str(&text).ok());
+    let provider_value = python_metadata_string(metadata.as_ref(), &request.field_name);
 
     tx.execute(
         "INSERT INTO issue_metadata_corrections \
@@ -1222,7 +1340,7 @@ pub async fn import_issue(
             "INSERT INTO issues \
                 (thread_id, issue_number, position, status, created_at) \
              VALUES ($1, $2, 1, 'unread', now()) RETURNING id",
-            &[&thread_id, &request.issue_number.as_deref().unwrap_or("1")],
+            &[&thread_id, &import_issue_number(request.issue_number.as_deref())],
         )
         .await
         .map_err(db::query_error)?;
@@ -1416,6 +1534,78 @@ struct SimEntry {
     cv_id: i32,
     number: String,
     outcome: SimOutcome,
+}
+
+struct ImportResultCounts {
+    adopted: i32,
+    skipped: i32,
+    conflicts: i32,
+    created: i32,
+}
+
+/// Build roster-ordered import results. When a row reuses an issue already
+/// linked in this run (notably a duplicate ComicVine id), report the number of
+/// the issue that was actually linked rather than the second row's number.
+fn assemble_import_results(
+    entries: &[SimEntry],
+    all: &[SimIssue],
+) -> (Vec<ImportSeriesIssueResult>, ImportResultCounts) {
+    let mut issue_results = Vec::with_capacity(entries.len());
+    let mut counts = ImportResultCounts {
+        adopted: 0,
+        skipped: 0,
+        conflicts: 0,
+        created: 0,
+    };
+    for entry in entries {
+        let linked = match &entry.outcome {
+            SimOutcome::Created(sim) | SimOutcome::Reused(sim) => Some(*sim),
+            SimOutcome::Conflict { issue, .. } => *issue,
+            SimOutcome::ReusedExisting(id) => all.iter().position(|issue| issue.id == Some(*id)),
+            SimOutcome::Error(_) => None,
+        };
+        let number = linked
+            .and_then(|index| all.get(index))
+            .map(|issue| issue.number.clone())
+            .unwrap_or_else(|| entry.number.clone());
+        let (issue_id, outcome, detail) = match &entry.outcome {
+            SimOutcome::Created(sim) => {
+                counts.adopted += 1;
+                counts.created += 1;
+                (all[*sim].id, "created", None)
+            }
+            SimOutcome::Reused(sim) => {
+                counts.skipped += 1;
+                (all[*sim].id, "reused", None)
+            }
+            SimOutcome::ReusedExisting(id) => {
+                counts.skipped += 1;
+                (Some(*id), "reused", None)
+            }
+            SimOutcome::Conflict {
+                issue,
+                issue_id,
+                detail,
+            } => {
+                counts.conflicts += 1;
+                (
+                    issue.and_then(|sim| all[sim].id).or(*issue_id),
+                    "conflict",
+                    Some(detail.clone()),
+                )
+            }
+            SimOutcome::Error(detail) => (None, "error", Some(detail.clone())),
+        };
+        issue_results.push(ImportSeriesIssueResult {
+            comicvine_issue_id: entry.cv_id,
+            issue_number: Some(number),
+            issue_id,
+            outcome: outcome.to_owned(),
+            hydration: "not_attempted".to_owned(),
+            conflict_detail: detail,
+        });
+    }
+    (issue_results, counts)
 }
 
 /// `POST /api/v2/comicvine/series:import`.
@@ -1868,48 +2058,9 @@ pub async fn import_series(
         .map_err(db::query_error)?;
     }
 
-    // Results, in roster order.
-    let mut issue_results = Vec::with_capacity(entries.len());
-    let (mut adopted, mut skipped, mut conflicts) = (0i32, 0i32, 0i32);
-    let mut created_count = 0i32;
-    for entry in &entries {
-        let (issue_id, outcome, detail) = match &entry.outcome {
-            SimOutcome::Created(sim) => {
-                adopted += 1;
-                created_count += 1;
-                (all[*sim].id, "created", None)
-            }
-            SimOutcome::Reused(sim) => {
-                skipped += 1;
-                (all[*sim].id, "reused", None)
-            }
-            SimOutcome::ReusedExisting(id) => {
-                skipped += 1;
-                (Some(*id), "reused", None)
-            }
-            SimOutcome::Conflict {
-                issue,
-                issue_id,
-                detail,
-            } => {
-                conflicts += 1;
-                (
-                    issue.and_then(|sim| all[sim].id).or(*issue_id),
-                    "conflict",
-                    Some(detail.clone()),
-                )
-            }
-            SimOutcome::Error(detail) => (None, "error", Some(detail.clone())),
-        };
-        issue_results.push(ImportSeriesIssueResult {
-            comicvine_issue_id: entry.cv_id,
-            issue_number: Some(entry.number.clone()),
-            issue_id,
-            outcome: outcome.to_owned(),
-            hydration: "not_attempted".to_owned(),
-            conflict_detail: detail,
-        });
-    }
+    // Results, in roster order, with numbers taken from the linked issue.
+    let (issue_results, counts) = assemble_import_results(&entries, &all);
+    let created_count = counts.created;
 
     if created_count > 0 {
         // Python adoption reopens a completed reused thread at the queue front
@@ -2012,9 +2163,9 @@ pub async fn import_series(
         series_name,
         comicvine_volume_id: volume_id,
         total_issues_in_series: rows.len() as i32,
-        issues_adopted: adopted,
-        issues_skipped: skipped,
-        issues_conflict: conflicts,
+        issues_adopted: counts.adopted,
+        issues_skipped: counts.skipped,
+        issues_conflict: counts.conflicts,
         issue_results,
         reading_order_id: None,
         position: None,
@@ -2100,14 +2251,7 @@ fn series_result(value: &Value, fallback_id: Option<i32>) -> Option<ComicVineSer
 fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
     let object = value.as_object()?;
     let id = coerce_provider_int(object.get("id"))?;
-    let issue_number = object
-        .get("issue_number")
-        .map(|value| match value {
-            Value::String(text) => text.clone(),
-            Value::Number(number) => number.to_string(),
-            _ => value.to_string(),
-        })
-        .filter(|text| !text.is_empty());
+    let issue_number = python_issue_number(object.get("issue_number"));
     Some(ComicVineIssueCandidate {
         comicvine_issue_id: id,
         issue_number,
@@ -2117,6 +2261,25 @@ fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
         image_url: candidate_image_url(object.get("image")),
         site_detail_url: provider_string(object.get("site_detail_url")),
     })
+}
+
+/// Build the direct-issue resolution card from one provider result row.
+fn resolved_issue(id: i32, result: &Value) -> ComicVineResolvedIssue {
+    let volume = result.get("volume").and_then(Value::as_object);
+    ComicVineResolvedIssue {
+        comicvine_issue_id: id,
+        series_name: volume
+            .and_then(|v| v.get("name"))
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        volume_id: volume.and_then(|v| coerce_provider_int(v.get("id"))),
+        issue_number: python_issue_number(result.get("issue_number")),
+        name: provider_string(result.get("name")),
+        cover_date: provider_string(result.get("cover_date")),
+        store_date: provider_string(result.get("store_date")),
+        image_url: provider_image_url(result.get("image")),
+        site_detail_url: provider_string(result.get("site_detail_url")),
+    }
 }
 
 /// `GET /api/v2/comicvine/search/series`.

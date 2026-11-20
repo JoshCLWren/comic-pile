@@ -275,9 +275,9 @@ fn parse_retry_after(header: &str, now: chrono::DateTime<chrono::Utc>) -> Option
     }
     // IMF-fixdate (RFC 7231), the form ComicVine and Python's
     // `email.utils.parsedate_to_datetime` use for HTTP-date Retry-After values.
-    if let Ok(parsed) = chrono::NaiveDateTime::parse_from_str(value, "%a, %d %b %Y %H:%M:%S GMT")
-    {
-        let parsed = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(parsed, chrono::Utc);
+    if let Ok(parsed) = chrono::NaiveDateTime::parse_from_str(value, "%a, %d %b %Y %H:%M:%S GMT") {
+        let parsed =
+            chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(parsed, chrono::Utc);
         return Some(parsed.signed_duration_since(now).as_seconds_f64());
     }
     // RFC 2822 variants with an explicit numeric offset.
@@ -896,6 +896,7 @@ async fn drain_authorized(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::outbound::RecordingFakeOutbound;
     use deadpool_postgres::Object;
 
     async fn seed_identity(state: &AppState) -> i32 {
@@ -1438,5 +1439,97 @@ mod tests {
             120
         );
         assert_eq!(issue_id("4000-29319"), Some(29319));
+    }
+
+    /// Drive the real `provider_response` with one canned reply so throttle
+    /// parity is tested through the helper the browser routes share. The
+    /// recording fake never opens a socket.
+    async fn provider_failure(
+        status: StatusCode,
+        retry_after: Option<&str>,
+    ) -> Result<Value, ProviderFailure> {
+        let fake = RecordingFakeOutbound::new();
+        let mut headers = HeaderMap::new();
+        if let Some(value) = retry_after {
+            headers.insert(
+                "retry-after",
+                value.parse().expect("valid retry-after header"),
+            );
+        }
+        fake.push_ok(status, headers, Bytes::new());
+        let outbound: Arc<dyn OutboundHttp> = Arc::new(fake);
+        provider_response(&outbound, "issue/4000-1", "", "testkey123").await
+    }
+
+    fn throttled(result: Result<Value, ProviderFailure>) -> Option<u32> {
+        match result {
+            Err(ProviderFailure::RateLimited(secs)) => Some(secs),
+            Err(ProviderFailure::Unavailable) => None,
+            other => panic!("unexpected provider result: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn comicvine_420_is_throttled_with_its_retry_after() {
+        let status =
+            StatusCode::from_u16(COMICVINE_THROTTLE_STATUS).expect("420 is a valid status");
+        assert_eq!(
+            throttled(provider_failure(status, Some("90")).await),
+            Some(90)
+        );
+    }
+
+    #[tokio::test]
+    async fn comicvine_403_is_not_a_throttle() {
+        // Python's transports treat only 420 and 429 as throttles; a 403 is a
+        // plain provider error and must never start a shared cooldown.
+        assert_eq!(
+            throttled(provider_failure(StatusCode::FORBIDDEN, Some("120")).await),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn comicvine_numeric_retry_after_matches_python_without_clamping() {
+        // Python uses max(0.0, float(retry_after)): no 60s floor and no 3600s cap.
+        assert_eq!(
+            throttled(provider_failure(StatusCode::TOO_MANY_REQUESTS, Some("5")).await),
+            Some(5)
+        );
+        assert_eq!(
+            throttled(provider_failure(StatusCode::TOO_MANY_REQUESTS, Some("7200")).await),
+            Some(7200)
+        );
+        // Fractional delta-seconds round up to a representable whole second.
+        assert_eq!(
+            throttled(provider_failure(StatusCode::TOO_MANY_REQUESTS, Some("0.25")).await),
+            Some(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn comicvine_unparseable_retry_after_uses_headerless_fallback() {
+        for header in [Some("not-a-date"), Some(""), None] {
+            assert_eq!(
+                throttled(provider_failure(StatusCode::TOO_MANY_REQUESTS, header).await),
+                Some(NO_HEADER_COOLDOWN_SECS),
+                "header: {header:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn comicvine_retry_after_parses_delta_seconds_and_http_dates() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-11-20T00:00:00Z")
+            .expect("fixed clock")
+            .with_timezone(&chrono::Utc);
+        assert_eq!(parse_retry_after("90", now), Some(90.0));
+        assert_eq!(parse_retry_after("90.5", now), Some(90.5));
+        assert_eq!(
+            parse_retry_after("Fri, 20 Nov 2026 00:02:00 GMT", now),
+            Some(120.0)
+        );
+        assert_eq!(parse_retry_after("garbage", now), None);
+        assert_eq!(parse_retry_after("", now), None);
     }
 }
