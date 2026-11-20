@@ -108,10 +108,11 @@ async def load_authoring_snapshot(
                 row.id,
                 row.source_issue_id,
                 row.target_issue_id,
-                row.origin or "converted",
+                row.origin or "reader",
                 (row.provenance or "historical classification unknown", row.note or ""),
             )
             for row in requirements
+            if row.origin != "converted"
         ),
         excluded_issue_ids=excluded,
     )
