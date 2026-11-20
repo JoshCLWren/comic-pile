@@ -100,16 +100,26 @@ exit 0
     )
     # Separate assertion: no test commands ran as part of the lint gate.
     # The lint script should only perform static checks, not invoke test suites.
+    # Exclude the hook's summary line from this check; the summary intentionally
+    # mentions CI test suites for clarity (see G1 wording update). Only check
+    # actual output lines for test command invocations.
     output_lower = (result.stdout + result.stderr).lower()
-    assert "pytest" not in output_lower, (
+    # Filter out the hook's "Pre-push lint passed" summary line which
+    # intentionally mentions CI test suites for clarification (G1 wording).
+    filtered_lines = [
+        line for line in output_lower.splitlines()
+        if not line.startswith("pre-push lint passed")
+    ]
+    output_filtered = "\n".join(filtered_lines)
+    assert "pytest" not in output_filtered, (
         f"Lint gate unexpectedly ran pytest; test commands leaked into lint gate. "
         f"Output: {result.stdout + result.stderr!r}"
     )
-    assert "vitest" not in output_lower, (
+    assert "vitest" not in output_filtered, (
         f"Lint gate unexpectedly ran vitest; test commands leaked into lint gate. "
         f"Output: {result.stdout + result.stderr!r}"
     )
-    assert "ui audit" not in output_lower, (
+    assert "ui audit" not in output_filtered, (
         f"Lint gate unexpectedly ran UI audit; test commands leaked into lint gate. "
         f"Output: {result.stdout + result.stderr!r}"
     )
