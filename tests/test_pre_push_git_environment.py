@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> None:
-    """Run the lint-only hook while ensuring no test gates run and Git env is isolated."""
+    """Run the lint-only hook; the lint stub checks Git env isolation and no test gates run."""
     hook = Path(__file__).resolve().parents[1] / ".githooks" / "pre-push"
     local_variables = subprocess.check_output(
         ["git", "rev-parse", "--local-env-vars"], text=True
