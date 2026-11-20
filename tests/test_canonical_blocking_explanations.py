@@ -100,14 +100,6 @@ async def test_canonical_dependency_blocks_explains_and_clears(
         for thread_id, deps in batched.items()
     } == {target_thread.id: [expected]}
 
-    response = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload["is_blocked"] is True
-    assert payload["blocking_reasons"] == [expected]
-    assert payload["blocking_dependencies"][0]["thread_title"] == "Canonical Source"
-    assert payload["blocking_dependencies"][0]["issue_number"] == "1"
-
     source_issue.status = "read"
     source_issue.read_at = datetime.now(UTC)
     source_thread.next_unread_issue_id = None

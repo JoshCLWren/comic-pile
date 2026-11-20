@@ -20,7 +20,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     const issues = await issuesResponse.json() as { issues: Array<{ id: number }> }
     const first = issues.issues[0].id
     const second = issues.issues[1].id
-    const planResponse = await page.request.post('/api/v1/continuity-plans/', { headers, data: {
+    const planResponse = await page.request.post('/api/v2/continuity-plans/', { headers, data: {
       name: `Cycle feedback ${suffix}`, ordering_mode: 'informational',
       lanes: [{ id: 'main', name: 'Main', order: 0 }],
       nodes: [{ id: 'first', node_type: 'issue', ref_id: first, lane_id: 'main', position: 0 }],
@@ -31,7 +31,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
 
     // Legacy invalid graph state cannot be authored through the protected API.
     // Supply its documented 422 response only; all navigation/editor reads are real.
-    await page.route('**/api/v1/custom-cbls', async (route) => {
+    await page.route('**/api/v2/reading-lists', async (route) => {
       if (route.request().method() !== 'POST') return route.continue()
       await route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ detail: {
         code: 'reading_list_cycle', message: `Reading constraint cycle: Issue ${second} -> Issue ${first}`,
@@ -52,7 +52,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     await expect(alert).toContainText('No new list was saved')
     await expect(alert).not.toContainText(`Issue ${second}`)
     await expect(page.getByLabel('New custom CBL name')).toHaveValue(attemptedName)
-    const lists = await page.request.get('/api/v1/custom-cbls', { headers })
+    const lists = await page.request.get('/api/v2/reading-lists', { headers })
     expect(await lists.json()).toEqual([])
     await page.screenshot({ path: testInfo.outputPath('named-create-cycle.png'), fullPage: true })
     await alert.getByRole('link', { name: `Review prerequisites for ${threadTitle} #1` }).click()

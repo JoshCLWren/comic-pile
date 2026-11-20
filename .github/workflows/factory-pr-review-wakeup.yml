@@ -40,6 +40,15 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Validate current PR and wake canonical dispatcher
         env:
@@ -60,6 +69,13 @@ jobs:
             echo "PR #${PR_NUMBER} is no longer eligible; no dispatch"
             exit 0
           fi
+          # A live worker lease owns the next action; its handoff and the
+          # check-completion wakeup advance the PR. Skip a redundant pass.
+          if jq -e '[.labels[].name | select(test("^factory:([0-9]+|local)$"))] | length > 0' \
+            <<< "$pr" >/dev/null; then
+            echo "PR #${PR_NUMBER} is leased by an active worker; no dispatch"
+            exit 0
+          fi
           if printf '%s' "$pr" | python3 -c '
           import json
           import sys
@@ -75,4 +91,4 @@ jobs:
             exit 0
           fi
           gh workflow run fixed-model-factory-dispatch.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
+            --repo "$GITHUB_REPOSITORY" --ref main -f target="pr:$PR_NUMBER" -f action=advance

@@ -224,6 +224,87 @@
     "name": "get_creator_summaries_endpoint"
   },
   {
+    "path": "/api/v1/creators/compare",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "compare_creators_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/team-chemistry",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_team_chemistry_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/discoveries",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_discoveries_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_series_issues_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_detail_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_metric_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_rating_distribution_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_role_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_series_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
     "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
     "methods": [
       "POST"
@@ -622,5 +703,301 @@
     ],
     "module": "app.api.identity_inbox",
     "name": "api_skip_item"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}/issues",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.issue",
+    "name": "list_issues"
+  },
+  {
+    "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.reading_order_projection",
+    "name": "confirm_plan_projection"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/folders",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_catalog",
+    "name": "list_cbl_source_folders"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/browse",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_catalog",
+    "name": "browse_cbl_source_catalog"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_comicvine_lookup",
+    "name": "find_cbl_sources_by_comicvine_issue"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/compare",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.cbl_comicvine_lookup",
+    "name": "compare_cbl_sources"
+  },
+  {
+    "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_comicvine_lookup",
+    "name": "find_cbl_candidates_for_reading_list"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_sources",
+    "name": "discover_cbl_source_lists"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_sources",
+    "name": "get_cbl_source_list"
+  },
+  {
+    "path": "/api/v1/cbl/{list_id}/adoption-commit",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.cbl_plan_adoption",
+    "name": "api_cbl_adoption_commit"
+  },
+  {
+    "path": "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.cbl_plan_adoption",
+    "name": "api_targeted_cbl_adoption_commit"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.issue_identity",
+    "name": "api_cbl_adoption_plan"
+  },
+  {
+    "path": "/api/metrics",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.metrics",
+    "name": "metrics"
+  },
+  {
+    "path": "/api/v1/metrics",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.metrics",
+    "name": "metrics"
+  },
+  {
+    "path": "/api/v1/taste/discoveries",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.taste",
+    "name": "list_taste_discoveries"
+  },
+  {
+    "path": "/api/v1/reading-plan-sync/sync",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.reading_plan_sync",
+    "name": "sync_released_issues_endpoint"
+  },
+  {
+    "path": "/api/v1/reading-plan-sync/status",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.reading_plan_sync",
+    "name": "get_sync_status"
+  },
+  {
+    "path": "/api/v1/sessions/",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.session",
+    "name": "list_sessions"
+  },
+  {
+    "path": "/api/v1/sessions/{session_id}/details",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.session",
+    "name": "get_session_details"
+  },
+  {
+    "path": "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.undo",
+    "name": "undo_to_snapshot"
+  },
+  {
+    "path": "/api/v1/undo/{session_id}/snapshots",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.undo",
+    "name": "list_session_snapshots"
+  },
+  {
+    "path": "/api/v1/custom-cbls",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.custom_cbl",
+    "name": "list_custom_cbl_lists"
+  },
+  {
+    "path": "/api/v1/custom-cbls/issue-search",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.custom_cbl",
+    "name": "search_custom_cbl_issues"
+  },
+  {
+    "path": "/api/v1/custom-cbls",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.custom_cbl",
+    "name": "create_custom_cbl"
+  },
+  {
+    "path": "/api/v1/custom-cbls/{list_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.custom_cbl",
+    "name": "get_custom_cbl"
+  },
+  {
+    "path": "/api/v1/custom-cbls/{list_id}",
+    "methods": [
+      "PUT"
+    ],
+    "module": "app.api.custom_cbl",
+    "name": "update_custom_cbl"
+  },
+  {
+    "path": "/api/v1/custom-cbls/{list_id}/export",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.custom_cbl",
+    "name": "export_custom_cbl"
+  },
+  {
+    "path": "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.custom_cbl",
+    "name": "apply_custom_cbl"
+  },
+  {
+    "path": "/api/v1/custom-cbls/{list_id}/reader",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.custom_cbl",
+    "name": "read_custom_cbl"
+  },
+  {
+    "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.custom_cbl",
+    "name": "read_custom_cbl_overlap_decisions"
+  },
+  {
+    "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+    "methods": [
+      "PUT"
+    ],
+    "module": "app.api.custom_cbl",
+    "name": "save_custom_cbl_overlap_decision"
+  },
+  {
+    "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+    "methods": [
+      "DELETE"
+    ],
+    "module": "app.api.custom_cbl",
+    "name": "delete_custom_cbl_overlap_decision"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}:migrateToIssues",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "migrate_thread_to_issues"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "migrate_thread_to_issues_simple"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "set_current_issue"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}/issues",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.issue",
+    "name": "create_issues"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}/issues:reorder",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.issue",
+    "name": "reorder_issues"
   }
 ]

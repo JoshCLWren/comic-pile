@@ -22,6 +22,15 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Reject PRs without durable factory provenance
         shell: bash
@@ -33,6 +42,13 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -Eeuo pipefail
+
+          # Noncanonical maintenance branches are not worker claims. Even a
+          # GitHub API outage must not revoke their normal PRs.
+          if [[ ! "$HEAD_REF" =~ ^factory/[0-9]+-[0-9]+- ]]; then
+            echo "Noncanonical maintenance branch: no worker provenance required."
+            exit 0
+          fi
 
           comments="$RUNNER_TEMP/factory-pr-comments.json"
           decision="$RUNNER_TEMP/factory-fence-decision.json"

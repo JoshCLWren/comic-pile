@@ -137,12 +137,6 @@ const clientCases: ClientCase[] = [
     expectedArgs: ['/v2/auth/me'],
   },
   {
-    name: 'reads owner-scoped analytics metrics',
-    invoke: (client) => client.metrics(),
-    method: 'get',
-    expectedArgs: ['/v2/analytics/metrics'],
-  },
-  {
     name: 'requests a Roll offer',
     invoke: (client) =>
       client.offer({
@@ -206,6 +200,177 @@ const clientCases: ClientCase[] = [
       client.updateQueueEntry({ path: { thread_id: 3 }, body: { position: 2 } }),
     method: 'patch',
     expectedArgs: ['/v2/queue-entries/3', { position: 2 }],
+  },
+  {
+    name: 'lists tags',
+    invoke: (client) => client.listTags(),
+    method: 'get',
+    expectedArgs: ['/v2/tags'],
+  },
+  {
+    name: 'creates a tag',
+    invoke: (client) => client.createTag({ body: { name: 'Horror', color: 'red' } }),
+    method: 'post',
+    expectedArgs: ['/v2/tags', { name: 'Horror', color: 'red' }],
+  },
+  {
+    name: 'reads one tag by encoded path id',
+    invoke: (client) => client.getTag({ path: { tag_id: 5 } }),
+    method: 'get',
+    expectedArgs: ['/v2/tags/5'],
+  },
+  {
+    name: 'patches a tag',
+    invoke: (client) => client.updateTag({ path: { tag_id: 5 }, body: { name: 'Noir' } }),
+    method: 'patch',
+    expectedArgs: ['/v2/tags/5', { name: 'Noir' }],
+  },
+  {
+    name: 'deletes a tag',
+    invoke: (client) => client.deleteTag({ path: { tag_id: 5 } }),
+    method: 'delete',
+    expectedArgs: ['/v2/tags/5'],
+  },
+  {
+    name: 'reads tag usage',
+    invoke: (client) => client.usageTag({ path: { tag_id: 5 } }),
+    method: 'get',
+    expectedArgs: ['/v2/tags/5/usage'],
+  },
+  {
+    name: 'assigns a tag to one target',
+    invoke: (client) =>
+      client.assignTag({ path: { tag_id: 5 }, body: { target_type: 'thread', target_id: 9 } }),
+    method: 'post',
+    expectedArgs: ['/v2/tags/5/assignments', { target_type: 'thread', target_id: 9 }],
+  },
+  {
+    name: 'unassigns a tag from one encoded target',
+    invoke: (client) =>
+      client.unassignTag({ path: { tag_id: 5, target_type: 'issue', target_id: 11 } }),
+    method: 'delete',
+    expectedArgs: ['/v2/tags/5/assignments/issue/11'],
+  },
+  {
+    name: 'bulk-assigns a tag',
+    invoke: (client) =>
+      client.bulkAssignTag({
+        path: { tag_id: 5 },
+        body: { target_type: 'thread', target_ids: [1, 2] },
+      }),
+    method: 'post',
+    expectedArgs: ['/v2/tags/5/assignment-batches', { target_type: 'thread', target_ids: [1, 2] }],
+  },
+  {
+    name: 'bulk-unassigns a tag',
+    invoke: (client) =>
+      client.bulkUnassignTag({
+        path: { tag_id: 5 },
+        body: { target_type: 'thread', target_ids: [3] },
+      }),
+    method: 'post',
+    expectedArgs: ['/v2/tags/5/unassignment-batches', { target_type: 'thread', target_ids: [3] }],
+  },
+  {
+    name: 'reads effective issue tags',
+    invoke: (client) => client.effectiveIssue({ path: { issue_id: 12 } }),
+    method: 'get',
+    expectedArgs: ['/v2/tags/effective/issues/12'],
+  },
+  {
+    name: 'reads effective plan tags',
+    invoke: (client) => client.effectivePlan({ path: { plan_id: 13 } }),
+    method: 'get',
+    expectedArgs: ['/v2/tags/effective/plans/13'],
+  },
+  {
+    name: 'reads effective thread tags',
+    invoke: (client) => client.effectiveThread({ path: { thread_id: 14 } }),
+    method: 'get',
+    expectedArgs: ['/v2/tags/effective/threads/14'],
+  },
+  {
+    name: 'reads effective tags for the issues of a thread',
+    invoke: (client) => client.effectiveThreadIssues({ path: { thread_id: 14 } }),
+    method: 'get',
+    expectedArgs: ['/v2/tags/effective/threads/14/issues'],
+  },
+  {
+    name: 'reads the reading mode',
+    invoke: (client) => client.getReadingMode(),
+    method: 'get',
+    expectedArgs: ['/v2/reading-mode'],
+  },
+  {
+    name: 'replaces the reading mode',
+    invoke: (client) =>
+      client.setReadingMode({ body: { source: 'manual', bandwidth: 'light', intent: 'momentum' } }),
+    method: 'put',
+    expectedArgs: ['/v2/reading-mode', { source: 'manual', bandwidth: 'light', intent: 'momentum' }],
+  },
+  {
+    name: 'creates a reading-mode suggestion',
+    invoke: (client) => client.suggestReadingMode(),
+    method: 'post',
+    expectedArgs: ['/v2/reading-mode/suggestions'],
+  },
+  {
+    name: 'dismisses the reading-mode suggestion',
+    invoke: (client) => client.dismissReadingModeSuggestion(),
+    method: 'post',
+    expectedArgs: ['/v2/reading-mode/suggestion-dismissals'],
+  },
+  {
+    name: 'reads user preferences',
+    invoke: (client) => client.getUserPreferences(),
+    method: 'get',
+    expectedArgs: ['/v2/users/me/preferences'],
+  },
+  {
+    name: 'patches user preferences',
+    invoke: (client) => client.patchUserPreferences({ body: { theme: 'ink-gold' } }),
+    method: 'patch',
+    expectedArgs: ['/v2/users/me/preferences', { theme: 'ink-gold' }],
+  },
+  {
+    name: 'imports one ComicVine issue on the canonical v2 route',
+    invoke: (client) =>
+      client.importIssue({
+        body: {
+          comicvine_issue_id: 4050,
+          title: 'Saga #1',
+          issue_number: '1',
+          anchor_before_thread_id: 7,
+        },
+      }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/comicvine/issues:import',
+      {
+        comicvine_issue_id: 4050,
+        title: 'Saga #1',
+        issue_number: '1',
+        anchor_before_thread_id: 7,
+      },
+    ],
+  },
+  {
+    name: 'imports a whole ComicVine series on the canonical v2 route',
+    invoke: (client) =>
+      client.importSeries({
+        body: { comicvine_volume_id: 4050, already_read_count: 3, reading_order_id: 12 },
+      }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/comicvine/series:import',
+      { comicvine_volume_id: 4050, already_read_count: 3, reading_order_id: 12 },
+    ],
+  },
+  {
+    name: 'reads ComicVine series import status by encoded volume id on v2',
+    invoke: (client) => client.seriesImportStatusV2({ path: { comicvine_volume_id: 4050 } }),
+    method: 'get',
+    expectedArgs: ['/v2/comicvine/series/4050/import-status'],
   },
 ]
 

@@ -4,7 +4,8 @@ import asyncio
 import json
 import os
 from dataclasses import asdict
-from pathlib import Path
+
+from route_harness import cargo_example_path
 
 import pytest
 from jose import jwt
@@ -18,7 +19,6 @@ from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverla
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.repositories.reading_shadow_repository import load_shadow_inputs
 
-ROOT = Path(__file__).resolve().parents[3]
 SECRET = "synthetic-option-parity"
 
 
@@ -142,7 +142,7 @@ async def test_option_input_parity() -> None:
                 "RUST_ROLL_TEST_TOKEN": jwt.encode({"sub": "option-reader", "type": "access", "jti": "synthetic-option-jti"},
                                                    SECRET, "HS256")}
             process = await asyncio.create_subprocess_exec(
-                str(ROOT / "native/roll-service/target/debug/examples/option_snapshot"),
+                str(cargo_example_path("option_snapshot")),
                 env=environment, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15)

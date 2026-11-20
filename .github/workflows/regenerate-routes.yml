@@ -73,19 +73,19 @@ jobs:
           ROUTE_PYTHON: .venv/bin/python
         run: |
           set -euo pipefail
-          # python first: fragment-derived vercel/inventory/AGENTS/rewrites.
-          python3 scripts/generate_route_burndown.py
+          # node first: fragment-derived vercel/inventory/AGENTS/rewrites.
+          node scripts/generate_route_burndown.mjs
           # node second: sync the Python surface from the FastAPI registry.
           node scripts/generate_vercel_routes.mjs
-          # python last: node rewrites the inventory without burndown
-          # enrichment (ingress_destination/burndown_status), so the
+          # node last: generate_vercel_routes rewrites the inventory without
+          # burndown enrichment (ingress_destination/burndown_status), so the
           # burndown generator must run last to restore the enriched
-          # inventory. This python -> node -> python order is the only
-          # order where both --check gates pass; CI rust-ingress uses
-          # the same python-last invariant (node then python).
-          python3 scripts/generate_route_burndown.py
+          # inventory. This node -> node -> node order is the only order where
+          # both --check gates pass; CI rust-ingress uses the same
+          # burndown-last invariant.
+          node scripts/generate_route_burndown.mjs
           node scripts/generate_vercel_routes.mjs --check
-          python3 scripts/generate_route_burndown.py --check
+          node scripts/generate_route_burndown.mjs --check
 
       - name: Open or refresh CI-gated regeneration PR
         env:
@@ -153,7 +153,7 @@ jobs:
           # dispatch production on exit. Normally CI is still running and a
           # separate pull_request_target/closed job handles the eventual merge.
           # shellcheck source=/dev/null
-          source .github/scripts/factory-dispatch-production-deploy.sh
+          source .github/scripts/dispatch-production-deploy.sh
           dispatch_deploy_after_merges() {
             if [[ "$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)" == 'MERGED' ]]; then
               GH_TOKEN="$DEPLOY_TOKEN" factory_dispatch_production_deploy "Route regeneration PR #$pr merged"
@@ -187,5 +187,5 @@ jobs:
           set -euo pipefail
           # The event is already merged. Never run code from the PR head.
           # shellcheck source=/dev/null
-          source .github/scripts/factory-dispatch-production-deploy.sh
+          source .github/scripts/dispatch-production-deploy.sh
           factory_dispatch_production_deploy "Route regeneration PR #${PR_NUMBER} merged"

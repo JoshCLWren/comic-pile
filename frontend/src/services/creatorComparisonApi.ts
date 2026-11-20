@@ -10,7 +10,7 @@ import type { CreatorComparisonResponse } from '../types/index'
 export function createCreatorComparisonApi(client: HttpClient) {
   return {
     getComparison: (keys: string[]) =>
-      client.get<CreatorComparisonResponse>('/v1/creators/compare', {
+      client.get<CreatorComparisonResponse>('/v2/creators/compare', {
         params: { keys: keys.join(',') },
       }),
   }

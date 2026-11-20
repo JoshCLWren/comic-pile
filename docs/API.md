@@ -23,7 +23,7 @@ The API uses a **partial versioning** strategy with two surfaces:
 - **`/api/*`** — the legacy surface, used by original resources. Most maintained client resources have migrated to the versioned surface.
 - **`/api/v1/*`** — the canonical versioned surface. All new client resources must be added here.
 
-Legacy paths (e.g., `/api/threads/*`, `/api/roll/*`, `/api/sessions/*`, `/api/rate/*`, `/api/undo/*`) are retained as explicit, tested backwards-compatibility aliases. Maintained first-party consumers should use the `/api/v1/*` equivalents. The snooze family (`/api/v1/snooze/*` and `/api/snooze/*`) is retired: snooze is the native `POST /api/v2/roll/offer` reroll and unsnooze is client-only via the `comicpile_roll_snoozes` cookie (#4338, #4349).
+The 16 Python unversioned thread, session and undo operations listed in [the caller audit](UNVERSIONED_ALIAS_RETIREMENT.md) are retired; use their existing `/api/v1/*` contracts. Three native detail/snapshot aliases remain under `/api/threads` and `/api/sessions`. The CLI helper and browser setup helpers also use those versioned paths. This removes 16 Python route-methods (threads 10, sessions 4, undo 2) without adding Rust handlers. The two remaining unversioned Roll handlers are retained while the live Roll migration owns their delivery. Auth has no Python mounts, but Rust still publishes eight operations at each of `/api/auth/*`, `/api/v1/auth/*` and `/api/v2/auth/*`; product callers use v2. Native auth compatibility removal remains outside this Python-alias slice because it also changes the published native same-path contract and baseline ingress generation. The snooze family (`/api/v1/snooze/*` and `/api/snooze/*`) is retired: snooze is the native `POST /api/v2/roll/offer` reroll and unsnooze is client-only via the `comicpile_roll_snoozes` cookie (#4338, #4349).
 
 **Convention for new endpoints:** add new client resources under `/api/v1/*`;
 do not introduce new bare `/api/*` routes. Non-production tooling routes
@@ -38,9 +38,7 @@ The exact canonical families and the allowed legacy aliases are maintained in
 
 The version segment identifies the HTTP contract, not the runtime. Native Rust
 currently serves every deployed `/api/v2` operation listed in
-[`docs/api/v2-route-inventory.json`](api/v2-route-inventory.json), while
-`GET /api/v2/reading-boundaries/{thread_id}` remains a Python/FastAPI operation
-behind the same v2 contract version. Never infer "v1 means Python" or "v2 means
+[`docs/api/v2-route-inventory.json`](api/v2-route-inventory.json), and the obsolete `GET /api/v2/reading-boundaries/{thread_id}` handler is retired. Never infer "v1 means Python" or "v2 means
 Rust" from a path.
 
 ### Generated authoritative contract
@@ -49,11 +47,12 @@ The checked-in client contract
 (`frontend/src/generated/openapi.json` and `openapi.ts`) is assembled from two
 generated sources:
 
-- `app.openapi()` for the Python/FastAPI routes, and
+- `native/contracts/python-legacy.openapi.json`, a frozen snapshot of the remaining
+  Python/FastAPI routes, and
 - `native/contracts/v2-runtime.openapi.json` for the deployed native Rust v2
   operations, generated from the Rust DTOs by `cargo run --example v2_openapi`.
 
-`scripts/export_openapi_schema.py` merges them: a native operation replaces the
+`scripts/export_openapi_schema.mjs` merges them: a native operation replaces the
 same `(path, method)` because ingress routes that request to Rust, and a native
 component schema that differs from a same-named Python schema is published as
 `Native<Name>` with its internal references rewritten. The same canonical
@@ -487,37 +486,7 @@ until the visitor explicitly signs up and separately chooses a save action.
 
 Session tracking and history.
 
-### GET /sessions/current/
-
-Get the currently active session.
-
-**Response**: `200 OK`
-
-```json
-{
-  "id": 1,
-  "started_at": "2025-12-30T10:00:00",
-  "ended_at": null,
-  "start_die": 6,
-  "user_id": 1,
-  "ladder_path": "6 → 8 → 10",
-  "active_thread": {
-    "id": 3,
-    "title": "The Walking Dead Vol. 1",
-    "format": "TPB",
-    "issues_remaining": 5,
-    "position": 10
-  }
-}
-```
-
-**Response**: `404 Not Found`
-
-```json
-{
-  "detail": "No active session found"
-}
-```
+> `GET /sessions/current/` and `POST /sessions/{id}/restore-session-start` are retired (#4343); Roll state is event-derived.
 
 ### GET /sessions/
 

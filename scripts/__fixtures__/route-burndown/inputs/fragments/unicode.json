@@ -1,0 +1,15 @@
+{
+  "family": "unicode",
+  "owned_path_patterns": ["^/api/v2/unicode$"],
+  "defaults": {"owning_issue": 7, "status": "transitional"},
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/unicode",
+      "runtime": "python-fastapi",
+      "dest": "/api/index.py",
+      "consumers": ["café.ts 😀"]
+    }
+  ]
+}

@@ -20,12 +20,8 @@ def test_parse_db_queries_handles_missing_and_invalid_headers() -> None:
 
 def test_build_endpoints_includes_optional_later_history_page() -> None:
     """Verify endpoint construction includes the optional later-History-page entry."""
-    assert _build_endpoints(25, None) == [
-        "/api/v1/sessions/current/",
-        "/api/v1/sessions/?page_size=25",
-    ]
+    assert _build_endpoints(25, None) == ["/api/v1/sessions/?page_size=25"]
     assert _build_endpoints(25, "2026-08-01T12:00:00+00:00,42") == [
-        "/api/v1/sessions/current/",
         "/api/v1/sessions/?page_size=25",
         "/api/v1/sessions/?page_size=25&page_token=2026-08-01T12%3A00%3A00%2B00%3A00%2C42",
     ]
@@ -35,7 +31,6 @@ def test_select_endpoints_supports_isolated_first_request_runs() -> None:
     """Verify each endpoint can be measured without earlier endpoints preconditioning it."""
     token = "2026-08-01T12:00:00+00:00,42"
 
-    assert _select_endpoints("current", 25, token) == ["/api/v1/sessions/current/"]
     assert _select_endpoints("history-first", 25, token) == ["/api/v1/sessions/?page_size=25"]
     assert _select_endpoints("history-later", 25, token) == [
         "/api/v1/sessions/?page_size=25&page_token=2026-08-01T12%3A00%3A00%2B00%3A00%2C42"
@@ -53,7 +48,7 @@ def test_summarize_separates_first_observed_from_steady_state() -> None:
     """Verify summarize splits first-observed evidence from steady-state aggregate."""
     samples = [
         Sample(
-            endpoint="/api/v1/sessions/current/",
+            endpoint="/api/v1/sessions/?page_size=25",
             iteration=1,
             elapsed_ms=40.0,
             status=200,
@@ -63,7 +58,7 @@ def test_summarize_separates_first_observed_from_steady_state() -> None:
             server_timing=None,
         ),
         Sample(
-            endpoint="/api/v1/sessions/current/",
+            endpoint="/api/v1/sessions/?page_size=25",
             iteration=2,
             elapsed_ms=20.0,
             status=200,
@@ -73,7 +68,7 @@ def test_summarize_separates_first_observed_from_steady_state() -> None:
             server_timing="app;dur=19.5",
         ),
         Sample(
-            endpoint="/api/v1/sessions/current/",
+            endpoint="/api/v1/sessions/?page_size=25",
             iteration=3,
             elapsed_ms=30.0,
             status=200,
@@ -85,7 +80,7 @@ def test_summarize_separates_first_observed_from_steady_state() -> None:
     ]
 
     assert summarize(samples) == {
-        "endpoint": "/api/v1/sessions/current/",
+        "endpoint": "/api/v1/sessions/?page_size=25",
         "first_observed": {
             "elapsed_ms": 40.0,
             "status": 200,

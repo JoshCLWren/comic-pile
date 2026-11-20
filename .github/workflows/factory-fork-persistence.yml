@@ -37,6 +37,15 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'

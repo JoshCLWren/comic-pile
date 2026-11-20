@@ -6,7 +6,7 @@ import { cast } from '../utils/cast'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
-import { useSession } from '../hooks/useSession'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useSnooze } from '../hooks/useSnooze'
 import {
   useCreateThread,
@@ -16,6 +16,13 @@ import {
 } from '../hooks/useThread'
 import QueuePage from '../pages/QueuePage'
 import { useQueueListLoading } from '../pages/QueuePage/useQueueListLoading'
+
+vi.mock('../hooks/useCompletedThreads', () => ({
+  useCompletedThreads: vi.fn(() => ({
+    threads: [], hasNextPage: false, isLoadingMore: false, isError: false,
+    loadMore: vi.fn(), retry: vi.fn(),
+  })),
+}))
 
 vi.mock('../hooks/useThread', () => ({
   useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
@@ -28,6 +35,7 @@ vi.mock('../hooks/useThread', () => ({
 vi.mock('../hooks/useQueue', () => ({
   useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
   useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
+  useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToPosition: vi.fn(),
@@ -35,7 +43,7 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
+vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../pages/QueuePage/useQueueListLoading', () => ({ useQueueListLoading: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
@@ -112,7 +120,7 @@ beforeEach(() => {
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
-  vi.mocked(useSession).mockReturnValue({
+  vi.mocked(useRollBootstrap).mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: vi.fn(),
   } as never)

@@ -244,16 +244,14 @@
         ],
         "properties": {
           "height": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           "pixelRatio": {
             "type": "number",
             "format": "double"
           },
           "width": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           }
         }
       },
@@ -266,12 +264,10 @@
         ],
         "properties": {
           "x": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           "y": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           }
         }
       },
@@ -284,12 +280,10 @@
         ],
         "properties": {
           "height": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           "width": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           }
         }
       },

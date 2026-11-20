@@ -1,7 +1,7 @@
 """Regression coverage for the cold-import budget on the API entry path (#2978).
 
 The Vercel Fluid function pays for every module it imports before it can answer
-``/api/ping``. These tests pin the contracts that keep that cheap:
+``/health``. These tests pin the contracts that keep that cheap:
 
 * ``app.api`` composes nothing at import time (no eager router imports);
 * a cold entry-path start registers only the lightweight routers, and the first
@@ -30,12 +30,8 @@ ENTRY_PATH = REPOSITORY_ROOT / "api" / "index.py"
 
 #: Modules that must stay unimported until a non-ping request needs them.
 DEFERRED_ROUTER_MODULES = (
-    "app.api.roll",
     "app.api.thread",
     "app.api.session",
-    "app.api.continuity_plan",
-    "app.api.continuity_rule",
-    "app.api.roll_recovery_switch",
 )
 
 #: Dependency sub-router route reachable only once the sub-routers are composed.
@@ -195,15 +191,15 @@ async def test_cold_ping_defers_core_routers_and_next_request_loads_only_its_mou
     app = create_app(serve_frontend=False, defer_router_imports=True)
     cold_paths = _route_paths(app)
 
-    assert "/api/ping" in cold_paths
+    assert "/health" in cold_paths
     assert DEPENDENCY_SUBROUTER_PATH not in cold_paths
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        ping = await client.get("/api/ping")
+        probe = await client.get("/health")
 
-        assert ping.status_code == 200
-        assert ping.json() == {"status": "alive"}
+        assert probe.status_code == 200
+        assert probe.json() == {"status": "alive"}
         assert _route_paths(app) == cold_paths
 
         # Unauthenticated: a 401 proves the real route answered instead of the

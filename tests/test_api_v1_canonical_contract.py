@@ -12,7 +12,7 @@ acceptance criteria that the generated OpenAPI document:
 
 The check reads the committed generated schema rather than importing the
 application, so it stays in the lightweight schema-validation tier and matches
-exactly what the frontend client consumes. ``scripts/generate_openapi_types.py``
+exactly what the frontend client consumes. ``scripts/generate_openapi_types.mjs``
 keeps this artifact current in CI.
 """
 
@@ -44,7 +44,7 @@ def _schema_candidates() -> list[Path]:
 # resources. Admin and debug tooling was pruned (#4861); every other bare
 # ``/api`` path must be a compatibility alias for a family that also has a
 # canonical ``/api/v1`` route. Metrics is the retained eager surface.
-LEGACY_ONLY_TOOLING = frozenset({"metrics", "ping"})
+LEGACY_ONLY_TOOLING = frozenset({"metrics"})
 
 # Retained first-party client families that must expose a canonical
 # ``/api/v1`` route. These are the durable product APIs, not tooling.
@@ -70,8 +70,8 @@ REQUIRED_V1_FAMILIES = frozenset(
 
 
 # The generated client surface (issue #1741) must reference no bare domain
-# paths except versioned resources, ping and native same-path startup metrics (#4854).
-CLIENT_EXEMPT_BARE_PATHS = frozenset({"/api/ping", "/api/metrics"})
+# paths except versioned resources and native same-path startup metrics (#4854).
+CLIENT_EXEMPT_BARE_PATHS = frozenset({"/api/metrics"})
 CLIENT_VERSIONED_PREFIXES = ("/api/v1/", "/api/v2/")
 
 
@@ -96,7 +96,7 @@ def _load_schema() -> dict:
     raise FileNotFoundError(
         "Generated OpenAPI schema missing. Tried: "
         f"{[str(p) for p in tried]}. "
-        "Run `python scripts/generate_openapi_types.py`."
+        "Run `node scripts/generate_openapi_types.mjs`."
     )
 
 
@@ -114,33 +114,23 @@ def test_openapi_has_no_duplicate_operation_ids() -> None:
 
 
 def test_openapi_has_no_supported_collections_surface() -> None:
-    """Collections were removed; no Collections route, schema, or operation."""
+    """Collections and their exclusion API were removed; no routes, schemas, or operations."""
     schema = _load_schema()
     violations: list[str] = []
 
     for path in schema.get("paths", {}):
-        if "collection" in path.lower() and path not in {
-            "/api/v1/collection-exclusions",
-            "/api/v1/collection-exclusions/{exclusion_id}",
-        }:
+        if "collection" in path.lower():
             violations.append(f"path:{path}")
 
     for name in schema.get("components", {}).get("schemas", {}):
-        if "collection" in name.lower() and name not in {
-            "CollectionExclusionCreate",
-            "CollectionExclusionResponse",
-        }:
+        if "collection" in name.lower():
             violations.append(f"schema:{name}")
 
     for methods in schema.get("paths", {}).values():
         for operation in methods.values():
             if isinstance(operation, dict):
                 operation_id = operation.get("operationId", "")
-                if "collection" in operation_id.lower() and operation_id not in {
-                    "list_exclusions_api_v1_collection_exclusions_get",
-                    "create_exclusion_api_v1_collection_exclusions_post",
-                    "delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete",
-                }:
+                if "collection" in operation_id.lower():
                     violations.append(f"operation:{operation_id}")
 
     assert not violations, f"Collections surface detected: {violations}"
@@ -223,7 +213,7 @@ def test_generated_client_has_zero_bare_domain_path_references() -> None:
     Issue #1741 acceptance: ``frontend/src/generated/openapi.ts`` has zero
     bare domain-path references. The schema that feeds that generated client
     keeps infrastructure paths, canonical v1/v2 routes, and the exempt
-    ``/api/ping`` heartbeat and same-path native ``/api/metrics`` paths.
+    same-path native ``/api/metrics`` path.
     """
     schema = _load_schema()
     paths = list(schema.get("paths", {}))
@@ -244,7 +234,6 @@ def test_generated_client_has_zero_bare_domain_path_references() -> None:
     assert any(path.startswith("/api/v1/") for path in paths), (
         "Generated client schema lost all canonical /api/v1 routes."
     )
-    assert "/api/ping" in paths, "Ping heartbeat path missing from client schema."
 
 
 @pytest.mark.parametrize(
@@ -284,11 +273,11 @@ def test_known_v2_routes_are_versioned_client_paths() -> None:
 
 
 @pytest.mark.parametrize("surface", ["path", "schema", "operation"])
-def test_retired_collections_are_rejected_even_with_exclusion_api(
+def test_retired_collections_are_rejected(
     monkeypatch: pytest.MonkeyPatch,
     surface: str,
 ) -> None:
-    """The exclusion API exception cannot reintroduce the retired Collections domain."""
+    """No collection surface may reintroduce the retired Collections domain."""
     schema = _load_schema()
     if surface == "path":
         schema["paths"]["/api/v1/collections"] = {}

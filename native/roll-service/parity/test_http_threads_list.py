@@ -17,8 +17,9 @@ import asyncio
 import json
 import os
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TypeGuard
+
+from route_harness import cargo_example_path
 from urllib.parse import urlencode
 from uuid import uuid4
 
@@ -40,13 +41,7 @@ from app.models.tag import Tag, TagAssignment
 from app.services import thread_service
 
 SECRET = "synthetic-native-threads-secret"
-# CI builds into native/roll-service/target; the managed local wrapper keeps
-# its own bounded target directory, so locate the built example without changing
-# how this test builds or runs anything.
-EXAMPLE = (
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_threads_list"
-)
+EXAMPLE = cargo_example_path("http_threads_list")
 
 
 def _is_thread_row(value: object) -> TypeGuard[dict[str, object]]:

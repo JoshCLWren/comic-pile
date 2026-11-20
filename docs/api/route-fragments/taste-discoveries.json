@@ -4,9 +4,9 @@
     "^/api/v1/taste/discoveries(?:/.*)?$"
   ],
   "defaults": {
-    "runtime": "python-fastapi",
+    "runtime": "native-rust",
     "status": "transitional",
-    "owning_issue": null,
+    "owning_issue": 4853,
     "consumers": [
       "frontend/src/services/api-taste.ts"
     ]
@@ -16,8 +16,9 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/taste/discoveries",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/taste/discoveries$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/taste/discoveries$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",

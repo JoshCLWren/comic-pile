@@ -3,7 +3,7 @@
 Owner decisions: 2026-10-31. Applies to interactive ChatGPT engineering sessions,
 local factory sessions, scheduled factory workers, and their implementation/review
 handoffs. Read alongside `AGENTS.md`, `docs/ISSUE_EXECUTION_PROTOCOL.md`, and
-`docs/AUTONOMOUS_FACTORY_POLICY.md`.
+[docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md).
 
 ## Prime directive
 
@@ -83,6 +83,17 @@ repository/operational policy** requires them.
   required release gate that cannot pass), report the specific evidence,
   preserve progress, and hand off the required repair. Do not call a simulation
   or non-activated implementation complete.
+
+### Owner update: SQL efficiency without per-operation budget projects (2026-11-15)
+
+For database work, instruct agents to use set-based queries, batching, indexed
+filters, bounded reads, and consistent transactions. Avoid N+1 queries and
+unnecessary round trips. Measure or add focused regressions when a real
+performance defect demands it. **Do not create per-endpoint SQL-budget
+registries, numeric statement-count quotas, mandatory pg_stat_statements parity
+matrices, or related standalone issues/PRs.** The SQL-budget program #4737,
+#4988 and #5146–#5151 is canceled and is not a Rust migration exit condition.
+This owner decision supersedes historical issue bodies and test-plan language.
 
 ## 4. Refactor in proportion to the objective
 

@@ -60,13 +60,15 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
-
-      - name: Configure Neon-first factory projections
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        uses: ./.github/actions/factory-state-cache
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
         with:
-          neon-api-key: ${{ secrets.NEON_API_KEY }}
-          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+          repository: JoshCLWren/rotisserie
+          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Install Neon-first GitHub read shim
         shell: bash
@@ -113,25 +115,7 @@ jobs:
                 || (context.eventName === 'pull_request_target' && context.payload.action === 'edited')) {
               await visibility({ github, context });
             } else {
-              // The scheduled inventory is advisory. Neon is consulted first;
-              // absent/expired projections fall back to the existing live scan.
-              let openPullRequests = null;
-              if (context.eventName === 'schedule' || context.eventName === 'workflow_dispatch') {
-                const { spawnSync } = require('node:child_process');
-                const read = spawnSync('python3', [
-                  '.github/scripts/factory_gh_read_through.py', 'projected',
-                  context.repo.owner + '/' + context.repo.repo, 'pr',
-                ], { encoding: 'utf8', timeout: 15000 });
-                if (read.status === 0) {
-                  try {
-                    const parsed = JSON.parse(read.stdout);
-                    if (Array.isArray(parsed)) openPullRequests = parsed;
-                  } catch (error) {
-                    core.warning('Neon PR projection unreadable; using GitHub discovery');
-                  }
-                }
-              }
-              await visibility.reconcileMissingPrLabels({ github, context, openPullRequests });
+              await visibility.reconcileMissingPrLabels({ github, context });
             }
 
       - name: Reconcile linked issue from trusted canonical PR history

@@ -25,6 +25,7 @@ from uuid import uuid4
 
 import pytest
 from jose import jwt
+from route_harness import cargo_example_path
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -36,7 +37,7 @@ SECRET = "synthetic-native-issue-command-secret"
 RUNNER = Path(
     os.environ.get(
         "RUST_ROLL_ISSUE_READ_RATE_EXAMPLE",
-        Path(__file__).resolve().parents[1] / "target/debug/examples/http_issue_read_rate",
+        cargo_example_path("http_issue_read_rate"),
     )
 )
 

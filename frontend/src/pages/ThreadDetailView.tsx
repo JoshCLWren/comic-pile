@@ -192,11 +192,20 @@ export default function ThreadDetailView() {
   const issuesError = issuesQuery.isError
   const issuesLoaded = issuesQuery.pages.length > 0
   const nextPageToken = issuesQuery.nextPageToken
-  // The currently loaded issue pages share a single bounded metadata batch.
-  // Expanding a thread never starts one cover/rating request per row.
-  const issueCardsQuery = useIssueCards(issues.map((issue) => issue.id), {
-    enabled: issuesExpanded && !issuesError,
-  })
+  // The Next Issue panel is visible before ISSUES expands. Its canonical
+  // issue ID comes from the Rust reading-boundary projection, so fetch that
+  // one card even while the list is collapsed. Once expanded, combine it with
+  // visible issue IDs in the existing bounded batch, never one call per row.
+  const nextBoundaryIssueId = threadId == null
+    ? null
+    : boundaryQuery.data?.threads[threadId]?.next?.issue.issue_id ?? null
+  const visibleCardIds = issuesExpanded && !issuesError ? issues.map((issue) => issue.id) : []
+  const issueCardsQuery = useIssueCards(
+    nextBoundaryIssueId == null ? visibleCardIds : [nextBoundaryIssueId, ...visibleCardIds],
+    // The Next issue line renders the series title from these cards, so
+    // they refresh on focus like the boundary query (#5486).
+    { enabled: nextBoundaryIssueId != null || (issuesExpanded && !issuesError), refetchOnWindowFocus: 'always' },
+  )
   const cardsByIssue = indexIssueCards(issueCardsQuery.data)
 
   useEffect(() => {
@@ -483,6 +492,7 @@ export default function ThreadDetailView() {
             explanation={boundaryQuery.data?.threads[thread.id]}
             isPending={boundaryQuery.isPending}
             isError={boundaryQuery.isError}
+            cardsByIssue={cardsByIssue}
             onRetry={() => { void boundaryQuery.refetch() }}
             fallback={
               legacyBlockingInfo.isError ? (

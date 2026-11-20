@@ -96,6 +96,19 @@ export function queueThreadTitle(page: Page, title: string): Locator {
   return page.getByText(title, { exact: true })
 }
 
+/**
+ * Roll pool thread locator by title.
+ *
+ * Scoped to the roll pool's thread buttons to avoid duplicate-advisory title
+ * collisions when the same title appears elsewhere on the page.
+ */
+export function rollPoolThreadByTitle(page: Page, title: string): Locator {
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return page.getByRole('button', {
+    name: new RegExp(`^Die face \\d+: ${escaped}(,|:|$)`, 'i'),
+  })
+}
+
 /** Live geometry of the production page scroller (`#root`, not the window). */
 export type AppScrollState = {
   windowScrollY: number
@@ -434,7 +447,7 @@ export async function createThread(
   let threadId: number | null = null;
 
   while (!success && attempts < maxAttempts) {
-    const response = await page.request.post('/api/threads/', {
+    const response = await page.request.post('/api/v1/threads/', {
       data: dataWithoutTotal,
         headers: jsonHeaders,
       });
@@ -468,7 +481,7 @@ export async function createThread(
               if (issuesListResponse.ok()) {
                 const issuesData = await issuesListResponse.json();
                 for (const issue of issuesData.issues) {
-                  await page.request.post(`/api/v1/issues/${issue.id}:markRead`, {
+                  await page.request.post(`/api/v2/issues/${issue.id}/read-markers`, {
                     headers: {
                       ...authHeaders,
                       'X-CSRF-Token': csrfToken,
@@ -646,7 +659,7 @@ export async function navigateToRatePage(page: Page): Promise<void> {
   const threads = threadsData.threads ?? threadsData
   expect(threads.length).toBeGreaterThan(0)
 
-  await page.request.post(`/api/threads/${threads[0].id}/set-pending`, {
+  await page.request.post(`/api/v1/threads/${threads[0].id}/set-pending`, {
     headers: { Authorization: `Bearer ${token}` },
   })
 

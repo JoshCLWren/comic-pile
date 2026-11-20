@@ -9,7 +9,7 @@ import type { CreatorTeamChemistryResponse } from '../types/index'
  */
 export function createCreatorTeamChemistryApi(client: HttpClient) {
   return {
-    getChemistry: () => client.get<CreatorTeamChemistryResponse>('/v1/creators/team-chemistry'),
+    getChemistry: () => client.get<CreatorTeamChemistryResponse>('/v2/creators/team-chemistry'),
   }
 }
 

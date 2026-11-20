@@ -9,11 +9,11 @@ on:
     paths:
       - '.github/workflows/fixed-model-factory-dispatch-recovery.yml'
       - '.github/scripts/factory_heartbeat_health.py'
+      - '.github/scripts/factory_runtime_view.py'
       - '.github/factory-expected-workers.json'
 
 permissions:
   actions: write
-  issues: read
   contents: read
 
 concurrency:
@@ -30,6 +30,15 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - name: Configure shared Neon factory discovery cache
         uses: ./.github/actions/factory-state-cache
         with:
@@ -43,13 +52,23 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          python3 -c 'import json, sys; sys.path.insert(0, ".github/scripts"); from factory_completion_controller import registry_comments; print(json.dumps([registry_comments()]))' \
-            > /tmp/factory-registry-comments.json
-          python3 .github/scripts/factory_heartbeat_health.py \
-            --comments /tmp/factory-registry-comments.json \
-            --output /tmp/factory-heartbeat-health.json \
-            --summary "$GITHUB_STEP_SUMMARY"
+          # Neon is the durable, trusted runtime view.
+          report="$RUNNER_TEMP/factory-heartbeat-report.md"
+          refresh_health() {
+            python3 -c 'import json, sys; sys.path.insert(0, ".github/scripts"); from factory_runtime_view import export_view; print(json.dumps(export_view(sys.argv[1])))' "$GITHUB_REPOSITORY" \
+              > /tmp/factory-runtime-view.json
+            python3 .github/scripts/factory_heartbeat_health.py \
+              --view /tmp/factory-runtime-view.json \
+              --output /tmp/factory-heartbeat-health.json \
+              --summary "$report"
+          }
+          : > "$report"
+          refresh_health
+          cat "$report" >> "$GITHUB_STEP_SUMMARY"
 
+          # Lifecycle freshness comes only from trusted Neon events written by
+          # the run workflow's own trusted jobs. Issue #1093 is retired as a
+          # registry: there is no GitHub comment fallback to reconcile.
           # Per-worker freshness is diagnostic only. Preserve the existing
           # fleet-wide recovery gate; never launch a worker for its stale age.
           newest_age="$(jq -r '.newest_active_age_seconds // "missing"' /tmp/factory-heartbeat-health.json)"

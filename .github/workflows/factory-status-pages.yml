@@ -2,19 +2,21 @@ name: Factory Status Pages
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - '.github/scripts/generate_factory_status_dashboard.py'
+      - '.github/scripts/factory_fleet_console.cjs'
+      - '.github/scripts/factory_fleet_style.py'
+      - '.github/scripts/factory_state_cache.py'
       - '.github/scripts/factory_delivery_funnel.py'
       - '.github/scripts/probe_opencode_free_roster.py'
       - '.github/scripts/factory_capacity_policy.py'
       - '.github/scripts/factory_full_completion_controller.py'
       - '.github/scripts/factory_completion_controller.py'
       - '.github/workflows/factory-status-pages.yml'
-      - '.github/free-model-factories.tsv'
 
 permissions:
   contents: write
@@ -35,6 +37,15 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Configure shared Neon factory discovery cache
         uses: ./.github/actions/factory-state-cache
@@ -42,15 +53,15 @@ jobs:
           neon-api-key: ${{ secrets.NEON_API_KEY }}
           neon-project-id: ${{ vars.NEON_PROJECT_ID }}
 
-      - name: Prune expired generic GitHub discovery snapshots
+      - name: Prune retired discovery and audit events
         shell: bash
         run: |
           set -Eeuo pipefail
           if [[ -z "${FACTORY_STATE_DSN_FILE:-}" ]]; then
-            echo "::warning::Factory Neon unavailable; expired cache cleanup deferred"
+            echo "::warning::Factory Neon unavailable; bounded retention deferred"
             exit 0
           fi
-          python3 .github/scripts/factory_state_cache.py prune-expired
+          python3 .github/scripts/factory_state_cache.py prune-obsolete
 
       - name: Install Neon-first GitHub read shim
         shell: bash
@@ -79,6 +90,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PYTHONPATH: .github/scripts
+          # The dashboard asks for the same inventory during demand and
+          # rendering. Share it within this trusted job, not in Neon.
+          FACTORY_DISCOVERY_DIR: ${{ runner.temp }}/factory-discovery
           OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
           OMNIROUTE_MANAGEMENT_API_KEY: ${{ secrets.OMNIROUTE_MANAGEMENT_API_KEY }}
           OMNIROUTE_BASE_URL: ${{ vars.OMNIROUTE_BASE_URL }}
@@ -98,20 +112,34 @@ jobs:
               -f "sha=${main_sha}" >/dev/null
           fi
 
-          existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/index.html?ref=${branch}" \
-            --jq '.sha' 2>/dev/null || true)"
-          content="$(base64 -w0 site/index.html)"
-          args=(
-            --method PUT
-            "repos/${GITHUB_REPOSITORY}/contents/index.html"
-            -f "branch=${branch}"
-            -f 'message=chore: refresh factory dashboard'
-            -f "content=${content}"
-          )
-          if [[ -n "$existing_sha" ]]; then
-            args+=(-f "sha=${existing_sha}")
-          fi
-          gh api "${args[@]}" --jq '.commit.sha'
+          # Large dashboard pages cannot fit in one Linux command argument.
+          # Build the GitHub Contents API request as a file and stream it to gh.
+          publish_snapshot() {
+            local filepath="$1" destination="$2" message="$3" existing_sha="$4"
+            local payload_file
+            payload_file="$(mktemp "$RUNNER_TEMP/factory-status-payload.XXXXXX")"
+            python3 - "$filepath" "$branch" "$message" "$existing_sha" "$payload_file" <<'PY'
+          import base64
+          import json
+          import sys
+          from pathlib import Path
+
+          source, branch, message, sha, destination = sys.argv[1:]
+          request = {
+              "branch": branch,
+              "message": message,
+              "content": base64.b64encode(Path(source).read_bytes()).decode("ascii"),
+          }
+          if sha:
+              request["sha"] = sha
+          Path(destination).write_text(json.dumps(request, separators=(",", ":")))
+          PY
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${destination}" --input "$payload_file" --jq '.commit.sha'
+            rm -f "$payload_file"
+          }
+
+          existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/index.html?ref=${branch}" --jq '.sha' 2>/dev/null || true)"
+          publish_snapshot site/index.html index.html 'chore: refresh factory dashboard' "$existing_sha"
 
           # Public normalized counts keyed by immutable merged SHA, never logs
           # or credentials. Update only when attribution changed.
@@ -119,11 +147,7 @@ jobs:
             cache_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/funnel-cache.json?ref=${branch}" --jq '.sha' 2>/dev/null || true)"
             local_sha="$(git hash-object site/funnel-cache.json)"
             if [[ "$cache_sha" != "$local_sha" ]]; then
-              cache_args=(--method PUT "repos/${GITHUB_REPOSITORY}/contents/funnel-cache.json"
-                -f "branch=${branch}" -f 'message=chore: cache merged factory attribution'
-                -f "content=$(base64 -w0 site/funnel-cache.json)")
-              if [[ -n "$cache_sha" ]]; then cache_args+=(-f "sha=${cache_sha}"); fi
-              gh api "${cache_args[@]}" --jq '.commit.sha'
+              publish_snapshot site/funnel-cache.json funnel-cache.json 'chore: cache merged factory attribution' "$cache_sha"
             fi
           fi
 
@@ -223,7 +247,7 @@ jobs:
           marker='Can the fleet move work, and which factories are actually useful?'
           loader='factory-status-live/index.html'
 
-          for attempt in {1..18}; do
+          for _ in {1..18}; do
             shell="$(curl --fail --silent --show-error --location \
               -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "$page_url" 2>/dev/null || true)"
             live="$(curl --fail --silent --show-error --location \

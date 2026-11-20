@@ -1,8 +1,7 @@
 {
   "family": "custom-cbl",
   "owned_path_patterns": [
-    "^/api/v1/custom\\-cbls(?:/.*)?$",
-    "^/api/v2/reading\\-lists(?:/.*)?$"
+    "^/api/v2/reading-lists(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -32,6 +31,16 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4684
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/reading-lists/memberships:check",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/memberships:check$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5435
     },
     {
       "bucket": "operations",
@@ -74,81 +83,99 @@
       "owning_issue": 4684
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/custom-cbls",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/custom\\-cbls$"
+      "path": "/api/v2/reading-lists/issue-candidates",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/issue-candidates$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}/export",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+/export$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/custom-cbls",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/custom\\-cbls$"
+      "path": "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+/reading-plans/[0-9]+/applications$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/custom-cbls/issue-search",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/custom\\-cbls/issue\\-search$"
+      "path": "/api/v2/reading-lists/{list_id}/overlap-decisions",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+/overlap-decisions$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844
     },
     {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/custom-cbls/{list_id}",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/custom\\-cbls/[^/]+$"
-    },
-    {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "PUT",
-      "path": "/api/v1/custom-cbls/{list_id}",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/custom\\-cbls/[^/]+$"
+      "path": "/api/v2/reading-lists/{list_id}/overlap-decisions",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+/overlap-decisions$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844
     },
     {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/custom-cbls/{list_id}/export",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/custom\\-cbls/[^/]+/export$"
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions$"
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "PUT",
-      "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions$"
-    },
-    {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "DELETE",
-      "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions/[^/]+$"
+      "path": "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+/overlap-decisions/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844
     },
     {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/custom-cbls/{list_id}/reader",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/custom\\-cbls/[^/]+/reader$"
-    },
-    {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/custom\\-cbls/[^/]+/reading\\-plans/[^/]+:apply$"
+      "path": "/api/v2/reading-lists/{list_id}/adoption-commits",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+/adoption-commits$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+/reading-plans/[0-9]+/adoption-commits$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
     }
   ]
 }

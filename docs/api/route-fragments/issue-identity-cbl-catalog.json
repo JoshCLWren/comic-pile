@@ -1,0 +1,38 @@
+{
+  "family": "issue-identity-cbl-catalog",
+  "owned_path_patterns": [
+    "^/api/v1/issue\\-identity/cbl\\-sources/browse$",
+    "^/api/v1/issue\\-identity/cbl\\-sources/folders$"
+  ],
+  "defaults": {
+    "runtime": "native-rust",
+    "status": "target",
+    "owning_issue": 4843,
+    "consumers": [
+      "frontend/src/services/api-cbl-sources.ts",
+      "frontend/src/services/api-reading-graph.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/browse",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/browse$",
+      "runtime": "native-rust",
+      "status": "target",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/folders",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/folders$",
+      "runtime": "native-rust",
+      "status": "target",
+      "exclude_from_inventory": true
+    }
+  ]
+}

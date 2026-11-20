@@ -67,7 +67,7 @@ def test_production_cold_start_over_budget_serves_requests_and_records_violation
     app = create_app(serve_frontend=False, defer_router_imports=True)
     try:
         with TestClient(app) as client:
-            assert client.get("/api/ping").status_code == 200
+            assert client.get("/health").status_code == 200
 
         assert get_performance_budget_manager().violation_counts_by_operation() == {
             "startup.readiness": 1
@@ -90,7 +90,7 @@ def test_old_worker_age_does_not_trigger_false_startup_violation(
     app = create_app(serve_frontend=False, defer_router_imports=True)
     try:
         with TestClient(app) as client:
-            response = client.get("/api/ping")
+            response = client.get("/health")
             assert response.status_code == 200
 
         assert get_performance_budget_manager().get_startup_violations() == []
@@ -112,7 +112,7 @@ def test_production_startup_inside_budget_records_no_violation(
     app = create_app(serve_frontend=False, defer_router_imports=True)
     try:
         with TestClient(app) as client:
-            assert client.get("/api/ping").status_code == 200
+            assert client.get("/health").status_code == 200
 
         assert get_performance_budget_manager().get_startup_violations() == []
     finally:

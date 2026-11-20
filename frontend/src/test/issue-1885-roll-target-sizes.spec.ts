@@ -87,7 +87,7 @@ async function authHeaders(page: Page): Promise<Record<string, string>> {
 }
 
 async function openRatingView(page: Page, threadId: number): Promise<void> {
-  const pending = await page.request.post(`/api/threads/${threadId}/set-pending`, {
+  const pending = await page.request.post(`/api/v1/threads/${threadId}/set-pending`, {
     headers: { Authorization: `Bearer ${await getAuthToken(page)}` },
   })
   expect(pending.ok(), `set-pending failed: ${pending.status()}`).toBeTruthy()
@@ -193,7 +193,7 @@ test.describe('Roll pointer target sizes (#1885)', () => {
       expect(data.issues.length).toBeGreaterThan(0)
       return data.issues[0]!.id
     }
-    const created = await page.request.post('/api/v1/dependencies/', {
+    const created = await page.request.post('/api/v2/dependencies/', {
       headers: await authHeaders(page),
       data: {
         source_type: 'issue',

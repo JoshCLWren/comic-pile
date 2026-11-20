@@ -105,7 +105,7 @@ def create_thread(token: str, title: str, issues_count: int, format: str = "Comi
         Thread ID
     """
     response = requests.post(
-        f"{API_BASE}/api/threads/",
+        f"{API_BASE}/api/v1/threads/",
         headers={"Authorization": f"Bearer {token}"},
         json={"title": title, "format": format, "issues_remaining": issues_count},
         timeout=REQUESTS_TIMEOUT,
@@ -124,7 +124,7 @@ def migrate_thread(token: str, thread_id: int, last_issue_read: int, total_issue
         total_issues: Total issues in the series
     """
     response = requests.post(
-        f"{API_BASE}/api/threads/{thread_id}:migrateToIssues",
+        f"{API_BASE}/api/v1/threads/{thread_id}:migrateToIssues",
         headers={"Authorization": f"Bearer {token}"},
         json={"last_issue_read": last_issue_read, "total_issues": total_issues},
         timeout=REQUESTS_TIMEOUT,
@@ -181,15 +181,27 @@ def mark_issue_read(token: str, thread_id: int, issue_number: str) -> bool:
 
     try:
         response = requests.post(
-            f"{API_BASE}/api/v1/issues/{issue_id}:markRead",
+            f"{API_BASE}/api/v2/issues/{issue_id}/read-markers",
             headers={"Authorization": f"Bearer {token}"},
             timeout=REQUESTS_TIMEOUT,
         )
         response.raise_for_status()
         return True
     except requests.HTTPError as e:
-        if e.response is not None and e.response.status_code == 409:
-            return False
+        response = e.response
+        if response is not None:
+            # The v2 read-marker route reports an already-read issue as 400 with a
+            # stable detail (the retired v1 :markRead route used 409). Both mean the
+            # issue is already read; every other error must still surface.
+            if response.status_code == 409:
+                return False
+            if response.status_code == 400:
+                try:
+                    detail = response.json().get("detail", "")
+                except ValueError:
+                    detail = ""
+                if "already marked as read" in str(detail):
+                    return False
         raise
 
 

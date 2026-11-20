@@ -1,0 +1,649 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ComicPile native same-path thread ordering API",
+    "description": "Generated contract for the native thread ordering and dependency-inspection handlers that retain their original method and path.",
+    "license": {
+      "name": ""
+    },
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/threads/{thread_id}/connected": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "summary": "Documentation-only operation for connected threads.",
+        "operationId": "thread_ordering_connected_threads",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Threads connected through dependencies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadConnectedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}/dependency-order-check": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "summary": "Documentation-only operation for the dependency order check.",
+        "operationId": "thread_ordering_dependency_order_check",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dependency edges that disagree with issue positions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadDependencyOrderCheckResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}/issues:validateOrder": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for issue order validation.",
+        "operationId": "thread_ordering_validate_order",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Human-readable ordering warnings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueOrderValidationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}/reading-orders": {
+      "get": {
+        "tags": [
+          "reading-orders"
+        ],
+        "summary": "Documentation-only operation for reading orders containing a thread.",
+        "operationId": "thread_ordering_reading_orders",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned reading orders containing the thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}:getBlockingInfo": {
+      "post": {
+        "tags": [
+          "dependencies"
+        ],
+        "summary": "Documentation-only operation for the single-thread blocking explanation.",
+        "operationId": "thread_ordering_get_blocking_info",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Blocked status and reasons",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockingExplanation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/threads:getBlockingInfo": {
+      "post": {
+        "tags": [
+          "dependencies"
+        ],
+        "summary": "Documentation-only operation for the batch blocking explanation.",
+        "operationId": "thread_ordering_get_threads_blocking_info",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchBlockingExplanationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Blocking explanations keyed by thread id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchBlockingExplanationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "One or more threads not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BatchBlockingExplanationRequest": {
+        "type": "object",
+        "description": "Python `BatchBlockingExplanationRequest` (documentation schema).",
+        "required": [
+          "thread_ids"
+        ],
+        "properties": {
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "maxItems": 500,
+            "minItems": 1
+          }
+        }
+      },
+      "BatchBlockingExplanationResponse": {
+        "type": "object",
+        "description": "Python `BatchBlockingExplanationResponse`.",
+        "required": [
+          "threads"
+        ],
+        "properties": {
+          "threads": {
+            "$ref": "#/components/schemas/OrderedExplanations"
+          }
+        }
+      },
+      "BlockingDependency": {
+        "type": "object",
+        "description": "One blocking issue (Python `BlockingDependency`).",
+        "required": [
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "label"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "BlockingExplanation": {
+        "type": "object",
+        "description": "Blocked status plus reader-language reasons (Python `BlockingExplanation`).",
+        "required": [
+          "is_blocked",
+          "blocking_reasons",
+          "blocking_dependencies"
+        ],
+        "properties": {
+          "blocking_dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlockingDependency"
+            }
+          },
+          "blocking_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "is_blocked": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ConnectedThreadInfo": {
+        "type": "object",
+        "description": "Python `ConnectedThreadInfo`.",
+        "required": [
+          "thread_id",
+          "title",
+          "connection_type",
+          "dependency_id",
+          "is_circular"
+        ],
+        "properties": {
+          "connection_type": {
+            "type": "string"
+          },
+          "dependency_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_circular": {
+            "type": "boolean"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "DependencyOrderConflict": {
+        "type": "object",
+        "description": "Python `DependencyOrderConflict`.",
+        "required": [
+          "issue_id",
+          "issue_number",
+          "position",
+          "dependency_requires_before",
+          "conflict"
+        ],
+        "properties": {
+          "conflict": {
+            "type": "string"
+          },
+          "dependency_requires_before": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyOrderRequirement"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "DependencyOrderRequirement": {
+        "type": "object",
+        "description": "Python `DependencyOrderRequirement`.",
+        "required": [
+          "issue_id",
+          "issue_number",
+          "position"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "IssueOrderValidationResponse": {
+        "type": "object",
+        "description": "Python `IssueOrderValidationResponse`.",
+        "required": [
+          "warnings"
+        ],
+        "properties": {
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "OrderedExplanations": {
+        "type": "object",
+        "description": "Ordered `thread_id -> explanation` object (Python `dict[int, ...]`).",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/BlockingExplanation"
+        },
+        "propertyNames": {
+          "type": "string"
+        }
+      },
+      "ReadingOrderItemResponse": {
+        "type": "object",
+        "description": "Python `ReadingOrderItemResponse`.",
+        "required": [
+          "thread_id",
+          "thread_title",
+          "position",
+          "is_read"
+        ],
+        "properties": {
+          "is_read": {
+            "type": "boolean"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadingOrderResponse": {
+        "type": "object",
+        "description": "Python `ReadingOrderResponse`.",
+        "required": [
+          "id",
+          "name",
+          "total_items",
+          "completed_items",
+          "items"
+        ],
+        "properties": {
+          "completed_items": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderItemResponse"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "total_items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ThreadConnectedResponse": {
+        "type": "object",
+        "description": "Python `ThreadConnectedResponse`.",
+        "required": [
+          "thread_id",
+          "connected_threads"
+        ],
+        "properties": {
+          "connected_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectedThreadInfo"
+            }
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadDependencyOrderCheckResponse": {
+        "type": "object",
+        "description": "Python `ThreadDependencyOrderCheckResponse`.",
+        "required": [
+          "thread_id",
+          "conflicts"
+        ],
+        "properties": {
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyOrderConflict"
+            }
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadReadingOrdersResponse": {
+        "type": "object",
+        "description": "Python `ThreadReadingOrdersResponse`.",
+        "required": [
+          "reading_orders"
+        ],
+        "properties": {
+          "reading_orders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderResponse"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

@@ -22,7 +22,7 @@ from app.models.event import Event
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.models.user import User
-from app.services.cbl_reconciliation import preview_cbl_adoption, reconcile_cbl_source_list
+from app.services.cbl_reconciliation import reconcile_cbl_source_list
 from app.services.comicvine_resolution import DuplicatePhysicalIssueError, import_comicvine_issue
 from app.services.issue_identity_reconciliation import (
     check_hydration_would_duplicate,
@@ -475,8 +475,7 @@ async def test_cbl_entries_without_matching_owned_issue_are_unresolved_not_dropp
 # boundary with 422 on oversize pages. The retained service layer exposes
 # the same pagination intent via ``list_duplicate_physical_issues`` and
 # ``list_conflicting_provider_identities``, and CBL reconciliation via
-# ``reconcile_cbl_source_list`` plus the retained adoption preview
-# (``preview_cbl_adoption``). These tests assert that intent at the
+# ``reconcile_cbl_source_list``. These tests assert that intent at the
 # service boundary instead of the removed HTTP routes.
 
 
@@ -536,58 +535,6 @@ async def test_conflicting_listing_respects_page_size_limit(async_db) -> None:
         assert "issue_number" in item
         assert "comicvine_ids" in item
         assert "distinct_identities" in item
-
-
-@pytest.mark.asyncio
-async def test_cbl_reconciliation_report_preserves_positions_and_adoption_preview(async_db) -> None:
-    """CBL reconciliation preserves ordered positions (was reconciliation HTTP).
-
-    The pruned HTTP reconciliation endpoint paginated ``entries`` with a
-    hard size cap. The retained service returns the full ordered report;
-    pagination is a caller-side slice over ``entries``. This also covers
-    the retained adoption-preview/plan service (``preview_cbl_adoption``)
-    which backs ``GET /cbl/{id}/adoption-preview`` and
-    ``POST /cbl/{id}/adoption-plan``.
-    """
-    fixture = await _make_ultimate_universe_fixture(async_db)
-    user = cast(User, fixture["user"])
-
-    source = CBLSource(repository="test/repo", revision_sha="abc123", synced_at=datetime.now(UTC))
-    async_db.add(source)
-    await async_db.flush()
-
-    cbl_list = CBLSourceList(
-        source_id=source.id,
-        source_path="test.cbl",
-        name="Test List",
-        declared_issue_count=50,
-        content_hash="abc",
-        revision_sha="abc123",
-        active=True,
-    )
-    async_db.add(cbl_list)
-    await async_db.flush()
-
-    for i in range(1, 51):
-        async_db.add(
-            CBLSourceEntry(list_id=cbl_list.id, position=i, series_name="Test Series", issue_number=str(i))
-        )
-    await async_db.flush()
-
-    report = await reconcile_cbl_source_list(async_db, user_id=user.id, list_id=cbl_list.id)
-    assert report.total_positions == 50
-    assert len(report.entries) == 50
-    # Positions stay ordered 1..50; caller-side pagination slices cleanly.
-    positions = [int(e["cbl_position"]) for e in report.entries]
-    assert positions == list(range(1, 51))
-    assert len(report.entries[:30]) == 30
-    assert len(report.entries[30:]) == 20
-
-    # Retained adoption preview/plan path (live HTTP surface).
-    adoption_report, plan = await preview_cbl_adoption(async_db, user_id=user.id, list_id=cbl_list.id)
-    assert adoption_report.total_positions == 50
-    assert len(plan.entries) == 50
-    assert plan.final_adopted_count == len(plan.final_adopted_order)
 
 
 @pytest.mark.asyncio

@@ -6,8 +6,9 @@ import os
 import resource
 import time
 from dataclasses import asdict
-from pathlib import Path
 from uuid import uuid4
+
+from route_harness import cargo_example_path
 
 import pytest
 from jose import jwt
@@ -17,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.models import Issue, Thread, User
 from app.repositories.reading_shadow_repository import load_shadow_inputs
 
-ROOT = Path(__file__).resolve().parents[3]
 SECRET = "synthetic-core-parity-secret"
 
 
@@ -114,7 +114,7 @@ async def test_core_scalar_parity() -> None:
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_TEST_TOKEN": token,
         }
-        binary = ROOT / "native/roll-service/target/debug/examples/reading_snapshot"
+        binary = cargo_example_path("reading_snapshot")
 
         async def run() -> tuple[int, bytes, bytes]:
             process = await asyncio.create_subprocess_exec(

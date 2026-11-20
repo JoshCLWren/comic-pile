@@ -4,6 +4,10 @@ run-name: Factory ${{ inputs.worker }} · fixed-model entry
 on:
   workflow_dispatch:
     inputs:
+      assignment:
+        description: Bounded dispatcher assignment with target, exact head and claim token
+        required: true
+        type: string
       worker:
         description: Active fixed-model Factory number from the roster
         required: true
@@ -17,53 +21,18 @@ permissions:
   checks: read
 
 jobs:
-  model_health_snapshot:
-    name: Read Neon model exclusions (trusted)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      exclusions: ${{ steps.export.outputs.exclusions }}
-      heartbeat_id: ${{ steps.export.outputs.heartbeat_id }}
-      attempt_id: ${{ steps.export.outputs.attempt_id }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: main
-          persist-credentials: false
-      - uses: ./.github/actions/factory-state-cache
-        with:
-          neon-api-key: ${{ secrets.NEON_API_KEY }}
-          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
-      - name: Export bounded model decision snapshot
-        id: export
-        shell: bash
-        env:
-          INPUT_WORKER: ${{ inputs.worker }}
-        run: |
-          set -Eeuo pipefail
-          [[ "$INPUT_WORKER" =~ ^[1-9][0-9]*$ ]] || exit 1
-          snapshot="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions --repo "$GITHUB_REPOSITORY" --worker "$INPUT_WORKER")"
-          jq -e 'type == "object"' <<< "$snapshot" >/dev/null
-          echo "exclusions=$snapshot" >> "$GITHUB_OUTPUT"
-          echo "heartbeat_id=$(jq -r '.__heartbeat_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
-          echo "attempt_id=$(jq -r '.__attempt_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
-
   run:
-    needs: model_health_snapshot
     uses: ./.github/workflows/free-model-factory-run.yml
     with:
       worker: ${{ inputs.worker }}
-      model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}
-      heartbeat_comment_id: ${{ needs.model_health_snapshot.outputs.heartbeat_id }}
-      attempt_comment_id: ${{ needs.model_health_snapshot.outputs.attempt_id }}
+      assignment: ${{ inputs.assignment }}
     secrets: inherit
 
   # The preceding job owns the entire worker lease and its release. A
   # completion wakeup is therefore a signal only, never an assignment.
   signal_completion:
-    name: Wake completion drain after worker exits
-    needs: run
+    name: Wake completion drain after trusted outcome persistence
+    needs: [run, persist_outcome]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -79,7 +48,7 @@ jobs:
           # reliably delivered. Explicit workflow_dispatch is supported and
           # the drain's concurrency group coalesces bursts of completions.
           gh workflow run factory-completion-drain.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main
+            --repo "$GITHUB_REPOSITORY" --ref main -f source_run_id="$GITHUB_RUN_ID"
 
   # Persist the terminal outcome in this trusted, *separate* runner after the
   # model execution job exits. The capacity drain can remain blocked behind
@@ -87,7 +56,7 @@ jobs:
   # The reusable model job does not receive Neon secrets.
   persist_outcome:
     name: Persist trusted worker outcome in Neon
-    needs: [run, model_health_snapshot]
+    needs: run
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -100,6 +69,15 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Configure restricted Neon factory event ledger
         uses: ./.github/actions/factory-state-cache
@@ -112,7 +90,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_WORKER: ${{ inputs.worker }}
-          ATTEMPT_COMMENT_ID: ${{ needs.model_health_snapshot.outputs.attempt_id }}
         run: |
           set -Eeuo pipefail
           # Retry only transient GitHub responses. Every retry overwrites its
@@ -148,7 +125,7 @@ jobs:
           # Write ANSI-colored logs to a local file, never to a terminal.
           retry_gh_api "$RUNNER_TEMP/factory-entry.log" --allow-escape-sequences \
             "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs"
-          python3 .github/scripts/classify-fixed-model-run.py \
+          python3 .github/scripts/factory_dynamic_outcome.py \
             --log "$RUNNER_TEMP/factory-entry.log" \
             > "$RUNNER_TEMP/worker-outcome.json"
           # Code handoff is distinct from agent exit. Only potential successful
@@ -167,7 +144,7 @@ jobs:
               exit 1
             }
           fi
-          # Authoritative remote-ref/PR enrichment distinguishes saved recovery
+          # Authoritative remote-ref/PR enrichment distinguishes persisted work
           # from validated PR delivery. Never convert a failing worker into success.
           checkpoint_args=(--repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID"
             --cleanup --outcome "$RUNNER_TEMP/worker-outcome.json")
@@ -175,7 +152,7 @@ jobs:
             checkpoint_args+=(--delivered-pr "$delivery_pr")
           fi
           python3 .github/scripts/factory_checkpoint_handoff.py "${checkpoint_args[@]}" || {
-            echo "::warning::Recovery publication failed; independent checkpoint reconciliation will retry"
+            echo "::warning::Work PR publication failed; independent checkpoint reconciliation will retry"
           }
           # Worker identity comes from the trusted dispatch input, *not* from
           # any untrusted text in a model-generated log.
@@ -218,7 +195,7 @@ jobs:
           else
             verdict="failed"
             if [[ "$saved" == true ]]; then
-              message="Code saved to recovery; PR delivery incomplete; worker failed: $classification (recovery PR: ${recovery_pr:-publication pending})"
+              message="Code saved on the work PR; validation incomplete; worker failed: $classification (work PR: ${recovery_pr:-publication pending})"
             else
               message="No verified saved code or PR delivery; worker failed: $classification"
             fi
@@ -228,30 +205,44 @@ jobs:
             echo
             echo "$message"
             echo
+            # Markdown backticks in this printf format are intentional.
+            # shellcheck disable=SC2016
             printf 'Neon terminal classification: `%s`\n' "$classification"
-            printf 'Checkpoint saved: `%s`; recovery PR: `%s`; checkpoint validated: `false`\n' "$saved" "${recovery_pr:-none}"
+            # Markdown backticks in this printf format are intentional.
+            # shellcheck disable=SC2016
+            printf 'Checkpoint saved: `%s`; work PR: `%s`; checkpoint validated: `false`\n' "$saved" "${recovery_pr:-none}"
           } >> "$GITHUB_STEP_SUMMARY"
-          # Publish the same final verdict to the existing registry marker.
-          # Use Neon-discovered ID, never re-page all historical comments.
-          marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${INPUT_WORKER} -->"
-          if [[ "${ATTEMPT_COMMENT_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
-            existing="$(gh api "repos/$GITHUB_REPOSITORY/issues/comments/$ATTEMPT_COMMENT_ID" --jq .body 2>/dev/null || true)"
-            if [[ "$existing" == *"$marker"* ]]; then
-              existing_run="$(sed -n 's/^Run: //p' <<< "$existing" | tail -1)"
-              existing_run="${existing_run##*/}"
-              if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > GITHUB_RUN_ID )); then
-                echo "[factory-outcome] preserved newer attempt marker from run $existing_run"
-              else
-                stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-                body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nOutcome: %s\nAgent outcome: %s\nAttempt outcome: %s\nVerified delivery: %s\nDelivered PR: %s\nUpdated: %s\nRun: %s' \
-                  "$marker" "$INPUT_WORKER" "$verdict" "$classification" "$classification" "$delivered" "${pr:-none}" "$stamp" "$GITHUB_RUN_ID")"
-                gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ATTEMPT_COMMENT_ID" \
-                  -f body="$body" >/dev/null || echo "::warning::Registry status update failed; Neon remains authoritative"
-              fi
-            fi
-          fi
           echo "[factory-outcome] $verdict: $message"
           if [[ "$verdict" == failed ]]; then
             echo "::error::$message"
             exit 1
           fi
+
+      # Deferred reconciliation: a persister that hit the installation rate
+      # limit (runs 44031401652, 44032359658) left no Neon outcome. Each later
+      # Entry persister backfills a bounded number of earlier misses with the
+      # same classifier. Never blocks or changes this run's own verdict.
+      - name: Reconcile earlier Entry outcomes missing from Neon
+        if: ${{ always() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory_outcome_reconcile.py \
+            --repo "$GITHUB_REPOSITORY" --hours 12 --limit 3 \
+            --exclude-run "$GITHUB_RUN_ID"
+
+      # The signed-in Actions run, not Neon, owns this durable handoff record.
+      # A failed agent remains failed; this artifact never upgrades the verdict.
+      - name: Preserve attested worker outcome artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: factory-worker-outcome-${{ github.run_id }}
+          path: ${{ runner.temp }}/worker-outcome-attested.json
+          if-no-files-found: warn
+          retention-days: 30
+

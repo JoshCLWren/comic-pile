@@ -11,6 +11,7 @@ import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { issuesApi } from '../services/api-issues'
+import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import { tagsApi } from '../services/api-tags'
 
 const navigateSpy = vi.fn()
@@ -165,6 +166,55 @@ it('does not fetch issues before the Issues section expands', async () => {
   expect(mockedIssuesApiList).not.toHaveBeenCalled()
   expect(screen.getByText('Issues (10)')).toBeInTheDocument()
   expect(screen.getByText(/Next up: #3/)).toBeInTheDocument()
+})
+
+it('loads the next issue cover before expansion and shares its card batch with ISSUES', async () => {
+  const cover = 'https://comicvine.example/saga-3.jpg'
+  const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockImplementation(async (ids) =>
+    ids.map((id): IssueCard => ({
+      issue_id: id, thread_id: 1, thread_title: 'Saga',
+      issue_number: id === 401 ? '3' : '4', status: 'unread',
+      rating: null, mapping_state: 'confirmed',
+      has_confirmed_identity: true,
+      cover_image_url: id === 401 ? cover : 'https://comicvine.example/saga-4.jpg',
+    })),
+  )
+  // SAFETY: only the canonical next-issue fields used by the panel are needed.
+  vi.mocked(readingBoundariesApi.batch).mockResolvedValue({
+    threads: { 1: {
+      thread_id: 1, state: 'available', summary: 'Saga #3 is available next.',
+      blockers: [], next: { issue: {
+        issue_id: 401, thread_id: 1, thread_title: 'Saga',
+        issue_number: '3', label: 'Saga #3', volume_label: null,
+      } },
+    } },
+  } as never)
+  // SAFETY: this fixture supplies the thread fields rendered by the detail view.
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2,
+    queue_position: 1, status: 'active', total_issues: 4,
+    next_unread_issue_number: '3', notes: null,
+  } as never)
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 401, thread_id: 1, issue_number: '3', status: 'unread', read_at: null, created_at: 'now' },
+      { id: 402, thread_id: 1, issue_number: '4', status: 'unread', read_at: null, created_at: 'now' },
+    ],
+    next_page_token: null, total_count: 2, page_size: 100,
+  })
+  renderPage()
+
+  const nextCover = await screen.findByRole('img', { name: 'Cover for Saga #3' })
+  expect(nextCover).toHaveAttribute('src', cover)
+  expect(fetchCards).toHaveBeenCalledWith([401])
+  expect(mockedIssuesApiList).not.toHaveBeenCalled()
+
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(fetchCards).toHaveBeenCalledWith([401, 402]))
+  expect(screen.getAllByRole('img', { name: 'Cover for Saga #3' })).toHaveLength(2)
+  // One batch for the visible row IDs, never one query per issue.
+  expect(fetchCards).toHaveBeenCalledTimes(2)
+  fetchCards.mockRestore()
 })
 
 it('fetches one bounded page when the Issues section expands', async () => {

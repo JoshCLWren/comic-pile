@@ -49,11 +49,35 @@ jobs:
             exit 1
           fi
 
+      - name: Checkout trusted factory App metadata resolver
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}
+          ref: main
+          path: factory-control
+          persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          path: factory-control/.rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash factory-control/.rotisserie/runtime/factory/install/overlay.sh factory-control
+
+      - name: Resolve observability App client ID
+        id: app_identity
+        env:
+          FACTORY_APP_ID: ${{ secrets.FACTORY_OBSERVABILITY_APP_ID }}
+          FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_OBSERVABILITY_APP_PRIVATE_KEY }}
+        run: python3 factory-control/.github/scripts/factory_app_client_id.py
+
       - name: Mint private artifact reader token
         uses: actions/create-github-app-token@v3
         id: reader
         with:
-          app-id: ${{ secrets.FACTORY_OBSERVABILITY_APP_ID }}
+          client-id: ${{ steps.app_identity.outputs.client_id }}
           private-key: ${{ secrets.FACTORY_OBSERVABILITY_APP_PRIVATE_KEY }}
           owner: JoshCLWren
           repositories: comic-pile
@@ -63,7 +87,7 @@ jobs:
         uses: actions/create-github-app-token@v3
         id: writer
         with:
-          app-id: ${{ secrets.FACTORY_OBSERVABILITY_APP_ID }}
+          client-id: ${{ steps.app_identity.outputs.client_id }}
           private-key: ${{ secrets.FACTORY_OBSERVABILITY_APP_PRIVATE_KEY }}
           owner: JoshCLWren
           repositories: JoshCLWren.github.io

@@ -141,7 +141,15 @@ fn claims(token: &str, secret: &[u8]) -> Result<AccessClaims, ApiError> {
     validation.validate_exp = false;
     validation.validate_nbf = false;
     validation.validate_aud = false;
-    let payload = decode::<Value>(token, &DecodingKey::from_secret(secret), &validation)
+    validation.leeway = 0;
+    let key = DecodingKey::from_secret(secret).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        invalid()
+    })?;
+    let payload = decode::<Value>(token, &key, &validation)
         .map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
@@ -269,7 +277,7 @@ mod tests {
     #[test]
     fn reject_wrong_algorithm_wrong_signature_and_unsigned_credentials() {
         let payload = json!({"sub":"reader", "jti":"test-jti", "type":"access"});
-        let key = EncodingKey::from_secret(b"synthetic-test-key");
+        let key = EncodingKey::from_secret(b"synthetic-test-key").unwrap();
         let hs256 = encode(&Header::new(Algorithm::HS256), &payload, &key).unwrap();
         assert!(claims(&hs256, b"synthetic-test-key").is_ok());
         let wrong_key = claims(&hs256, b"other-key").err().unwrap();

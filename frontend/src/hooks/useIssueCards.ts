@@ -14,7 +14,7 @@ import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
  * @param options.enabled - Disable the query when no rows are rendered.
  * @returns The issue-card query result for the visible ids.
  */
-export function useIssueCards(issueIds: number[], options?: { enabled?: boolean }) {
+export function useIssueCards(issueIds: number[], options?: { enabled?: boolean; refetchOnWindowFocus?: boolean | 'always' }) {
   const normalized = useMemo(
     () => [...new Set(issueIds)].filter((id) => Number.isInteger(id) && id > 0).sort((a, b) => a - b),
     [issueIds],
@@ -24,6 +24,8 @@ export function useIssueCards(issueIds: number[], options?: { enabled?: boolean 
     queryFn: () => issueCardsApi.fetchCards(normalized),
     enabled: (options?.enabled ?? true) && normalized.length > 0,
     staleTime: 30_000,
+    // Default false matches the client default; plan detail opts in (#5486).
+    refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
     // Preserve cached cards for matching canonical ids while an expanded batch loads.
     // Consumers index by issue_id, so old rows cannot masquerade as new issues.
     placeholderData: (previousCards) =>

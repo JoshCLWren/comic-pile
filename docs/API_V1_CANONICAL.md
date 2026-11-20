@@ -48,21 +48,26 @@ snooze and rolls the replacement in one transaction; unsnooze is client-only (th
 Two categories of bare `/api/<segment>` routes are retained deliberately and must remain
 on the explicit allowlist:
 
-1. **Compatibility aliases** — the families above that also keep a legacy
-   `/api/<family>` path (`auth`, `queue`, `rate`, `roll`, `sessions`,
-   `threads`, `undo`). These are tested backwards-compatibility surfaces; maintained
-   first-party consumers should prefer the `/api/v1` equivalent.
-2. **Tooling-only surfaces** — administrative and non-production routes that are never
-   versioned client resources: `admin`, `bug-reports`, and `debug` (the latter mounted
-   only outside production).
+1. **Compatibility aliases** — Roll retains its two Python unversioned
+   handlers while its live migration is in progress. Rust separately publishes
+   auth compatibility paths at `/api/auth/*` and `/api/v1/auth/*`; the product
+   auth client uses `/api/v2/auth/*`. The 16 Python unversioned `threads`,
+   `sessions`, and `undo` operations are retired following a caller audit;
+   their existing versioned contracts remain. Native `GET /api/threads/{thread_id}`,
+   `GET /api/sessions/{session_id}`, and
+   `GET /api/sessions/{session_id}/snapshots` remain compatibility routes.
+2. **Infrastructure surfaces** — bounded health, ping and metrics routes remain
+   available. Retired admin, debug and bug-report aliases are not exceptions.
 
 Any other bare `/api` route is a regression and fails the contract test.
 
 ## Collections
 
 Collections were removed. The OpenAPI document contains no supported Collections route,
-schema, or operation. The distinct `/api/v1/collection-exclusions` API protects durable
-reader exclusions under Option E; it does not restore the retired Collections domain. References to a *retired* `collection_id` query parameter in legacy
+schema, or operation. Durable reader exclusions under Option E remain in storage, but the
+distinct `/api/v1/collection-exclusions` HTTP API was retired with the Python API (Part of
+#5431); it neither exists as a supported operation nor restores the retired Collections
+domain. References to a *retired* `collection_id` query parameter in legacy
 operation descriptions are documentation of removed behavior, not supported surface.
 
 ## Verification
@@ -75,5 +80,5 @@ pytest tests/test_api_v1_canonical_contract.py
 
 It asserts: no duplicate `operationId`s, no supported Collections surface, every canonical
 family above has an `/api/v1` route, and every bare `/api` alias is on the allowlist.
-Regenerate the schema with `python scripts/generate_openapi_types.py` after any routing
+Regenerate the schema with `node scripts/generate_openapi_types.mjs` after any routing
 change.

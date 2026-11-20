@@ -6,10 +6,6 @@
       "max_dispatches_per_utc_day": 1,
       "account_limits": "50 requests/day, 10 requests/minute per account; unpublished per-request prompt-size cap on free tier"
     },
-    "requesty": {
-      "max_dispatches_per_utc_day": 4,
-      "account_limits": "200 requests/day, 20 requests/minute per account"
-    },
     "gemini-free": {
       "max_dispatches_per_utc_day": 2,
       "account_limits": "Model/project-specific free requests/tokens per day; free-tier project required, never assume paid project is free"

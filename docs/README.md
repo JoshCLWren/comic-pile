@@ -25,9 +25,9 @@ What’s New is backed by the release API and Neon release ledger. A dedicated p
 - [SEO launch runbook](operations/SEO_LAUNCH_RUNBOOK.md): operator steps for Search Console ownership, sitemap submission, index inspection, baseline metrics, and legitimate off-site discovery.
 - [Agent engineering rules](../AGENTS.md): mandatory repository conventions for coding agents.
 - [Manual QA behavior inventory](manual-qa/README.md): agent-friendly workflows and expected outcomes for manual product QA.
-- [Autonomous factory policy](AUTONOMOUS_FACTORY_POLICY.md): canonical autonomous delivery lifecycle and merge policy.
+- [Autonomous factory policy](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md): canonical autonomous delivery lifecycle and merge policy.
 - [Issue execution protocol](ISSUE_EXECUTION_PROTOCOL.md): issue ownership, implementation, validation, and closure procedure.
-- [Factory GitHub visibility](FACTORY_GITHUB_VISIBILITY.md): canonical factory labels and GitHub visibility rules.
+- [Factory GitHub visibility](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/FACTORY_GITHUB_VISIBILITY.md): canonical factory labels and GitHub visibility rules.
 - [Historical changelog](changelog.md): frozen pre-release-ledger source retained for provenance and auditability.
 - [Release writer](RELEASE_WRITER.md): post-merge publication and reconciliation contract for the database release ledger.
 - [API documentation](API.md): REST API contracts and examples.
@@ -45,9 +45,9 @@ The migration replaces several competing or obsolete entry points with one repos
 | Before | After | Ownership |
 | --- | --- | --- |
 | Large root `README.md` mixed project setup with long-form guidance | Concise `README.md` links into this hub | Repository |
-| `docs/INDEX.md` duplicated documentation navigation | `docs/README.md` is the single repository documentation index | Repository |
+| `docs/INDEX.md` duplicated documentation navigation | `docs/README.md` is the single repository documentation index | Repository | <!-- docs-path-check: ignore -->
 | `ROLLBACK.md` and `TECH_DEBT.md` presented stale historical guidance as active documentation | Useful history remains in Git history; current procedures live in canonical runbooks or the Wiki | Git history / Wiki |
-| `docs/railway-load-testing.md` and `docs/performance-experiment-reconnaissance.md` described retired deployment experiments | Current production truth is Vercel + Neon; historical context belongs in the Wiki | Repository contracts / Wiki |
+| `docs/railway-load-testing.md` and `docs/performance-experiment-reconnaissance.md` described retired deployment experiments | Current production truth is Vercel + Neon; historical context belongs in the Wiki | Repository contracts / Wiki | <!-- docs-path-check: ignore -->
 | Markdown files had no exhaustive ownership record | Documentation CI renders the exhaustive Markdown inventory on demand without committing shared generated state | CI artifact |
 | Human-facing architecture and troubleshooting material competed with code-coupled contracts | `docs/WIKI_HANDOFF.md` defines the structured Wiki and links code-coupled topics back here | Wiki / Repository |
 
@@ -55,8 +55,8 @@ The inventory generator remains available for audits through the Documentation w
 
 ## Documentation maintenance
 
-`scripts/check_markdown_docs.py` is the repository-side guard for local Markdown links and undocumented root-level Markdown sprawl. `scripts/generate_markdown_inventory.py` provides the exhaustive file-by-file audit when needed, while CI keeps its output artifact-only so documentation validation cannot create a repository-wide coordination bottleneck.
+`node scripts/check_doc_code_paths.mjs` fails the required CI Summary when current docs cite a code path in backticks that no longer exists (offline, no network). Mark intentionally historical material with `<!-- docs-path-check: ignore -->` on the line or `<!-- docs-path-check: historical -->` in the file; `docs/issue-plans/` and changelogs are exempt. `scripts/check_markdown_docs.py` is the repository-side guard for local Markdown links and undocumented root-level Markdown sprawl. `scripts/generate_markdown_inventory.py` provides the exhaustive file-by-file audit when needed, while CI keeps its output artifact-only so documentation validation cannot create a repository-wide coordination bottleneck.
 
-Do not commit `docs/MARKDOWN_INVENTORY.md`; generate the inventory locally or download the Documentation workflow artifact when an audit requires it.
+Do not commit `docs/MARKDOWN_INVENTORY.md`; generate the inventory locally or download the Documentation workflow artifact when an audit requires it. <!-- docs-path-check: ignore -->
 
 Historical implementation notes and explorations should live in the Wiki or Git history, not beside current operational instructions.

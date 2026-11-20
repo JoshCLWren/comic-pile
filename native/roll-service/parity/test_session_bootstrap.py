@@ -4,8 +4,9 @@ import asyncio
 import json
 import os
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from unittest.mock import patch
+
+from route_harness import cargo_example_path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -20,9 +21,6 @@ from comic_pile.reading_session import get_current_die_for_session, get_or_creat
 
 NOW = datetime(2026, 10, 29, 8, 0, tzinfo=UTC)
 SECRET = "synthetic-session-parity"
-ROOT = Path(__file__).resolve().parents[3]
-
-
 class Clock(datetime):
     """Freeze application clock without modifying PostgreSQL or wall-clock time."""
 
@@ -135,7 +133,7 @@ async def test_session_bootstrap_parity(scenario):
 
         async def native(**extra):
             p = await asyncio.create_subprocess_exec(
-                str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
+                str(cargo_example_path("session_bootstrap")),
                 env={**env, **extra}, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             try:
                 out, err = await asyncio.wait_for(p.communicate(), 20)
@@ -327,7 +325,7 @@ async def test_initialize_cancellation_rolls_back_new_session_and_checkpoint():
                 {"id": thread_id},
             )
             process = await asyncio.create_subprocess_exec(
-                str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
+                str(cargo_example_path("session_bootstrap")),
                 env=environment,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
@@ -446,7 +444,7 @@ async def test_corrupt_session_json_recovers_in_place_and_keeps_pending_roll():
 
         async def native():
             p = await asyncio.create_subprocess_exec(
-                str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
+                str(cargo_example_path("session_bootstrap")),
                 env=env,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -543,7 +541,7 @@ async def test_read_only_get_projects_foreign_pending_issue_without_persisting_r
 
         async def native(*, initialize=False):
             process = await asyncio.create_subprocess_exec(
-                str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
+                str(cargo_example_path("session_bootstrap")),
                 env={**env, **({"RUST_ROLL_TEST_INITIALIZE": "1"} if initialize else {})},
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

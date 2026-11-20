@@ -14,7 +14,7 @@ const pattern = config.builds.find(build => build.src === 'api/index.py').config
 const sources = [
   'api/index.py', 'app/main.py', 'comic_pile/reading_session.py',
   'Cargo.toml', 'Cargo.lock', 'build.rs', 'native/roll-service/Cargo.toml',
-  'native/roll-service/Cargo.lock', 'native/roll-service/src/lib.rs',
+  'native/roll-service/src/lib.rs',
 ];
 const artifacts = [
   'target/release/deps/native.rlib',

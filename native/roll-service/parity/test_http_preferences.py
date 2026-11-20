@@ -1,10 +1,10 @@
-"""Native same-path preferences and Taste Bank signals against PostgreSQL.
+"""Native preferences (v2) and same-path Taste Bank signals (v1) against PostgreSQL.
 
-The Rust handlers replace the Python handlers at the exact same
-method/path pairs (#4834):
+The Rust handlers serve preferences as a v2 resource and keep Taste Bank
+signals at the same v1 method/path pairs (#4834, Part of #4335):
 
-* ``GET /api/v1/users/me/preferences``
-* ``PATCH /api/v1/users/me/preferences``
+* ``GET /api/v2/users/me/preferences``
+* ``PATCH /api/v2/users/me/preferences``
 * ``GET /api/v1/users/me/taste-signals``
 * ``PUT /api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict``
 
@@ -24,8 +24,9 @@ import asyncio
 import json
 import os
 from datetime import UTC, datetime
-from pathlib import Path
 from uuid import uuid4
+
+from route_harness import cargo_example_path
 
 import pytest
 from jose import jwt
@@ -34,15 +35,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.models import TasteSignal, User
 
 SECRET = "synthetic-native-preferences-secret"
-# CI builds into native/roll-service/target; the managed local wrapper keeps
-# its own bounded target directory, so locate the built example without
-# changing how this test builds or runs anything.
-EXAMPLE = (
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_preferences"
-)
+EXAMPLE = cargo_example_path("http_preferences")
 
-PREFERENCES_URI = "/api/v1/users/me/preferences"
+PREFERENCES_URI = "/api/v2/users/me/preferences"
 SIGNALS_URI = "/api/v1/users/me/taste-signals"
 # The frontend `encodeURIComponent`s the external key, so the colon arrives
 # percent-encoded and the handler must decode it back to the stored key.

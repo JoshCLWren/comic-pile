@@ -14,7 +14,7 @@ on:
 permissions:
   contents: read
   actions: read
-  issues: write
+  issues: read
   pull-requests: read
 
 jobs:
@@ -23,6 +23,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - name: Test fixed-model runtime classifier
         run: python .github/scripts/classify-fixed-model-run.py --self-test
 
@@ -39,6 +48,15 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Read fixed-model job log
         id: runtime
@@ -87,66 +105,21 @@ jobs:
           neon-api-key: ${{ secrets.NEON_API_KEY }}
           neon-project-id: ${{ vars.NEON_PROJECT_ID }}
 
-      - name: Update durable attempt-outcome marker
+      - name: Summarize observed worker outcome
         if: steps.runtime.outputs.publish == 'true'
         shell: bash
-        env:
-          WORKER: ${{ steps.runtime.outputs.worker }}
         run: |
           set -Eeuo pipefail
+          # Visibility only. Issue #1093 is retired as a registry: the trusted
+          # job log and the Neon write below are the authoritative record.
           data="$RUNNER_TEMP/runtime-outcome.json"
-          # Attempt evidence has its own durable record. Runner liveness updates use
-          # factory-heartbeat:v1 and must never overwrite this classified result.
-          marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${WORKER} -->"
-          model="$(jq -r .model "$data")"
-          source="$(jq -r .source "$data")"
-          minute="$(jq -r .minute "$data")"
-          outcome="$(jq -r .outcome "$data")"
-          outcome_class="$(jq -r .outcome_class "$data")"
-          detail="$(jq -r .detail "$data")"
-          proven="$(jq -r 'if .exact_model_proven then "yes" else "no" end' "$data")"
-          persisted="$(jq -r 'if .persisted_work then "yes" else "no" end' "$data")"
-          delivery_state="$(jq -r '.delivery_outcome // "none"' "$data")"
-          delivery_pr="$(jq -r '.delivery_pr // empty' "$data")"
-          selected_kind="$(jq -r '.selected_kind // ""' "$data")"
-          selected_number="$(jq -r '.selected_number // ""' "$data")"
-          selected='none'
-          if [[ -n "$selected_kind" && -n "$selected_number" ]]; then
-            selected="${selected_kind} #${selected_number}"
-          fi
-          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nAgent outcome: %s\nAttempt outcome: %s\nExact model execution proven: %s\nSelected: %s\nPersisted work signal: %s\nVerified delivery: %s\nDelivered PR: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
-            "$marker" "$WORKER" "$model" "$source" "$minute" "$outcome" "$outcome_class" "$proven" "$selected" "$persisted" "$delivery_state" "${delivery_pr:-none}" "$detail" "$now" "$RUN_URL")"
           {
             echo "### Observed factory worker outcome"
             echo
-            echo "Agent: \`$outcome_class\`"
-            echo "Verified delivery: \`$delivery_state\`"
-            echo "PR: \`${delivery_pr:-none}\`"
+            echo "Agent: \`$(jq -r .outcome_class "$data")\`"
+            echo "Verified delivery: \`$(jq -r '.delivery_outcome // "none"' "$data")\`"
+            echo "PR: \`$(jq -r '.delivery_pr // "none"' "$data")\`"
           } >> "$GITHUB_STEP_SUMMARY"
-          # The shared snapshot usually has the worker's existing durable
-          # marker. Avoid paginating every historical comment on each completed
-          # worker run. A missing cached marker MUST be verified against live
-          # history before a new comment is created, preventing duplicates.
-          comment_id="$(python3 -c 'import json, sys; sys.path.insert(0, ".github/scripts"); from factory_completion_controller import registry_comments; print(json.dumps(registry_comments()))' \
-            | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
-          if [[ -z "$comment_id" ]]; then
-            echo "No cached attempt marker for Factory ${WORKER}; verifying live history before creating one"
-            comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-              | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
-          fi
-          existing_run=''
-          if [[ -n "$comment_id" ]]; then
-            existing_run="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" --jq '.body' \
-              | sed -n 's/^Run: //p' | tail -1)"
-          fi
-          if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > RUN_ID )); then
-            echo "Newer attempt evidence from run ${existing_run} already exists; preserving it"
-          elif [[ -n "$comment_id" ]]; then
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
-          else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
-          fi
 
       - name: Persist classified worker completion in Neon
         if: always() && steps.runtime.outputs.publish == 'true'
