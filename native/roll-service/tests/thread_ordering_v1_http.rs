@@ -1277,6 +1277,18 @@ async fn roll_rerolls_shrink_top_die_without_backfill_and_reset_restores_pool() 
     .await;
     assert_eq!(die_status, StatusCode::OK, "{die_body:?}");
 
+    // Bootstrap creates the active reading session and must show the original
+    // d20 window before any temporary snooze is applied.
+    let (bootstrap_status, bootstrap_body) =
+        send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
+    assert_eq!(bootstrap_status, StatusCode::OK, "{bootstrap_body:?}");
+    let initial_faces = bootstrap_body["rollable"].as_array().unwrap();
+    assert_eq!(initial_faces.len(), 20, "{bootstrap_body:?}");
+    assert!(initial_faces.iter().all(|face| {
+        let thread_id = face["thread"]["id"].as_i64().unwrap() as i32;
+        ids[..20].contains(&thread_id)
+    }));
+
     let initial = offer_value(&state, &token, &csrf, "no-backfill-offer-0", None).await;
     let mut pending = initial["thread_id"].as_i64().unwrap() as i32;
     assert!(ids[..20].contains(&pending), "{initial:?}");
