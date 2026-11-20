@@ -17,14 +17,16 @@
       "method": "GET",
       "path": "/api/v1/taste/discoveries",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/taste/discoveries$"
+      "src": "^/api/v1/taste/discoveries$",
+      "methods": ["GET", "OPTIONS"]
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$"
+      "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$",
+      "methods": ["POST", "OPTIONS"]
     }
   ]
 }
