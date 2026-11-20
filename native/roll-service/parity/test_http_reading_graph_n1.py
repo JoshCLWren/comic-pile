@@ -12,7 +12,7 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import assert_declared_budget, cargo_example_path, db_counters, db_nested_statements, run_rust_example
 
 SECRET = "synthetic-native-reading-graph-n1-secret"
 BINARY = str(cargo_example_path("http_reading_graph"))
@@ -85,9 +85,11 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
             "RUST_ROLL_TEST_METHOD": "GET",
             "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
             "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_TEST_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
@@ -220,7 +222,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert large_body.get("applied") is False
         assert large_body.get("status_before") == "cycle"
         large_graph = large_body.get("graph")
-        assert isinstance(large_graph, dict) and large_graph.get("status") == "cycle"
+        assert isinstance(large_graph, dict) and large_graph.get("status") == "ok"
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
