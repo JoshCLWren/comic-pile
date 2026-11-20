@@ -1409,7 +1409,7 @@ mod tests {
             panic!("expected a reader-authored cycle")
         };
         assert!(message.contains("Issue 10 --[Thread X-Force series order]--> Issue 11"));
-        assert!(message.contains("prerequisite 77 (reader)"));
+        assert!(message.contains("prerequisite 77 (reader)"), "{message}");
         assert_eq!(edges.len(), 2);
 
         // The same invariant holds through the canonical DB-loaded input path.
