@@ -76,5 +76,5 @@ echo "Running lint (scripts/lint.sh)..."
 bash scripts/lint.sh
 
 echo ""
-echo "Pre-push lint passed. Tests are not run on push; CI is the test gate."
+echo "Pre-push lint passed. Product tests (backend pytest, vitest, UI audit) run in CI; the hardcoded-ID guard still runs as part of lint."
 printf '%s\n' "$HEAD_SHA" > "$VERIFY_STAMP"
