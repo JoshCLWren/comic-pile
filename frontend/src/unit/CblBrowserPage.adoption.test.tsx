@@ -818,6 +818,66 @@ describe('CblBrowserPage adoption', () => {
         screen.getByRole('button', { name: 'Add this reading order' }),
       ).not.toBeDisabled()
     })
+    expect(screen.getByText('Need attention').nextElementSibling).toHaveTextContent('0')
+    expect(screen.queryByText(/still needs attention/)).not.toBeInTheDocument()
+  })
+
+  it('skips a collection entry whose identity needs review instead of offering a false Include choice', async () => {
+    const user = userEvent.setup()
+    const unresolvedEntry = entry({
+      cbl_position: 2,
+      cbl_entry_id: 102,
+      issue_number: '120',
+      series_name: 'X-Men (1963)',
+      adoption_class: 'existing',
+      adoption_decision: 'unresolved',
+      adopted: false,
+      resolved_issue_id: 12,
+      canonical_issue_id: 12,
+      resolution_status: 'resolved_via_comicvine_canonical',
+      is_duplicate_identity: true,
+      collection_excluded: true,
+      collection_exclusion_reason: 'collection_identity_requires_review',
+    })
+    const initialPreview = preview({
+      entries: [entry({}), unresolvedEntry],
+      summary: {
+        reused_existing_count: 1,
+        missing_would_create_count: 0,
+        excluded_count: 0,
+        unresolved_count: 1,
+        awaiting_opt_in_count: 0,
+        final_adopted_count: 1,
+        final_adopted_order: [1],
+        reused_existing_positions: [1],
+        missing_would_create_positions: [],
+        excluded_positions: [],
+        unresolved_positions: [2],
+        awaiting_opt_in_positions: [],
+      },
+    })
+    renderPage()
+    await searchFor(user)
+    await selectSource(user, initialPreview)
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+
+    await openChecklist(user)
+    await expandVolume(user, 'Ultimate Spider-Man')
+    expect(screen.queryByRole('checkbox', { name: 'Include X-Men (1963) #120' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Skip' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Need attention').nextElementSibling).toHaveTextContent('0')
+      expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeEnabled()
+    })
+    expect(screen.getByRole('button', { name: 'Unskip' })).toBeInTheDocument()
+    expect(mockPlan).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Unskip' }))
+    await waitFor(() => {
+      expect(screen.getByText('Need attention').nextElementSibling).toHaveTextContent('1')
+      expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+    })
   })
 
   it('excluding the series of an unresolved entry unblocks the add (#3542)', async () => {
