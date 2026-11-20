@@ -324,7 +324,6 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 
 @pytest.mark.asyncio
 async def test_budget_repair_confirmed() -> None:
