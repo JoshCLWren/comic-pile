@@ -143,6 +143,20 @@ fn invalid(message: impl Into<String>) -> ValidationError {
         message: message.into(),
     }
 }
+
+/// Only explicit `origin=reader` prerequisites carry execution authority.
+///
+/// Converted and legacy-generated rows stay in the database as audit data, but
+/// they must never enter the canonical evaluator or its cycle validator.
+fn authoritative_prerequisites(
+    snapshot: &Snapshot,
+) -> impl Iterator<Item = &Prerequisite> + '_ {
+    snapshot
+        .prerequisites
+        .iter()
+        .filter(|prerequisite| prerequisite.origin == "reader")
+}
+
 impl Snapshot {
     /// Preserve every owner-scoped constraint. Names default to stable numeric labels.
     pub fn from_inputs(inputs: &OptionInputs, names: &BTreeMap<i32, String>) -> Self {
