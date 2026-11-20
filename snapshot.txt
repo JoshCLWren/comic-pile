@@ -1,9 +1,9 @@
-utc: 2026-11-20T11:32:23Z
-uptime: 682.35s load: 0.10 0.16 0.10
+utc: 2026-11-20T11:32:40Z
+uptime: 698.73s load: 0.08 0.15 0.10
 processes: 162
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15982         983       12397          51        2966       14998
+Mem:           15982         993       12387          51        2966       14988
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
@@ -16,12 +16,12 @@ Filesystem      Size  Used Avail Use% Mounted on
 82396 dockerd
 55988 php-fpm8.5
 46024 containerd
-44788 ExtHandler
+44840 ExtHandler
 36940 Daemon
 30272 networkd-dispat
 21400 php-fpm8.5
 21400 php-fpm8.5
-18040 systemd-journal
+18048 systemd-journal
 16684 systemd
 15700 hosted-compute-
 15052 udisksd
@@ -36,4 +36,3 @@ Filesystem      Size  Used Avail Use% Mounted on
  0.0 containerd
 --- kernel oom/kill
 --- shutdown/session signals
-2026-11-20T11:21:17+00:00 runnervmccnms hosted-compute-agent[1968]: {"level":"INFO","ts":1795173677.1279464,"logger":"hosted-compute-agent","msg":"Reading metadata to detect shutdown tag..."}
