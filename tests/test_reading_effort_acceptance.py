@@ -17,6 +17,7 @@ verifies every acceptance criterion from issue #1705:
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from app.models import (
     Event,
@@ -31,6 +32,7 @@ from app.services.reading_effort import (
     MAX_VALID_READ_SECONDS,
     MIN_OBSERVED_SAMPLES,
     MIN_VALID_READ_SECONDS,
+    RECOMMENDATION_CONTEXT_VERSION,
     EstimateSource,
     ExclusionReason,
     aggregate_observations,
@@ -39,6 +41,7 @@ from app.services.reading_effort import (
     compute_effort_estimate,
 )
 
+from tests.roll_flow import roll_pending_thread
 
 pytestmark = pytest.mark.asyncio
 
@@ -235,7 +238,9 @@ async def test_sparse_issue_history_falls_back_to_thread_history(async_db):
     other_issue_b = await _add_issue(async_db, thread, 3)
     base = datetime.now(UTC) - timedelta(hours=12)
 
-    await _link_read(async_db, thread, minutes=20.0, rolled_at=base, issue=sparse_issue)
+    await _link_read(
+        async_db, thread, minutes=20.0, rolled_at=base, issue=sparse_issue
+    )
     await _link_read(
         async_db,
         thread,
@@ -310,3 +315,132 @@ async def test_observed_history_takes_precedence_over_era_prior(async_db):
     )
     assert estimate.source == EstimateSource.OBSERVED_THREAD
     assert estimate.minutes == pytest.approx(7.0)
+
+
+async def test_override_roll_records_decision_time_recommendation_context(
+    auth_client, async_db
+):
+    """Manual overrides also persist decision-time context without changing selection."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    thread = await _add_thread(async_db, user.id, "Override Candidate", queue_position=1)
+    override_response = await auth_client.post(
+        "/api/roll/override", json={"thread_id": thread.id}
+    )
+    assert override_response.status_code == 200
+
+    override_event_result = await async_db.execute(
+        select(Event)
+        .where(Event.type == "roll")
+        .where(Event.selection_method == "override")
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    override_event = override_event_result.scalar_one()
+    assert override_event.selected_thread_id == thread.id
+    context = override_event.recommendation_context
+    assert context is not None
+    candidate = context["selected_candidate"]
+    assert candidate["thread_id"] == thread.id
+    assert candidate["effort_source"] == EstimateSource.UNKNOWN.value
+    assert candidate["effort_minutes"] is None
+    assert candidate["effort_band"] == "unknown"
+
+
+async def test_roll_records_decision_time_recommendation_context(async_db):
+    """A roll persists the versioned estimate/source that existed at decision time."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    thread = await _add_thread(async_db, user.id, "Era Candidate")
+    await _confirm_series_metadata(async_db, thread, "2021-06-01")
+
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    body = roll_response
+    assert body["thread_id"] == thread.id
+
+    roll_event_result = await async_db.execute(
+        select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1)
+    )
+    roll_event = roll_event_result.scalar_one()
+    context = roll_event.recommendation_context
+    assert context is not None
+    assert context["context_version"] == RECOMMENDATION_CONTEXT_VERSION
+    candidate = context["selected_candidate"]
+    assert candidate["thread_id"] == thread.id
+    assert candidate["effort_source"] == EstimateSource.ERA_PRIOR.value
+    assert candidate["effort_minutes"] == pytest.approx(17.0)
+    assert candidate["effort_band"] == "balanced"
+    assert candidate["effort_confidence"] == pytest.approx(ERA_PRIOR_CONFIDENCE)
+    assert candidate["effort_sample_count"] == 0
+
+
+async def test_legacy_random_roll_selection_behavior_unchanged(async_db):
+    """Random rolls keep their legacy contract while context recording is added.
+
+    The recorded selection method follows the active control path, so the
+    plain legacy roll records the balanced momentum path (#3762).
+    """
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    pool_ids = set()
+    for index in range(1, 4):
+        thread = await _add_thread(async_db, user.id, f"Pool {index}", queue_position=index)
+        pool_ids.add(thread.id)
+    await _add_thread(async_db, user.id, "Completed", queue_position=9, status="completed")
+    await _add_thread(async_db, user.id, "Blocked", queue_position=10, is_blocked=True)
+
+    legacy_fields = {
+        "thread_id",
+        "title",
+        "format",
+        "issues_remaining",
+        "queue_position",
+        "die_size",
+        "result",
+        "offset",
+        "snoozed_count",
+        "explanation",
+        "issue_id",
+        "issue_number",
+        "next_issue_id",
+        "next_issue_number",
+        "total_issues",
+        "reading_progress",
+    }
+
+    for _ in range(3):
+        roll_response = (await roll_pending_thread(async_db)).model_dump()
+        body = roll_response
+        assert set(body) == legacy_fields
+        assert body["die_size"] == 6
+        assert body["thread_id"] in pool_ids
+        assert 1 <= body["result"] <= len(pool_ids)
+        assert body["offset"] == 0
+        assert body["snoozed_count"] == 0
+
+        event_result = await async_db.execute(
+            select(Event)
+            .where(Event.type == "roll")
+            .order_by(Event.id.desc())
+            .limit(1)
+        )
+        latest_roll = event_result.scalar_one()
+        assert latest_roll.selected_thread_id == body["thread_id"]
+        # The plain legacy roll runs the balanced control path, whose only
+        # active weighting factor is reading momentum. The recorded method
+        # names that control path; "random" now names only the documented
+        # random-intent bypass (#3762).
+        assert latest_roll.selection_method == "momentum"
+
+        from comic_pile.reading_session import get_or_create
+
+        session = await get_or_create(async_db, user_id=user.id, existing_user=user)
+        session.pending_thread_id = None
+        session.pending_thread_updated_at = None
+        await async_db.commit()

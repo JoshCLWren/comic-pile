@@ -1,51 +1,24 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   type RecoveryCandidate,
   type RecoveryStep,
 } from '../services/api-reading-plan-recovery'
 import { useReadingPlanRecoveryPreview, useRelinkReadingPlan } from '../hooks/useReadingPlans'
-import CompactIssueCardTrigger from './CompactIssueCardTrigger'
-import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
-import type { IssueCard } from '../services/issueCardsApi'
 
-function StepNames({ steps, cardsByIssue }: { steps: RecoveryStep[]; cardsByIssue: Map<number, IssueCard> }) {
+function StepNames({ steps }: { steps: RecoveryStep[] }) {
   return (
     <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-[var(--theme-text-muted)]">
-      {steps.map((step) => {
-        // Labels arrive as "Series #number"; split for a truthful identity hint
-        // instead of a bare "?" issue number.
-        const match = /^(?<title>.+) #(?<number>[^#]+)$/.exec(step.label)
-        const title = match?.groups?.title ?? step.label
-        const number = match?.groups?.number ?? '?'
-        return (
-          <li key={step.issue_id} className="flex flex-wrap items-center gap-2">
-            <span className="min-w-0">{step.label} <span className="text-xs">(issue ID {step.issue_id})</span></span>
-            <CompactIssueCardTrigger
-              issueId={step.issue_id}
-              threadTitle={title}
-              issueNumber={number}
-              card={cardsByIssue.get(step.issue_id) ?? null}
-              hideTitle
-            />
-          </li>
-        )
-      })}
+      {steps.map((step) => (
+        <li key={step.issue_id}>
+          {step.label} <span className="text-xs">(issue ID {step.issue_id})</span>
+        </li>
+      ))}
     </ul>
   )
 }
 
-function CandidateChanges({
-  candidate,
-  cardsByIssue,
-  showFullOrder,
-  onToggleFullOrder,
-}: {
-  candidate: RecoveryCandidate
-  cardsByIssue: Map<number, IssueCard>
-  showFullOrder: boolean
-  onToggleFullOrder: (open: boolean) => void
-}) {
+function CandidateChanges({ candidate }: { candidate: RecoveryCandidate }) {
   return (
     <div className="mt-3 space-y-3 text-sm" data-testid="plan-recovery-diff">
       <p className="font-semibold text-[var(--theme-text-primary)]">
@@ -54,13 +27,13 @@ function CandidateChanges({
       {candidate.added_steps.length > 0 && (
         <div>
           <p>Newly authoritative issues ({candidate.added_steps.length}):</p>
-          <StepNames steps={candidate.added_steps} cardsByIssue={cardsByIssue} />
+          <StepNames steps={candidate.added_steps} />
         </div>
       )}
       {candidate.removed_steps.length > 0 && (
         <div>
           <p>Saved Plan issues absent from this list ({candidate.removed_steps.length}):</p>
-          <StepNames steps={candidate.removed_steps} cardsByIssue={cardsByIssue} />
+          <StepNames steps={candidate.removed_steps} />
         </div>
       )}
       {candidate.order_changed && (
@@ -73,12 +46,9 @@ function CandidateChanges({
         !candidate.order_changed && (
           <p>The saved membership and order match this Reading List.</p>
         )}
-      <details
-        open={showFullOrder}
-        onToggle={(event) => onToggleFullOrder(event.currentTarget.open)}
-      >
+      <details>
         <summary className="cursor-pointer font-semibold">View the complete proposed reading order</summary>
-        <StepNames steps={candidate.steps} cardsByIssue={cardsByIssue} />
+        <StepNames steps={candidate.steps} />
       </details>
     </div>
   )
@@ -97,41 +67,8 @@ export function ReadingPlanRecovery({
 }) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [acknowledged, setAcknowledged] = useState(false)
-  const [showSavedRefs, setShowSavedRefs] = useState(false)
-  const [showFullOrder, setShowFullOrder] = useState(false)
   const recovery = useReadingPlanRecoveryPreview(planId)
   const apply = useRelinkReadingPlan(planId, onRecovered)
-
-  // One bounded batch for the sections the reader can actually see: the saved
-  // references only when that disclosure is open, and the chosen candidate's
-  // diff (plus its full order only when expanded). The server returns every
-  // owned list as a candidate, so batching all of them would fetch metadata
-  // for the whole collection just to open recovery. Hooks run before early
-  // returns so hook order stays stable.
-  const previewForCards = recovery.data
-  const stepIssueIds = useMemo(
-    () => {
-      if (!previewForCards) return []
-      const ids = new Set<number>()
-      if (showSavedRefs) {
-        for (const step of previewForCards.retained_steps) ids.add(step.issue_id)
-      }
-      const selectedCandidate = previewForCards.candidates.find(
-        (candidate) => candidate.list_id === selectedId,
-      )
-      if (selectedCandidate) {
-        for (const step of selectedCandidate.added_steps) ids.add(step.issue_id)
-        for (const step of selectedCandidate.removed_steps) ids.add(step.issue_id)
-        if (showFullOrder) {
-          for (const step of selectedCandidate.steps) ids.add(step.issue_id)
-        }
-      }
-      return [...ids]
-    },
-    [previewForCards, selectedId, showSavedRefs, showFullOrder],
-  )
-  const cardsQuery = useIssueCards(stepIssueIds, { enabled: stepIssueIds.length > 0 })
-  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
 
   if (recovery.isPending) return <p role="status">Checking Reading Plan references…</p>
   if (recovery.isError || !recovery.data) {
@@ -158,16 +95,13 @@ export function ReadingPlanRecovery({
         The saved Plan has {preview.retained_steps.length} surviving issue references.
         Creating another list with the same name does not restore its identity.
       </p>
-      <details
-        open={showSavedRefs}
-        onToggle={(event) => setShowSavedRefs(event.currentTarget.open)}
-      >
+      <details>
         <summary className="cursor-pointer font-semibold">Show saved Plan references</summary>
-        <StepNames steps={preview.retained_steps} cardsByIssue={cardsByIssue} />
+        <StepNames steps={preview.retained_steps} />
       </details>
       <p>
         Choose an existing Reading List as the new authority, or{' '}
-        <Link className="underline" to={`/continuity-plans/${planId}/edit?authoring=1`}>open the Plan authoring UI</Link>{' '}
+        <Link className="underline" to="/continuity-plans/new">open the Plan authoring UI</Link>{' '}
         with the issues and order you want. This does not recover deleted issues automatically.
       </p>
       <label className="block space-y-2">
@@ -191,12 +125,7 @@ export function ReadingPlanRecovery({
       </label>
       {selected && (
         <>
-          <CandidateChanges
-            candidate={selected}
-            cardsByIssue={cardsByIssue}
-            showFullOrder={showFullOrder}
-            onToggleFullOrder={setShowFullOrder}
-          />
+          <CandidateChanges candidate={selected} />
           <label className="flex items-start gap-3">
             <input
               type="checkbox"

@@ -55,7 +55,7 @@ test.describe('reading-mode quiz acceptance', () => {
     await expect(page.getByTestId('reading-mode-quiz')).toBeHidden()
 
     // Backend recorded the mode with source `quiz`.
-    const response = await page.request.get('/api/v2/reading-mode', {
+    const response = await page.request.get('/api/v1/reading-mode', {
       headers: { Accept: 'application/json' },
     })
     expect(response.ok()).toBe(true)
@@ -76,7 +76,7 @@ test.describe('reading-mode quiz acceptance', () => {
     const page = authenticatedPage
 
     // Seed a manual mode first via the API.
-    const seed = await page.request.put('/api/v2/reading-mode', {
+    const seed = await page.request.post('/api/v1/reading-mode', {
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       data: { bandwidth: 'light', intent: 'momentum', source: 'manual' },
     })
@@ -89,7 +89,7 @@ test.describe('reading-mode quiz acceptance', () => {
 
     // Modal closed without submitting; prior manual mode is unchanged.
     await expect(page.getByTestId('reading-mode-quiz')).toBeHidden()
-    const response = await page.request.get('/api/v2/reading-mode')
+    const response = await page.request.get('/api/v1/reading-mode')
     // SAFETY: the test reads only the bandwidth and source fields it asserts
     const body = (await response.json()) as { bandwidth: string; source: string }
     expect(body.bandwidth).toBe('light')

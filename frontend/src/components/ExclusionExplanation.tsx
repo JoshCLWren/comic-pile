@@ -1,7 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { CreatorMetricIssue } from '../types/index'
-import CompactIssueCardTrigger from './CompactIssueCardTrigger'
-import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 
 interface ExclusionExplanationProps {
   excludedIssues: CreatorMetricIssue[]
@@ -10,25 +8,6 @@ interface ExclusionExplanationProps {
 
 export function ExclusionExplanation({ excludedIssues, totalExcluded }: ExclusionExplanationProps) {
   const [showExcluded, setShowExcluded] = useState(false)
-  // Bounded batch for the rows the reader can actually see (five per reason);
-  // nothing fetches while the list stays collapsed. Hooks run before the early
-  // return so hook order never changes.
-  const visibleIssueIds = useMemo(
-    () => {
-      if (!showExcluded) return []
-      const byReason = new Map<string, CreatorMetricIssue[]>()
-      for (const issue of excludedIssues) {
-        const reason = issue.exclusion_reason || 'No specific reason'
-        const bucket = byReason.get(reason) ?? []
-        if (bucket.length < 5) bucket.push(issue)
-        byReason.set(reason, bucket)
-      }
-      return Array.from(byReason.values()).flat().map((issue) => issue.issue_id)
-    },
-    [excludedIssues, showExcluded],
-  )
-  const cardsQuery = useIssueCards(visibleIssueIds, { enabled: showExcluded })
-  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
 
   if (totalExcluded === 0) {
     return null
@@ -75,17 +54,8 @@ export function ExclusionExplanation({ excludedIssues, totalExcluded }: Exclusio
             {showExcluded && (
               <div className="space-y-1">
                 {issues.slice(0, 5).map((issue) => (
-                  <div key={issue.issue_id} className="flex items-center gap-2 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-                    <CompactIssueCardTrigger
-                      issueId={issue.issue_id}
-                      threadTitle={issue.thread_title}
-                      issueNumber={issue.issue_number}
-                      status={issue.status === 'read' ? 'read' : 'unread'}
-                      rating={issue.effective_rating}
-                      card={cardsByIssue.get(issue.issue_id) ?? null}
-                      hideTitle
-                    />
-                    <span className="min-w-0 truncate">• {issue.thread_title} #{issue.issue_number}</span>
+                  <div key={issue.issue_id} className="text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+                    • {issue.thread_title} #{issue.issue_number}
                   </div>
                 ))}
                 {issues.length > 5 && (

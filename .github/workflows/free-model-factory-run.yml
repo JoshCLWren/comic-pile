@@ -68,13 +68,6 @@ on:
         required: false
       FACTORY_WORKER_48_APP_PRIVATE_KEY:
         required: false
-      # Shared factory App. Every other worker posts readable handoffs through it.
-      ROTISSERIE_FACTORY_APP_ID:
-        required: false
-      ROTISSERIE_FACTORY_INSTALLATION_ID:
-        required: false
-      ROTISSERIE_FACTORY_APP_PRIVATE_KEY:
-        required: false
 
 permissions:
   contents: write
@@ -110,15 +103,6 @@ jobs:
         with:
           ref: main
           persist-credentials: false
-      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
-        uses: actions/checkout@v7
-        with:
-          repository: JoshCLWren/rotisserie
-          ref: f74f612d4e7a6dec65a9c17f76596c1eb567a19e
-          path: .rotisserie/runtime
-          persist-credentials: false
-      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
-        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - uses: ./.github/actions/factory-state-cache
         with:
           neon-api-key: ${{ secrets.NEON_API_KEY }}
@@ -175,9 +159,6 @@ jobs:
       FACTORY_WORKER_48_APP_ID: ${{ secrets.FACTORY_WORKER_48_APP_ID }}
       FACTORY_WORKER_48_INSTALLATION_ID: ${{ secrets.FACTORY_WORKER_48_INSTALLATION_ID }}
       FACTORY_WORKER_48_APP_PRIVATE_KEY: ${{ secrets.FACTORY_WORKER_48_APP_PRIVATE_KEY }}
-      ROTISSERIE_FACTORY_APP_ID: ${{ secrets.ROTISSERIE_FACTORY_APP_ID }}
-      ROTISSERIE_FACTORY_INSTALLATION_ID: ${{ secrets.ROTISSERIE_FACTORY_INSTALLATION_ID }}
-      ROTISSERIE_FACTORY_APP_PRIVATE_KEY: ${{ secrets.ROTISSERIE_FACTORY_APP_PRIVATE_KEY }}
       FACTORY_READER_APP_ID: ${{ secrets.FACTORY_READER_APP_ID }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -218,15 +199,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           token: ${{ secrets.PR_REBASE_TOKEN }}
-      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
-        uses: actions/checkout@v7
-        with:
-          repository: JoshCLWren/rotisserie
-          ref: f74f612d4e7a6dec65a9c17f76596c1eb567a19e
-          path: .rotisserie/runtime
-          persist-credentials: false
-      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
-        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Install factory syntax parsers
         uses: ./.github/actions/factory-syntax
@@ -568,23 +540,13 @@ jobs:
       # repository's shared GITHUB_TOKEN budget. Writes keep the workflow
       # token, so no extra workflows are ever triggered. Absent or
       # under-permissioned Apps are a silent no-op.
-      # Resolve the existing App's client ID from authenticated GitHub metadata.
-      - name: Resolve existing read-only App client ID
-        id: read_app_identity
-        if: ${{ env.FACTORY_READER_APP_ID != '' }}
-        continue-on-error: true
-        shell: bash
-        env:
-          FACTORY_APP_ID: ${{ secrets.FACTORY_READER_APP_ID }}
-          FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_READER_APP_PRIVATE_KEY }}
-        run: python3 .github/scripts/factory_app_client_id.py
       - name: Mint optional read-only factory App token
         id: read_token
-        if: ${{ steps.read_app_identity.outputs.client_id != '' }}
+        if: ${{ env.FACTORY_READER_APP_ID != '' }}
         continue-on-error: true
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ steps.read_app_identity.outputs.client_id }}
+          app-id: ${{ secrets.FACTORY_READER_APP_ID }}
           private-key: ${{ secrets.FACTORY_READER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
@@ -624,8 +586,8 @@ jobs:
           FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
           FACTORY_WORKER: ${{ steps.lane.outputs.worker }}
           FACTORY_SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
-          FACTORY_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
-          FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          FACTORY_MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
           FACTORY_DISPLAY: ${{ steps.executor.outputs.display || steps.lane.outputs.display }}
           FACTORY_BRANCH_SUFFIX: ${{ steps.executor.outputs.branch_suffix || steps.lane.outputs.branch_suffix }}
         run: |
@@ -640,17 +602,9 @@ jobs:
           FACTORY_REAL_GH="$(command -v gh)"
           export FACTORY_REAL_GH FACTORY_GH_CALL_LOG="$RUNNER_TEMP/factory-gh-calls.log"
           export PATH="$meter_dir:$PATH"
-          # Hosted VMs have been shut down mid-session, losing the step log.
-          # Push resource snapshots to a hidden ref so the cause survives.
-          cp .github/scripts/factory-vm-sampler.sh "$meter_dir/factory-vm-sampler.sh"
-          setsid bash "$meter_dir/factory-vm-sampler.sh" "$GITHUB_RUN_ID" 15 \
-            </dev/null >/dev/null 2>&1 &
-          vm_sampler_pid=$!
           set +e
           bash .github/scripts/free-model-factory-worker.sh
           worker_status=$?
-          kill -USR1 "$vm_sampler_pid" 2>/dev/null
-          wait "$vm_sampler_pid" 2>/dev/null
           python3 -I "$meter_dir/factory_gh_usage.py" "$FACTORY_GH_CALL_LOG" \
             --label "worker ${FACTORY_WORKER}" --summary "$GITHUB_STEP_SUMMARY"
           set -e
@@ -663,7 +617,7 @@ jobs:
         if: always() && vars.FACTORY_OMNIROUTE_ENABLED == 'on' && steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
         shell: bash
         env:
-          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           [[ -n "${OMNIROUTE_MANAGEMENT_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]] || {
@@ -742,14 +696,8 @@ jobs:
           {
             echo "### Factory ${WORKER} attempt"
             echo
-          # Markdown backticks in this printf format are intentional.
-          # shellcheck disable=SC2016
             printf -- '- Source/model: `%s` / `%s`\n' "$SOURCE" "$MODEL"
-          # Markdown backticks in this printf format are intentional.
-          # shellcheck disable=SC2016
             printf -- '- Job status: `%s`\n' "$JOB_STATUS"
-          # Markdown backticks in this printf format are intentional.
-          # shellcheck disable=SC2016
             printf -- '- Provisional attempt outcome: `%s`\n' "$attempt_outcome"
             printf -- '- Detail: %s\n' "$attempt_detail"
             echo
@@ -772,15 +720,6 @@ jobs:
         with:
           ref: main
           persist-credentials: false
-      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
-        uses: actions/checkout@v7
-        with:
-          repository: JoshCLWren/rotisserie
-          ref: f74f612d4e7a6dec65a9c17f76596c1eb567a19e
-          path: .rotisserie/runtime
-          persist-credentials: false
-      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
-        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - uses: ./.github/actions/factory-syntax
       # Only this trusted, separate cleanup job receives the Neon DSN.
       # The model-running factory job above must never see it.
@@ -841,15 +780,6 @@ jobs:
         with:
           ref: main
           persist-credentials: false
-      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
-        uses: actions/checkout@v7
-        with:
-          repository: JoshCLWren/rotisserie
-          ref: f74f612d4e7a6dec65a9c17f76596c1eb567a19e
-          path: .rotisserie/runtime
-          persist-credentials: false
-      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
-        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - uses: ./.github/actions/factory-syntax
       - name: Configure restricted Neon post-session lease release
         uses: ./.github/actions/factory-state-cache

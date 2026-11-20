@@ -43,7 +43,8 @@ describe('development API routing', () => {
     expect(resolve('POST', '/api/v2/reading-boundaries')).toBe('native')
     expect(resolve('POST', '/api/v2/auth/login')).toBe('native')
     expect(resolve('GET', '/api/v1/catalog/series-mappings/preview')).toBe('native')
-    expect(resolve('GET', '/api/v1/traffic-metrics')).toBe('native')
+    expect(resolve('POST', '/api/v1/catalog/series-mappings/preview')).toBe('python')
+    expect(resolve('GET', '/api/v1/traffic-metrics')).toBe('python')
     expect(resolve('GET', '/api/not-a-route')).toBe('native')
     const ordered = createApiDestinationResolver([
       { src: '/api/mixed', methods: ['GET'], dest: '/api/index.py' },
@@ -52,21 +53,6 @@ describe('development API routing', () => {
     ])
     expect(ordered('GET', '/api/mixed')).toBe('python')
     expect(ordered('POST', '/api/mixed')).toBe('native')
-  })
-
-  it('sends the migrated preview POST to native ingress in the route source of truth', () => {
-    // vercel.json is bot-owned and regenerated post-merge, so at PR CI time it
-    // still carries the Python exception for this POST. The route fragment is
-    // the authoritative input that the regeneration workflow consumes (#5342).
-    const catalog = JSON.parse(readFileSync(
-      resolvePath(process.cwd(), '../docs/api/route-fragments/catalog.json'), 'utf8',
-    ))
-    const preview = catalog.operations.find((operation: { method: string; path: string }) =>
-      operation.method === 'POST' &&
-      operation.path === '/api/v1/catalog/series-mappings/preview')
-    expect(preview).toBeDefined()
-    expect(preview.dest).toBe('/api/native_roll.rs')
-    expect(preview.runtime).toBe('native-rust')
   })
 
   it('forwards concurrent mixed-runtime requests with bodies and queries intact', async () => {
@@ -78,13 +64,7 @@ describe('development API routing', () => {
     })
     const native = echo('native')
     const python = echo('python')
-    const syntheticPythonRoute = {
-      src: '^/api/v1/__mixed-runtime-proxy-fixture$',
-      methods: ['POST', 'OPTIONS'],
-      dest: '/api/index.py',
-    }
-    const routes = [syntheticPythonRoute, ...ingress.routes]
-    const proxy = createApiProxy(routes, {
+    const proxy = createApiProxy(ingress.routes, {
       native: await listen(native),
       python: await listen(python),
     })
@@ -96,13 +76,8 @@ describe('development API routing', () => {
     const gateway = createHttpServer(vite.middlewares)
     try {
       const base = await listen(gateway)
-      // One native route and one deterministic Python fixture. The fixture keeps
-      // this mixed-runtime forwarding test independent of live Python route
-      // migrations.
-      const pythonPath = '/api/v1/__mixed-runtime-proxy-fixture'
-      expect(createApiDestinationResolver(routes)('POST', pythonPath)).toBe('python')
       const results = await Promise.all(Array.from({ length: 12 }, async (_, index) => {
-        const path = index % 2 === 0 ? '/api/v2/auth/login' : pythonPath
+        const path = index % 2 === 0 ? '/api/v2/auth/login' : '/api/v1/catalog/series-mappings/preview'
         const response = await fetch(`${base}${path}?request=${index}`, {
           method: 'POST', body: JSON.stringify({ request: index }),
           headers: { 'Content-Type': 'application/json' },
@@ -113,7 +88,7 @@ describe('development API routing', () => {
         expect(result).toEqual({
           runtime: index % 2 === 0 ? 'native' : 'python',
           method: 'POST',
-          url: `${index % 2 === 0 ? '/api/v2/auth/login' : pythonPath}?request=${index}`,
+          url: `${index % 2 === 0 ? '/api/v2/auth/login' : '/api/v1/catalog/series-mappings/preview'}?request=${index}`,
           body: JSON.stringify({ request: index }),
         })
       })

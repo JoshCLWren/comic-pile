@@ -92,7 +92,7 @@ if [ "$MODE" = "--staged" ]; then
         printf '%s\n' "$STAGED_FILES" | rg -e '^(package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|eslint\.config\.(js|cjs|mjs))$' || true
     )
     STAGED_FRONTEND_NODE_TOOLING=$(
-        printf '%s\n' "$STAGED_FILES" | rg -e '^frontend/(package\.json|package-lock\.json|yarn\.lock|eslint\.config\.(js|cjs|mjs))$' || true
+        printf '%s\n' "$STAGED_FILES" | rg -e '^frontend/(package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|eslint\.config\.(js|cjs|mjs))$' || true
     )
 fi
 

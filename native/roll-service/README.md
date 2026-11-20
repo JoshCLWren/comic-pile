@@ -122,8 +122,8 @@ failures return the sanitized Python database-unavailable 503 envelope and
 
 Tests require a **disposable local PostgreSQL** connection. The native Roll
 service never creates or alters schema, so its integration tests run against the
-canonical schema in `public`, loaded from
-`native/migrate/migrations/V1__baseline.sql` (a `pg_dump --schema-only` of a database
+canonical Alembic schema in `public`, loaded from
+`tests/fixtures/schema/public_schema.sql` (a `pg_dump --schema-only` of a database
 at Alembic head — regenerate with `make roll-test-schema`). They truncate and
 reseed the application tables between cases and never hand-write them:
 
@@ -134,11 +134,6 @@ cargo test --locked -p comicpile-roll-service --all-targets
 ```
 
 Missing test configuration fails instead of silently skipping integration tests.
-CI also runs `node scripts/check_native_route_db_tests.mjs` (with its own
-`node --test` regression file): every module that registers an HTTP route in
-`lib.rs::router` must have at least one `tests/*.rs` HTTP test using this real
-database harness, or an explicit reason in the checker's allowlist. This closes
-the gap that let a route module ship with no database test at all (#5351).
 CI provisions PostgreSQL. `tests/fixtures/roll-v2/auth-matrix.json` is consumed by
 both Rust integration tests and `tests/test_native_auth_matrix.py`, pinning valid
 credentials and exact auth rejection status/detail/challenge across languages.
@@ -156,8 +151,7 @@ never used to choose eligibility. Missing or cross-thread pointers fail closed;
 failed or canceled transactions discard their physical pool connection.
 
 The local parity example is a CLI only, with no public HTTP route. On a disposable
-PostgreSQL database with the canonical schema already applied
-(`MIGRATE_DATABASE_URL=<url> cargo run --locked -p comicpile-migrate -- up`):
+PostgreSQL database with the canonical Alembic schema already applied:
 
 ```bash
 cargo build --locked -p comicpile-roll-service --example reading_snapshot
@@ -165,7 +159,7 @@ PYTHONPATH=. uv run pytest native/roll-service/parity/test_core_inputs.py -q -s 
 ```
 
 Set `RUST_ROLL_TEST_DATABASE_URL` to that disposable database. The parity suite
-uses the restricted `roll_test_dml` role against the canonical schema in
+uses the restricted `roll_test_dml` role against the canonical Alembic schema in
 `public`; it never creates schemas or tables. Run a Rust test first to provision
 the role, then set `RUST_ROLL_PARITY_DATABASE_URL` to its DSN and run pytest.
 Each parity case takes a shared advisory lock, truncates application rows, and

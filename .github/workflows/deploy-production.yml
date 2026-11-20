@@ -1,6 +1,6 @@
 name: Deploy Production
 # Dispatched runs show who asked and why ("Deploy Production [source=manual] <reason>");
-# dispatch-production-deploy.sh (and the Rotisserie factory copy) matches this prefix to find a queued
+# factory-dispatch-production-deploy.sh matches this prefix to find a queued
 # manual run. Other events evaluate to '' and keep GitHub's default run name.
 run-name: ${{ github.event_name == 'workflow_dispatch' && format('Deploy Production [source={0}] {1}', inputs.source, inputs.reason) || '' }}
 
@@ -183,9 +183,9 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/generate_vercel_routes.mjs
-          node scripts/generate_route_burndown.mjs
+          .venv/bin/python scripts/generate_route_burndown.py
           node scripts/generate_vercel_routes.mjs --check
-          node scripts/generate_route_burndown.mjs --check
+          .venv/bin/python scripts/generate_route_burndown.py --check
 
       - name: Get production database connection string
         id: neon

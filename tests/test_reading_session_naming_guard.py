@@ -13,7 +13,9 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 AUTH_MODULES = (
     REPOSITORY_ROOT / "app" / "auth.py",
+    REPOSITORY_ROOT / "app" / "repositories" / "user_repository.py",
     REPOSITORY_ROOT / "app" / "repositories" / "revoked_token_repository.py",
+    REPOSITORY_ROOT / "app" / "repositories" / "failed_login_repository.py",
 )
 
 READING_SESSION_REPOSITORY_PATTERNS = [
@@ -105,8 +107,9 @@ def _scan_auth_modules(modules: tuple[Path, ...] = AUTH_MODULES) -> list[str]:
     """Report every forbidden reading-domain import or call across auth modules.
 
     A guarded module that does not exist is a hard failure, never a silent skip.
-    Each ``AUTH_MODULES`` entry must exist so the guard cannot silently skip a
-    module whose path was mistyped or removed.
+    Issue #3772 shipped five ``AUTH_MODULES`` entries without the ``app/`` prefix;
+    the guard's ``if module_path.exists()`` skip hid the typos and left the
+    password-reset mailer plus all four auth-state repositories unguarded.
 
     Args:
         modules: Auth modules to scan. Defaults to the guarded ``AUTH_MODULES``.
@@ -143,8 +146,10 @@ def test_auth_code_does_not_touch_reading_session_domain() -> None:
 def test_every_guarded_auth_module_exists() -> None:
     """Each guarded auth module must resolve to a real file.
 
-    Regression for #3772: every guarded auth module must resolve to a real file
-    so the guard cannot silently skip a mistyped or removed path.
+    Regression for #3772: five ``AUTH_MODULES`` entries pointed at
+    ``services/...`` and ``repositories/...`` instead of ``app/services/...``
+    and ``app/repositories/...``. The guard silently skipped them, so this test
+    pins the eight intended modules as scannable files.
     """
     missing = [str(module_path) for module_path in AUTH_MODULES if not module_path.exists()]
     assert not missing, (

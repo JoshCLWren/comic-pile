@@ -53,6 +53,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 | Endpoint | Limit | Description |
 |----------|-------|-------------|
+| `GET /sessions/current/` | 200/minute | Get current session (high frequency polling) |
 | `POST /sessions/` | 30/minute | Create new session |
 
 ## Response Headers

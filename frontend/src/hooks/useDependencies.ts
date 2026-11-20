@@ -177,8 +177,5 @@ export function useThreadBlockingInfo(threadId: number | null) {
     queryKey: queryKeys.dependencies.blockingBatch(threadId == null ? [] : [threadId]),
     queryFn: () => dependenciesApi.getBatchBlockingInfo([threadId!]),
     enabled: threadId != null,
-    // Open thread pages must not keep a stale Next-issue line after a change
-    // made in another tab (#5486).
-    refetchOnWindowFocus: 'always',
   })
 }

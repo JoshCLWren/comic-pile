@@ -1,9 +1,0 @@
-{
-  "routes": [
-    {"src": "^/api/v1/legacy$", "methods": ["GET"], "dest": "/api/native_roll.rs"},
-    {"src": "^/api/v2/alpha$", "methods": ["GET"], "dest": "/api/native_roll.rs"},
-    {"src": "^/api/v2/unicode$", "methods": ["GET", "OPTIONS"], "dest": "/api/index.py"},
-    {"src": "/api(?:/.*)?", "dest": "/api/native_roll.rs"},
-    {"src": "/(.*)", "dest": "/index.html"}
-  ]
-}

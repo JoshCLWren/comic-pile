@@ -51,16 +51,15 @@ still chain to `.git/hooks/pre-commit`.
 Runs automatically before each push to remote.
 
 **What it does:**
-- Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
-- Runs frontend unit tests (`pnpm test`)
-- Runs the rendered UI audit (`pnpm run audit:ui`)
+- Runs `pytest --cov=comic_pile` with 94% coverage requirement
 
-The Python API is frozen during the Rust cutover, so backend pytest no longer
-gates pushes. Backend pytest runs are not part of the pre-push hook.
+**What it checks:**
+- All tests pass
+- Test coverage meets 94% threshold
 
 **What happens on failure:**
 - Push is aborted
-- You'll see which check failed
+- You'll see which tests failed
 - Can bypass with `git push --no-verify` (not recommended)
 
 ## Installation

@@ -3,6 +3,7 @@ import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode } from 'react'
+import axios from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 function createWrapper() {
@@ -19,15 +20,17 @@ function createWrapper() {
 
 const api = vi.hoisted(() => ({
   queueApi: { moveToPosition: vi.fn(), moveToFront: vi.fn(), moveToBack: vi.fn(), shuffle: vi.fn() },
-  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), reroll: vi.fn(), unsnooze: vi.fn() },
+  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), reroll: vi.fn() },
   undoApi: { listSnapshots: vi.fn(), undo: vi.fn() },
+  tasksApi: { getMetrics: vi.fn() },
   threadsApi: { listStale: vi.fn() },
-  sessionApi: { list: vi.fn(), getDetails: vi.fn(), getSnapshots: vi.fn() },
+  sessionApi: { getCurrent: vi.fn(), list: vi.fn(), getDetails: vi.fn(), getSnapshots: vi.fn(), restoreSessionStart: vi.fn() },
   migrationApi: { migrateThread: vi.fn() },
   bugReportsApi: { create: vi.fn() },
 }))
 const protectedApi = vi.hoisted(() => ({ rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() }))
 const bootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
+vi.mock('../services/api-tasks', () => ({ tasksApi: api.tasksApi }))
 vi.mock('../services/api-migration', () => ({ migrationApi: api.migrationApi }))
 vi.mock('../services/api-bug-reports', () => ({ bugReportsApi: api.bugReportsApi }))
 vi.mock('../services/api-threads', () => ({ threadsApi: api.threadsApi }))
@@ -42,9 +45,10 @@ const toast = createToastSpy()
 
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks/useRate'
-import { useDismissPending, useOverrideRoll, useReroll, useRoll, useSetDie, useUnsnooze } from '../hooks/useRoll'
-import { useSessions, useSessionDetails, useSessionSnapshots } from '../hooks/useSession'
+import { useDismissPending, useOverrideRoll, useReroll, useRoll, useSetDie } from '../hooks/useRoll'
+import { useSession, useSessions, useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from '../hooks/useSession'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useStaleThreads } from '../hooks/useThread'
 
@@ -108,8 +112,6 @@ describe('mutation hook success and failure paths', () => {
     const dismiss = renderHook(() => useDismissPending(), { wrapper: createWrapper() }); await act(async () => await dismiss.result.current.mutate())
     const setDie = renderHook(() => useSetDie(), { wrapper: createWrapper() }); await act(async () => await setDie.result.current.mutate(6))
     const reroll = renderHook(() => useReroll(), { wrapper: createWrapper() }); await act(async () => await reroll.result.current.mutate())
-    const unsnooze = renderHook(() => useUnsnooze(), { wrapper: createWrapper() }); await act(async () => await unsnooze.result.current.mutate(8))
-    expect(api.rollApi.unsnooze).toHaveBeenCalledWith(8)
     expect(roll.result.current.isError).toBe(false)
     api.rollApi.reroll.mockRejectedValueOnce(new Error('fail'))
     const failed = renderHook(() => useReroll(), { wrapper: createWrapper() })
@@ -135,13 +137,22 @@ describe('mutation hook success and failure paths', () => {
 })
 
 describe('data hooks', () => {
-  it('loads snapshots', async () => {
+  it('loads analytics and snapshots', async () => {
+    api.tasksApi.getMetrics.mockResolvedValue({ total_threads: 1 })
+    const analytics = renderHook(() => useAnalytics(), { wrapper: createWrapper() })
+    await waitFor(() => expect(analytics.result.current.data).toEqual({ total_threads: 1 }))
     api.undoApi.listSnapshots.mockResolvedValue({ snapshots: [] })
     const snapshots = renderHook(() => useSnapshots(1), { wrapper: createWrapper() })
     await waitFor(() => expect(snapshots.result.current.data).toEqual({ snapshots: [] }))
     const empty = renderHook(() => useSnapshots(null), { wrapper: createWrapper() })
     expect(empty.result.current.data).toBeNull()
 
+    api.tasksApi.getMetrics.mockRejectedValueOnce(new Error('metrics failed'))
+    const failedAnalytics = renderHook(() => useAnalytics(), { wrapper: createWrapper() })
+    await waitFor(() => expect(failedAnalytics.result.current.error).toBeInstanceOf(Error))
+    api.tasksApi.getMetrics.mockRejectedValueOnce('metrics unavailable')
+    const stringAnalytics = renderHook(() => useAnalytics(), { wrapper: createWrapper() })
+    await waitFor(() => expect(stringAnalytics.result.current.error?.message).toBe('metrics unavailable'))
     api.undoApi.listSnapshots.mockRejectedValueOnce(new Error('snapshots failed'))
     const failedSnapshots = renderHook(() => useSnapshots(2), { wrapper: createWrapper() })
     await waitFor(() => expect(failedSnapshots.result.current.isError).toBe(true))
@@ -179,10 +190,20 @@ describe('data hooks', () => {
     expect(sessions2.result.current.error?.message).toBe('Failed to load more sessions')
   })
 
-  it('loads session snapshots and handles undo', async () => {
+  it('loads current session, handles notifications, and restores snapshots', async () => {
+    const storage = new Map<string, string>([['comic_pile_last_session_id_7', '1']])
+    Object.defineProperty(window, 'localStorage', { configurable: true, value: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) } })
+    api.sessionApi.getCurrent.mockResolvedValue({ id: 2, user_id: 7 })
+    const current = renderHook(() => useSession(), { wrapper: createWrapper() })
+    await waitFor(() => expect(current.result.current.data?.id).toBe(2))
+    expect(toast.showToast).toHaveBeenCalled()
     api.sessionApi.getSnapshots.mockResolvedValue({ snapshots: [] })
     const snapshots = renderHook(() => useSessionSnapshots(1), { wrapper: createWrapper() })
     await waitFor(() => expect(snapshots.result.current.data).toEqual({ snapshots: [] }))
+    api.sessionApi.restoreSessionStart.mockResolvedValue({ ok: true })
+    const restore = renderHook(() => useRestoreSessionStart(), { wrapper: createWrapper() })
+    await act(async () => await restore.result.current.mutate(1))
+    expect(api.sessionApi.restoreSessionStart).toHaveBeenCalledWith(1)
     api.undoApi.undo.mockResolvedValue(undefined)
     const undo = renderHook(() => useUndo(), { wrapper: createWrapper() })
     await act(async () => await undo.result.current.mutate({ sessionId: 1, snapshotId: 2 }))
@@ -193,6 +214,11 @@ describe('data hooks', () => {
   })
 
   it('covers session error and empty-id branches', async () => {
+    api.sessionApi.getCurrent.mockRejectedValueOnce('bad session')
+    const current = renderHook(() => useSession(), { wrapper: createWrapper() })
+    await waitFor(() => expect(current.result.current.isError).toBe(true))
+    expect(current.result.current.error?.message).toBe('Failed to fetch current session')
+
     api.sessionApi.list.mockRejectedValueOnce(new Error('list failed'))
     // SAFETY: a null id disables the query, which is the pending case under test
     const sessions = renderHook(() => useSessions(null as never), { wrapper: createWrapper() })
@@ -207,8 +233,37 @@ describe('data hooks', () => {
     api.sessionApi.getSnapshots.mockRejectedValueOnce('snapshots failed')
     const snapshots = renderHook(() => useSessionSnapshots(9), { wrapper: createWrapper() })
     await waitFor(() => expect(snapshots.result.current.isError).toBe(true))
+    api.sessionApi.restoreSessionStart.mockRejectedValueOnce('restore failed')
+    const restore = renderHook(() => useRestoreSessionStart(), { wrapper: createWrapper() })
+    await act(async () => {
+      await expect(restore.result.current.mutate(9)).rejects.toBe('restore failed')
+    })
+    await waitFor(() => expect(restore.result.current.isError).toBe(true))
+  })
+
+  it('covers storage fallbacks, unchanged sessions, empty snapshots, and Axios restore errors', async () => {
+    const originalStorage = window.localStorage
+    const storageFailure = {
+      getItem: () => { throw new Error('storage unavailable') },
+      setItem: () => { throw new Error('storage unavailable') },
+    }
+    Object.defineProperty(window, 'localStorage', { configurable: true, value: storageFailure })
+    api.sessionApi.getCurrent.mockResolvedValueOnce({ id: 8 })
+    const current = renderHook(() => useSession(), { wrapper: createWrapper() })
+    await waitFor(() => expect(current.result.current.data?.id).toBe(8))
+    expect(toast.showToast).not.toHaveBeenCalled()
+
     const emptySnapshots = renderHook(() => useSessionSnapshots(null), { wrapper: createWrapper() })
     expect(emptySnapshots.result.current.isPending).toBe(false)
+    const axiosError = new axios.AxiosError('restore request failed', 'ERR_BAD_REQUEST')
+    axiosError.isAxiosError = true
+    // SAFETY: the client narrows the error to an axios failure before reading response.data.detail
+    axiosError.response = { status: 400, data: { detail: 'server rejected restore' } } as never
+    api.sessionApi.restoreSessionStart.mockRejectedValueOnce(axiosError)
+    const restore = renderHook(() => useRestoreSessionStart(), { wrapper: createWrapper() })
+    await act(async () => expect(restore.result.current.mutate(8)).rejects.toBe(axiosError))
+    await waitFor(() => expect(restore.result.current.error).toBe(axiosError))
+    Object.defineProperty(window, 'localStorage', { configurable: true, value: originalStorage })
   })
 
   it('ignores snapshots that resolve after unmount', async () => {

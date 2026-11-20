@@ -18,29 +18,29 @@ describe('tagsApi routes (issue #3032)', () => {
     await tagsApi.list('  ')
     await tagsApi.list('  physical ')
 
-    expect(client.get).toHaveBeenNthCalledWith(1, '/v2/tags', {
+    expect(client.get).toHaveBeenNthCalledWith(1, '/v1/tags/', {
       params: undefined,
     })
-    expect(client.get).toHaveBeenNthCalledWith(2, '/v2/tags', {
+    expect(client.get).toHaveBeenNthCalledWith(2, '/v1/tags/', {
       params: undefined,
     })
-    expect(client.get).toHaveBeenNthCalledWith(3, '/v2/tags', {
+    expect(client.get).toHaveBeenNthCalledWith(3, '/v1/tags/', {
       params: { search: 'physical' },
     })
   })
 
   it('reads, updates, and deletes one tag', async () => {
     client.get.mockResolvedValue({ id: 3, name: 'Horror' })
-    client.patch.mockResolvedValue({ id: 3, name: 'Fear' })
+    client.put.mockResolvedValue({ id: 3, name: 'Fear' })
     client.delete.mockResolvedValue({ tag_id: 3, assignments_removed: 2 })
 
     await tagsApi.get(3)
     await tagsApi.update(3, { name: 'Fear', color: 'blue' })
     await tagsApi.delete(3)
 
-    expect(client.get).toHaveBeenCalledWith('/v2/tags/3')
-    expect(client.patch).toHaveBeenCalledWith('/v2/tags/3', { name: 'Fear', color: 'blue' })
-    expect(client.delete).toHaveBeenCalledWith('/v2/tags/3')
+    expect(client.get).toHaveBeenCalledWith('/v1/tags/3/')
+    expect(client.put).toHaveBeenCalledWith('/v1/tags/3/', { name: 'Fear', color: 'blue' })
+    expect(client.delete).toHaveBeenCalledWith('/v1/tags/3/')
   })
 
   it('creates a tag and reads usage for the delete confirmation', async () => {
@@ -50,12 +50,12 @@ describe('tagsApi routes (issue #3032)', () => {
     await tagsApi.create({ name: 'Physical', color: 'red', include_near_matches: true })
     await tagsApi.usage(9)
 
-    expect(client.post).toHaveBeenCalledWith('/v2/tags', {
+    expect(client.post).toHaveBeenCalledWith('/v1/tags/', {
       name: 'Physical',
       color: 'red',
       include_near_matches: true,
     })
-    expect(client.get).toHaveBeenCalledWith('/v2/tags/9/usage')
+    expect(client.get).toHaveBeenCalledWith('/v1/tags/9/usage/')
   })
 
   it('assigns and unassigns one tag on a single target', async () => {
@@ -65,11 +65,13 @@ describe('tagsApi routes (issue #3032)', () => {
     await tagsApi.assign(3, { target_type: 'Issue', target_id: 11 })
     await tagsApi.unassign(3, { target_type: 'Thread', target_id: 4 })
 
-    expect(client.post).toHaveBeenCalledWith('/v2/tags/3/assignments', {
+    expect(client.post).toHaveBeenCalledWith('/v1/tags/3/assign/', {
       target_type: 'Issue',
       target_id: 11,
     })
-    expect(client.delete).toHaveBeenCalledWith('/v2/tags/3/assignments/Thread/4')
+    expect(client.delete).toHaveBeenCalledWith('/v1/tags/3/unassign/', {
+      data: { target_type: 'Thread', target_id: 4 },
+    })
   })
 
   it('bulk assigns and bulk unassigns across many targets', async () => {
@@ -78,11 +80,11 @@ describe('tagsApi routes (issue #3032)', () => {
     await tagsApi.bulkAssign(3, { target_type: 'Issue', target_ids: [1, 2] })
     await tagsApi.bulkUnassign(3, { target_type: 'Issue', target_ids: [1, 2] })
 
-    expect(client.post).toHaveBeenNthCalledWith(1, '/v2/tags/3/assignment-batches', {
+    expect(client.post).toHaveBeenNthCalledWith(1, '/v1/tags/3/bulk-assign/', {
       target_type: 'Issue',
       target_ids: [1, 2],
     })
-    expect(client.post).toHaveBeenNthCalledWith(2, '/v2/tags/3/unassignment-batches', {
+    expect(client.post).toHaveBeenNthCalledWith(2, '/v1/tags/3/bulk-unassign/', {
       target_type: 'Issue',
       target_ids: [1, 2],
     })
@@ -95,9 +97,9 @@ describe('tagsApi routes (issue #3032)', () => {
     await tagsApi.effectiveForThread(4)
     await tagsApi.effectiveForPlan(9)
 
-    expect(client.get).toHaveBeenNthCalledWith(1, '/v2/tags/effective/issues/11')
-    expect(client.get).toHaveBeenNthCalledWith(2, '/v2/tags/effective/threads/4')
-    expect(client.get).toHaveBeenNthCalledWith(3, '/v2/tags/effective/plans/9')
+    expect(client.get).toHaveBeenNthCalledWith(1, '/v1/tags/effective/issue/11/')
+    expect(client.get).toHaveBeenNthCalledWith(2, '/v1/tags/effective/thread/4/')
+    expect(client.get).toHaveBeenNthCalledWith(3, '/v1/tags/effective/plan/9/')
   })
 
   it('reads bulk effective tags for every issue in a thread (issue #3422)', async () => {
@@ -105,6 +107,6 @@ describe('tagsApi routes (issue #3032)', () => {
 
     await tagsApi.threadIssuesEffective(4)
 
-    expect(client.get).toHaveBeenCalledWith('/v2/tags/effective/threads/4/issues')
+    expect(client.get).toHaveBeenCalledWith('/v1/tags/effective/thread/4/issues/')
   })
 })

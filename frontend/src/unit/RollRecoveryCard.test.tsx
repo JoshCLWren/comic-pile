@@ -3,8 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { RollRecoveryCard } from '../pages/RollPage/components/RollRecoveryCard'
 import type { RollRecoveryInfo } from '../types/rollBootstrap'
-import { issueCardsApi } from '../services/issueCardsApi'
-vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 const recovery: RollRecoveryInfo = {
   original_thread_id: 10,

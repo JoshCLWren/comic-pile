@@ -36,8 +36,8 @@ vi.mock('../services/api', () => {
 vi.mock('../services/api-preferences', () => ({
   preferencesApi: {
     get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
-      mocks.get('/v2/users/me/preferences', options),
-    patch: (data: { theme?: string | null }) => mocks.patch('/v2/users/me/preferences', data),
+      mocks.get('/v1/users/me/preferences', options),
+    patch: (data: { theme?: string | null }) => mocks.patch('/v1/users/me/preferences', data),
   },
 }))
 
@@ -82,7 +82,7 @@ function axiosError(status: number): Error & { isAxiosError: true; response: { s
 const PREFERENCES_CONFIG = { timeout: 15000, skipAuthRedirect: true }
 
 async function waitForPreferencesFetch() {
-  await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v2/users/me/preferences', PREFERENCES_CONFIG))
+  await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v1/users/me/preferences', PREFERENCES_CONFIG))
 }
 
 describe('AuthProvider transient recovery', () => {
@@ -300,7 +300,7 @@ describe('AuthProvider transient recovery', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
-    expect(mocks.get).toHaveBeenNthCalledWith(3, '/v2/users/me/preferences', PREFERENCES_CONFIG)
+    expect(mocks.get).toHaveBeenNthCalledWith(3, '/v1/users/me/preferences', PREFERENCES_CONFIG)
   }, 15000)
 
   it('logs out when explicit recovery proves the persistent session is invalid', async () => {

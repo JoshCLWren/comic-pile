@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, ExternalIdentity, Issue, ReadingSession, Thread, User
 from app.models.external_identity import IssueExternalIdentityMapping, ThreadExternalSeriesMapping
+from tests.roll_flow import roll_pending_thread
 
 #: Hard ceiling for one representative successful roll, including auth,
 #: selection, recommendation persistence, and response assembly. The issue's
@@ -183,6 +184,27 @@ async def _seed_library(
     return reading_session
 
 
+async def _capture_roll_statements(
+    db: AsyncSession,
+    db_engine: AsyncEngine,
+    *,
+    bandwidth: str,
+    intent: str,
+) -> list[str]:
+    """Return every SQL statement issued by one successful roll selection."""
+    statements: list[str] = []
+
+    def _record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", _record)
+    try:
+        await roll_pending_thread(db, bandwidth=bandwidth, intent=intent)
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", _record)
+    return statements
+
+
 async def _dismiss_pending(client: AsyncClient) -> None:
     """Clear the pending roll between captured requests."""
     response = await client.post("/api/v1/roll/dismiss-pending")
@@ -190,59 +212,104 @@ async def _dismiss_pending(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_batch_effort_matches_reference_with_constant_reads(
+async def test_roll_statement_count_is_bounded_and_pool_independent(
+    auth_client: AsyncClient,
     async_db: AsyncSession,
     db_engine: AsyncEngine,
     default_user: User,
 ) -> None:
+    """d6/d20/d100 stay under budget for every selection mode."""
+    reading_session = await _seed_library(async_db, default_user, size=LIBRARY_SIZE)
+
+    counts: dict[str, dict[int, int]] = {mode: {} for mode in ROLL_MODES}
+    for die in DIE_SIZES:
+        reading_session.manual_die = die
+        reading_session.start_die = die
+        await async_db.commit()
+
+        for mode, selection in ROLL_MODES.items():
+            statements = await _capture_roll_statements(
+                async_db,
+                db_engine,
+                bandwidth=selection["bandwidth"],
+                intent=selection["intent"],
+            )
+            counts[mode][die] = len(statements)
+            assert len(statements) <= ROLL_STATEMENT_BUDGET, (
+                f"{mode} roll at d{die} issued {len(statements)} statements, "
+                f"budget is {ROLL_STATEMENT_BUDGET}"
+            )
+            await _dismiss_pending(auth_client)
+
+    for mode, per_die in counts.items():
+        assert len(set(per_die.values())) == 1, (
+            f"{mode} roll statement count grew with the die pool: {per_die}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_forced_legacy_roll_stays_within_budget(
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The operator legacy kill switch keeps the same bounded request cost."""
+    await _seed_library(async_db, default_user, size=6)
+
+    from app.config import get_recommendation_settings
+
+    monkeypatch.setenv("RECOMMENDATION_CONTROL_MODE", "legacy")
+    get_recommendation_settings.cache_clear()
+    try:
+        statements = await _capture_roll_statements(
+            async_db,
+            db_engine,
+            bandwidth="balanced",
+            intent="balanced",
+        )
+    finally:
+        monkeypatch.delenv("RECOMMENDATION_CONTROL_MODE", raising=False)
+        get_recommendation_settings.cache_clear()
+
+    assert len(statements) <= ROLL_STATEMENT_BUDGET, (
+        f"forced-legacy roll issued {len(statements)} statements, "
+        f"budget is {ROLL_STATEMENT_BUDGET}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_batch_effort_matches_reference_with_constant_reads(
+    async_db: AsyncSession, db_engine: AsyncEngine, default_user: User,
+) -> None:
     """Bulk effort preserves scalar precedence with at most three read queries."""
     from sqlalchemy import select
     from app.services.reading_effort import (
-        aggregate_observations,
-        collect_classified_observations,
-        compute_effort_estimates_batch,
-        era_prior_minutes,
-        resolve_effort_estimate,
-        resolve_publication_year,
+        aggregate_observations, collect_classified_observations,
+        compute_effort_estimates_batch, era_prior_minutes,
+        resolve_effort_estimate, resolve_publication_year,
     )
 
     await _seed_library(async_db, default_user, size=LIBRARY_SIZE)
-    threads = list(
-        (
-            await async_db.scalars(
-                select(Thread).where(Thread.user_id == default_user.id).order_by(Thread.id)
-            )
-        ).all()
-    )
+    threads = list((await async_db.scalars(
+        select(Thread).where(Thread.user_id == default_user.id).order_by(Thread.id)
+    )).all())
     # Conflicting issue/thread history must retain issue-first precedence.
     await _add_observed_effort(
-        async_db,
-        threads[0],
-        minutes=30,
-        count=3,
-        issue_id=threads[0].next_unread_issue_id,
+        async_db, threads[0], minutes=30, count=3, issue_id=threads[0].next_unread_issue_id,
     )
     identity = ExternalIdentity(
-        provider="comicvine",
-        entity_type="issue",
-        external_id="batch-era-fixture",
-        metadata_json={"cover_date": "1990-01-01"},
-        updated_at=datetime.now(UTC),
+        provider="comicvine", entity_type="issue", external_id="batch-era-fixture",
+        metadata_json={"cover_date": "1990-01-01"}, updated_at=datetime.now(UTC),
     )
     async_db.add(identity)
     await async_db.flush()
-    async_db.add(
-        IssueExternalIdentityMapping(
-            issue_id=threads[-1].next_unread_issue_id,
-            external_identity_id=identity.id,
-            status="confirmed",
-        )
-    )
+    async_db.add(IssueExternalIdentityMapping(
+        issue_id=threads[-1].next_unread_issue_id, external_identity_id=identity.id,
+        status="confirmed",
+    ))
     no_data = await _add_thread(
-        async_db,
-        default_user.id,
-        title="No history or metadata",
-        queue_position=LIBRARY_SIZE + 1,
+        async_db, default_user.id, title="No history or metadata", queue_position=LIBRARY_SIZE + 1,
     )
     threads.append(no_data)
     await async_db.flush()
@@ -256,19 +323,12 @@ async def test_batch_effort_matches_reference_with_constant_reads(
         year = await resolve_publication_year(async_db, thread_id=thread_id, issue_id=issue_id)
         reference[(thread_id, issue_id)] = resolve_effort_estimate(
             by_issue.get((thread_id, issue_id)) if issue_id is not None else None,
-            by_thread.get(thread_id),
-            era_prior_minutes(year),
+            by_thread.get(thread_id), era_prior_minutes(year),
         )
     statements: list[str] = []
 
-    def capture(
-        _conn: object,
-        _cursor: object,
-        statement: str,
-        _parameters: object,
-        _context: object,
-        _executemany: bool,
-    ) -> None:
+    def capture(_conn: object, _cursor: object, statement: str,
+                _parameters: object, _context: object, _executemany: bool) -> None:
         statements.append(statement)
 
     for size in (1, 6, 20, 100, len(candidates)):
@@ -277,9 +337,7 @@ async def test_batch_effort_matches_reference_with_constant_reads(
         event.listen(db_engine.sync_engine, "before_cursor_execute", capture)
         try:
             result = await compute_effort_estimates_batch(
-                async_db,
-                user_id=default_user.id,
-                candidates=selected,
+                async_db, user_id=default_user.id, candidates=selected,
             )
         finally:
             event.remove(db_engine.sync_engine, "before_cursor_execute", capture)
@@ -291,9 +349,7 @@ async def test_batch_effort_matches_reference_with_constant_reads(
 
 @pytest.mark.asyncio
 async def test_batch_effort_never_uses_another_readers_metadata(
-    async_db: AsyncSession,
-    default_user: User,
-    sample_user2: User,
+    async_db: AsyncSession, default_user: User, sample_user2: User,
 ) -> None:
     """Foreign candidate IDs cannot expose their publication-era estimates."""
     from app.services.reading_effort import compute_effort_estimates_batch, neutral_estimate
@@ -301,26 +357,17 @@ async def test_batch_effort_never_uses_another_readers_metadata(
     foreign = await _add_thread(async_db, sample_user2.id, title="Foreign", queue_position=1)
     await _confirm_series_era(async_db, foreign, cover_date="1965-01-01")
     identity = ExternalIdentity(
-        provider="comicvine",
-        entity_type="issue",
-        external_id="foreign-batch-era",
-        metadata_json={"cover_date": "1965-01-01"},
-        updated_at=datetime.now(UTC),
+        provider="comicvine", entity_type="issue", external_id="foreign-batch-era",
+        metadata_json={"cover_date": "1965-01-01"}, updated_at=datetime.now(UTC),
     )
     async_db.add(identity)
     await async_db.flush()
-    async_db.add(
-        IssueExternalIdentityMapping(
-            issue_id=foreign.next_unread_issue_id,
-            external_identity_id=identity.id,
-            status="confirmed",
-        )
-    )
+    async_db.add(IssueExternalIdentityMapping(
+        issue_id=foreign.next_unread_issue_id, external_identity_id=identity.id, status="confirmed",
+    ))
     await async_db.flush()
     candidate = (foreign.id, foreign.next_unread_issue_id)
     result = await compute_effort_estimates_batch(
-        async_db,
-        user_id=default_user.id,
-        candidates=[candidate],
+        async_db, user_id=default_user.id, candidates=[candidate],
     )
     assert result[candidate] == neutral_estimate()

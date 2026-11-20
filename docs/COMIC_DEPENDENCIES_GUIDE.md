@@ -403,13 +403,29 @@ await dependenciesApi.createDependency({
 })
 ```
 
-### Thread issue list (`frontend/src/pages/ThreadDetailView.tsx`)
+### IssueList Component (`frontend/src/components/IssueList.tsx`)
 
-The former standalone `frontend/src/components/IssueList.tsx` was removed on <!-- docs-path-check: ignore -->
-2026-11-18: it had no live callers and its row actions were superseded by the
-shared exact-issue card family (`ComicIssueCard` / `CompactIssueCardTrigger`,
-see `docs/ISSUE_CARD_MOUNT_INVENTORY.md`). The Thread detail view renders the
-same actions per row through the shared component instead.
+**Features:**
+- Lists all issues in a thread
+- Filter by: All | Unread | Read
+- Toggle status with click (unread ↔ read)
+- Shows "Next" badge on thread.next_unread_issue_id
+- Progress bar and percentage
+- Read date for completed issues
+
+**UI Display:**
+```
+Issues                          [All ▼]
+┌─────────────────────────────────┐
+│ 🟢 #361                         │
+│ 🟢 #362                      Next│
+│ ✅ #363         Jan 15, 2024    │
+│ ✅ #364         Jan 16, 2024    │
+└─────────────────────────────────┘
+
+Read 2 of 50 (4%)
+████░░░░░░░░░░░░░░░░░░░░░░░░░░░
+```
 
 ### API Service (`frontend/src/services/api-issues.ts`)
 

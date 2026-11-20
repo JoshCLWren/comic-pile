@@ -76,61 +76,50 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/check-duplicates",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/check\\-duplicates$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/check\\-duplicates$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/excluded/threads",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/excluded/threads$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/excluded/threads$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/groups:batch",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/groups:batch$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/reactivate",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/reactivate$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/reactivate$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/stale",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/stale$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/stale$"
     },
     {
       "bucket": "v1_operations",
       "method": "DELETE",
       "path": "/api/v1/threads/{thread_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+$"
     },
     {
       "bucket": "v1_operations",
@@ -144,139 +133,123 @@
       "bucket": "v1_operations",
       "method": "PUT",
       "path": "/api/v1/threads/{thread_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/connected",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+/connected$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/connected$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/dependency-order-check",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}/exclude",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+/exclude$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/exclude$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+/issues$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/threads/[^/]+/issues$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/issues",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/issues$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/issues:reorder",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/issues:reorder$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/issues:validateOrder",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/issues:validateOrder$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/reading-orders",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/reading\\-orders$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}/restore",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+/restore$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/restore$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}/set-pending",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+/set\\-pending$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/set\\-pending$"
     },
     {
       "bucket": "v1_operations",
       "method": "PUT",
       "path": "/api/v1/threads/{thread_id}/test-backdate",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+/test\\-backdate$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/test\\-backdate$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}:getBlockingInfo",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}:migrateToIssues",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+:migrateToIssues$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+:migrateToIssues$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+:setCurrentIssue$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+:setCurrentIssue$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads:getBlockingInfo",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/index.py",
       "src": "^/api/v1/threads:getBlockingInfo$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
+      ]
     }
   ]
 }

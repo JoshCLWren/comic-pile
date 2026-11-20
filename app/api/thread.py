@@ -18,13 +18,17 @@ from app.models.user import User
 from app.schemas import (
     CheckPotentialDuplicatesRequest,
     CheckPotentialDuplicatesResponse,
+    MigrateToIssuesRequest,
     QueueThreadListResponse,
     ReactivateRequest,
     RollResponse,
+    SetCurrentIssueRequest,
+    SetCurrentIssueResponse,
     ThreadCreate,
     ThreadResponse,
     ThreadUpdate,
 )
+from app.schemas.migration import MigrateToIssuesSimpleRequest
 from app.services import thread_service
 from app.services.errors import (
     ConflictError,
@@ -336,6 +340,85 @@ async def backdate_thread_for_testing(
     try:
         return await thread_service.backdate_thread_for_testing(
             db, current_user.id, thread_id, days_ago
+        )
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
+
+
+@router.post("/{thread_id}:migrateToIssues", response_model=ThreadResponse)
+async def migrate_thread_to_issues(
+    thread_id: int,
+    request: MigrateToIssuesRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadResponse:
+    """Migrate an old-style thread to issue tracking (#1..total_issues).
+
+    Marks #1 through ``last_issue_read`` as read and updates the thread's
+    issue-tracking fields.
+
+    Raises:
+        HTTPException: 404 if thread not found, 400 if validation fails.
+    """
+    try:
+        return await thread_service.migrate_thread_to_issues(
+            db,
+            current_user.id,
+            thread_id,
+            last_issue_read=request.last_issue_read,
+            total_issues=request.total_issues,
+        )
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
+
+
+@router.post("/{thread_id}:migrateToIssuesSimple", response_model=ThreadResponse)
+async def migrate_thread_to_issues_simple(
+    thread_id: int,
+    request: MigrateToIssuesSimpleRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadResponse:
+    """Simplified migration inferred from the issue just rated.
+
+    Marks earlier issues read, keeps the rated issue unread so the rating
+    flow can mark it read, and points ``next_unread_issue_id`` at it.
+
+    Raises:
+        HTTPException: 404 if thread not found, 400 if validation fails.
+    """
+    try:
+        return await thread_service.migrate_thread_to_issues_simple(
+            db,
+            current_user.id,
+            thread_id,
+            issue_number=request.issue_number,
+        )
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
+
+
+@router.post("/{thread_id}:setCurrentIssue", response_model=SetCurrentIssueResponse)
+async def set_current_issue(
+    thread_id: int,
+    request: SetCurrentIssueRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SetCurrentIssueResponse:
+    """Atomically correct the current issue for an active thread.
+
+    Marks every earlier issue read, ensures the target is unread, updates
+    ``thread.next_unread_issue_id``, and pins ``session.pending_issue_id``.
+
+    Raises:
+        HTTPException: 404 if thread or issue not found, 400 for validation errors.
+    """
+    try:
+        return await thread_service.set_current_issue(
+            db,
+            current_user.id,
+            thread_id,
+            issue_number=request.issue_number,
         )
     except ServiceError as exc:
         raise _map_service_error(exc) from exc

@@ -1,12 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { CalculationDisplay } from '../components/CalculationDisplay'
 import { DrilldownIssueList } from '../components/DrilldownIssueList'
 import { ExclusionExplanation } from '../components/ExclusionExplanation'
 import type { CreatorMetricCalculation, CreatorMetricIssue } from '../types/index'
-import { issueCardsApi } from '../services/issueCardsApi'
 
 function makeCalculation(overrides?: Partial<CreatorMetricCalculation>): CreatorMetricCalculation {
   return {
@@ -33,8 +32,6 @@ function makeIssue(overrides?: Partial<CreatorMetricIssue>): CreatorMetricIssue 
     ...overrides,
   }
 }
-
-vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 describe('CalculationDisplay', () => {
   it('renders the formula with numerator, denominator, and result', () => {
@@ -149,19 +146,5 @@ describe('ExclusionExplanation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Show excluded issues' }))
     expect(screen.getByRole('button', { name: 'Hide excluded issues' })).toBeInTheDocument()
-  })
-
-  it('exposes the shared exact-issue action for each visible excluded issue', () => {
-    render(
-      <ExclusionExplanation
-        excludedIssues={[
-          makeIssue({ issue_id: 12, exclusion_reason: 'No stored effective rating' }),
-        ]}
-        totalExcluded={1}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show excluded issues' }))
-    expect(screen.getByTestId('issue-card-trigger-12')).toBeInTheDocument()
   })
 })

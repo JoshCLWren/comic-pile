@@ -18,6 +18,9 @@ vi.mock('../components/ContinuityCorrectionDialog', () => ({ default: () => null
 vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
   ReadingOrderGroups: () => null,
 }))
+vi.mock('../pages/RollPage/components/ComicVineIssueCard', () => ({
+  ComicVineIssueCard: () => null,
+}))
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))

@@ -50,7 +50,7 @@ For the closest match to the maintained production setup, use Neon's pooled conn
 
 ### 3. Apply the schema
 
-Run the committed migrations (refinery runner, `native/migrate`) before serving the application:
+Run the committed Alembic migrations before serving the application:
 
 ```bash
 make migrate

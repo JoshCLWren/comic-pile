@@ -27,10 +27,8 @@ const mockPool = {
   connect: async () => ({ query: mockPool.query, release: () => {} }),
 };
 
-// SAFETY: tests inject a mock database pool on globalThis for isolated handler execution.
 (globalThis as any).pool = mockPool;
 
-// SAFETY: SECRET_KEY is set in this test module's process environment above.
 const SECRET_KEY = process.env.SECRET_KEY as string;
 
 function createMockRequest(authHeader?: string) {
@@ -58,7 +56,6 @@ test('Auth/me API Handler Tests', async (t) => {
     const token = jwt.sign({ sub: 'testuser', jti, type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
     const req = createMockRequest(`Bearer ${token}`);
     const res = createMockResponse();
-    // SAFETY: mock request/response objects satisfy the handler contract for this unit test.
     await authMeHandler(req as any, res as any);
     assert.equal(res._status, 200);
     assert.deepEqual(res._json, { id: 1, username: 'testuser', email: 'test@example.com', is_admin: false });
@@ -67,7 +64,6 @@ test('Auth/me API Handler Tests', async (t) => {
   await t.test('should return 401 for missing authorization header', async () => {
     const req = createMockRequest();
     const res = createMockResponse();
-    // SAFETY: mock request/response objects satisfy the handler contract for this unit test.
     await authMeHandler(req as any, res as any);
     assert.equal(res._status, 401);
     assert.deepEqual(res._json, { error: 'Missing or invalid authorization header' });
@@ -77,7 +73,6 @@ test('Auth/me API Handler Tests', async (t) => {
     const token = jwt.sign({ sub: 'testuser', jti: 'valid-jti-123', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '-1s' });
     const req = createMockRequest(`Bearer ${token}`);
     const res = createMockResponse();
-    // SAFETY: mock request/response objects satisfy the handler contract for this unit test.
     await authMeHandler(req as any, res as any);
     assert.equal(res._status, 401);
     assert.deepEqual(res._json, { error: 'Invalid or expired token' });
@@ -86,7 +81,6 @@ test('Auth/me API Handler Tests', async (t) => {
   await t.test('should return 401 for malformed token', async () => {
     const req = createMockRequest('Bearer not-a-jwt');
     const res = createMockResponse();
-    // SAFETY: mock request/response objects satisfy the handler contract for this unit test.
     await authMeHandler(req as any, res as any);
     assert.equal(res._status, 401);
     assert.deepEqual(res._json, { error: 'Invalid or expired token' });
@@ -96,7 +90,6 @@ test('Auth/me API Handler Tests', async (t) => {
     const token = jwt.sign({ sub: 'testuser', jti: 'revoked-jti', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
     const req = createMockRequest(`Bearer ${token}`);
     const res = createMockResponse();
-    // SAFETY: mock request/response objects satisfy the handler contract for this unit test.
     await authMeHandler(req as any, res as any);
     assert.equal(res._status, 401);
     assert.deepEqual(res._json, { error: 'Token has been revoked' });
@@ -106,7 +99,6 @@ test('Auth/me API Handler Tests', async (t) => {
     const token = jwt.sign({ sub: 'testuser', type: 'access' }, SECRET_KEY, { expiresIn: '1h' });
     const req = createMockRequest(`Bearer ${token}`);
     const res = createMockResponse();
-    // SAFETY: mock request/response objects satisfy the handler contract for this unit test.
     await authMeHandler(req as any, res as any);
     assert.equal(res._status, 401);
     assert.deepEqual(res._json, { error: 'Invalid authentication credentials' });
@@ -116,7 +108,6 @@ test('Auth/me API Handler Tests', async (t) => {
     const token = jwt.sign({ sub: 'nonexistentuser', jti: 'valid-jti-123', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
     const req = createMockRequest(`Bearer ${token}`);
     const res = createMockResponse();
-    // SAFETY: mock request/response objects satisfy the handler contract for this unit test.
     await authMeHandler(req as any, res as any);
     assert.equal(res._status, 401);
     assert.deepEqual(res._json, { error: 'User not found' });
@@ -126,7 +117,6 @@ test('Auth/me API Handler Tests', async (t) => {
     const token = jwt.sign({ sub: 'passwordchangeduser', jti: 'valid-jti-123', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
     const req = createMockRequest(`Bearer ${token}`);
     const res = createMockResponse();
-    // SAFETY: mock request/response objects satisfy the handler contract for this unit test.
     await authMeHandler(req as any, res as any);
     assert.equal(res._status, 401);
     assert.deepEqual(res._json, { error: 'Password changed; please sign in again.' });
@@ -134,7 +124,6 @@ test('Auth/me API Handler Tests', async (t) => {
   await t.test('should reject refresh credentials', async () => {
     const token = jwt.sign({ sub: 'testuser', jti: 'refresh-jti', type: 'refresh', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
     const res = createMockResponse();
-    // SAFETY: mock request/response objects satisfy the handler contract for this unit test.
     await authMeHandler(createMockRequest(`Bearer ${token}`) as any, res as any);
     assert.equal(res._status, 401);
     assert.deepEqual(res._json, { error: 'Invalid authentication credentials' });
@@ -143,7 +132,6 @@ test('Auth/me API Handler Tests', async (t) => {
   await t.test('should map a database failure to 500', async () => {
     const token = jwt.sign({ sub: 'database-outage', jti: 'valid-jti', type: 'access', pc: 0 }, SECRET_KEY, { expiresIn: '1h' });
     const res = createMockResponse();
-    // SAFETY: mock request/response objects satisfy the handler contract for this unit test.
     await authMeHandler(createMockRequest(`Bearer ${token}`) as any, res as any);
     assert.equal(res._status, 500);
     assert.deepEqual(res._json, { error: 'Internal server error' });

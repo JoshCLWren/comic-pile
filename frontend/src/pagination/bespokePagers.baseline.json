@@ -8,6 +8,7 @@
     "pages/RollPage/useRollModals.ts": "collect-all do/while loop"
   },
   "handRolledPagers": {
+    "components/IssueList.tsx": "setNextPageToken hand-written paging state",
     "pages/ThreadDetailView.tsx": "setNextPageToken hand-written paging state"
   },
   "nextCursorFiles": {

@@ -1,5 +1,5 @@
-//! Disposable-schema HTTP regression runner for the native preferences (v2)
-//! and same-path Taste Bank signal operations (v1, #4834).
+//! Disposable-schema HTTP regression runner for the native same-path
+//! preferences and Taste Bank signal operations (#4834).
 //!
 //! Environment:
 //! * `RUST_ROLL_TEST_TOKEN` — bearer token to present (omit for an
@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token = std::env::var("RUST_ROLL_TEST_TOKEN").unwrap_or_default();
     let method = std::env::var("RUST_ROLL_TEST_METHOD").unwrap_or_else(|_| "GET".to_string());
     let uri = std::env::var("RUST_ROLL_TEST_URI")
-        .unwrap_or_else(|_| "/api/v2/users/me/preferences".to_string());
+        .unwrap_or_else(|_| "/api/v1/users/me/preferences".to_string());
     let body = std::env::var("RUST_ROLL_TEST_BODY").unwrap_or_default();
     let config = Config::from_env()?;
     let app = router(Arc::new(AppState::new(config)?));

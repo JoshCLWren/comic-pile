@@ -6,7 +6,6 @@
 import {execFileSync} from 'node:child_process';
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
-import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
 
 const PYTHON = '/api/index.py';
 const RUST = '/api/native_roll.rs';
@@ -125,9 +124,7 @@ export function fragmentVercelRoutes(fragments, previousRoutes = []) {
         dest = previous.dest;
       }
       if (!src) {
-        // The catch-all is never a fragment's own ingress src (slim vercel.json
-        // relies on it instead of explicit native_roll entries).
-        src = (previous && previous.src !== FALLBACK && previous.src) || routeRegex(path);
+        src = (previous && previous.src) || routeRegex(path);
       }
       if (dest !== PYTHON && !NATIVE.has(dest)) {
         throw new Error(`unknown destination ${dest} for ${method} ${path}`);
@@ -204,23 +201,16 @@ export function generateVercel(config, operations, fragments = null) {
   // Deterministic native-before-Python order: baseline natives (preserved
   // order) + fragment natives (sorted) + fragment pythons (sorted) +
   // baseline exceptions (sorted by path) + catch-all + non-API tail.
-  // Fragment-derived native_roll routes are emitted only when a later Python
-  // or native_issue route could otherwise shadow them (the catch-all already
-  // sends everything else to native_roll).
-  const fullRoutes = [
-    ...baselineNatives,
-    ...fragmentNatives,
-    ...fragmentPythons,
-    ...baselineExceptions,
-    {src: FALLBACK, dest: RUST},
-    ...rest,
-  ];
   return {
     ...config,
-    routes: slimNativeRollRoutes(
-      fullRoutes,
-      new Set(fragmentNatives),
-    ),
+    routes: [
+      ...baselineNatives,
+      ...fragmentNatives,
+      ...fragmentPythons,
+      ...baselineExceptions,
+      {src: FALLBACK, dest: RUST},
+      ...rest,
+    ],
   };
 }
 export function loadFragmentFiles(directory = 'docs/api/route-fragments') {

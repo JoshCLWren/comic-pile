@@ -1,0 +1,564 @@
+"""Bounded personal creator summary, discovery, and comparison APIs (issues #2028, #2775, #3091).
+
+Endpoints:
+
+- ``GET /api/v1/creators`` — bounded discovery list of canonical creators with
+  at least one rated issue for the authenticated user (issue #2775).
+- ``GET /api/v1/creators/summaries`` — bounded batch summary of the
+  authenticated user's library statistics per canonical creator key.
+- ``GET /api/v1/creators/compare`` — bounded side-by-side comparison of 2-4
+  canonical creators using shared personal analytics semantics (issue #3091).
+- ``GET /api/v1/creators/team-chemistry`` — bounded ranked recurring creator
+  teams credited together on shared rated issues (issue #3094).
+- ``GET /api/v1/creators/discoveries`` — explainable personal taste-discovery
+  views (consistently loved, polarizing, most read, top-rating rate, small
+  sample, loved-with-unread, warmed/cooled) (issue #3093).
+- ``GET /api/v1/creators/{creator_key}`` — bounded personal creator detail,
+  including series/run-level aggregates (issues #2037, #3088).
+- ``GET /api/v1/creators/{creator_key}/series/{series_key}/issues`` — bounded
+  drill-down of the issues behind one series/run aggregate (issue #3088).
+
+This router validates requests and delegates aggregation to the creator services.
+It performs no query construction and no direct persistence.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth import get_current_user
+from app.database import get_db
+from app.models.user import User
+from app.schemas.creator_comparison import (
+    CreatorComparisonResponse,
+    CreatorMetricDrilldown,
+    CreatorRatingDistributionDrilldown,
+    CreatorRoleDrilldown,
+    CreatorSeriesDrilldown,
+)
+from app.schemas.creator_detail import CreatorDetailResponse, CreatorSeriesIssueListResponse
+from app.schemas.creator_discovery import CreatorDiscoveryResponse
+from app.schemas.creator_team_chemistry import CreatorTeamChemistryResponse
+from app.services.creator_comparison import get_creator_comparison
+from app.services.creator_detail import get_creator_detail, get_creator_series_issues
+from app.services.creator_discovery import get_creator_discoveries
+from app.services.creator_metric_drilldown import get_creator_metric_drilldown
+from app.services.creator_team_chemistry import get_creator_team_chemistry
+
+router = APIRouter(prefix="/api/v1/creators", tags=["creators"])
+
+#: Upper bound for a single batch summary request (issue #2028 performance scope).
+#: One request never grows past a small fixed number of queries and bounded rows.
+
+#: Bounded comparison limits (issue #3091).
+MIN_COMPARISON_CREATORS = 2
+MAX_COMPARISON_CREATORS = 4
+
+
+def _split_creator_keys(raw: str) -> list[str]:
+    """Split and de-duplicate the raw comma-separated keys parameter.
+
+    Args:
+        raw: Raw ``keys`` query parameter value.
+
+    Returns:
+        Unique, order-preserving creator keys.
+    """
+    seen: set[str] = set()
+    keys: list[str] = []
+    for part in raw.split(","):
+        key = part.strip()
+        if key and key not in seen:
+            seen.add(key)
+            keys.append(key)
+    return keys
+
+
+
+
+def _validate_comparison_keys(raw: str | None) -> list[str]:
+    """Validate a creator keys query parameter for comparison (2-4 keys).
+
+    Args:
+        raw: Raw ``keys`` query parameter value.
+
+    Returns:
+        Unique validated creator keys (2-4).
+
+    Raises:
+        HTTPException: When the parameter is missing, out of bounds, or malformed.
+    """
+    if not raw or not raw.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"keys must be a comma-separated list of {MIN_COMPARISON_CREATORS}-"
+                f"{MAX_COMPARISON_CREATORS} canonical creator keys"
+            ),
+        )
+
+    keys = _split_creator_keys(raw)
+    if not keys:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"keys must be a comma-separated list of {MIN_COMPARISON_CREATORS}-"
+                f"{MAX_COMPARISON_CREATORS} canonical creator keys"
+            ),
+        )
+
+    if len(keys) < MIN_COMPARISON_CREATORS or len(keys) > MAX_COMPARISON_CREATORS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"keys must contain {MIN_COMPARISON_CREATORS} to {MAX_COMPARISON_CREATORS} "
+                f"creator keys, got {len(keys)}"
+            ),
+        )
+
+    for key in keys:
+        parts = key.split(":")
+        valid = len(parts) == 2 and parts[0] == "creator" and parts[1].isdigit()
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Invalid creator key {key!r}: expected creator:<external-person-id> "
+                    "(stable ComicVine person id, no display names)"
+                ),
+            )
+
+    return keys
+
+
+@router.get("/compare", response_model=CreatorComparisonResponse)
+async def compare_creators_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+    keys: str | None = Query(
+        default=None,
+        description=f"Comma-separated canonical creator keys ({MIN_COMPARISON_CREATORS}-{MAX_COMPARISON_CREATORS})",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorComparisonResponse:
+    """Return bounded personal side-by-side comparison for the requested creator keys.
+
+    Compares 2-4 canonical creators using the same explainable personal analytics
+    already available on creator detail pages. Every metric remains explicitly
+    personal to the authenticated user.
+
+    Metrics included per creator:
+    - Average rating and median rating
+    - Rated sample count
+    - Rating distribution
+    - 5★/top-rating rate (proportion of 5.0 ratings)
+    - Role-specific averages and counts
+    - Strongest series/thread aggregates
+    - Unread attributed issue count (Issue.status == "unread", not queue/upcoming semantics)
+    - Read-but-unrated attributed issue count (no stored effective rating)
+    - Explicit "insufficient data" flag when rated sample < 3
+
+    Only creator keys visible in the authenticated user's own confirmed issue
+    metadata are compared; unknown or foreign keys are silently omitted so a
+    creator key can never leak another user's library state. Same-display-name
+    creators remain distinct via their canonical keys.
+
+    Args:
+        current_user: Authenticated user whose library is aggregated.
+        keys: Comma-separated canonical creator keys (2-4).
+        db: Async database session.
+
+    Returns:
+        Batch comparison keyed by requested visible creator keys, plus explicit
+        coverage state and list of keys with insufficient data.
+
+    Raises:
+        HTTPException: When the ``keys`` parameter is missing, out of bounds, or malformed.
+    """
+    requested_keys = _validate_comparison_keys(keys)
+    try:
+        return await get_creator_comparison(db, current_user.id, requested_keys)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+
+@router.get("/team-chemistry", response_model=CreatorTeamChemistryResponse)
+async def get_creator_team_chemistry_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CreatorTeamChemistryResponse:
+    """Return ranked recurring creator-team pairs for the authenticated user.
+
+    A team is a pair of stable canonical creator identities credited together
+    on shared rated issues with eligible interior-storytelling roles. Pairs
+    below ``min_shared_team_sample`` shared rated issues are never ranked, the
+    returned issue drilldown sample is bounded, and every metric stays
+    descriptive personal-reading data: no causation or significance is
+    expressed or implied.
+
+    Only creator identities visible in the authenticated user's own confirmed
+    issue metadata are considered, so a creator key can never leak another
+    user's library state, and same-name creators remain distinct via their
+    canonical keys.
+
+    Args:
+        current_user: Authenticated user whose library is aggregated.
+        db: Async database session.
+
+    Returns:
+        Ranked bounded team pairs with shared sample, average, distribution,
+        baseline context, and navigable issue references, plus explicit
+        metadata-coverage state.
+    """
+    return await get_creator_team_chemistry(db, current_user.id)
+
+
+@router.get("/discoveries", response_model=CreatorDiscoveryResponse)
+async def get_creator_discoveries_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CreatorDiscoveryResponse:
+    """Return explainable personal taste-discovery views for the authenticated user.
+
+    Every view is deterministic and derived only from the user's own latest
+    effective ratings and confirmed creator credits. A creator may appear in
+    multiple views, and each entry carries the supporting metrics and the exact
+    rules that qualified it, so no ranking is unexplained. Every view has an
+    explicit minimum sample before it ranks creators, and missing creator
+    metadata is reported as partial coverage rather than negative evidence.
+
+    Args:
+        current_user: Authenticated user whose library is aggregated.
+        db: Async database session.
+
+    Returns:
+        Bounded discovery views in canonical order plus metadata-coverage state.
+    """
+    return await get_creator_discoveries(db, current_user.id)
+
+
+@router.get("/{creator_key}/series/{series_key}/issues", response_model=CreatorSeriesIssueListResponse)
+async def get_creator_series_issues_endpoint(
+    creator_key: str,
+    series_key: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    limit: int = Query(50, ge=1, le=100),
+    offset: int | None = Query(None, ge=0),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorSeriesIssueListResponse:
+    """Return the bounded issues supporting one creator series/run group.
+
+    Every series aggregate on creator detail is explainable from these rows.
+    The series key must be the canonical ``thread:<id>`` identity; a group is
+    never addressed by display-title text, and a series belonging to another
+    user is indistinguishable from one that does not exist.
+
+    Args:
+        creator_key: Canonical creator key (e.g. ``creator:12345``).
+        series_key: Canonical series key (e.g. ``thread:7``).
+        current_user: Authenticated user owning the library.
+        limit: Max number of issue rows.
+        offset: Pagination offset.
+        db: Async database session.
+
+    Returns:
+        The bounded drill-down page plus its group-level header aggregates.
+
+    Raises:
+        HTTPException: When either key is malformed, or the creator or series
+        group is not found in the user's library.
+    """
+    try:
+        return await get_creator_series_issues(
+            db=db,
+            user_id=current_user.id,
+            creator_key=creator_key,
+            series_key=series_key,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Series {series_key} not found in your library",
+        ) from None
+
+
+@router.get("/{creator_key}", response_model=CreatorDetailResponse)
+async def get_creator_detail_endpoint(
+    creator_key: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    limit: int = Query(50, ge=1, le=100),
+    offset: int | None = Query(None, ge=0),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorDetailResponse:
+    """Return full personal creator detail for the specified canonical key.
+
+    Args:
+        creator_key: Canonical creator key (e.g. ``creator:12345``).
+        current_user: Authenticated user owning the library.
+        limit: Max number of issues per collection.
+        offset: Pagination offset.
+        db: Async database session.
+
+    Returns:
+        The full creator detail response including summary, role stats, and issue lists.
+
+    Raises:
+        HTTPException: When the key is malformed or the creator is not found
+        in the user's library.
+    """
+    try:
+        return await get_creator_detail(
+            db=db,
+            user_id=current_user.id,
+            creator_key=creator_key,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Creator {creator_key} not found in your library",
+        ) from None
+
+
+@router.get("/{creator_key}/metrics/{metric_type}", response_model=CreatorMetricDrilldown)
+async def get_creator_metric_drilldown_endpoint(
+    creator_key: str,
+    metric_type: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    role: str | None = Query(None, description="Specific role for role-based metrics"),
+    rating_value: str | None = Query(None, description="Specific rating value for distribution metrics"),
+    series_key: str | None = Query(None, description="Specific series key for series metrics"),
+    page: int = Query(1, ge=1, description="Page number for paginated results"),
+    page_size: int = Query(50, ge=1, le=200, description="Number of items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorMetricDrilldown:
+    """Return detailed drilldown for a specific creator metric.
+
+    This endpoint provides the exact calculation, supporting issues, and exclusion
+    reasoning for any creator metric shown on comparison or detail pages.
+
+    Args:
+        creator_key: Canonical creator key (e.g. ``creator:12345``).
+        metric_type: Type of metric to drill down (``average-rating``, ``median-rating``,
+            ``rated-issue-count``, ``five-star-rate``, ``rating-distribution``,
+            ``unread-count``, ``read-unrated-count``, ``role-stats``, ``series-stats``).
+        current_user: Authenticated user owning the library.
+        role: Specific role for role-based metrics (required for ``role-stats``).
+        rating_value: Specific rating value for distribution metrics (e.g. ``5.0``, ``4.5``).
+        series_key: Specific series key for series metrics (e.g. ``thread:123``).
+        page: Page number for paginated issue lists.
+        page_size: Number of issues per page.
+        db: Async database session.
+
+    Returns:
+        Detailed drilldown with calculation, included issues, excluded issues, and pagination.
+
+    Raises:
+        HTTPException: When keys are malformed, metric type is invalid, or data is not found.
+    """
+    try:
+        return await get_creator_metric_drilldown(
+            db=db,
+            user_id=current_user.id,
+            creator_key=creator_key,
+            metric_type=metric_type,
+            role=role,
+            rating_value=rating_value,
+            series_key=series_key,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Metric {metric_type} not available for creator {creator_key}",
+        ) from None
+
+
+@router.get("/{creator_key}/metrics/rating-distribution/{rating_value}", response_model=CreatorRatingDistributionDrilldown)
+async def get_creator_rating_distribution_drilldown_endpoint(
+    creator_key: str,
+    rating_value: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    page: int = Query(1, ge=1, description="Page number for paginated results"),
+    page_size: int = Query(50, ge=1, le=200, description="Number of items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorRatingDistributionDrilldown:
+    """Return detailed drilldown for a specific rating distribution bucket.
+
+    Args:
+        creator_key: Canonical creator key (e.g. ``creator:12345``).
+        rating_value: Specific rating value (e.g. ``5.0``, ``4.5``).
+        current_user: Authenticated user owning the library.
+        page: Page number for paginated results.
+        page_size: Number of issues per page.
+        db: Async database session.
+
+    Returns:
+        Rating distribution drilldown for the specific bucket.
+
+    Raises:
+        HTTPException: When keys are malformed or data is not found.
+    """
+    try:
+        drilldown = await get_creator_metric_drilldown(
+            db=db,
+            user_id=current_user.id,
+            creator_key=creator_key,
+            metric_type="rating-distribution",
+            rating_value=rating_value,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Rating distribution {rating_value} not available for creator {creator_key}",
+        ) from None
+    if not isinstance(drilldown, CreatorRatingDistributionDrilldown):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Rating distribution drilldown returned an unexpected shape",
+        )
+    return drilldown
+
+
+@router.get("/{creator_key}/metrics/role-stats/{role}", response_model=CreatorRoleDrilldown)
+async def get_creator_role_drilldown_endpoint(
+    creator_key: str,
+    role: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    page: int = Query(1, ge=1, description="Page number for paginated results"),
+    page_size: int = Query(50, ge=1, le=200, description="Number of items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorRoleDrilldown:
+    """Return detailed drilldown for a specific creator role.
+
+    Args:
+        creator_key: Canonical creator key (e.g. ``creator:12345``).
+        role: Specific role to drill down (e.g., ``Writer``, ``Artist``, ``Penciler``).
+        current_user: Authenticated user owning the library.
+        page: Page number for paginated results.
+        page_size: Number of issues per page.
+        db: Async database session.
+
+    Returns:
+        Role drilldown with calculation, included issues, and role-specific data.
+
+    Raises:
+        HTTPException: When keys are malformed or data is not found.
+    """
+    try:
+        drilldown = await get_creator_metric_drilldown(
+            db=db,
+            user_id=current_user.id,
+            creator_key=creator_key,
+            metric_type="role-stats",
+            role=role,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Role {role} not available for creator {creator_key}",
+        ) from None
+    if not isinstance(drilldown, CreatorRoleDrilldown):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Role drilldown returned an unexpected shape",
+        )
+    return drilldown
+
+
+@router.get("/{creator_key}/metrics/series-stats/{series_key}", response_model=CreatorSeriesDrilldown)
+async def get_creator_series_drilldown_endpoint(
+    creator_key: str,
+    series_key: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    page: int = Query(1, ge=1, description="Page number for paginated results"),
+    page_size: int = Query(50, ge=1, le=200, description="Number of issues per page"),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorSeriesDrilldown:
+    """Return detailed drilldown for a specific creator series.
+
+    Args:
+        creator_key: Canonical creator key (e.g. ``creator:12345``).
+        series_key: Specific series key (e.g. ``thread:123``).
+        current_user: Authenticated user owning the library.
+        page: Page number for paginated results.
+        page_size: Number of issues per page.
+        db: Async database session.
+
+    Returns:
+        Series drilldown with calculation, included issues, and series-specific data.
+
+    Raises:
+        HTTPException: When keys are malformed or data is not found.
+    """
+    try:
+        drilldown = await get_creator_metric_drilldown(
+            db=db,
+            user_id=current_user.id,
+            creator_key=creator_key,
+            metric_type="series-stats",
+            series_key=series_key,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Series {series_key} not available for creator {creator_key}",
+        ) from None
+    if not isinstance(drilldown, CreatorSeriesDrilldown):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Series drilldown returned an unexpected shape",
+        )
+    return drilldown
+
+
+__all__ = [
+    "MIN_COMPARISON_CREATORS",
+    "MAX_COMPARISON_CREATORS",
+    "router",
+]

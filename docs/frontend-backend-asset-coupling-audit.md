@@ -115,7 +115,7 @@ Recommendation:
 Severity: Low
 
 Evidence:
-- `frontend/vite.config.ts` - build `outDir`
+- `frontend/vite.config.js` - build `outDir`
 - `AGENTS.md` - Playwright build guidance
 
 Details:
@@ -197,7 +197,7 @@ Recommendation:
 - CI Playwright job explicitly builds frontend before browser tests:
   - `.github/workflows/ci.yml` - Playwright job build step
 - Production smoke coverage catches chunk load failures in key routes:
-  - `frontend/src/test/smoke.spec.ts` - chunk failure response listener <!-- docs-path-check: ignore -->
+  - `frontend/src/test/smoke.spec.ts` - chunk failure response listener
 - Dockerfile already separates build and runtime stages:
   - `Dockerfile` - `python-builder` and runtime stages
 - Runtime container already runs as non-root user:

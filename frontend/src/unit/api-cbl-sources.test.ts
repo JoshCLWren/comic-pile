@@ -95,7 +95,7 @@ describe('cblSourcesApi.commit', () => {
       unresolved_positions: [4],
     })
     expect(client.post).toHaveBeenCalledWith(
-      '/v2/reading-lists/42/reading-plans/77/adoption-commits',
+      '/v1/cbl/42/reading-plans/77/adoption-commit',
       {
         entry_decisions: {},
         series_decisions: [],
@@ -120,7 +120,7 @@ describe('cblSourcesApi.commit', () => {
     })
 
     expect(client.post).toHaveBeenCalledWith(
-      '/v2/reading-lists/42/reading-plans/77/adoption-commits',
+      '/v1/cbl/42/reading-plans/77/adoption-commit',
       expect.objectContaining({
         overlap_decisions: [{ overlap_id: 'mister-miracle|jli', choice: 'continue_series' }],
       }),
@@ -153,7 +153,7 @@ describe('cblSourcesApi.commit', () => {
     })
 
     expect(client.post).toHaveBeenCalledWith(
-      '/v2/reading-lists/42/reading-plans/77/adoption-commits',
+      '/v1/cbl/42/reading-plans/77/adoption-commit',
       expect.objectContaining({
         series_decisions: [],
         series_overrides: [
@@ -193,7 +193,7 @@ describe('cblSourcesApi.commitNew', () => {
       unresolved_positions: [4],
     })
     expect(client.post).toHaveBeenCalledWith(
-      '/v2/reading-lists/42/adoption-commits',
+      '/v1/cbl/42/adoption-commit',
       {
         entry_decisions: {},
         series_decisions: [],

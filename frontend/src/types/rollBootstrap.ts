@@ -142,8 +142,6 @@ export interface RollBootstrapResponse {
   roll_pool: RollBootstrapThread[]
   snoozed_threads: RollBootstrapThread[]
   snoozed_count: number
-  /** Complete, uncapped snoozed series ids; `snoozed_threads` is a 20-row display summary. */
-  snoozed_thread_ids?: number[]
   skipped_thread_ids: number[]
   skipped_threads: RollBootstrapThread[]
   /** Minimal empty-pool explanation; absent only for legacy fixtures. */

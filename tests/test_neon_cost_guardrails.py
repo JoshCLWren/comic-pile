@@ -15,12 +15,13 @@ from app.main import create_app
     ("path", "expected"),
     [
         ("/health", {"status": "alive"}),
+        ("/api/v1/keepalive", {"status": "disabled"}),
     ],
 )
 async def test_public_probes_do_not_connect_to_database(
     path: str, expected: dict[str, str]
 ) -> None:
-    """The public liveness probe must not open the database, even if DB access would fail."""
+    """Neither probe should open the database, even if DB access would fail."""
     app = create_app(serve_frontend=False)
 
     async def forbidden_db() -> AsyncSession:

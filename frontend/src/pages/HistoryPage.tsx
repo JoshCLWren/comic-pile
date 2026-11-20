@@ -1,10 +1,6 @@
+import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
-import { useMemo } from 'react'
-import { useActivity } from '../hooks/useActivity'
-import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
-import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
-import type { ActivityItem } from '../services/api-activity'
-import { formatDate, formatTime } from '../utils/dateFormat'
+import type { SessionSummary } from '../types'
 
 /**
  * Shared recovery action for the bounded-loading and load-failure states.
@@ -24,85 +20,9 @@ function RetryHistoryButton({ onRetry }: { onRetry: () => void }) {
   )
 }
 
-/** Reader-facing name for a logical action the activity resource emits. */
-function activityLabel(type: string): string {
-  switch (type) {
-    case 'roll':
-      return 'Rolled'
-    case 'snooze':
-      return 'Snoozed'
-    case 'unsnooze':
-      return 'Unsnoozed'
-    case 'rate':
-      return 'Rated'
-    case 'manual_die':
-      return 'Set die'
-    case 'reset_dice':
-      return 'Reset die'
-    case 'dismiss':
-      return 'Dismissed the roll'
-    case 'undo':
-      return 'Restored'
-    case 'rolled_but_skipped':
-      return 'Skipped'
-    default:
-      return type.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
-  }
-}
-
-function formatDie(value: number | null | undefined): string | null {
-  return value == null ? null : `d${value}`
-}
-
-/**
- * Die progression for one logical action.
- *
- * A snooze or rating that stepped the ladder renders its full transition
- * (`d6 → d8`), so the reader can see the die change even though the resulting
- * roll is a separate item. A roll renders the die it was rolled on.
- */
-function dieProgression(item: ActivityItem): string | null {
-  const before = formatDie(item.die_before)
-  const after = formatDie(item.die_after)
-  if (before && after && before !== after) return `Die ${before} → ${after}`
-  if (after) return `Die ${after}`
-  if (before) return `Die ${before}`
-  return null
-}
-
-function activityHeadline(item: ActivityItem): string {
-  const rating = item.rating == null ? null : item.rating.toFixed(1)
-  if (item.type === 'rate' && rating) return `Rated ${rating}`
-  if (item.type === 'manual_die' && item.die_after != null) return `Set die to d${item.die_after}`
-  if (item.type === 'reset_dice' && item.die_after != null) return `Reset die to d${item.die_after}`
-  return activityLabel(item.type)
-}
-
-/** Subject line for one activity item: an owned series, with its issue. */
-function ActivitySubject({ item }: { item: ActivityItem }) {
-  if (item.thread_id == null) return null
-  const title = item.thread_title ?? 'Deleted series'
-  return (
-    <span className="text-stone-400">
-      {' · '}
-      {item.thread_title ? (
-        <Link
-          to={`/thread/${item.thread_id}`}
-          className="underline decoration-dotted underline-offset-2 hover:text-stone-300"
-        >
-          {title}
-        </Link>
-      ) : (
-        title
-      )}
-      {item.issue_number ? ` #${item.issue_number}` : null}
-    </span>
-  )
-}
-
 export default function HistoryPage() {
   const {
-    data: activity,
+    data: sessions,
     isPending,
     isLoadingMore,
     hasMore,
@@ -110,15 +30,7 @@ export default function HistoryPage() {
     error,
     isRetrying,
     refetch,
-  } = useActivity()
-  // One bounded batch projection for the visible page of exact owned issues;
-  // never one request per rendered row.
-  const visibleIssueIds = useMemo(
-    () => (activity ?? []).map((item) => item.issue_id).filter((id): id is number => id != null),
-    [activity],
-  )
-  const cardsQuery = useIssueCards(visibleIssueIds)
-  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
+  } = useSessions()
 
   if (isPending) {
     // A timed-out first page stays pending through the shared retry policy
@@ -139,29 +51,120 @@ export default function HistoryPage() {
     return <div className="flex items-center justify-center h-screen">Loading...</div>
   }
 
-  if (error && !isLoadingMore && (!activity || activity.length === 0)) {
+  if (error && !isLoadingMore && (!sessions || sessions.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4">
         <p role="alert" className="error-message">
-          Failed to load activity
+          Failed to load sessions
         </p>
         <RetryHistoryButton onRetry={() => void refetch()} />
       </div>
     )
   }
 
-  if (!activity || activity.length === 0) {
+  if (!sessions || sessions.length === 0) {
     return (
       <div className="space-y-6 md:space-y-8 pb-20">
         <header className="flex flex-wrap items-end justify-between gap-3 px-2">
           <div>
             <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-            <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
+            <p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
           </div>
         </header>
-        <div className="text-center text-stone-500">No activity yet</div>
+        <div className="text-center text-stone-500">No sessions yet</div>
       </div>
     )
+  }
+
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return ''
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
+
+  const formatTime = (dateStr: string | null | undefined) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return ''
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  }
+
+  /**
+   * Unique accessible name for a session-detail link (#3687).
+   *
+   * Every card shows the same concise "View full session" text while the
+   * arrow stays aria-hidden, so without a distinct aria-label a screen reader
+   * announces dozens of identical links and cannot tell the cards apart. The
+   * stable session id keeps each name unique even when the start time is
+   * missing or unparseable, and the start date/time adds spoken context. The
+   * visible label is unchanged.
+   */
+  const buildSessionLinkLabel = (session: SessionSummary): string => {
+    const base = `View full session for session ${session.id}`
+    const date = formatDate(session.started_at)
+    const time = formatTime(session.started_at)
+    if (date && time) {
+      return `${base}, started ${date} at ${time}`
+    }
+    return base
+  }
+
+  const formatDuration = (startedAt: string | null | undefined, endedAt: string | null | undefined) => {
+    if (!startedAt || !endedAt) return null
+    const start = new Date(startedAt)
+    const end = new Date(endedAt)
+    const diffMs = end.getTime() - start.getTime()
+    if (!Number.isFinite(diffMs) || diffMs < 0) return null
+    const diffMins = Math.floor(diffMs / 60000)
+    const hours = Math.floor(diffMins / 60)
+    const mins = diffMins % 60
+    if (hours === 0) return `${mins}m`
+    if (mins === 0) return `${hours}h`
+    return `${hours}h ${mins}m`
+  }
+
+  const formatDiceProgression = (ladderPath: string | null | undefined, lastRolledResult: number | null | undefined) => {
+    if (!ladderPath) return ''
+    const dice = ladderPath.split(' → ')
+    const progression = dice.map(d => `d${d}`).join(' → ')
+
+    // Only a roll that landed on a number is reported; a missing or zero
+    // result would otherwise render a dangling "· Rolled" suffix.
+    if (lastRolledResult != null && lastRolledResult > 0) {
+      return `${progression} · Rolled ${lastRolledResult}`
+    }
+
+    return progression
+  }
+
+  const buildActivityLine = (
+    session: SessionSummary,
+  ): string | null => {
+    const parts: string[] = []
+
+    const issuesRead = session.active_thread?.issues_read
+    const lastRating = session.active_thread?.last_rating
+
+    // Add issues read information
+    if (issuesRead != null && issuesRead > 0) {
+      parts.push(`${issuesRead} ${issuesRead === 1 ? 'issue' : 'issues'} read`)
+    }
+
+    // Add rating information
+    if (lastRating != null) {
+      parts.push(`rated ${lastRating.toFixed(1)}`)
+    }
+
+    // Report the session's recorded start die, not the evolving current die,
+    // so past history never rewrites itself when the reader's current die
+    // setting changes (issue #4243).
+    const hasActivity = (issuesRead != null && issuesRead > 0) || lastRating != null
+    if (hasActivity && session.start_die != null) {
+      parts.push(`Die size d${session.start_die}`)
+    }
+
+    return parts.length > 0 ? parts.join(' · ') : null
   }
 
   return (
@@ -169,53 +172,94 @@ export default function HistoryPage() {
       <header className="flex flex-wrap items-end justify-between gap-3 px-2">
         <div>
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-          <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
+          <p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
         </div>
       </header>
 
-      <div
-        id="activity-list"
-        className="border-y border-[var(--theme-border)] divide-y divide-[var(--theme-border)]"
-        role="list"
-        aria-label="Activity history"
-      >
-        {activity.map((item) => {
-          const progression = dieProgression(item)
+      <div id="sessions-list" className="border-y border-[var(--theme-border)] divide-y divide-[var(--theme-border)]" role="list" aria-label="Session history">
+        {sessions.map((session) => {
+          const duration = formatDuration(session.started_at, session.ended_at)
+          const isAbandonedRoll = (
+            !session.active_thread
+            && session.last_rolled_result == null
+            && (session.snapshot_count ?? 0) <= 1
+          )
+          const activityLine = session.active_thread
+            ? buildActivityLine(session)
+            : null
+          // The dice progression is rendered once per card, independently of the
+          // activity line, so a rated or read session never loses its ladder
+          // and roll (#3573).
+          const diceProgression = session.ladder_path
+            ? formatDiceProgression(session.ladder_path, session.last_rolled_result)
+            : ''
           return (
-            <div key={item.event_id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
+            <div key={session.id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
               <div className="w-16 md:w-20 shrink-0">
                 <div className="text-xs font-bold leading-none text-stone-200">
-                  {formatDate(item.timestamp)}
+                  {formatDate(session.started_at)}
                 </div>
                 <div className="mt-1 text-[10px] font-bold uppercase tracking-widest leading-none text-stone-500">
-                  {formatTime(item.timestamp)}
+                  {formatTime(session.started_at)}
                 </div>
               </div>
 
               <div className="min-w-0 flex-1 space-y-1.5">
-                <p className="font-bold text-sm leading-tight text-stone-200 truncate">
-                  {activityHeadline(item)}
-                  <ActivitySubject item={item} />
-                </p>
+                {isAbandonedRoll ? (
+                  <p className="text-sm font-bold text-[var(--theme-text-primary)]">
+                    No issue selected
+                  </p>
+                ) : session.active_thread ? (
+                  <>
+                    <p className="font-bold text-sm leading-tight text-stone-200 truncate">
+                      {session.active_thread.title}
+                      {session.active_thread.next_issue_number ? (
+                        <span className="text-stone-400"> · #{session.active_thread.next_issue_number}</span>
+                      ) : null}
+                      {session.active_thread.tags && session.active_thread.tags.length > 0 ? (
+                        <span className="text-stone-400">
+                          {' · ' + session.active_thread.tags.map(t => t.name).join(', ')}
+                        </span>
+                      ) : null}
+                    </p>
+                    {activityLine ? (
+                      <p className="text-xs text-stone-400">
+                        {activityLine}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                        {session.active_thread.issues_remaining != null
+                          ? `${session.active_thread.issues_remaining} left in queue`
+                          : 'In progress'}
+                      </p>
+                    )}
+                  </>
+                ) : null}
 
-                {progression && (
+                {diceProgression && (
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
-                    {progression}
+                    {diceProgression}
                   </p>
                 )}
 
-                {item.issue_id != null && (
-                  <div className="pt-1">
-                    <CompactIssueCardTrigger
-                      issueId={item.issue_id}
-                      threadTitle={item.thread_title ?? 'Deleted series'}
-                      issueNumber={item.issue_number ?? cardsByIssue.get(item.issue_id)?.issue_number ?? '?'}
-                      status={cardsByIssue.get(item.issue_id)?.status === 'read' ? 'read' : 'unread'}
-                      card={cardsByIssue.get(item.issue_id) ?? null}
-                      hideTitle
-                    />
-                  </div>
-                )}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                  {duration && <span>Duration: {duration}</span>}
+                  {(session.snapshot_count ?? 0) > 0 && (
+                    <Link
+                      to={`/sessions/${session.id}`}
+                      className="underline decoration-dotted underline-offset-2 hover:text-stone-300"
+                    >
+                      Snapshots ({session.snapshot_count})
+                    </Link>
+                  )}
+                  <Link
+                    to={`/sessions/${session.id}`}
+                    aria-label={buildSessionLinkLabel(session)}
+                    className="inline-flex items-center gap-1 text-stone-400 hover:text-stone-200 underline decoration-dotted underline-offset-4"
+                  >
+                    View full session <span aria-hidden>→</span>
+                  </Link>
+                </div>
               </div>
             </div>
           )
@@ -233,7 +277,7 @@ export default function HistoryPage() {
       {error && !isLoadingMore && (
         <div className="text-center py-4">
           <p className="text-sm font-bold text-red-400 mb-3">
-            Failed to load more activity
+            Failed to load more sessions
           </p>
           <button
             onClick={loadMore}
@@ -250,7 +294,7 @@ export default function HistoryPage() {
             onClick={loadMore}
             className="h-10 md:h-12 px-6 md:px-8 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
           >
-            Load more activity
+            Load More Sessions
           </button>
         </div>
       )}

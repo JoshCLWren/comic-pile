@@ -37,15 +37,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
-      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
-        uses: actions/checkout@v7
-        with:
-          repository: JoshCLWren/rotisserie
-          ref: f74f612d4e7a6dec65a9c17f76596c1eb567a19e
-          path: .rotisserie/runtime
-          persist-credentials: false
-      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
-        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Configure shared Neon factory discovery cache
         uses: ./.github/actions/factory-state-cache
@@ -247,7 +238,7 @@ jobs:
           marker='Can the fleet move work, and which factories are actually useful?'
           loader='factory-status-live/index.html'
 
-          for _ in {1..18}; do
+          for attempt in {1..18}; do
             shell="$(curl --fail --silent --show-error --location \
               -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "$page_url" 2>/dev/null || true)"
             live="$(curl --fail --silent --show-error --location \

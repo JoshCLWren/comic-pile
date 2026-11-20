@@ -6,7 +6,7 @@ use axum::{
 };
 use comicpile_roll_service::{
     config::{Config, Environment},
-    router, test_support,
+    router, AppState,
 };
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tower::ServiceExt;
@@ -96,7 +96,7 @@ fn public_production_binding_requires_verified_tls_transport() {
 
 #[tokio::test]
 async fn health_and_error_envelopes_work_without_database_checkout() {
-    let state = Arc::new(test_support::test_app_state(config()));
+    let state = Arc::new(AppState::new(config()).unwrap());
     let app = router(state.clone());
     for (method, path, status, expected) in [
         (
@@ -161,7 +161,7 @@ async fn stalled_database_handshake_hits_configured_create_timeout() {
         .parse()
         .unwrap();
     config.pool_timeout = Duration::from_millis(50);
-    let state = test_support::test_app_state(config);
+    let state = AppState::new(config).unwrap();
     let started = std::time::Instant::now();
     let result = tokio::time::timeout(Duration::from_secs(1), state.pool.get())
         .await

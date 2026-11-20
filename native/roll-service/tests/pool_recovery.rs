@@ -79,7 +79,8 @@ fn state_with_recycling(
         _ => None,
     })
     .expect("pool recovery test config");
-    let mut state = test_support::test_app_state_with_recycling(config, recycling_method);
+    let mut state =
+        AppState::with_recycling(config, recycling_method).expect("pool recovery test state");
     state.connection_recovery = connection_recovery;
     Arc::new(state)
 }

@@ -130,7 +130,9 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
         )
     code_coupled_docs = {
         "docs/API.md",
+        "docs/AUTONOMOUS_FACTORY_POLICY.md",
         "docs/DATABASE_SAVE_LOAD.md",
+        "docs/FACTORY_GITHUB_VISIBILITY.md",
         "docs/GIT_HOOKS.md",
         "docs/ISSUE_EXECUTION_PROTOCOL.md",
         "docs/PRODUCTION_STARTUP_DIAGNOSTICS.md",

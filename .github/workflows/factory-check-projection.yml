@@ -6,6 +6,7 @@ on:
   workflow_run:
     workflows:
       - CI
+      - Route Fragment Guard
       - PR-Agent Advisory Review
       - Local Ollama Review
       - Fixed Model PR Repair Guard
@@ -36,17 +37,6 @@ jobs:
         with:
           ref: main
           persist-credentials: false
-      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
-        if: env.REVIEW_FAILURE == 'true'
-        uses: actions/checkout@v7
-        with:
-          repository: JoshCLWren/rotisserie
-          ref: f74f612d4e7a6dec65a9c17f76596c1eb567a19e
-          path: .rotisserie/runtime
-          persist-credentials: false
-      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
-        if: env.REVIEW_FAILURE == 'true'
-        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Configure restricted Neon for failed-review cooldown only
         if: env.REVIEW_FAILURE == 'true'

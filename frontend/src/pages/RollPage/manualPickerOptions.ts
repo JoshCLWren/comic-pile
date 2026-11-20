@@ -18,8 +18,6 @@ export interface ManualPickerThread {
   issue_number?: string | null
   issues_remaining?: number | null
   comicvine_mapping?: ComicVineMappingHealth | null
-  /** Derived representative cover on the existing thread list projection. */
-  series_cover_image_url?: string | null
 }
 
 /** One rendered picker choice. */
@@ -28,8 +26,6 @@ export interface ManualPickerOption {
   id: number
   /** Full accessible label; disambiguated when base labels collide. */
   label: string
-  threadTitle?: string
-  coverImageUrl?: string | null
 }
 
 /** The picker's two rendered option groups. */
@@ -251,16 +247,12 @@ export function buildManualPickerOptions(params: {
   }
   resolveResidualCollisions(rows, duplicateNormalizedTitles)
 
-  const toOption = (row: PickerRow): ManualPickerOption => {
-    const option: ManualPickerOption = { id: row.thread.id, label: row.label }
-    if (row.thread.series_cover_image_url) {
-      option.threadTitle = row.thread.title
-      option.coverImageUrl = row.thread.series_cover_image_url
-    }
-    return option
-  }
   return {
-    activeOptions: rows.flatMap((row) => row.group === 'active' ? [toOption(row)] : []),
-    snoozedOptions: rows.flatMap((row) => row.group === 'snoozed' ? [toOption(row)] : []),
+    activeOptions: rows.flatMap((row) =>
+      row.group === 'active' ? [{ id: row.thread.id, label: row.label }] : [],
+    ),
+    snoozedOptions: rows.flatMap((row) =>
+      row.group === 'snoozed' ? [{ id: row.thread.id, label: row.label }] : [],
+    ),
   }
 }

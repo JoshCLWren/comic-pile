@@ -13,7 +13,7 @@ for (const width of [390, 1280]) {
     page.on('request', (request) => {
       if (request.url().includes('remove-identity')) removed.push(request.url())
     })
-    await page.route('**/api/v2/comicvine/search/series**', (route) => route.fulfill({ json: {
+    await page.route('**/api/v1/comicvine/search/series**', (route) => route.fulfill({ json: {
       query: 'Tom Strong', results: [{ comicvine_volume_id: 6566, name: 'Tom Strong',
         publisher: 'America’s Best Comics', start_year: 1999, issue_count: 36,
         site_detail_url: null, image_url: null }],
@@ -37,7 +37,7 @@ for (const width of [390, 1280]) {
           reason: null }],
       } })
     })
-    await page.route('**/api/v2/series-mapping-commits', async (route) => {
+    await page.route('**/api/v1/catalog/series-mappings/commit', async (route) => {
       // SAFETY: this test owns the approval flow and asserts its row IDs before using the body.
       const body = route.request().postDataJSON() as { approved_row_ids: string[]; idempotency_key: string }
       expect(body.approved_row_ids).toEqual([`issue:${originId}`])

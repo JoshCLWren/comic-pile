@@ -1,7 +1,8 @@
-"""Continuity-rule request schemas."""
+"""Continuity-rule request and response schemas."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -82,3 +83,21 @@ class ContinuityRuleCreate(BaseModel):
                     deduped.append(target)
             self.convergence_targets = deduped
         return self
+
+
+class ContinuityRuleResponse(BaseModel):
+    """Schema for a persisted generalized continuity rule."""
+
+    id: int
+    user_id: int
+    source_type: ContinuityNodeType
+    source_id: int
+    target_type: ContinuityNodeType
+    target_id: int
+    satisfaction_type: ContinuitySatisfactionType
+    checkpoint_issue_id: int | None
+    convergence_targets: list[ConvergenceTarget]
+    selected_member_issue_ids: list[int]
+    note: str | None
+    created_at: datetime
+    updated_at: datetime

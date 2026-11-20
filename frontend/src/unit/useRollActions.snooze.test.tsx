@@ -6,7 +6,6 @@
  * `console.error` after the sheet had already closed. Either way the reader
  * saw the click "succeed" and nothing was recorded.
  */
-import type { RollUnsnoozeResponse } from '../services/apiTypes'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NavigateFunction } from 'react-router-dom'
@@ -62,8 +61,6 @@ function renderActionSheet(options: HarnessOptions = {}) {
   }))
   const onSnoozeRefreshFailed = vi.fn()
   const refetchBootstrap = vi.fn(() => Promise.resolve(bootstrap))
-  // SAFETY: the hook discards the unsnooze response body; an empty stub suffices
-  const unsnoozeMutate = vi.fn((_threadId: number) => Promise.resolve({} as RollUnsnoozeResponse))
 
   const { result } = renderHook(() => {
     const state = useRollPageState()
@@ -81,7 +78,6 @@ function renderActionSheet(options: HarnessOptions = {}) {
         moveToFrontMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         moveToBackMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         shuffleQueueMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
-        unsnoozeMutation: { mutate: unsnoozeMutate, isPending: false },
       },
       refetchBootstrap,
       enterRatingView: vi.fn(() => Promise.resolve()),
@@ -94,7 +90,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
   })
 
   // `result` stays live so every assertion reads the latest render's closure.
-  return { result, snoozeMutate, snoozeResponse, refetchBootstrap, onSnoozeRefreshFailed, unsnoozeMutate }
+  return { result, snoozeMutate, snoozeResponse, refetchBootstrap, onSnoozeRefreshFailed }
 }
 
 /** Select the pooled series whose action sheet the reader opened. */
@@ -170,7 +166,8 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
   })
 
   it('unsnoozes the selected series regardless of the pending thread', async () => {
-    const { result, snoozeMutate, refetchBootstrap, unsnoozeMutate } = renderActionSheet({
+    document.cookie = `comicpile_roll_snoozes=${encodeURIComponent('[8,9]')}; path=/`
+    const { result, snoozeMutate, refetchBootstrap } = renderActionSheet({
       bootstrap: bootstrapWith({ snoozed_threads: [pooledThread(8)], pending_thread_id: null }),
     })
     selectThread(result, 8)
@@ -179,11 +176,10 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
       await result.current.actions.handleAction('snooze')
     })
 
-    // Roll unsnooze calls the native v2 endpoint (restores the pending roll and
-    // reverts the die, #4589) and refreshes, with no legacy v1 unsnooze call.
-    expect(unsnoozeMutate).toHaveBeenCalledWith(8)
-    // The unsnooze mutation owns the bootstrap refresh in onSuccess; no second refetch.
-    expect(refetchBootstrap).not.toHaveBeenCalled()
+    // Roll unsnooze is browser-only: it drops the id from the snooze cookie
+    // and refreshes, with no legacy v1 unsnooze server call (#4349).
+    expect(decodeURIComponent(document.cookie)).toContain('[9]')
+    expect(refetchBootstrap).toHaveBeenCalled()
     expect(snoozeMutate).not.toHaveBeenCalled()
   })
 

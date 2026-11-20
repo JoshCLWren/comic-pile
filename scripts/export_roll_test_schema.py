@@ -23,11 +23,10 @@ import re
 import shutil
 import subprocess
 import sys
-import uuid
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-FIXTURE_PATH = REPO_ROOT / "native/migrate/migrations/V1__baseline.sql"
+FIXTURE_PATH = REPO_ROOT / "native/roll-service/tests/fixtures/schema/public_schema.sql"
 
 # pg_dump emits psql meta-commands and version banners that vary by client
 # version or per invocation. Dropping them keeps the fixture diffable and
@@ -489,62 +488,6 @@ def _dump(database_url: str) -> str:
     return _normalize(result.stdout)
 
 
-def _migration_sql_paths() -> list[Path]:
-    """Return Rust migration SQL files in version order."""
-    paths = sorted(path for path in FIXTURE_PATH.parent.glob("*.sql") if path.is_file())
-    return paths
-
-
-def _as_psycopg_url(database_url: str) -> str:
-    """Return a sync psycopg SQLAlchemy URL for SQLAlchemy operations."""
-    if database_url.startswith("postgresql+asyncpg://"):
-        return database_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
-    if database_url.startswith("postgresql+psycopg://"):
-        return database_url
-    if database_url.startswith("postgres://"):
-        return database_url.replace("postgres://", "postgresql+psycopg://", 1)
-    if database_url.startswith("postgresql://"):
-        return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return database_url
-
-
-def _with_database(database_url: str, database: str) -> str:
-    """Return *database_url* with its database path component replaced."""
-    sync_url = database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
-    sync_url = sync_url.replace("postgresql+psycopg://", "postgresql://", 1)
-    head, _ = sync_url.rsplit("/", 1)
-    return f"{head}/{database}"
-
-
-def _dump_rust_migration_chain(database_url: str) -> str:
-    """Apply all Rust migration SQL files to a temporary DB and dump its schema."""
-    from sqlalchemy import create_engine, text
-
-    paths = _migration_sql_paths()
-    if not paths:
-        raise SystemExit(f"no migration SQL files found in {FIXTURE_PATH.parent}")
-
-    admin_url = _as_psycopg_url(_with_database(database_url, "postgres"))
-    temp_db = f"export_fixture_{uuid.uuid4().hex[:12]}"
-    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
-    try:
-        with admin_engine.connect() as connection:
-            connection.execute(text(f'CREATE DATABASE "{temp_db}"'))
-        temp_url = _with_database(database_url, temp_db)
-        temp_engine = create_engine(_as_psycopg_url(temp_url))
-        try:
-            with temp_engine.begin() as connection:
-                for path in paths:
-                    connection.exec_driver_sql(path.read_text())
-            return _dump(temp_url)
-        finally:
-            temp_engine.dispose()
-    finally:
-        with admin_engine.connect() as connection:
-            connection.execute(text(f'DROP DATABASE IF EXISTS "{temp_db}" WITH (FORCE)'))
-        admin_engine.dispose()
-
-
 def main() -> int:
     """Write the fixture, or verify it is current with ``--check``."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -565,60 +508,27 @@ def main() -> int:
         raise SystemExit("provide --database-url or set DATABASE_URL to a migrated database")
 
     _assert_at_head(database_url)
-    alembic_exported = _dump(database_url)
-    paths = _migration_sql_paths()
-
-    if len(paths) > 1:
-        rust_exported = _dump_rust_migration_chain(database_url)
-        if _normalize_catalog(rust_exported) != _normalize_catalog(alembic_exported):
-            delta = _compare_normalized_schemas(rust_exported, alembic_exported)
-            details = []
-            for kind in ("added", "removed", "changed"):
-                for item in delta[kind][:20]:
-                    details.append(f"{kind}: {item}")
-            if details:
-                print("\n".join(details), file=sys.stderr)
-            raise SystemExit(
-                "Rust migration chain schema differs from the Alembic head schema. "
-                "Update the incremental migration files to match."
-            )
-        exported = rust_exported
-    else:
-        exported = alembic_exported
+    exported = _dump(database_url)
 
     if args.check:
-        if len(paths) <= 1:
-            if not FIXTURE_PATH.exists():
-                raise SystemExit(f"missing fixture: {FIXTURE_PATH.relative_to(REPO_ROOT)}")
-            current = FIXTURE_PATH.read_text()
-            if current != exported:
-                diff = subprocess.run(
-                    ["diff", "-u", str(FIXTURE_PATH), "-"],
-                    input=exported,
-                    text=True,
-                    capture_output=True,
-                    check=False,
-                )
-                print(diff.stdout, file=sys.stderr)
-                raise SystemExit(
-                    "native Roll test schema fixture is stale. Run `make roll-test-schema`."
-                )
-            print(f"{FIXTURE_PATH.relative_to(REPO_ROOT)} matches the Alembic head schema.")
-            return 0
-
         if not FIXTURE_PATH.exists():
-            raise SystemExit(f"missing baseline fixture: {FIXTURE_PATH.relative_to(REPO_ROOT)}")
-        print(
-            "Rust migration chain matches the Alembic head schema "
-            f"(baseline preserved at {FIXTURE_PATH.relative_to(REPO_ROOT)})."
-        )
+            raise SystemExit(f"missing fixture: {FIXTURE_PATH.relative_to(REPO_ROOT)}")
+        current = FIXTURE_PATH.read_text()
+        if current != exported:
+            diff = subprocess.run(
+                ["diff", "-u", str(FIXTURE_PATH), "-"],
+                input=exported,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            print(diff.stdout, file=sys.stderr)
+            raise SystemExit(
+                "native Roll test schema fixture is stale. Run `make roll-test-schema`."
+            )
+        print(f"{FIXTURE_PATH.relative_to(REPO_ROOT)} matches the Alembic head schema.")
         return 0
 
-    if len(paths) > 1:
-        raise SystemExit(
-            "incremental Rust migrations exist; do not rewrite 0001_baseline.sql. "
-            "Add or update incremental migration SQL to match the Alembic head."
-        )
     FIXTURE_PATH.parent.mkdir(parents=True, exist_ok=True)
     FIXTURE_PATH.write_text(exported)
     print(

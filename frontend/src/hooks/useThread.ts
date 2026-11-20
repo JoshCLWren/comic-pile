@@ -5,7 +5,6 @@ import {
   applyEditedThreadToQueuePages,
   invalidateAfterCreatorCreditChange,
   invalidateAfterQueueMutation,
-  invalidateAfterThreadMetadataEdit,
   invalidatePotentialDuplicates,
 } from '../query/cacheEffects';
 import { queryClient } from '../query/queryClient';
@@ -72,13 +71,10 @@ export function useUpdateThread() {
       applyEditedThreadToQueuePages(queryClient, result);
       // A rename or re-format changes which existing editions the Add Series
       // and Edit/Rename forms should warn about (#3612). Queue rows are patched
-      // in place above, so Roll, session, and plan views still need to
-      // reconcile the new metadata without a hard reload (#5264).
+      // in place above, so only the advisory answers need to stop serving their
+      // pre-edit observation.
       if (variables.data.title !== undefined || variables.data.format !== undefined) {
-        await Promise.all([
-          invalidatePotentialDuplicates(queryClient),
-          invalidateAfterThreadMetadataEdit(queryClient),
-        ]);
+        await invalidatePotentialDuplicates(queryClient);
       }
       // Creator analytics are derived server-side from the series' manual
       // creator credits, so only a credits edit needs those refreshed. Leave

@@ -10,20 +10,23 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, test_support, AppState};
+use comicpile_roll_service::{config::Config, router, AppState};
 use serde_json::Value;
 use std::sync::Arc;
 use tower::ServiceExt;
 
 fn state() -> Arc<AppState> {
-    Arc::new(test_support::test_app_state(
-        Config::from_lookup(|key| match key {
-            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
-            "RUST_ROLL_JWT_SECRET" => Some("synthetic-csrf-test-secret".into()),
-            _ => None,
-        })
+    Arc::new(
+        AppState::new(
+            Config::from_lookup(|key| match key {
+                "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+                "RUST_ROLL_JWT_SECRET" => Some("synthetic-csrf-test-secret".into()),
+                _ => None,
+            })
+            .unwrap(),
+        )
         .unwrap(),
-    ))
+    )
 }
 
 async fn status_and_body(
@@ -58,12 +61,11 @@ async fn status_and_body(
 async fn protected_native_mutations_require_a_matching_double_submit_pair() {
     // Cover the live mutation paths the SPA actually calls, not only one alias.
     for path in [
-        "/api/v2/roll/dismiss-pending",
+        "/api/v1/roll/dismiss-pending",
         "/api/v2/reading-sessions",
         "/api/v2/issues/cards",
         "/api/v2/queue-orders",
         "/api/v2/roll/offer",
-        "/api/v2/roll/unsnooze",
         "/api/v1/auth/logout",
     ] {
         for (cookie, header_value) in [
@@ -90,7 +92,7 @@ async fn protected_native_mutations_require_a_matching_double_submit_pair() {
     let (status, _) = status_and_body(
         Some("token-value"),
         Some("token-value"),
-        "/api/v2/roll/dismiss-pending",
+        "/api/v1/roll/dismiss-pending",
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);

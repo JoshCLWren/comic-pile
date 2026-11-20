@@ -329,6 +329,34 @@ async def test_convergence_is_multiple_incoming_dependencies(
 
 
 @pytest.mark.asyncio
+async def test_issue_read_state_is_global_across_overlapping_plans(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Reading a shared Issue advances progress in every overlapping plan."""
+    user = await get_or_create_user_async(async_db)
+    shared = await _make_issue(async_db, user_id=user.id, suffix="shared")
+    other = await _make_issue(async_db, user_id=user.id, suffix="other")
+    await async_db.commit()
+
+    plan_p = await _create_plan(
+        auth_client,
+        "Plan P",
+        [_node("p-shared", shared.id, 0), _node("p-other", other.id, 1)],
+    )
+    plan_q = await _create_plan(
+        auth_client, "Plan Q", [_node("q-shared", shared.id, 0)]
+    )
+
+    marked = await auth_client.post(f"/api/v1/issues/{shared.id}:markRead")
+    assert marked.status_code == 204, marked.text
+
+    membership_p = await auth_client.get(f"/api/v1/continuity-plans/{plan_p}/membership")
+    membership_q = await auth_client.get(f"/api/v1/continuity-plans/{plan_q}/membership")
+    assert membership_p.json()["progress"] == {"total_issues": 2, "read_issues": 1}
+    assert membership_q.json()["progress"] == {"total_issues": 1, "read_issues": 1}
+
+
+@pytest.mark.asyncio
 async def test_provenance_round_trips_through_normalized_representation(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:

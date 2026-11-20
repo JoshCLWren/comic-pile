@@ -1,17 +1,15 @@
 //! Bounded, awaited ComicVine metadata-repair worker.
 //! A Vercel request is the lifetime of the work: never spawn and forget a task.
-use crate::{
-    db,
-    outbound::{OutboundHttp, OutboundRequest},
-    ApiError, AppState,
-};
+use crate::{db, ApiError, AppState};
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
     Json,
 };
 use bytes::Bytes;
-use http_body_util::BodyExt;
+use http_body_util::{BodyExt, Empty};
+use hyper::client::conn::http1;
+use hyper_util::rt::TokioIo;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use std::{sync::Arc, time::Duration};
@@ -26,7 +24,18 @@ const PROVIDER_TIMEOUT: Duration = Duration::from_secs(5);
 const COMPLETE_FRESH_DAYS: i64 = 30;
 const EMPTY_CREDIT_RECHECK_DAYS: i64 = 7;
 
-pub(crate) const FIELDS: &str = "id,name,issue_number,cover_date,store_date,image,volume,person_credits,character_credits,team_credits,story_arc_credits,date_last_updated";
+// A provider connection must not outlive its awaited Vercel request. In
+// particular, early return on malformed/oversized provider responses must
+// cancel the HTTP driver instead of leaving a detached serverless task.
+struct ConnectionGuard(tokio::task::JoinHandle<()>);
+
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+const FIELDS: &str = "id,name,issue_number,cover_date,store_date,image,volume,person_credits,character_credits,team_credits,story_arc_credits,date_last_updated";
 const CLAIM: &str = r#"
 WITH candidate AS (
   SELECT id FROM comicvine_metadata_refresh_requests
@@ -101,22 +110,29 @@ pub struct DrainReport {
 }
 
 #[derive(Debug)]
-pub(crate) enum ProviderFailure {
+enum ProviderFailure {
     RateLimited(u32),
     Unavailable,
     Timeout,
     InvalidPayload,
 }
 
-/// Authorize the ComicVine metadata-repair cron route through the same shared
-/// gate as the release-sync cron. [`crate::cron_auth::authorize_cron_http`] owns
-/// the fail-closed placeholder rejection, case-insensitive `Bearer` scheme
-/// (RFC 6750, Python's `scheme.lower()`), constant-time compare and the crucial
-/// 503 (unconfigured) vs 401 (bad bearer) status split. Keeping the typed
-/// `Result` here instead of collapsing it to a `bool` is what preserves Python's
-/// `require_cron_secret` contract on this route.
-fn authorize(headers: &HeaderMap, expected: Option<&str>) -> Result<(), ApiError> {
-    crate::cron_auth::authorize_cron_http(headers, expected)
+fn allowed(headers: &HeaderMap, expected: Option<&str>) -> bool {
+    let Some(secret) = expected.filter(|s| s.len() >= 16) else {
+        return false;
+    };
+    let Some(header) = headers.get("authorization").and_then(|h| h.to_str().ok()) else {
+        return false;
+    };
+    let Some(provided) = header.strip_prefix("Bearer ") else {
+        return false;
+    };
+    let a = provided.as_bytes();
+    let b = secret.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter().zip(b).fold(0_u8, |v, (x, y)| v | (x ^ y)) == 0
 }
 
 fn issue_id(external_id: &str) -> Option<u32> {
@@ -254,95 +270,92 @@ fn provider_timestamp(value: &Value) -> Option<String> {
     )
 }
 
-/// Raw outcome of one ComicVine exchange, before a caller applies its own
-/// throttle and envelope policy (the repair worker and the browser routes
-/// mirror different retired Python clients).
-#[derive(Debug)]
-pub(crate) enum Exchange {
-    /// A decoded JSON body from a 2xx response.
-    Payload(Value),
-    /// HTTP 403, 420 or 429 with the raw `Retry-After` header, if any.
-    Throttled {
-        status: u16,
-        retry_after: Option<String>,
-    },
-}
-
-/// One repair-worker provider call: 429/403 are throttles whose
-/// `Retry-After` is clamped to 60..=3600 s, other non-2xx statuses (420
-/// included) are unavailable, and the envelope must carry `status_code: 1`.
-pub(crate) async fn provider_response(
-    outbound: &Arc<dyn OutboundHttp>,
+async fn provider_response(
     resource: &str,
     extra_query: &str,
     api_key: &str,
 ) -> Result<Value, ProviderFailure> {
-    match provider_exchange(outbound, resource, extra_query, api_key).await? {
-        Exchange::Throttled {
-            status: 429 | 403,
-            retry_after,
-        } => Err(ProviderFailure::RateLimited(
-            retry_after
-                .and_then(|h| h.parse::<u32>().ok())
-                .unwrap_or(60)
-                .clamp(60, 3600),
-        )),
-        Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
-        Exchange::Payload(payload) if payload["status_code"].as_i64() == Some(1) => Ok(payload),
-        Exchange::Payload(_) => Err(ProviderFailure::Unavailable),
-    }
-}
-
-pub(crate) async fn provider_exchange(
-    outbound: &Arc<dyn OutboundHttp>,
-    resource: &str,
-    extra_query: &str,
-    api_key: &str,
-) -> Result<Exchange, ProviderFailure> {
     // Callers construct only trusted resource names and numeric query values.
     // Fail closed on unexpected credential syntax rather than sending an unescaped secret.
     if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
         return Err(ProviderFailure::Unavailable);
     }
-    let request = OutboundRequest {
-        method: http::Method::GET,
-        path: format!("/api/{resource}/?api_key={api_key}&format=json{extra_query}"),
-        headers: vec![
-            ("accept".to_string(), "application/json".to_string()),
-            (
-                "user-agent".to_string(),
-                "ComicPile/1.0 (metadata repair)".to_string(),
-            ),
-        ],
-        body: Bytes::new(),
-    };
-    let exchange = async {
-        let response = outbound.send(HOST, request).await.map_err(|e| {
+    let connect = async {
+        let tcp = tokio::net::TcpStream::connect((HOST, 443))
+            .await
+            .map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ProviderFailure::Unavailable
+            })?;
+        let tls = native_tls::TlsConnector::new().map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
                 "preserved underlying error before mapping"
             );
             ProviderFailure::Unavailable
         })?;
-        let status = response.status;
-        if status == StatusCode::TOO_MANY_REQUESTS
-            || status == StatusCode::FORBIDDEN
-            || status.as_u16() == 420
+        let tls = tokio_native_tls::TlsConnector::from(tls)
+            .connect(HOST, tcp)
+            .await
+            .map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ProviderFailure::Unavailable
+            })?;
+        let (mut sender, connection) = http1::handshake(TokioIo::new(tls)).await.map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ProviderFailure::Unavailable
+        })?;
+        let _connection_guard = ConnectionGuard(tokio::spawn(async move {
+            let _ = connection.await;
+        }));
+        let path = format!("/api/{resource}/?api_key={api_key}&format=json{extra_query}");
+        let request = http::Request::builder()
+            .method("GET")
+            .uri(path)
+            .header("host", HOST)
+            .header("accept", "application/json")
+            .header("user-agent", "ComicPile/1.0 (metadata repair)")
+            .body(Empty::<Bytes>::new())
+            .map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ProviderFailure::Unavailable
+            })?;
+        let mut response = sender.send_request(request).await.map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ProviderFailure::Unavailable
+        })?;
+        if response.status() == StatusCode::TOO_MANY_REQUESTS
+            || response.status() == StatusCode::FORBIDDEN
         {
-            return Ok(Exchange::Throttled {
-                status: status.as_u16(),
-                retry_after: response
-                    .headers
-                    .get("retry-after")
-                    .and_then(|h| h.to_str().ok())
-                    .map(str::to_owned),
-            });
+            let retry = response
+                .headers()
+                .get("retry-after")
+                .and_then(|h| h.to_str().ok())
+                .and_then(|h| h.parse::<u32>().ok())
+                .unwrap_or(60)
+                .clamp(60, 3600);
+            return Err(ProviderFailure::RateLimited(retry));
         }
-        if !status.is_success() {
+        if !response.status().is_success() {
             return Err(ProviderFailure::Unavailable);
         }
         if response
-            .headers
+            .headers()
             .get("content-length")
             .and_then(|h| h.to_str().ok())
             .and_then(|n| n.parse::<usize>().ok())
@@ -351,8 +364,7 @@ pub(crate) async fn provider_exchange(
             return Err(ProviderFailure::InvalidPayload);
         }
         let mut data = Vec::new();
-        let mut body = response.body;
-        while let Some(frame) = body.frame().await {
+        while let Some(frame) = response.body_mut().frame().await {
             let frame = frame.map_err(|e| {
                 tracing::debug!(
                     error_kind = crate::error_kind(&e),
@@ -374,9 +386,12 @@ pub(crate) async fn provider_exchange(
             );
             ProviderFailure::InvalidPayload
         })?;
-        Ok(Exchange::Payload(payload))
+        if payload["status_code"].as_i64() != Some(1) {
+            return Err(ProviderFailure::Unavailable);
+        }
+        Ok(payload)
     };
-    tokio::time::timeout(PROVIDER_TIMEOUT, exchange)
+    tokio::time::timeout(PROVIDER_TIMEOUT, connect)
         .await
         .map_err(|e| {
             tracing::debug!(
@@ -387,13 +402,8 @@ pub(crate) async fn provider_exchange(
         })?
 }
 
-async fn provider_issue(
-    outbound: &Arc<dyn OutboundHttp>,
-    id: u32,
-    api_key: &str,
-) -> Result<Value, ProviderFailure> {
+async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure> {
     provider_response(
-        outbound,
         &format!("issue/4000-{id}"),
         &format!("&field_list={FIELDS}"),
         api_key,
@@ -408,15 +418,8 @@ async fn provider_issue(
 /// by the Python preview builder. Never turn an outage or partial roster into
 /// an empty successful plan: doing so can approve a wrong comic identity.
 pub(crate) async fn catalog_volume_roster(
-    outbound: &Arc<dyn OutboundHttp>,
     external_id: &str,
 ) -> Result<(Value, Vec<Value>), ApiError> {
-    // Test scaffolding only: an installed fixture short-circuits the live
-    // provider so handler tests stay deterministic. Production never installs
-    // one, so this is an inert map lookup.
-    if let Some(fixture) = crate::test_support::lookup_test_volume_roster(external_id) {
-        return Ok(fixture);
-    }
     let unavailable = || ApiError::ServiceUnavailable("provider_unavailable".to_owned());
     let volume_id = external_id
         .parse::<u32>()
@@ -427,7 +430,7 @@ pub(crate) async fn catalog_volume_roster(
         .ok()
         .filter(|v| !v.is_empty())
         .ok_or_else(unavailable)?;
-    let volume = provider_response(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
+    let volume = provider_response(&format!("volume/4050-{volume_id}"), "", &api_key)
         .await
         .map_err(|_| unavailable())?;
     let volume_info = volume
@@ -449,7 +452,7 @@ pub(crate) async fn catalog_volume_roster(
     let mut expected_total: Option<usize> = None;
     loop {
         let query = format!("&filter=volume:{volume_id}&limit=100&offset={offset}");
-        let page = provider_response(outbound, "issues", &query, &api_key)
+        let page = provider_response("issues", &query, &api_key)
             .await
             .map_err(|_| unavailable())?;
         let results = page
@@ -703,7 +706,7 @@ async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'sta
         .await?;
         return Ok("deferred");
     };
-    match provider_issue(&state.outbound, id, key)
+    match provider_issue(id, key)
         .await
         .and_then(|value| normalized_metadata(&value, id))
     {
@@ -807,8 +810,7 @@ pub(crate) async fn hydrate_catalog_commit(
             let Some(comicvine_id) = issue_id(&external_id) else {
                 continue;
             };
-            let Ok(provider_data) = provider_issue(&state.outbound, comicvine_id, &api_key).await
-            else {
+            let Ok(provider_data) = provider_issue(comicvine_id, &api_key).await else {
                 continue;
             };
             let Ok((patch, _, external_url, provider_updated_at)) =
@@ -852,19 +854,9 @@ pub async fn drain(
     headers: HeaderMap,
 ) -> Result<Json<DrainReport>, ApiError> {
     let secret = std::env::var("CRON_SECRET").ok();
-    drain_authorized(&state, &headers, secret.as_deref()).await
-}
-
-/// Handler body with the expected secret injected so the 503/401 route gate is
-/// directly testable without mutating the process-global `CRON_SECRET`. The
-/// auth check returns before any database work, so authorization regressions
-/// need no database.
-async fn drain_authorized(
-    state: &AppState,
-    headers: &HeaderMap,
-    expected: Option<&str>,
-) -> Result<Json<DrainReport>, ApiError> {
-    authorize(headers, expected)?;
+    if !allowed(&headers, secret.as_deref()) {
+        return Err(ApiError::Unauthorized("Unauthorized".into()));
+    }
     let key = std::env::var("COMICVINE_API_KEY").ok();
     let key = key.as_deref().filter(|v| !v.is_empty());
     let mut report = DrainReport {
@@ -872,11 +864,11 @@ async fn drain_authorized(
         ..Default::default()
     };
     for index in 0..BATCH_LIMIT {
-        let Some(job) = claim(state).await? else {
+        let Some(job) = claim(&state).await? else {
             break;
         };
         report.claimed += 1;
-        match process(state, &job, key).await? {
+        match process(&state, &job, key).await? {
             "completed" => report.completed += 1,
             "no_credits" => report.no_credits += 1,
             "failed" => report.failed += 1,
@@ -1061,153 +1053,10 @@ mod tests {
     fn cron_auth_fails_closed() {
         let mut headers = HeaderMap::new();
         headers.insert("authorization", "Bearer 1234567890123456".parse().unwrap());
-        authorize(&headers, Some("1234567890123456")).expect("matching secret");
-        assert_eq!(
-            authorize(&headers, Some("1234567890123457"))
-                .expect_err("wrong secret")
-                .status(),
-            StatusCode::UNAUTHORIZED
-        );
-        assert_eq!(
-            authorize(&headers, Some("short"))
-                .expect_err("non-matching secret")
-                .status(),
-            StatusCode::UNAUTHORIZED
-        );
-        assert_eq!(
-            authorize(&headers, None)
-                .expect_err("unconfigured")
-                .status(),
-            StatusCode::SERVICE_UNAVAILABLE
-        );
-    }
-
-    #[test]
-    fn authorize_accepts_case_insensitive_bearer_scheme() {
-        // Parity with Python's `scheme.lower()` and the release-sync cron gate
-        // (RFC 6750): this route used to require the literal "Bearer " prefix,
-        // diverging from Python for `bearer`/`BEARER` casings.
-        let secret = "a-very-secret-value";
-        for scheme in ["bearer", "BEARER", "Bearer"] {
-            let mut headers = HeaderMap::new();
-            headers.insert(
-                "authorization",
-                format!("{scheme} {secret}").parse().expect("valid header"),
-            );
-            authorize(&headers, Some(secret)).expect("case-insensitive bearer scheme");
-        }
-    }
-
-    #[test]
-    fn cron_auth_rejects_placeholder_secrets_as_unconfigured() {
-        // Missing/unconfigured/placeholder secret must fail closed as 503,
-        // matching Python's `require_cron_secret`, never collapse to a 401.
-        let mut headers = HeaderMap::new();
-        headers.insert("authorization", "Bearer 1234567890123456".parse().unwrap());
-        for placeholder in [
-            "",
-            "   ",
-            "[SENSITIVE]",
-            "  [SENSITIVE]  ",
-            "<redacted>",
-            "<REDACTED>",
-            "redacted",
-            "REDACTED",
-            "undefined",
-            "UNDEFINED",
-            "null",
-            "NULL",
-        ] {
-            assert_eq!(
-                authorize(&headers, Some(placeholder))
-                    .expect_err("placeholder secret must be treated as unconfigured")
-                    .status(),
-                StatusCode::SERVICE_UNAVAILABLE,
-                "placeholder: {placeholder:?}"
-            );
-        }
-    }
-
-    /// Auth failures return before any database work, so a synthetic state is
-    /// enough to exercise the real handler's 503/401 mapping.
-    fn cron_test_state() -> Arc<AppState> {
-        let config = crate::Config::from_lookup(|name| match name {
-            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
-            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
-            _ => None,
-        })
-        .expect("synthetic config");
-        Arc::new(AppState::new(config).expect("synthetic state"))
-    }
-
-    /// Extract the status from a rejected drain without requiring `Debug` on
-    /// the success payload (`Json<DrainReport>`), which is never produced on
-    /// the authorization-failure paths under test.
-    fn rejected_status(result: Result<Json<DrainReport>, ApiError>) -> StatusCode {
-        match result {
-            Ok(_) => panic!("cron request should have been rejected"),
-            Err(error) => error.status(),
-        }
-    }
-
-    #[tokio::test]
-    async fn drain_route_returns_503_for_unconfigured_cron_secret() {
-        // Route-level regression: the ComicVine repair cron must report a
-        // missing/placeholder CRON_SECRET as fail-closed 503, matching Python
-        // and the release-sync cron, rather than the pre-fix blanket 401.
-        let state = cron_test_state();
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "authorization",
-            "Bearer a-very-secret-value".parse().expect("valid header"),
-        );
-        for expected in [
-            None,
-            Some(""),
-            Some("[SENSITIVE]"),
-            Some("<redacted>"),
-            Some("redacted"),
-            Some("undefined"),
-            Some("null"),
-        ] {
-            assert_eq!(
-                rejected_status(drain_authorized(&state, &headers, expected).await),
-                StatusCode::SERVICE_UNAVAILABLE,
-                "expected: {expected:?}"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn drain_route_returns_401_for_bad_or_missing_bearer() {
-        // Route-level regression: a configured secret with a missing/malformed/
-        // wrong bearer remains a 401 (distinct from the 503 above).
-        let state = cron_test_state();
-        let expected = Some("a-very-secret-value");
-        assert_eq!(
-            rejected_status(drain_authorized(&state, &HeaderMap::new(), expected).await),
-            StatusCode::UNAUTHORIZED
-        );
-
-        let mut wrong = HeaderMap::new();
-        wrong.insert(
-            "authorization",
-            "Bearer not-the-secret".parse().expect("valid header"),
-        );
-        assert_eq!(
-            rejected_status(drain_authorized(&state, &wrong, expected).await),
-            StatusCode::UNAUTHORIZED
-        );
-
-        let mut malformed = HeaderMap::new();
-        malformed.insert(
-            "authorization",
-            "Token a-very-secret-value".parse().unwrap(),
-        );
-        assert_eq!(
-            rejected_status(drain_authorized(&state, &malformed, expected).await),
-            StatusCode::UNAUTHORIZED
-        );
+        assert!(allowed(&headers, Some("1234567890123456")));
+        assert!(!allowed(&headers, Some("1234567890123457")));
+        assert!(!allowed(&headers, Some("short")));
+        assert!(!allowed(&headers, None));
     }
     #[test]
     fn only_verified_singular_issue_payload_completes() {

@@ -4,14 +4,9 @@ on:
   pull_request:
     paths:
       - 'native/roll-service/**'
-      - 'native/migrate/**'
-      - 'alembic/**'
-      - 'scripts/check_rust_migration_parity.py'
       - 'build.rs'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'build.sh'
-      - 'check-rust-workspace-lock.mjs'
       - 'rust-toolchain.toml'
       - 'api/native_roll.rs'
       - '.vercelignore'
@@ -29,14 +24,9 @@ on:
     branches: [main]
     paths:
       - 'native/roll-service/**'
-      - 'native/migrate/**'
-      - 'alembic/**'
-      - 'scripts/check_rust_migration_parity.py'
       - 'build.rs'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'build.sh'
-      - 'check-rust-workspace-lock.mjs'
       - 'rust-toolchain.toml'
       - 'api/native_roll.rs'
       - '.vercelignore'
@@ -77,9 +67,6 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://postgres:native-local-test@127.0.0.1:5432/native_auth_test
       RUST_ROLL_TEST_DATABASE_URL: postgresql://postgres:native-local-test@127.0.0.1:5432/native_auth_test
       RUST_ROLL_PARITY_DATABASE_URL: postgresql://roll_test_dml:roll-test-dml@127.0.0.1:5432/native_auth_test
-      # comicpile-migrate is now a workspace member, so the workspace-wide test
-      # step runs its database tests too; they create their own scratch databases.
-      MIGRATE_TEST_DATABASE_URL: postgresql://postgres:native-local-test@127.0.0.1:5432/postgres
       # The workspace target directory is the repository root by default; keep
       # the release artifact at the path the parity runner and upload expect.
       CARGO_TARGET_DIR: ${{ github.workspace }}/native/roll-service/target
@@ -96,20 +83,6 @@ jobs:
           fi
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
-      - uses: Swatinem/rust-cache@v2.9.3
-        with:
-          workspaces: native/roll-service -> target
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Verify unified Cargo workspace lockfile
-        # Same guard the production @vercel/rust build.sh runs: fail on a
-        # second lockfile, divergent resolution or lock mutation, then export
-        # the canonical digest so build.rs asserts it on every cargo step.
-        working-directory: .
-        run: |
-          set -euo pipefail
-          node check-rust-workspace-lock.mjs
-          lock_sha256="$(node check-rust-workspace-lock.mjs --lock-sha256)"
-          printf 'COMICPILE_EXPECTED_LOCK_SHA256=%s\n' "$lock_sha256" >> "$GITHUB_ENV"
       - name: Formatting
         run: cargo fmt --all --check
       - name: Clippy
@@ -120,37 +93,11 @@ jobs:
         run: uv sync --frozen --all-extras
       - name: Install PostgreSQL client tools
         run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
-      - name: Rust migration runner (format, lint, tests)
-        working-directory: native/migrate
-        env:
-          MIGRATE_TEST_DATABASE_URL: postgresql://postgres:native-local-test@127.0.0.1:5432/postgres
-        run: |
-          set -euo pipefail
-          cargo fmt --check
-          cargo clippy --locked --all-targets -- -D warnings
-          cargo test --locked
-      - name: Apply the Rust baseline migration to the test database
-        working-directory: native/migrate
-        env:
-          MIGRATE_DATABASE_URL: ${{ env.RUST_ROLL_TEST_DATABASE_URL }}
-        run: cargo run --locked -- up
-      - name: Build the Alembic oracle database
+      - name: Apply Alembic schema to the test database
         working-directory: .
-        env:
-          DATABASE_URL: postgresql+asyncpg://postgres:native-local-test@127.0.0.1:5432/alembic_oracle
-        run: |
-          PGPASSWORD=native-local-test psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE alembic_oracle'
-          uv run alembic upgrade head
-      - name: Verify Rust migrations equal the Alembic head schema
-        working-directory: .
-        run: |
-          uv run python scripts/check_rust_migration_parity.py \
-            --alembic-url postgresql://postgres:native-local-test@127.0.0.1:5432/alembic_oracle \
-            --rust-url "$RUST_ROLL_TEST_DATABASE_URL"
+        run: uv run alembic upgrade head
       - name: Verify native Roll test schema fixture
         working-directory: .
-        env:
-          DATABASE_URL: postgresql+asyncpg://postgres:native-local-test@127.0.0.1:5432/alembic_oracle
         run: uv run python scripts/export_roll_test_schema.py --check
       - name: Unit and integration tests
         run: cargo test --workspace --locked --all-targets
@@ -173,7 +120,6 @@ jobs:
       - name: Build scalar parity runner
         run: cargo build --locked -p comicpile-roll-service --examples
       - name: Python versus Rust scalar parity
-        if: github.event_name == 'pull_request'
         working-directory: .
         env:
           PYTHONPATH: .
@@ -189,25 +135,15 @@ jobs:
           # include_str! dependency cannot pass full-checkout CI again.
           bundle="$(mktemp -d)"
           trap 'rm -rf "$bundle"' EXIT
-          mkdir -p "$bundle/api" "$bundle/native/roll-service" "$bundle/native/migrate"
+          mkdir -p "$bundle/api" "$bundle/native/roll-service"
           cp Cargo.toml Cargo.lock build.rs "$bundle/"
           cp api/native_roll.rs api/native_issue.rs "$bundle/api/"
           cp native/roll-service/Cargo.toml "$bundle/native/roll-service/"
           cp -R native/roll-service/src "$bundle/native/roll-service/src"
           test ! -e "$bundle/native/roll-service/tests"
-          # Cargo loads every declared workspace member's manifest (and needs
-          # its target sources) before building native_roll, so the migration
-          # crate must be present even though its binary is not built here.
-          # The real Vercel bundle also contains it; .vercelignore only drops
-          # tests/ and *.sql, which is why neither is copied above.
-          cp native/migrate/Cargo.toml "$bundle/native/migrate/"
-          cp -R native/migrate/src "$bundle/native/migrate/src"
-          test ! -e "$bundle/native/migrate/tests"
-          test ! -e "$bundle/native/migrate/migrations"
           (
             cd "$bundle"
             COMICPILE_BUILD_SHA="$GITHUB_SHA" \
-            COMICPILE_EXPECTED_LOCK_SHA256="$COMICPILE_EXPECTED_LOCK_SHA256" \
             CARGO_TARGET_DIR="$GITHUB_WORKSPACE/native/roll-service/target" \
               cargo build --release --locked --bin native_roll
           )

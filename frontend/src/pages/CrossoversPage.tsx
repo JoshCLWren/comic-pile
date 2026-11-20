@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
@@ -9,8 +9,6 @@ import {
 import { type DependencyGroup, type DependencyGroupMember } from '../services/api-dependency-groups'
 import type { Issue } from '../types'
 import Breadcrumbs from '../components/Breadcrumbs'
-import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
-import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import ConfirmDialog from '../components/ConfirmDialog'
 import GlossaryLink from '../components/GlossaryLink'
 import type { ThreadListItem } from '../types'
@@ -108,22 +106,6 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
     error: rangeIssuesError,
   } = useCrossoverIssuesForRange(rangeThread?.id ?? null, api)
   const isLoadingRangeIssues = rangeThread !== null && isPendingRangeIssues
-
-  // One bounded batch projection for the exact owned issues in the expanded
-  // (non-editing) group's rendered membership rows. Collapsed and editing
-  // groups render no cards, so their ids must not trigger metadata fetches.
-  const memberIssueIds = useMemo(
-    () => {
-      const expanded = groups.find((group) => group.id === expandedId && group.id !== editingId)
-      if (!expanded) return []
-      return expanded.memberships
-        .map((member) => member.issue_id)
-        .filter((id): id is number => id != null)
-    },
-    [groups, expandedId, editingId],
-  )
-  const cardsQuery = useIssueCards(memberIssueIds)
-  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
 
   const threadLoadError = threadsError ? errorMessage(threadsError, 'Unable to load comics for selection.') : null
   const rangeLoadError = rangeIssuesError
@@ -406,20 +388,9 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
                         {group.memberships.map((member) => {
                           const label = memberLabel(member)
                           return (
-                            <li key={member.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--theme-border)] px-3 py-2">
-                              <span className="min-w-0">{label}</span>
-                              <span className="flex shrink-0 items-center gap-2">
-                                {member.issue_id != null && (
-                                  <CompactIssueCardTrigger
-                                    issueId={member.issue_id}
-                                    threadTitle={member.series_title?.trim() || 'Unknown series'}
-                                    issueNumber={member.issue_number?.trim() || '?'}
-                                    card={cardsByIssue.get(member.issue_id) ?? null}
-                                    hideTitle
-                                  />
-                                )}
-                                <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={isAnyMutationPending} aria-label={`Remove ${label} from ${group.name}`}>Remove</button>
-                              </span>
+                            <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--theme-border)] px-3 py-2">
+                              <span>{label}</span>
+                              <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={isAnyMutationPending} aria-label={`Remove ${label} from ${group.name}`}>Remove</button>
                             </li>
                           )
                         })}

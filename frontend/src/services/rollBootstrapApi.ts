@@ -101,7 +101,7 @@ export function createRollBootstrapApi(client: HttpClient) {
       }
     },
     switchPrerequisite: (request: RollPrerequisiteSwitchRequest) =>
-      client.post<RollPrerequisiteSwitchResponse>('/v2/roll/switch-prerequisite', request),
+      client.post<RollPrerequisiteSwitchResponse>('/v1/roll/switch-prerequisite', request),
     /** Test hook: clears the client-lifetime session-resolution dedupe. */
     resetSessionState: (): void => {
       sessionState.resolvedTimezone = undefined

@@ -52,7 +52,6 @@ async function stabilizeApiRoute(route: Route): Promise<void> {
 
 async function installStableAuditResponses(page: Page): Promise<void> {
   await page.route('**/api/v2/auth/me', stabilizeApiRoute)
-  await page.route(/\/api\/v2\/activity(?:\?.*)?$/, stabilizeApiRoute)
   await page.route(/\/api\/v1\/sessions\/(?:current\/)?(?:\?.*)?$/, stabilizeApiRoute)
 }
 

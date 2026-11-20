@@ -21,8 +21,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/issue\\-identity/cbl\\-sources/browse$",
       "runtime": "native-rust",
-      "status": "target",
-      "exclude_from_inventory": true
+      "status": "target"
     },
     {
       "bucket": "v1_operations",
@@ -31,8 +30,7 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/issue\\-identity/cbl\\-sources/folders$",
       "runtime": "native-rust",
-      "status": "target",
-      "exclude_from_inventory": true
+      "status": "target"
     }
   ]
 }

@@ -11,7 +11,6 @@ import {
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
 import type { RollResponse } from '../../types'
-import type { RollUnsnoozeResponse } from '../../services/apiTypes'
 import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
@@ -27,7 +26,6 @@ interface RollMutations {
   moveToFrontMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
   moveToBackMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
   shuffleQueueMutation: { mutate: () => Promise<void>; isPending: boolean }
-  unsnoozeMutation: { mutate: (threadId: number) => Promise<RollUnsnoozeResponse>; isPending: boolean }
 }
 
 interface UseRollActionsParams {
@@ -106,7 +104,6 @@ export function useRollActions({
     moveToFrontMutation,
     moveToBackMutation,
     shuffleQueueMutation,
-    unsnoozeMutation,
   } = mutations
 
   function handleThreadClick(thread: RollBootstrapThread) {
@@ -182,10 +179,10 @@ export function useRollActions({
           break
         case 'snooze': {
           if (isSnoozed) {
-            // The server endpoint removes the snooze (restoring the pending
-            // roll and die when it is still the latest action) and the client
-            // clears the browser cookie. The mutation refreshes die state.
-            await unsnoozeMutation.mutate(selectedThread!.id)
+            // Roll unsnooze is client-only: remove the thread from the browser snooze cookie
+            const { removeRollSnooze } = await import('../../services/api-roll')
+            removeRollSnooze(selectedThread!.id)
+            await refetchBootstrap()
             break
           }
           // The snooze endpoint acts on the session's pending thread, so the

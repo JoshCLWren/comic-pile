@@ -211,7 +211,7 @@ test('does not make a redundant /auth/me call after AuthProvider resolves user',
   })
   
   // Navigation should not make its own /auth/me call; only AuthProvider does
-  // AuthProvider also calls /v2/users/me/preferences via fetchAndApplyPersistedTheme,
+  // AuthProvider also calls /v1/users/me/preferences via fetchAndApplyPersistedTheme,
   // so we count only the /v2/auth/me calls.
   const authMeCalls = mockApiGet.mock.calls.filter(
     (call) => call[0] === '/v2/auth/me',

@@ -8,7 +8,7 @@
 
 **Test:** Drag/reorder one and move another to front, then reload Queue and each thread page.
 
-**Expected:** Displayed positions agree everywhere (Queue list, Thread page and pending Roll label), persist, and do not duplicate or lose rows. Regression history: #5263, fixed by #5429.
+**Expected:** Displayed positions agree everywhere, persist, and do not duplicate or lose rows.
 
 ## MQA-QUEUE-002: Move to front affects the bounded pool
 
@@ -22,9 +22,7 @@
 
 **Test:** Snooze a QA series, inspect its queue/roll state, then unsnooze or satisfy the relevant backoff rule.
 
-**Expected:** Excluded series do not roll while excluded, without being deleted or silently re-prioritized; they return when eligible. Temporary snoozes are browser-scoped reroll exclusions that expire at local midnight or on Reset Dice ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405); UPDATE 2026-11-18). Durable exclusion is Remove from Queue, which is non-destructive and restorable from the excluded section.
-
-**Unsnooze (UPDATE 2026-11-18, [#4589](https://github.com/JoshCLWren/comic-pile/issues/4589)):** Queue Unsnooze calls the server: it removes that snooze and, when it was the latest snooze with no later action, restores the series as the pending roll and reverts the die; otherwise it only removes the snooze. See MQA-ROLL-014.
+**Expected:** Excluded series do not roll while excluded, without being deleted or silently re-prioritized; they return when eligible.
 
 ## MQA-QUEUE-004: Blocked differs from out-of-pool
 
@@ -81,36 +79,3 @@
 **Expected:** Confirmed title and active/completed state refresh promptly across affected views, including Queue position. Targeted cache invalidation prevents stale data from reappearing; failed operations never falsely show committed changes or lose persisted state. No unrelated Thread is affected.
 
 **Tracking:** Approved Queue/dialog work [#3558](https://github.com/JoshCLWren/comic-pile/issues/3558); related QA regression [#3771](https://github.com/JoshCLWren/comic-pile/issues/3771). Keep separately tracked functional Queue bugs independent of this usability contract.
-
-
-## MQA-QUEUE-011: Finished series stay listed
-
-**Setup:** QA account with at least one completed series.
-
-**Test:** Open Queue, expand Finished Series, reload and navigate away and back.
-
-**Expected:** Completed series remain listed (read from the completed collection, not the active-only Queue rows). Source: #5171, fixed by #5297.
-
-## MQA-QUEUE-012: Queue rows show the series cover when a confirmed cover exists
-
-**Test:** Open Queue with one series whose next unread issue has a confirmed ComicVine mapping carrying a cover, one series whose only confirmed covers sit on later issues, and one series with no confirmed cover. Expand the page at phone and desktop widths.
-
-**Expected:** The series with a confirmed cover shows the provider cover image at the start of its row, using the provider URL unchanged and reserving its frame before load (no layout shift). The later-issue series shows the first confirmed cover by issue position. The series without a confirmed cover shows the shared "No cover" placeholder, not a broken image or an empty gap. Covers never come from unconfirmed candidates.
-
-**Tracking:** Part of the V2 covers work [#5433](https://github.com/JoshCLWren/comic-pile/issues/5433). Other views (Thread detail, History, Sessions, plans, CBL browser, Identity inbox, Creators, Crossovers) are not covered by this scenario yet.
-
-## MQA-QUEUE-013: Bulk remove and restore container series from Queue
-
-**Setup:** A reading list, reading plan, or crossover containing multiple active series in the Queue. Include a case where at least one member also belongs to another active list/crossover when possible.
-
-**Test:** From the container page, choose "Remove all series from Queue" (or equivalent bulk action), review the affected series list, keep any series that should remain in another active context when offered, and confirm. Inspect Queue active rows, the Removed from Queue section, and Roll eligibility. Then restore the whole removal group from Queue and/or restore all from the container action.
-
-**Expected:** The action removes the selected container series from the active Queue in one operation without deleting issues, read history, ratings, mappings, or list/plan/crossover membership. Removed series appear grouped by the removal source in Queue with group and individual restore available. Restoring returns eligible series to the active Queue and updates Roll eligibility accordingly. The confirmation waits for overlap checks to complete and does not proceed if those checks fail; series intentionally kept in Queue remain active.
-
-## MQA-QUEUE-014: Delete series removes events and related rows atomically
-
-**Setup:** QA account with a queued series that has roll events (for example, after a manual roll pick and a remove/restore cycle) and appears in a reading order.
-
-**Test:** From the Queue row menu choose "Delete series" and confirm "Delete Series" in the "Permanently delete …?" dialog. Reload Queue and reopen the reading order.
-
-**Expected:** The series disappears from Queue with no foreign-key error banner. Its issues, reading history, ratings, events and reading-order entries are removed atomically in one transaction, a delete audit event is recorded, and unrelated series are untouched. Source: #5461, fixed by #5468 (renumbered from MQA-QUEUE-012 after main added the covers scenario with that ID).

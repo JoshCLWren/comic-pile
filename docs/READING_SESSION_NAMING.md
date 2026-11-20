@@ -20,13 +20,13 @@ The collision contributed directly to the password-reset incident fixed in #2996
 |---------|---------------|---------------|
 | Durable reading history | `ReadingSession` in `app/models/reading_session.py` | `sessions` (unchanged) |
 | Reading-history persistence | functions in `app/repositories/reading_session_repository.py` | — |
-| Reading-history orchestration | Rust reading-session service in `native/roll-service/src/reading_session.rs` | — |
+| Reading-history orchestration | `ReadingSessionService` in `app/services/reading_session_service.py` | — |
 | Core reading-session helpers | `comic_pile/reading_session.py` | — |
 | API endpoints | `/api/session/` (unchanged) | — |
 | API schemas | `SessionListItem`, `SessionDetail` (unchanged) | — |
 
-`app/models/session.py`, `app/repositories/session_repository.py`, `app/services/session_service.py`, and <!-- docs-path-check: ignore -->
-`comic_pile/session.py` no longer exist. `delete_all_sessions_for_user()` was deleted outright rather than <!-- docs-path-check: ignore -->
+`app/models/session.py`, `app/repositories/session_repository.py`, `app/services/session_service.py`, and
+`comic_pile/session.py` no longer exist. `delete_all_sessions_for_user()` was deleted outright rather than
 renamed, because nothing legitimately bulk-deletes a user's reading history.
 
 **Authentication code uses precise names:**
@@ -57,19 +57,19 @@ This is out of scope for the domain rename. The internal model class is `Reading
    - `test_reading_session_repository_exposes_no_destructive_helper` — the reading-session repository may
      not expose a public `delete_*` helper or issue a bulk `DELETE` against reading sessions, so
      `delete_all_sessions_for_user()` cannot reappear.
-   - `test_reading_session_is_not_exposed_under_a_bare_session_name` — `app/models/session.py` must stay <!-- docs-path-check: ignore -->
+   - `test_reading_session_is_not_exposed_under_a_bare_session_name` — `app/models/session.py` must stay
      deleted, `app.models` must export `ReadingSession` and not `Session`, and `User` must expose
      `reading_sessions` and not `sessions`.
 
-2. **Regression test** (`tests/test_password_reset.py::test_reset_preserves_reading_sessions`): completes a <!-- docs-path-check: ignore -->
+2. **Regression test** (`tests/test_password_reset.py::test_reset_preserves_reading_sessions`): completes a
    real `POST /api/auth/reset-password` for a user with populated reading history and proves every reading
    session, thread, issue, event, and snapshot survives unchanged.
 
 3. **Documentation in code**: key modules state the boundary explicitly:
    - `app/models/reading_session.py`: names the rationale and the auth state that lives elsewhere.
    - `app/repositories/reading_session_repository.py`: "nothing in this module revokes credentials or touches authentication state".
-   - `native/roll-service/src/auth/services.rs`: `complete_reset` only consumes the `password_reset_tokens` row and updates `users` (`password_hash`, `password_changed_at`); it never touches the reading-history `sessions` table.
-   The Python-side guard assertions keep the first two statements from drifting away.
+   - `app/services/password_reset_service.py`: "The reading-history table is never touched here; reading sessions survive every password change/reset".
+   Two guard assertions keep those statements from drifting away.
 
 4. **Agent guidance**: `AGENTS.md` → "Domain Nouns With Multiple Meanings (House Standard)" makes the
    qualified-name rule mandatory for every agent, so this document is reached without knowing its path.
@@ -82,11 +82,11 @@ HTTP surface depend on them, and none of them is reachable from application code
 | Retained name | Where | Why retained |
 |---|---|---|
 | `sessions` table | `ReadingSession.__tablename__` | Renaming requires a migration plus API/client coordination |
-| `/api/session/...` endpoints | `app/api/session.py`, `native/roll-service/src/undo_apply.rs` | Public HTTP contract |
+| `/api/session/...` endpoints | `app/api/session.py`, `app/api/undo.py` | Public HTTP contract |
 | `SessionListItem`, `SessionDetail`, `SessionResponse`, `SessionHistoryPage` | `app/schemas/session.py` | Public response schema names |
 | `session_id` parameters, fields, and prose | throughout `app/`, `comic_pile/`, `tests/` | Unambiguous in context and pervasive on the wire |
 | `comic_pile/reading_session.py` | re-exports in `comic_pile/__init__.py` | Qualified module path is the disambiguation |
-| `app/services/session_response.py`, `native/roll-service/src/session_history.rs` | service modules | Response/history projections over reading sessions; module name is qualified |
+| `app/services/session_response.py`, `session_history_projection.py` | service modules | Response/history projections over reading sessions; module name is qualified |
 | `X-Session-Read-*` response headers | `app/middleware/security_headers.py` | Diagnostics header contract, unrelated to either session concept |
 
 ## Guidelines for Future Work

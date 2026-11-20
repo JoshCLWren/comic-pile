@@ -78,15 +78,6 @@ pub struct QueueSeriesMetadata {
     pub publisher: Option<String>,
 }
 
-/// Bulk exclusion provenance attached to an excluded queue thread (#5435).
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-pub struct QueueExclusionGroupRef {
-    pub id: i32,
-    pub source_kind: String,
-    pub source_id: i32,
-    pub source_name: String,
-}
-
 /// One reader threads collection item.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ThreadListItem {
@@ -108,14 +99,6 @@ pub struct ThreadListItem {
     pub tags: Vec<ThreadTag>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub series_metadata: Option<QueueSeriesMetadata>,
-    /// Present when this excluded thread was removed as part of a bulk action.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub queue_exclusion_group: Option<QueueExclusionGroupRef>,
-    /// Derived series cover: the exact provider CDN URL of the thread's next
-    /// unread confirmed issue, falling back to the first confirmed issue with a
-    /// cover. Null when the series has no confirmed issue cover.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub series_cover_image_url: Option<String>,
 }
 
 /// Paginated reader threads collection.
@@ -127,7 +110,7 @@ pub struct ThreadListResponse {
 }
 
 /// The legacy single-thread response retained for the v1 and bare aliases.
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ThreadDetailResponse {
     pub id: i32,
     pub title: String,
@@ -182,51 +165,19 @@ fn normalize_search(search: Option<&str>) -> String {
         .unwrap_or_default()
 }
 
-/// Canonical SQL expression that groups blocked rows last in display order.
-///
-/// The Queue list, the single-thread detail and the pending Roll offer all use
-/// this expression, so the owner-approved Option E preview (evaluated reading
-/// eligibility) cannot drift from the stored `is_blocked` grouping. `bool_param`
-/// and `ids_param` are the calling statement's bind placeholders for the
-/// Option E flag and the sorted eligible-thread id array.
-pub(crate) fn blocked_order_expr(bool_param: &str, ids_param: &str) -> String {
-    format!(
-        "(CASE WHEN {bool_param}::boolean THEN NOT (t.id = ANY({ids_param}::int[])) ELSE t.is_blocked END)"
-    )
-}
-
-/// Canonical 1-based display position for one thread as an SQL scalar expression.
-///
-/// This is the same dense `row_number()` ranking the Queue list uses over the
-/// caller's active queue. It yields SQL NULL when `thread_expr` is not in that
-/// queue (for example a completed thread), so callers must fall back to the
-/// stored `queue_position` instead of reading NULL into an integer.
-pub(crate) fn display_position_expr(
-    user_expr: &str,
-    thread_expr: &str,
-    bool_param: &str,
-    ids_param: &str,
-) -> String {
-    let blocked = blocked_order_expr(bool_param, ids_param);
-    format!(
-        "(SELECT ranked.display_position FROM (
-             SELECT t.id,
-                    row_number() OVER (ORDER BY {blocked}, t.queue_position, t.id)::int AS display_position
-             FROM threads t
-             WHERE t.user_id = {user_expr} AND t.status = 'active'
-         ) ranked WHERE ranked.id = {thread_expr})"
-    )
-}
-
-/// Sorted Option E eligible thread ids for the canonical block-grouping
-/// expression, built from the same projection the Queue list uses.
-pub(crate) fn eligible_candidate_ids(
-    validated: &crate::reading_constraints::ValidatedReadingInputs,
-) -> Result<Vec<i32>, ApiError> {
-    let projection = OptionEProjection::build(validated)?;
-    let mut ids: Vec<i32> = projection.candidates.into_iter().collect();
-    ids.sort_unstable();
-    Ok(ids)
+fn option_e_enabled() -> bool {
+    let enabled = std::env::var("OPTION_E_ENABLED")
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "t" | "yes" | "y" | "on"
+            )
+        })
+        .unwrap_or(false);
+    enabled
+        && std::env::var("OPTION_E_APPROVED_PREVIEW")
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false)
 }
 
 fn encode_cursor(cursor: &QueueCursor) -> String {
@@ -346,7 +297,7 @@ pub async fn list_threads(
         return Err(unprocessable("search must be at least 1 character"));
     }
     let search = normalize_search(raw_search);
-    let option_e = state.option_e;
+    let option_e = option_e_enabled();
     let execution = if option_e { "option_e" } else { "legacy" };
     let cursor = query
         .page_token
@@ -446,49 +397,32 @@ pub async fn get_thread_detail(
     claims: VerifiedAccessClaims,
     axum::extract::Path(thread_id): axum::extract::Path<i32>,
 ) -> Result<Json<ThreadDetailResponse>, ApiError> {
-    // The detail must rank by the same blocked expression as the Queue list,
-    // otherwise a stored `is_blocked` flag that disagrees with the Option E
-    // evaluation gives the two views different positions for the same thread.
-    let option_e = state.option_e;
-    let mut candidates: Vec<i32> = Vec::new();
-    if option_e {
-        let user = crate::auth::authenticate_claims(&state, &claims).await?;
-        let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
-        candidates = eligible_candidate_ids(&validated)?;
-    }
-    let position = display_position_expr("(SELECT user_id FROM auth)", "$4", "$5", "$6");
-    let sql = format!(
-        "WITH auth AS (
+    let connection = db::checkout(&state).await?;
+    let row = connection
+        .query_opt(
+            "WITH auth AS (
                  SELECT u.id AS user_id
                  FROM users u
                  WHERE u.username = $1
                    AND COALESCE(trunc(extract(epoch FROM u.password_changed_at))::bigint, 0) <= $3
                    AND NOT EXISTS (SELECT 1 FROM revoked_tokens r WHERE r.jti = $2)
-         )
-         SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
-                t.status, t.last_rating,
-                to_char(t.last_activity_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
-                t.notes, t.is_test, t.is_blocked,
-                to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
-                t.total_issues, t.reading_progress,
-                t.next_unread_issue_id, t.manual_creator_credits::text,
-                (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id),
-                {position} AS computed_position
-         FROM threads t
-         JOIN auth ON auth.user_id = t.user_id
-         WHERE t.id = $4",
-    );
-    let connection = db::checkout(&state).await?;
-    let row = connection
-        .query_opt(
-            &sql,
+             )
+             SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+                    t.status, t.last_rating,
+                    to_char(t.last_activity_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                    t.notes, t.is_test, t.is_blocked,
+                    to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                    t.total_issues, t.reading_progress,
+                    t.next_unread_issue_id, t.manual_creator_credits::text,
+                    (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id)
+             FROM threads t
+             JOIN auth ON auth.user_id = t.user_id
+             WHERE t.id = $4",
             &[
                 &claims.username(),
                 &claims.jti(),
                 &claims.expected_epoch()?,
                 &thread_id,
-                &option_e,
-                &candidates,
             ],
         )
         .await
@@ -497,20 +431,12 @@ pub async fn get_thread_detail(
         StatusCode::NOT_FOUND,
         "Thread not found".to_string(),
     ))?;
-
-    // The canonical ranking is NULL for completed / non-queued threads, which
-    // are reached through the owning read but are not in the active queue.
-    // Keep their stored position rather than panicking on a NULL -> i32 read.
-    let computed_position: Option<i32> = row.get(17);
-    let stored_position: i32 = row.get(4);
-    let queue_position = computed_position.unwrap_or(stored_position);
-
     Ok(Json(ThreadDetailResponse {
         id: row.get(0),
         title: row.get(1),
         format: normalize_format(row.get(2)),
         issues_remaining: row.get(3),
-        queue_position,
+        queue_position: row.get(4),
         status: row.get(5),
         last_rating: row.get(6),
         last_activity_at: row.get(7),
@@ -522,11 +448,10 @@ pub async fn get_thread_detail(
         total_issues: row.get(12),
         reading_progress: row.get(13),
         next_unread_issue_id: row.get(14),
-        next_unread_issue_number: row.get::<_, Option<String>>(16),
+        next_unread_issue_number: row.get(16),
         manual_creator_credits: row
             .get::<_, Option<String>>(15)
-            .as_deref()
-            .and_then(|s| serde_json::from_str::<Value>(s).ok())
+            .and_then(|value| serde_json::from_str(&value).ok())
             .unwrap_or_else(|| Value::Array(Vec::new())),
     }))
 }
@@ -606,133 +531,6 @@ pub async fn list_completed_threads(
     }))
 }
 
-/// Read one validated page of the authenticated reader's excluded threads.
-///
-/// Mirrors `thread_service.list_excluded_threads`: `position` has no meaning
-/// off the active queue and is read as `created`, excluded rows hold no live
-/// Queue ordinal (their `queue_position` is zero), and `active_count` is the
-/// schema default of zero. Parameter validation (`search`, `sort`, `page_size`)
-/// is the caller's responsibility (`thread_lifecycle::list_excluded_threads`).
-pub(crate) async fn list_excluded_page(
-    state: &AppState,
-    claims: &VerifiedAccessClaims,
-    raw_search: Option<&str>,
-    requested_sort: &str,
-    page_size: i64,
-    page_token: Option<&str>,
-) -> Result<Json<ThreadListResponse>, ApiError> {
-    let sort = if requested_sort == "position" {
-        "created"
-    } else {
-        requested_sort
-    };
-    let search = normalize_search(raw_search);
-    let cursor = page_token
-        .filter(|token| !token.is_empty())
-        .map(|token| decode_cursor(token, sort, &search, "legacy"))
-        .transpose()?;
-    let (auth, _active_count, _list_names, rows) = query_page(
-        state,
-        claims,
-        None,
-        false,
-        None,
-        &search,
-        sort,
-        page_size,
-        cursor.as_ref(),
-        "excluded",
-    )
-    .await?;
-    validate_auth(claims, &auth)?;
-    let mut rows = rows;
-    let next_page_token = if rows.len() > page_size as usize {
-        rows.truncate(page_size as usize);
-        rows.last().map(|last| {
-            encode_cursor(&QueueCursor {
-                sort: sort.to_string(),
-                search,
-                values: match sort {
-                    "title" => vec![last.title.clone(), last.id.to_string()],
-                    _ => vec![
-                        last.created_at
-                            .strip_suffix('Z')
-                            .map(|value| format!("{value}+00:00"))
-                            .unwrap_or_else(|| last.created_at.clone()),
-                        last.id.to_string(),
-                    ],
-                },
-                execution: "legacy".to_string(),
-            })
-        })
-    } else {
-        None
-    };
-    let mut threads = rows
-        .into_iter()
-        .map(|mut row| {
-            row.queue_position = 0;
-            row.into_item(None, None)
-        })
-        .collect::<Result<Vec<_>, ApiError>>()?;
-    attach_queue_exclusion_groups(state, claims, &mut threads).await?;
-    Ok(Json(ThreadListResponse {
-        threads,
-        next_page_token,
-        active_count: 0,
-    }))
-}
-
-/// Attach bulk exclusion provenance to excluded thread list items in one query.
-async fn attach_queue_exclusion_groups(
-    state: &AppState,
-    claims: &VerifiedAccessClaims,
-    threads: &mut [ThreadListItem],
-) -> Result<(), ApiError> {
-    if threads.is_empty() {
-        return Ok(());
-    }
-    let ids: Vec<i32> = threads.iter().map(|thread| thread.id).collect();
-    let connection = db::checkout(state).await?;
-    let user_id: i32 = connection
-        .query_one(
-            "SELECT id FROM users WHERE username = $1",
-            &[&claims.username()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .get(0);
-    let rows = connection
-        .query(
-            "SELECT t.id, g.id, g.source_kind, g.source_id, g.source_name \
-             FROM threads t \
-             JOIN queue_exclusion_groups g ON g.id = t.queue_exclusion_group_id \
-             WHERE t.user_id = $1 AND t.id = ANY($2::int[]) AND t.status = 'excluded'",
-            &[&user_id, &ids],
-        )
-        .await
-        .map_err(db::query_error)?;
-    drop(connection);
-    let mut groups = std::collections::HashMap::with_capacity(rows.len());
-    for row in rows {
-        groups.insert(
-            row.get::<_, i32>(0),
-            QueueExclusionGroupRef {
-                id: row.get(1),
-                source_kind: row.get(2),
-                source_id: row.get(3),
-                source_name: row.get(4),
-            },
-        );
-    }
-    for thread in threads {
-        if let Some(group) = groups.remove(&thread.id) {
-            thread.queue_exclusion_group = Some(group);
-        }
-    }
-    Ok(())
-}
-
 fn validate_auth(claims: &VerifiedAccessClaims, auth: &Option<AuthRow>) -> Result<(), ApiError> {
     let auth = auth
         .as_ref()
@@ -788,7 +586,6 @@ struct PageRow {
     tags: Vec<ThreadTag>,
     series_documents: Vec<Value>,
     health: Option<MappingHealthRow>,
-    series_cover_image_url: Option<String>,
 }
 
 impl PageRow {
@@ -856,8 +653,6 @@ impl PageRow {
             },
             tags: self.tags,
             series_metadata: series_metadata(&self.series_documents, &self.title),
-            queue_exclusion_group: None,
-            series_cover_image_url: self.series_cover_image_url,
         })
     }
 }
@@ -1163,7 +958,7 @@ ranked AS (
     WHERE t.status = 'active'
 ),
 page AS (
-    SELECT t.id, t.next_unread_issue_id, t.title, t.format, t.queue_position, t.status,
+    SELECT t.id, t.title, t.format, t.queue_position, t.status,
            t.last_activity_at, t.is_blocked, t.total_issues, t.notes, t.created_at,
            t.manual_creator_credits,
            r.display_position,
@@ -1220,44 +1015,6 @@ health AS (
         GROUP BY thread_state.thread_id
     ) state ON state.thread_id = p.id
     WHERE p.total_issues IS NOT NULL
-),
--- One representative cover per page thread, computed set-based in one
--- statement. Each issue first takes the same mapping the issue card uses
--- (confirmed only, then confidence, updated_at and mapping id), so issue
--- actions and Queue never disagree. The thread then takes the next unread
--- issue's cover, falling back to the first covered issue by position.
--- Only ComicVine confirmed mappings expose covers, matching issue_service.rs.
-issue_cover AS (
-    SELECT DISTINCT ON (i.id)
-           i.id AS issue_id, i.thread_id, i.position,
-           COALESCE(
-               NULLIF(BTRIM(ei.metadata_json->>'image_url'), ''),
-               NULLIF(BTRIM(ei.metadata_json->>'primary_image'), ''),
-               NULLIF(BTRIM(ei.metadata_json#>>'{image,original_url}'), ''),
-               NULLIF(BTRIM(ei.metadata_json#>>'{image,super_url}'), ''),
-               NULLIF(BTRIM(ei.metadata_json#>>'{image,medium_url}'), ''),
-               NULLIF(BTRIM(ei.metadata_json#>>'{image,small_url}'), ''),
-               NULLIF(BTRIM(ei.metadata_json->>'cover_image_url'), '')
-           ) AS cover_url
-    FROM page p
-    JOIN issues i ON i.thread_id = p.id
-    JOIN issue_external_identity_mappings m
-        ON m.issue_id = i.id AND m.status = 'confirmed'
-    JOIN external_identities ei
-        ON ei.id = m.external_identity_id
-       AND ei.entity_type = 'issue'
-       AND lower(ei.provider) IN ('comicvine', 'comic_vine')
-    ORDER BY i.id, m.confidence DESC NULLS LAST, m.updated_at DESC, m.id DESC
-),
-series_cover AS (
-    SELECT DISTINCT ON (ic.thread_id) ic.thread_id, ic.cover_url
-    FROM issue_cover ic
-    JOIN page p ON p.id = ic.thread_id
-    WHERE ic.cover_url IS NOT NULL
-    ORDER BY ic.thread_id,
-             COALESCE(ic.issue_id = p.next_unread_issue_id, false) DESC,
-             ic.position,
-             ic.issue_id
 )
 SELECT json_build_object(
     'auth', (SELECT json_build_object(
@@ -1285,7 +1042,6 @@ SELECT json_build_object(
             'is_blocked', p.is_blocked,
             'total_issues', p.total_issues,
             'next_issue_number', p.next_issue_number,
-            'series_cover_image_url', cov.cover_url,
             'notes', p.notes,
             'created_at', {created_timestamp},
             'manual_creator_credits', p.manual_creator_credits,
@@ -1321,7 +1077,6 @@ SELECT json_build_object(
             ) FROM health h WHERE h.thread_id = p.id)
         ) ORDER BY p.page_ord)
         FROM page p
-        LEFT JOIN series_cover cov ON cov.thread_id = p.id
     ), '[]'::json)
 )::text
 "#;
@@ -1350,7 +1105,7 @@ async fn query_page(
 ) -> Result<(Option<AuthRow>, i32, Vec<ListName>, Vec<PageRow>), ApiError> {
     // Reference both mode parameters unconditionally so the statement keeps a
     // stable bind count whether the Option E preview is active or not.
-    let blocked = blocked_order_expr("$7", "$8");
+    let blocked = "(CASE WHEN $7::boolean THEN NOT (t.id = ANY($8::int[])) ELSE t.is_blocked END)";
     let order = match sort {
         "title" => "t.title, t.id".to_string(),
         "created" => "t.created_at DESC, t.id DESC".to_string(),
@@ -1369,7 +1124,7 @@ async fn query_page(
         )
         .replace("{order}", &order)
         .replace("{cursor}", &cursor_sql)
-        .replace("{blocked}", &blocked)
+        .replace("{blocked}", blocked)
         .replace("{activity_timestamp}", &iso_timestamp("p.last_activity_at"))
         .replace("{created_timestamp}", &iso_timestamp("p.created_at"))
         .replace("{tag_created_timestamp}", &iso_timestamp("tg.created_at"))

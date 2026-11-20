@@ -1,8 +1,5 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type {
-  BulkQueueExclusionRequest,
-  BulkQueueExclusionResponse,
-  BulkQueueRestoreResponse,
   CheckPotentialDuplicatesRequest,
   CheckPotentialDuplicatesResponse,
   ReactivateThreadPayload,
@@ -64,37 +61,6 @@ export function createThreadsApi(client: HttpClient) {
     delete: (id: number) => client.delete<void>(`/v1/threads/${id}`),
     exclude: (id: number) => client.post<Thread>(`/v1/threads/${id}/exclude`),
     restore: (id: number) => client.post<Thread>(`/v1/threads/${id}/restore`),
-    bulkExclude: (data: BulkQueueExclusionRequest) =>
-      client.post<BulkQueueExclusionResponse>('/v2/queue-exclusions', data),
-    bulkRestore: (threadIds: number[]) =>
-      client.post<BulkQueueRestoreResponse>('/v2/queue-exclusions/restore', { thread_ids: threadIds }),
-    checkExcludedStatus: async (threadIds: number[]) => {
-      const chunkSize = 1000
-      const chunks: number[][] = []
-      for (let index = 0; index < threadIds.length; index += chunkSize) {
-        chunks.push(threadIds.slice(index, index + chunkSize))
-      }
-      const results = await Promise.all(
-        chunks.map((chunk) =>
-          client.post<{ excluded_thread_ids: number[]; active_thread_ids?: number[] }>(
-            '/v2/queue-exclusions/status:check',
-            { thread_ids: chunk },
-          ),
-        ),
-      )
-      const excluded = new Set<number>()
-      const active = new Set<number>()
-      for (const result of results) {
-        for (const id of result.excluded_thread_ids ?? []) excluded.add(id)
-        for (const id of result.active_thread_ids ?? []) active.add(id)
-      }
-      return {
-        excluded_thread_ids: Array.from(excluded),
-        active_thread_ids: Array.from(active),
-      }
-    },
-    restoreExclusionGroup: (groupId: number) =>
-      client.post<BulkQueueRestoreResponse>(`/v2/queue-exclusion-groups/${groupId}/restore`),
     reactivate: (data: ReactivateThreadPayload) =>
       client.post<Thread, ReactivateThreadPayload>('/v1/threads/reactivate', data),
     listStale: (days = 30) => client.get<Thread[]>('/v1/threads/stale', { params: { days } }),

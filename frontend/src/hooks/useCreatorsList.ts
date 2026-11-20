@@ -7,7 +7,7 @@ import { queryKeys } from '../query/queryKeys'
 /** Bounded page size for the personal creator browse list (backend max is 50). */
 export const CREATOR_LIST_PAGE_SIZE = 20
 
-/** Server-side browse orderings exposed by `GET /api/v2/creators`. */
+/** Server-side browse orderings exposed by `GET /api/v1/creators`. */
 export type CreatorListSort = 'name' | 'ratings_count' | 'average_rating'
 
 /** Normalized browse selection; a blank search is stored as `undefined`. */

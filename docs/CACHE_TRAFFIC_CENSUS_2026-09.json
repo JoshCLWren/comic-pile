@@ -7,7 +7,7 @@
   "window": {
     "kind": "vercel_runtime_logs_group_by_requestPath",
     "lookback": "7d",
-    "note": "Vercel Hobby runtime logs. A 31d group_by query returned the same distinct-path set and counts as the 7d window, so the retained window is treated as seven days. Vercel Web Analytics reported 0 visitors and 0 pageviews for the latest 31 days and is not used as API census truth. GET /api/v1/traffic-metrics was process-local on serverless and was not used as fleet truth; that operation has since been retired with the Python API (Part of #5431)."
+    "note": "Vercel Hobby runtime logs. A 31d group_by query returned the same distinct-path set and counts as the 7d window, so the retained window is treated as seven days. Vercel Web Analytics reported 0 visitors and 0 pageviews for the latest 31 days and is not used as API census truth. GET /api/v1/traffic-metrics is process-local on serverless and was not used as fleet truth."
   },
   "status_totals_7d": {
     "200": 851,

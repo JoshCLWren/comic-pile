@@ -8,7 +8,6 @@ import {
   describe,
   expect,
   it,
-  vi,
 } from 'vitest'
 import type {
   CBLAdoptionPreview,
@@ -45,8 +44,6 @@ import {
   openChecklist,
   expandVolume,
 } from './CblBrowserPage.fixture'
-import { issueCardsApi } from '../services/issueCardsApi'
-vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 describe('CblBrowserPage adoption', () => {
   it('selecting a source shows the preview with the consequence summary', async () => {
@@ -1012,96 +1009,6 @@ describe('CblBrowserPage adoption', () => {
     expect(
       screen.getByText('Resolve the reading-order loop before adding this source.'),
     ).toBeInTheDocument()
-  })
-
-  it('shows the graph, the loop, and a resolve path when a cycle has no overlap questions (#5379)', async () => {
-    const user = userEvent.setup()
-    const cyclePreview = readingGraphPreview({
-      overlaps: [],
-      cycle_errors: [
-        {
-          code: 'reading_constraint_cycle',
-          message:
-            'Reading constraint cycle: Supreme #1 --source order--> Alpha Flight #1 --source order--> Supreme #1.',
-        },
-      ],
-    })
-    // The loop exists only while both series are included; excluding one
-    // breaks it, so the server answers without a cycle for the rest.
-    mockGraphPreview.mockImplementation(
-      async (_listId: number, request: { included_positions: number[] }) =>
-        request.included_positions.includes(1) ? cyclePreview : withoutOverlap(),
-    )
-    renderPage()
-    await searchFor(user)
-    await selectSource(
-      user,
-      preview({
-        entries: [
-          entry({
-            cbl_entry_id: 101,
-            cbl_position: 1,
-            series_name: 'Supreme',
-            issue_number: '1',
-            series_group_id: 'group-supreme',
-            resolved_issue_id: 11,
-          }),
-          entry({
-            cbl_entry_id: 102,
-            cbl_position: 2,
-            series_name: 'Alpha Flight',
-            issue_number: '1',
-            series_group_id: 'group-alpha-flight',
-            resolved_issue_id: 12,
-          }),
-        ],
-        summary: {
-          reused_existing_count: 2,
-          missing_would_create_count: 0,
-          final_adopted_count: 2,
-          final_adopted_order: [1, 2],
-          reused_existing_positions: [1, 2],
-          missing_would_create_positions: [],
-        },
-      }),
-    )
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Add this reading order' }),
-      ).toBeDisabled()
-    })
-    // The loop itself must be visible, not just the disabled-button tooltip.
-    expect(screen.getByTestId('reading-graph-summary')).toBeInTheDocument()
-    expect(
-      screen.getByText(/Reading constraint cycle: Supreme #1/),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText('Resolve the reading-order loop before adding this source.'),
-    ).toBeInTheDocument()
-    // A resolve path must be visible: the reader can break the loop from the checklist.
-    expect(
-      screen.getByText(/exclude one of the series in this loop under Customize/i),
-    ).toBeInTheDocument()
-
-    // Recovery: excluding a loop series re-checks the graph and enables Add.
-    await openChecklist(user)
-    await expandVolume(user, 'Supreme')
-    await user.click(screen.getByRole('checkbox', { name: 'Include Supreme #1' }))
-    await waitFor(() => {
-      expect(mockGraphPreview).toHaveBeenLastCalledWith(
-        7,
-        expect.objectContaining({ included_positions: [2] }),
-      )
-    })
-    await waitFor(() => {
-      expect(screen.queryByText(/Reading constraint cycle/)).not.toBeInTheDocument()
-    })
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Add this reading order' }),
-      ).toBeEnabled()
-    })
   })
 
   it('keeps each source\'s own checklist choices when switching sources (#4014)', async () => {

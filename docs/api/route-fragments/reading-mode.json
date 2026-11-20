@@ -1,7 +1,7 @@
 {
   "family": "reading-mode",
   "owned_path_patterns": [
-    "^/api/v2/reading\\-mode(?:/.*)?$"
+    "^/api/v1/reading\\-mode(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -13,44 +13,36 @@
   },
   "operations": [
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v2/reading-mode",
+      "path": "/api/v1/reading-mode",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/reading\\-mode$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/reading\\-mode$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
-      "method": "PUT",
-      "path": "/api/v2/reading-mode",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/reading\\-mode$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
-    },
-    {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "POST",
-      "path": "/api/v2/reading-mode/suggestion-dismissals",
+      "path": "/api/v1/reading-mode",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/reading\\-mode/suggestion\\-dismissals$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/reading\\-mode$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "POST",
-      "path": "/api/v2/reading-mode/suggestions",
+      "path": "/api/v1/reading-mode/dismiss-suggestion",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/reading\\-mode/suggestions$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/reading\\-mode/dismiss\\-suggestion$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-mode/suggest",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-mode/suggest$",
+      "exclude_from_inventory": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
   "family": "tags",
   "owned_path_patterns": [
-    "^/api/v2/tags(?:/.*)?$"
+    "^/api/v1/tags(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -13,144 +13,116 @@
   },
   "operations": [
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v2/tags",
+      "path": "/api/v1/tags/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/tags/$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "POST",
-      "path": "/api/v2/tags",
+      "path": "/api/v1/tags/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/tags/$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v2/tags/effective/issues/{issue_id}",
+      "path": "/api/v1/tags/effective/issue/{issue_id}/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/effective/issues/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/tags/effective/issue/[^/]+/$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v2/tags/effective/plans/{plan_id}",
+      "path": "/api/v1/tags/effective/plan/{plan_id}/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/effective/plans/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/tags/effective/plan/[^/]+/$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v2/tags/effective/threads/{thread_id}",
+      "path": "/api/v1/tags/effective/thread/{thread_id}/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/effective/threads/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/tags/effective/thread/[^/]+/$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v2/tags/effective/threads/{thread_id}/issues",
+      "path": "/api/v1/tags/effective/thread/{thread_id}/issues/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/effective/threads/[^/]+/issues$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/tags/effective/thread/[^/]+/issues/$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
-      "method": "GET",
-      "path": "/api/v2/tags/{tag_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
-    },
-    {
-      "bucket": "operations",
-      "method": "PATCH",
-      "path": "/api/v2/tags/{tag_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
-    },
-    {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "DELETE",
-      "path": "/api/v2/tags/{tag_id}",
+      "path": "/api/v1/tags/{tag_id}/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/tags/[^/]+/$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v2/tags/{tag_id}/usage",
+      "path": "/api/v1/tags/{tag_id}/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/[^/]+/usage$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/tags/[^/]+/$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/tags/{tag_id}/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/tags/[^/]+/$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
       "method": "POST",
-      "path": "/api/v2/tags/{tag_id}/assignments",
+      "path": "/api/v1/tags/{tag_id}/assign/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/[^/]+/assignments$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/tags/[^/]+/assign/$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/tags/{tag_id}/bulk-assign/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/tags/[^/]+/bulk\\-assign/$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/tags/{tag_id}/bulk-unassign/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/tags/[^/]+/bulk\\-unassign/$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
       "method": "DELETE",
-      "path": "/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}",
+      "path": "/api/v1/tags/{tag_id}/unassign/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/[^/]+/assignments/[^/]+/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/tags/[^/]+/unassign/$",
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "operations",
-      "method": "POST",
-      "path": "/api/v2/tags/{tag_id}/assignment-batches",
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/tags/{tag_id}/usage/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/[^/]+/assignment\\-batches$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
-    },
-    {
-      "bucket": "operations",
-      "method": "POST",
-      "path": "/api/v2/tags/{tag_id}/unassignment-batches",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/tags/[^/]+/unassignment\\-batches$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335
+      "src": "^/api/v1/tags/[^/]+/usage/$",
+      "exclude_from_inventory": true
     }
   ]
 }

@@ -46,20 +46,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - uses: Swatinem/rust-cache@v2.9.3
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Verify unified Cargo workspace lockfile
-        # Runs the same guard the production @vercel/rust build.sh runs. It
-        # fails on a second lockfile, divergent resolution or lock mutation,
-        # and exports the canonical digest so build.rs asserts it on every
-        # subsequent cargo invocation in this job.
-        working-directory: .
-        run: |
-          set -euo pipefail
-          node check-rust-workspace-lock.mjs
-          lock_sha256="$(node check-rust-workspace-lock.mjs --lock-sha256)"
-          printf 'COMICPILE_EXPECTED_LOCK_SHA256=%s\n' "$lock_sha256" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@v2
       - name: Check workspace Rust formatting
         run: cargo fmt --all -- --check
       - name: Compile the native Vercel Rust function

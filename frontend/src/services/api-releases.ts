@@ -13,7 +13,7 @@ export type ReleaseListResponse = components['schemas']['ReleaseListResponse']
 export function createReleasesApi(client: HttpClient) {
   return {
     list: (limit = 20, offset = 0) =>
-      client.get<ReleaseListResponse>('/v2/releases', {
+      client.get<ReleaseListResponse>('/v1/releases/', {
         params: { limit, offset },
       }),
   }

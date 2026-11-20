@@ -28,8 +28,8 @@ export const GUEST_AUTH_PROBE = budget(
 /** App-shell reads every authenticated layout mounts. */
 export const AUTHENTICATED_SHELL = budget(
   'GET /api/v2/auth/me x1',
-  'GET /api/v2/identity-inbox?limit=1&offset=0 x1',
-  'GET /api/v2/users/me/preferences x1',
+  'GET /api/v1/identity-inbox?limit=1&offset=0 x1',
+  'GET /api/v1/users/me/preferences x1',
 )
 
 /**
@@ -59,7 +59,7 @@ const PUBLIC_ENTRIES = {
 const AUX_ENTRIES = {
   '/whats-new': budget(
     ...AUTHENTICATED_SHELL,
-    'GET /api/v2/releases?limit=20&offset=0 x1',
+    'GET /api/v1/releases/?limit=20&offset=0 x1',
   ),
   '/glossary': AUTHENTICATED_SHELL,
   '/help': AUTHENTICATED_SHELL,

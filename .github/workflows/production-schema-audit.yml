@@ -1,7 +1,7 @@
 # Scheduled read-only production schema audit (issue #4735).
 #
 # Compares production Neon PostgreSQL with the canonical Alembic fixture at
-# native/migrate/migrations/V1__baseline.sql and fails on
+# native/roll-service/tests/fixtures/schema/public_schema.sql and fails on
 # any real column/index/constraint/function drift. Runs only on main or by
 # manual dispatch; it never uses pull_request_target, so untrusted branch
 # code never executes with secrets in scope.

@@ -1823,7 +1823,7 @@ pub async fn retract(
 // ---------------------------------------------------------------------------
 
 /// Documentation-only operation for the mounted releases list handler.
-#[utoipa::path(get, path = "/api/v2/releases", tag = "releases", operation_id = "releases_list", params(("limit" = Option<i32>, Query, description = "Maximum releases to return (1-100, default 20)"), ("offset" = Option<i32>, Query, description = "Number of matching releases to skip (default 0)")), responses((status = 200, body = ReleaseListResponse), (status = 422, description = "Invalid pagination")))]
+#[utoipa::path(get, path = "/api/v1/releases/", tag = "releases", operation_id = "releases_list", params(("limit" = Option<i32>, Query, description = "Maximum releases to return (1-100, default 20)"), ("offset" = Option<i32>, Query, description = "Number of matching releases to skip (default 0)")), responses((status = 200, body = ReleaseListResponse), (status = 422, description = "Invalid pagination")))]
 #[allow(dead_code)]
 pub fn list_documentation() {}
 

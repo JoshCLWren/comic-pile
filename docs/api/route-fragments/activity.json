@@ -8,7 +8,7 @@
     "runtime": "native-rust",
     "status": "target",
     "consumers": [
-      "frontend/src/services/api-activity.ts"
+      "frontend/src/pages/HistoryPage.tsx"
     ]
   },
   "operations": [

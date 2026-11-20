@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def _session_read_operation(path: str, method: str) -> str | None:
-    """Classify History list reads.
+    """Classify current-session and History list reads.
 
     Args:
         path: Request URL path.
@@ -28,6 +28,8 @@ def _session_read_operation(path: str, method: str) -> str | None:
     normalized_path = path.rstrip("/")
     prefixes = ("/api/sessions", "/api/v1/sessions")
     for prefix in prefixes:
+        if normalized_path == f"{prefix}/current":
+            return "current-session"
         if normalized_path == prefix:
             return "history-list"
     return None

@@ -18,7 +18,6 @@ function makeExcluded(overrides: Partial<ThreadListItem> = {}): ThreadListItem {
     last_activity_at: null,
     notes: null,
     created_at: '2024-01-01T00:00:00Z',
-    queue_exclusion_group: null,
     ...overrides,
   }
 }
@@ -31,7 +30,6 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={false}
         error={null}
         onRestore={vi.fn()}
-        onRestoreGroup={vi.fn()}
       />,
     )
     expect(screen.queryByTestId('excluded-threads-section')).not.toBeInTheDocument()
@@ -46,7 +44,6 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={false}
         error={null}
         onRestore={vi.fn()}
-        onRestoreGroup={vi.fn()}
       />,
     )
 
@@ -76,7 +73,6 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={false}
         error={null}
         onRestore={vi.fn()}
-        onRestoreGroup={vi.fn()}
       />,
     )
 
@@ -95,7 +91,6 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={false}
         error={null}
         onRestore={onRestore}
-        onRestoreGroup={vi.fn()}
       />,
     )
 
@@ -114,7 +109,6 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={true}
         error={null}
         onRestore={vi.fn()}
-        onRestoreGroup={vi.fn()}
       />,
     )
 
@@ -132,7 +126,6 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={false}
         error="Could not restore that series to the queue."
         onRestore={vi.fn()}
-        onRestoreGroup={vi.fn()}
       />,
     )
 
@@ -141,75 +134,5 @@ describe('ExcludedThreadsSection', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Could not restore that series to the queue.',
     )
-  })
-
-  it('groups bulk exclusions, restores whole groups, and clarifies loaded counts', async () => {
-    const user = userEvent.setup()
-    const onRestore = vi.fn()
-    const onRestoreGroup = vi.fn()
-
-    render(
-      <ExcludedThreadsSection
-        threads={[
-          makeExcluded({
-            id: 11,
-            title: 'Saga',
-            queue_exclusion_group: { id: 5, source_kind: 'reading_list', source_id: 9, source_name: 'Space Opera' },
-          }),
-          makeExcluded({
-            id: 12,
-            title: 'East of West',
-            queue_exclusion_group: { id: 5, source_kind: 'reading_list', source_id: 9, source_name: 'Space Opera' },
-          }),
-          makeExcluded({ id: 13, title: 'Lazarus' }),
-        ]}
-        isRestoring={false}
-        error={null}
-        onRestore={onRestore}
-        onRestoreGroup={onRestoreGroup}
-      />,
-    )
-
-    await user.click(screen.getByRole('button', { name: 'Show Removed (3)' }))
-
-    expect(screen.getByText('Space Opera')).toBeVisible()
-    expect(screen.getByText('Reading list')).toBeVisible()
-    expect(screen.getByText('2 shown here (Restore All restores the whole group)')).toBeVisible()
-    expect(screen.getByText('Individually removed series')).toBeVisible()
-
-    await user.click(screen.getByRole('button', { name: 'Restore all series removed with Space Opera' }))
-    expect(onRestoreGroup).toHaveBeenCalledWith(5)
-
-    await user.click(screen.getByRole('button', { name: 'Restore Lazarus to queue' }))
-    expect(onRestore).toHaveBeenCalledWith(13)
-  })
-
-  it('supports reading plan and crossover group labels', async () => {
-    const user = userEvent.setup()
-
-    render(
-      <ExcludedThreadsSection
-        threads={[
-          makeExcluded({
-            id: 21,
-            title: 'X-Men',
-            queue_exclusion_group: { id: 2, source_kind: 'reading_plan', source_id: 3, source_name: 'Krakoa' },
-          }),
-          makeExcluded({
-            id: 22,
-            title: 'X-Force',
-            queue_exclusion_group: { id: 3, source_kind: 'crossover', source_id: 4, source_name: 'Fall of X' },
-          }),
-        ]}
-        isRestoring={false}
-        error={null}
-        onRestore={vi.fn()}
-        onRestoreGroup={vi.fn()}
-      />,
-    )
-
-    await user.click(screen.getByRole('button', { name: 'Show Removed (2)' }))
-    expect(screen.getByText('Reading plan')).toBeVisible()
-    expect(screen.getByText('Crossover')).toBeVisible()
   })
 })

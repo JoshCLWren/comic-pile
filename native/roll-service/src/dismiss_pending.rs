@@ -1,4 +1,5 @@
-//! Native cutover of `POST /api/v2/roll/dismiss-pending`.
+//! Native cutover of `POST /api/v1/roll/dismiss-pending` and its shared-handler alias
+//! `POST /api/roll/dismiss-pending`.
 //!
 //! The Python handler is the behavioral oracle. This module preserves the same
 //! request contract (no body), authenticated owner scope, status/error JSON,
@@ -125,13 +126,24 @@ fn now_seconds() -> f64 {
 
 #[utoipa::path(
     post,
-    path = "/api/v2/roll/dismiss-pending",
+    path = "/api/v1/roll/dismiss-pending",
     tag = "roll",
     responses((status = 204, description = "No Content. Pending thread cleared.")),
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
 pub(crate) fn dismiss_pending_documentation() {}
+
+/// Also mount the legacy-handler alias.
+#[utoipa::path(
+    post,
+    path = "/api/roll/dismiss-pending",
+    tag = "roll",
+    responses((status = 204, description = "No Content. Pending thread cleared.")),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub(crate) fn dismiss_pending_legacy_documentation() {}
 
 #[cfg(test)]
 mod tests {

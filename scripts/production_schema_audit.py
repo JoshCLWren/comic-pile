@@ -3,7 +3,7 @@
 
 Scheduled, read-only comparison of production Neon PostgreSQL with the
 committed Alembic-canonical dump at
-``native/migrate/migrations/V1__baseline.sql`` (issue #4735).
+``native/roll-service/tests/fixtures/schema/public_schema.sql`` (issue #4735).
 The dump reuses the export normalizer from ``export_roll_test_schema`` plus
 order-insensitive statement comparison, so owner/grant/version/ordering noise
 does not mask real column/index/constraint/function changes.

@@ -1216,6 +1216,26 @@ class TestTargetDeletionCleanup:
         )
         assert remaining.scalars().all() == []
 
+    async def test_continuity_plan_deletion_removes_its_assignments(
+        self, admin_auth_client: AsyncClient, admin_user: User, async_db: AsyncSession
+    ) -> None:
+        """Deleting a reading plan clears the assignments that pointed at it."""
+        _thread, _issue, plan = await _create_target_entities(async_db, admin_user)
+        created = await TagService(async_db).create_tag(
+            admin_user, "Plan Cleanup", color="red", scope="global"
+        )
+        tag_id = created.tag.id
+        await TagService(async_db).assign_tag(
+            admin_user, tag_id, "ContinuityPlan", plan.id
+        )
+
+        resp = await admin_auth_client.delete(f"/api/v1/continuity-plans/{plan.id}")
+        assert resp.status_code == 204
+
+        remaining = await async_db.execute(
+            select(TagAssignment).where(TagAssignment.tag_id == tag_id)
+        )
+        assert remaining.scalars().all() == []
 
 
 async def _create_extra_issues(

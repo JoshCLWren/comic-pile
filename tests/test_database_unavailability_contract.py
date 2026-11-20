@@ -4,6 +4,7 @@ Covers the acceptance criteria for classifying database dependency failures
 as a stable 503 instead of generic 500.
 """
 
+from collections.abc import AsyncIterator
 from typing import Annotated
 from unittest.mock import AsyncMock
 
@@ -281,6 +282,47 @@ async def test_auth_endpoint_database_unavailability_not_401(
 
 
 @pytest.mark.asyncio
+async def test_health_live_endpoint_remains_dependency_free(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """/health/live remains dependency-free liveness endpoint."""
+    test_app = create_app(serve_frontend=False)
+
+    # Even if database is completely broken, /health/live should work
+    def fail_db() -> AsyncIterator[AsyncSession]:
+        raise RuntimeError("Database completely broken")
+
+    test_app.dependency_overrides[get_db] = fail_db
+
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/health/live")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "alive"}
+
+
+@pytest.mark.asyncio
+async def test_legacy_health_endpoint_remains_dependency_free(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """/health (legacy) remains dependency-free liveness endpoint."""
+    test_app = create_app(serve_frontend=False)
+
+    def fail_db() -> AsyncIterator[AsyncSession]:
+        raise RuntimeError("Database completely broken")
+
+    test_app.dependency_overrides[get_db] = fail_db
+
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "alive"}
+
+
+@pytest.mark.asyncio
 async def test_database_unavailable_error_log_context() -> None:
     """DatabaseUnavailableError.to_log_context returns structured info."""
     # Test with asyncpg-style error
@@ -375,6 +417,52 @@ async def test_database_unavailable_response_structure(
     assert "quota" not in response_text
 
 
+@pytest.mark.asyncio
+async def test_dependency_health_endpoint_still_works(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """/api/v1/health/dependencies continues to be the explicit dependency-aware probe."""
+    from app.services import health_probe
+
+    test_app = create_app(serve_frontend=False)
+
+    async def unavailable_database(_: AsyncSession) -> None:
+        raise health_probe.ProbeUnavailableError("database offline")
+
+    # Monkeypatch AsyncSessionLocal to avoid database connection
+    class _FakeSessionContext:
+        def __init__(self, session):
+            self._session = session
+        async def __aenter__(self):
+            return self._session
+        async def __aexit__(self, *args):
+            await self._session.close()
+
+    fake_session = AsyncMock(spec=AsyncSession)
+    fake_session.execute = AsyncMock()
+    fake_session.connection = AsyncMock()
+    monkeypatch.setattr(health_probe, "database_probe", unavailable_database)
+    monkeypatch.setattr("app.database.AsyncSessionLocal", lambda: _FakeSessionContext(fake_session))
+    # The token gate only applies once a token is configured.
+    monkeypatch.setenv("HEALTH_CHECK_TOKEN", "test-token")
+
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Without auth token, should 404
+        response = await client.get("/api/v1/health/dependencies")
+        assert response.status_code == 404
+
+        # With token, should return 503 for unhealthy
+        response = await client.get(
+            "/api/v1/health/dependencies", headers={"X-Health-Token": "test-token"}
+        )
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        payload = response.json()
+        assert payload["status"] == "unhealthy"
+        assert payload["database"]["status"] == "unavailable"
+
+
+# Cleanup fixture to reset database circuit between tests
 @pytest.fixture(autouse=True)
 def _reset_database_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep process-local circuit state isolated between tests."""

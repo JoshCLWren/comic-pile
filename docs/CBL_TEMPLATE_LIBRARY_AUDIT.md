@@ -218,7 +218,7 @@ List 26 does not reconcile, and the mismatch is not a stale-revision artifact:
 - Its recorded `revision_sha` `1a4e17d1…` — which is also the source row's revision — **is not a
   commit object in the mirror repository at all** (`git cat-file -t` fails).
 - Its 15 entries are `B.P.R.D.: The Universal Machine` #1–#5 and similar, matching the shape of the
-  Step 21 B.P.R.D. recovery work (`tests/test_bprd_integrated_golden_path.py` builds a near-identical <!-- docs-path-check: ignore -->
+  Step 21 B.P.R.D. recovery work (`tests/test_bprd_integrated_golden_path.py` builds a near-identical
   list at `Dark Horse/B.P.R.D. Plague of Frogs Omnibus Vol. 3.cbl`).
 
 So production's only recorded source revision cannot be resolved back to the mirror, and one of its

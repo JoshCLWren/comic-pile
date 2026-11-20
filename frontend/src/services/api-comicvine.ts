@@ -10,10 +10,6 @@ import api from './api'
  */
 export const SERIES_IMPORT_TIMEOUT_MS = 120_000
 
-// Roster-backed provider reads (resolve + series issues) page through ComicVine;
-// keep above the server-side 50s roster deadline so the browser does not cancel early.
-export const COMICVINE_ROSTER_TIMEOUT_MS = 60_000
-
 export interface ComicVineCreator {
   creator_id?: number | null
   name: string
@@ -252,14 +248,13 @@ export const comicVineApi = {
       `/v1/comicvine/series/${volumeId}/import-status`,
     ),
   searchSeries: (query: string, limit = 10, offset = 0) =>
-    api.get<ComicVineSeriesSearchResponse>(`/v2/comicvine/search/series`, { params: { q: query, limit, offset } }),
+    api.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit, offset } }),
   resolveIdentity: (input: string) =>
-    // Roster-backed: a pasted volume URL resolves the roster before answering.
-    api.get<ComicVineResolveResponse>(`/v2/comicvine/resolve`, { params: { input }, timeout: COMICVINE_ROSTER_TIMEOUT_MS }),
+    api.get<ComicVineResolveResponse>(`/v1/comicvine/resolve`, { params: { input } }),
   getSeriesIssues: (volumeId: number, seriesName = '') =>
-    api.get<ComicVineSeriesIssuesResponse>(`/v2/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName }, timeout: COMICVINE_ROSTER_TIMEOUT_MS }),
+    api.get<ComicVineSeriesIssuesResponse>(`/v1/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName } }),
   getIssueIdentity: (issueId: number) =>
-    api.get<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity`),
+    api.get<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity`),
   confirmIdentity: (issueId: number, comicvineIssueId: number) =>
     api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:confirm`, { comicvine_issue_id: comicvineIssueId }),
   replaceIdentity: (issueId: number, comicvineIssueId: number, reason?: string) =>
@@ -269,7 +264,7 @@ export const comicVineApi = {
   applyCorrection: (issueId: number, fieldName: string, canonicalValue: string, reason?: string) =>
     api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:correct`, { field_name: fieldName, canonical_value: canonicalValue, reason }),
   listCorrections: (issueId: number) =>
-    api.get<MetadataCorrectionsResponse>(`/v2/comicvine/issues/${issueId}/metadata:corrections`),
+    api.get<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:corrections`),
   revertCorrection: (issueId: number, correctionId: number) =>
     api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:revert`, { correction_id: correctionId }),
   removeIdentity: (issueId: number) =>

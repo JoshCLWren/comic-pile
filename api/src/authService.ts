@@ -5,62 +5,51 @@ import type { UserResponse } from './authTypes.js';
 const SECRET_KEY = process.env.SECRET_KEY || '';
 if (!SECRET_KEY) throw new Error('SECRET_KEY environment variable must be set');
 
-type VerifiedAccessClaims = {
+function verifyToken(token: string): {
   sub: string;
   jti: string;
   type: string;
   exp: number;
   pc?: number;
-};
-
-function isStringValue(value: unknown): value is string {
-  return Object.prototype.toString.call(value) === '[object String]';
-}
-
-function isNumberValue(value: unknown): value is number {
-  return Object.prototype.toString.call(value) === '[object Number]';
-}
-
-function verifyToken(token: string): VerifiedAccessClaims {
+} {
   try {
-    // SAFETY: jwt.verify returns the decoded token payload for a valid HS256 token; fields are validated before use.
     const payload = jwt.verify(token, SECRET_KEY, { algorithms: ['HS256'] }) as {
       sub?: unknown;
       jti?: unknown;
       type?: unknown;
-      exp?: unknown;
-      pc?: unknown;
+      exp?: number;
+      pc?: number;
     };
-
+    
     // Validate required claims
-    if (!isStringValue(payload.sub)) {
+    if (!payload.sub || typeof payload.sub !== 'string') {
       throw new Error('Invalid subject claim');
     }
-
-    if (!isStringValue(payload.jti)) {
+    
+    if (!payload.jti || typeof payload.jti !== 'string') {
       throw new Error('Invalid JTI claim');
     }
-
+    
     if (payload.type !== 'access') {
       throw new Error('Invalid token type');
     }
-
-    const exp = isNumberValue(payload.exp) ? payload.exp : 0;
-    if (isNumberValue(payload.pc)) {
-      return {
-        sub: payload.sub,
-        jti: payload.jti,
-        type: 'access',
-        exp,
-        pc: payload.pc,
-      };
-    }
-    return {
+    
+    const claims: {
+      sub: string;
+      jti: string;
+      type: string;
+      exp: number;
+      pc?: number;
+    } = {
       sub: payload.sub,
       jti: payload.jti,
       type: 'access',
-      exp,
+      exp: typeof payload.exp === 'number' ? payload.exp : 0,
     };
+    if (typeof payload.pc === 'number') {
+      claims.pc = payload.pc;
+    }
+    return claims;
   } catch (error) {
     throw new Error(`Token verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }

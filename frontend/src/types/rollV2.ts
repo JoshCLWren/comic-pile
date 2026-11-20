@@ -112,8 +112,6 @@ export interface RollV2BootstrapResponse {
   last_read: RollV2LastRead | null
   snoozed_threads: RollV2Thread[]
   snoozed_count: number
-  /** Complete, uncapped snoozed series ids; `snoozed_threads` is a 20-row display summary. */
-  snoozed_thread_ids?: number[]
   skipped_thread_ids: number[]
   skipped_threads: RollV2Thread[]
   timezone?: string | null

@@ -5,7 +5,7 @@
  * prove):
  * 1. Selecting 2 creators on `/creators` reveals a Compare action that opens
  *    `/creators/compare` with the selection encoded in route/query state.
- * 2. The comparison view issues exactly one bounded `/api/v2/creators/compare`
+ * 2. The comparison view issues exactly one bounded `/api/v1/creators/compare`
  *    request, never one detail request per creator.
  * 3. Cards render personal averages with sample sizes, 5-star rate, role
  *    breakdown, navigable series aggregates, and distinct same-name creators.
@@ -84,7 +84,7 @@ function comparisonItem(
 
 async function installCreatorsList(page: Page) {
   await page.route(
-    (url) => url.pathname === '/api/v2/creators',
+    (url) => url.pathname === '/api/v1/creators',
     async (route: Route) => {
       const params = new URL(route.request().url()).searchParams
       await route.fulfill({
@@ -108,7 +108,7 @@ async function installCreatorComparison(
 ) {
   const requests: string[] = []
   await page.route(
-    (url) => url.pathname === '/api/v2/creators/compare',
+    (url) => url.pathname === '/api/v1/creators/compare',
     async (route: Route) => {
       const params = new URL(route.request().url()).searchParams
       requests.push(params.get('keys') ?? '')

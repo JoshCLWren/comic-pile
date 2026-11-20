@@ -42,21 +42,15 @@ the whole session.
    ```bash
    export E2E_BACKEND_PORT="$((9000+N))"
    export BASE_URL="http://127.0.0.1:${E2E_BACKEND_PORT}"
-   # Pin BOTH Python URL fields to this session's slot database. In test mode
-   # Python prefers TEST_DATABASE_URL over DATABASE_URL, and the tracked
-   # .env.test otherwise forces :5437 regardless of your slot (issue #5119).
-   export E2E_TEST_DB_URL="postgresql+asyncpg://postgres:postgres@localhost:$((5437+N))/comic_pile_test"
    SECRET_KEY=test-secret-key-for-testing-only TEST_ENVIRONMENT=true AUTO_BACKUP_ENABLED=false \
-     DATABASE_URL="${E2E_TEST_DB_URL}" TEST_DATABASE_URL="${E2E_TEST_DB_URL}" \
+     DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:$((5437+N))/comic_pile_test \
      nohup .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port "${E2E_BACKEND_PORT}" \
      > "/tmp/backend-${E2E_BACKEND_PORT}.log" 2>&1 &
    curl -fsS "${BASE_URL}/health"
    ```
 
    All Playwright configs read `BASE_URL` (fallback `http://127.0.0.1:9000`), so the export
-   is what steers the suite to this session's backend. When you also run the native v2
-   ingress locally, set `RUST_ROLL_DATABASE_URL` to that same slot database so the two
-   runtimes share fixtures; the CI workflow pins all three URLs for you.
+   is what steers the suite to this session's backend.
 
    uvicorn has no `--reload`: after any backend edit or rebase, kill the old process and
    restart it, or you are testing stale code.

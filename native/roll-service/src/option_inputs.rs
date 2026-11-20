@@ -84,7 +84,7 @@ impl OptionInputs {
     }
 }
 // Numeric strings need not fit a machine integer (Python uses arbitrary precision).
-pub(crate) fn normalize_volume(provider: &str, external_id: &str) -> (String, String) {
+fn normalize_volume(provider: &str, external_id: &str) -> (String, String) {
     let provider = provider.trim().case_fold().collect::<String>();
     let value = external_id.trim();
     let digits = value.strip_prefix("4050-").unwrap_or(value);

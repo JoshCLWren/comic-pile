@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { useSessionDetails, useSessionSnapshots } from '../hooks/useSession'
+import { useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from '../hooks/useSession'
 import { useUndo } from '../hooks/useUndo'
 import { formatDateTime, formatDateTimeWithSeconds } from '../utils/dateFormat'
 import LoadingSpinner from '../components/LoadingSpinner'
+import Modal from '../components/Modal'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { useToast } from '../contexts/useToast'
 import { invalidateAfterUndo } from '../query/cacheEffects'
@@ -240,7 +242,9 @@ export default function SessionPage() {
   const { showToast } = useToast()
   const { data: details, isPending, refetch: refetchDetails } = useSessionDetails(id)
   const { data: snapshotsData } = useSessionSnapshots(id)
+  const restoreMutation = useRestoreSessionStart()
   const undoMutation = useUndo()
+  const [isRestoreConfirmationOpen, setIsRestoreConfirmationOpen] = useState(false)
 
   const snapshots = snapshotsData?.snapshots ?? []
 
@@ -254,7 +258,7 @@ export default function SessionPage() {
 
   const isEmptySession = details.events.length === 0
 
-  // Undo rewrites queue order, session state, Roll, and the
+  // Both restore paths rewrite queue order, session state, Roll, and the
   // history aggregates, so each one confirms out loud and refreshes through the
   // shared helper instead of leaving Roll on its pre-undo snapshot (#3194).
   // The helper also refreshes this page's snapshot list, so the callers only
@@ -268,6 +272,19 @@ export default function SessionPage() {
     } catch (error) {
       console.error('Undo failed:', error)
       showToast('Failed to undo the last change. Please try again.', 'error')
+    }
+  }
+
+  const handleRestoreStart = async () => {
+    try {
+      await restoreMutation.mutate(details.session_id)
+      setIsRestoreConfirmationOpen(false)
+      await refetchDetails()
+      await invalidateAfterUndo(queryClient)
+      showToast('Session restored to its starting state.', 'success')
+    } catch (error) {
+      console.error('Restore failed:', error)
+      showToast('Failed to restore the session start. Please try again.', 'error')
     }
   }
 
@@ -341,11 +358,20 @@ export default function SessionPage() {
       <div className="surface-panel p-4 md:p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-black uppercase text-stone-200">Snapshots</h2>
+          <button
+            type="button"
+            onClick={() => setIsRestoreConfirmationOpen(true)}
+            disabled={restoreMutation.isPending || snapshots.length === 0}
+            className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60"
+          >
+            {restoreMutation.isPending ? 'Restoring...' : 'Restore Start'}
+          </button>
         </div>
         <p className="text-xs text-[var(--theme-text-dim)]">
           <span className="font-bold text-stone-300">Undo Latest</span> reverses only the newest
-          change, and it stays on the newest snapshot until it has been used once. Your reading
-          history stays intact.
+          change, and it stays on the newest snapshot until it has been used once.{' '}
+          <span className="font-bold text-stone-300">Restore Start</span> rewinds the whole session
+          to the moment it began and asks for confirmation first.
         </p>
         {snapshots.length === 0 ? (
           <p className="text-xs text-stone-500">No snapshots available.</p>
@@ -396,6 +422,35 @@ export default function SessionPage() {
           </div>
         )}
       </div>
+
+      <Modal
+        isOpen={isRestoreConfirmationOpen}
+        title="Restore session start?"
+        onClose={() => setIsRestoreConfirmationOpen(false)}
+        autoFocus={false}
+      >
+        <p className="text-sm text-[var(--theme-text-muted)]">
+          This replaces your entire current pile with the state saved when Session #{details.session_id} began.
+          Threads added since then may be removed, and reading progress, ratings, and queue order may be reverted.
+        </p>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => setIsRestoreConfirmationOpen(false)}
+            className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleRestoreStart}
+            disabled={restoreMutation.isPending}
+            className="min-h-11 rounded-xl bg-[var(--theme-danger)] px-4 text-sm font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-danger-hover)] disabled:opacity-60"
+          >
+            {restoreMutation.isPending ? 'Restoring...' : 'Restore session start'}
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }

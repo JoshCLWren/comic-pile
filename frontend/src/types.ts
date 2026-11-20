@@ -27,9 +27,7 @@ export type AuthTokens = components['schemas']['TokenResponse']
  */
 export type ThreadUpdatePayload = components['schemas']['ThreadUpdate']
 export type ReactivateThreadPayload = components['schemas']['ReactivateRequest']
-export interface OverrideRollPayload {
-  thread_id: number
-}
+export type OverrideRollPayload = components['schemas']['OverrideRequest']
 export type Dependency = components['schemas']['DependencyResponse']
 export type ThreadDependenciesResponse = components['schemas']['ThreadDependenciesResponse']
 export type IssueDependencyEdge = components['schemas']['IssueDependencyEdge']

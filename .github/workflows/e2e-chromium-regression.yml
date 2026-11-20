@@ -47,13 +47,6 @@ env:
   # Native Rust v2 and Python share this process-visible credential epoch.
   ENVIRONMENT: 'test'
   SECRET_KEY: e2e-regression-discovery-secret-key
-  # One disposable PostgreSQL database for BOTH runtimes (issue #5119). The
-  # tracked .env.test defines TEST_DATABASE_URL on :5437; in test mode Python
-  # settings prefer that value over DATABASE_URL, so it must be pinned here to
-  # the same database the native v2 service reads through RUST_ROLL_DATABASE_URL.
-  # Keep all three endpoints identical; tests/test_e2e_chromium_shared_db.py guards it.
-  DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/comic_pile_e2e_regression
-  TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/comic_pile_e2e_regression
   RUST_ROLL_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/comic_pile_e2e_regression
   RUST_ROLL_JWT_SECRET: e2e-regression-discovery-secret-key
   RUST_ROLL_ENV: development
@@ -111,12 +104,8 @@ jobs:
       - name: Build frontend
         run: pnpm --filter frontend run build
 
-      - name: Install Chromium browser binaries
-        # No --with-deps: that path runs apt-get against security.ubuntu.com,
-        # whose 503s for fonts-*/xfonts-* broke this job. The hosted runner
-        # already provides the browser system libraries; only the pinned
-        # browser binaries are downloaded (from the Playwright CDN) here.
-        run: pnpm --filter frontend exec playwright install chromium
+      - name: Install Chromium
+        run: pnpm --filter frontend exec playwright install --with-deps chromium
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -124,9 +113,9 @@ jobs:
         run: CARGO_TARGET_DIR=native/roll-service/target cargo build --release --locked -p comicpile-roll-service
 
       - name: Apply migrations
-        # DATABASE_URL / TEST_DATABASE_URL come from the shared top-level env.
-        # Refinery runner (#5431); Alembic is frozen.
-        run: CARGO_TARGET_DIR=native/roll-service/target cargo run --release --locked -p comicpile-migrate -- up
+        run: .venv/bin/alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/comic_pile_e2e_regression
 
       - name: Start backend and native v2 ingress
         run: |
@@ -137,7 +126,7 @@ jobs:
           nohup .venv/bin/python scripts/e2e_native_ingress.py \
             > /tmp/ingress.log 2>&1 &
           ready=0
-          for _ in $(seq 1 45); do
+          for i in $(seq 1 45); do
             python_ready=0
             native_ready=0
             if curl -fsS http://127.0.0.1:9001/health >/dev/null; then
@@ -161,6 +150,9 @@ jobs:
             tail -n 200 /tmp/ingress.log || true
             exit 1
           fi
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/comic_pile_e2e_regression
+
       - name: Select regression specs from canonical inventory
         run: |
           .venv/bin/python scripts/e2e_regression_select.py \

@@ -24,7 +24,7 @@ describe('creatorTeamChemistryApi', () => {
     client.get.mockResolvedValue(RESPONSE)
 
     await expect(chemistryApi.getChemistry()).resolves.toEqual(RESPONSE)
-    expect(client.get).toHaveBeenCalledWith('/v2/creators/team-chemistry')
+    expect(client.get).toHaveBeenCalledWith('/v1/creators/team-chemistry')
   })
 
   it('exposes a single read method so team chemistry cannot persist', () => {

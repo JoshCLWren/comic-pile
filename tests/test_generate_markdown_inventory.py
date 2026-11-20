@@ -47,7 +47,9 @@ def test_docs_hub_contracts_are_kept_with_code() -> None:
     """Docs named by the authoritative hub must not be moved to the Wiki."""
     paths = (
         "docs/API.md",
+        "docs/AUTONOMOUS_FACTORY_POLICY.md",
         "docs/DATABASE_SAVE_LOAD.md",
+        "docs/FACTORY_GITHUB_VISIBILITY.md",
         "docs/GIT_HOOKS.md",
         "docs/ISSUE_EXECUTION_PROTOCOL.md",
         "docs/REACT_ARCHITECTURE.md",

@@ -3,10 +3,8 @@ import { act, renderHook } from '@testing-library/react'
 import { useQueueRestore } from '../pages/QueuePage/useQueueRestore'
 
 const mutate = vi.fn()
-const mutateGroup = vi.fn()
 vi.mock('../hooks/useQueue', () => ({
   useRestoreThread: vi.fn(() => ({ mutate, isPending: false, isError: false })),
-  useRestoreExclusionGroup: vi.fn(() => ({ mutate: mutateGroup, isPending: false, isError: false })),
 }))
 
 describe('useQueueRestore', () => {
@@ -34,17 +32,5 @@ describe('useQueueRestore', () => {
     expect(result.current.restoreError).toBe(
       'Could not restore that series to the queue. Check your connection and try again.',
     )
-  })
-
-  it('restores an exclusion group and clears any previous error', async () => {
-    mutateGroup.mockResolvedValue(undefined)
-    const { result } = renderHook(() => useQueueRestore())
-
-    await act(async () => {
-      await result.current.handleRestoreGroup(11)
-    })
-
-    expect(mutateGroup).toHaveBeenCalledWith(11)
-    expect(result.current.restoreError).toBeNull()
   })
 })

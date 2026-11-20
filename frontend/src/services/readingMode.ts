@@ -32,13 +32,13 @@ export function getQuizQuestions(): QuizQuestion[] {
 }
 
 export async function getReadingMode(): Promise<ReadingModeState> {
-  return api.get<ReadingModeState>('/v2/reading-mode')
+  return api.get<ReadingModeState>('/v1/reading-mode')
 }
 
 export async function setReadingModeFromQuiz(
   answers: Record<string, string>,
 ): Promise<ReadingModeState> {
-  return api.put<ReadingModeState>('/v2/reading-mode', {
+  return api.post<ReadingModeState>('/v1/reading-mode', {
     answers,
     // SAFETY: the quiz flow always records the source as 'quiz' in the payload contract.
     source: 'quiz' as ReadingModeSource,
@@ -49,7 +49,7 @@ export async function setReadingModeManual(
   bandwidth: string,
   intent: string,
 ): Promise<ReadingModeState> {
-  return api.put<ReadingModeState>('/v2/reading-mode', {
+  return api.post<ReadingModeState>('/v1/reading-mode', {
     bandwidth,
     intent,
     // SAFETY: the manual flow always records the source as 'manual' in the payload contract.
@@ -58,9 +58,9 @@ export async function setReadingModeManual(
 }
 
 export async function dismissReadingModeSuggestion(): Promise<ReadingModeState> {
-  return api.post<ReadingModeState>('/v2/reading-mode/suggestion-dismissals')
+  return api.post<ReadingModeState>('/v1/reading-mode/dismiss-suggestion')
 }
 
 export async function suggestReadingMode(): Promise<ReadingModeState> {
-  return api.post<ReadingModeState>('/v2/reading-mode/suggestions')
+  return api.post<ReadingModeState>('/v1/reading-mode/suggest')
 }

@@ -4,12 +4,14 @@ from collections.abc import Iterator
 from dataclasses import replace
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_reading_execution_settings
 from app.models import Dependency, Issue, Thread, User
+from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.repositories.reading_boundary_repository import (
     BoundaryIssueLabels,
@@ -34,6 +36,7 @@ from app.services.reading_list_evaluator import (
     ReadingThread,
     SeriesOverlapDecision,
 )
+from tests.conftest import get_or_create_user_async
 
 FOURTH_WORLD = "comicvine:volume:fourth-world"
 JLI = "comicvine:volume:jli"
@@ -96,7 +99,9 @@ def _fixture() -> tuple[ReadingSnapshot, ReadingEligibilitySnapshot, BoundarySha
                 (SeriesOverlapDecision(JLI, MISTER_MIRACLE),),
             ),
         ),
-        prerequisites=(ReadingPrerequisite(1, F2, M1, "reader", ("reader authored",)),),
+        prerequisites=(
+            ReadingPrerequisite(1, F2, M1, "reader", ("reader authored",)),
+        ),
     )
     snapshot = replace(
         build_eligibility_snapshot(state, queued_thread_ids=frozenset({1, 2, 3})),
@@ -224,7 +229,9 @@ async def test_repository_leaves_ambiguous_composite_volume_empty(
     foreign = Thread(user_id=other.id, title="Foreign", format="Comic", queue_position=1)
     async_db.add_all([composite, single, foreign])
     await async_db.flush()
-    composite_issue = Issue(thread_id=composite.id, issue_number="1", position=1, status="unread")
+    composite_issue = Issue(
+        thread_id=composite.id, issue_number="1", position=1, status="unread"
+    )
     single_issue = Issue(thread_id=single.id, issue_number="1", position=1, status="unread")
     foreign_issue = Issue(thread_id=foreign.id, issue_number="1", position=1, status="unread")
     async_db.add_all([composite_issue, single_issue, foreign_issue])
@@ -317,25 +324,19 @@ async def test_scoped_boundary_labels_keep_both_directions_and_skip_unrelated_ed
     unrelated, c_issues = await _owned_series(async_db, owner.id, "Unrelated", 3)
     _, foreign_issues = await _owned_series(async_db, foreign.id, "Foreign", 1)
     outbound = Dependency(
-        source_issue_id=a_issues[0].id,
-        target_issue_id=b_issues[0].id,
+        source_issue_id=a_issues[0].id, target_issue_id=b_issues[0].id,
         note="historical outbound",
     )
     inbound = Dependency(
-        source_issue_id=b_issues[1].id,
-        target_issue_id=a_issues[1].id,
-        origin="converted",
-        classification="C",
-        provenance="historical inbound",
+        source_issue_id=b_issues[1].id, target_issue_id=a_issues[1].id,
+        origin="converted", classification="C", provenance="historical inbound",
     )
     internal = Dependency(
-        source_issue_id=a_issues[0].id,
-        target_issue_id=a_issues[1].id,
+        source_issue_id=a_issues[0].id, target_issue_id=a_issues[1].id,
         note="historical internal",
     )
     other = Dependency(
-        source_issue_id=b_issues[0].id,
-        target_issue_id=c_issues[0].id,
+        source_issue_id=b_issues[0].id, target_issue_id=c_issues[0].id,
         note="unrelated historical edge",
     )
     cross_owner = Dependency(
@@ -354,7 +355,9 @@ async def test_scoped_boundary_labels_keep_both_directions_and_skip_unrelated_ed
 
     event.listen(Engine, "before_cursor_execute", capture)
     try:
-        labels = await load_boundary_labels(async_db, owner.id, requested_thread_ids={requested.id})
+        labels = await load_boundary_labels(
+            async_db, owner.id, requested_thread_ids={requested.id}
+        )
     finally:
         event.remove(Engine, "before_cursor_execute", capture)
 
@@ -381,17 +384,115 @@ async def test_scoped_boundary_labels_keep_both_directions_and_skip_unrelated_ed
         async_db, owner.id, requested_thread_ids={requested.id, related.id}
     )
     assert set(both.prerequisites) == {outbound.id, inbound.id, internal.id, other.id}
-    assert all(
-        edge_id not in both.prerequisite_ids_by_thread[unrelated.id]
-        for edge_id in (outbound.id, inbound.id, internal.id)
+    assert all(edge_id not in both.prerequisite_ids_by_thread[unrelated.id]
+               for edge_id in (outbound.id, inbound.id, internal.id))
+
+
+@pytest.mark.asyncio
+async def test_api_returns_named_live_blocker_and_excludes_history(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """The authenticated route names the authored prerequisite, not old adjacency."""
+    user = await get_or_create_user_async(async_db)
+    other = User(username="boundary_api_other", password_hash="unused")
+    async_db.add(other)
+    await async_db.flush()
+    fourth, fourth_issues = await _owned_series(async_db, user.id, "Fourth World", 1)
+    miracle, miracle_issues = await _owned_series(async_db, user.id, "Mister Miracle", 2)
+    foreign, _ = await _owned_series(async_db, other.id, "Foreign", 1)
+    async_db.add_all(
+        [
+            Dependency(
+                source_issue_id=fourth_issues[1].id,
+                target_issue_id=miracle_issues[0].id,
+                origin="reader",
+                classification="A",
+                provenance="Explicit reader prerequisite",
+            ),
+            Dependency(
+                source_issue_id=fourth_issues[0].id,
+                target_issue_id=miracle_issues[0].id,
+                note="Old reading plan checkpoint",
+            ),
+        ]
     )
+    await async_db.commit()
+    miracle_id, foreign_id = miracle.id, foreign.id
+
+    response = await auth_client.get(f"/api/v1/reading-boundaries/{miracle_id}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["state"] == "blocked"
+    assert [issue["issue_number"] for issue in body["blockers"][0]["waiting_on"]] == ["2"]
+    assert body["blockers"][0]["waiting_on"][0]["thread_title"] == "Fourth World"
+    assert "Reader prerequisite" in body["blockers"][0]["reason"]
+    assert body["blockers"][0]["editor"]["prerequisite_id"] is not None
+    assert len(body["historical"]) == 1
+    assert body["historical"][0]["kind"] == "legacy_dependency"
+    assert "not an active reading requirement" in body["historical"][0]["detail"]
+
+    # V2 is a clean versioned contract: no retired field or historical SELECT.
+    dependency_sql: list[tuple[str, tuple[str, ...]]] = []
+
+    def capture_v2(conn, cursor, statement, parameters, context, executemany):
+        if "FROM dependencies" in statement:
+            if isinstance(parameters, dict):
+                binds = tuple(str(value) for value in parameters.values())
+            elif isinstance(parameters, (list, tuple)):
+                binds = tuple(str(value) for value in parameters)
+            else:
+                binds = ()
+            dependency_sql.append((statement, binds))
+
+    event.listen(Engine, "before_cursor_execute", capture_v2)
+    try:
+        canonical_response = await auth_client.get(
+            f"/api/v2/reading-boundaries/{miracle_id}"
+        )
+    finally:
+        event.remove(Engine, "before_cursor_execute", capture_v2)
+
+    assert canonical_response.status_code == 200, canonical_response.text
+    canonical = canonical_response.json()
+    assert "historical" not in canonical
+    assert canonical["state"] == body["state"]
+    assert canonical["blockers"] == body["blockers"]
+    assert canonical["next"] == body["next"]
+    # Only get_execution_eligibility's explicit reader-origin query is allowed.
+    # The boundary label loader must never fetch converted or unclassified rows.
+    assert all("DEPENDENCIES.ORIGIN =" in query.upper().split("WHERE", 1)[1]
+               for query, _ in dependency_sql)
+    assert all("reader" in binds for _, binds in dependency_sql)
+    assert len(dependency_sql) <= 2
+
+    hidden = await auth_client.get(f"/api/v1/reading-boundaries/{foreign_id}")
+    assert hidden.status_code == 404
+
+    batch = await auth_client.post(
+        "/api/v1/reading-boundaries",
+        json={"thread_ids": [fourth.id, miracle_id]},
+    )
+    assert batch.status_code == 200, batch.text
+    assert set(batch.json()["threads"]) == {str(fourth.id), str(miracle_id)}
+    assert batch.json()["threads"][str(miracle_id)]["state"] == "blocked"
+
+    missing = await auth_client.post(
+        "/api/v1/reading-boundaries",
+        json={"thread_ids": [foreign_id]},
+    )
+    assert missing.status_code == 404
 
 
 def test_owned_list_names_and_modes_appear_on_next_and_waiting_issues() -> None:
     """Owned list membership labels survive projection onto next and waiting Issues."""
     _state, snapshot, labels = _fixture()
 
-    membership = BoundaryReadingListMembership(list_id=LIST_ID, name="JLI", mode="strict")
+    membership = BoundaryReadingListMembership(
+        list_id=LIST_ID, name="JLI", mode="strict"
+    )
     new_issues = dict(labels.issues)
     for issue_id in (F2, J2, M1):
         row = new_issues[issue_id]
@@ -410,6 +511,97 @@ def test_owned_list_names_and_modes_appear_on_next_and_waiting_issues() -> None:
     assert miracle.blockers
     assert miracle.blockers[0].waiting_on[0].reading_lists[0].name == "JLI"
     assert miracle.blockers[0].waiting_on[0].reading_lists[0].mode == "strict"
+
+
+@pytest.mark.asyncio
+async def test_api_returns_unavailable_when_option_e_disabled_single(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A disabled Option E explains one owned series as unavailable."""
+    user = await get_or_create_user_async(async_db)
+    thread, _issues = await _owned_series(async_db, user.id, "Fourth World", 1)
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/reading-boundaries/{thread.id}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["state"] == "unavailable"
+    assert body["next"] is None
+    assert body["blockers"] == []
+    assert body["historical"] == []
+
+
+@pytest.mark.asyncio
+async def test_api_returns_unavailable_when_option_e_disabled_batch(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A disabled Option E explains every requested owned series as unavailable."""
+    user = await get_or_create_user_async(async_db)
+    first, _ = await _owned_series(async_db, user.id, "First", 1)
+    second, _ = await _owned_series(async_db, user.id, "Second", 2)
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/reading-boundaries",
+        json={"thread_ids": [first.id, second.id]},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert set(body["threads"]) == {str(first.id), str(second.id)}
+    for thread in (first, second):
+        assert body["threads"][str(thread.id)]["state"] == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_api_includes_owned_list_names_and_modes_on_issues(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Owned list names and modes appear on next and waiting Issues."""
+    user = await get_or_create_user_async(async_db)
+    other = User(username="boundary_list_other", password_hash="unused")
+    async_db.add(other)
+    await async_db.flush()
+    fourth, fourth_issues = await _owned_series(async_db, user.id, "Fourth World", 1)
+    miracle, miracle_issues = await _owned_series(async_db, user.id, "Mister Miracle", 2)
+
+    cbl = CustomCBLList(user_id=user.id, name="JLI", mode="strict")
+    async_db.add(cbl)
+    await async_db.flush()
+    async_db.add_all(
+        [
+            CustomCBLEntry(
+                list_id=cbl.id, issue_id=fourth_issues[1].id, position=1, gate="none"
+            ),
+            CustomCBLEntry(
+                list_id=cbl.id, issue_id=miracle_issues[0].id, position=2, gate="none"
+            ),
+        ]
+    )
+    async_db.add(
+        Dependency(
+            source_issue_id=fourth_issues[1].id,
+            target_issue_id=miracle_issues[0].id,
+            origin="reader",
+            classification="A",
+            provenance="Explicit reader prerequisite",
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/reading-boundaries/{miracle.id}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["next"]["issue"]["reading_lists"][0]["name"] == "JLI"
+    assert body["next"]["issue"]["reading_lists"][0]["mode"] == "strict"
+    assert body["blockers"][0]["waiting_on"][0]["reading_lists"][0]["name"] == "JLI"
+    assert body["blockers"][0]["waiting_on"][0]["reading_lists"][0]["mode"] == "strict"
 
 
 @pytest.mark.parametrize("requirements", [(F2,), (F2, F1)])
@@ -504,10 +696,12 @@ def test_stacked_hold_and_strict_order_count_one_canonical_requirement() -> None
 
     assert explanation.state == "blocked"
     assert explanation.summary == "Geiger #9 is waiting on 1 live requirement."
-    assert [issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on] == [
-        REDCOAT_ISSUE
-    ]
-    assert explanation.blockers[0].reason == (f"Hold in {QA_LIST_NAME}: read Redcoat #7 first")
+    assert [
+        issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on
+    ] == [REDCOAT_ISSUE]
+    assert explanation.blockers[0].reason == (
+        f"Hold in {QA_LIST_NAME}: read Redcoat #7 first"
+    )
     # The strict-order rule stays visible and editable without restating Redcoat #7.
     assert explanation.blockers[1].reason == f"Also gated by Strict order in {QA_LIST_NAME}."
     assert explanation.blockers[1].waiting_on == []
@@ -564,10 +758,9 @@ def test_distinct_blocking_issues_remain_separately_visible_and_counted() -> Non
     explanation = project_boundary_explanation(snapshot, labels, GEIGER_ID)
 
     assert explanation.summary == "Geiger #9 is waiting on 2 live requirements."
-    assert [issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on] == [
-        REDCOAT_ISSUE,
-        302,
-    ]
+    assert [
+        issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on
+    ] == [REDCOAT_ISSUE, 302]
     assert "Redcoat #7" in explanation.blockers[0].reason
     assert "Mister Miracle Special #1" in explanation.blockers[1].reason
 
@@ -615,11 +808,77 @@ def test_two_lists_requiring_one_issue_keep_both_editors() -> None:
     explanation = project_boundary_explanation(snapshot, labels, GEIGER_ID)
 
     assert explanation.summary == "Geiger #9 is waiting on 1 live requirement."
-    assert [issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on] == [
-        REDCOAT_ISSUE
-    ]
+    assert [
+        issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on
+    ] == [REDCOAT_ISSUE]
     assert {blocker.editor.list_id for blocker in explanation.blockers if blocker.editor} == {
         LIST_ID,
         SECOND_LIST_ID,
     }
     assert explanation.blockers[1].reason == "Also gated by Strict order in Crossover order."
+
+
+def test_recovery_describes_stacked_gates_once_with_every_origin() -> None:
+    """Roll recovery lists one blocker per Issue and keeps both gate origins."""
+    from app.services.reading_recovery_service import build_reading_recovery
+
+    snapshot = replace(
+        _stacked_hold_strict_snapshot(),
+        list_labels={LIST_ID: QA_LIST_NAME},
+        issue_labels={REDCOAT_ISSUE: "Redcoat #7", GEIGER_ISSUE: "Geiger #9"},
+    )
+
+    recovery = build_reading_recovery(
+        snapshot,
+        pending_thread_id=GEIGER_ID,
+        pending_thread_title="Geiger",
+        excluded_thread_ids=frozenset(),
+    )
+
+    assert recovery is not None
+    assert [blocker.source_id for blocker in recovery.direct_blockers] == [REDCOAT_ISSUE]
+    note = recovery.direct_blockers[0].note
+    assert note is not None
+    assert f"Hold in {QA_LIST_NAME}" in note
+    assert f"Strict order in {QA_LIST_NAME}" in note
+
+
+@pytest.mark.asyncio
+async def test_api_counts_stacked_hold_and_strict_gates_as_one_requirement(
+    option_e: None,
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """MQA-ROLL-013: the boundary API reports one requirement for one Issue."""
+    user = await get_or_create_user_async(async_db)
+    _redcoat, redcoat_issues = await _owned_series(async_db, user.id, "Redcoat", 1, count=1)
+    geiger, geiger_issues = await _owned_series(async_db, user.id, "Geiger", 2, count=1)
+    cbl = CustomCBLList(user_id=user.id, name=QA_LIST_NAME, mode="strict")
+    async_db.add(cbl)
+    await async_db.flush()
+    async_db.add_all(
+        [
+            CustomCBLEntry(
+                list_id=cbl.id, issue_id=redcoat_issues[0].id, position=1, gate="hold"
+            ),
+            CustomCBLEntry(
+                list_id=cbl.id, issue_id=geiger_issues[0].id, position=2, gate="none"
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/reading-boundaries/{geiger.id}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["state"] == "blocked"
+    assert body["summary"] == "Geiger #1 is waiting on 1 live requirement."
+    waiting = [
+        issue["issue_id"] for blocker in body["blockers"] for issue in blocker["waiting_on"]
+    ]
+    assert waiting == [redcoat_issues[0].id]
+    assert any(
+        blocker["reason"] == f"Also gated by Strict order in {QA_LIST_NAME}."
+        for blocker in body["blockers"]
+    )

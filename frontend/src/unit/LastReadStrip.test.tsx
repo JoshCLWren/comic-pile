@@ -198,8 +198,6 @@ describe('LastReadStrip', () => {
       'src',
       'https://example.test/saga-5.jpg',
     )
-    expect(screen.getByTestId('last-read-cover')).toBeVisible()
-    expect(screen.getByRole('img', { name: 'Saga 5 cover' })).toHaveClass('object-cover')
   })
 
   it('copies the title and issue string', async () => {
@@ -238,8 +236,7 @@ describe('LastReadStrip', () => {
     )
 
     expect(screen.queryByRole('img', { name: 'Saga 5 cover' })).not.toBeInTheDocument()
-    expect(screen.getByTestId('last-read-cover-placeholder')).toBeInTheDocument()
-    expect(screen.getByLabelText('No cover for Saga #5')).toBeInTheDocument()
+    expect(screen.getByLabelText('Cover unavailable')).toBeInTheDocument()
   })
 
   it('omits canonical stats and run progress when they are unknown', () => {

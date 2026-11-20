@@ -27,11 +27,9 @@ interface ReadingGraphSummaryProps {
  * Compact reading-graph panel shown beside the CBL selection.
  *
  * It names which series can continue and which ones wait, plus the reader's
- * current per-volume decisions. The panel is rendered when the server reports
- * at least one genuine overlap or a cycle error; a source without a real
- * conflict keeps the one-decision flow and never shows a questionnaire. A
- * cycle without overlap questions still needs the panel, because the loop
- * blocks adding and must stay visible with a way to break it (#5379).
+ * current per-volume decisions. The panel is only rendered when the server
+ * reports at least one genuine overlap; a source without a real conflict keeps
+ * the one-decision flow and never shows a questionnaire.
  *
  * @param props - Graph preview, current answers, and the review action.
  * @returns The inline reading-graph summary.
@@ -81,12 +79,6 @@ export default function ReadingGraphSummary({
               <li key={error.code}>{error.message}</li>
             ))}
           </ul>
-          {decisionCount === 0 && (
-            <p className="mt-1 text-xs">
-              No series decision can break this loop — exclude one of the series in this loop
-              under Customize before adding this source.
-            </p>
-          )}
         </div>
       )}
 

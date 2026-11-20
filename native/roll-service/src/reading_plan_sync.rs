@@ -4,8 +4,8 @@
 //! Preserves the Python `app/api/reading_plan_sync.py` wire contract at the
 //! same HTTP method and exact path:
 //!
-//! * `GET /api/v2/reading-plan-sync/status`
-//! * `POST /api/v2/reading-plan-sync/runs`
+//! * `GET /api/v1/reading-plan-sync/status`
+//! * `POST /api/v1/reading-plan-sync/sync`
 //!
 //! Status is a direct read of persisted release-source state. The sync POST
 //! mirrors the user-triggered `sync_released_issues` behavior: evaluate only
@@ -16,26 +16,18 @@
 
 #![forbid(unsafe_code)]
 
-use crate::{
-    auth::AuthenticatedUser,
-    db,
-    outbound::{OutboundHttp, OutboundRequest},
-    ApiError, AppState,
-};
-use axum::{
-    extract::State,
-    http::{HeaderMap, HeaderValue},
-    response::{IntoResponse, Response},
-    Json,
-};
+use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use axum::{extract::State, Json};
 use bytes::Bytes;
 use chrono::{DateTime, SecondsFormat, Utc};
-use http_body_util::BodyExt;
+use http_body_util::{BodyExt, Empty};
+use hyper::client::conn::http1;
+use hyper_util::rt::TokioIo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const COMICVINE_HOST: &str = "comicvine.gamespot.com";
 const PROVIDER_TIMEOUT: Duration = Duration::from_secs(30);
@@ -684,36 +676,43 @@ fn parse_volume_id(raw: &str, source_id: i32) -> Result<i32, String> {
     })
 }
 
-/// Fetch one ComicVine page through the app's outbound seam (#5339): the
-/// real HTTPS client in production, a recording fake in test contexts.
-async fn comicvine_get(
-    outbound: &Arc<dyn OutboundHttp>,
-    path_and_query: &str,
-) -> Result<Value, String> {
-    let request = OutboundRequest {
-        method: http::Method::GET,
-        path: path_and_query.to_string(),
-        headers: vec![
-            ("accept".to_string(), "application/json".to_string()),
-            ("user-agent".to_string(), "ComicPile/1.0".to_string()),
-        ],
-        body: Bytes::new(),
-    };
-    let exchange = async {
-        let response = outbound
-            .send(COMICVINE_HOST, request)
+#[allow(dead_code)]
+async fn comicvine_get(path_and_query: &str) -> Result<Value, String> {
+    let connect = async {
+        let tcp = tokio::net::TcpStream::connect((COMICVINE_HOST, 443))
             .await
             .map_err(|e| e.to_string())?;
-        let status = response.status;
-        if !status.is_success() {
-            return Err(format!("HTTP {}", status));
+        let tls = native_tls::TlsConnector::new().map_err(|e| e.to_string())?;
+        let tls = tokio_native_tls::TlsConnector::from(tls)
+            .connect(COMICVINE_HOST, tcp)
+            .await
+            .map_err(|e| e.to_string())?;
+        let (mut sender, connection) = http1::handshake(TokioIo::new(tls))
+            .await
+            .map_err(|e| e.to_string())?;
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let request = hyper::Request::builder()
+            .method("GET")
+            .uri(path_and_query)
+            .header("host", COMICVINE_HOST)
+            .header("accept", "application/json")
+            .header("user-agent", "ComicPile/1.0")
+            .body(Empty::<Bytes>::new())
+            .map_err(|e| e.to_string())?;
+        let mut response = sender
+            .send_request(request)
+            .await
+            .map_err(|e| e.to_string())?;
+        if !response.status().is_success() {
+            return Err(format!("HTTP {}", response.status()));
         }
         let mut body = Vec::new();
-        let mut response_body = response.body;
-        while let Some(frame) = response_body.frame().await {
+        while let Some(frame) = response.frame().await {
             let frame = frame.map_err(|e| e.to_string())?;
-            if let Ok(data) = frame.into_data() {
-                body.extend_from_slice(&data);
+            if let Some(data) = frame.data_ref() {
+                body.extend_from_slice(data);
                 if body.len() > MAX_BODY {
                     return Err("response too large".to_string());
                 }
@@ -721,17 +720,13 @@ async fn comicvine_get(
         }
         serde_json::from_slice::<Value>(&body).map_err(|e| e.to_string())
     };
-    tokio::time::timeout(PROVIDER_TIMEOUT, exchange)
+    tokio::time::timeout(PROVIDER_TIMEOUT, connect)
         .await
         .map_err(|_| "provider timeout".to_string())?
 }
 
 #[allow(dead_code)]
-async fn fetch_volume_issues(
-    outbound: &Arc<dyn OutboundHttp>,
-    api_key: &str,
-    volume_id: i32,
-) -> Result<Vec<Value>, String> {
+async fn fetch_volume_issues(api_key: &str, volume_id: i32) -> Result<Vec<Value>, String> {
     if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
         return Err("COMICVINE_API_KEY is required".to_string());
     }
@@ -742,7 +737,7 @@ async fn fetch_volume_issues(
         let path = format!(
             "/api/issues/?api_key={api_key}&format=json&filter=volume:{volume_id}&limit=100&offset={offset}"
         );
-        let payload = comicvine_get(outbound, &path).await?;
+        let payload = comicvine_get(&path).await?;
         let status_code = payload
             .get("status_code")
             .and_then(Value::as_i64)
@@ -788,7 +783,7 @@ async fn fetch_volume_issues(
     Ok(rows)
 }
 
-pub(crate) async fn rebuild_plan_issues_from_nodes_json(
+async fn rebuild_plan_issues_from_nodes_json(
     tx: &tokio_postgres::Transaction<'_>,
     plan_id: i32,
 ) -> Result<(), ApiError> {
@@ -1003,24 +998,7 @@ pub async fn sync_released_issues_endpoint(
 ) -> Result<Json<SyncResponse>, ApiError> {
     let as_of = parse_as_of(&payload.as_of)?;
     let _refresh = payload.refresh;
-    let report = sync_released_issues_for_user(&state, user.id(), as_of).await?;
-    Ok(Json(SyncResponse {
-        success: report.failed_sources == 0 && report.issue_failures == 0,
-        message: report_message(&report),
-        result: report,
-    }))
-}
-
-/// Core per-owner release sync shared by the authenticated HTTP endpoint and
-/// the multi-owner scheduled cron path. The caller supplies the owner id and
-/// release boundary; ownership checks, collection exclusions, provider gating,
-/// and per-source transaction isolation are identical to the HTTP endpoint.
-pub async fn sync_released_issues_for_user(
-    state: &Arc<AppState>,
-    user_id: i32,
-    as_of: DateTime<Utc>,
-) -> Result<SyncReport, ApiError> {
-    let mut connection = db::checkout(state).await?;
+    let mut connection = db::checkout(&state).await?;
 
     let all_rows = connection
         .query(
@@ -1030,7 +1008,7 @@ pub async fn sync_released_issues_for_user(
              JOIN external_identities ei ON ei.id = rps.external_identity_id \
              WHERE cp.user_id = $1 \
              ORDER BY rps.created_at",
-            &[&user_id],
+            &[&user.id()],
         )
         .await
         .map_err(db::query_error)?;
@@ -1051,7 +1029,7 @@ pub async fn sync_released_issues_for_user(
     }
     let enabled_sources = enabled_rows.len() as i64;
 
-    let exclusions = load_release_exclusions(&connection, user_id).await?;
+    let exclusions = load_release_exclusions(&connection, user.id()).await?;
 
     if enabled_sources == 0 {
         let report = SyncReport {
@@ -1072,7 +1050,11 @@ pub async fn sync_released_issues_for_user(
             skipped_sources: 0,
             failures: Vec::new(),
         };
-        return Ok(report);
+        return Ok(Json(SyncResponse {
+            success: report.failed_sources == 0 && report.issue_failures == 0,
+            message: report_message(&report),
+            result: report,
+        }));
     }
 
     // Test-only roster injection: JSON object {"<volume_id>": [issue,...], "_fail_<volume_id>": "error"}
@@ -1121,7 +1103,11 @@ pub async fn sync_released_issues_for_user(
                 skipped_sources: 0,
                 failures,
             };
-            return Ok(report);
+            return Ok(Json(SyncResponse {
+                success: false,
+                message: report_message(&report),
+                result: report,
+            }));
         }
     };
 
@@ -1179,7 +1165,7 @@ pub async fn sync_released_issues_for_user(
                 Ok(Vec::new())
             }
         } else {
-            fetch_volume_issues(&state.outbound, &api_key, volume_id).await
+            fetch_volume_issues(&api_key, volume_id).await
         };
         let roster = match roster {
             Ok(roster) => roster,
@@ -1217,7 +1203,7 @@ pub async fn sync_released_issues_for_user(
             let source_result: SourceTxOutcome = async {
                 tx.execute(
                     "SELECT id FROM users WHERE id = $1 FOR UPDATE",
-                    &[&user_id],
+                    &[&user.id()],
                 )
                 .await
                 .map_err(db::query_error)?;
@@ -1254,7 +1240,7 @@ pub async fn sync_released_issues_for_user(
                     .query_opt(
                         "SELECT 1 FROM threads t JOIN continuity_plans cp ON cp.id = $2 \
                          WHERE t.id = $1 AND t.user_id = $3 AND cp.user_id = $3 FOR UPDATE OF t",
-                        &[&source.thread_id, &source.plan_id, &user_id],
+                        &[&source.thread_id, &source.plan_id, &user.id()],
                     )
                     .await
                     .map_err(db::query_error)?
@@ -1334,7 +1320,7 @@ pub async fn sync_released_issues_for_user(
                                AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
                                AND e.external_id = $2 \
                              ORDER BY i.id LIMIT 1",
-                            &[&user_id, &issue_id_str],
+                            &[&user.id(), &issue_id_str],
                         )
                         .await
                         .map_err(db::query_error)?
@@ -1404,7 +1390,7 @@ pub async fn sync_released_issues_for_user(
                     for issue_id in &adopted_for_extension {
                         extend_adopted_issue_to_following_plans(
                             &tx,
-                            user_id,
+                            user.id(),
                             source.thread_id,
                             source.external_identity_id,
                             *issue_id,
@@ -1414,8 +1400,8 @@ pub async fn sync_released_issues_for_user(
                 }
 
                 if created_any || source_reused > 0 {
-                    recalculate_thread_tracking(&tx, source.thread_id, user_id, created_any).await?;
-                    crate::issue_service::refresh_blocked_threads(&tx, user_id).await?;
+                    recalculate_thread_tracking(&tx, source.thread_id, user.id(), created_any).await?;
+                    crate::issue_service::refresh_blocked_threads(&tx, user.id()).await?;
                 }
 
                 Ok((source_issues_checked, source_created, source_reused, source_future_skips, source_unknown_date_skips, source_conflicts, source_issue_failures, source_excluded_issues, false))
@@ -1481,12 +1467,16 @@ pub async fn sync_released_issues_for_user(
             .await;
     }
 
-    Ok(report)
+    Ok(Json(SyncResponse {
+        success: report.failed_sources == 0 && report.issue_failures == 0,
+        message: report_message(&report),
+        result: report,
+    }))
 }
 
 #[utoipa::path(
     post,
-    path = "/api/v2/reading-plan-sync/runs",
+    path = "/api/v1/reading-plan-sync/sync",
     tag = "reading-plan-sync",
     operation_id = "reading_plan_sync",
     request_body = SyncRequest,
@@ -1503,7 +1493,7 @@ pub fn sync_released_issues_documentation() {}
 
 #[utoipa::path(
     get,
-    path = "/api/v2/reading-plan-sync/status",
+    path = "/api/v1/reading-plan-sync/status",
     tag = "reading-plan-sync",
     operation_id = "reading_plan_sync_status",
     responses(
@@ -1540,265 +1530,11 @@ impl utoipa::Modify for ReadingPlanSyncSecurityAddon {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Scheduled (Vercel Cron) multi-owner release sync
-// ---------------------------------------------------------------------------
-
-/// Transaction-scoped advisory-lock key shared with the Python scheduled path.
-/// A fixed global key keeps overlapping cron invocations on independent
-/// serverless instances from double-adopting the same releases.
-const RELEASE_SYNC_CRON_LOCK_KEY: i64 = 1_065_200_001;
-
-/// Wall-clock budget for starting new owners in one scheduled run. Owners left
-/// over are reported as deferred for the next daily run via a 200
-/// `ScheduledSyncResponse{truncated: true, users_deferred: N}`, matching the
-/// Python contract. The ingress timeout in `crate::bound_request` is derived
-/// from this value with a margin so this budget always elapses first and the
-/// truncated report can actually be returned instead of a 503.
-pub(crate) const CRON_MAX_DURATION: Duration = Duration::from_secs(50);
-
-/// One owner whose sync failed during a scheduled run.
-#[derive(Debug, Clone, Serialize)]
-pub struct ScheduledUserFailure {
-    pub user_id: i32,
-    pub error: String,
-}
-
-/// Aggregate, secret-free metrics for one scheduled release-sync run.
-#[derive(Debug, Clone, Serialize)]
-pub struct ScheduledSyncReport {
-    pub status: &'static str,
-    pub as_of: String,
-    pub users_total: i32,
-    pub users_processed: i32,
-    pub users_failed: i32,
-    pub users_deferred: i32,
-    pub truncated: bool,
-    pub duration_ms: i64,
-    pub total_sources: i64,
-    pub enabled_sources: i64,
-    pub checked_sources: i64,
-    pub successful_sources: i64,
-    pub failed_sources: i64,
-    pub issues_checked: i64,
-    pub created_issues: i64,
-    pub reused_issues: i64,
-    pub future_skips: i64,
-    pub unknown_date_skips: i64,
-    pub conflicts: i64,
-    pub issue_failures: i64,
-    pub excluded_sources: i64,
-    pub skipped_sources: i64,
-    pub excluded_issues: i64,
-    pub failures: Vec<SourceSyncFailure>,
-    pub user_failures: Vec<ScheduledUserFailure>,
-}
-
-impl ScheduledSyncReport {
-    fn new(status: &'static str, as_of: String, users_total: i32) -> Self {
-        Self {
-            status,
-            as_of,
-            users_total,
-            users_processed: 0,
-            users_failed: 0,
-            users_deferred: 0,
-            truncated: false,
-            duration_ms: 0,
-            total_sources: 0,
-            enabled_sources: 0,
-            checked_sources: 0,
-            successful_sources: 0,
-            failed_sources: 0,
-            issues_checked: 0,
-            created_issues: 0,
-            reused_issues: 0,
-            future_skips: 0,
-            unknown_date_skips: 0,
-            conflicts: 0,
-            issue_failures: 0,
-            excluded_sources: 0,
-            skipped_sources: 0,
-            excluded_issues: 0,
-            failures: Vec::new(),
-            user_failures: Vec::new(),
-        }
-    }
-
-    fn merge(&mut self, user: &SyncReport) {
-        self.total_sources += user.total_sources;
-        self.enabled_sources += user.enabled_sources;
-        self.checked_sources += user.checked_sources;
-        self.successful_sources += user.successful_sources;
-        self.failed_sources += user.failed_sources;
-        self.issues_checked += user.issues_checked;
-        self.created_issues += user.created_issues;
-        self.reused_issues += user.reused_issues;
-        self.future_skips += user.future_skips;
-        self.unknown_date_skips += user.unknown_date_skips;
-        self.conflicts += user.conflicts;
-        self.issue_failures += user.issue_failures;
-        self.excluded_sources += user.excluded_sources;
-        self.skipped_sources += user.skipped_sources;
-        self.excluded_issues += user.excluded_issues;
-        self.failures.extend(user.failures.iter().cloned());
-    }
-
-    fn success(&self) -> bool {
-        if self.status == "already_running" {
-            return true;
-        }
-        !self.truncated
-            && self.users_failed == 0
-            && self.failed_sources == 0
-            && self.issue_failures == 0
-    }
-}
-
-/// Wire response of the machine-triggered scheduled release-sync run.
-#[derive(Debug, Serialize)]
-pub struct ScheduledSyncResponse {
-    pub success: bool,
-    pub status: &'static str,
-    pub message: String,
-    pub result: ScheduledSyncReport,
-}
-
-/// Fail-closed Vercel Cron secret gate, matching `require_cron_secret`: a
-/// deployment without a usable secret returns 503, a missing or incorrect
-/// bearer returns 401. The shared [`crate::cron_auth::authorize_cron_http`]
-/// owns the placeholder rejection, case-insensitive `Bearer` scheme (RFC 6750,
-/// Python's `scheme.lower()`), constant-time comparison and the 503/401 status
-/// split, so every native cron route authorizes identically. Credentials are
-/// never logged.
-fn cron_authorize(headers: &HeaderMap, expected: Option<&str>) -> Result<(), ApiError> {
-    crate::cron_auth::authorize_cron_http(headers, expected)
-}
-
-fn scheduled_response(payload: ScheduledSyncResponse) -> Response {
-    let mut response = Json(payload).into_response();
-    response
-        .headers_mut()
-        .insert("cache-control", HeaderValue::from_static("no-store"));
-    response
-}
-
-/// Multi-owner Rust path for the daily Vercel Cron release sync
-/// (`GET /api/v1/cron/release-sync`). Every owner with an enabled release
-/// source is synced through the same per-user core as the authenticated HTTP
-/// endpoint, with independent per-owner failure isolation, a transaction-scoped
-/// advisory lock against overlapping invocations, and a wall-clock budget.
-pub async fn scheduled_release_sync_cron(
-    State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-) -> Result<Response, ApiError> {
-    let secret = std::env::var("CRON_SECRET").ok();
-    run_scheduled_release_sync(&state, &headers, secret.as_deref(), CRON_MAX_DURATION).await
-}
-
-/// Scheduled run body with the secret and wall-clock budget injected, so tests
-/// never mutate global environment state and can exercise the truncation
-/// branch directly. The production handler supplies `CRON_SECRET` and
-/// `CRON_MAX_DURATION`; the latter mirrors Python's `max_duration_seconds`.
-async fn run_scheduled_release_sync(
-    state: &Arc<AppState>,
-    headers: &HeaderMap,
-    secret: Option<&str>,
-    max_duration: Duration,
-) -> Result<Response, ApiError> {
-    cron_authorize(headers, secret)?;
-
-    let started = Instant::now();
-    let as_of = Utc::now();
-    let as_of_text = format_synced_at(as_of);
-
-    // Hold the advisory lock on a dedicated connection for the entire run. The
-    // per-owner syncs use their own pooled connections and transactions, so one
-    // owner's failure cannot roll back work already committed for another.
-    let mut lock_connection = db::checkout(state).await?;
-    let lock_transaction = lock_connection
-        .build_transaction()
-        .start()
-        .await
-        .map_err(db::query_error)?;
-    let acquired: bool = lock_transaction
-        .query_one(
-            "SELECT pg_try_advisory_xact_lock($1)",
-            &[&RELEASE_SYNC_CRON_LOCK_KEY],
-        )
-        .await
-        .map_err(db::query_error)?
-        .get(0);
-
-    if !acquired {
-        lock_transaction.rollback().await.map_err(db::query_error)?;
-        let mut result = ScheduledSyncReport::new("already_running", as_of_text, 0);
-        result.duration_ms = started.elapsed().as_millis() as i64;
-        return Ok(scheduled_response(ScheduledSyncResponse {
-            success: result.success(),
-            status: result.status,
-            message: "Release sync skipped: another scheduled run is already active".to_string(),
-            result,
-        }));
-    }
-
-    let owner_rows = lock_transaction
-        .query(
-            "SELECT DISTINCT cp.user_id FROM continuity_plans cp \
-             JOIN reading_plan_release_sources rps ON rps.plan_id = cp.id \
-             WHERE rps.enabled = TRUE ORDER BY cp.user_id",
-            &[],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let owner_ids: Vec<i32> = owner_rows.iter().map(|row| row.get(0)).collect();
-
-    let mut report = ScheduledSyncReport::new("completed", as_of_text, owner_ids.len() as i32);
-    for (index, user_id) in owner_ids.into_iter().enumerate() {
-        if started.elapsed() >= max_duration {
-            report.truncated = true;
-            report.users_deferred = report.users_total.saturating_sub(index as i32);
-            break;
-        }
-        match sync_released_issues_for_user(state, user_id, as_of).await {
-            Ok(user_report) => {
-                report.users_processed += 1;
-                report.merge(&user_report);
-            }
-            Err(error) => {
-                report.users_failed += 1;
-                report.user_failures.push(ScheduledUserFailure {
-                    user_id,
-                    error: format!("User sync failed: {}", error.detail()),
-                });
-            }
-        }
-    }
-    lock_transaction.commit().await.map_err(db::query_error)?;
-    report.duration_ms = started.elapsed().as_millis() as i64;
-
-    let message = format!(
-        "Scheduled release sync completed: {} users processed, {} created, {} reused, {} sources failed, {} users deferred",
-        report.users_processed,
-        report.created_issues,
-        report.reused_issues,
-        report.failed_sources,
-        report.users_deferred
-    );
-    Ok(scheduled_response(ScheduledSyncResponse {
-        success: report.success(),
-        status: report.status,
-        message,
-        result: report,
-    }))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{config::Config, test_support::DB_LOCK};
-    use axum::{extract::State, http::StatusCode};
-    use serde_json::Value;
+    use axum::extract::State;
     use std::sync::Arc;
 
     async fn test_state() -> Arc<AppState> {
@@ -1845,250 +1581,5 @@ mod tests {
 
         let with_micros = DateTime::from_timestamp(1_704_164_645, 123_456_000).expect("micros");
         assert_eq!(format_synced_at(with_micros), "2024-01-02T03:04:05.123456Z");
-    }
-
-    fn cron_headers(secret: &str) -> HeaderMap {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "authorization",
-            HeaderValue::from_str(&format!("Bearer {secret}")).expect("valid header"),
-        );
-        headers
-    }
-
-    #[test]
-    fn cron_authorize_fails_closed_without_a_usable_secret() {
-        assert_eq!(
-            cron_authorize(&HeaderMap::new(), None)
-                .expect_err("missing secret")
-                .status(),
-            StatusCode::SERVICE_UNAVAILABLE
-        );
-        assert_eq!(
-            cron_authorize(&HeaderMap::new(), Some("a-very-secret-value"))
-                .expect_err("missing header")
-                .status(),
-            StatusCode::UNAUTHORIZED
-        );
-        let mut wrong = HeaderMap::new();
-        wrong.insert(
-            "authorization",
-            HeaderValue::from_static("Bearer not-the-secret"),
-        );
-        assert_eq!(
-            cron_authorize(&wrong, Some("a-very-secret-value"))
-                .expect_err("wrong secret")
-                .status(),
-            StatusCode::UNAUTHORIZED
-        );
-        cron_authorize(
-            &cron_headers("a-very-secret-value"),
-            Some("a-very-secret-value"),
-        )
-        .expect("matching secret");
-    }
-
-    #[test]
-    fn cron_authorize_accepts_case_insensitive_bearer_scheme() {
-        for header in [
-            "bearer a-very-secret-value",
-            "BEARER a-very-secret-value",
-            "Bearer a-very-secret-value",
-        ] {
-            let mut headers = HeaderMap::new();
-            headers.insert("authorization", HeaderValue::from_static(header));
-            cron_authorize(&headers, Some("a-very-secret-value"))
-                .expect("case-insensitive bearer scheme");
-        }
-    }
-
-    #[test]
-    fn cron_authorize_rejects_placeholder_secrets_as_unconfigured() {
-        // Parity with Python `usable_cron_secret`: every placeholder (and its
-        // case / whitespace variants) is "not configured" -> 503, never a
-        // bearer rejection. See `app/config.py::_usable_secret`.
-        for placeholder in [
-            "",
-            "   ",
-            "[SENSITIVE]",
-            "  [SENSITIVE]  ",
-            "<redacted>",
-            "<REDACTED>",
-            "redacted",
-            "REDACTED",
-            "undefined",
-            "UNDEFINED",
-            "null",
-            "NULL",
-        ] {
-            let headers = cron_headers("a-very-secret-value");
-            assert_eq!(
-                cron_authorize(&headers, Some(placeholder))
-                    .expect_err("placeholder secret must be treated as unconfigured")
-                    .status(),
-                StatusCode::SERVICE_UNAVAILABLE,
-                "placeholder: {placeholder:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn cron_authorize_accepts_valid_secret_and_rejects_wrong_bearer() {
-        let secret = "a-very-secret-value";
-        cron_authorize(&cron_headers(secret), Some(secret)).expect("valid bearer");
-        assert_eq!(
-            cron_authorize(&cron_headers("not-the-secret"), Some(secret))
-                .expect_err("wrong bearer")
-                .status(),
-            StatusCode::UNAUTHORIZED
-        );
-    }
-
-    async fn seed_cron_owner(connection: &deadpool_postgres::Client, user_id: i32) {
-        let plan_id = 1_000 + user_id;
-        let thread_id = 2_000 + user_id;
-        let identity_id = 3_000 + user_id;
-        let source_id = 4_000 + user_id;
-        let external_id = 7_400 + user_id;
-        connection
-            .batch_execute(&format!(
-                "INSERT INTO users (id, username) VALUES ({user_id}, 'cron-owner-{user_id}');
-                 INSERT INTO threads (id, title, format, issues_remaining, queue_position, status, user_id, created_at)
-                 VALUES ({thread_id}, 'Cron thread', 'other', 0, 1, 'active', {user_id}, NOW());
-                 INSERT INTO continuity_plans
-                   (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
-                 VALUES ({plan_id}, {user_id}, 'Cron plan', 'informational', '[]'::json, '[]'::json, NOW(), NOW());
-                 INSERT INTO external_identities
-                   (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
-                 VALUES ({identity_id}, 'comicvine', 'series', '4050-{external_id}', '{{}}'::json, NOW(), NOW());
-                 INSERT INTO reading_plan_release_sources
-                   (id, plan_id, thread_id, external_identity_id, enabled, created_at, updated_at)
-                 VALUES ({source_id}, {plan_id}, {thread_id}, {identity_id}, TRUE, NOW(), NOW());"
-            ))
-            .await
-            .expect("seed cron owner");
-    }
-
-    #[tokio::test]
-    async fn scheduled_sync_processes_every_enabled_owner() {
-        let _guard = DB_LOCK.lock().await;
-        let state = test_state().await;
-        crate::test_support::reset(&state).await;
-        let connection = crate::db::checkout(&state).await.expect("seed connection");
-        seed_cron_owner(&connection, 1).await;
-        seed_cron_owner(&connection, 2).await;
-        drop(connection);
-
-        let response = run_scheduled_release_sync(
-            &state,
-            &cron_headers("a-very-secret-value"),
-            Some("a-very-secret-value"),
-            CRON_MAX_DURATION,
-        )
-        .await
-        .expect("scheduled sync response");
-
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(response.headers()["cache-control"], "no-store");
-        let bytes = axum::body::to_bytes(response.into_body(), 2_000_000)
-            .await
-            .expect("response body");
-        let payload: Value = serde_json::from_slice(&bytes).expect("json payload");
-        assert_eq!(payload["status"], "completed");
-        assert_eq!(payload["result"]["users_total"], 2);
-        assert_eq!(payload["result"]["users_processed"], 2);
-        assert_eq!(payload["result"]["users_failed"], 0);
-    }
-
-    #[tokio::test]
-    async fn scheduled_sync_already_running_is_a_successful_noop() {
-        let _guard = DB_LOCK.lock().await;
-        let state = test_state().await;
-        crate::test_support::reset(&state).await;
-        let mut holder = crate::db::checkout(&state).await.expect("lock holder");
-        let transaction = holder
-            .build_transaction()
-            .start()
-            .await
-            .expect("lock transaction");
-        let acquired: bool = transaction
-            .query_one(
-                "SELECT pg_try_advisory_xact_lock($1)",
-                &[&RELEASE_SYNC_CRON_LOCK_KEY],
-            )
-            .await
-            .expect("acquire lock")
-            .get(0);
-        assert!(acquired);
-
-        let response = run_scheduled_release_sync(
-            &state,
-            &cron_headers("a-very-secret-value"),
-            Some("a-very-secret-value"),
-            CRON_MAX_DURATION,
-        )
-        .await
-        .expect("scheduled sync response");
-
-        assert_eq!(response.status(), StatusCode::OK);
-        let bytes = axum::body::to_bytes(response.into_body(), 2_000_000)
-            .await
-            .expect("response body");
-        let payload: Value = serde_json::from_slice(&bytes).expect("json payload");
-        assert_eq!(payload["status"], "already_running");
-        assert_eq!(payload["success"], true);
-        transaction.rollback().await.expect("release lock");
-    }
-
-    #[tokio::test]
-    async fn scheduled_sync_reports_truncation_when_budget_exhausted() {
-        let _guard = DB_LOCK.lock().await;
-        let state = test_state().await;
-        crate::test_support::reset(&state).await;
-        let connection = crate::db::checkout(&state).await.expect("seed connection");
-        seed_cron_owner(&connection, 1).await;
-        seed_cron_owner(&connection, 2).await;
-        drop(connection);
-
-        // A zero budget is exhausted at the very first owner check, so the run
-        // must return a 200 truncated report (never a 503) and defer every
-        // owner, matching the Python cron contract. This is deterministic — no
-        // wall-clock timing is involved.
-        let response = run_scheduled_release_sync(
-            &state,
-            &cron_headers("a-very-secret-value"),
-            Some("a-very-secret-value"),
-            Duration::ZERO,
-        )
-        .await
-        .expect("scheduled sync response");
-
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(response.headers()["cache-control"], "no-store");
-        let bytes = axum::body::to_bytes(response.into_body(), 2_000_000)
-            .await
-            .expect("response body");
-        let payload: Value = serde_json::from_slice(&bytes).expect("json payload");
-        assert_eq!(payload["status"], "completed");
-        assert_eq!(payload["success"], false);
-        assert_eq!(payload["result"]["truncated"], true);
-        assert_eq!(payload["result"]["users_total"], 2);
-        assert_eq!(payload["result"]["users_deferred"], 2);
-        assert_eq!(payload["result"]["users_processed"], 0);
-        assert_eq!(
-            payload["result"]["users_processed"]
-                .as_i64()
-                .expect("processed count")
-                + payload["result"]["users_deferred"]
-                    .as_i64()
-                    .expect("deferred count"),
-            payload["result"]["users_total"]
-                .as_i64()
-                .expect("total count")
-        );
-        assert!(payload["message"]
-            .as_str()
-            .expect("message")
-            .contains("2 users deferred"));
     }
 }

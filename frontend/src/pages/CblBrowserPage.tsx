@@ -11,8 +11,6 @@ import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { CblSourceDetailPanel } from '../components/CblSourceDetailPanel'
-import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
-import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import {
   cblSourcesApi,
   type CBLAdoptionPreviewEntry,
@@ -287,23 +285,6 @@ export default function CblBrowserPage() {
     gcTime: 15 * 60 * 1000, // 15 minutes
   })
   const browsePage = browseQuery.data ?? null
-
-  // The server clamps an out-of-range page to the last valid page (#5381).
-  // Adopt the returned page in the URL so Previous/Next step from the page
-  // actually shown instead of the stale requested one.
-  const servedPage = browsePage && !browseQuery.isPlaceholderData ? browsePage.page : null
-  useEffect(() => {
-    if (servedPage === null || servedPage === page) return
-    setSearchParams(
-      (current) => {
-        const params = new URLSearchParams(current)
-        if (servedPage > 1) params.set('page', String(servedPage))
-        else params.delete('page')
-        return params
-      },
-      { replace: true },
-    )
-  }, [servedPage, page, setSearchParams])
   const selectedSource =
     deepLinkedListId !== null
       ? (browsePage?.items.find((item) => item.id === deepLinkedListId) ?? null)
@@ -442,26 +423,6 @@ export default function CblBrowserPage() {
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
   const seriesGroups = useMemo(() => (preview ? buildCblSeriesGroups(preview) : []), [preview])
-
-  // Expanded rows naming an exact owned issue share one bounded card batch;
-  // source-only or missing entries carry no owned card at all.
-  const visibleOwnedIssueIds = useMemo(
-    () => {
-      const ids: number[] = []
-      for (const group of seriesGroups) {
-        if (!expandedGroups[group.id]) continue
-        for (const entry of group.entries) {
-          if (entry.adoption_class === 'existing' && entry.resolved_issue_id != null) {
-            ids.push(entry.resolved_issue_id)
-          }
-        }
-      }
-      return ids
-    },
-    [seriesGroups, expandedGroups],
-  )
-  const ownedCardsQuery = useIssueCards(visibleOwnedIssueIds)
-  const ownedCardsByIssue = useMemo(() => indexIssueCards(ownedCardsQuery.data), [ownedCardsQuery.data])
 
   /**
    * The graph preview follows the reader's checklist and answers. `preview` is
@@ -934,7 +895,7 @@ export default function CblBrowserPage() {
             </p>
           )}
 
-          {graph && (hasGenuineOverlap(graph) || graphCycleErrors.length > 0) && (
+          {graph && hasGenuineOverlap(graph) && (
             <ReadingGraphSummary
               preview={graph}
               choices={overlapChoices}
@@ -1079,18 +1040,6 @@ export default function CblBrowserPage() {
                                       <span className="mt-1 block text-xs text-[var(--theme-warning)]">
                                         {resolutionReason}
                                       </span>
-                                    )}
-                                    {entry.adoption_class === 'existing' && entry.resolved_issue_id != null && (
-                                      <div className="mt-1">
-                                        <CompactIssueCardTrigger
-                                          issueId={entry.resolved_issue_id}
-                                          threadTitle={entry.series_name}
-                                          issueNumber={entry.issue_number}
-                                          status={entry.read_status === 'read' ? 'read' : 'unread'}
-                                          card={ownedCardsByIssue.get(entry.resolved_issue_id) ?? null}
-                                          hideTitle
-                                        />
-                                      </div>
                                     )}
                                   </span>
                                   {entry.adoption_class !== 'ambiguous_unresolved' && (

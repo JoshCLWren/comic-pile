@@ -19,7 +19,7 @@ describe('defaultHttpClient', () => {
     const client = defaultHttpClient()
 
     await client.get('/v1/threads/', { params: { search: 'bat' } })
-    await client.post('/v2/roll/override', { thread_id: 1 })
+    await client.post('/v1/roll/override', { thread_id: 1 })
     await client.put('/v1/queues/9/name', { name: 'Saga' })
     await client.patch('/v1/example-resource', { mode: 'auto' })
     await client.delete('/v1/queues/9')
@@ -28,7 +28,7 @@ describe('defaultHttpClient', () => {
       params: { search: 'bat' },
     })
     expect(registered.post).toHaveBeenCalledWith(
-      '/v2/roll/override',
+      '/v1/roll/override',
       { thread_id: 1 },
       undefined,
     )

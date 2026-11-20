@@ -22,7 +22,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     const csrf = await csrfResponse.json() as { csrf_token: string }
     const headers = { Authorization: `Bearer ${token}`, 'X-CSRF-Token': csrf.csrf_token }
 
-    const listResponse = await page.request.post('/api/v2/reading-lists', { headers, data: {
+    const listResponse = await page.request.post('/api/v1/custom-cbls', { headers, data: {
       name: `QA List Test 004P ${suffix}`,
       issue_ids: [],
     } })
@@ -44,7 +44,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     // Cancel keeps the saved list exactly as it is.
     await dialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(dialog).toBeHidden()
-    const afterCancel = await page.request.get('/api/v2/reading-lists', { headers })
+    const afterCancel = await page.request.get('/api/v1/custom-cbls', { headers })
     // SAFETY: the list endpoint returns a JSON array of custom CBLs with numeric ids.
     const afterCancelBody = await afterCancel.json() as Array<{ id: number }>
     expect(afterCancelBody.some((item) => item.id === list.id)).toBe(true)
@@ -55,11 +55,11 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
       .getByRole('button', { name: 'Delete custom CBL' })
       .click()
     await expect(page.getByRole('status')).toContainText('Custom CBL deleted.')
-    const afterDelete = await page.request.get('/api/v2/reading-lists', { headers })
+    const afterDelete = await page.request.get('/api/v1/custom-cbls', { headers })
     // SAFETY: the list endpoint returns a JSON array of custom CBLs with numeric ids.
     const afterDeleteBody = await afterDelete.json() as Array<{ id: number }>
     expect(afterDeleteBody.some((item) => item.id === list.id)).toBe(false)
-    const reload = await page.request.get(`/api/v2/reading-lists/${list.id}`, { headers })
+    const reload = await page.request.get(`/api/v1/custom-cbls/${list.id}`, { headers })
     expect([404, 410]).toContain(reload.status())
     await page.screenshot({ path: testInfo.outputPath('custom-cbl-delete-confirm.png'), fullPage: true })
   })

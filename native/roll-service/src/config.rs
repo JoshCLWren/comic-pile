@@ -45,8 +45,6 @@ pub struct Config {
     /// Refresh-token and refresh-cookie lifetime, matching Python's
     /// REFRESH_TOKEN_EXPIRE_DAYS.
     pub refresh_token_expire_days: i64,
-    /// Effective approved Option E rollout setting, parsed once at startup.
-    pub option_e: bool,
 }
 /// Adapt SQLAlchemy/Neon URLs for tokio-postgres. The production DATABASE_URL
 /// can contain libpq/driver options that tokio-postgres does not recognize.
@@ -207,7 +205,6 @@ impl Config {
                 7 * 24 * 60,
             )? as i64,
             refresh_token_expire_days: number(&get, "REFRESH_TOKEN_EXPIRE_DAYS", 7, 365)? as i64,
-            option_e: crate::option_e_setting::option_e_from_lookup(&get),
         })
     }
 }

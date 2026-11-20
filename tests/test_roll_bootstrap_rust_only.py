@@ -9,7 +9,11 @@ from pathlib import Path
 
 from fastapi.routing import APIRoute
 
+import app.services.roll_service as roll_service_module
 from app.main import app
+from app.repositories import roll_repository
+from app.schemas import roll as roll_schemas
+from app.services.roll_service import RollService
 
 
 BOOTSTRAP_PATHS = (
@@ -34,10 +38,35 @@ def test_python_exposes_no_roll_bootstrap_get_handlers() -> None:
         assert "get" not in paths.get(path, {})
 
 
+def test_python_bootstrap_projection_stays_deleted() -> None:
+    """Do not resurrect the retired Python bootstrap read model (#4350).
+
+    The Python v1 projection had no live caller once both clients moved to the
+    Rust v2 resource, and the unused Python v2 response DTO followed it.
+    Deleting them is only durable if reintroduction fails here rather than
+    silently re-adding query code no route serves.
+    """
+    assert not hasattr(roll_schemas, "RollBootstrapResponse")
+    assert not hasattr(roll_schemas, "RollBootstrapThread")
+    assert not hasattr(roll_schemas, "ThreadExclusionReason")
+    assert not hasattr(RollService, "load_bootstrap_thread_data")
+    assert not hasattr(roll_service_module, "BootstrapThreadData")
+    assert not hasattr(roll_service_module, "BootstrapLibrarySummary")
+    assert not hasattr(roll_service_module, "_classify_library")
+    assert not hasattr(roll_service_module, "_summary_thread")
+    assert [
+        name for name in dir(roll_repository) if name.startswith("fetch_bootstrap_")
+    ] == []
+
+
 def test_public_v2_bootstrap_routes_to_native_rust() -> None:
     """The only supported bootstrap ingress targets the Rust function."""
     config = json.loads((Path(__file__).resolve().parents[1] / "vercel.json").read_text())
-    matching = [route for route in config["routes"] if route.get("src") == "/api/v2/roll/bootstrap"]
+    matching = [
+        route
+        for route in config["routes"]
+        if route.get("src") == "/api/v2/roll/bootstrap"
+    ]
     assert matching == [
         {
             "src": "/api/v2/roll/bootstrap",

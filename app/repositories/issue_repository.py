@@ -5,7 +5,7 @@ return ORM models, plain rows/tuples, or counts; callers (services) own
 transaction boundaries.
 """
 
-from sqlalchemy import case, delete, select, text, update
+from sqlalchemy import case, delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -358,6 +358,26 @@ async def defer_position_unique_constraint(db: AsyncSession) -> None:
     await db.execute(text("SET CONSTRAINTS uq_issue_thread_position DEFERRED"))
 
 
+async def count_for_thread(
+    db: AsyncSession, thread_id: int, status_filter: str | None = None
+) -> int:
+    """Count a thread's issues, optionally filtered by status.
+
+    Args:
+        db: Database session.
+        thread_id: Thread whose issues are counted.
+        status_filter: Optional exact issue status ("read"/"unread").
+
+    Returns:
+        Number of matching issues (0 when none).
+    """
+    query = select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
+    if status_filter:
+        query = query.where(Issue.status == status_filter)
+    result = await db.execute(query)
+    return result.scalar() or 0
+
+
 async def first_unread(db: AsyncSession, thread_id: int) -> Issue | None:
     """Return the earliest-position unread issue of a thread.
 
@@ -406,6 +426,46 @@ async def exists_read_at_or_after(
         .limit(1)
     )
     return result.scalar_one_or_none() is not None
+
+
+async def list_page(
+    db: AsyncSession,
+    thread_id: int,
+    *,
+    status_filter: str | None,
+    cursor: tuple[int, int] | None,
+    limit: int,
+) -> list[Issue]:
+    """Fetch one page of a thread's issues in canonical order.
+
+    Args:
+        db: Database session.
+        thread_id: Thread whose issues are listed.
+        status_filter: Optional exact issue status ("read"/"unread").
+        cursor: Decoded ``(position, id)`` continuation cursor, or None for
+            the first page.
+        limit: Maximum number of issues to return.
+
+    Returns:
+        Issues ordered by position, at most ``limit`` rows.
+    """
+    query = select(Issue).where(Issue.thread_id == thread_id)
+
+    if status_filter:
+        query = query.where(Issue.status == status_filter)
+
+    query = query.order_by(Issue.position)
+
+    if cursor is not None:
+        cursor_position, cursor_id = cursor
+        query = query.where(
+            (Issue.position > cursor_position)
+            | ((Issue.position == cursor_position) & (Issue.id > cursor_id))
+        )
+
+    query = query.limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
 
 
 async def issue_ids_for_thread(db: AsyncSession, thread_id: int) -> set[int]:

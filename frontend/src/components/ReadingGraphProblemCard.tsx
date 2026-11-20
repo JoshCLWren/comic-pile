@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   readingGraphProblemApi,
@@ -8,8 +8,6 @@ import {
 } from '../services/api-reading-graph'
 import { queryKeys } from '../query/queryKeys'
 import { invalidateAfterReadingGraphRepair } from '../query/cacheEffects'
-import CompactIssueCardTrigger from './CompactIssueCardTrigger'
-import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 
 /**
  * Owner-scoped reading-graph recovery card.
@@ -48,26 +46,6 @@ export function ReadingGraphProblemCard() {
       await invalidateAfterReadingGraphRepair(queryClient)
     },
   })
-
-  // One bounded batch for every exact owned issue named by the reported
-  // edges; hooks stay above the early return for a stable hook order.
-  const cycleIssueIds = useMemo(
-    () => {
-      const current = graph.data
-      if (!current || current.status === 'ok') return []
-      const ids = new Set<number>()
-      for (const cycle of current.cycles) {
-        for (const edge of cycle.edges) {
-          ids.add(edge.source.issue_id)
-          ids.add(edge.target.issue_id)
-        }
-      }
-      return [...ids]
-    },
-    [graph.data],
-  )
-  const cardsQuery = useIssueCards(cycleIssueIds, { enabled: cycleIssueIds.length > 0 })
-  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
 
   const problem = graph.data
   if (!problem || problem.status === 'ok') {
@@ -132,22 +110,6 @@ export function ReadingGraphProblemCard() {
                       {edge.target.series_title} #{edge.target.issue_number}
                     </span>{' '}
                     <span className="text-[var(--theme-text-dim)]">({edge.origin})</span>
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      <CompactIssueCardTrigger
-                        issueId={edge.source.issue_id}
-                        threadTitle={edge.source.series_title}
-                        issueNumber={edge.source.issue_number}
-                        card={cardsByIssue.get(edge.source.issue_id) ?? null}
-                        hideTitle
-                      />
-                      <CompactIssueCardTrigger
-                        issueId={edge.target.issue_id}
-                        threadTitle={edge.target.series_title}
-                        issueNumber={edge.target.issue_number}
-                        card={cardsByIssue.get(edge.target.issue_id) ?? null}
-                        hideTitle
-                      />
-                    </div>
                   </li>
                 ))}
               </ul>

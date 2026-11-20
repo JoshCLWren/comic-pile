@@ -43,7 +43,28 @@ updates:
     ignore:
       # Dev-only bot/tooling; noisy and outside the product path.
       - dependency-name: testdriverai
-      # Planned frontend toolchain majors — bump in dedicated PRs, not weekly noise.
+    groups:
+      js-root-minor-patch:
+        update-types:
+          - minor
+          - patch
+      js-root-major:
+        update-types:
+          - major
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - factory
+      - factory:review
+      - factory:unowned
+      - infrastructure
+    ignore:
+      # Planned toolchain majors — bump in dedicated PRs, not weekly noise.
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
@@ -66,11 +87,17 @@ updates:
         update-types:
           - version-update:semver-major
     groups:
-      js-root-minor-patch:
+      frontend-prod-minor-patch:
+        dependency-type: production
         update-types:
           - minor
           - patch
-      js-root-major:
+      frontend-dev-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      frontend-major:
         update-types:
           - major
 
@@ -89,23 +116,3 @@ updates:
       github-actions:
         patterns:
           - "*"
-
-  - package-ecosystem: cargo
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    labels:
-      - factory
-      - factory:review
-      - factory:unowned
-      - infrastructure
-    groups:
-      cargo-minor-patch:
-        update-types:
-          - minor
-          - patch
-      cargo-major:
-        update-types:
-          - major

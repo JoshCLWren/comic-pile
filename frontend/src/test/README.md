@@ -57,6 +57,7 @@ frontend/src/
     ├── threads.spec.ts      # Thread management tests
     ├── roll.spec.ts         # Dice rolling feature tests
     ├── rate.spec.ts         # Rating functionality tests
+    ├── analytics.spec.ts    # Analytics dashboard tests
     ├── history.spec.ts      # Session history tests
     ├── accessibility.spec.ts # WCAG accessibility tests
     ├── visual.spec.ts       # Visual regression tests
@@ -122,33 +123,39 @@ npx playwright test -g "should login"
 - Session completion
 - Form validation
 
-### 5. History Tests (`history.spec.ts`)
+### 5. Analytics Tests (`analytics.spec.ts`)
+- Statistics display
+- Charts/graphs
+- Data filtering
+- Export functionality
+
+### 6. History Tests (`history.spec.ts`)
 - Session history
 - Pagination
 - Session details
 - Filtering
 
-### 6. Accessibility Tests (`accessibility.spec.ts`)
+### 7. Accessibility Tests (`accessibility.spec.ts`)
 - WCAG 2.1 AA compliance
 - ARIA attributes
 - Keyboard navigation
 - Color contrast
 - Focus management
 
-### 7. Visual Regression Tests (`visual.spec.ts`)
+### 8. Visual Regression Tests (`visual.spec.ts`)
 - Page screenshots
 - Component screenshots
 - Cross-browser checks
 - Responsive design
 
-### 8. Network Tests (`network.spec.ts`)
+### 9. Network Tests (`network.spec.ts`)
 - API request validation
 - Error handling
 - Retry logic
 - Rate limiting
 - CORS
 
-### 9. Edge Cases Tests (`edge-cases.spec.ts`)
+### 10. Edge Cases Tests (`edge-cases.spec.ts`)
 - Empty states
 - Invalid inputs
 - Network failures

@@ -17,7 +17,6 @@ import type { Thread } from '../types'
 // service surface these hooks consume.
 const mockListExcluded = vi.fn<typeof realThreadsApi.listExcluded>()
 const mockRestore = vi.fn<RestoreThreadApi['restore']>()
-const mockRestoreGroup = vi.fn<RestoreThreadApi['restoreExclusionGroup']>()
 const mockExclude = vi.fn<typeof realThreadsApi.exclude>()
 
 vi.mock('../services/api-threads', () => ({
@@ -25,17 +24,12 @@ vi.mock('../services/api-threads', () => ({
     listExcluded: (...args: Parameters<typeof realThreadsApi.listExcluded>) =>
       mockListExcluded(...args),
     restore: (...args: Parameters<RestoreThreadApi['restore']>) => mockRestore(...args),
-    restoreExclusionGroup: (...args: Parameters<RestoreThreadApi['restoreExclusionGroup']>) =>
-      mockRestoreGroup(...args),
     exclude: (...args: Parameters<typeof realThreadsApi.exclude>) => mockExclude(...args),
   },
 }))
 
 const invalidate = vi.fn<QueueInvalidateFn>()
-const restoreApi: RestoreThreadApi = {
-  restore: mockRestore,
-  restoreExclusionGroup: mockRestoreGroup,
-}
+const restoreApi: RestoreThreadApi = { restore: mockRestore }
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
   return {

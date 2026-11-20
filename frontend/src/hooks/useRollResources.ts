@@ -50,13 +50,6 @@ export function useRollIssueCards(
     queryKey: queryKeys.roll.issueCards(issueIds),
     queryFn: () => api.issueCards(issueIds),
     enabled: issueIds.length > 0,
-    // A roll can change the eligible batch before the next cards GET completes.
-    // Reuse only cards whose exact issue ids remain visible so existing cover
-    // images stay mounted instead of briefly falling back to empty thumbnails.
-    // The authoritative response replaces this placeholder once it arrives.
-    placeholderData: (previous) => previous && ({
-      items: previous.items.filter((card) => issueIds.includes(card.issue_id)),
-    }),
   })
 }
 

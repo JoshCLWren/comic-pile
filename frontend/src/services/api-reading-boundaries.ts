@@ -3,8 +3,8 @@ import type { components } from '../generated/openapi'
 
 /** Canonical v2 is Rust-owned and contains no retired historical associations. */
 export type ReadingBoundaryExplanation = components['schemas']['ReadingBoundaryExplanationV2']
-export type BoundaryEditorTarget = components['schemas']['BoundaryEditorTarget']
-export type BoundaryIssue = components['schemas']['BoundaryIssue']
+export type BoundaryEditorTarget = components['schemas']['NativeBoundaryEditorTarget']
+export type BoundaryIssue = components['schemas']['NativeBoundaryIssue']
 type Batch = components['schemas']['ReadingBoundaryBatchResponseV2']
 
 /** Read canonical explanations in bounded batches, never one request per Queue row. */

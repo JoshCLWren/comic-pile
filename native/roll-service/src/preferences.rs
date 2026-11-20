@@ -1,12 +1,11 @@
-//! Native cutover of browser-called users/me preferences (v2) and same-path
-//! Taste Bank signal operations (v1, #4834, parent #4335).
+//! Native same-path cutover of the browser-called users/me preferences and
+//! Taste Bank signal operations (#4834, parent #4335).
 //!
-//! Preferences are served as Rust `/api/v2/users/me/preferences`; the frontend
-//! no longer calls `/api/v1/users/me/preferences`. Taste Bank signals remain
-//! same-path v1 until their own v2 migration:
+//! These replace, at the exact same HTTP method and path, the Python handlers
+//! in `app/api/preferences.py` and `app/api/taste_signal.py`:
 //!
-//! * `GET /api/v2/users/me/preferences`
-//! * `PATCH /api/v2/users/me/preferences`
+//! * `GET /api/v1/users/me/preferences`
+//! * `PATCH /api/v1/users/me/preferences`
 //! * `GET /api/v1/users/me/taste-signals`
 //! * `PUT /api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict`
 //!
@@ -21,6 +20,10 @@
 //! upsert for a theme write or a verdict write, and insert-then-read for the
 //! empty-PATCH seeding path (matching the Python repository). There is no
 //! per-row fan-out.
+//!
+//! The Python handlers stay mounted until authenticated production proof
+//! permits their removal; production ingress in `vercel.json` now routes
+//! these four method/path pairs to this native binary instead.
 
 #![forbid(unsafe_code)]
 
@@ -207,7 +210,7 @@ fn taste_signal_from_row(row: &Row) -> TasteSignalResponse {
     }
 }
 
-/// `GET /api/v2/users/me/preferences`
+/// `GET /api/v1/users/me/preferences`
 ///
 /// Returns the persisted theme, resolving to `classic` when no preference
 /// row exists yet, exactly like the Python service.
@@ -233,7 +236,7 @@ pub async fn get_user_preferences(
     }))
 }
 
-/// `PATCH /api/v2/users/me/preferences`
+/// `PATCH /api/v1/users/me/preferences`
 ///
 /// A present theme is applied as a single atomic upsert so overlapping
 /// first-time writes resolve as updates instead of surfacing a unique
@@ -363,16 +366,18 @@ pub async fn set_taste_signal_verdict(
     Ok(Json(taste_signal_from_row(&row)))
 }
 
-/// OpenAPI document for the native same-path Taste Bank signal surface (v1).
-///
-/// Preferences v2 operations are documented in the canonical v2 OpenAPI.
+/// OpenAPI document for the native same-path preferences surface.
 #[derive(utoipa::OpenApi)]
 #[openapi(
     paths(
+        get_user_preferences_documentation,
+        patch_user_preferences_documentation,
         list_taste_signals_documentation,
         set_taste_signal_verdict_documentation
     ),
     components(schemas(
+        UserPreferencesResponse,
+        UserPreferencesPatchRequest,
         TasteSignalResponse,
         TasteSignalListResponse,
         TasteVerdictRequest
@@ -400,7 +405,7 @@ impl utoipa::Modify for PreferencesSecurityAddon {
 /// Documentation-only operation for reading user preferences.
 #[utoipa::path(
     get,
-    path = "/api/v2/users/me/preferences",
+    path = "/api/v1/users/me/preferences",
     tag = "users",
     responses(
         (status = 200, description = "The authenticated user's preferences", body = UserPreferencesResponse),
@@ -410,12 +415,12 @@ impl utoipa::Modify for PreferencesSecurityAddon {
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub(crate) fn get_user_preferences_documentation() {}
+fn get_user_preferences_documentation() {}
 
 /// Documentation-only operation for updating user preferences.
 #[utoipa::path(
     patch,
-    path = "/api/v2/users/me/preferences",
+    path = "/api/v1/users/me/preferences",
     tag = "users",
     request_body = UserPreferencesPatchRequest,
     responses(
@@ -427,7 +432,7 @@ pub(crate) fn get_user_preferences_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub(crate) fn patch_user_preferences_documentation() {}
+fn patch_user_preferences_documentation() {}
 
 /// Documentation-only operation for listing Taste Bank signals.
 #[utoipa::path(
@@ -543,7 +548,15 @@ mod tests {
             vec![
                 (
                     "get".to_string(),
+                    "/api/v1/users/me/preferences".to_string()
+                ),
+                (
+                    "get".to_string(),
                     "/api/v1/users/me/taste-signals".to_string()
+                ),
+                (
+                    "patch".to_string(),
+                    "/api/v1/users/me/preferences".to_string()
                 ),
                 (
                     "put".to_string(),
@@ -553,6 +566,8 @@ mod tests {
             ]
         );
         for schema in [
+            "UserPreferencesResponse",
+            "UserPreferencesPatchRequest",
             "TasteSignalResponse",
             "TasteSignalListResponse",
             "TasteVerdictRequest",

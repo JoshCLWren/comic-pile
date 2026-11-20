@@ -86,14 +86,14 @@ export interface InsertReadingOrderItemResponse {
 export function createReadingOrdersApi(client: HttpClient) {
   return {
     list: async (): Promise<ReadingOrderListResponse> => {
-      return client.get<ReadingOrderListResponse>('/v2/reading-orders/')
+      return client.get<ReadingOrderListResponse>('/v1/reading-orders/')
     },
     insertItem: async (
       readingOrderId: number,
       data: { thread_id: number; position: number },
     ): Promise<InsertReadingOrderItemResponse> => {
       return client.post<InsertReadingOrderItemResponse>(
-        `/v2/reading-orders/${readingOrderId}/items`,
+        `/v1/reading-orders/${readingOrderId}/items`,
         data,
       )
     },
@@ -111,7 +111,7 @@ export function createReadingOrdersApi(client: HttpClient) {
       readingOrderId: number,
     ): Promise<ReadingOrderProjectionResult> => {
       return client.post<ReadingOrderProjectionResult>(
-        `/v2/continuity-plans/${planId}/reading-orders/project`,
+        `/v1/continuity-plans/${planId}/reading-orders/project`,
         { reading_order_id: readingOrderId },
       )
     },
@@ -124,7 +124,7 @@ export function createReadingOrdersApi(client: HttpClient) {
       laneId?: string
       laneName?: string
     }): Promise<ContinuityPlan> => {
-      return client.post(`/v2/continuity-plans/from-reading-order`, {
+      return client.post(`/v1/continuity-plans/from-reading-order`, {
         reading_order_id: params.readingOrderId,
         plan_name: params.planName ?? null,
         lane_id: params.laneId ?? 'adopted',

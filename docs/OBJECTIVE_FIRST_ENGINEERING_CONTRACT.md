@@ -3,7 +3,7 @@
 Owner decisions: 2026-10-31. Applies to interactive ChatGPT engineering sessions,
 local factory sessions, scheduled factory workers, and their implementation/review
 handoffs. Read alongside `AGENTS.md`, `docs/ISSUE_EXECUTION_PROTOCOL.md`, and
-[docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md).
+`docs/AUTONOMOUS_FACTORY_POLICY.md`.
 
 ## Prime directive
 

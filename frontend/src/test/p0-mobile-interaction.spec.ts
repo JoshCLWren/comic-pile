@@ -12,7 +12,6 @@ import { test } from './fixtures'
 import {
   createThread,
   gotoQueue,
-  rollPoolThreadByTitle,
   waitForQueueReady,
   waitForRollPageReady,
 } from './helpers'
@@ -57,7 +56,7 @@ test.describe('MOBILE-001: Primary mobile interaction path', () => {
 
     const pool = page.locator('[data-roll-pool]')
     await expect(pool).toBeVisible({ timeout: 15000 })
-    await expect(rollPoolThreadByTitle(page, 'Mobile Roll Thread')).toBeVisible()
+    await expect(pool.getByText('Mobile Roll Thread')).toBeVisible()
   })
 
   test('mobile queue page is navigable and shows threads', async ({
@@ -77,9 +76,7 @@ test.describe('MOBILE-001: Primary mobile interaction path', () => {
     await mobileNav.getByRole('link', { name: /queue/i }).click()
 
     await waitForQueueReady(page)
-    await expect(
-      page.getByTestId('queue-thread-item').filter({ hasText: 'Mobile Queue Thread' }),
-    ).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText('Mobile Queue Thread')).toBeVisible({ timeout: 10000 })
   })
 
   test('mobile rating flow works end-to-end', async ({ authenticatedPage }) => {
@@ -97,7 +94,7 @@ test.describe('MOBILE-001: Primary mobile interaction path', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await rollPoolThreadByTitle(page, 'Mobile Rate Thread').click()
+    await page.getByText('Mobile Rate Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     await page.locator('#rating-input').fill('3')
@@ -126,9 +123,7 @@ test.describe('MOBILE-001: Primary mobile interaction path', () => {
     await page.locator('#create-thread-issues').fill('1-3')
     await page.getByRole('button', { name: /create series/i }).click()
 
-    await expect(
-      page.getByTestId('queue-thread-item').filter({ hasText: 'Mobile Created Thread' }),
-    ).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText('Mobile Created Thread')).toBeVisible({ timeout: 10000 })
   })
 
   test('mobile layout has no horizontal overflow', async ({

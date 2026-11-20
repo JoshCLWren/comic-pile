@@ -1,11 +1,7 @@
 
-import { useMemo } from 'react'
 import { useCrossoverDetail } from '../hooks/useCrossoverDetail'
 import { useParams, Link } from 'react-router-dom'
 import Breadcrumbs from '../components/Breadcrumbs'
-import ContainerQueueActions from '../components/ContainerQueueActions'
-import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
-import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 
 
 export default function CrossoverDetailPage() {
@@ -13,28 +9,6 @@ export default function CrossoverDetailPage() {
   const groupId = parseInt(group ?? '', 10)
 
   const { crossover, members, linkedPlans, isLoading, error, refetch } = useCrossoverDetail(groupId)
-  const memberThreads = useMemo(() => {
-    const byId = new Map<number, { id: number; title: string }>()
-    for (const member of members) {
-      const threadId =
-        member.membership.thread_id ??
-        member.thread?.id ??
-        member.issue?.thread_id ??
-        null
-      if (threadId == null || threadId <= 0 || byId.has(threadId)) continue
-      byId.set(threadId, {
-        id: threadId,
-        title: member.thread?.title ?? member.membership.series_title ?? `Series ${threadId}`,
-      })
-    }
-    return Array.from(byId.values())
-  }, [members])
-  const memberIssueIds = useMemo(
-    () => members.map((member) => member.issue?.id).filter((id): id is number => id != null),
-    [members],
-  )
-  const cardsQuery = useIssueCards(memberIssueIds)
-  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
 
   if (isLoading) {
     return (
@@ -144,13 +118,6 @@ export default function CrossoverDetailPage() {
         ) : null}
       </div>
 
-      <ContainerQueueActions
-        sourceKind="crossover"
-        sourceId={crossover.id}
-        sourceName={crossover.name}
-        memberThreads={memberThreads}
-      />
-
       <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3 sm:px-6 sm:py-4">
         <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4 sm:gap-y-0 sm:divide-x sm:divide-[var(--theme-border)]">
           <div>
@@ -189,23 +156,12 @@ export default function CrossoverDetailPage() {
                 </p>
               </div>
             </div>
-                    {nextUnread?.issue?.id != null ? (
-                      <CompactIssueCardTrigger
-                        issueId={nextUnread.issue.id}
-                        threadTitle={nextUnread.thread?.title ?? 'Unknown Series'}
-                        issueNumber={nextUnread.issue.issue_number ?? '?'}
-                        status={nextUnread.issue.status === 'read' ? 'read' : 'unread'}
-                        card={cardsByIssue.get(nextUnread.issue.id) ?? null}
-                        actionLabel="Read now"
-                      />
-                    ) : (
-                      <Link
-                        to={'/thread/' + nextUnread.thread?.id}
-                        className="shrink-0 inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-primary-action-hover)] transition-colors"
-                      >
-                        Read Now
-                      </Link>
-                    )}
+            <Link
+              to={'/thread/' + nextUnread.thread?.id}
+              className="shrink-0 inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-3 py-1.5 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-primary-action-hover)] transition-colors"
+            >
+              Read Now
+            </Link>
           </div>
         </div>
       )}
@@ -256,16 +212,6 @@ export default function CrossoverDetailPage() {
                     >
                       {isRead ? 'Read' : 'Unread'}
                     </span>
-                    {member.issue?.id != null && (
-                      <CompactIssueCardTrigger
-                        issueId={member.issue.id}
-                        threadTitle={threadTitle}
-                        issueNumber={issueNumber}
-                        status={isRead ? 'read' : 'unread'}
-                        card={cardsByIssue.get(member.issue.id) ?? null}
-                        hideTitle
-                      />
-                    )}
                     {member.thread && (
                       <Link
                         to={`/thread/${member.thread.id}`}

@@ -2,7 +2,7 @@
 
 Scheduled, **read-only** comparison of production Neon PostgreSQL against the
 canonical Alembic fixture at
-`native/migrate/migrations/V1__baseline.sql`.
+`native/roll-service/tests/fixtures/schema/public_schema.sql`.
 `alembic current` only proves the migrated stamp; this audit proves actual
 schema equivalence through `pg_dump --schema-only` normalized with the
 established `scripts/export_roll_test_schema.py` logic plus order-insensitive
@@ -84,7 +84,7 @@ expected drift, confirm the difference is real and intended, then:
 
 1. Run `make roll-test-schema` against a database migrated to the Alembic
    head (`DATABASE_URL`).
-2. Commit the regenerated `V1__baseline.sql`; the fixture is never edited
+2. Commit the regenerated `public_schema.sql`; the fixture is never edited
    by hand.
 3. Push; CI regenerates and diffs, and the next scheduled audit re-checks
    production against the updated fixture.

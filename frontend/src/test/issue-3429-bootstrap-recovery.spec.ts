@@ -24,9 +24,7 @@ import { expect, type Page } from '@playwright/test'
 import { test } from './auth-fixtures'
 
 const ROLL_BOOTSTRAP_PATH = '/api/v2/roll/bootstrap'
-// #4822 moved /history off the legacy session index onto the owner-scoped
-// activity resource. Exercise the real first-page request the page now makes.
-const ACTIVITY_PATH = '/api/v2/activity'
+const SESSION_LIST_PATH = '/api/v1/sessions/'
 
 const UNAVAILABLE_BODY = JSON.stringify({ detail: 'service_unavailable' })
 
@@ -103,7 +101,7 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
     page,
     mockApi,
   }) => {
-    const markActivityHealthy = await failUntilHealthy(page, ACTIVITY_PATH)
+    const markSessionsHealthy = await failUntilHealthy(page, SESSION_LIST_PATH)
 
     await mockApi.setupAuthUser()
     await page.goto('/history')
@@ -112,8 +110,8 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
     await expect(page.getByText('Loading...', { exact: true })).toHaveCount(0)
 
-    markActivityHealthy()
-    await recoverInPlace(page, ACTIVITY_PATH)
+    markSessionsHealthy()
+    await recoverInPlace(page, SESSION_LIST_PATH)
 
     await expect(page.getByRole('heading', { name: 'History' })).toBeVisible()
     await expect(page.getByText('Still loading')).toHaveCount(0)

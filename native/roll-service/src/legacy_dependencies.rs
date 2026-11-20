@@ -1,8 +1,14 @@
-//! Native `/api/v2/dependencies` read and note-update handlers (`GET`
-//! `blocked`, `GET`/`PATCH` `{dependency_id}`). Create and delete live in
-//! [`crate::dependencies`].
+//! Native same-path compatibility handlers for the browser dependency API.
+//!
+//! These routes intentionally keep the `/api/v1` wire surface while the Python
+//! implementation remains available until production runtime proof is recorded.
 
-use crate::{auth::AuthenticatedUser, db, dependencies::DependencyResponse, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser,
+    db,
+    dependencies::{self, DependencyCreateRequest, DependencyResponse},
+    ApiError, AppState,
+};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -69,7 +75,7 @@ async fn fetch_dependency(
     }))
 }
 
-/// `GET /api/v2/dependencies/blocked`.
+/// `GET /api/v1/dependencies/blocked`.
 pub async fn blocked(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -96,7 +102,16 @@ pub async fn blocked(
     Ok(Json(rows.into_iter().map(|row| row.get(0)).collect()))
 }
 
-/// `GET /api/v2/dependencies/{dependency_id}`.
+/// `POST /api/v1/dependencies/`.
+pub async fn create(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<DependencyCreateRequest>,
+) -> Result<(StatusCode, Json<DependencyResponse>), ApiError> {
+    dependencies::create_dependency(state, user, Json(request)).await
+}
+
+/// `GET /api/v1/dependencies/{dependency_id}`.
 pub async fn get(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -108,7 +123,7 @@ pub async fn get(
         .ok_or_else(|| not_found(dependency_id))
 }
 
-/// `PATCH /api/v2/dependencies/{dependency_id}`.
+/// `PATCH /api/v1/dependencies/{dependency_id}`.
 pub async fn update(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -147,9 +162,18 @@ pub async fn update(
         .ok_or_else(|| not_found(dependency_id))
 }
 
+/// `DELETE /api/v1/dependencies/{dependency_id}`.
+pub async fn delete(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(dependency_id): Path<i32>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    dependencies::delete_dependency(state, user, Path(dependency_id)).await
+}
+
 #[utoipa::path(
     get,
-    path = "/api/v2/dependencies/blocked",
+    path = "/api/v1/dependencies/blocked",
     operation_id = "list_blocked_legacy_dependencies",
     tag = "dependencies",
     responses((status = 200, description = "Blocked thread ids", body = [i32]), (status = 401, description = "Not authenticated")),
@@ -158,8 +182,19 @@ pub async fn update(
 pub fn blocked_documentation() {}
 
 #[utoipa::path(
+    post,
+    path = "/api/v1/dependencies/",
+    operation_id = "create_legacy_dependency",
+    tag = "dependencies",
+    request_body = DependencyCreateRequest,
+    responses((status = 201, description = "Created dependency", body = DependencyResponse), (status = 400, description = "Invalid dependency"), (status = 401, description = "Not authenticated"), (status = 404, description = "Issue not found"), (status = 409, description = "Reading constraint cycle: nothing was changed"), (status = 422, description = "Validation failed")),
+    security(("HTTPBearer" = []))
+)]
+pub fn create_documentation() {}
+
+#[utoipa::path(
     get,
-    path = "/api/v2/dependencies/{dependency_id}",
+    path = "/api/v1/dependencies/{dependency_id}",
     operation_id = "get_legacy_dependency",
     tag = "dependencies",
     params(("dependency_id" = i32, Path, description = "Dependency id")),
@@ -170,7 +205,7 @@ pub fn get_documentation() {}
 
 #[utoipa::path(
     patch,
-    path = "/api/v2/dependencies/{dependency_id}",
+    path = "/api/v1/dependencies/{dependency_id}",
     operation_id = "update_legacy_dependency",
     tag = "dependencies",
     request_body = DependencyNoteUpdate,
@@ -179,6 +214,17 @@ pub fn get_documentation() {}
     security(("HTTPBearer" = []))
 )]
 pub fn update_documentation() {}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/dependencies/{dependency_id}",
+    operation_id = "delete_legacy_dependency",
+    tag = "dependencies",
+    params(("dependency_id" = i32, Path, description = "Dependency id")),
+    responses((status = 200, description = "Deleted", body = serde_json::Value), (status = 401, description = "Not authenticated"), (status = 404, description = "Dependency not found")),
+    security(("HTTPBearer" = []))
+)]
+pub fn delete_documentation() {}
 
 #[cfg(test)]
 mod tests {
@@ -201,10 +247,10 @@ mod tests {
         drop(connection);
         let owner = AuthenticatedUser::for_test(1);
         let other = AuthenticatedUser::for_test(2);
-        let (status, Json(created)) = crate::dependencies::create_dependency(
+        let (status, Json(created)) = create(
             State(state.clone()),
             owner,
-            Json(crate::dependencies::DependencyCreateRequest {
+            Json(DependencyCreateRequest {
                 source_type: "issue".into(),
                 source_id: 101,
                 target_type: "issue".into(),
@@ -226,10 +272,9 @@ mod tests {
         .await
         .expect_err("foreign update denied");
         assert_eq!(denied.status(), StatusCode::NOT_FOUND);
-        let denied =
-            crate::dependencies::delete_dependency(State(state.clone()), other, Path(edge))
-                .await
-                .expect_err("foreign delete denied");
+        let denied = delete(State(state.clone()), other, Path(edge))
+            .await
+            .expect_err("foreign delete denied");
         assert_eq!(denied.status(), StatusCode::NOT_FOUND);
         let Json(updated) = update(
             State(state.clone()),
@@ -270,10 +315,9 @@ mod tests {
         .await
         .expect("owner clears note");
         assert_eq!(cleared.note, None);
-        let Json(deleted) =
-            crate::dependencies::delete_dependency(State(state.clone()), owner, Path(edge))
-                .await
-                .expect("owner deletes edge");
+        let Json(deleted) = delete(State(state.clone()), owner, Path(edge))
+            .await
+            .expect("owner deletes edge");
         assert_eq!(deleted["message"], "Dependency deleted");
         let connection = state.pool.get().await.expect("read deleted edge");
         let count: i64 = connection

@@ -80,6 +80,19 @@ class CBLReconciliationReport:
     first_unread_issue_id: int | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class CBLAdoptionPlan:
+    """Read-only adoption decisions for every CBL source position."""
+
+    entries: tuple[dict[str, object], ...]
+    reused_existing_count: int
+    missing_would_create_count: int
+    excluded_count: int
+    unresolved_count: int
+    final_adopted_count: int
+    final_adopted_order: tuple[int, ...]
+
+
 def cbl_series_group_id(entry: dict[str, object]) -> str:
     """Return a deterministic series/run grouping key for a CBL entry.
 
@@ -104,6 +117,130 @@ def cbl_comicvine_series_id(entry: dict[str, object]) -> str | None:
     provider = str(entry.get("series_provider") or "").strip().casefold()
     external_id = entry.get("series_external_id")
     return str(external_id) if provider == "comicvine" and external_id is not None else None
+
+
+def calculate_cbl_adoption_plan(
+    entries: tuple[dict[str, object], ...] | list[dict[str, object]],
+    *,
+    series_decisions: dict[str, bool] | None = None,
+    entry_decisions: dict[str, bool] | None = None,
+) -> CBLAdoptionPlan:
+    """Calculate an adoption plan without database or persistence access.
+
+    Existing entries are included by default. Missing/importable entries require
+    an explicit entry or series include decision. Unresolved/ambiguous entries
+    are never adopted, but excluding their series defers them exactly like a
+    per-entry skip so one exclusion clears the attention gate (#3542). An entry
+    decision overrides its series decision.
+    """
+    series_choices = {str(key): value for key, value in (series_decisions or {}).items()}
+    entry_choices = {str(key): value for key, value in (entry_decisions or {}).items()}
+    planned: list[dict[str, object]] = []
+    adopted_positions: list[int] = []
+    reused = missing = excluded = unresolved = 0
+
+    for source_entry in entries:
+        entry = dict(source_entry)
+        position = int(entry["cbl_position"])
+        series_group_id = str(entry.get("series_group_id") or cbl_series_group_id(entry))
+        entry_key = str(entry.get("cbl_entry_id") or position)
+        resolution_status = str(entry.get("resolution_status") or "")
+        ambiguous_canonical = resolution_status == "resolved_via_comicvine_canonical_ambiguous"
+        resolved = entry.get("resolved_issue_id") is not None and not ambiguous_canonical
+        importable = entry.get("resolution_status") == "no_owned_issue_for_comicvine_id"
+        selectable = resolved or importable
+        entry["adoption_class"] = (
+            "existing"
+            if resolved
+            else "missing_importable"
+            if importable
+            else "ambiguous_unresolved"
+        )
+        if entry.get("collection_excluded"):
+            if (
+                entry.get("collection_exclusion_reason") == "collection_identity_requires_review"
+                and entry_choices.get(entry_key, series_choices.get(series_group_id, True))
+            ):
+                decision = "unresolved"
+                unresolved += 1
+            else:
+                decision = "excluded"
+                excluded += 1
+        elif not selectable:
+            # An explicit per-entry skip lets the reader defer one ambiguous
+            # entry without blocking adoption of the whole source, and an
+            # explicit series exclusion clears every unresolved entry in that
+            # series without a separate skip (#3542). The entry choice keeps
+            # precedence over the series choice, matching the branch above and
+            # the commit-time decision resolver.
+            if entry_choices.get(entry_key, series_choices.get(series_group_id, True)) is False:
+                decision = "excluded"
+                excluded += 1
+            else:
+                decision = "unresolved"
+                unresolved += 1
+        else:
+            # #2128: safely creatable missing entries default to included. The
+            # reader's single Add confirmation is the explicit approval for the
+            # missing comics shown in the reviewed summary; only ambiguous or
+            # unresolvable identities interrupt the happy path.
+            default_selected = resolved or importable
+            selected = entry_choices.get(
+                entry_key,
+                series_choices.get(series_group_id, default_selected),
+            )
+            if selected:
+                decision = "included_existing" if resolved else "would_create_missing"
+                adopted_positions.append(position)
+                if resolved:
+                    reused += 1
+                else:
+                    missing += 1
+            else:
+                explicit = entry_key in entry_choices or series_group_id in series_choices
+                decision = "excluded" if explicit else "awaiting_opt_in"
+                excluded += 1
+                if decision == "awaiting_opt_in":
+                    excluded -= 1
+        entry["series_group_id"] = series_group_id
+        entry["adoption_decision"] = decision
+        entry["adopted"] = decision in {"included_existing", "would_create_missing"}
+        planned.append(entry)
+
+    return CBLAdoptionPlan(
+        entries=tuple(planned),
+        reused_existing_count=reused,
+        missing_would_create_count=missing,
+        excluded_count=excluded,
+        unresolved_count=unresolved,
+        final_adopted_count=len(adopted_positions),
+        final_adopted_order=tuple(adopted_positions),
+    )
+
+
+async def preview_cbl_adoption(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    list_id: int,
+    series_decisions: dict[str, bool] | None = None,
+    entry_decisions: dict[str, bool] | None = None,
+) -> tuple[CBLReconciliationReport, CBLAdoptionPlan]:
+    """Return reconciliation and a dry-run adoption plan without mutating rows.
+
+    Every source series and issue starts selected, so a first add needs no
+    per-entry decision. Durable save/reopen of reader choices is owned by the
+    Option E upsert ticket (#4022), not by this read-only preview.
+    """
+    report = await reconcile_cbl_source_list(db, user_id=user_id, list_id=list_id)
+    entries = tuple(
+        {**entry, "series_group_id": cbl_series_group_id(entry)} for entry in report.entries
+    )
+    return report, calculate_cbl_adoption_plan(
+        entries,
+        series_decisions=series_decisions,
+        entry_decisions=entry_decisions,
+    )
 
 
 async def reconcile_cbl_source_list(

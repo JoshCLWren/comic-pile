@@ -1,8 +1,7 @@
 //! Simple unauthenticated performance metrics for the native runtime.
 //!
-//! This preserves the legacy wire contract of `GET /api/metrics` while serving
-//! it from the Rust binary. The `/api/v1/metrics` alias has no caller and was
-//! retired with the Analytics page (#4348, #5446).
+//! This preserves the legacy wire contract of `GET /api/metrics` and
+//! `GET /api/v1/metrics` while serving it from the Rust binary.
 
 use axum::Json;
 use serde::Serialize;
@@ -73,6 +72,15 @@ pub async fn get_metrics() -> Json<StartupMetricsResponse> {
     responses((status = 200, description = "Simple application startup metrics", body = StartupMetricsResponse))
 )]
 pub fn get_metrics_documentation() {}
+
+/// OpenAPI documentation for the versioned metrics alias.
+#[utoipa::path(
+    get,
+    path = "/api/v1/metrics",
+    tag = "metrics",
+    responses((status = 200, description = "Simple application startup metrics", body = StartupMetricsResponse))
+)]
+pub fn get_v1_metrics_documentation() {}
 
 #[cfg(test)]
 mod tests {

@@ -12,7 +12,7 @@ describe('releasesApi', () => {
     client.get.mockResolvedValue(payload)
 
     await expect(releasesApi.list()).resolves.toEqual(payload)
-    expect(client.get).toHaveBeenCalledWith('/v2/releases', {
+    expect(client.get).toHaveBeenCalledWith('/v1/releases/', {
       params: { limit: 20, offset: 0 },
     })
   })
@@ -22,7 +22,7 @@ describe('releasesApi', () => {
     client.get.mockResolvedValue(payload)
 
     await expect(releasesApi.list(50, 20)).resolves.toEqual(payload)
-    expect(client.get).toHaveBeenCalledWith('/v2/releases', {
+    expect(client.get).toHaveBeenCalledWith('/v1/releases/', {
       params: { limit: 50, offset: 20 },
     })
   })

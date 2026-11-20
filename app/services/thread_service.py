@@ -37,6 +37,7 @@ from app.schemas import (
     QueueThreadListResponse,
     ReactivateRequest,
     RollResponse,
+    SetCurrentIssueResponse,
     ThreadCreate,
     ThreadDetail,
     ThreadResponse,
@@ -48,6 +49,7 @@ from app.services.reading_effort import publication_year_from_metadata
 from app.services.errors import ConflictError, ForbiddenError, InvalidRequestError, NotFoundError
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership_guard import (
+    require_frontier_in_thread,
     require_session_pending_consistent,
 )
 from app.services.roll_exclusion import derive_effective_roll_excluded_thread_ids
@@ -1550,3 +1552,255 @@ async def backdate_thread_for_testing(
     return await thread_to_response(thread, db)
 
 
+async def migrate_thread_to_issues(
+    db: AsyncSession,
+    user_id: int,
+    thread_id: int,
+    *,
+    last_issue_read: int,
+    total_issues: int,
+) -> ThreadResponse:
+    """Migrate an old-style thread to use issue tracking.
+
+    Creates issue records #1 through ``total_issues`` and marks #1 through
+    ``last_issue_read`` as read via the model's migration routine.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the thread.
+        thread_id: Primary key of the thread to migrate.
+        last_issue_read: Highest issue number already read.
+        total_issues: Total issues to create.
+
+    Returns:
+        ThreadResponse with the migrated thread.
+
+    Raises:
+        NotFoundError: When the thread does not exist for this user.
+        InvalidRequestError: When the thread already tracks issues or the range is
+            inconsistent.
+    """
+    thread = await _require_owned_thread(db, user_id, thread_id)
+
+    if thread.total_issues is not None:
+        raise InvalidRequestError(f"Thread {thread_id} already uses issue tracking")
+
+    if last_issue_read > total_issues:
+        raise InvalidRequestError("last_issue_read cannot exceed total_issues")
+
+    await thread.migrate_to_issues(last_issue_read, total_issues, db)
+
+    response = await thread_to_response(thread, db)
+
+    await db.commit()
+
+    return response
+
+
+async def migrate_thread_to_issues_simple(
+    db: AsyncSession,
+    user_id: int,
+    thread_id: int,
+    *,
+    issue_number: str,
+) -> ThreadResponse:
+    """Migrate a legacy thread using the issue the user just rated.
+
+    Infers ``total_issues`` from ``issues_remaining`` and the given issue
+    number when the thread has no issues yet, marks every earlier position as
+    read, keeps the rated issue unread for the rating flow, and points
+    ``next_unread_issue_id`` at it.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the thread.
+        thread_id: Primary key of the thread to migrate.
+        issue_number: Displayed number of the issue just rated.
+
+    Returns:
+        ThreadResponse with the migrated thread.
+
+    Raises:
+        NotFoundError: When the thread does not exist for this user.
+        InvalidRequestError: When the thread already tracks issues, the issue
+            is missing and cannot be created, or the number is non-numeric.
+    """
+    thread = await _require_owned_thread(db, user_id, thread_id)
+
+    if thread.total_issues is not None:
+        raise InvalidRequestError(f"Thread {thread_id} already uses issue tracking")
+
+    current_issue = await issue_repository.find_in_thread_by_number(db, thread_id, issue_number)
+
+    if not current_issue:
+        try:
+            issue_num_int = int(issue_number)
+            total_issues = issue_num_int + max(thread.issues_remaining - 1, 0)
+
+            for i in range(1, total_issues + 1):
+                if i < issue_num_int:
+                    issue_status = "read"
+                    read_at = datetime.now(UTC)
+                else:
+                    issue_status = "unread"
+                    read_at = None
+
+                await issue_repository.add_issue(
+                    db,
+                    Issue(
+                        thread_id=thread.id,
+                        issue_number=str(i),
+                        status=issue_status,
+                        read_at=read_at,
+                        position=i,
+                    ),
+                )
+
+            current_issue = await issue_repository.find_in_thread_by_number(
+                db, thread_id, issue_number
+            )
+
+            if not current_issue:
+                raise InvalidRequestError(
+                    f"Failed to create issue '{issue_number}'. Please add it via Edit Thread first."
+                )
+        except ValueError:
+            raise InvalidRequestError(
+                f"Non-numeric issue '{issue_number}' not found in thread."
+                " Please add it via Edit Thread first."
+            ) from None
+
+    all_issues = await issue_repository.issues_ordered(db, thread_id)
+
+    for issue in all_issues:
+        if issue.position < current_issue.position:
+            if issue.status != "read":
+                issue.status = "read"
+                issue.read_at = datetime.now(UTC)
+        elif issue.position == current_issue.position:
+            issue.status = "unread"
+            issue.read_at = None
+
+    thread.total_issues = len(all_issues)
+    thread.next_unread_issue_id = current_issue.id
+    thread.reading_progress = "in_progress"
+
+    response = await thread_to_response(thread, db)
+
+    await db.commit()
+
+    return response
+
+
+async def set_current_issue(
+    db: AsyncSession,
+    user_id: int,
+    thread_id: int,
+    *,
+    issue_number: str,
+) -> SetCurrentIssueResponse:
+    """Atomically correct the current issue for an active owned thread.
+
+    Marks every issue before the target as read, ensures the target is
+    unread, updates ``thread.next_unread_issue_id``, and pins
+    ``session.pending_issue_id`` so the active roll reflects the corrected
+    position immediately.
+
+    Args:
+        db: Database session.
+        user_id: Owner that must own the thread.
+        thread_id: Primary key of the thread whose current issue is corrected.
+        issue_number: Displayed number of the target issue.
+
+    Returns:
+        SetCurrentIssueResponse with the corrected thread and issue info.
+
+    Raises:
+        NotFoundError: When the thread or target issue does not exist for this
+            user.
+        InvalidRequestError: When the thread is not active or does not use
+            issue tracking.
+    """
+    thread = await _require_owned_thread(db, user_id, thread_id, for_update=True)
+    eligibility = await get_execution_eligibility(db, user_id)
+
+    if thread.status != "active":
+        raise InvalidRequestError(f"Thread {thread_id} is not active")
+
+    if eligibility is None and not thread.uses_issue_tracking():
+        raise InvalidRequestError(f"Thread {thread_id} does not use issue tracking")
+
+    # Session creation/initialization may commit. Resolve it before changing
+    # Issue statuses so a later unavailable-selection rejection stays atomic.
+    current_session = await get_or_create(db, user_id=user_id)
+    await db.refresh(thread)
+
+    target_number = issue_number.strip()
+
+    target_issue = await issue_repository.find_in_thread_by_number(db, thread_id, target_number)
+
+    if not target_issue:
+        raise NotFoundError(f"Issue '{target_number}' not found in thread {thread_id}")
+
+    all_issues = await issue_repository.issues_ordered(db, thread_id)
+
+    now = datetime.now(UTC)
+    for issue in all_issues:
+        if issue.position < target_issue.position:
+            if issue.status != "read":
+                issue.status = "read"
+                issue.read_at = now
+        elif issue.position == target_issue.position:
+            if issue.status != "unread":
+                issue.status = "unread"
+                issue.read_at = None
+
+    thread.total_issues = len(all_issues)
+    # Defense in depth: the target was resolved inside this thread, and the
+    # guard plus fk_threads_frontier_same_thread reject a frontier pointing
+    # at any other thread — even one owned by the same reader (issue #3225).
+    await require_frontier_in_thread(db, thread_id, target_issue.id)
+    thread.next_unread_issue_id = target_issue.id
+    thread.reading_progress = "in_progress"
+    thread.issues_remaining = await thread.get_issues_remaining(db)
+
+    target_issue_id = target_issue.id
+    target_issue_number = target_issue.issue_number
+
+    # Extract attributes before commit so post-commit access never triggers a
+    # lazy load (MissingGreenlet rule from AGENTS.md).
+    issues_remaining = thread.issues_remaining
+    total_issues = thread.total_issues
+    reading_progress = thread.reading_progress
+    queue_position = await display_position(db, thread)
+    thread_title = thread.title
+    thread_format = normalize_format_value(thread.format)
+
+    current_session.pending_thread_id = thread_id
+    current_session.pending_issue_id = target_issue_id
+    current_session.pending_thread_updated_at = now
+
+    await require_session_pending_consistent(db, current_session)
+
+    if eligibility is None:
+        await db.commit()
+    else:
+        await db.flush()
+        updated = await get_execution_eligibility(db, user_id)
+        if updated is None or updated.threads[thread_id].next_issue_id != target_issue_id:
+            raise InvalidRequestError("The corrected issue is not available in the reading order")
+        await set_pending_thread(db, user_id, thread_id)
+
+    return SetCurrentIssueResponse(
+        thread_id=thread_id,
+        title=thread_title,
+        format=thread_format,
+        issues_remaining=issues_remaining,
+        queue_position=queue_position,
+        issue_id=target_issue_id,
+        issue_number=target_issue_number,
+        next_issue_id=target_issue_id,
+        next_issue_number=target_issue_number,
+        total_issues=total_issues,
+        reading_progress=reading_progress,
+    )

@@ -66,3 +66,14 @@ class ComicVineIssueIntelligence(BaseModel):
     story_arcs: list[ComicVineStoryArc] = Field(default_factory=list)
     metadata_status: str = "not_deep_fetched"
     refresh_retry_after_seconds: int | None = None
+
+
+class MetadataRepairDrainResponse(BaseModel):
+    """Bounded outcome counts returned by the metadata repair cron."""
+
+    claimed: int
+    completed: int
+    no_credits: int
+    deferred: int
+    failed: int
+    provider_configured: bool

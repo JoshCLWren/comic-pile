@@ -408,6 +408,89 @@ async def test_remove_from_queue_preserves_records_and_restore_reuses_the_same_r
 
 
 @pytest.mark.asyncio
+async def test_exclusion_survives_reading_the_final_unread_issue(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Reading every issue must not silently reactivate an excluded series.
+
+    Marking the last unread issue read recomputes the thread lifecycle to
+    ``completed``. A durable queue exclusion outranks that recomputation: the
+    series has to stay excluded, and therefore restorable, until the reader
+    asks for it. Otherwise removal is a one-way trip to the wrong shelf.
+    """
+    ids = await _seed_series(async_db, default_user)
+    before = await _curated_state(async_db, ids)
+
+    exclude_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/exclude")
+    assert exclude_response.status_code == 200
+
+    for issue_id in ids.unread_issue_ids:
+        mark_read = await auth_client.post(f"/api/v1/issues/{issue_id}:markRead")
+        assert mark_read.status_code == 204
+
+    async_db.expire_all()
+    thread = await async_db.get(Thread, ids.thread_id)
+    assert thread is not None
+    assert thread.status == "excluded"
+    assert thread.queue_position == 0
+    assert thread.issues_remaining == 0
+
+    # Read state is recorded normally; only the lifecycle status is preserved.
+    async_db.expire_all()
+    issues = await _issue_rows(async_db, ids.thread_id)
+    assert [issue.status for issue in issues] == ["read", "read", "read"]
+    assert all(issue.read_at is not None for issue in issues)
+
+    await _assert_thread_preserved(async_db, ids, before)
+
+    # Still excluded, still discoverable, still restorable.
+    assert await _excluded_thread_ids(auth_client) == [ids.thread_id]
+
+    restore_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/restore")
+    assert restore_response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_restore_returns_a_fully_read_series_to_the_finished_shelf(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Restoring a series with nothing left to read must not create a queue ghost.
+
+    An ``active`` thread with an empty reading frontier violates the completion
+    invariant that Roll and the queue eligibility predicates rely on, so a fully
+    read series returns to the finished shelf with all of its history intact.
+    """
+    owner_id = default_user.id
+    ids = await _seed_series(async_db, default_user)
+    before = await _curated_state(async_db, ids)
+
+    exclude_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/exclude")
+    assert exclude_response.status_code == 200
+
+    for issue_id in ids.unread_issue_ids:
+        mark_read = await auth_client.post(f"/api/v1/issues/{issue_id}:markRead")
+        assert mark_read.status_code == 204
+
+    restore_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/restore")
+    assert restore_response.status_code == 200
+    assert restore_response.json()["status"] == "completed"
+
+    async_db.expire_all()
+    restored = await async_db.get(Thread, ids.thread_id)
+    assert restored is not None
+    assert restored.status == "completed"
+    assert restored.queue_position == 0
+    assert restored.next_unread_issue_id is None
+
+    # The curated state the reader protected is still there, and the finished
+    # shelf — not the active queue — owns the series again.
+    await _assert_thread_preserved(async_db, ids, before)
+    assert ids.thread_id in await _completed_thread_ids(auth_client)
+    assert ids.thread_id not in await _queue_thread_ids(async_db, owner_id)
+    assert await _excluded_thread_ids(auth_client) == []
+
+
+@pytest.mark.asyncio
 async def test_excluded_series_stays_out_of_the_roll_pool(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
@@ -435,6 +518,49 @@ async def test_excluded_series_stays_out_of_the_roll_pool(
     assert ids.thread_id not in await derive_effective_roll_excluded_thread_ids(
         async_db, user_id
     )
+
+
+@pytest.mark.asyncio
+async def test_appending_issues_does_not_reactivate_an_excluded_series(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """CBL sync and provider adoption must not resurrect an excluded series.
+
+    Appending issues recomputes the lifecycle from issue state, the same way a
+    reading action does. The durable queue exclusion has to survive that path
+    too, otherwise an out-of-band sync silently puts a deliberately removed
+    series back into the active queue.
+    """
+    owner_id = default_user.id
+    ids = await _seed_series(async_db, default_user)
+    before = await _curated_state(async_db, ids)
+
+    exclude_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/exclude")
+    assert exclude_response.status_code == 200
+
+    from app.services import issue as issue_service
+
+    await issue_service.create_issues(
+        async_db,
+        thread_id=ids.thread_id,
+        current_user_id=owner_id,
+        issue_range="4",
+        insert_after_issue_id=None,
+    )
+    await async_db.commit()
+
+    async_db.expire_all()
+    thread = await async_db.get(Thread, ids.thread_id)
+    assert thread is not None
+    assert thread.status == "excluded"
+    assert thread.queue_position == 0
+
+    # The newly adopted issue is tracked and the curated records still stand.
+    issues = await _issue_rows(async_db, ids.thread_id)
+    assert [issue.issue_number for issue in issues] == ["1", "2", "3", "4"]
+    await _assert_thread_preserved(async_db, ids, before)
+    assert await _excluded_thread_ids(auth_client) == [ids.thread_id]
+    assert ids.thread_id not in await _queue_thread_ids(async_db, owner_id)
 
 
 @pytest.mark.asyncio

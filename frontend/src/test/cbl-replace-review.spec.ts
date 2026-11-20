@@ -64,7 +64,7 @@ async function createReadingList(
   mode: 'strict' | 'loose' = 'strict',
 ): Promise<number> {
   const headers = await authHeaders(page)
-  const response = await page.request.post('/api/v2/reading-lists', {
+  const response = await page.request.post('/api/v1/custom-cbls', {
     headers,
     data: {
       name,
@@ -85,7 +85,7 @@ async function createReadingList(
 
 async function getReadingList(page: Page, listId: number): Promise<ReadingListResponse> {
   const headers = await authHeaders(page)
-  const response = await page.request.get(`/api/v2/reading-lists/${listId}`, { headers })
+  const response = await page.request.get(`/api/v1/custom-cbls/${listId}`, { headers })
   expect(response.ok(), await response.text()).toBeTruthy()
   // SAFETY: the test reads only the response fields listed in this type
   return (await response.json()) as ReadingListResponse
@@ -98,7 +98,7 @@ async function applyReadingList(
 ): Promise<void> {
   const headers = await authHeaders(page)
   const response = await page.request.post(
-    `/api/v2/reading-lists/${listId}/reading-plans/${planId}/applications`,
+    `/api/v1/custom-cbls/${listId}/reading-plans/${planId}:apply`,
     { headers, data: { lane_id: null } },
   )
   expect(response.ok(), await response.text()).toBeTruthy()
@@ -527,7 +527,7 @@ test.describe('CBL replacement review', () => {
       entry_intents: { [firstIssueId]: { gate: 'none', skipped: false } },
       checkpoint_issue_ids: [],
     }
-    const previewChange = await page.request.put(`/api/v2/reading-lists/${listId}`, {
+    const previewChange = await page.request.put(`/api/v1/custom-cbls/${listId}`, {
       headers, data: changeRequest,
     })
     expect(previewChange.status(), await previewChange.text()).toBe(409)
@@ -540,7 +540,7 @@ test.describe('CBL replacement review', () => {
     expect(confirmation.detail.predecessor_changes[0]).toMatchObject({
       issue_id: secondIssueId, before_issue_ids: [firstIssueId], after_issue_ids: [],
     })
-    const changed = await page.request.put(`/api/v2/reading-lists/${listId}`, {
+    const changed = await page.request.put(`/api/v1/custom-cbls/${listId}`, {
       headers,
       data: { ...changeRequest, confirmed_predecessor_changes: confirmation.detail.predecessor_changes },
     })

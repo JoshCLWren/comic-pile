@@ -1,11 +1,12 @@
 {
   "family": "undo",
   "owned_path_patterns": [
-    "^/api/v2/undo(?:/.*)?$"
+    "^/api/undo(?:/.*)?$",
+    "^/api/v1/undo(?:/.*)?$"
   ],
   "defaults": {
-    "runtime": "native-rust",
-    "status": "target",
+    "runtime": "python-fastapi",
+    "status": "transitional",
     "owning_issue": null,
     "consumers": [
       "frontend/src/services/api-undo.ts"
@@ -13,24 +14,16 @@
   },
   "operations": [
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v2/undo/{session_id}/snapshots",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/undo/[^/]+/snapshots$",
-      "owning_issue": 4839,
-      "runtime": "native-rust",
-      "status": "target"
+      "path": "/api/v1/undo/{session_id}/snapshots",
+      "dest": "/api/index.py"
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "POST",
-      "path": "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/undo/[^/]+/snapshots/[^/]+/restore$",
-      "owning_issue": 4839,
-      "runtime": "native-rust",
-      "status": "target"
+      "path": "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+      "dest": "/api/index.py"
     }
   ]
 }

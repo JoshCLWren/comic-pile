@@ -113,7 +113,7 @@ export function createIssuesApi(client: HttpClient) {
      * @returns The issue details
      */
     get: async (issueId: number): Promise<Issue> => {
-      return client.get(`/v2/issues/${issueId}`)
+      return client.get(`/v1/issues/${issueId}`)
     },
 
     /**
@@ -122,7 +122,7 @@ export function createIssuesApi(client: HttpClient) {
      * @param issueId - The issue ID to mark as read
      */
     markRead: async (issueId: number): Promise<void> => {
-      await client.post(`/v2/issues/${issueId}/read-markers`)
+      await client.post(`/v1/issues/${issueId}:markRead`)
     },
 
     /**
@@ -131,15 +131,15 @@ export function createIssuesApi(client: HttpClient) {
      * @param issueId - The issue ID to mark as unread
      */
     markUnread: async (issueId: number): Promise<void> => {
-      await client.delete(`/v2/issues/${issueId}/read-markers`)
+      await client.post(`/v1/issues/${issueId}:markUnread`)
     },
 
     bulkMarkRead: async (issueIds: number[]): Promise<void> => {
-      await client.post(`/v2/issue-read-markers`, { issue_ids: issueIds })
+      await client.post(`/v1/issues:bulkMarkRead`, { issue_ids: issueIds })
     },
 
     bulkMarkUnread: async (issueIds: number[]): Promise<void> => {
-      await client.post(`/v2/issue-read-marker-removals`, { issue_ids: issueIds })
+      await client.post(`/v1/issues:bulkMarkUnread`, { issue_ids: issueIds })
     },
 
     /**
@@ -148,7 +148,7 @@ export function createIssuesApi(client: HttpClient) {
      * @param afterIssueId - Move after this issue ID, or null to move to the top
      */
     move: async (issueId: number, afterIssueId: number | null): Promise<void> => {
-      await client.put<void, { after_issue_id: number | null }>(`/v2/issues/${issueId}/position`, {
+      await client.post<void, { after_issue_id: number | null }>(`/v1/issues/${issueId}:move`, {
         after_issue_id: afterIssueId,
       })
     },
@@ -208,7 +208,7 @@ export function createIssuesApi(client: HttpClient) {
      * @returns Reader-context response with series, crossovers, and local_chain data
      */
     getReaderContext: async (issueId: number, config?: { signal?: AbortSignal }): Promise<ReaderContextResponse> => {
-      return client.get(`/v2/issues/${issueId}/reader-context`, config)
+      return client.get(`/v1/issues/${issueId}/reader-context`, config)
     },
   }
 }

@@ -419,8 +419,8 @@ describe('ReadingPlanDetailPage', () => {
   })
 
 
-  it('keeps strict blockers and release-follow noise out of the initial screen with bounded, small fixtures', async () => {
-    const blockers = Array.from({ length: 6 }, (_, index) => ({
+  it('keeps Julix-sized strict blockers and release-follow noise out of the initial screen', async () => {
+    const blockers = Array.from({ length: 382 }, (_, index) => ({
       issue_id: index + 1000,
       thread_id: index + 2000,
       thread_title: index === 0 ? 'B.P.R.D.: Casualties' : `Extra prerequisite ${index}`,
@@ -432,7 +432,7 @@ describe('ReadingPlanDetailPage', () => {
       name: 'Mignolaverse',
       ordering_mode: 'strict_sequential',
       execution_mode: 'option_e',
-      progress: { total_issues: 100, read_issues: 82 },
+      progress: { total_issues: 464, read_issues: 82 },
       available_now: [],
       blocked_next: Array.from({ length: 8 }, (_, index) => ({
         ...blockedIssue,
@@ -442,7 +442,7 @@ describe('ReadingPlanDetailPage', () => {
       })),
       lanes: [{
         ...readerView.lanes[0],
-        issues: Array.from({ length: 100 }, (_, index) => ({
+        issues: Array.from({ length: 464 }, (_, index) => ({
           ...laterIssue,
           occurrence_id: `later-${index}`,
           issue_id: 500 + index,
@@ -456,12 +456,12 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.queryByText('Extra prerequisite 1 #1')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Follow Ultimate Spider-Man (2024)' })).not.toBeInTheDocument()
     expect(screen.getByText(/This linked Reading List controls reading eligibility/)).toBeInTheDocument()
-    fireEvent.click(screen.getAllByRole('button', { name: 'Show 5 other reading requirements' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show 381 other reading requirements' })[0])
     expect(screen.getByRole('link', { name: 'Open Extra prerequisite 1 issue #1' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Show 5 more blocked issues' }))
     expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(8)
     expect(screen.queryByText('Cable #76')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Show complete reading order (100 issues)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show complete reading order (464 issues)' }))
     expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(48)
     expect(screen.getByRole('button', { name: 'Show next 40 issues in reading order' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Show next 40 issues in reading order' }))
@@ -470,7 +470,7 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(8)
     fireEvent.click(screen.getByRole('button', { name: 'Show fewer blocked issues' }))
     expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(3)
-    fireEvent.click(screen.getByRole('button', { name: 'Show 100 upcoming issues' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show 464 upcoming issues' }))
     expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(33)
     fireEvent.click(screen.getByRole('button', { name: 'Show next 30 upcoming issues' }))
     expect(screen.getAllByTestId('reading-plan-issue-row')).toHaveLength(63)

@@ -31,17 +31,11 @@ export function useReadingPlans() {
   })
 }
 
-export function useReadingPlanReader(
-  planId: number | null,
-  options?: { refetchOnWindowFocus?: boolean | 'always' },
-) {
+export function useReadingPlanReader(planId: number | null) {
   return useQuery({
     queryKey: planId ? queryKeys.readingPlans.reader(planId) : [],
     queryFn: () => continuityPlansApi.getReader(planId!),
     enabled: planId != null,
-    // Opt-in per view (#5486): the detail page refreshes on focus, but the
-    // legacy edit route must not unmount its draft on a failed background fetch.
-    refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
   })
 }
 

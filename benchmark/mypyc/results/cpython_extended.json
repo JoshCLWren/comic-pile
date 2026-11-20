@@ -1,0 +1,508 @@
+{
+  "benchmark": "mypyc-cpu-evaluation",
+  "configuration": {
+    "cold_samples": 7,
+    "warm_iterations": 500,
+    "warm_samples": 7,
+    "workload_sizes": {
+      "effort_count": 120,
+      "familiar_candidate_count": 100,
+      "familiar_signal_count": 24,
+      "observation_count": 4000,
+      "pool_sizes": [
+        20,
+        60
+      ],
+      "signal_count": 120
+    }
+  },
+  "environment": {
+    "artifact_total_bytes": 0,
+    "artifacts": [],
+    "c_compiler": "cc (Debian 14.2.0-19) 14.2.0",
+    "machine": "x86_64",
+    "mypy_version": "2.4.0",
+    "platform": "Linux-6.12.105+deb13-amd64-x86_64-with-glibc2.41",
+    "processor": "",
+    "python_full_version": "3.14.7 (main, Aug 25 2026, 14:02:56) [Clang 22.1.3 ]",
+    "python_implementation": "cpython",
+    "python_version": "3.14.7",
+    "root": "source",
+    "seed": 20261017,
+    "setuptools_version": "84.0.0",
+    "source_total_bytes": 90489,
+    "surface": "cpython"
+  },
+  "issue": 3258,
+  "request_initialization": {
+    "candidate_import": {
+      "count": 7,
+      "max_ms": 20.3705,
+      "mean_ms": 18.1434,
+      "median_ms": 17.5056,
+      "min_ms": 17.1558,
+      "spread_pct": 18.36,
+      "stdev_ms": 1.1746
+    },
+    "process_wall": {
+      "count": 7,
+      "max_ms": 238.8495,
+      "mean_ms": 233.9898,
+      "median_ms": 233.2908,
+      "min_ms": 228.7381,
+      "spread_pct": 4.33,
+      "stdev_ms": 3.6609
+    },
+    "workload": {
+      "count": 7,
+      "max_ms": 31.7419,
+      "mean_ms": 30.9668,
+      "median_ms": 30.8172,
+      "min_ms": 30.5085,
+      "spread_pct": 4.0,
+      "stdev_ms": 0.4533
+    }
+  },
+  "results": [
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 17.7694,
+          "mean_ms": 17.4512,
+          "median_ms": 17.4244,
+          "min_ms": 17.2683,
+          "spread_pct": 2.88,
+          "stdev_ms": 0.1791
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 114.4359,
+          "mean_ms": 111.4227,
+          "median_ms": 111.4608,
+          "min_ms": 108.5917,
+          "spread_pct": 5.24,
+          "stdev_ms": 1.866
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 0.6874,
+          "mean_ms": 0.6675,
+          "median_ms": 0.6663,
+          "min_ms": 0.6589,
+          "spread_pct": 4.28,
+          "stdev_ms": 0.0095
+        }
+      },
+      "describe": "build_candidate_weights over 120 effort pairs x 3 bandwidth modes",
+      "module": "comic_pile.recommendation_weights",
+      "module_file": "recommendation_weights.py",
+      "warm": {
+        "count": 7,
+        "max_ms": 0.6564,
+        "mean_ms": 0.6379,
+        "median_ms": 0.6401,
+        "min_ms": 0.6196,
+        "spread_pct": 5.74,
+        "stdev_ms": 0.0135
+      },
+      "workload": "build_candidate_weights"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 18.5422,
+          "mean_ms": 17.873,
+          "median_ms": 17.714,
+          "min_ms": 17.5788,
+          "spread_pct": 5.44,
+          "stdev_ms": 0.3852
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 128.6242,
+          "mean_ms": 116.7446,
+          "median_ms": 114.7715,
+          "min_ms": 113.0129,
+          "spread_pct": 13.6,
+          "stdev_ms": 5.4952
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 2.1224,
+          "mean_ms": 2.045,
+          "median_ms": 2.0483,
+          "min_ms": 1.9935,
+          "spread_pct": 6.3,
+          "stdev_ms": 0.0504
+        }
+      },
+      "describe": "weight_pool over 120 candidate signals x 3 bandwidth/intent pairs",
+      "module": "comic_pile.recommendation_weighting",
+      "module_file": "recommendation_weighting.py",
+      "warm": {
+        "count": 7,
+        "max_ms": 1.8663,
+        "mean_ms": 1.856,
+        "median_ms": 1.8558,
+        "min_ms": 1.8467,
+        "spread_pct": 1.06,
+        "stdev_ms": 0.0065
+      },
+      "workload": "weight_pool"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 17.5711,
+          "mean_ms": 17.4205,
+          "median_ms": 17.5456,
+          "min_ms": 17.1338,
+          "spread_pct": 2.49,
+          "stdev_ms": 0.1849
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 105.1075,
+          "mean_ms": 103.3329,
+          "median_ms": 103.8275,
+          "min_ms": 101.3315,
+          "spread_pct": 3.64,
+          "stdev_ms": 1.3885
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 0.1707,
+          "mean_ms": 0.155,
+          "median_ms": 0.155,
+          "min_ms": 0.1471,
+          "spread_pct": 15.21,
+          "stdev_ms": 0.0082
+        }
+      },
+      "describe": "select_from_pool over pool sizes 20 and 60 x 3 control paths",
+      "module": "comic_pile.recommendation_selection",
+      "module_file": "recommendation_selection.py",
+      "warm": {
+        "count": 7,
+        "max_ms": 0.0732,
+        "mean_ms": 0.0693,
+        "median_ms": 0.0688,
+        "min_ms": 0.0662,
+        "spread_pct": 10.25,
+        "stdev_ms": 0.0027
+      },
+      "workload": "select_from_pool"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 18.3233,
+          "mean_ms": 17.4228,
+          "median_ms": 17.3212,
+          "min_ms": 17.1714,
+          "spread_pct": 6.65,
+          "stdev_ms": 0.4032
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 105.3978,
+          "mean_ms": 103.0951,
+          "median_ms": 103.1077,
+          "min_ms": 101.3821,
+          "spread_pct": 3.89,
+          "stdev_ms": 1.5743
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 0.0029,
+          "mean_ms": 0.0026,
+          "median_ms": 0.0026,
+          "min_ms": 0.0024,
+          "spread_pct": 20.06,
+          "stdev_ms": 0.0002
+        }
+      },
+      "describe": "read RECOMMENDATION_ALGORITHM_VERSION (import-surface constant read)",
+      "module": "comic_pile.recommendation_version",
+      "module_file": "recommendation_version.py",
+      "warm": {
+        "count": 7,
+        "max_ms": 0.0002,
+        "mean_ms": 0.0002,
+        "median_ms": 0.0002,
+        "min_ms": 0.0002,
+        "spread_pct": 3.6,
+        "stdev_ms": 0.0
+      },
+      "workload": "recommendation_version"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 24.0831,
+          "mean_ms": 20.6014,
+          "median_ms": 20.3171,
+          "min_ms": 18.5728,
+          "spread_pct": 27.12,
+          "stdev_ms": 2.1095
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 147.609,
+          "mean_ms": 129.9805,
+          "median_ms": 129.9013,
+          "min_ms": 118.8127,
+          "spread_pct": 22.17,
+          "stdev_ms": 9.0473
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 6.0584,
+          "mean_ms": 4.5215,
+          "median_ms": 4.2638,
+          "min_ms": 4.0176,
+          "spread_pct": 47.86,
+          "stdev_ms": 0.712
+        }
+      },
+      "describe": "compute_familiar_factors over 100 candidates and 24 taste signals",
+      "module": "comic_pile.familiar_weighting",
+      "module_file": "familiar_weighting.py",
+      "warm": {
+        "count": 7,
+        "max_ms": 4.0511,
+        "mean_ms": 4.0073,
+        "median_ms": 4.0308,
+        "min_ms": 3.9165,
+        "spread_pct": 3.34,
+        "stdev_ms": 0.056
+      },
+      "workload": "compute_familiar_factors"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 19.6752,
+          "mean_ms": 18.8848,
+          "median_ms": 18.7862,
+          "min_ms": 18.2291,
+          "spread_pct": 7.7,
+          "stdev_ms": 0.4546
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 131.2756,
+          "mean_ms": 127.7099,
+          "median_ms": 127.913,
+          "min_ms": 124.0088,
+          "spread_pct": 5.68,
+          "stdev_ms": 2.2411
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 9.8047,
+          "mean_ms": 8.2038,
+          "median_ms": 8.0922,
+          "min_ms": 7.5455,
+          "spread_pct": 27.92,
+          "stdev_ms": 0.7389
+        }
+      },
+      "describe": "aggregate_efforts over 4000 reading-effort observations",
+      "module": "comic_pile.reading_effort",
+      "module_file": "reading_effort.py",
+      "warm": {
+        "count": 7,
+        "max_ms": 8.2235,
+        "mean_ms": 8.0199,
+        "median_ms": 8.0376,
+        "min_ms": 7.7183,
+        "spread_pct": 6.29,
+        "stdev_ms": 0.1547
+      },
+      "workload": "aggregate_efforts"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 25.5554,
+          "mean_ms": 19.9863,
+          "median_ms": 19.2462,
+          "min_ms": 18.3734,
+          "spread_pct": 37.32,
+          "stdev_ms": 2.4772
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 149.2109,
+          "mean_ms": 125.492,
+          "median_ms": 120.77,
+          "min_ms": 117.2165,
+          "spread_pct": 26.49,
+          "stdev_ms": 11.1884
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 0.4929,
+          "mean_ms": 0.3997,
+          "median_ms": 0.3988,
+          "min_ms": 0.3488,
+          "spread_pct": 36.13,
+          "stdev_ms": 0.0537
+        }
+      },
+      "describe": "snooze backoff sequence generation and eligibility over 200 checks",
+      "module": "comic_pile.snooze_backoff",
+      "module_file": "snooze_backoff.py",
+      "warm": {
+        "count": 7,
+        "max_ms": 0.3438,
+        "mean_ms": 0.334,
+        "median_ms": 0.334,
+        "min_ms": 0.3269,
+        "spread_pct": 5.06,
+        "stdev_ms": 0.0059
+      },
+      "workload": "snooze_backoff"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 17.232,
+          "mean_ms": 17.1468,
+          "median_ms": 17.1589,
+          "min_ms": 17.0777,
+          "spread_pct": 0.9,
+          "stdev_ms": 0.0543
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 185.4576,
+          "mean_ms": 184.0485,
+          "median_ms": 183.6862,
+          "min_ms": 183.4727,
+          "spread_pct": 1.08,
+          "stdev_ms": 0.741
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 11.9209,
+          "mean_ms": 11.8532,
+          "median_ms": 11.8314,
+          "min_ms": 11.7966,
+          "spread_pct": 1.05,
+          "stdev_ms": 0.0505
+        }
+      },
+      "describe": "classify 5000 reading-effort observations against thresholds",
+      "module": "comic_pile.reading_effort_observation_rules",
+      "module_file": "reading_effort_observation_rules.py",
+      "warm": {
+        "count": 7,
+        "max_ms": 14.4101,
+        "mean_ms": 13.8376,
+        "median_ms": 13.7085,
+        "min_ms": 13.3619,
+        "spread_pct": 7.65,
+        "stdev_ms": 0.4111
+      },
+      "workload": "classify_observations"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 18.0558,
+          "mean_ms": 17.4485,
+          "median_ms": 17.2795,
+          "min_ms": 17.2093,
+          "spread_pct": 4.9,
+          "stdev_ms": 0.3401
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 125.6033,
+          "mean_ms": 123.915,
+          "median_ms": 124.1039,
+          "min_ms": 122.3073,
+          "spread_pct": 2.66,
+          "stdev_ms": 1.0119
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 3.553,
+          "mean_ms": 3.5274,
+          "median_ms": 3.5188,
+          "min_ms": 3.5169,
+          "spread_pct": 1.02,
+          "stdev_ms": 0.0135
+        }
+      },
+      "describe": "classify 200 hydration reports with 5-20 issues each",
+      "module": "comic_pile.comicvine_report_classification",
+      "module_file": "comicvine_report_classification.py",
+      "warm": {
+        "count": 7,
+        "max_ms": 3.4032,
+        "mean_ms": 3.3478,
+        "median_ms": 3.3444,
+        "min_ms": 3.3052,
+        "spread_pct": 2.93,
+        "stdev_ms": 0.0355
+      },
+      "workload": "classify_hydration_reports"
+    },
+    {
+      "cold": {
+        "candidate_import": {
+          "count": 7,
+          "max_ms": 18.1397,
+          "mean_ms": 17.6362,
+          "median_ms": 17.5828,
+          "min_ms": 17.2412,
+          "spread_pct": 5.11,
+          "stdev_ms": 0.3712
+        },
+        "process_wall": {
+          "count": 7,
+          "max_ms": 121.9852,
+          "mean_ms": 119.7621,
+          "median_ms": 119.551,
+          "min_ms": 117.6506,
+          "spread_pct": 3.63,
+          "stdev_ms": 1.3519
+        },
+        "workload": {
+          "count": 7,
+          "max_ms": 4.4639,
+          "mean_ms": 4.4382,
+          "median_ms": 4.4431,
+          "min_ms": 4.4067,
+          "spread_pct": 1.29,
+          "stdev_ms": 0.0231
+        }
+      },
+      "describe": "dice ladder step_up/step_down over 5000 transitions",
+      "module": "comic_pile.dice_ladder",
+      "module_file": "dice_ladder.py",
+      "warm": {
+        "count": 7,
+        "max_ms": 5.8802,
+        "mean_ms": 4.6373,
+        "median_ms": 4.4366,
+        "min_ms": 4.3565,
+        "spread_pct": 34.34,
+        "stdev_ms": 0.5508
+      },
+      "workload": "dice_ladder"
+    }
+  ]
+}

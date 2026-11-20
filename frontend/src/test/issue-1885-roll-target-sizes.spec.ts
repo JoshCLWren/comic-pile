@@ -193,7 +193,7 @@ test.describe('Roll pointer target sizes (#1885)', () => {
       expect(data.issues.length).toBeGreaterThan(0)
       return data.issues[0]!.id
     }
-    const created = await page.request.post('/api/v2/dependencies/', {
+    const created = await page.request.post('/api/v1/dependencies/', {
       headers: await authHeaders(page),
       data: {
         source_type: 'issue',

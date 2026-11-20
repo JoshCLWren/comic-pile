@@ -64,3 +64,66 @@ class ThreadIssueCreatorsResponse(BaseModel):
     issues: list[IssueCreatorsEntry] = Field(default_factory=list)
 
 
+class IssueCreateRange(BaseModel):
+    """Schema for creating issues from range format."""
+
+    issue_range: str = Field(
+        ..., min_length=1, description="Issue range like '1-25' or '1, 3, 5-7'"
+    )
+    insert_after_issue_id: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Insert new issues after this issue ID. Omit the field to place ordinary "
+            "numeric issues in natural series order. Send explicit null to append at "
+            "the end."
+        ),
+    )
+
+
+class IssueMoveRequest(BaseModel):
+    """Schema for moving an issue to a new position."""
+
+    after_issue_id: int | None = Field(
+        ...,
+        ge=1,
+        description="Move after this issue. null = move to position 1 (top).",
+    )
+
+
+class IssueReorderRequest(BaseModel):
+    """Schema for bulk reordering issues within a thread."""
+
+    issue_ids: list[int] = Field(
+        ...,
+        min_length=1,
+        description="Ordered list of issue IDs representing the desired order.",
+    )
+
+
+class IssueBulkMarkReadRequest(BaseModel):
+    """Schema for bulk marking issues as read."""
+
+    issue_ids: list[int] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Broadcast list of issue IDs to mark read.",
+    )
+
+
+class IssueBulkMarkUnreadRequest(BaseModel):
+    """Schema for bulk marking issues as unread."""
+
+    issue_ids: list[int] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Broadcast list of issue IDs to mark unread.",
+    )
+
+
+class IssueOrderValidationResponse(BaseModel):
+    """Schema for reporting in-thread dependency ordering conflicts."""
+
+    warnings: list[str]

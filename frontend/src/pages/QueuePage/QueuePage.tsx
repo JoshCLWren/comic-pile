@@ -6,6 +6,7 @@ import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useExcludedThreads, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useCompletedThreads } from '../../hooks/useCompletedThreads'
+import { useSession } from '../../hooks/useSession'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useRollPendingSync } from './useRollPendingSync'
 import { useToast } from '../../contexts/useToast'
@@ -61,6 +62,7 @@ export default function QueuePage() {
   // fully mapped or non-issue-tracked rows) are the bulk action's scope, and an
   // open run keeps reading the cursor so the batch covers the whole queue.
   const bulkMapping = useQueueBulkMapping(queueLoader)
+  const { data: session, refetch: refetchSession } = useSession()
   const { data: rollBootstrap } = useRollBootstrap()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -71,7 +73,7 @@ export default function QueuePage() {
   // The active Queue endpoint cannot return finished rows (#5171).
   const completed = useCompletedThreads()
   const { threads: excludedThreads } = useExcludedThreads(true)
-  const { handleRestore, handleRestoreGroup, restoreError, isRestoring } = useQueueRestore()
+  const { handleRestore, restoreError, isRestoring } = useQueueRestore()
 
   const { activeThreads, filteredThreads } = useQueueFilters(
     threads,
@@ -109,14 +111,14 @@ export default function QueuePage() {
   )
 
   const rollNudge = useRollNudge()
-  const rollPendingSync = useRollPendingSync({ rollBootstrap, refetchQueue: queueLoader.refetch })
+  const rollPendingSync = useRollPendingSync({ rollBootstrap, session, refetchSession, refetchQueue: queueLoader.refetch })
   const modals = useQueueModalsHook({
     threads,
     onCreated: rollNudge.onCreated,
     // Refetch so a confirmed edit (e.g. a completed series) reconciles the Queue now (#4181).
     onUpdated: rollPendingSync.onUpdated,
     onReactivated: async () => {},
-    refetchRollState: rollPendingSync.onRefetchRollState,
+    refetchSession: rollPendingSync.onRefetchSession,
     submitCreate,
     submitEdit,
     submitReactivate,
@@ -137,7 +139,7 @@ export default function QueuePage() {
     actions,
     activeThreads,
     modals,
-    rollState: rollPendingSync.rollState,
+    session: rollPendingSync.session,
     sortBy,
   })
 
@@ -236,7 +238,6 @@ export default function QueuePage() {
           isRestoring={isRestoring}
           error={restoreError}
           onRestore={handleRestore}
-          onRestoreGroup={handleRestoreGroup}
         />
 
         {isError && threads !== null && (

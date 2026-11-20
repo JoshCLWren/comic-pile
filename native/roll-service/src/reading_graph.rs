@@ -15,9 +15,8 @@ use crate::{
     auth::AuthenticatedUser, db, option_inputs, option_inputs::OptionInputs,
     reading_constraints::ValidationError, ApiError, AppState,
 };
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use tokio_postgres::Transaction;
@@ -205,100 +204,6 @@ pub(crate) fn cycle_conflict(
             ApiError::Conflict(format!(
                 "Reading constraint cycle: {path}. Nothing was changed."
             ))
-        }
-        ValidationError::InvalidSnapshot { message } => ApiError::Unprocessable(message),
-    }
-}
-
-/// Custom CBL authoring uses FastAPI's structured 422 cycle contract
-/// (`detail.code` / `detail.path`) rather than the graph diagnostic 409.
-pub(crate) fn custom_cbl_cycle_conflict(
-    error: ValidationError,
-    inputs: &option_inputs::OptionInputs,
-) -> ApiError {
-    match error {
-        ValidationError::Cycle { message, edges } => {
-            let titles: BTreeMap<i32, &str> = inputs
-                .core
-                .threads
-                .iter()
-                .map(|thread| (thread.id, thread.title.as_str()))
-                .collect();
-            let thread_ids: BTreeMap<i32, i32> = inputs
-                .core
-                .issues
-                .iter()
-                .map(|issue| (issue.id, issue.thread_id))
-                .collect();
-            let names: BTreeMap<i32, String> = inputs
-                .core
-                .issues
-                .iter()
-                .map(|issue| {
-                    (
-                        issue.id,
-                        format!(
-                            "{} #{}",
-                            titles.get(&issue.thread_id).copied().unwrap_or("Series"),
-                            issue.issue_number
-                        ),
-                    )
-                })
-                .collect();
-            let human_path = edges
-                .iter()
-                .map(|edge| {
-                    format!(
-                        "{} --[{}]--> {}",
-                        names
-                            .get(&edge.source_issue_id)
-                            .cloned()
-                            .unwrap_or_else(|| format!("Issue #{}", edge.source_issue_id)),
-                        edge.origin,
-                        names
-                            .get(&edge.target_issue_id)
-                            .cloned()
-                            .unwrap_or_else(|| format!("Issue #{}", edge.target_issue_id)),
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(" -> ");
-            let path = edges
-                .iter()
-                .map(|edge| {
-                    json!({
-                        "source_issue_id": edge.source_issue_id,
-                        "source_thread_id": thread_ids.get(&edge.source_issue_id).copied(),
-                        "source_issue_name": names
-                            .get(&edge.source_issue_id)
-                            .cloned()
-                            .unwrap_or_else(|| format!("Issue #{}", edge.source_issue_id)),
-                        "target_issue_id": edge.target_issue_id,
-                        "target_thread_id": thread_ids.get(&edge.target_issue_id).copied(),
-                        "target_issue_name": names
-                            .get(&edge.target_issue_id)
-                            .cloned()
-                            .unwrap_or_else(|| format!("Issue #{}", edge.target_issue_id)),
-                        "origin": edge.origin,
-                        "prerequisite_origin": edge.prerequisite_origin,
-                        "provenance": edge.provenance,
-                    })
-                })
-                .collect::<Vec<_>>();
-            let detail = if message.is_empty() {
-                json!({
-                    "code": "reading_list_cycle",
-                    "message": format!("Reading constraint cycle: {human_path}. Nothing was changed."),
-                    "path": path,
-                })
-            } else {
-                json!({
-                    "code": "reading_list_cycle",
-                    "message": message,
-                    "path": path,
-                })
-            };
-            ApiError::structured(StatusCode::UNPROCESSABLE_ENTITY, detail)
         }
         ValidationError::InvalidSnapshot { message } => ApiError::Unprocessable(message),
     }
@@ -940,36 +845,5 @@ mod tests {
             crate::reading_constraints::ValidatedReadingInputs::contained(source, &BTreeMap::new())
                 .unwrap();
         assert!(validated.graph_problem().is_none());
-    }
-
-    #[test]
-    fn cycle_conflict_emits_structured_422_with_edge_path() {
-        let inputs = inputs();
-        let edge = crate::reading_constraints::ConstraintEdge {
-            source_issue_id: 11,
-            target_issue_id: 14,
-            origin: "list order".to_string(),
-            prerequisite_origin: None,
-            provenance: vec!["Julix".to_string()],
-            list_id: Some(7),
-        };
-        let error = custom_cbl_cycle_conflict(
-            crate::reading_constraints::ValidationError::Cycle {
-                message: "cycle".to_string(),
-                edges: vec![edge],
-            },
-            &inputs,
-        );
-        assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
-        let detail = error.structured_detail().expect("structured cycle detail");
-        assert_eq!(detail["code"], "reading_list_cycle");
-        let path = detail["path"].as_array().expect("cycle edge path");
-        assert_eq!(path.len(), 1);
-        assert_eq!(path[0]["source_issue_id"], 11);
-        assert_eq!(path[0]["source_thread_id"], 8);
-        assert_eq!(path[0]["source_issue_name"], "B.P.R.D. #130");
-        assert_eq!(path[0]["target_issue_name"], "B.P.R.D. #142");
-        assert_eq!(path[0]["origin"], "list order");
-        assert_eq!(path[0]["provenance"], serde_json::json!(["Julix"]));
     }
 }

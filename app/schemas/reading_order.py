@@ -24,6 +24,12 @@ class ReadingOrderResponse(BaseModel):
     items: list[ReadingOrderItemResponse] = []
 
 
+class ThreadReadingOrdersResponse(BaseModel):
+    """Response schema for reading orders containing a specific thread."""
+
+    reading_orders: list[ReadingOrderResponse]
+
+
 class ReadingOrderSummary(BaseModel):
     """Compact reading order metadata for projection and picker surfaces."""
 
@@ -74,9 +80,20 @@ class ReadingOrderProjectionPreview(BaseModel):
 
 
 class ReadingOrderProjectionRequest(BaseModel):
-    """Request contract for the Python preview; confirmation is served by Rust."""
+    """Request contract for both preview and confirm endpoints."""
 
     reading_order_id: int = Field(gt=0)
+
+
+class ReadingOrderProjectionResult(BaseModel):
+    """Response contract for the confirm endpoint."""
+
+    plan_id: int
+    reading_order_id: int
+    added_count: int = Field(ge=0)
+    updated_count: int = Field(ge=0)
+    kept_count: int = Field(ge=0)
+    total_positions: int = Field(ge=0)
 
 
 class ReadingOrderAdoptRequest(BaseModel):

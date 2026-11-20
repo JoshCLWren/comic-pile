@@ -38,7 +38,7 @@ and mutation-refresh behavior are covered by the specs listed per row.
 | `/creators/:creatorKey` | Cold load | 2 reads (detail + team chemistry) | **1** | eager team-chemistry fetch | #4500/#4511: deferred to disclosure |
 | `/creators/compare` | Cold load | 1 deduped key-set read | 1 (required) | — | #4511 |
 | `/crossovers`, `/crossovers/:group` | Cold load | 2 reads (groups + full thread enumeration) | **1** | eager enumeration | #4511: enumerated on expansion only |
-| `/crossovers` | Direct visit | redirect | redirect to continuity plans/events | legacy alias | `frontend/src/unit/App.test.tsx` |
+| `/crossovers` | Direct visit | redirect | redirect to continuity plans/events | legacy alias | `unit/App.test.tsx` |
 | `/cbl-sources` | Cold root browse | root + detail/preview/graph reads | **1** (root only) | premature detail reads | #4511 |
 
 ## Reading / continuity / identity

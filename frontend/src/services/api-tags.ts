@@ -1,4 +1,3 @@
-import type { components } from '../generated/openapi'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
 /**
@@ -6,16 +5,29 @@ import { defaultHttpClient, type HttpClient } from './httpClient'
  * Hand-written (not from the generated OpenAPI types) because the checked-in
  * generated file predates the tag API; field names mirror `app/schemas/tags.py`.
  */
-export type Tag = components['schemas']['Tag'] & {
+export interface Tag {
+  id: number
+  name: string
+  normalized_name: string
   scope: 'global' | 'private'
   owner_user_id: number | null
+  /** Hex `#RRGGBB` from the fixed 32-color palette. */
+  color: string
+  created_at: string
+  updated_at: string
 }
 
 export interface TagListResponse {
   tags: Tag[]
 }
 
-export type NearMatch = components['schemas']['NearMatch']
+export interface NearMatch {
+  id: number
+  name: string
+  color: string
+  normalized_name: string
+  scope: string
+}
 
 export interface CreateTagPayload {
   name: string
@@ -25,8 +37,10 @@ export interface CreateTagPayload {
   include_near_matches?: boolean
 }
 
-export type CreateTagResponse = components['schemas']['CreateTagResponse'] & {
+export interface CreateTagResponse {
   tag: Tag
+  redirected_to_global: boolean
+  near_matches: NearMatch[]
 }
 
 export interface UpdateTagPayload {
@@ -54,7 +68,14 @@ export interface BulkAssignPayload {
   target_ids: number[]
 }
 
-export type BulkAssignResponse = components['schemas']['BulkAssignResponse']
+export interface BulkAssignResponse {
+  tag_id: number
+  target_type: string
+  requested_ids: number[]
+  affected_ids: number[]
+  already_ids: number[]
+  still_inherited_ids: number[]
+}
 
 export interface TagUsage {
   tag_id: number
@@ -69,10 +90,18 @@ export interface DeleteTagResponse {
   references_removed_by_consumers: Record<string, number>
 }
 
-export type InheritanceSource = components['schemas']['InheritanceSource']
+export interface InheritanceSource {
+  target_type: string
+  target_id: number
+  display_name: string
+}
 
-export type EffectiveTag = components['schemas']['EffectiveTag'] & {
+export interface EffectiveTag {
   tag: Tag
+  /** True when directly assigned to the queried object (may also be inherited). */
+  direct: boolean
+  /** Every object whose direct assignment contributes this tag. */
+  sources: InheritanceSource[]
 }
 
 export interface EffectiveTagsResponse {
@@ -192,39 +221,37 @@ export function createTagsApi(client: HttpClient) {
     /** List tags visible to the caller, optionally filtered by name. */
     list: async (search?: string): Promise<TagListResponse> => {
       const trimmed = search?.trim()
-      return client.get<TagListResponse>('/v2/tags', {
+      return client.get<TagListResponse>('/v1/tags/', {
         params: trimmed ? { search: trimmed } : undefined,
       })
     },
-    get: (id: number) => client.get<Tag>(`/v2/tags/${id}`),
+    get: (id: number) => client.get<Tag>(`/v1/tags/${id}/`),
     create: (data: CreateTagPayload) =>
-      client.post<CreateTagResponse, CreateTagPayload>('/v2/tags', data),
+      client.post<CreateTagResponse, CreateTagPayload>('/v1/tags/', data),
     update: (id: number, data: UpdateTagPayload) =>
-      client.patch<Tag, UpdateTagPayload>(`/v2/tags/${id}`, data),
-    delete: (id: number) => client.delete<DeleteTagResponse>(`/v2/tags/${id}`),
-    usage: (id: number) => client.get<TagUsage>(`/v2/tags/${id}/usage`),
+      client.put<Tag, UpdateTagPayload>(`/v1/tags/${id}/`, data),
+    delete: (id: number) => client.delete<DeleteTagResponse>(`/v1/tags/${id}/`),
+    usage: (id: number) => client.get<TagUsage>(`/v1/tags/${id}/usage/`),
     assign: (id: number, data: AssignTagPayload) =>
-      client.post<TagAssignment, AssignTagPayload>(`/v2/tags/${id}/assignments`, data),
+      client.post<TagAssignment, AssignTagPayload>(`/v1/tags/${id}/assign/`, data),
     unassign: (id: number, data: AssignTagPayload) =>
-      client.delete<TagAssignment>(
-        `/v2/tags/${id}/assignments/${data.target_type}/${data.target_id}`,
-      ),
+      client.delete<TagAssignment>(`/v1/tags/${id}/unassign/`, { data }),
     /** Attach one tag to many targets; unrelated tags are never touched. */
     bulkAssign: (id: number, data: BulkAssignPayload) =>
       client.post<BulkAssignResponse, BulkAssignPayload>(
-        `/v2/tags/${id}/assignment-batches`,
+        `/v1/tags/${id}/bulk-assign/`,
         data,
       ),
     /** Detach one tag from many targets; unrelated tags are never touched. */
     bulkUnassign: (id: number, data: BulkAssignPayload) =>
       client.post<BulkAssignResponse, BulkAssignPayload>(
-        `/v2/tags/${id}/unassignment-batches`,
+        `/v1/tags/${id}/bulk-unassign/`,
         data,
       ),
     effectiveForIssue: (issueId: number) =>
-      client.get<EffectiveTagsResponse>(`/v2/tags/effective/issues/${issueId}`),
+      client.get<EffectiveTagsResponse>(`/v1/tags/effective/issue/${issueId}/`),
     effectiveForThread: (threadId: number) =>
-      client.get<EffectiveTagsResponse>(`/v2/tags/effective/threads/${threadId}`),
+      client.get<EffectiveTagsResponse>(`/v1/tags/effective/thread/${threadId}/`),
     /**
      * Bulk effective tags for every issue in one thread (issue #3422).
      * Powers the thread detail issue rows so the client never issues one
@@ -232,10 +259,10 @@ export function createTagsApi(client: HttpClient) {
      */
     threadIssuesEffective: (threadId: number) =>
       client.get<ThreadIssuesEffectiveTagsResponse>(
-        `/v2/tags/effective/threads/${threadId}/issues`,
+        `/v1/tags/effective/thread/${threadId}/issues/`,
       ),
     effectiveForPlan: (planId: number) =>
-      client.get<EffectiveTagsResponse>(`/v2/tags/effective/plans/${planId}`),
+      client.get<EffectiveTagsResponse>(`/v1/tags/effective/plan/${planId}/`),
   }
 }
 

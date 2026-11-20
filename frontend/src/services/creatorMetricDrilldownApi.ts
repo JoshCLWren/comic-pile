@@ -25,7 +25,7 @@ export function createCreatorMetricDrilldownApi(client: HttpClient) {
         pageSize?: number
       }
     ) =>
-      client.get<CreatorMetricDrilldown>(`/v2/creators/${creatorKey}/metrics/${metricType}`, {
+      client.get<CreatorMetricDrilldown>(`/v1/creators/${creatorKey}/metrics/${metricType}`, {
         params: {
           role: params?.role,
           rating_value: params?.ratingValue,
@@ -44,7 +44,7 @@ export function createCreatorMetricDrilldownApi(client: HttpClient) {
       }
     ) =>
       client.get<CreatorRatingDistributionDrilldown>(
-        `/v2/creators/${creatorKey}/metrics/rating-distribution/${ratingValue}`,
+        `/v1/creators/${creatorKey}/metrics/rating-distribution/${ratingValue}`,
         {
           params: {
             page: params?.page,
@@ -61,7 +61,7 @@ export function createCreatorMetricDrilldownApi(client: HttpClient) {
         pageSize?: number
       }
     ) =>
-      client.get<CreatorRoleDrilldown>(`/v2/creators/${creatorKey}/metrics/role-stats/${role}`, {
+      client.get<CreatorRoleDrilldown>(`/v1/creators/${creatorKey}/metrics/role-stats/${role}`, {
         params: {
           page: params?.page,
           page_size: params?.pageSize,
@@ -76,7 +76,7 @@ export function createCreatorMetricDrilldownApi(client: HttpClient) {
         pageSize?: number
       }
     ) =>
-      client.get<CreatorSeriesDrilldown>(`/v2/creators/${creatorKey}/metrics/series-stats/${seriesKey}`, {
+      client.get<CreatorSeriesDrilldown>(`/v1/creators/${creatorKey}/metrics/series-stats/${seriesKey}`, {
         params: {
           page: params?.page,
           page_size: params?.pageSize,

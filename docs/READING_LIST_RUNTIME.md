@@ -126,13 +126,12 @@ current editor targets. **V2 has no `historical` response field, and never runs
 the legacy dependency query.** Only `origin=reader` prerequisites are loaded
 by the canonical eligibility evaluator.
 
-The original `/api/v1/reading-boundaries` endpoints have been retired with the
-Python API (Part of #5431). They existed only for clients expecting the historic
-`historical` field; their optional historical lookup was constrained to the
-requested owned series rather than the entire collection. The v2 endpoints above
-are the only reading-boundary HTTP operations now. Historical associations stay
-in storage but are no longer exposed by an HTTP operation or loaded by the
-canonical UI.
+The original `/api/v1/reading-boundaries` endpoints remain isolated for
+compatibility with clients expecting the historic `historical` field. They
+never activate old edges, and their optional historical lookup is constrained
+to the requested owned series rather than the entire collection. V1 is
+deprecated for the app's live Roll/Queue traffic. Historical data is retained
+in storage without being loaded by the canonical UI.
 
 The custom CBL editor's **Read this list** control opens this current-list reader.
 Available issues can be marked read directly, and read issues can be marked unread.

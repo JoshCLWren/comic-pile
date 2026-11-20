@@ -44,7 +44,7 @@ async function createParallelPlan(
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
-  const response = await page.request.post('/api/v2/continuity-plans/', {
+  const response = await page.request.post('/api/v1/continuity-plans/', {
     headers: { ...headers, 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
     data: { name, ordering_mode: 'informational', lanes, nodes },
   })

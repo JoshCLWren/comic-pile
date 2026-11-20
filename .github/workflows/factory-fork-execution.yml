@@ -66,15 +66,6 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
-        uses: actions/checkout@v7
-        with:
-          repository: JoshCLWren/rotisserie
-          ref: f74f612d4e7a6dec65a9c17f76596c1eb567a19e
-          path: .rotisserie/runtime
-          persist-credentials: false
-      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
-        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
@@ -110,7 +101,7 @@ jobs:
           tar -xzf "$archive" -C "$RUNNER_TEMP/kilo-bin"
           binary="$(find "$RUNNER_TEMP/kilo-bin" -type f -name kilo -perm -111 | head -n 1)"
           test -n "$binary"
-          dirname "$binary" >> "$GITHUB_PATH"
+          echo "$(dirname "$binary")" >> "$GITHUB_PATH"
           npm install -g pnpm@10.15.0
       - name: Run isolated contributor repair
         shell: bash

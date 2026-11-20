@@ -63,7 +63,7 @@ Run:
 Stream the output. When it finishes, check if a `_done.md` file was written and show the user a summary of what the agent did.
 
 ## Notes
-- The pipeline infrastructure lives in [scripts/opencode_pipeline.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/scripts/opencode_pipeline.sh) — if the task involves the pipeline, include relevant sections from that file in the context
+- The pipeline infrastructure lives in `scripts/opencode_pipeline.sh` — if the task involves the pipeline, include relevant sections from that file in the context
 - Model pool files: `.opencode_logs/model_test_results.txt` (Tier 2) and `.opencode_logs/model_tool_test_results.txt` (Tier 1 / tool-use verified)
 - Timesheet: `.opencode_logs/timesheet.jsonl` — useful for understanding what models have worked recently
 - Worktrees: `~/.opencode-worktrees/comic-pile/issue_N` — one per open issue

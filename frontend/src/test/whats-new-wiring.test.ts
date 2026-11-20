@@ -42,7 +42,7 @@ describe('What’s new wiring', () => {
     expect(hookSource).toContain('../services/api-releases')
     expect(hookSource).toContain('queryKeys.releases.list')
     expect(queryKeysSource).toContain('releases:')
-    expect(releaseApiSource).toContain("'/v2/releases'")
+    expect(releaseApiSource).toContain("'/v1/releases/'")
     expect(pageSource).not.toContain('/changelog.md')
     expect(viteConfigSource).not.toContain('changelogAsset')
     expect(viteConfigSource).not.toContain('docs/changelog')

@@ -1,0 +1,750 @@
+"""Author, search, export, and apply user-owned custom CBL lists."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from html import escape
+from typing import Literal, cast
+
+from fastapi import HTTPException
+from sqlalchemy import delete, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.continuity_plan import ContinuityPlan
+from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
+from app.models.issue import Issue
+from app.models.thread import Thread
+from app.repositories import reading_list_authoring_repository as authoring_repository
+from app.schemas.continuity_plan import (
+    CBLPlacement,
+    ContinuityPlanLane,
+    ContinuityPlanNode,
+    PlanOrderingMode,
+)
+from app.schemas.custom_cbl import (
+    CustomCBLApplyResponse,
+    CustomCBLEntryResponse,
+    CustomCBLIssueSearchResult,
+    CustomCBLListItem,
+    CustomCBLResponse,
+    ReadingListEntryIntent,
+    ReadingListPredecessorChange,
+)
+from app.services.continuity_plan_writer import (
+    guard_plan_write,
+    payload_issue_ids,
+    preserve_server_lane_metadata,
+    replace_compiled_rules,
+    validate_node_ownership,
+)
+from app.services.reading_list_authoring import validate_authored_list
+from app.services.reading_list_evaluator import ReadingList, ReadingListEntry
+from app.services.reading_plan_normalization import editor_nodes_for_plan, editor_plan_response
+from comic_pile.dependencies import refresh_user_blocked_status
+
+
+@dataclass(frozen=True, slots=True)
+class CustomCBLEntryView:
+    """Resolved custom CBL membership used by API and plan application."""
+
+    id: int
+    position: int
+    issue_id: int
+    thread_id: int
+    series_name: str
+    issue_number: str
+    status: str
+    is_checkpoint: bool
+    gate: Literal["none", "hold", "after_previous"]
+    skipped: bool
+    checkpoint_target_issue_ids: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CustomCBLApplyResult:
+    """Reading Plan mutation outcome from one explicit custom CBL application."""
+
+    plan: ContinuityPlan
+    added_issue_ids: tuple[int, ...]
+    skipped_existing_issue_ids: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CustomCBLExportResult:
+    """Portable XML payload and stable download filename for one owned custom CBL."""
+
+    content: str
+    filename: str
+
+
+async def get_owned_custom_cbl(db: AsyncSession, *, user_id: int, list_id: int) -> CustomCBLList:
+    """Load one custom CBL without leaking another user's list identifiers."""
+    row = (
+        await db.execute(
+            select(CustomCBLList).where(
+                CustomCBLList.id == list_id,
+                CustomCBLList.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Custom CBL {list_id} not found")
+    return row
+
+
+async def list_custom_cbls(db: AsyncSession, *, user_id: int) -> list[tuple[CustomCBLList, int]]:
+    """Return owned custom CBLs newest-first with issue counts."""
+    result = await db.execute(
+        select(CustomCBLList, func.count(CustomCBLEntry.id))
+        .outerjoin(CustomCBLEntry, CustomCBLEntry.list_id == CustomCBLList.id)
+        .where(CustomCBLList.user_id == user_id)
+        .group_by(CustomCBLList.id)
+        .order_by(CustomCBLList.updated_at.desc(), CustomCBLList.id.desc())
+    )
+    return [(row[0], int(row[1])) for row in result.all()]
+
+
+async def load_custom_cbl_entries(db: AsyncSession, *, list_id: int) -> list[CustomCBLEntryView]:
+    """Resolve ordered custom CBL entries to their canonical issue/thread labels."""
+    result = await db.execute(
+        select(CustomCBLEntry, Issue, Thread)
+        .join(Issue, Issue.id == CustomCBLEntry.issue_id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(CustomCBLEntry.list_id == list_id)
+        .order_by(CustomCBLEntry.position)
+    )
+    return [
+        CustomCBLEntryView(
+            id=entry.id,
+            position=entry.position,
+            issue_id=issue.id,
+            thread_id=thread.id,
+            series_name=thread.title,
+            issue_number=issue.issue_number,
+            status=issue.status,
+            is_checkpoint=entry.is_checkpoint,
+            gate=entry.gate,
+            skipped=entry.skipped,
+            checkpoint_target_issue_ids=tuple(entry.checkpoint_target_issue_ids or []),
+        )
+        for entry, issue, thread in result.all()
+    ]
+
+
+async def replace_custom_cbl_entries(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    list_row: CustomCBLList,
+    issue_ids: Sequence[int],
+    checkpoint_issue_ids: Sequence[int] | None = None,
+    checkpoint_targets: dict[int, list[int]] | None = None,
+) -> None:
+    """Replace membership after proving every referenced issue belongs to the user."""
+    checkpoint_set = set(checkpoint_issue_ids or ())
+    previous = await load_custom_cbl_entries(db, list_id=list_row.id)
+    previous_intent = {entry.issue_id: (entry.gate, entry.skipped) for entry in previous}
+    targets = checkpoint_targets
+    if targets is None:
+        targets = {}
+        for index, entry in enumerate(previous):
+            if entry.checkpoint_target_issue_ids:
+                targets[entry.issue_id] = list(entry.checkpoint_target_issue_ids)
+            elif entry.is_checkpoint:
+                targets[entry.issue_id] = (
+                    [previous[index + 1].issue_id] if index + 1 < len(previous) else []
+                )
+        # Removed targets drop their checkpoint, never redirect to a new neighbor.
+        targets = {
+            source: [target for target in values if target in issue_ids]
+            for source, values in targets.items()
+            if source in issue_ids and (checkpoint_issue_ids is None or source in checkpoint_set)
+        }
+    for position, source in enumerate(issue_ids):
+        if checkpoint_targets is None and source in checkpoint_set and source not in targets:
+            targets[source] = [issue_ids[position + 1]] if position + 1 < len(issue_ids) else []
+    if any(
+        source not in issue_ids
+        or source in values
+        or len(values) != len(set(values))
+        or any(target not in issue_ids for target in values)
+        for source, values in targets.items()
+    ):
+        raise HTTPException(
+            status_code=422, detail={"code": "custom_cbl_invalid_checkpoint_targets"}
+        )
+    if issue_ids:
+        result = await db.execute(
+            select(Issue.id)
+            .join(Thread, Thread.id == Issue.thread_id)
+            .where(Thread.user_id == user_id, Issue.id.in_(set(issue_ids)))
+        )
+        owned = set(result.scalars().all())
+        missing = [issue_id for issue_id in issue_ids if issue_id not in owned]
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "custom_cbl_issue_not_owned", "issue_ids": missing},
+            )
+
+    await db.execute(delete(CustomCBLEntry).where(CustomCBLEntry.list_id == list_row.id))
+    for position, issue_id in enumerate(issue_ids):
+        gate, skipped = previous_intent.get(issue_id, ("none", False))
+        db.add(
+            CustomCBLEntry(
+                list_id=list_row.id,
+                issue_id=issue_id,
+                position=position,
+                gate=gate,
+                skipped=skipped,
+                is_checkpoint=bool(targets.get(issue_id)),
+                checkpoint_target_issue_ids=targets.get(issue_id, []),
+            )
+        )
+    await db.flush()
+
+
+async def search_owned_issues(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    query: str,
+    limit: int,
+) -> list[tuple[Issue, Thread]]:
+    """Search canonical owned issues for custom CBL authoring."""
+    normalized = query.strip()
+    statement = (
+        select(Issue, Thread)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Thread.user_id == user_id)
+        .order_by(Thread.title.asc(), Issue.position.asc(), Issue.id.asc())
+        .limit(limit)
+    )
+    if normalized:
+        pattern = f"%{normalized}%"
+        statement = statement.where(
+            or_(
+                Thread.title.ilike(pattern),
+                Issue.issue_number.ilike(pattern),
+                (Thread.title + " #" + Issue.issue_number).ilike(pattern),
+            )
+        )
+    result = await db.execute(statement)
+    return [(issue, thread) for issue, thread in result.all()]
+
+
+def export_custom_cbl_xml(name: str, entries: Sequence[CustomCBLEntryView]) -> str:
+    """Render a portable CBL document from canonical issue references."""
+    books = "\n".join(
+        f'    <Book Series="{escape(entry.series_name, quote=True)}" '
+        f'Number="{escape(entry.issue_number, quote=True)}" />'
+        for entry in entries
+    )
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        "<ReadingList>\n"
+        f"  <Name>{escape(name)}</Name>\n"
+        f"  <NumIssues>{len(entries)}</NumIssues>\n"
+        "  <Books>\n"
+        f"{books}\n"
+        "  </Books>\n"
+        "</ReadingList>\n"
+    )
+
+
+def _without_source_provenance(
+    node: ContinuityPlanNode,
+    *,
+    source_path: str,
+) -> ContinuityPlanNode:
+    """Remove stale provenance for this custom CBL while preserving every other source."""
+    paths = tuple(path for path in (node.source_paths or ()) if path != source_path)
+    placements = tuple(
+        placement
+        for placement in (node.source_cbl_placements or ())
+        if placement.source_path != source_path
+    )
+    explanation = node.source_explanation
+    if explanation and explanation.startswith("Added from custom CBL '"):
+        explanation = None
+    return node.model_copy(
+        update={
+            "source_paths": paths or None,
+            "source_cbl_placements": placements or None,
+            "source_explanation": explanation,
+        }
+    )
+
+
+def _with_source_provenance(
+    node: ContinuityPlanNode,
+    *,
+    source_path: str,
+    source_position: int,
+    list_name: str,
+) -> ContinuityPlanNode:
+    """Attach current custom-CBL provenance to a reused or newly created plan node."""
+    paths = tuple(dict.fromkeys([*(node.source_paths or ()), source_path]))
+    placements = [
+        placement
+        for placement in (node.source_cbl_placements or ())
+        if placement.source_path != source_path
+    ]
+    placements.append(CBLPlacement(source_path=source_path, position=source_position))
+    return node.model_copy(
+        update={
+            "source_paths": paths,
+            "source_cbl_placements": tuple(placements),
+            "source_explanation": node.source_explanation
+            or f"Added from custom CBL '{list_name}'.",
+        }
+    )
+
+
+def _renumber_lane(nodes: Sequence[ContinuityPlanNode]) -> list[ContinuityPlanNode]:
+    """Return one lane with contiguous positions while preserving node identities."""
+    return [node.model_copy(update={"position": position}) for position, node in enumerate(nodes)]
+
+
+def _merge_custom_cbl_into_lane(
+    *,
+    all_nodes: Sequence[ContinuityPlanNode],
+    target_lane_id: str,
+    entries: Sequence[CustomCBLEntryView],
+    list_row: CustomCBLList,
+) -> tuple[list[ContinuityPlanNode], list[int], list[int]]:
+    """Merge one custom list into a lane, anchored by its earliest existing issue.
+
+    Existing source issues in the target lane are reused as anchors. Existing
+    source issues in another lane are left untouched and reported as skipped,
+    so applying a CBL never moves or duplicates an issue across lanes.
+    """
+    source_path = f"custom-cbl:{list_row.id}"
+    source_issue_ids = [entry.issue_id for entry in entries]
+    source_issue_set = set(source_issue_ids)
+
+    cleaned_nodes: list[ContinuityPlanNode] = []
+    for node in all_nodes:
+        is_cross_lane_source = (
+            node.node_type == "issue"
+            and node.ref_id in source_issue_set
+            and node.lane_id != target_lane_id
+        )
+        cleaned_nodes.append(
+            node
+            if is_cross_lane_source
+            else _without_source_provenance(node, source_path=source_path)
+        )
+
+    existing_by_issue: dict[int, ContinuityPlanNode] = {}
+    for node in cleaned_nodes:
+        if node.node_type != "issue" or node.ref_id not in source_issue_set:
+            continue
+        if node.ref_id in existing_by_issue:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "custom_cbl_duplicate_plan_issue",
+                    "issue_id": node.ref_id,
+                },
+            )
+        existing_by_issue[node.ref_id] = node
+
+    target_nodes = sorted(
+        (node for node in cleaned_nodes if node.lane_id == target_lane_id),
+        key=lambda node: node.position,
+    )
+    source_indexes = [
+        index
+        for index, node in enumerate(target_nodes)
+        if node.node_type == "issue" and node.ref_id in source_issue_set
+    ]
+    anchor_index = min(source_indexes) if source_indexes else len(target_nodes)
+    target_without_source = [
+        node
+        for node in target_nodes
+        if not (node.node_type == "issue" and node.ref_id in source_issue_set)
+    ]
+
+    ordered_source_nodes: list[ContinuityPlanNode] = []
+    added: list[int] = []
+    reused: list[int] = []
+    for entry in entries:
+        existing = existing_by_issue.get(entry.issue_id)
+        if existing is not None and existing.lane_id != target_lane_id:
+            reused.append(entry.issue_id)
+            continue
+        if existing is None:
+            node = ContinuityPlanNode(
+                id=f"custom-cbl-{list_row.id}-{entry.id}",
+                node_type="issue",
+                ref_id=entry.issue_id,
+                lane_id=target_lane_id,
+                position=0,
+                label=f"{entry.series_name} #{entry.issue_number}",
+                is_checkpoint=entry.is_checkpoint,
+                checkpoint_target_ref_ids=list(entry.checkpoint_target_issue_ids),
+                convergence_gate=[],
+            )
+            added.append(entry.issue_id)
+        else:
+            node = existing.model_copy(
+                update={
+                    "is_checkpoint": entry.is_checkpoint,
+                    "checkpoint_target_ref_id": None,
+                    "checkpoint_target_ref_ids": list(entry.checkpoint_target_issue_ids),
+                }
+            )
+            reused.append(entry.issue_id)
+        ordered_source_nodes.append(
+            _with_source_provenance(
+                node,
+                source_path=source_path,
+                source_position=entry.position,
+                list_name=list_row.name,
+            )
+        )
+
+    merged_target = [
+        *target_without_source[:anchor_index],
+        *ordered_source_nodes,
+        *target_without_source[anchor_index:],
+    ]
+    renumbered_target = _renumber_lane(merged_target)
+
+    other_nodes = [node for node in cleaned_nodes if node.lane_id != target_lane_id]
+    return [*other_nodes, *renumbered_target], added, reused
+
+
+async def apply_custom_cbl_to_plan(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    list_row: CustomCBLList,
+    plan_id: int,
+    lane_id: str | None,
+    expected_updated_at: datetime | None = None,
+) -> CustomCBLApplyResult:
+    """Merge custom CBL order into one owned Reading Plan through its canonical writer."""
+    plan = (
+        await db.execute(
+            select(ContinuityPlan)
+            .where(
+                ContinuityPlan.id == plan_id,
+                ContinuityPlan.user_id == user_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if plan is None:
+        raise HTTPException(status_code=404, detail=f"Continuity plan {plan_id} not found")
+
+    entries = await load_custom_cbl_entries(db, list_id=list_row.id)
+    if not entries:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "custom_cbl_empty", "message": "Custom CBL has no issues"},
+        )
+
+    lanes = [ContinuityPlanLane.model_validate(value) for value in (plan.lanes_json or [])]
+    if not lanes:
+        target_lane = ContinuityPlanLane(id="custom-cbl", name="Custom CBL", order=0)
+        lanes = [target_lane]
+    elif lane_id is None:
+        target_lane = min(lanes, key=lambda lane: lane.order)
+    else:
+        target_lane = next((lane for lane in lanes if lane.id == lane_id), None)
+        if target_lane is None:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "custom_cbl_lane_not_found", "lane_id": lane_id},
+            )
+
+    nodes = await editor_nodes_for_plan(db, plan)
+    await guard_plan_write(
+        db,
+        plan=plan,
+        incoming_ids=payload_issue_ids(nodes),
+        expected_updated_at=expected_updated_at,
+    )
+    merged_nodes, added, reused = _merge_custom_cbl_into_lane(
+        all_nodes=nodes,
+        target_lane_id=target_lane.id,
+        entries=entries,
+        list_row=list_row,
+    )
+
+    await validate_node_ownership(db, user_id=user_id, nodes=merged_nodes)
+    plan.lanes_json = preserve_server_lane_metadata(list(plan.lanes_json or []), lanes)
+    plan.nodes_json = [node.model_dump() for node in merged_nodes]
+    await replace_compiled_rules(
+        db,
+        user_id=user_id,
+        plan=plan,
+        nodes=merged_nodes,
+        ordering_mode=cast(PlanOrderingMode, plan.ordering_mode),
+    )
+    await db.flush()
+
+    return CustomCBLApplyResult(
+        plan=plan,
+        added_issue_ids=tuple(added),
+        skipped_existing_issue_ids=tuple(reused),
+    )
+
+
+def _entry_response(entry: CustomCBLEntryView) -> CustomCBLEntryResponse:
+    """Map one resolved membership row to the public response contract."""
+    return CustomCBLEntryResponse(
+        id=entry.id,
+        position=entry.position,
+        issue_id=entry.issue_id,
+        thread_id=entry.thread_id,
+        series_name=entry.series_name,
+        issue_number=entry.issue_number,
+        status=entry.status,
+        is_checkpoint=entry.is_checkpoint,
+        gate=entry.gate,
+        skipped=entry.skipped,
+        checkpoint_target_issue_ids=list(entry.checkpoint_target_issue_ids),
+    )
+
+
+async def _full_response(db: AsyncSession, row: CustomCBLList) -> CustomCBLResponse:
+    """Resolve one custom list to its full public response."""
+    entries = await load_custom_cbl_entries(db, list_id=row.id)
+    return CustomCBLResponse(
+        id=row.id,
+        user_id=row.user_id,
+        name=row.name,
+        description=row.description,
+        mode=row.mode,
+        issue_count=len(entries),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        entries=[_entry_response(entry) for entry in entries],
+    )
+
+
+async def list_custom_cbl_responses(db: AsyncSession, *, user_id: int) -> list[CustomCBLListItem]:
+    """List one user's custom CBLs as public picker rows."""
+    rows = await list_custom_cbls(db, user_id=user_id)
+    return [
+        CustomCBLListItem(
+            id=row.id,
+            name=row.name,
+            description=row.description,
+            mode=row.mode,
+            issue_count=count,
+            updated_at=row.updated_at,
+        )
+        for row, count in rows
+    ]
+
+
+async def search_custom_cbl_issue_responses(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    query: str,
+    limit: int,
+) -> list[CustomCBLIssueSearchResult]:
+    """Search one user's canonical issues and return public authoring candidates."""
+    rows = await search_owned_issues(db, user_id=user_id, query=query, limit=limit)
+    return [
+        CustomCBLIssueSearchResult(
+            issue_id=issue.id,
+            thread_id=thread.id,
+            series_name=thread.title,
+            issue_number=issue.issue_number,
+            status=issue.status,
+        )
+        for issue, thread in rows
+    ]
+
+
+async def create_custom_cbl_for_user(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    name: str,
+    description: str | None,
+    issue_ids: Sequence[int],
+    checkpoint_issue_ids: Sequence[int] | None = None,
+    checkpoint_targets: dict[int, list[int]] | None = None,
+    mode: Literal["strict", "loose"] | None = None,
+    entry_intents: dict[int, ReadingListEntryIntent] | None = None,
+    confirmed_predecessor_changes: list[ReadingListPredecessorChange] | None = None,
+) -> CustomCBLResponse:
+    """Create one custom CBL, persist exact membership, and return its full representation."""
+    if confirmed_predecessor_changes is not None:
+        raise HTTPException(status_code=422, detail={"code": "reading_list_confirmation_put_only"})
+    try:
+        await authoring_repository.lock_reader(db, user_id)
+        row = CustomCBLList(
+            user_id=user_id,
+            mode=mode or "loose",
+            name=name.strip(),
+            description=description.strip() if description else None,
+        )
+        db.add(row)
+        await db.flush()
+        await replace_custom_cbl_entries(
+            db,
+            user_id=user_id,
+            list_row=row,
+            issue_ids=issue_ids,
+            checkpoint_issue_ids=checkpoint_issue_ids,
+            checkpoint_targets=checkpoint_targets,
+        )
+        await authoring_repository.set_entry_intents(
+            db,
+            row.id,
+            {i: (intent.gate, intent.skipped) for i, intent in (entry_intents or {}).items()},
+        )
+        _, warnings = await validate_authored_list(
+            db,
+            user_id=user_id,
+            list_id=row.id,
+            before=None,
+            confirmed=confirmed_predecessor_changes,
+        )
+        response = await _full_response(db, row)
+        response.warnings = warnings
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return response
+
+
+async def get_custom_cbl_response(
+    db: AsyncSession, *, user_id: int, list_id: int
+) -> CustomCBLResponse:
+    """Return one owned custom CBL as a full public representation."""
+    row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)
+    return await _full_response(db, row)
+
+
+async def update_custom_cbl_for_user(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    list_id: int,
+    name: str,
+    description: str | None,
+    issue_ids: Sequence[int],
+    checkpoint_issue_ids: Sequence[int] | None = None,
+    checkpoint_targets: dict[int, list[int]] | None = None,
+    mode: Literal["strict", "loose"] | None = None,
+    entry_intents: dict[int, ReadingListEntryIntent] | None = None,
+    confirmed_predecessor_changes: list[ReadingListPredecessorChange] | None = None,
+) -> CustomCBLResponse:
+    """Replace one owned custom CBL's metadata and ordered membership atomically."""
+    try:
+        await authoring_repository.lock_reader(db, user_id)
+        row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)
+        previous = await load_custom_cbl_entries(db, list_id=list_id)
+        before = ReadingList(
+            row.id,
+            row.mode,
+            tuple(
+                ReadingListEntry(entry.issue_id, entry.gate, entry.skipped) for entry in previous
+            ),
+            row.name,
+        )
+        if mode is not None:
+            row.mode = mode
+        row.name = name.strip()
+        row.description = description.strip() if description else None
+        row.updated_at = datetime.now(UTC)
+        await replace_custom_cbl_entries(
+            db,
+            user_id=user_id,
+            list_row=row,
+            issue_ids=issue_ids,
+            checkpoint_issue_ids=checkpoint_issue_ids,
+            checkpoint_targets=checkpoint_targets,
+        )
+        await authoring_repository.set_entry_intents(
+            db,
+            row.id,
+            {i: (intent.gate, intent.skipped) for i, intent in (entry_intents or {}).items()},
+        )
+        changes, warnings = await validate_authored_list(
+            db,
+            user_id=user_id,
+            list_id=row.id,
+            before=before,
+            confirmed=confirmed_predecessor_changes,
+        )
+        response = await _full_response(db, row)
+        response.predecessor_changes = changes
+        response.warnings = warnings
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return response
+
+
+async def delete_custom_cbl_for_user(db: AsyncSession, *, user_id: int, list_id: int) -> None:
+    """Delete one owned custom CBL without touching its canonical issues or Reading Plans."""
+    try:
+        await authoring_repository.lock_reader(db, user_id)
+        row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)
+        await db.delete(row)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+
+async def export_custom_cbl_for_user(
+    db: AsyncSession, *, user_id: int, list_id: int
+) -> CustomCBLExportResult:
+    """Load and render one owned custom CBL as portable XML."""
+    row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)
+    entries = await load_custom_cbl_entries(db, list_id=row.id)
+    return CustomCBLExportResult(
+        content=export_custom_cbl_xml(row.name, entries),
+        filename=f"custom-cbl-{row.id}.cbl",
+    )
+
+
+async def apply_custom_cbl_for_user(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    list_id: int,
+    plan_id: int,
+    lane_id: str | None,
+    expected_updated_at: datetime | None = None,
+) -> CustomCBLApplyResponse:
+    """Apply one owned custom CBL and persist plan rules plus blocked projection atomically."""
+    try:
+        row = await get_owned_custom_cbl(db, user_id=user_id, list_id=list_id)
+        result = await apply_custom_cbl_to_plan(
+            db,
+            user_id=user_id,
+            list_row=row,
+            plan_id=plan_id,
+            lane_id=lane_id,
+            expected_updated_at=expected_updated_at,
+        )
+        if result.plan.ordering_mode == "strict_sequential":
+            await refresh_user_blocked_status(user_id, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+
+    await db.refresh(result.plan)
+    plan = await editor_plan_response(db, result.plan)
+    return CustomCBLApplyResponse(
+        **plan.model_dump(),
+        added_issue_ids=list(result.added_issue_ids),
+        skipped_existing_issue_ids=list(result.skipped_existing_issue_ids),
+    )

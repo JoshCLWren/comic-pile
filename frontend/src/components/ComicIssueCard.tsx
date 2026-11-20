@@ -7,7 +7,12 @@ import { invalidateIssueCards } from '../query/cacheEffects'
 import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi'
 import type { IssueIdentityResponse } from '../services/api-comicvine'
 import { getApiErrorDetail } from '../utils/apiError'
-import { DIRECT_RATING_DEFAULT } from './comicIssueRatingScale'
+
+/** Fast-path default for a manual Mark read (#4444); Roll keeps its own 4.0 threshold. */
+export const DIRECT_RATING_DEFAULT = 3.5
+
+/** Half-step scale from 0.5 to 5.0 shared by direct and Roll rating controls. */
+export const RATING_VALUES = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
 
 /** Responsive presentation variants of one underlying card implementation. */
 export type ComicIssueCardVariant = 'compact' | 'standard' | 'featured'
@@ -49,7 +54,7 @@ export function ComicIssueCover({
 }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const hasCover = coverImageUrl != null && coverImageUrl !== '' && failedUrl !== coverImageUrl
-  const issueLabel = issueNumber ? `${threadTitle} #${issueNumber}` : threadTitle
+  const issueLabel = `${threadTitle} #${issueNumber}`
   const sizeClass =
     variant === 'featured'
       ? 'w-36 sm:w-44'

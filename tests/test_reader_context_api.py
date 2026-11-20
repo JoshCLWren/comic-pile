@@ -1,0 +1,1087 @@
+"""Focused API coverage for the bounded issue reader-context contract.
+
+Issue #1401: one authenticated ``reader-context`` response for the active Roll
+issue covering canonical-series analytics, exact crossover membership, and the
+bounded local reading neighborhood.
+"""
+
+import re
+from datetime import UTC, datetime
+
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Event, Issue, Thread, User
+from app.models.continuity_rule import ContinuityRule
+from app.models.dependency import Dependency
+from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
+from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+
+D1 = datetime(2026, 1, 1, tzinfo=UTC)
+D2 = datetime(2026, 1, 2, tzinfo=UTC)
+D3 = datetime(2026, 1, 3, tzinfo=UTC)
+D4 = datetime(2026, 1, 4, tzinfo=UTC)
+
+
+async def _make_thread(
+    db: AsyncSession,
+    user: User,
+    *,
+    title: str,
+    issue_count: int,
+    queue_position: int,
+    read_through: int = 0,
+) -> tuple[Thread, list[Issue]]:
+    """Create an owned thread with contiguous issues."""
+    thread = Thread(
+        user_id=user.id,
+        title=title,
+        format="Comic",
+        issues_remaining=issue_count - read_through,
+        total_issues=issue_count,
+        queue_position=queue_position,
+        status="active",
+    )
+    db.add(thread)
+    await db.flush()
+    issues = []
+    for position in range(1, issue_count + 1):
+        issue = Issue(
+            thread_id=thread.id,
+            issue_number=str(position),
+            position=position,
+            status="read" if position <= read_through else "unread",
+        )
+        db.add(issue)
+        issues.append(issue)
+    await db.flush()
+    return thread, issues
+
+
+async def _confirm_identity(
+    db: AsyncSession,
+    issue: Issue,
+    *,
+    external_id: str,
+    series_id: int,
+    series_name: str,
+) -> None:
+    """Create a confirmed ComicVine issue identity mapping."""
+    identity = ExternalIdentity(
+        provider="comicvine",
+        entity_type="issue",
+        external_id=external_id,
+        metadata_json={
+            "issue_number": issue.issue_number,
+            "volume_id": series_id,
+            "volume_name": series_name,
+        },
+    )
+    db.add(identity)
+    await db.flush()
+    db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            confidence=1.0,
+        )
+    )
+    await db.flush()
+
+
+async def _rate(
+    db: AsyncSession,
+    issue: Issue,
+    *,
+    rating: float,
+    timestamp: datetime,
+) -> Event:
+    """Create one rate event for an issue."""
+    event = Event(
+        type="rate",
+        thread_id=issue.thread_id,
+        issue_id=issue.id,
+        issue_number=issue.issue_number,
+        rating=rating,
+        timestamp=timestamp,
+    )
+    db.add(event)
+    await db.flush()
+    return event
+
+
+async def _make_group(
+    db: AsyncSession,
+    user: User,
+    name: str,
+    *,
+    thread_id: int | None = None,
+    issue_ids: tuple[int, ...] = (),
+) -> DependencyGroup:
+    """Create an owned dependency group with optional memberships."""
+    group = DependencyGroup(user_id=user.id, name=name)
+    db.add(group)
+    await db.flush()
+    if thread_id is not None:
+        db.add(DependencyGroupMembership(group_id=group.id, thread_id=thread_id))
+    for issue_id in issue_ids:
+        db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue_id))
+    await db.flush()
+    return group
+
+
+async def _thanos_scenario(
+    db: AsyncSession,
+    user: User,
+) -> tuple[Thread, list[Issue]]:
+    """Build a four-issue series with confirmed identities and rates."""
+    thread, issues = await _make_thread(
+        db, user, title="Thanos", issue_count=4, queue_position=1, read_through=4
+    )
+    for index, issue in enumerate(issues[:3], start=1):
+        await _confirm_identity(
+            db,
+            issue,
+            external_id=f"cv-{index}",
+            series_id=20764,
+            series_name="Thanos",
+        )
+    await _confirm_identity(
+        db,
+        issues[3],
+        external_id="cv-other",
+        series_id=99999,
+        series_name="Other",
+    )
+    await _rate(db, issues[0], rating=4.0, timestamp=D1)
+    await _rate(db, issues[1], rating=3.5, timestamp=D2)
+    await _rate(db, issues[2], rating=5.0, timestamp=D3)
+    return thread, issues
+
+
+@pytest.mark.asyncio
+async def test_reader_context_ownership_and_missing_issue(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Another user's issue and a nonexistent issue return 404."""
+    other_user = User(username="reader_context_other_owner")
+    async_db.add(other_user)
+    await async_db.flush()
+    owned_thread, owned_issues = await _make_thread(
+        async_db, default_user, title="Owned", issue_count=1, queue_position=1
+    )
+    hidden_thread, hidden_issues = await _make_thread(
+        async_db, other_user, title="Hidden", issue_count=1, queue_position=2
+    )
+
+    owned = await auth_client.get(
+        f"/api/v1/issues/{owned_issues[0].id}/reader-context"
+    )
+    hidden = await auth_client.get(
+        f"/api/v1/issues/{hidden_issues[0].id}/reader-context"
+    )
+    missing = await auth_client.get("/api/v1/issues/999999/reader-context")
+
+    assert owned.status_code == 200
+    assert hidden.status_code == 404
+    assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_reader_context_canonical_series_stats(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Confirmed identity yields canonical aggregates and previous issue."""
+    _thread, issues = await _thanos_scenario(async_db, default_user)
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[1].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    series = body["series"]
+    assert series["identity_source"] == "comicvine"
+    assert series["canonical_series_id"] == "20764"
+    assert series["series_name"] == "Thanos"
+    assert series["average_rating"] == pytest.approx(4.17)
+    assert series["ratings_count"] == 3
+    assert series["previous_issue"] == {
+        "issue_id": issues[0].id,
+        "issue_number": "1",
+        "rating": 4.0,
+    }
+    assert [item["rating"] for item in series["recent_ratings"]] == [5.0, 3.5, 4.0]
+    assert series["highest_rating"] == 5.0
+    assert series["lowest_rating"] == 3.5
+
+
+@pytest.mark.asyncio
+async def test_reader_context_duplicate_rate_events_dedupe(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Multiple rate events for one issue count once with the latest winning."""
+    _thread, issues = await _thanos_scenario(async_db, default_user)
+    await _rate(async_db, issues[0], rating=2.5, timestamp=D4)
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[1].id}/reader-context"
+    )
+
+    series = response.json()["series"]
+    assert series["ratings_count"] == 3
+    assert series["average_rating"] == pytest.approx(3.67)
+    assert series["recent_ratings"][0]["rating"] == 2.5
+    assert series["highest_rating"] == 5.0
+    assert series["lowest_rating"] == 2.5
+
+
+@pytest.mark.asyncio
+async def test_reader_context_currently_read_filtering(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Unread confirmed series issues do not contribute to canonical stats."""
+    _thread, issues = await _thanos_scenario(async_db, default_user)
+    issues[2].status = "unread"
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[1].id}/reader-context"
+    )
+
+    series = response.json()["series"]
+    assert series["ratings_count"] == 2
+    assert series["average_rating"] == pytest.approx(3.75)
+    assert series["highest_rating"] == 4.0
+    assert series["lowest_rating"] == 3.5
+    assert [item["issue_id"] for item in series["recent_ratings"]] == [
+        issues[1].id,
+        issues[0].id,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reader_context_unavailable_identity(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Missing canonical identity yields unavailable stats, never title fallback."""
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="No Identity",
+        issue_count=2,
+        queue_position=1,
+        read_through=2,
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[1].id}/reader-context"
+    )
+
+    series = response.json()["series"]
+    assert series["identity_source"] == "unavailable"
+    assert series["canonical_series_id"] is None
+    assert series["series_name"] is None
+    assert series["average_rating"] is None
+    assert series["ratings_count"] == 0
+    assert series["recent_ratings"] == []
+    assert series["highest_rating"] is None
+    assert series["lowest_rating"] is None
+    assert series["previous_issue"]["issue_id"] == issues[0].id
+
+
+@pytest.mark.asyncio
+async def test_reader_context_crossover_current_and_future_membership(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Current vs future vs thread-level crossover membership stays exact."""
+    thread, issues = await _thanos_scenario(async_db, default_user)
+    await _make_group(
+        async_db,
+        default_user,
+        "Annihilation",
+        issue_ids=(issues[3].id,),
+    )
+    await _make_group(
+        async_db,
+        default_user,
+        "Onslaught",
+        issue_ids=(issues[1].id,),
+    )
+    await _make_group(async_db, default_user, "ThreadWide", thread_id=thread.id)
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[1].id}/reader-context"
+    )
+
+    crossovers = response.json()["crossovers"]
+    assert [item["name"] for item in crossovers] == [
+        "Annihilation",
+        "Onslaught",
+        "ThreadWide",
+    ]
+    by_name = {item["name"]: item for item in crossovers}
+    assert by_name["Annihilation"]["applies_to_current_issue"] is False
+    assert by_name["Annihilation"]["membership_kind"] == "issue"
+    assert by_name["Annihilation"]["next_member"] == {
+        "issue_id": issues[3].id,
+        "issue_number": "4",
+    }
+    assert by_name["Onslaught"]["applies_to_current_issue"] is True
+    assert by_name["Onslaught"]["membership_kind"] == "issue"
+    assert by_name["Onslaught"]["next_member"] is None
+    assert by_name["ThreadWide"]["applies_to_current_issue"] is True
+    assert by_name["ThreadWide"]["membership_kind"] == "thread"
+    assert by_name["ThreadWide"]["next_member"] is None
+
+
+@pytest.mark.asyncio
+async def test_reader_context_thread_level_membership_resolves_next_unread(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A thread-level membership current-issues the thread and resolves to #N."""
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Animal Man",
+        issue_count=4,
+        queue_position=1,
+        read_through=1,
+    )
+    await _make_group(async_db, default_user, "Swamp Thing AUDIT-TEST", thread_id=thread.id)
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[1].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    crossover = body["crossovers"][0]
+    assert crossover["name"] == "Swamp Thing AUDIT-TEST"
+    assert crossover["membership_kind"] == "thread"
+    assert crossover["applies_to_current_issue"] is True
+    assert crossover["next_member"] == {
+        "issue_id": issues[2].id,
+        "issue_number": "3",
+    }
+    current_memberships = [
+        item["crossover_memberships"]
+        for item in body["local_chain"]["issues"]
+        if item["relation"] == "current"
+    ][0]
+    assert current_memberships == [
+        {"id": crossover["id"], "name": "Swamp Thing AUDIT-TEST"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reader_context_thread_level_membership_no_unread_resolves_unknown(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A thread-level membership with no unread issue exposes thread kind only."""
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Fully Read",
+        issue_count=2,
+        queue_position=1,
+        read_through=2,
+    )
+    await _make_group(async_db, default_user, "ThreadWide", thread_id=thread.id)
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[1].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    crossover = body["crossovers"][0]
+    assert crossover["membership_kind"] == "thread"
+    assert crossover["applies_to_current_issue"] is True
+    assert crossover["next_member"] is None
+
+
+@pytest.mark.asyncio
+async def test_reader_context_crossover_aggregates(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Crossover averages and read counts use exact owned members only."""
+    _thread, issues = await _thanos_scenario(async_db, default_user)
+    other_thread, other_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Nova",
+        issue_count=1,
+        queue_position=2,
+        read_through=1,
+    )
+    await _confirm_identity(
+        async_db,
+        other_issues[0],
+        external_id="cv-nova",
+        series_id=20764,
+        series_name="Thanos",
+    )
+    await _rate(async_db, other_issues[0], rating=2.0, timestamp=D4)
+    await _make_group(
+        async_db,
+        default_user,
+        "Annihilation",
+        issue_ids=(issues[0].id, issues[1].id, other_issues[0].id),
+    )
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[1].id}/reader-context"
+    )
+
+    crossover = response.json()["crossovers"][0]
+    assert crossover["name"] == "Annihilation"
+    assert crossover["ratings_count"] == 3
+    assert crossover["average_rating"] == pytest.approx(3.17)
+    assert crossover["read_count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_reader_context_local_chain_middle_bound(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A middle issue returns five nodes with previous/current/next/future."""
+    _thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Middle",
+        issue_count=7,
+        queue_position=1,
+        read_through=7,
+    )
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[3].id}/reader-context"
+    )
+
+    chain = response.json()["local_chain"]["issues"]
+    assert [item["issue_id"] for item in chain] == [
+        issues[1].id,
+        issues[2].id,
+        issues[3].id,
+        issues[4].id,
+        issues[5].id,
+    ]
+    assert [item["relation"] for item in chain] == [
+        "previous",
+        "previous",
+        "current",
+        "next",
+        "future",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reader_context_local_chain_start_and_end_clamped(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Start and end positions clamp the neighborhood at thread boundaries."""
+    _thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Clamped",
+        issue_count=7,
+        queue_position=1,
+        read_through=7,
+    )
+
+    start = await auth_client.get(
+        f"/api/v1/issues/{issues[0].id}/reader-context"
+    )
+    end = await auth_client.get(
+        f"/api/v1/issues/{issues[6].id}/reader-context"
+    )
+
+    start_chain = start.json()["local_chain"]["issues"]
+    assert [item["issue_id"] for item in start_chain] == [
+        issues[0].id,
+        issues[1].id,
+        issues[2].id,
+    ]
+    assert [item["relation"] for item in start_chain] == [
+        "current",
+        "next",
+        "future",
+    ]
+    end_chain = end.json()["local_chain"]["issues"]
+    assert [item["issue_id"] for item in end_chain] == [
+        issues[4].id,
+        issues[5].id,
+        issues[6].id,
+    ]
+    assert [item["relation"] for item in end_chain] == [
+        "previous",
+        "previous",
+        "current",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reader_context_edge_bound_and_deterministic_order(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Edges are capped at 20 and keep a deterministic ordering."""
+    _thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Edges",
+        issue_count=5,
+        queue_position=1,
+        read_through=5,
+    )
+    other_thread, other_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Targets",
+        issue_count=25,
+        queue_position=2,
+        read_through=25,
+    )
+    for index, target in enumerate(other_issues):
+        async_db.add(
+            Dependency(
+                source_issue_id=issues[2].id,
+                target_issue_id=target.id,
+                note=f"edge-{index}",
+            )
+        )
+    await async_db.flush()
+
+    first = await auth_client.get(
+        f"/api/v1/issues/{issues[2].id}/reader-context"
+    )
+    second = await auth_client.get(
+        f"/api/v1/issues/{issues[2].id}/reader-context"
+    )
+
+    edges = first.json()["local_chain"]["edges"]
+    assert len(edges) == 20
+    assert all(edge["kind"] == "dependency" for edge in edges)
+    assert [edge["id"] for edge in edges] == sorted(edge["id"] for edge in edges)
+    assert edges == second.json()["local_chain"]["edges"]
+
+
+@pytest.mark.asyncio
+async def test_reader_context_cross_thread_edge_without_expansion(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """An edge may point outside the thread without expanding the neighborhood."""
+    _thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Neighborhood",
+        issue_count=5,
+        queue_position=1,
+        read_through=5,
+    )
+    other_thread, other_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Distant",
+        issue_count=1,
+        queue_position=2,
+        read_through=1,
+    )
+    dependency = Dependency(
+        source_issue_id=issues[2].id,
+        target_issue_id=other_issues[0].id,
+        note="cross-thread",
+    )
+    async_db.add(dependency)
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[2].id}/reader-context"
+    )
+
+    body = response.json()
+    chain = body["local_chain"]
+    assert [item["issue_id"] for item in chain["issues"]] == [
+        issue.id for issue in issues
+    ]
+    assert other_issues[0].id not in {item["issue_id"] for item in chain["issues"]}
+    assert chain["edges"] == [
+        {
+            "id": dependency.id,
+            "kind": "dependency",
+            "source_issue_id": issues[2].id,
+            "target_issue_id": other_issues[0].id,
+            "source_thread_id": _thread.id,
+            "target_thread_id": other_thread.id,
+            "source_issue_number": issues[2].issue_number,
+            "target_issue_number": other_issues[0].issue_number,
+            "source_thread_title": "Neighborhood",
+            "target_thread_title": "Distant",
+            "source_status": "read",
+            "target_status": "read",
+            "note": "cross-thread",
+            "source_label": "Neighborhood #3",
+            "target_label": "Distant #1",
+            "explanation": "Neighborhood #3 can be read now. Distant #1 waits on it.",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reader_context_dependency_explanations_hide_raw_thread_ids(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Dependency edge copy stays human-only; navigation ids stay payload-invisible.
+
+    Regression coverage for issue #1876: the shared blocking copy generator is
+    reused for Reading Context edges, so a raw ``(thread #N)`` suffix would
+    leak into reader surfaces. Explanations must identify comics by human
+    identity only while the payload still carries thread ids for navigation.
+    """
+    raw_id_patterns = (
+        re.compile(r"thread #\d+", re.IGNORECASE),
+        re.compile(r"\bThread \d+", re.IGNORECASE),
+    )
+    source_thread, source_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Ultimate Universe: One Year In",
+        issue_count=2,
+        queue_position=1,
+        read_through=1,
+    )
+    target_thread, target_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="The Ultimates",
+        issue_count=1,
+        queue_position=2,
+        read_through=0,
+    )
+    dependency = Dependency(
+        source_issue_id=source_issues[1].id,
+        target_issue_id=target_issues[0].id,
+        note="one-year-later",
+    )
+    async_db.add(dependency)
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{target_issues[0].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    edges = response.json()["local_chain"]["edges"]
+    dependency_edges = [edge for edge in edges if edge["kind"] == "dependency"]
+    assert len(dependency_edges) == 1
+    edge = dependency_edges[0]
+
+    expected = (
+        f"You must read Ultimate Universe: One Year In "
+        f"#{source_issues[1].issue_number} first"
+    )
+    assert edge["explanation"] == expected
+    assert edge["source_thread_id"] == source_thread.id
+
+    visible_strings = [
+        value
+        for key, value in edge.items()
+        if key in ("explanation", "source_label", "target_label") and value
+    ]
+    assert expected in visible_strings
+    for candidate in visible_strings:
+        for pattern in raw_id_patterns:
+            assert not pattern.search(candidate)
+
+
+@pytest.mark.asyncio
+async def test_reader_context_continuity_rule_edges(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Issue-to-issue continuity rules surface as continuity edges once."""
+    _thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Rules",
+        issue_count=5,
+        queue_position=1,
+        read_through=5,
+    )
+    rule = ContinuityRule(
+        user_id=default_user.id,
+        source_type="issue",
+        source_id=issues[1].id,
+        target_type="issue",
+        target_id=issues[3].id,
+        satisfaction_type="item_read",
+        note="directive",
+    )
+    async_db.add(rule)
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[2].id}/reader-context"
+    )
+
+    edges = response.json()["local_chain"]["edges"]
+    assert edges == [
+        {
+            "id": rule.id,
+            "kind": "continuity",
+            "source_issue_id": issues[1].id,
+            "target_issue_id": issues[3].id,
+            "source_thread_id": _thread.id,
+            "target_thread_id": _thread.id,
+            "source_issue_number": issues[1].issue_number,
+            "target_issue_number": issues[3].issue_number,
+            "source_thread_title": "Rules",
+            "target_thread_title": "Rules",
+            "source_status": "read",
+            "target_status": "read",
+            "note": "directive",
+            "source_label": "Rules #2",
+            "target_label": "Rules #4",
+            "explanation": "Rules #2 must be read before Rules #4",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_reader_context_edge_statuses_orient_prerequisites(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Edge payloads carry each endpoint's owned read status for orientation.
+
+    Issue #1916 fixture: the path into the active issue crosses threads, so
+    the reader-facing prerequisite presentation needs authoritative read
+    state for every endpoint instead of guessing from arrow direction.
+    """
+    manhunter_thread, mm = await _make_thread(
+        async_db,
+        default_user,
+        title="Absolute Martian Manhunter",
+        issue_count=4,
+        queue_position=1,
+        read_through=1,
+    )
+    _evil_thread, evil = await _make_thread(
+        async_db,
+        default_user,
+        title="Absolute Evil",
+        issue_count=1,
+        queue_position=2,
+    )
+    into_evil = ContinuityRule(
+        user_id=default_user.id,
+        source_type="issue",
+        source_id=mm[0].id,
+        target_type="issue",
+        target_id=evil[0].id,
+        satisfaction_type="item_read",
+    )
+    into_current = ContinuityRule(
+        user_id=default_user.id,
+        source_type="issue",
+        source_id=evil[0].id,
+        target_type="issue",
+        target_id=mm[1].id,
+        satisfaction_type="item_read",
+    )
+    async_db.add_all([into_evil, into_current])
+    await async_db.flush()
+
+    response = await auth_client.get(f"/api/v1/issues/{mm[1].id}/reader-context")
+
+    assert response.status_code == 200
+    edges = {
+        edge["source_issue_id"]: edge
+        for edge in response.json()["local_chain"]["edges"]
+    }
+    assert edges[mm[0].id]["source_status"] == "read"
+    assert edges[mm[0].id]["target_status"] == "unread"
+    assert edges[evil[0].id]["source_status"] == "unread"
+    assert edges[evil[0].id]["target_status"] == "unread"
+
+
+@pytest.mark.asyncio
+async def test_reader_context_missing_optional_data(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A lone issue returns an empty but well-formed decorative payload."""
+    _thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Lone",
+        issue_count=1,
+        queue_position=1,
+    )
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[0].id}/reader-context"
+    )
+
+    body = response.json()
+    assert body["issue_id"] == issues[0].id
+    assert body["series"]["identity_source"] == "unavailable"
+    assert body["series"]["previous_issue"] is None
+    assert body["crossovers"] == []
+    chain = body["local_chain"]
+    assert len(chain["issues"]) == 1
+    assert chain["issues"][0]["relation"] == "current"
+    assert chain["issues"][0]["rating"] is None
+    assert chain["issues"][0]["crossover_memberships"] == []
+    assert chain["edges"] == []
+
+
+@pytest.mark.asyncio
+async def test_reader_context_no_synchronous_provider_dependency(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reader-context never hydrates ComicVine synchronously."""
+    _thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Offline",
+        issue_count=1,
+        queue_position=1,
+        read_through=1,
+    )
+    await _confirm_identity(
+        async_db,
+        issues[0],
+        external_id="cv-offline",
+        series_id=20764,
+        series_name="Thanos",
+    )
+
+    def _unexpected_schedule(*_args: object, **_kwargs: object) -> bool:
+        raise AssertionError("ComicVine provider work was scheduled synchronously")
+
+    async def _unexpected_call(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("ComicVine provider was hydrated synchronously")
+
+    monkeypatch.setattr(
+        "app.services.comicvine_intelligence.schedule_issue_metadata_refresh",
+        _unexpected_schedule,
+    )
+    monkeypatch.setattr(
+        "app.services.comicvine_fallback.refresh_issue_metadata",
+        _unexpected_call,
+    )
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[0].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["series"]["identity_source"] == "comicvine"
+
+
+@pytest.mark.asyncio
+async def test_reader_context_edge_labels_expose_issue_number_and_thread_title(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Edge labels carry issue numbers and thread titles, not raw database IDs."""
+    source_thread, source_issues = await _make_thread(
+        async_db, default_user, title="Observer", issue_count=3, queue_position=1
+    )
+    target_thread, target_issues = await _make_thread(
+        async_db, default_user, title="Targeter", issue_count=2, queue_position=2
+    )
+    dep = Dependency(
+        source_issue_id=source_issues[0].id,
+        target_issue_id=target_issues[0].id,
+        note="cross-team",
+    )
+    async_db.add(dep)
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{source_issues[1].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    edges = body["local_chain"]["edges"]
+    assert len(edges) >= 1
+    edge = next(e for e in edges if e["id"] == dep.id)
+    assert edge["kind"] == "dependency"
+    assert edge["source_issue_number"] == "1"
+    assert edge["source_thread_title"] == "Observer"
+    assert edge["target_issue_number"] == "1"
+    assert edge["target_thread_title"] == "Targeter"
+    assert edge["note"] == "cross-team"
+
+
+@pytest.mark.asyncio
+async def test_reader_context_dependency_explanation_asymmetric_prerequisite(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """When the current issue is the prerequisite, copy says it can be read now.
+
+    Regression coverage for issue #1882: Cable #62 → X-Force #83 style edges
+    must not present the served comic as blocked merely because it unlocks a
+    downstream issue.
+    """
+    cable_thread, cable_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Cable",
+        issue_count=2,
+        queue_position=1,
+        read_through=1,
+    )
+    xforce_thread, xforce_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="X-Force",
+        issue_count=2,
+        queue_position=2,
+        read_through=0,
+    )
+    dependency = Dependency(
+        source_issue_id=cable_issues[1].id,
+        target_issue_id=xforce_issues[0].id,
+        note="cable-to-xforce",
+    )
+    async_db.add(dependency)
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{cable_issues[1].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    edges = response.json()["local_chain"]["edges"]
+    dep_edges = [edge for edge in edges if edge["kind"] == "dependency"]
+    assert len(dep_edges) == 1
+    edge = dep_edges[0]
+    assert edge["explanation"] == (
+        "Cable #2 can be read now. X-Force #1 waits on it."
+    )
+
+
+@pytest.mark.asyncio
+async def test_reader_context_dependency_explanation_asymmetric_target(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """When the current issue is the target, copy says the source must be read first.
+
+    Regression coverage for issue #1882: the served comic must not be presented
+    as readable when a prerequisite is unread.
+    """
+    ultimate_thread, ultimate_issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Ultimate Spider-Man",
+        issue_count=6,
+        queue_position=1,
+        read_through=4,
+    )
+    dependency = Dependency(
+        source_issue_id=ultimate_issues[3].id,
+        target_issue_id=ultimate_issues[5].id,
+        note="ultimate-block",
+    )
+    async_db.add(dependency)
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{ultimate_issues[5].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    edges = response.json()["local_chain"]["edges"]
+    dep_edges = [edge for edge in edges if edge["kind"] == "dependency"]
+    assert len(dep_edges) == 1
+    edge = dep_edges[0]
+    assert edge["explanation"] == (
+        "You must read Ultimate Spider-Man #4 first"
+    )
+
+
+@pytest.mark.asyncio
+async def test_reader_context_dependency_explanation_neutral_when_unrelated(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """When the current issue is neither source nor target, copy stays symmetric.
+
+    Issue #1882 acceptance: downstream-unlock information must remain distinct
+    from current readiness. An edge between two other issues should not imply
+    anything about the served comic.
+    """
+    _thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Chain",
+        issue_count=5,
+        queue_position=1,
+        read_through=5,
+    )
+    dependency = Dependency(
+        source_issue_id=issues[0].id,
+        target_issue_id=issues[4].id,
+        note="far-jump",
+    )
+    async_db.add(dependency)
+    await async_db.flush()
+
+    response = await auth_client.get(
+        f"/api/v1/issues/{issues[2].id}/reader-context"
+    )
+
+    assert response.status_code == 200
+    edges = response.json()["local_chain"]["edges"]
+    dep_edges = [edge for edge in edges if edge["kind"] == "dependency"]
+    assert len(dep_edges) == 1
+    edge = dep_edges[0]
+    assert edge["explanation"] == (
+        "Chain #1 can be read, but blocks Chain #5"
+    )

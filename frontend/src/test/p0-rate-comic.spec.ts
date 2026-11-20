@@ -9,7 +9,7 @@
  */
 import { expect } from '@playwright/test'
 import { test } from './fixtures'
-import { createThread, gotoRollPage, rollPoolThreadByTitle, waitForRollPageReady } from './helpers'
+import { createThread, gotoRollPage, waitForRollPageReady } from './helpers'
 
 test.describe('RATE-001: Rating a comic', () => {
   test('rating input appears after selecting a rolled thread', async ({
@@ -27,7 +27,7 @@ test.describe('RATE-001: Rating a comic', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await rollPoolThreadByTitle(page, 'Rate Visible Thread').click()
+    await page.getByText('Rate Visible Thread').first().click()
 
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
   })
@@ -47,7 +47,7 @@ test.describe('RATE-001: Rating a comic', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await rollPoolThreadByTitle(page, 'Persist Rating Thread').click()
+    await page.getByText('Persist Rating Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     const ratingInput = page.locator('#rating-input')
@@ -61,7 +61,7 @@ test.describe('RATE-001: Rating a comic', () => {
     expect(response.ok()).toBeTruthy()
   })
 
-  test('roll again offer control is available in the rating view', async ({
+  test('snooze button is available in the rating view', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -76,12 +76,11 @@ test.describe('RATE-001: Rating a comic', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await rollPoolThreadByTitle(page, 'Snooze Button Thread').click()
+    await page.getByText('Snooze Button Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    const rerollOffer = page.getByTestId('reroll-offer')
-    await expect(rerollOffer).toBeVisible()
-    await expect(rerollOffer).toHaveText(/roll again/i)
+    const snoozeBtn = page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i })
+    await expect(snoozeBtn).toBeVisible()
   })
 
   test('cancel roll returns to the roll view', async ({ authenticatedPage }) => {
@@ -97,7 +96,7 @@ test.describe('RATE-001: Rating a comic', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await rollPoolThreadByTitle(page, 'Cancel Roll Thread').click()
+    await page.getByText('Cancel Roll Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     const cancelBtn = page.getByTestId('rating-secondary-actions').getByRole('button', { name: /cancel/i })

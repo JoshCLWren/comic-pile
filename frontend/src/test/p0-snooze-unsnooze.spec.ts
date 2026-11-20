@@ -20,10 +20,9 @@ import {
   createThread,
   dismissRollNudgeIfPresent,
   getAuthToken,
-  gotoQueue,
   gotoRollPage,
+  gotoQueue,
   openThreadActions,
-  rollPoolThreadByTitle,
   startRequestLedger,
   waitForRollPageReady,
 } from './helpers'
@@ -55,7 +54,7 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await rollPoolThreadByTitle(page, 'Snooze Me Thread').click()
+    await page.getByText('Snooze Me Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     const offer = page.waitForResponse(
@@ -64,7 +63,7 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
         && response.url().includes('/api/v2/roll/offer')
         && response.status() === 200,
     )
-    await page.getByTestId('reroll-offer').click()
+    await page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i }).click()
     // SAFETY: the response is the native offer handler's JSON for this test request.
     const body = (await (await offer).json()) as { thread_id: number; snoozed_thread_id: number | null }
     expect(body.snoozed_thread_id).toBe(snoozed.id)
@@ -94,15 +93,16 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await rollPoolThreadByTitle(page, 'Queue Snooze Thread').click()
+    await page.getByText('Queue Snooze Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    await page.getByTestId('reroll-offer').click()
+    await page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i }).click()
     await expect.poll(() => cookieSnoozes(page)).toContain(snoozed.id)
 
     await gotoQueue(page)
+    await page.getByText('Queue Snooze Thread').first().waitFor({ state: 'visible', timeout: 10000 })
     const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Queue Snooze Thread' })
-    await expect(threadItem).toBeVisible({ timeout: 10000 })
+    await expect(threadItem).toBeVisible()
   })
 
   test('queue row snooze settles the current session through one owner (#4276)', async ({
@@ -138,17 +138,17 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     // server's authoritative pending ID to target whichever one the die chose.
     const token = await getAuthToken(page)
     if (!token) throw new Error('Authenticated fixture token was unavailable')
-    const rollBootstrapResponse = await page.request.get('/api/v2/roll/bootstrap', {
+    const currentSessionResponse = await page.request.get('/api/v1/sessions/current/', {
       headers: { Authorization: `Bearer ${token}` },
     })
-    expect(rollBootstrapResponse.ok()).toBe(true)
-    const sessionData: unknown = await rollBootstrapResponse.json()
+    expect(currentSessionResponse.ok()).toBe(true)
+    const sessionData: unknown = await currentSessionResponse.json()
     if (
       !isObject(sessionData) ||
       !hasProperty(sessionData, 'pending_thread_id') ||
       !isNumber(sessionData.pending_thread_id)
     ) {
-      throw new Error('Roll bootstrap response did not include a pending thread ID')
+      throw new Error('Current session response did not include a pending thread ID')
     }
     const threadNameById = new Map([
       [primary.id, 'Single Owner Snooze Thread'],
@@ -166,27 +166,34 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
       .filter({ hasText: pendingThreadName })
     await expect(threadItem).toBeVisible()
     const before = {
+      sessions: ledger.count('GET', '/api/v1/sessions/current/'),
       queuePages: ledger.count('GET', '/api/v2/threads'),
       excluded: ledger.count('GET', '/api/v1/threads/excluded/threads'),
     }
 
-    // Arm the settle signal BEFORE the user action so the reconciliation
-    // response cannot outrun the listener.
+    // Arm both settle signals BEFORE the user action so the reconciliation
+    // responses cannot outrun the listeners.
     const listRefresh = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET'
         && response.url().includes('/api/v2/threads')
         && response.status() === 200,
     )
+    const sessionRefresh = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET'
+        && response.url().includes('/api/v1/sessions/current/')
+        && response.status() === 200,
+    )
     await clickThreadMenuItem(page, threadItem!, 'Snooze')
     await listRefresh
+    await sessionRefresh
 
     // The retired v1 endpoint must never be called by the Queue snooze path.
     expect(ledger.count('POST', '/api/v1/snooze/')).toBe(0)
     // One bounded refresh of each read model per snooze; a second
     // handler-layer invalidation of the same key would trip these budgets.
-    // The retired current-session read is never requested (#4343).
-    expect(ledger.count('GET', '/api/v1/sessions/current/')).toBe(0)
+    expect(ledger.count('GET', '/api/v1/sessions/current/') - before.sessions).toBe(1)
     expect(ledger.count('GET', '/api/v2/threads') - before.queuePages).toBe(1)
     expect(
       ledger.count('GET', '/api/v1/threads/excluded/threads') - before.excluded,

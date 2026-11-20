@@ -8,7 +8,7 @@
 
 **Test:** Find it in the inbox, inspect candidates, confirm correct identity, and reload thread.
 
-**Expected:** Each candidate displays its own ComicVine cover using the shared cover component (or a shared placeholder when provider art is missing), never the current owned issue's cover or a different candidate's art. No candidate image implies a confirmed mapping. Only the chosen issue gets the approved mapping; inbox and thread indicators update.
+**Expected:** Only the chosen issue gets the approved mapping; inbox and thread indicators update.
 
 ## MQA-IDENTITY-002: Unsafe candidates can be deferred
 
@@ -21,11 +21,3 @@
 **Test:** Resolve one issue and compare inbox, thread detail and Queue.
 
 **Expected:** Each surface reflects persisted scope and remaining work; one mapped issue does not imply a fully mapped series.
-
-## MQA-IDENTITY-004: Collapsed items report real candidate state
-
-**Setup:** Unresolved QA items, some with one candidate and some with none.
-
-**Test:** Inspect collapsed inbox rows, then expand each.
-
-**Expected:** The collapsed header reflects the same candidate state as the expanded item: no "No candidates found" text when a candidate exists, and a reason shown when none validates. Source: [#5382](https://github.com/JoshCLWren/comic-pile/issues/5382), fixed by #5427.

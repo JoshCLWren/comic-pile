@@ -25,7 +25,7 @@ interface UseRatingViewParams {
     updateRatingUI: (value: string) => void
     handleSubmitRating: (finishSession: boolean) => Promise<void>
     handleCancelRating: () => Promise<void>
-    handleRefreshThread: (options?: { forceRefresh?: boolean }) => Promise<void>
+    handleRefreshThread: () => Promise<void>
     enterRatingView: (threadId: number | null, result?: number | null, threadMetadata?: ThreadMetadata | null) => Promise<void>
   }
   snooze: { handleSnooze: () => Promise<void> }
@@ -55,7 +55,7 @@ export interface RatingViewData {
   onResetDice?: () => void
   onReroll?: () => Promise<void>
   onCancel: () => void
-  onRefreshThread: (options?: { forceRefresh?: boolean }) => Promise<void> | void
+  onRefreshThread: () => void
   readerContext: ReaderContextResponse | null
   readingBoundary?: ReadingBoundaryExplanation
   readingBoundaryPending?: boolean

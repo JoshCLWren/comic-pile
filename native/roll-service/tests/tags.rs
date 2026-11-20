@@ -5,7 +5,7 @@ use axum::{
     body::Body,
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, test_support, AppState};
+use comicpile_roll_service::{config::Config, router, AppState};
 use serde_json::Value;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -24,15 +24,18 @@ async fn setup() -> (
     tokio::sync::MutexGuard<'static, ()>,
 ) {
     let url = comicpile_roll_service::test_support::database_url().await;
-    let state = Arc::new(test_support::test_app_state(
-        Config::from_lookup(|key| match key {
-            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-            "RUST_ROLL_JWT_SECRET" => Some("synthetic-tags-secret".into()),
-            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-            _ => None,
-        })
+    let state = Arc::new(
+        AppState::new(
+            Config::from_lookup(|key| match key {
+                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+                "RUST_ROLL_JWT_SECRET" => Some("synthetic-tags-secret".into()),
+                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+                _ => None,
+            })
+            .unwrap(),
+        )
         .unwrap(),
-    ));
+    );
     let _guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
     let username = format!("tag-user-{}-{}", std::process::id(), unique_suffix());
     let registered = send(
@@ -77,7 +80,7 @@ async fn setup() -> (
         &state,
         &token,
         "POST",
-        "/api/v2/tags",
+        "/api/v1/tags/",
         serde_json::json!({"name":"Original","color":"red"}),
     )
     .await;
@@ -153,7 +156,7 @@ async fn create_tag_writes_database_row() {
         &state,
         &token,
         "POST",
-        "/api/v2/tags",
+        "/api/v1/tags/",
         serde_json::json!({"name":"Additional","color":"red"}),
     )
     .await;
@@ -177,8 +180,8 @@ async fn update_tag_persists_name_and_color() {
     let result = mutation(
         &state,
         &token,
-        "PATCH",
-        &format!("/api/v2/tags/{tag_id}"),
+        "PUT",
+        &format!("/api/v1/tags/{tag_id}/"),
         serde_json::json!({"name":"Renamed","color":"blue"}),
     )
     .await;
@@ -203,7 +206,7 @@ async fn assign_tag_inserts_assignment() {
         &state,
         &token,
         "POST",
-        &format!("/api/v2/tags/{tag_id}/assignments"),
+        &format!("/api/v1/tags/{tag_id}/assign/"),
         serde_json::json!({"target_type":"Thread","target_id":1}),
     )
     .await;
@@ -219,7 +222,7 @@ async fn unassign_tag_removes_assignment() {
             &state,
             &token,
             "POST",
-            &format!("/api/v2/tags/{tag_id}/assignments"),
+            &format!("/api/v1/tags/{tag_id}/assign/"),
             serde_json::json!({"target_type":"Thread","target_id":1})
         )
         .await
@@ -230,7 +233,7 @@ async fn unassign_tag_removes_assignment() {
         &state,
         &token,
         "DELETE",
-        &format!("/api/v2/tags/{tag_id}/assignments/Thread/1"),
+        &format!("/api/v1/tags/{tag_id}/unassign/"),
         serde_json::json!({"target_type":"Thread","target_id":1}),
     )
     .await;
@@ -245,7 +248,7 @@ async fn bulk_assign_tag_writes_unique_assignments() {
         &state,
         &token,
         "POST",
-        &format!("/api/v2/tags/{tag_id}/assignment-batches"),
+        &format!("/api/v1/tags/{tag_id}/bulk-assign/"),
         serde_json::json!({"target_type":"Thread","target_ids":[1,1]}),
     )
     .await;
@@ -262,7 +265,7 @@ async fn bulk_unassign_tag_removes_assignments() {
             &state,
             &token,
             "POST",
-            &format!("/api/v2/tags/{tag_id}/assignments"),
+            &format!("/api/v1/tags/{tag_id}/assign/"),
             serde_json::json!({"target_type":"Thread","target_id":1})
         )
         .await
@@ -273,7 +276,7 @@ async fn bulk_unassign_tag_removes_assignments() {
         &state,
         &token,
         "POST",
-        &format!("/api/v2/tags/{tag_id}/unassignment-batches"),
+        &format!("/api/v1/tags/{tag_id}/bulk-unassign/"),
         serde_json::json!({"target_type":"Thread","target_ids":[1]}),
     )
     .await;
@@ -288,7 +291,7 @@ async fn delete_tag_cascades_assignments() {
         &state,
         &token,
         "POST",
-        &format!("/api/v2/tags/{tag_id}/assignments"),
+        &format!("/api/v1/tags/{tag_id}/assign/"),
         serde_json::json!({"target_type":"Thread","target_id":1}),
     )
     .await;
@@ -298,7 +301,7 @@ async fn delete_tag_cascades_assignments() {
         &state,
         &token,
         "DELETE",
-        &format!("/api/v2/tags/{tag_id}"),
+        &format!("/api/v1/tags/{tag_id}/"),
         serde_json::json!({}),
     )
     .await;

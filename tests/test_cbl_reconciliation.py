@@ -6,19 +6,24 @@ import argparse
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import select
+from httpx import AsyncClient
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
+from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services.cbl_reconciliation import (
+    calculate_cbl_adoption_plan,
     cbl_comicvine_series_id,
     cbl_series_group_id,
+    preview_cbl_adoption,
     reconcile_cbl_source_list,
 )
+from app.api.issue_identity import CBLAdoptionPreviewResponse
 from scripts.rebuild_crossover_from_cbl import _member_issue_ids, _rebuild
 from tests.conftest import get_or_create_user_async
 
@@ -159,6 +164,32 @@ def test_cbl_series_group_id_separates_same_named_volumes() -> None:
     )
     assert comicvine_volume == "provider-series:comicvine:4050-9876"
     assert comicvine_volume != first_run
+
+
+@pytest.mark.asyncio
+async def test_reconcile_reports_volume_year_for_series_grouping(
+    async_db: AsyncSession,
+) -> None:
+    """The report carries the volume year the browser groups same-named runs by."""
+    user = await get_or_create_user_async(async_db)
+    issues = [
+        await _make_issue(async_db, user_id=user.id, issue_number="1", position=1),
+        await _make_issue(async_db, user_id=user.id, issue_number="2", position=1),
+    ]
+    source_list_id = await _seed_source_list(
+        async_db,
+        issues=issues,
+        series_names={1: "Saga", 2: "Saga"},
+        volume_years={1: 2012, 2: 2019},
+    )
+
+    report = await reconcile_cbl_source_list(async_db, user_id=user.id, list_id=source_list_id)
+
+    assert [entry["volume_year"] for entry in report.entries] == [2012, 2019]
+
+    _, plan = await preview_cbl_adoption(async_db, user_id=user.id, list_id=source_list_id)
+    group_ids = [entry["series_group_id"] for entry in plan.entries]
+    assert group_ids[0] != group_ids[1]
 
 
 @pytest.mark.asyncio
@@ -336,6 +367,194 @@ async def test_reconcile_rejects_missing_source_list(
             )
 
 
+@pytest.mark.asyncio
+async def test_cbl_adoption_preview_is_read_only_and_supports_overrides(
+    async_db: AsyncSession,
+) -> None:
+    """Planning preserves positions, read history, and all database counts."""
+    user = await get_or_create_user_async(async_db)
+    read_at = datetime.now(UTC)
+    existing = await _make_issue(
+        async_db,
+        user_id=user.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=read_at,
+    )
+    missing = await _make_issue(async_db, user_id=user.id, issue_number="2", position=1)
+    source_list_id = await _seed_source_list(
+        async_db,
+        issues=[existing, missing],
+        omit_identity_at={2},
+        series_names={1: "Shared Run", 2: "Shared Run"},
+    )
+    source_entry = await async_db.scalar(
+        select(CBLSourceEntry).where(
+            CBLSourceEntry.list_id == source_list_id,
+            CBLSourceEntry.position == 2,
+        )
+    )
+    assert source_entry is not None
+    async_db.add(
+        CBLSourceEntry(
+            list_id=source_list_id,
+            position=3,
+            series_name="Shared Run",
+            issue_number="3",
+        )
+    )
+    await async_db.flush()
+
+    before = {
+        table: await async_db.scalar(select(func.count()).select_from(model))
+        for table, model in (
+            ("issues", Issue),
+            ("threads", Thread),
+            ("memberships", DependencyGroupMembership),
+        )
+    }
+    before_dependencies = await async_db.scalar(select(func.count()).select_from(Dependency))
+
+    report, plan = await preview_cbl_adoption(
+        async_db,
+        user_id=user.id,
+        list_id=source_list_id,
+    )
+    assert plan.entries[0]["adoption_decision"] == "included_existing"
+    # #2128: safely creatable missing entries default to included; the final Add
+    # is the explicit approval for them.
+    assert plan.entries[1]["adoption_decision"] == "would_create_missing"
+    assert plan.entries[2]["adoption_decision"] == "unresolved"
+    assert plan.final_adopted_order == (1, 2)
+    assert plan.excluded_count == 0
+    assert report.content_hash == "hash-1"
+    assert report.revision_sha == "sha-1"
+    repeat_report, _ = await preview_cbl_adoption(
+        async_db,
+        user_id=user.id,
+        list_id=source_list_id,
+    )
+    assert (
+        report.source_list_id,
+        report.source_path,
+        report.content_hash,
+        report.revision_sha,
+    ) == (
+        repeat_report.source_list_id,
+        repeat_report.source_path,
+        repeat_report.content_hash,
+        repeat_report.revision_sha,
+    )
+
+    _, explicitly_included = await preview_cbl_adoption(
+        async_db,
+        user_id=user.id,
+        list_id=source_list_id,
+        entry_decisions={str(source_entry.id): True},
+    )
+    assert explicitly_included.entries[1]["adoption_decision"] == "would_create_missing"
+    assert explicitly_included.entries[1]["adopted"] is True
+    assert explicitly_included.final_adopted_order == (1, 2)
+    assert explicitly_included.missing_would_create_count == 1
+
+    # The grouping key is deterministic but opaque; use the returned key for
+    # the same selection calculation to prove the per-entry override wins.
+    series_key = str(plan.entries[0]["series_group_id"])
+    _, overridden = await preview_cbl_adoption(
+        async_db,
+        user_id=user.id,
+        list_id=source_list_id,
+        series_decisions={series_key: False},
+        entry_decisions={str(source_entry.id): True},
+    )
+    assert report.entries[0]["resolved_issue_id"] == existing.id
+    assert report.entries[0]["read_status"] == "read"
+    assert [entry["cbl_position"] for entry in overridden.entries] == [1, 2, 3]
+    assert overridden.entries[0]["adoption_decision"] == "excluded"
+    assert overridden.entries[0]["adoption_class"] == "existing"
+    assert overridden.entries[1]["adoption_decision"] == "would_create_missing"
+    assert overridden.entries[1]["adoption_class"] == "missing_importable"
+    assert overridden.entries[2]["adoption_decision"] == "excluded"
+    assert overridden.entries[2]["adoption_class"] == "ambiguous_unresolved"
+    assert overridden.final_adopted_order == (2,)
+    assert overridden.reused_existing_count == 0
+    assert overridden.missing_would_create_count == 1
+    assert overridden.excluded_count == 2
+    assert overridden.unresolved_count == 0
+    assert before["issues"] == await async_db.scalar(select(func.count()).select_from(Issue))
+    assert before["threads"] == await async_db.scalar(select(func.count()).select_from(Thread))
+    assert before["memberships"] == await async_db.scalar(
+        select(func.count()).select_from(DependencyGroupMembership)
+    )
+    assert before_dependencies == await async_db.scalar(
+        select(func.count()).select_from(Dependency)
+    )
+    assert (
+        await async_db.scalar(
+            select(func.count())
+            .select_from(Dependency)
+            .where(Dependency.note.like("cbl-order:source:%"))
+        )
+        == 0
+    )
+
+
+def test_cbl_adoption_api_model_keeps_non_comicvine_series_provider_generic() -> None:
+    """A non-ComicVine series identity is never exposed as a ComicVine ID."""
+    entry = CBLAdoptionPreviewResponse.model_validate(
+        {
+            "source": {
+                "source_list_id": 1,
+                "source_repository": "repo",
+                "source_path": "list.cbl",
+                "content_hash": "hash",
+                "revision_sha": "sha",
+            },
+            "total_positions": 1,
+            "entries": [
+                {
+                    "cbl_position": 1,
+                    "cbl_entry_id": 10,
+                    "series_name": "Run",
+                    "issue_number": "1",
+                    "series_group_id": "provider-series:metron:42",
+                    "adoption_class": "existing",
+                    "adoption_decision": "included_existing",
+                    "adopted": True,
+                    "comicvine_issue_id": None,
+                    "comicvine_series_id": None,
+                    "series_provider": "MeTrOn",
+                    "series_external_id": "42",
+                    "resolved_issue_id": 7,
+                    "canonical_issue_id": 7,
+                    "read_status": "unread",
+                    "read_at": None,
+                    "resolution_status": "resolved_via_comicvine_canonical",
+                    "is_duplicate_identity": False,
+                }
+            ],
+            "summary": {
+                "reused_existing_count": 1,
+                "missing_would_create_count": 0,
+                "excluded_count": 0,
+                "unresolved_count": 0,
+                "awaiting_opt_in_count": 0,
+                "final_adopted_count": 1,
+                "final_adopted_order": [1],
+                "reused_existing_positions": [1],
+                "missing_would_create_positions": [],
+                "excluded_positions": [],
+                "unresolved_positions": [],
+                "awaiting_opt_in_positions": [],
+            },
+        }
+    )
+    assert entry.entries[0].series_provider == "MeTrOn"
+    assert entry.entries[0].series_external_id == "42"
+    assert entry.entries[0].comicvine_series_id is None
+
+
 def test_cbl_comicvine_series_id_requires_comicvine_provider() -> None:
     """Provider-generic series IDs cannot be mislabeled as ComicVine IDs."""
     assert cbl_comicvine_series_id(
@@ -344,6 +563,64 @@ def test_cbl_comicvine_series_id_requires_comicvine_provider() -> None:
     assert cbl_comicvine_series_id(
         {"series_provider": "  COMICVINE ", "series_external_id": "42"}
     ) == "42"
+
+
+def test_cbl_adoption_plan_does_not_auto_adopt_ambiguous_canonical_resolution() -> None:
+    """Canonical/read-history evidence remains visible but requires reconciliation."""
+    plan = calculate_cbl_adoption_plan(
+        [
+            {
+                "cbl_position": 4,
+                "cbl_entry_id": 40,
+                "series_name": "Run",
+                "issue_number": "4",
+                "series_group_id": "run-key",
+                "comicvine_issue_id": "4000-4",
+                "resolved_issue_id": 99,
+                "canonical_issue_id": 99,
+                "read_status": "read",
+                "read_at": "2026-01-01T00:00:00+00:00",
+                "resolution_status": "resolved_via_comicvine_canonical_ambiguous",
+            },
+        ],
+    )
+    entry = plan.entries[0]
+    assert entry["adoption_class"] == "ambiguous_unresolved"
+    assert entry["adoption_decision"] == "unresolved"
+    assert entry["adopted"] is False
+    assert plan.final_adopted_order == ()
+    assert entry["resolved_issue_id"] == 99
+    assert entry["canonical_issue_id"] == 99
+    assert entry["read_status"] == "read"
+
+
+def test_cbl_adoption_plan_preserves_gapped_source_positions() -> None:
+    """The pure planner keeps source positions as the adopted order."""
+    plan = calculate_cbl_adoption_plan(
+        [
+            {
+                "cbl_position": 2,
+                "cbl_entry_id": 20,
+                "series_name": "Run",
+                "issue_number": "2",
+                "series_group_id": "run-key",
+                "resolution_status": "resolved_via_comicvine_canonical",
+                "resolved_issue_id": 8,
+            },
+            {
+                "cbl_position": 5,
+                "cbl_entry_id": 50,
+                "series_name": "Run",
+                "issue_number": "5",
+                "series_group_id": "run-key",
+                "resolution_status": "no_owned_issue_for_comicvine_id",
+                "resolved_issue_id": None,
+            },
+        ],
+        series_decisions={"run-key": True},
+    )
+    assert plan.final_adopted_order == (2, 5)
+    assert plan.final_adopted_count == 2
 
 
 def test_cbl_series_group_id_does_not_confuse_identity_row_ids_with_external_ids() -> None:
@@ -358,6 +635,178 @@ def test_cbl_series_group_id_does_not_confuse_identity_row_ids_with_external_ids
             "volume_year": 2024,
         }
     ).startswith("source-series:")
+
+
+def test_cbl_adoption_selection_precedence_defaults_missing_included() -> None:
+    """Missing entries default to included (#2128); choices still take precedence."""
+    entries = [
+        {
+            "cbl_position": 2,
+            "cbl_entry_id": 20,
+            "series_name": "Run",
+            "issue_number": "2",
+            "series_group_id": "run-key",
+            "resolution_status": "resolved_via_comicvine_canonical",
+            "resolved_issue_id": 8,
+        },
+        {
+            "cbl_position": 5,
+            "cbl_entry_id": 50,
+            "series_name": "Run",
+            "issue_number": "5",
+            "series_group_id": "run-key",
+            "resolution_status": "no_owned_issue_for_comicvine_id",
+            "resolved_issue_id": None,
+        },
+    ]
+    default = calculate_cbl_adoption_plan(entries)
+    assert default.final_adopted_order == (2, 5)
+    assert default.entries[1]["adoption_decision"] == "would_create_missing"
+
+    excluded = calculate_cbl_adoption_plan(entries, series_decisions={"run-key": False})
+    assert excluded.final_adopted_order == ()
+    assert [entry["adoption_decision"] for entry in excluded.entries] == [
+        "excluded",
+        "excluded",
+    ]
+
+    included = calculate_cbl_adoption_plan(
+        entries,
+        series_decisions={"run-key": True},
+        entry_decisions={"20": False},
+    )
+    assert included.final_adopted_order == (5,)
+    assert included.entries[0]["adoption_decision"] == "excluded"
+    assert included.entries[1]["adoption_decision"] == "would_create_missing"
+
+
+def test_cbl_adoption_unresolved_entry_can_be_skipped() -> None:
+    """An explicit per-entry skip defers one ambiguous entry.
+
+    The skip unblocks adoption of the rest of the source.
+    """
+    entries = [
+        {
+            "cbl_position": 1,
+            "cbl_entry_id": 10,
+            "series_name": "Known",
+            "issue_number": "1",
+            "series_group_id": "known-key",
+            "resolution_status": "resolved_via_comicvine_canonical",
+            "resolved_issue_id": 8,
+        },
+        {
+            "cbl_position": 2,
+            "cbl_entry_id": 20,
+            "series_name": "Mystery",
+            "issue_number": "?",
+            "series_group_id": "mystery-key",
+            "resolution_status": "ambiguous_no_comicvine_id",
+            "resolved_issue_id": None,
+        },
+    ]
+    blocked = calculate_cbl_adoption_plan(entries)
+    assert blocked.unresolved_count == 1
+    assert blocked.entries[1]["adoption_decision"] == "unresolved"
+
+    skipped = calculate_cbl_adoption_plan(entries, entry_decisions={"20": False})
+    assert skipped.unresolved_count == 0
+    assert skipped.entries[1]["adoption_decision"] == "excluded"
+    assert skipped.excluded_count == 1
+    assert skipped.final_adopted_order == (1,)
+
+    # An explicit True does not skip; the entry still needs attention.
+    unskipped = calculate_cbl_adoption_plan(entries, entry_decisions={"20": True})
+    assert unskipped.unresolved_count == 1
+    assert unskipped.entries[1]["adoption_decision"] == "unresolved"
+
+
+def test_cbl_adoption_series_exclusion_defers_unresolved_entries() -> None:
+    """Excluding a series clears its unresolved entries from the attention gate.
+
+    The reader must not need a separate per-entry Skip before adoption can
+    proceed, and an explicit entry choice still beats the series choice (#3542).
+    """
+    entries = [
+        {
+            "cbl_position": 1,
+            "cbl_entry_id": 10,
+            "series_name": "Known",
+            "issue_number": "1",
+            "series_group_id": "known-key",
+            "resolution_status": "resolved_via_comicvine_canonical",
+            "resolved_issue_id": 8,
+        },
+        {
+            "cbl_position": 2,
+            "cbl_entry_id": 20,
+            "series_name": "Mystery",
+            "issue_number": "?",
+            "series_group_id": "mystery-key",
+            "resolution_status": "ambiguous_no_comicvine_id",
+            "resolved_issue_id": None,
+        },
+    ]
+    excluded = calculate_cbl_adoption_plan(entries, series_decisions={"mystery-key": False})
+    assert excluded.unresolved_count == 0
+    assert excluded.excluded_count == 1
+    assert excluded.entries[1]["adoption_decision"] == "excluded"
+    assert excluded.final_adopted_order == (1,)
+
+    # The series exclusion leaves unrelated series untouched.
+    assert excluded.entries[0]["adoption_decision"] == "included_existing"
+
+    # An explicit per-entry include overrides the series exclusion.
+    reconsidered = calculate_cbl_adoption_plan(
+        entries,
+        series_decisions={"mystery-key": False},
+        entry_decisions={"20": True},
+    )
+    assert reconsidered.unresolved_count == 1
+    assert reconsidered.entries[1]["adoption_decision"] == "unresolved"
+
+
+@pytest.mark.asyncio
+async def test_cbl_adoption_endpoint_returns_typed_fingerprinted_contract(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """The public preview endpoint exposes the client-ready typed contract."""
+    user = await get_or_create_user_async(async_db)
+    read_at = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+    issue = await _make_issue(
+        async_db,
+        user_id=user.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=read_at,
+    )
+    source_list_id = await _seed_source_list(async_db, issues=[issue])
+
+    response = await auth_client.get(
+        f"/api/v1/issue-identity/cbl/{source_list_id}/adoption-preview"
+    )
+
+    assert response.status_code == 200
+    contract = CBLAdoptionPreviewResponse.model_validate(response.json())
+    assert contract.source.source_list_id == source_list_id
+    assert contract.source.content_hash == "hash-1"
+    assert contract.source.revision_sha == "sha-1"
+    assert contract.entries[0].adoption_decision == "included_existing"
+    assert contract.entries[0].read_status == "read"
+    assert response.json()["entries"][0]["read_at"] == "2026-01-02T03:04:05Z"
+    assert contract.entries[0].read_at == read_at
+    assert contract.summary.final_adopted_order == [1]
+
+    openapi = (await auth_client.get("/openapi.json")).json()
+    read_at_schema = openapi["components"]["schemas"]["CBLAdoptionEntryResponse"]["properties"][
+        "read_at"
+    ]
+    assert read_at_schema["anyOf"] == [
+        {"type": "string", "format": "date-time"},
+        {"type": "null"},
+    ]
 
 
 @pytest.mark.asyncio

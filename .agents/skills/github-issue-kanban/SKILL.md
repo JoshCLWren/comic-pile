@@ -19,7 +19,7 @@ Use the issue selected by that command unless the user explicitly names another 
 
 Then read the selected issue body, the files it names, `AGENTS.md`, and
 `docs/ISSUE_EXECUTION_PROTOCOL.md`. For factory work, also read
-[docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md) and the latest canonical resume packet. Do not load unrelated
+`docs/AUTONOMOUS_FACTORY_POLICY.md` and the latest canonical resume packet. Do not load unrelated
 comment history. If the issue points to `docs/issue-plans/<number>.md`, read that plan in bounded
 chunks.
 
@@ -49,15 +49,15 @@ Issue work is expected to produce a pull request. After local verification, comm
 implementation, push the branch, and open a ready-for-review PR linked to the issue. Do not
 leave completed issue work only in the local working tree. Use a draft PR only when the user
 explicitly requests one. After pushing, follow the **CI completion after every push**
-section in [local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session/SKILL.md): monitor the exact
+section in [local-factory-session](../local-factory-session/SKILL.md): monitor the exact
 head through required CI, repair failures locally, and report the actual result. A PR
 link with "CI pending" is not an ordinary completion boundary.
 
 Continue authorized local factory delivery through actual independent review,
 gated merge, deployment and real acceptance. Do not wait for scheduled review
 when an eligible local reviewer can run: follow
-[the Codex Crouton adapter](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/crouton-factory-codex/SKILL.md) and
-[the executable ACP review path](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/LOCAL_FACTORY_REVIEW.md).
+[the Codex Crouton adapter](../crouton-factory-codex/SKILL.md) and
+[the executable ACP review path](../../../docs/LOCAL_FACTORY_REVIEW.md).
 Record the actual independent reviewer/model/session and exact head; manually
 use the canonical `factory:review` + `factory:local` lease only during active
 local review, then release it. Never invent a controller approval. Read only

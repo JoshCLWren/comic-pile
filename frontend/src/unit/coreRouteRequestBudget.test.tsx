@@ -20,6 +20,7 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { setDefaultHttpClient } from '../services/httpClient'
 import { threadsApi } from '../services/api-threads'
+import { sessionApi } from '../services/api-sessions'
 import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { dependenciesApi } from '../services/api-dependencies'
@@ -37,6 +38,7 @@ import { QueueControls } from '../pages/QueuePage/QueueControls'
 import { useQueueCrossovers } from '../pages/QueuePage/useQueueCrossovers'
 import { useExcludedThreads, useMoveToFront, useQueueThreads } from '../hooks/useQueue'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
+import { useSession } from '../hooks/useSession'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import type { SnoozeMutationOutcome } from '../hooks/useSnooze'
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
@@ -46,7 +48,6 @@ import { useRollActions } from '../pages/RollPage/useRollActions'
 import RollPage from '../pages/RollPage'
 import HistoryPage from '../pages/HistoryPage'
 import SessionPage from '../pages/SessionPage'
-import QueuePage from '../pages/QueuePage/QueuePage'
 import type { RollBootstrapThread } from '../types/rollBootstrap'
 import type { ThreadListItem, RollResponse } from '../types'
 import {
@@ -75,6 +76,20 @@ function renderAt(path: string, element: ReactNode, strict = false): ReactNode {
     </QueryClientProvider>
   )
   return strict ? <StrictMode>{tree}</StrictMode> : tree
+}
+
+const session = {
+  id: 1,
+  user_id: 1,
+  started_at: '2026-11-01T00:00:00Z',
+  ended_at: null,
+  start_die: 6,
+  current_die: 6,
+  ladder_path: '6',
+  snoozed_threads: [],
+  pending_thread_id: null,
+  pending_thread: null,
+  session_mode: null,
 }
 
 const queueThreads = [1, 2].map((id) => ({
@@ -135,6 +150,7 @@ const stubSnoozeOutcome: SnoozeMutationOutcome = {
  */
 function QueueBudgetProbe() {
   const queue = useQueueThreads()
+  useSession()
   useExcludedThreads(true)
   const threadIds = (queue.data ?? []).flatMap((thread) => (thread ? [thread.id] : []))
   const boundaries = useReadingBoundaries(threadIds)
@@ -202,7 +218,6 @@ function RollMoveBudgetProbe() {
         isPending: moveToFrontMutation.isPending,
       },
       moveToBackMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
-      unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}), isPending: false },
       shuffleQueueMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
     },
     refetchBootstrap,
@@ -225,12 +240,13 @@ let queueSnoozeHandle: {
 } | null = null
 
 /**
- * Queue row-action composition: the real queue loader, excluded
+ * Queue row-action composition: the real queue loader, session read, excluded
  * view, and the real native reroll/legacy unsnooze actions inside `useQueueThreadActions` —
  * the exact request path a snooze toggle produces from the Queue page.
  */
 function QueueSnoozeBudgetProbe() {
   useQueueThreads()
+  useSession()
   useExcludedThreads(true)
   const actions = useQueueThreadActions({
     navigateToRoll: budgetNavigate,
@@ -449,7 +465,7 @@ describe('core route request budgets', () => {
   it('authenticated shell cold-loads preferences and inbox status exactly once each', async () => {
     installAdapterRecorder()
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v2/users/me/preferences') return { theme: 'classic', user_id: 1 }
+      if (call.url === '/v1/users/me/preferences') return { theme: 'classic', user_id: 1 }
       return {}
     })
     setDefaultHttpClient(client)
@@ -457,16 +473,16 @@ describe('core route request budgets', () => {
     render(renderShell())
 
     await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v2/users/me/preferences')).toBe(true),
+      expect(calls.some((call) => call.url === '/v1/users/me/preferences')).toBe(true),
     )
     await waitFor(() => expect(adapterCalls.length).toBeGreaterThan(0))
     await drainSettledWork()
 
     expect(requestCounts(calls)).toEqual({
-      'GET /v2/users/me/preferences': 1,
+      'GET /v1/users/me/preferences': 1,
     })
     expect(requestCounts(adapterCalls)).toEqual({
-      'GET /v2/identity-inbox?limit=1&offset=0': 1,
+      'GET /v1/identity-inbox?limit=1&offset=0': 1,
     })
   })
 
@@ -524,6 +540,8 @@ describe('core route request budgets', () => {
       next_page_token: null,
       active_count: 0,
     } as never)
+    // SAFETY: the session fixture supplies every SessionCurrent field read here.
+    vi.spyOn(sessionApi, 'getCurrent').mockResolvedValue(session as never)
     // SAFETY: the boundary fixture supplies a state for each requested id.
     const batchBoundaries = vi.spyOn(readingBoundariesApi, 'batch').mockResolvedValue({
       threads: { 1: { state: 'unavailable' }, 2: { state: 'unavailable' } },
@@ -585,51 +603,24 @@ describe('core route request budgets', () => {
     expect(onSearchChange).toHaveBeenCalledWith('robert')
   })
 
-  it('History cold-loads exactly one activity page', async () => {
+  it('History cold-loads exactly one session list page', async () => {
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url.startsWith('/v2/activity')) return { items: [], next_page_token: null }
+      if (call.url === '/v1/sessions/') return { sessions: [], next_page_token: null }
       return {}
     })
     setDefaultHttpClient(client)
 
     render(renderAt('/history', <HistoryPage />))
 
-    await waitFor(() => expect(calls.some((call) => call.url.startsWith('/v2/activity'))).toBe(true))
+    await waitFor(() => expect(calls.some((call) => call.url === '/v1/sessions/')).toBe(true))
     await drainSettledWork()
 
-    expect(requestCounts(calls)).toEqual({ 'GET /v2/activity?limit=50': 1 })
-  })
-
-  it('Queue page reads pending-roll state from the Roll bootstrap and never calls sessions/current (#4343)', async () => {
-    const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v2/threads') {
-        return { threads: queueThreads, next_page_token: null, active_count: 2 }
-      }
-      if (call.url === '/v1/threads/excluded/threads') {
-        return { threads: [], next_page_token: null, active_count: 0 }
-      }
-      if (call.url === '/v1/threads/completed/threads') {
-        return { threads: [], next_page_token: null, active_count: 0 }
-      }
-      if (call.url === '/v2/reading-graph') return { status: 'ok' }
-      if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
-      if (call.url === '/v2/roll/bootstrap') return rollV2BootstrapIdle
-      return {}
-    })
-    setDefaultHttpClient(client)
-
-    render(renderAt('/queue', <QueuePage />))
-
-    await waitFor(() => expect(calls.some((call) => call.url === '/v2/roll/bootstrap')).toBe(true))
-    await drainSettledWork()
-
-    expect(calls.filter((call) => call.url.includes('/sessions/current'))).toEqual([])
-    expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(1)
+    expect(requestCounts(calls)).toEqual({ 'GET /v1/sessions/': 1 })
   })
 
   it('Session detail cold-loads details and snapshots exactly once', async () => {
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v2/reading-sessions/7/details') {
+      if (call.url === '/v1/sessions/7/details') {
         return {
           session_id: 7,
           started_at: '2026-11-01T00:00:00Z',
@@ -641,7 +632,7 @@ describe('core route request budgets', () => {
           events: [],
         }
       }
-      if (call.url === '/v2/reading-sessions/7/snapshots') return { session_id: 7, snapshots: [] }
+      if (call.url === '/v1/sessions/7/snapshots') return { session_id: 7, snapshots: [] }
       return {}
     })
     setDefaultHttpClient(client)
@@ -656,16 +647,14 @@ describe('core route request budgets', () => {
     )
 
     await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v2/reading-sessions/7/snapshots')).toBe(true),
+      expect(calls.some((call) => call.url === '/v1/sessions/7/snapshots')).toBe(true),
     )
     await drainSettledWork()
 
     expect(requestCounts(calls)).toEqual({
-      'GET /v2/reading-sessions/7/details': 1,
-      'GET /v2/reading-sessions/7/snapshots': 1,
+      'GET /v1/sessions/7/details': 1,
+      'GET /v1/sessions/7/snapshots': 1,
     })
-    expect(screen.queryByRole('button', { name: /restore start/i })).not.toBeInTheDocument()
-    expect(calls.filter((call) => call.url.includes('restore-session-start'))).toEqual([])
   })
 
   it('Roll move-front refreshes the bootstrap exactly once (#4276)', async () => {
@@ -722,6 +711,7 @@ describe('core route request budgets', () => {
       if (call.url === '/v1/threads/excluded/threads') {
         return { threads: [], next_page_token: null, active_count: 0 }
       }
+      if (call.url === '/v1/sessions/current/') return session
       if (call.url === '/v2/roll/offer') return { ...stubRollResponse }
       if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
       if (call.url === '/v2/roll/bootstrap') return rollV2BootstrapIdle
@@ -731,7 +721,9 @@ describe('core route request budgets', () => {
 
     render(renderSharedProbe(<QueueSnoozeBudgetProbe />))
     await waitFor(() => expect(queueSnoozeHandle).not.toBeNull())
-    await waitFor(() => expect(countRequests(calls, 'GET', '/v2/threads')).toBe(1))
+    await waitFor(() =>
+      expect(countRequests(calls, 'GET', '/v1/sessions/current/')).toBe(1),
+    )
     const coldLoads = calls.length
 
     await act(async () => {
@@ -743,12 +735,11 @@ describe('core route request budgets', () => {
 
     // One native offer both records the snooze and selects the next pending
     // comic; the legacy Python session-clearing POST is never issued.
-    // The retired current-session read is never requested (#4343). The Queue
-    // action does not boot a separate reading session or re-fetch an unmounted
-    // Roll screen.
+    // The Queue action owns exactly one current-session refresh. It does not
+    // boot a separate reading session or re-fetch an unmounted Roll screen.
     expect(countRequests(calls, 'POST', '/v2/roll/offer')).toBe(1)
     expect(countRequests(calls, 'POST', '/v1/snooze/')).toBe(0)
-    expect(countRequests(calls, 'GET', '/v1/sessions/current/')).toBe(0)
+    expect(countRequests(calls, 'GET', '/v1/sessions/current/')).toBe(2)
     expect(countRequests(calls, 'POST', '/v2/reading-sessions')).toBe(0)
     expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(0)
     // One bounded queue-page refresh after the reset (cold + reconciled first page).

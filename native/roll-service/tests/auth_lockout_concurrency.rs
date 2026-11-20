@@ -56,16 +56,19 @@ const PASSWORD: &str = "correct-horse-battery";
 const HISTORY_ROWS: i64 = 200;
 
 fn state(url: &str, pool_size: usize) -> Arc<AppState> {
-    Arc::new(test_support::test_app_state(
-        Config::from_lookup(|key| match key {
-            "RUST_ROLL_DATABASE_URL" => Some(url.into()),
-            "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
-            "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
-            "RUST_ROLL_POOL_TIMEOUT_MS" => Some("5000".into()),
-            _ => None,
-        })
+    Arc::new(
+        AppState::new(
+            Config::from_lookup(|key| match key {
+                "RUST_ROLL_DATABASE_URL" => Some(url.into()),
+                "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
+                "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
+                "RUST_ROLL_POOL_TIMEOUT_MS" => Some("5000".into()),
+                _ => None,
+            })
+            .unwrap(),
+        )
         .unwrap(),
-    ))
+    )
 }
 
 async fn database(pool_size: usize) -> (Arc<AppState>, tokio::sync::MutexGuard<'static, ()>) {
@@ -472,12 +475,6 @@ async fn count_queries_stay_indexed_as_history_grows() {
              SELECT 'bulk-' || g, $1, NOW() FROM generate_series(1, $2::bigint) AS g",
             &[&"198.51.100.9", &HISTORY_ROWS],
         )
-        .await
-        .unwrap();
-    // Plan choice depends on table statistics; autovacuum timing must not decide
-    // this assertion, so refresh them deterministically before EXPLAIN.
-    connection
-        .batch_execute("ANALYZE failed_login_attempts")
         .await
         .unwrap();
     for (label, sql, value) in [

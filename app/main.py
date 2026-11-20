@@ -316,6 +316,9 @@ logger.info(
 #: A request for one of these answers must not pay to register anything else
 #: (issue #3479).
 _EAGER_ROUTE_PREFIXES: tuple[str, ...] = (
+    "/api/metrics",
+    "/api/v1/metrics",
+    "/api/v1/keepalive",
     "/health",
 )
 
@@ -337,12 +340,25 @@ def _is_eager_path(path: str) -> bool:
 def _register_lightweight_routers(app: FastAPI) -> None:
     """Register lightweight routers that are always needed.
 
-    The former lightweight metrics and keepalive handlers were retired with
-    their Python implementations (their routes are served by native Rust v2),
-    so no Python router remains in the cold-start table. Registration happens
-    entirely through the deferred mounts.
+    These routers have zero or negligible import overhead and are needed for
+    basic functionality and cold-start mitigation.
     """
-    return
+    # Dependency-free compatibility endpoint for the retired keep-alive probe
+    # (issues #3480, #4129). Older clients may still call it, but it must not
+    # open a Neon connection or postpone scale-to-zero. Mounted under /api/v1
+    # and kept out of the generated client schema
+    # (include_in_schema=False), like the bounded health probes.
+    from app.api import keepalive
+
+    app.include_router(keepalive.router, prefix="/api/v1", tags=["keepalive"])
+
+    # Expose the metrics router in every environment so production performance
+    # tracking (issue #834) and future regression checks can read startup
+    # telemetry. It returns only process startup epoch and duration.
+    from app.api import metrics
+
+    app.include_router(metrics.router, prefix="/api", tags=["metrics"])
+    app.include_router(metrics.router, prefix="/api/v1", tags=["metrics"])
 
 
 def register_all_routers(app: FastAPI, environment: str) -> None:
@@ -350,9 +366,8 @@ def register_all_routers(app: FastAPI, environment: str) -> None:
 
     Router modules are imported lazily inside each mount so that a cold probe
     invocation does not load the full import graph. Registration order is the
-    historical ``include_router`` order: every deferred mount from
-    :mod:`app.router_mounts`` (the lightweight metrics/keepalive routers were
-    retired with their Python handlers).
+    historical ``include_router`` order: lightweight (metrics, keepalive) then
+    every deferred mount from :mod:`app.router_mounts``.
 
     Args:
         app: The FastAPI application instance.
@@ -490,8 +505,8 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         return await call_next(request)
 
     # Register routers with deferred, per-resource module imports to reduce
-    # cold-start cost. In deferred mode only the lightweight ping route is
-    # registered now. Each real request registers just the
+    # cold-start cost. In deferred mode only the lightweight ping/metrics/
+    # keepalive routers are registered now. Each real request registers just the
     # mounts its resource segment needs (issue #3479) and splices them in after
     # the lightweight routes so the JSON 404 fallback and SPA routes keep
     # matching last.
@@ -984,12 +999,15 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         defer_heavy_init = os.getenv("TEST_ENVIRONMENT") == "true" and os.getenv(
             "ENABLE_LAZY_HEAVY_INIT_IN_TESTS"
         ) != "true"
-        # Exempt the dependency-free public probe, including its trailing-slash
-        # form, which Starlette would otherwise slash-redirect only after heavy
-        # init ran. This endpoint must never wake Neon or prolong its idle window.
+        # Exempt the dependency-free public probes, including their trailing-slash
+        # forms, which Starlette would otherwise slash-redirect only after heavy
+        # init ran. These endpoints must never wake Neon or prolong its idle window.
         request_path = request.url.path
         probe_path = request_path.rstrip("/") or "/"
-        is_ping_probe = probe_path == "/health"
+        is_ping_probe = (
+            probe_path == "/health"
+            or probe_path == "/api/v1/keepalive"
+        )
         if not is_ping_probe:
             # Registration is synchronous, so concurrent cold requests cannot
             # interleave it; this runs before routing so the mounts the request

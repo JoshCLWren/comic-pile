@@ -1,13 +1,116 @@
-"""Tests for the bounded dependency probe and the instance warm-up handler."""
+"""Tests for bounded liveness, dependency-health, and warm-up behavior."""
 
 import asyncio
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import health_probe
+from app.services.health_probe import ProbeUnavailableError
 from app.startup_diagnostics import StartupSnapshot
+
+
+@pytest.mark.asyncio
+async def test_liveness_does_not_probe_dependencies(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify liveness remains independent from dependencies.
+
+    Args:
+        client: Async HTTP client for the test application.
+        monkeypatch: Pytest fixture for replacing dependency probes.
+
+    Returns:
+        None.
+    """
+
+    async def fail_if_called(*_: object) -> None:
+        raise AssertionError("dependency probe must not run")
+
+    monkeypatch.setattr(health_probe, "database_probe", fail_if_called)
+
+    response = await client.get("/api/v1/health/live")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "alive"}
+
+
+@pytest.mark.asyncio
+async def test_dependency_health_reports_independent_timings(
+    client: AsyncClient,
+) -> None:
+    """Verify the healthy dependency response reports database and total timings.
+
+    Args:
+        client: Async HTTP client for the test application.
+
+    Returns:
+        None.
+    """
+    response = await client.get("/api/v1/health/dependencies")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "healthy"
+    assert payload["database"]["status"] == "healthy"
+    assert payload["database"]["duration_ms"] >= 0
+    assert payload["total_duration_ms"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_dependency_health_reports_no_cache_dependency(
+    client: AsyncClient,
+) -> None:
+    """Verify the bounded probe never reports or degrades on an application cache.
+
+    The application cache subsystem was deleted in issue #2974, so the bounded
+    dependency probe reports the database only. No second dependency exists that
+    could degrade an otherwise healthy response.
+
+    Args:
+        client: Async HTTP client for the test application.
+
+    Returns:
+        None.
+    """
+    response = await client.get("/api/v1/health/dependencies")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "healthy"
+    assert "cache" not in payload
+
+
+@pytest.mark.asyncio
+async def test_dependency_health_reports_database_unavailable(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify database failure produces an unhealthy response without exception text.
+
+    Args:
+        client: Async HTTP client for the test application.
+        monkeypatch: Pytest fixture for replacing dependency probes.
+
+    Returns:
+        None.
+    """
+
+    async def unavailable_database(_: AsyncSession) -> None:
+        raise ProbeUnavailableError("database offline")
+
+    monkeypatch.setattr(health_probe, "database_probe", unavailable_database)
+    response = await client.get("/api/v1/health/dependencies")
+
+    assert response.status_code == 503
+    payload = response.json()
+    assert payload["status"] == "unhealthy"
+    assert payload["database"]["status"] == "unavailable"
+    assert "database offline" not in response.text
 
 
 @pytest.mark.asyncio
@@ -31,6 +134,89 @@ async def test_dependency_probe_times_out_without_hanging(
 
     assert result.status == "timeout"
     assert result.duration_ms < 50
+
+
+@pytest.mark.asyncio
+async def test_operational_token_hides_detailed_endpoints(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify configured operational endpoints require the trusted token.
+
+    Args:
+        client: Async HTTP client for the test application.
+        monkeypatch: Pytest fixture for setting the health token.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("HEALTH_CHECK_TOKEN", "trusted-monitor")
+
+    hidden = await client.get("/api/v1/health/dependencies")
+    allowed = await client.get(
+        "/api/v1/health/dependencies",
+        headers={"X-Health-Token": "trusted-monitor"},
+    )
+
+    assert hidden.status_code == 404
+    assert allowed.status_code in (200, 503)
+
+
+@pytest.mark.asyncio
+async def test_legacy_health_is_dependency_free(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify legacy liveness never opens database connections.
+
+    Args:
+        client: Async HTTP client for the test application.
+        monkeypatch: Pytest fixture for replacing dependency probes.
+
+    Returns:
+        None.
+    """
+
+    async def fail_if_called(*_: object) -> None:
+        raise AssertionError("legacy liveness must not probe dependencies")
+
+    monkeypatch.setattr(health_probe, "database_probe", fail_if_called)
+
+    response = await client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "alive"}
+
+
+@pytest.mark.asyncio
+async def test_warmup_uses_read_only_dependency_boundary(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify warm-up exercises the bounded read-only database path exactly once.
+
+    Args:
+        client: Async HTTP client for the test application.
+        monkeypatch: Pytest fixture for replacing the database probe.
+
+    Returns:
+        None.
+    """
+    calls = 0
+    original_probe = health_probe.database_probe
+
+    async def counting_probe(db: AsyncSession) -> None:
+        nonlocal calls
+        calls += 1
+        await original_probe(db)
+
+    monkeypatch.setattr(health_probe, "database_probe", counting_probe)
+
+    response = await client.get("/api/v1/health/warmup")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "healthy"
+    assert calls == 1
 
 
 def _make_mock_request(invocation: int = 1) -> MagicMock:

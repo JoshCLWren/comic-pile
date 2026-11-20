@@ -1,9 +1,0 @@
-{
-  "operations": [
-    {
-      "method": "GET",
-      "path": "/api/v2/alpha",
-      "sql_budget": {"max_statements": 3}
-    }
-  ]
-}

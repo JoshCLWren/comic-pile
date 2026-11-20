@@ -1,31 +1,30 @@
 {
   "family": "releases",
   "owned_path_patterns": [
-    "^/api/v1/releases(?:/.*)?$",
-    "^/api/v2/releases$"
+    "^/api/v1/releases(?:/.*)?$"
   ],
   "defaults": {
     "owning_issue": 4849,
     "runtime": "native-rust",
     "status": "target",
-    "consumers": []
+    "consumers": [
+      "frontend/src/services/api-releases.ts"
+    ]
   },
   "operations": [
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v2/releases",
+      "path": "/api/v1/releases/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/releases$",
+      "src": "^/api/v1/releases/$",
       "sql_budget": {
         "application_statements": 2,
         "transaction_control_statements": 0,
         "total_statements": 2,
         "basis": "one COUNT(*) over the published/public/readable filter plus one page SELECT with LIMIT/OFFSET; set-based, independent of library size, no per-row N+1"
       },
-      "consumers": [
-        "frontend/src/services/api-releases.ts"
-      ]
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",

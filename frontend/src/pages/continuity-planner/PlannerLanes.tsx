@@ -1,13 +1,9 @@
 import { laneNodeCount } from './plannerModel'
 import type { ContinuityPlannerEditor } from './useContinuityPlannerEditor'
-import { useIssueCards, indexIssueCards } from '../../hooks/useIssueCards'
-import { ComicIssueCover } from '../../components/ComicIssueCard'
-import type { ThreadListItem } from '../../types'
 
 interface PlannerLanesProps {
   editor: ContinuityPlannerEditor
   planId: number | null
-  threads: ThreadListItem[]
 }
 
 /**
@@ -15,11 +11,8 @@ interface PlannerLanesProps {
  * checkpoint/convergence controls, and lane management.
  * Holds no state; everything renders from the editor hook.
  */
-export default function PlannerLanes({ editor, planId, threads }: PlannerLanesProps) {
+export default function PlannerLanes({ editor, planId }: PlannerLanesProps) {
   const { orderedLanes, nodes } = editor
-  const issueCards = useIssueCards(nodes.filter((node) => node.node_type === 'issue').map((node) => node.ref_id))
-  const cardsByIssue = indexIssueCards(issueCards.data)
-  const threadsById = new Map(threads.map((thread) => [thread.id, thread]))
 
   const globalIndex = new Map<string, number>()
   let runningIndex = 0
@@ -144,8 +137,6 @@ export default function PlannerLanes({ editor, planId, threads }: PlannerLanesPr
                 <ol className="grid gap-2">
                   {laneNodes.map((node) => {
                     const index = laneNodes.findIndex((candidate) => candidate.id === node.id)
-                    const issueCard = node.node_type === 'issue' ? cardsByIssue.get(node.ref_id) : undefined
-                    const series = node.node_type === 'thread' ? threadsById.get(node.ref_id) : undefined
                     const otherLanes = orderedLanes.filter(
                       (candidate) => candidate.id !== lane.id,
                     )
@@ -158,16 +149,6 @@ export default function PlannerLanes({ editor, planId, threads }: PlannerLanesPr
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--theme-bg-panel)] font-black text-[var(--theme-text-muted)]">
                           {index + 1}
                         </span>
-                        {(node.node_type === 'issue' || node.node_type === 'thread') && (
-                          <ComicIssueCover
-                            coverImageUrl={issueCard?.cover_image_url ?? series?.series_cover_image_url ?? null}
-                            threadTitle={issueCard?.thread_title ?? series?.title ?? node.label}
-                            issueNumber={issueCard?.issue_number ?? ''}
-                            variant="compact"
-                            imageClassName="h-full w-full object-cover"
-                            altText=""
-                          />
-                        )}
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-bold text-[var(--theme-text-primary)]">
                             {node.label}

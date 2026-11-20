@@ -30,7 +30,7 @@ describe('creatorMetricDrilldownApi', () => {
     await expect(
       drilldownApi.getMetricDrilldown('creator:1', 'average-rating', { page: 2, pageSize: 25 }),
     ).resolves.toEqual(DRILLDOWN)
-    expect(client.get).toHaveBeenCalledWith('/v2/creators/creator:1/metrics/average-rating', {
+    expect(client.get).toHaveBeenCalledWith('/v1/creators/creator:1/metrics/average-rating', {
       params: {
         role: undefined,
         rating_value: undefined,
@@ -49,7 +49,7 @@ describe('creatorMetricDrilldownApi', () => {
       ratingValue: '5.0',
       seriesKey: 'thread:7',
     })
-    expect(client.get).toHaveBeenCalledWith('/v2/creators/creator:1/metrics/role-stats', {
+    expect(client.get).toHaveBeenCalledWith('/v1/creators/creator:1/metrics/role-stats', {
       params: {
         role: 'writer',
         rating_value: '5.0',
@@ -65,7 +65,7 @@ describe('creatorMetricDrilldownApi', () => {
 
     await drilldownApi.getRatingDistributionDrilldown('creator:1', '5.0', { page: 1 })
     expect(client.get).toHaveBeenCalledWith(
-      '/v2/creators/creator:1/metrics/rating-distribution/5.0',
+      '/v1/creators/creator:1/metrics/rating-distribution/5.0',
       { params: { page: 1, page_size: undefined } },
     )
   })
@@ -74,13 +74,13 @@ describe('creatorMetricDrilldownApi', () => {
     client.get.mockResolvedValue(DRILLDOWN)
 
     await drilldownApi.getRoleDrilldown('creator:1', 'writer', { pageSize: 10 })
-    expect(client.get).toHaveBeenCalledWith('/v2/creators/creator:1/metrics/role-stats/writer', {
+    expect(client.get).toHaveBeenCalledWith('/v1/creators/creator:1/metrics/role-stats/writer', {
       params: { page: undefined, page_size: 10 },
     })
 
     await drilldownApi.getSeriesDrilldown('creator:1', 'thread:7', {})
     expect(client.get).toHaveBeenCalledWith(
-      '/v2/creators/creator:1/metrics/series-stats/thread:7',
+      '/v1/creators/creator:1/metrics/series-stats/thread:7',
       { params: { page: undefined, page_size: undefined } },
     )
   })

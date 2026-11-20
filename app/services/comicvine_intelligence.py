@@ -433,7 +433,6 @@ async def get_issue_intelligence(
     )
 
 
-
 async def get_thread_issue_creators(
     db: AsyncSession,
     thread_id: int,

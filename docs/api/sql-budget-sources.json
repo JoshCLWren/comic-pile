@@ -4,6 +4,22 @@
   "operations": [
     {
       "method": "GET",
+      "path": "/api/v2/analytics/metrics",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "auth folded into one owner-scoped metrics statement; set-based",
+        "grows_with_data": false,
+        "max_statements": 2,
+        "proof_reference": "native/roll-service/src/analytics.rs",
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_analytics_metrics_n1.py",
+        "runtime_overhead_statements": 1
+      }
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/auth/csrf",
       "sql_budget": {
         "application_statements": 0,

@@ -16,11 +16,28 @@ E2E tests are your last line of defense against broken user experiences. Treat t
 
 ## Test Suites
 
-> The legacy pytest-based Python Playwright suite that used to live in this directory was removed
-> with the Python API. Browser E2E coverage now lives in `frontend/src/test/` (Playwright, TypeScript).
-> This directory only holds this README.
+### 1. Python Playwright Tests (tests_e2e/)
+**Status**: ✅ Working in CI
 
-### TypeScript Playwright Tests (frontend/src/test/)
+These are pytest-based Playwright tests that run in Docker containers. They start their own backend server and are used in the CI pipeline.
+
+```bash
+# Run all Python E2E tests
+pytest tests_e2e/ -m integration
+
+# Run specific test file
+pytest tests_e2e/test_browser_ui.py -v
+
+# Run with video recording
+pytest tests_e2e/ -m integration --video=retain-on-failure
+```
+
+**Test Files**:
+- `test_api_workflows.py` - API integration tests
+- `test_browser_ui.py` - Browser UI tests (registration, login, roll, rate, queue, history)
+- `test_dice_ladder_e2e.py` - Dice ladder behavior tests
+
+### 2. TypeScript Playwright Tests (frontend/src/test/)
 **Status**: ✅ Working
 
 These are Node.js-based Playwright tests with comprehensive coverage including accessibility and visual regression.
@@ -51,14 +68,35 @@ pnpm run test:e2e:headed
 - `network.spec.ts` - API/network tests (15 tests)
 - `edge-cases.spec.ts` - Edge case tests (20 tests)
 
+## Known Issues
+
+MissingGreenlet errors in `app/api/session.py` and `app/api/rate.py` have been fixed. If you encounter similar issues, ensure all SQLAlchemy model attributes are extracted into variables **before** `await db.commit()` (see `AGENTS.md` for the required pattern).
+
 ## CI Configuration
 
 The CI pipeline (`.github/workflows/ci.yml`) runs:
 
-1. **TypeScript E2E Tests** ✅
+1. **Python E2E Tests** ✅
+   - `test-e2e-api` - API workflow tests
+   - `test-e2e-dice-ladder` - Dice ladder behavior tests
+   - `test-e2e-browser-*` - Individual browser UI tests (sharded for parallel execution)
+
+2. **TypeScript E2E Tests** ✅
    - `test-e2e-playwright` - Playwright tests
 
 ## Local Development
+
+### Running Python E2E Tests Locally
+
+```bash
+# Set environment variables
+export DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/comic_pile_test"
+export TEST_DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/comic_pile_test"
+export SECRET_KEY="test-secret-key-for-testing-only"
+
+# Run tests
+pytest tests_e2e/test_browser_ui.py -v --no-cov
+```
 
 ### Running TypeScript E2E Tests Locally
 
@@ -70,11 +108,7 @@ pnpm exec playwright install chromium
 
 # Start backend (in separate terminal)
 cd ..
-# Start the Rust API against a disposable local test database (never a shared or production one)
-RUST_ROLL_BIND=127.0.0.1:8010 \
-RUST_ROLL_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/comic_pile_test" \
-RUST_ROLL_JWT_SECRET="test-secret-key-for-testing-only" \
-cargo run --locked -p comicpile-roll-service
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # Run tests
 cd frontend
@@ -106,6 +140,20 @@ test('example test', async ({ authenticatedPage }) => {
 - `createThread(page, data)` - Create thread via API
 - `SELECTORS` - Centralized element selectors
 
+### Python Test Helpers
+
+```python
+def login_with_playwright(page, test_server_url, email, password=None):
+    """Helper function to login via browser."""
+    login_response = requests.post(
+        f"{test_server_url}/api/auth/login",
+        json={"username": email, "password": password},
+    )
+    access_token = login_response.json()["access_token"]
+    page.add_init_script(f"localStorage.setItem('auth_token', {json.dumps(access_token)})")
+    page.goto(f"{test_server_url}/")
+```
+
 ## Debugging Failed Tests
 
 ### TypeScript Tests
@@ -124,6 +172,19 @@ ls test-results/*/test-failed-*.png
 pnpm exec playwright show-report
 ```
 
+### Python Tests
+
+```bash
+# Run single test with verbose output
+pytest tests_e2e/test_browser_ui.py::test_root_url_renders_dice_ladder -vv
+
+# Run with headed browser
+pytest tests_e2e/test_browser_ui.py --headed
+
+# Keep browser open on failure
+pytest tests_e2e/test_browser_ui.py --debug
+```
+
 ## Best Practices
 
 1. **Isolation**: Each test should clean up after itself
@@ -134,5 +195,6 @@ pnpm exec playwright show-report
 
 ## Next Steps
 
-1. **Add visual regression baseline images** for screenshot tests
-2. **Set up accessibility dashboard** for tracking a11y violations
+1. **Add more Python E2E tests** for coverage gaps
+2. **Add visual regression baseline images** for screenshot tests
+3. **Set up accessibility dashboard** for tracking a11y violations

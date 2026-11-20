@@ -85,23 +85,3 @@ it('discards a pending offer key whose stored thread intent is malformed', async
   )
 })
 
-
-it('unsnooze posts the v2 command and clears only the selected snooze cookie id (#4589)', async () => {
-  const isolated = createRollApi(client)
-  globalThis.document.cookie = `comicpile_roll_snoozes=${encodeURIComponent('[8,9]')}; path=/`
-
-  await isolated.unsnooze(8)
-
-  expect(client.post).toHaveBeenCalledWith('/v2/roll/unsnooze', { thread_id: 8 })
-  expect(readRollSnoozes()).toEqual([9])
-})
-
-it('unsnooze keeps the snooze cookie when the server write fails (#4589)', async () => {
-  const isolated = createRollApi(client)
-  globalThis.document.cookie = `comicpile_roll_snoozes=${encodeURIComponent('[8,9]')}; path=/`
-  client.post.mockRejectedValueOnce(new Error('connection dropped'))
-
-  await expect(isolated.unsnooze(8)).rejects.toThrow('connection dropped')
-
-  expect(readRollSnoozes()).toEqual([8, 9])
-})

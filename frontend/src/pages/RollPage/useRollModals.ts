@@ -28,6 +28,7 @@ interface UseRollModalsParams {
  */
 export function useRollModals({
   state,
+  bootstrap,
   overrideMutation,
   enterRatingView,
   setRestoreAction,
@@ -60,6 +61,9 @@ export function useRollModals({
     if (!isOverrideOpen || overrideThreads) return
 
     let cancelled = false
+    const snoozedThreads = bootstrap?.snoozed_threads ?? []
+    const snoozedIds = new Set(snoozedThreads.map((thread) => thread.id))
+
     async function loadAllOverrideThreads() {
       const collected: ThreadListItem[] = []
       let pageToken: string | null = null
@@ -70,9 +74,9 @@ export function useRollModals({
       } while (pageToken)
 
       if (!cancelled) {
-        // Keep the full thread projection: RollModal filters choices, and
-        // snoozed options also need the canonical series cover from this batch.
-        setOverrideThreads(collected)
+        setOverrideThreads(
+          collected.filter((thread) => thread.status === 'active' && !snoozedIds.has(thread.id)),
+        )
       }
     }
 
@@ -83,7 +87,7 @@ export function useRollModals({
     return () => {
       cancelled = true
     }
-  }, [isOverrideOpen, overrideThreads])
+  }, [isOverrideOpen, overrideThreads, bootstrap])
 
   useEffect(() => {
     if (showSimpleMigration) {

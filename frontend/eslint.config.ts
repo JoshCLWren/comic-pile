@@ -243,12 +243,6 @@ export default [
     },
   },
   {
-    files: ['src/components/CustomCBLBuilder.tsx'],
-    rules: {
-      'max-lines': ['error', { max: 1300, skipBlankLines: true, skipComments: true }],
-    },
-  },
-  {
     files: ['src/test/**/*.{ts,tsx}', 'src/unit/**/*.{ts,tsx}'],
     rules: {
       'max-lines': ['error', { max: 1600, skipBlankLines: true, skipComments: true }],

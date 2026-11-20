@@ -69,7 +69,6 @@ function renderRollSnooze(
     const snooze = useRollSnooze({
       state,
       snoozeMutation: { mutate },
-      unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}) },
       refetchBootstrap,
       onRefreshFailed,
     })
@@ -162,7 +161,6 @@ describe('useRollSnooze', () => {
     const { result } = renderHook(() => useRollSnooze({
       state: useRollPageState(),
       snoozeMutation: { mutate, retryRefresh },
-      unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}) },
       refetchBootstrap: vi.fn().mockResolvedValue(undefined),
     }))
 
@@ -182,7 +180,6 @@ describe('useRollSnooze', () => {
       const snooze = useRollSnooze({
         state,
         snoozeMutation: { mutate: vi.fn() },
-        unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}) },
         rerollMutation: { mutate: reroll },
         refetchBootstrap,
       })
@@ -215,7 +212,6 @@ describe('useRollSnooze', () => {
       const snooze = useRollSnooze({
         state,
         snoozeMutation: { mutate: vi.fn() },
-        unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}) },
         rerollMutation: { mutate: reroll },
         enterRatingView,
         refetchBootstrap,
@@ -239,46 +235,5 @@ describe('useRollSnooze', () => {
       response,
     )
     expect(refetchBootstrap).not.toHaveBeenCalled()
-  })
-
-  it('unsnoozes through the mutation, which owns the refresh', async () => {
-    const unsnooze = vi.fn().mockResolvedValue({})
-    const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
-    const { result } = renderHook(() => useRollSnooze({
-      state: useRollPageState(),
-      snoozeMutation: { mutate: vi.fn() },
-      unsnoozeMutation: { mutate: unsnooze },
-      refetchBootstrap,
-    }))
-
-    await act(async () => {
-      await result.current.handleUnsnooze(8)
-    })
-
-    expect(unsnooze).toHaveBeenCalledWith(8)
-    expect(refetchBootstrap).not.toHaveBeenCalled()
-  })
-
-  it('shows a visible error when unsnooze fails and does not refresh', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
-    const { result } = renderHook(() => {
-      const state = useRollPageState()
-      const snooze = useRollSnooze({
-        state,
-        snoozeMutation: { mutate: vi.fn() },
-        unsnoozeMutation: { mutate: vi.fn().mockRejectedValue(new Error('unsnooze unavailable')) },
-        refetchBootstrap,
-      })
-      return { state, snooze }
-    })
-
-    await act(async () => {
-      await result.current.snooze.handleUnsnooze(8)
-    })
-
-    expect(result.current.state.errorMessage).toContain('unsnooze unavailable')
-    expect(refetchBootstrap).not.toHaveBeenCalled()
-    errorSpy.mockRestore()
   })
 })

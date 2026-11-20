@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest'
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { setAccessToken } from '../../services/api'
 import { OTHER_USER, TEST_USER, renderAppAtRoute, type HarnessUser } from './appNetworkHarness'
 
@@ -31,7 +31,8 @@ describe('authentication transitions', () => {
 
     const base = app.ledger.mark()
     login()
-    await app.settleUntil(() => app.currentPath() === '/', 'login navigates to /')
+    await app.settle()
+    await waitFor(() => expect(app.currentPath()).toBe('/'))
 
     const rows = app.rows(app.ledger.since(base))
     expect(rows.filter(row => row.startsWith('POST /api/v2/auth/login'))).toEqual([
@@ -41,7 +42,7 @@ describe('authentication transitions', () => {
       'GET /api/v2/auth/me x1',
     ])
     expect(rows.some(row => row.startsWith('POST /api/v2/auth/refresh'))).toBe(false)
-    expect(rows.filter(row => row.startsWith('GET /api/v2/identity-inbox'))).toHaveLength(1)
+    expect(rows.filter(row => row.startsWith('GET /api/v1/identity-inbox'))).toHaveLength(1)
 
     currentUser = OTHER_USER
   })
@@ -77,8 +78,8 @@ describe('authentication transitions', () => {
       },
     })
     await app.settle()
-    const firstAccountReleases = app.rows().filter(row => row.includes('/api/v2/releases'))
-    expect(firstAccountReleases).toEqual(['GET /api/v2/releases?limit=20&offset=0 x1'])
+    const firstAccountReleases = app.rows().filter(row => row.includes('/api/v1/releases/'))
+    expect(firstAccountReleases).toEqual(['GET /api/v1/releases/?limit=20&offset=0 x1'])
 
     await app.perform('logout', async () => {
       screen.getAllByLabelText('Log out')[0].click()
@@ -88,13 +89,14 @@ describe('authentication transitions', () => {
     currentUser = OTHER_USER
     const base = app.ledger.mark()
     login()
+    await app.settle()
     // ProtectedRoute sent the expired session to /login with `from` state, so
     // a successful login returns to the requested page rather than the Roll home.
-    await app.settleUntil(() => app.currentPath() === '/whats-new', 'login returns to /whats-new')
+    await waitFor(() => expect(app.currentPath()).toBe('/whats-new'))
 
     const secondAccountReleases = app.rows(app.ledger.since(base)).filter(row =>
-      row.includes('/api/v2/releases'),
+      row.includes('/api/v1/releases/'),
     )
-    expect(secondAccountReleases).toEqual(['GET /api/v2/releases?limit=20&offset=0 x1'])
+    expect(secondAccountReleases).toEqual(['GET /api/v1/releases/?limit=20&offset=0 x1'])
   })
 })

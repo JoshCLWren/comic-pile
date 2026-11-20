@@ -13,7 +13,17 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.security import MAX_CLIENT_IP_CHARS, get_client_ip
 from tests.conftest import _create_async_db_override
+
+
+def test_get_client_ip_truncates_to_the_persisted_column_bound() -> None:
+    """A hostile forwarding header must not exceed varchar(45) on rejected login."""
+    hostile = "198.51.100.250-" * 8
+    resolved = get_client_ip({"x-forwarded-for": f"{hostile}, 203.0.113.9"}, None)
+    assert len(resolved) == MAX_CLIENT_IP_CHARS
+    assert len(get_client_ip({}, "203.0.113.9" * 10)) == MAX_CLIENT_IP_CHARS
+    assert get_client_ip({}, None) == "unknown"
 
 
 @pytest.mark.asyncio
@@ -121,10 +131,13 @@ async def test_health_routes_always_accessible(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ping_route_always_accessible(client: AsyncClient) -> None:
-    """The eager ping route is retained and always accessible (#4861)."""
+async def test_ping_and_metrics_routes_always_accessible(client: AsyncClient) -> None:
+    """Eager ping/metrics routes are retained and always accessible (#4861)."""
     ping = await client.get("/health")
     assert ping.status_code == 200
+
+    metrics = await client.get("/api/metrics")
+    assert metrics.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -462,3 +475,4 @@ async def test_app_starts_successfully(
             os.environ.pop("CORS_ORIGINS", None)
         else:
             os.environ["CORS_ORIGINS"] = original_cors
+
