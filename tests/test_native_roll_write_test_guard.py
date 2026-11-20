@@ -464,16 +464,21 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
     )
 
     now_tested = sorted(
-        {
-            resolved_modules[(module, handler)]
-            for module, handler in mounted
-            if resolved_modules[(module, handler)] in baseline
-            and _tests_write_path(module, handler)
-        }
+        baseline_module
+        for baseline_module in baseline
+        if (
+            handlers := [
+                (module, handler)
+                for module, handler in mounted
+                if resolved_modules[(module, handler)] == baseline_module
+                or module == baseline_module
+            ]
+        )
+        and all(_tests_write_path(module, handler) for module, handler in handlers)
     )
     assert now_tested == [], (
-        "These modules now have a write-path test; remove them from "
-        f"{BASELINE.name}: {now_tested}"
+        "Every mounted handler in these modules now has a write-path test; "
+        f"remove them from {BASELINE.name}: {now_tested}"
     )
 
     now_tested_handlers = sorted(
