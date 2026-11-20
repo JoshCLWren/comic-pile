@@ -493,7 +493,7 @@ def test_fetch_pr_records_for_branch_scopes_to_head(monkeypatch):
     assert len(records) == 1
     assert records[0]["headRefName"] == "factory/17-keep"
     assert records[0]["state"] == "OPEN"
-    assert records[0]["open_pr"] is False if "open_pr" in records[0] else True
+    assert records[0]["isDraft"] is False
     assert records[0]["number"] == 17
 
 
