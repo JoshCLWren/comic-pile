@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 93,
-    "native_rust": 93,
+    "total_live_operations": 108,
+    "native_rust": 108,
     "python_fastapi": 0,
-    "native_rust_status": 93,
+    "native_rust_status": 108,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -553,6 +553,123 @@
     {
       "runtime": "native-rust",
       "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/identity-inbox",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/identity-inbox/issue-matches",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/identity-inbox/{mapping_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/confirmations",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/deferrals",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/rejections",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/skips",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/issue-read-marker-removals",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/issue-read-markers",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
       "owning_issue": 4443,
       "consumers": [
         "frontend/src/services/rollResourcesApi.ts",
@@ -604,6 +721,20 @@
     {
       "runtime": "native-rust",
       "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-dependencies.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/issues/{issue_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
       "owning_issue": 4443,
       "consumers": [
         "frontend/src/services/nativeRollMutationApi.ts",
@@ -646,6 +777,72 @@
         "proof_reference": "native/roll-service/src/comicvine_issue.rs",
         "measurement_status": "pending-fixture"
       },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/issues/{issue_id}/dependencies",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ],
+      "method": "PUT",
+      "path": "/api/v2/issues/{issue_id}/position",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ],
+      "method": "DELETE",
+      "path": "/api/v2/issues/{issue_id}/read-markers",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/issues/{issue_id}/read-markers",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-reader-context.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/issues/{issue_id}/reader-context",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
