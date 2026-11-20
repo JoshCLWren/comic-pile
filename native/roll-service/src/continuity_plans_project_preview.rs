@@ -532,6 +532,20 @@ mod tests {
     }
 
     #[test]
+    fn flatten_tolerates_empty_strict_plan() {
+        // #5614: the empty strict plan (0 lanes, 0 steps) is a valid strict
+        // plan; it projects as an empty sequence instead of a
+        // malformed-plan conflict.
+        let nodes = serde_json::json!([]);
+        let lanes = serde_json::json!([]);
+        let parsed = parse_nodes(&nodes, 5).expect("no nodes");
+        let (ordered, dropped) =
+            flatten(parsed, "strict_sequential", &lanes, 5).expect("empty strict flattens");
+        assert!(ordered.is_empty());
+        assert!(dropped.is_empty());
+    }
+
+    #[test]
     fn drops_nodes_from_unknown_lanes() {
         let nodes = serde_json::json!([
             {"id":"n1","node_type":"thread","ref_id":10,"lane_id":"ghost","position":0}
