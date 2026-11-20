@@ -324,7 +324,7 @@ pub async fn read(
                     "read".to_string()
                 } else if Some(i) == first_unread_index {
                     let blockers = blockers_by_issue.get(&issue_id);
-                    if blockers.map_or(false, |b| !b.is_empty()) {
+                    if blockers.is_some_and(|b| !b.is_empty()) {
                         "blocked".to_string()
                     } else {
                         "available".to_string()
