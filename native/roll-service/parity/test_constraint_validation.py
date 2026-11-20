@@ -17,10 +17,10 @@ READER_ID = 937
 
 
 def oracle(data: dict[str, object]) -> dict[str, object]:
-    """Compare order/error payloads after dropping non-authoritative prerequisites.
+    """Compare order/error payloads after dropping converted audit prerequisites.
 
-    Converted and legacy-generated edges are audit data in the canonical Rust
-    evaluator; the reader-only projection is the contract both sides compare.
+    Converted edges have no canonical execution authority; unknown origins still
+    fail closed on both sides.
     """
     raw = json.loads(json.dumps(data))
     try:
