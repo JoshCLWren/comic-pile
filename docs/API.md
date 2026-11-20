@@ -50,7 +50,7 @@ generated sources:
 - `native/contracts/python-legacy.openapi.json`, a frozen snapshot of the remaining
   Python/FastAPI routes, and
 - `native/contracts/v2-runtime.openapi.json` for the deployed native Rust v2
-  operations, generated from the Rust DTOs by `cargo run --example v2_openapi`.
+  operations, generated from the Rust DTOs by `scripts/generate_contracts.sh` (bot-owned; never committed by feature PRs).
 
 `scripts/export_openapi_schema.mjs` merges them: a native operation replaces the
 same `(path, method)` because ingress routes that request to Rust, and a native

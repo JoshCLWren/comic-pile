@@ -84,12 +84,9 @@ also emits `frontend/src/generated/nativeV2Client.ts`, a thin typed request
 client generated from the native operation set and the merged operation types.
 It delegates every call to the existing `HttpClient`; it is not a new transport
 and does not change authentication, CSRF, retry or error semantics. Regenerate
-all three sources together:
-
-```sh
-cd native/roll-service && cargo run --example v2_openapi > ../contracts/v2-runtime.openapi.json
-cd ../.. && node scripts/generate_openapi_types.mjs
-```
+all of them together with `bash scripts/generate_contracts.sh`. They are
+bot-owned: feature PRs never commit them (CI regenerates them from the PR's
+code; the route-regeneration bot PR commits them after merge).
 
 `scripts/generate_openapi_types.mjs --check` verifies the schema, `openapi.ts`,
 and `nativeV2Client.ts` without overwriting repository artifacts. Custom
