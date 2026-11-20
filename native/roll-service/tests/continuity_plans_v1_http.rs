@@ -1115,3 +1115,150 @@ async fn repeated_authoring_saves_do_not_duplicate_preserved_placements() {
     drop(conn);
     assert_eq!(placements, 1, "repeated save duplicated a placement row");
 }
+
+#[tokio::test]
+async fn adoption_projection_release_sources_and_sync_execute_their_writes() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-release-lifecycle").await;
+    let user_id = user_id_for(&state, "cp-release-lifecycle").await;
+    seed_thread_issue(&state, user_id, 720001, 720011, "Release Series", "1").await;
+
+    let conn = db::checkout(&state).await.expect("seed connection");
+    let reading_order_id: i32 = conn
+        .query_one(
+            "INSERT INTO reading_orders (name, user_id) VALUES ('Release Order', $1) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .expect("reading order")
+        .get(0);
+    conn.execute(
+        "INSERT INTO reading_order_items (reading_order_id, thread_id, position) \
+         VALUES ($1, 720001, 1)",
+        &[&reading_order_id],
+    )
+    .await
+    .expect("reading order item");
+    let external_identity_id: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities \
+             (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'series', '720101', $1::text::json, NOW(), NOW()) \
+             RETURNING id",
+            &[&json!({"name": "Release Series"}).to_string()],
+        )
+        .await
+        .expect("provider identity")
+        .get(0);
+    conn.execute(
+        "INSERT INTO thread_external_series_mappings \
+         (thread_id, external_identity_id, status, created_at, updated_at) \
+         VALUES (720001, $1, 'confirmed', NOW(), NOW())",
+        &[&external_identity_id],
+    )
+    .await
+    .expect("confirmed series mapping");
+    drop(conn);
+
+    let (status, adopted) = authed_json(
+        &state,
+        "POST",
+        "/api/v2/continuity-plans/from-reading-order",
+        &token,
+        &csrf,
+        Some(json!({
+            "reading_order_id": reading_order_id,
+            "plan_name": "Adopted Release Plan"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{adopted}");
+    let plan_id = adopted["id"].as_i64().expect("plan id");
+    assert_eq!(adopted["nodes"][0]["ref_id"], 720001);
+
+    let (status, projected) = authed_json(
+        &state,
+        "POST",
+        &format!("/api/v2/continuity-plans/{plan_id}/reading-orders/project"),
+        &token,
+        &csrf,
+        Some(json!({"reading_order_id": reading_order_id})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{projected}");
+    assert_eq!(projected["added_count"], 1);
+    assert_eq!(projected["total_positions"], 1);
+
+    let (status, created) = authed_json(
+        &state,
+        "POST",
+        "/api/v2/continuity-plans/release-sources/",
+        &token,
+        &csrf,
+        Some(json!({
+            "plan_id": plan_id,
+            "thread_id": 720001,
+            "external_identity_id": external_identity_id
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let source_id = created["id"].as_i64().expect("release source id");
+    assert_eq!(created["enabled"], true);
+
+    let (status, updated) = authed_json(
+        &state,
+        "PATCH",
+        &format!("/api/v2/continuity-plans/release-sources/{source_id}"),
+        &token,
+        &csrf,
+        Some(json!({"enabled": false})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{updated}");
+    assert_eq!(updated["enabled"], false);
+
+    let (status, deleted) = authed_json(
+        &state,
+        "DELETE",
+        &format!("/api/v2/continuity-plans/release-sources/{source_id}"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{deleted}");
+
+    let (status, synced) = authed_json(
+        &state,
+        "POST",
+        "/api/v2/reading-plan-sync/runs",
+        &token,
+        &csrf,
+        Some(json!({"as_of": "2026-01-01T00:00:00Z", "refresh": false})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{synced}");
+    assert_eq!(synced["success"], true);
+    assert_eq!(synced["result"]["total_sources"], 0);
+
+    let conn = db::checkout(&state).await.expect("verification connection");
+    let projected_thread: i32 = conn
+        .query_one(
+            "SELECT thread_id FROM reading_order_items WHERE reading_order_id = $1 AND position = 1",
+            &[&reading_order_id],
+        )
+        .await
+        .expect("projected reading order row")
+        .get(0);
+    assert_eq!(projected_thread, 720001);
+    let remaining_sources: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM reading_plan_release_sources WHERE id = $1",
+            &[&(source_id as i32)],
+        )
+        .await
+        .expect("release source count")
+        .get(0);
+    assert_eq!(remaining_sources, 0);
+}

@@ -111,7 +111,9 @@ async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String
 async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Value) {
     let response = router(state.clone()).oneshot(request).await.unwrap();
     let status = response.status();
-    let bytes = to_bytes(response.into_body(), 2 * 1024 * 1024).await.unwrap();
+    let bytes = to_bytes(response.into_body(), 2 * 1024 * 1024)
+        .await
+        .unwrap();
     (
         status,
         serde_json::from_slice(&bytes).unwrap_or(Value::Null),

@@ -290,7 +290,9 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
     }
 
     let migration_runner = runner();
-    let applied = migration_runner.get_applied_migrations_async(client).await?;
+    let applied = migration_runner
+        .get_applied_migrations_async(client)
+        .await?;
     let embedded = migration_runner.get_migrations();
     for recorded in &applied {
         let Some(expected) = embedded
