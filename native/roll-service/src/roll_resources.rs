@@ -354,9 +354,9 @@ fn parse_snoozed(raw: Option<&str>) -> Result<HashSet<i32>, ApiError> {
 /// [`crate::roll_pool::offer_frontiers`] does for `POST /api/v2/roll/offer`.
 /// A deeper-ranked thread never backfills a snoozed face (MQA-ROLL-014), so
 /// the returned pool can only shrink below the logical die. When the reader
-/// has an unacted-on offer, the next
-/// offer snoozes it first: that steps the die up and excludes the pending
-/// thread, so the read projects the same outcome without persisting an event.
+/// has an unacted-on offer, the next offer snoozes it first: that steps the
+/// die up and excludes the pending thread, so the read projects the same
+/// outcome without persisting an event.
 fn select_eligible(
     inputs: option_inputs::OptionInputs,
     die_after: Option<i32>,
