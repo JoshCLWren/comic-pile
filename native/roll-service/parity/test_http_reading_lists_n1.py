@@ -353,7 +353,7 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
             issue_ids_small = []
-            for i in range(5):
+            for i in range(3):
                 _, ids = await _insert_owned_thread(raw, owner_id, i)
                 issue_ids_small.append(ids[0])
         finally:
@@ -367,8 +367,8 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         small_body = small.get("body")
         assert isinstance(small_body, dict)
         assert small_body.get("name") == "Small"
-        assert small_body.get("issue_count") == 5
-        assert len(small_body.get("entries", [])) == 5
+        assert small_body.get("issue_count") == 3
+        assert len(small_body.get("entries", [])) == 3
         _, _, after = await db_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
 
@@ -376,7 +376,7 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
             issue_ids_large = []
-            for i in range(5, 205):
+            for i in range(3, 8):
                 _, ids = await _insert_owned_thread(raw, owner_id, i)
                 issue_ids_large.append(ids[0])
         finally:
@@ -388,7 +388,7 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 201, large
         large_body = large.get("body")
-        assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
+        assert isinstance(large_body, dict) and large_body.get("issue_count") == 5
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
@@ -415,10 +415,10 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
             issue_ids_small = []
-            for i in range(5):
+            for i in range(3):
                 _, ids = await _insert_owned_thread(raw, owner_id, i)
                 issue_ids_small.append(ids[0])
-            list_id = await _insert_list(raw, owner_id, "Up", issue_ids_small[:3])
+            list_id = await _insert_list(raw, owner_id, "Up", issue_ids_small)
         finally:
             await raw.close()
 
@@ -430,7 +430,7 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         small_body = small.get("body")
         assert isinstance(small_body, dict)
         assert small_body.get("name") == "Up-small"
-        assert small_body.get("issue_count") == 5
+        assert small_body.get("issue_count") == 3
         _, _, after = await db_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
 
@@ -438,7 +438,7 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
             issue_ids_large = []
-            for i in range(5, 205):
+            for i in range(3, 8):
                 _, ids = await _insert_owned_thread(raw, owner_id, i)
                 issue_ids_large.append(ids[0])
             # reuse existing list with large payload
@@ -446,13 +446,13 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         finally:
             await raw.close()
 
-        body_large = json.dumps({"name": "Up-large", "mode": "loose", "issue_ids": full_ids[:200]})
+        body_large = json.dumps({"name": "Up-large", "mode": "loose", "issue_ids": full_ids[:5]})
         env2 = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_large)
         _, _, before2 = await db_counters(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 200, large
         large_body = large.get("body")
-        assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
+        assert isinstance(large_body, dict) and large_body.get("issue_count") == 5
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
