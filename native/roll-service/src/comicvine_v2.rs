@@ -412,10 +412,10 @@ fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     if value.is_empty() {
         return None;
     }
-    let (scheme, rest) = if let Some((s, r)) = value.split_once("://") {
+    let (scheme, rest): (String, &str) = if let Some((s, r)) = value.split_once("://") {
         (s.to_ascii_lowercase(), r)
     } else {
-        ("https", value) // No scheme defaults to https
+        ("https".to_owned(), value) // No scheme defaults to https
     };
     // Python behavior: reject ftp:// and other non-http(s) schemes
     if scheme != "http" && scheme != "https" {
@@ -2164,7 +2164,8 @@ pub async fn search_series(
     let (limit, offset) = (query.limit, query.offset);
     // Bounded arithmetic: use checked operations to prevent overflow
     // Maximum offset is limited to prevent integer overflow in page calculation
-    let page = offset.checked_div(limit as i64)
+    let page: i64 = (offset as i64)
+        .checked_div(limit as i64)
         .and_then(|p| p.checked_add(1))
         .unwrap_or(i64::MAX); // Cap at max page if overflow
     if query.q.trim().is_empty() {
