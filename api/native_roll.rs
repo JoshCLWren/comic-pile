@@ -504,6 +504,13 @@ fn app() -> Router {
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(native_dispatch),
         )
+        // Canonical native v2 ComicVine read routes (#4835, split chunk A).
+        .route("/api/v2/comicvine/search/series", get(native_dispatch))
+        .route("/api/v2/comicvine/resolve", get(native_dispatch))
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+            get(native_dispatch),
+        )
         .route(
             "/api/v2/issues/{issue_id}/dependencies",
             get(native_dispatch),
@@ -1138,6 +1145,38 @@ mod tests {
             response.headers().get("x-comicpile-api-runtime").unwrap(),
             "rust"
         );
+    }
+
+    #[tokio::test]
+    async fn comicvine_v2_read_ingress_preserves_canonical_paths_and_requires_auth() {
+        for uri in [
+            "/api/v2/comicvine/search/series?q=batman",
+            "/api/v2/comicvine/resolve?input=batman",
+            "/api/v2/comicvine/series/42/issues",
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "GET {uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "GET {uri} must be served by the native ingress"
+            );
+        }
     }
 
     #[tokio::test]
