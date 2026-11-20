@@ -82,6 +82,7 @@ vi.mock('../services/api-tags', async (importOriginal) => {
 })
 const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedThreadsApiGet = vi.mocked(threadsApi.get)
+const mockedThreadsApiUpdate = vi.mocked(threadsApi.update)
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
 const mockedIssuesApiListCreators = vi.mocked(issuesApi.listCreators)
 const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
