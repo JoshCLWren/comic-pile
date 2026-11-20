@@ -1,9 +1,9 @@
-utc: 2026-11-20T11:28:32Z
-uptime: 451.24s load: 0.14 0.18 0.10
+utc: 2026-11-20T11:28:49Z
+uptime: 467.61s load: 0.11 0.17 0.10
 processes: 164
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15982         986       12395          50        2965       14995
+Mem:           15982         987       12394          50        2965       14994
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
@@ -12,11 +12,11 @@ Filesystem      Size  Used Avail Use% Mounted on
 --- top rss (KiB, name only)
 206348 Runner.Worker
 138264 provjobd3588702
-110212 Runner.Listener
+110220 Runner.Listener
 82396 dockerd
 55988 php-fpm8.5
 46000 containerd
-43980 ExtHandler
+44044 ExtHandler
 36940 Daemon
 30272 networkd-dispat
 21400 php-fpm8.5
@@ -36,5 +36,4 @@ Filesystem      Size  Used Avail Use% Mounted on
  0.0 containerd
 --- kernel oom/kill
 --- shutdown/session signals
-2026-11-20T11:21:16+00:00 runnervmccnms python3[1322]: 2026-11-20T11:21:16.361367Z INFO MonitorHandler ExtHandler KernelSoftLockup: Boot ID changed (saved=3bb31775-e6d4-4835-a5bd-439a84511750, current=30905252-ce9b-4967-a94b-3eb2ea091540). Resetting timestamp watermark due to reboot.
 2026-11-20T11:21:17+00:00 runnervmccnms hosted-compute-agent[1968]: {"level":"INFO","ts":1795173677.1279464,"logger":"hosted-compute-agent","msg":"Reading metadata to detect shutdown tag..."}
