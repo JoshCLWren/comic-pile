@@ -2186,7 +2186,7 @@ pub async fn search_series(
         .collect();
     let total =
         coerce_provider_int(payload.get("number_of_total_results")).unwrap_or(results.len() as i32);
-    let loaded = offset + results.len() as i32;
+    let loaded = (offset as i64 + results.len() as i64) as i32;
     let has_more = loaded < total;
     Ok(Json(ComicVineSeriesSearchResponse {
         query: query.q,
