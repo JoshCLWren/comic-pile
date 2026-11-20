@@ -89,10 +89,12 @@ exit 0
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    # Assert that the lint script's Git environment checks ran (gate_log has content)
-    assert gate_log.exists() and gate_log.read_text().strip() != "", (
-        f"Git environment checks did not run; gate_log is empty or missing. "
-        f"Content: {gate_log.read_text()!r}"
+    # Assert that the lint script's Git environment checks ran
+    # (gate_log contains the completion marker written by the lint script)
+    gate_log_content = gate_log.read_text()
+    assert gate_log.exists() and "Git env checks completed" in gate_log_content, (
+        f"Git environment checks did not run; 'Git env checks completed' not found in gate_log. "
+        f"Content: {gate_log_content!r}"
     )
     # Assert that no test commands ran; gate_log should only contain lint-related messages
     gate_log_content = gate_log.read_text()
