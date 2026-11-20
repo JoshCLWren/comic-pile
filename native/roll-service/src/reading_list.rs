@@ -445,6 +445,7 @@ pub async fn create_reading_list(
         .unwrap_or_default()
         .into_iter()
         .collect();
+    let mut columns = EntryColumns::with_capacity(request.issue_ids.len());
     for (position, issue_id) in request.issue_ids.iter().enumerate() {
         let intent = request
             .entry_intents
@@ -462,30 +463,16 @@ pub async fn create_reading_list(
             .and_then(|targets| targets.get(issue_id))
             .cloned()
             .unwrap_or_default();
-        tx.execute(
-            "INSERT INTO custom_cbl_entries
-               (list_id, issue_id, position, created_at, is_checkpoint,
-                checkpoint_target_issue_ids, gate, skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[
-                &list_id,
-                issue_id,
-                &(position as i32),
-                &checkpoints.contains(issue_id),
-                &serde_json::to_string(&targets).map_err(|e| {
-                    tracing::debug!(
-                        error_kind = crate::error_kind(&e),
-                        "preserved underlying error before mapping"
-                    );
-                    ApiError::Internal("Invalid checkpoint".to_string())
-                })?,
-                &gate,
-                &skipped,
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
+        columns.push(
+            *issue_id,
+            position,
+            checkpoints.contains(issue_id),
+            &targets,
+            gate,
+            skipped,
+        )?;
     }
+    insert_entries(&tx, list_id, &columns).await?;
 
     graph_preflight(&tx, user).await?;
     let entries = load_entries(&tx, list_id).await?;
