@@ -1,7 +1,8 @@
 {
   "family": "comicvine",
   "owned_path_patterns": [
-    "^/api/v1/comicvine(?:/.*)?$"
+    "^/api/v1/comicvine(?:/.*)?$",
+    "^/api/v2/comicvine(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -110,6 +111,39 @@
       "path": "/api/v1/comicvine/series:import",
       "dest": "/api/index.py",
       "src": "^/api/v1/comicvine/series:import$"
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/comicvine/resolve",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/resolve$",
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "owning_issue": 4835
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/comicvine/search/series",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/search/series$",
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "owning_issue": 4835
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/series/[^/]+/issues$",
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "owning_issue": 4835
     }
   ]
 }

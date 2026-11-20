@@ -248,11 +248,12 @@ export const comicVineApi = {
       `/v1/comicvine/series/${volumeId}/import-status`,
     ),
   searchSeries: (query: string, limit = 10, offset = 0) =>
-    api.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit, offset } }),
+    api.get<ComicVineSeriesSearchResponse>(`/v2/comicvine/search/series`, { params: { q: query, limit, offset } }),
   resolveIdentity: (input: string) =>
-    api.get<ComicVineResolveResponse>(`/v1/comicvine/resolve`, { params: { input } }),
+    // Roster-backed: a pasted volume URL resolves the roster before answering.
+    api.get<ComicVineResolveResponse>(`/v2/comicvine/resolve`, { params: { input }, timeout: COMICVINE_ROSTER_TIMEOUT_MS }),
   getSeriesIssues: (volumeId: number, seriesName = '') =>
-    api.get<ComicVineSeriesIssuesResponse>(`/v1/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName } }),
+    api.get<ComicVineSeriesIssuesResponse>(`/v2/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName }, timeout: COMICVINE_ROSTER_TIMEOUT_MS }),
   getIssueIdentity: (issueId: number) =>
     api.get<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity`),
   confirmIdentity: (issueId: number, comicvineIssueId: number) =>
