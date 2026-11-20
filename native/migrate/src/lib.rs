@@ -289,17 +289,35 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
         };
     }
 
-    let applied: std::collections::BTreeSet<i32> = runner()
-        .get_applied_migrations_async(client)
-        .await?
-        .iter()
-        .map(|m| m.version())
-        .collect();
-    let pending = runner()
+    let runner = runner();
+    let applied = runner.get_applied_migrations_async(client).await?;
+    let embedded: std::collections::BTreeMap<i32, _> = runner
         .get_migrations()
         .iter()
-        .any(|m| !applied.contains(&m.version()));
-    if pending {
+        .map(|migration| (migration.version(), migration))
+        .collect();
+    let applied_versions: std::collections::BTreeSet<i32> = applied
+        .iter()
+        .map(|migration| {
+            let version = migration.version();
+            let Some(expected) = embedded.get(&version) else {
+                return Err(MigrateError(format!(
+                    "recorded migration V{version} is not embedded in this binary"
+                )));
+            };
+            if migration.name() != expected.name() || migration.checksum() != expected.checksum() {
+                return Err(MigrateError(format!(
+                    "recorded migration V{version} has a different name or checksum"
+                )));
+            }
+            Ok(version)
+        })
+        .collect::<Result<_, _>>()?;
+    if runner
+        .get_migrations()
+        .iter()
+        .any(|migration| !applied_versions.contains(&migration.version()))
+    {
         return Ok(true);
     }
 
