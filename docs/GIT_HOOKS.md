@@ -4,11 +4,11 @@ This repository uses git hooks to enforce code quality checks.
 
 ## Principle: fix what hooks flag
 
-Hooks run fast static checks (lint/format/types). Tests are not run in git
-hooks; CI is the test gate. If a hook blocks you, fix the lint failure. Owner
-policy (2026-11-18): factory agents may push feature branches with
-`git push --no-verify` when a local hook blocks them, then open a PR so CI runs.
-Never force-push or push to main.
+Hooks run fast static checks (lint/format/types). Product test suites are not
+run in git hooks; CI is the test gate. If a hook blocks you, fix the lint
+failure. Never use `--no-verify` or otherwise bypass a hook: `AGENTS.md` and
+`docs/ISSUE_EXECUTION_PROTOCOL.md` prohibit it. Fix the failure, push, and let
+CI run the product tests. Never force-push or push to main.
 
 ## Available Hooks
 
@@ -36,7 +36,7 @@ still chain to `.git/hooks/pre-commit`.
 **What happens on failure:**
 - Commit is aborted
 - You'll see which linting step failed
-- Can bypass with `git commit --no-verify` (not recommended)
+- Fix the failure and commit again; do not bypass the hook
 
 ### Pre-Push Hook
 Runs automatically before each push to remote.
@@ -44,12 +44,15 @@ Runs automatically before each push to remote.
 **What it does:**
 - Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
 
-No tests run on push (no pytest, vitest, or UI audit). CI runs the tests.
+Product test suites do not run on push: no vitest, no rendered UI audit, and no
+backend pytest. CI runs those. The Python lint gate still runs its static
+hardcoded-ID guard (`pytest tests/test_hardcoded_ids.py`); see `AGENTS.md`,
+"Full-repo ruff, ty, and hardcoded-ID guard before every Python push".
 
 **What happens on failure:**
 - Push is aborted
 - You'll see which check failed
-- Can bypass with `git push --no-verify` (not recommended)
+- Fix the failure and push again; do not bypass the hook
 
 ## Installation
 
@@ -74,15 +77,9 @@ chmod +x .git/hooks/pre-commit .git/hooks/pre-push
 
 ## Bypassing Hooks
 
-**Not recommended**, but if you need to bypass:
-
-```bash
-# Bypass pre-commit hook
-git commit --no-verify
-
-# Bypass pre-push hook
-git push --no-verify
-```
+Do not bypass hooks. `AGENTS.md` and `docs/ISSUE_EXECUTION_PROTOCOL.md` prohibit
+`--no-verify` and equivalent suppressions because a bypass hides real lint
+failures from the only local gate. Fix the reported failure, then commit or push.
 
 ## Why Hooks Exist
 

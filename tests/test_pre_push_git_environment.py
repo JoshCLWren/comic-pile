@@ -42,7 +42,17 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
     (repository / "pyproject.toml").touch()
     (repository / "frontend" / "node_modules").mkdir(parents=True)
     (repository / "scripts").mkdir()
-    (repository / "scripts" / "lint.sh").write_text("exit 0\n")
+    # The lint gate carries the Git-isolation assertion because it is the only
+    # child the hook is allowed to run. It records its own execution so the test
+    # proves the hook still invokes lint while no test command runs.
+    (repository / "scripts" / "lint.sh").write_text(
+        "#!/bin/bash\n"
+        "set -eu\n"
+        "for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do\n"
+        '  if [[ -v "$variable" ]]; then echo "Leaked $variable" >&2; exit 1; fi\n'
+        "done\n"
+        'printf "%s\\n" "lint" >> "$GATE_LOG"\n'
+    )
     tools_directory = tmp_path / "tools"
     tools_directory.mkdir()
     for tool in ("python", "pnpm"):
@@ -72,4 +82,7 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert not gate_log.exists() or gate_log.read_text() == ""
+    assert gate_log.exists(), result.stdout + result.stderr
+    # Exactly the lint gate ran: its leak checks passed and no python/pnpm test
+    # command executed.
+    assert gate_log.read_text().splitlines() == ["lint"]
