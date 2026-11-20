@@ -128,21 +128,21 @@ pub struct CanonicalCorrection {
 ///
 /// Stub handler for native v1 comicvine corrections list route.
 pub async fn list_corrections(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
 ) -> Result<Json<ListCorrectionsResponse>, ApiError> {
     Ok(Json(ListCorrectionsResponse {
-        issue_id,
+        _issue_id,
         corrections: vec![],
     }))
 }
 
 /// List corrections response matching Python api_list_corrections wire contract.
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ListCorrectionsResponse {
     pub issue_id: i32,
-    pub corrections: vec![CanonicalCorrection],
+    pub corrections: Vec<String>,
 }
 
 /// OpenAPI documentation for the list_corrections operation.
