@@ -194,6 +194,52 @@ export function routeModulesFromLib(source) {
     .sort((a, b) => a.module.localeCompare(b.module));
 }
 
+const ROUTE_AREAS_RS = path.join('native', 'roll-service', 'src', 'route_areas.rs');
+
+/**
+ * Extract `{module -> [route paths]}` for areas registered through
+ * `route_areas::AREAS` (owner directive 2026-11-19: area routes live in their
+ * own module, not lib.rs). Each `&crate::<module>::ROUTE_AREA` entry names
+ * the module; its `routes: <fn>` function body is scanned and every route is
+ * credited to that module. A listed area whose routes function cannot be found
+ * fails closed so area routes can never escape the guard.
+ */
+export function routeModulesFromAreas(areasSource, readModule) {
+  const modules = [];
+  for (const [, module] of areasSource.matchAll(/&crate::([A-Za-z_][A-Za-z0-9_]*)::ROUTE_AREA\b/g)) {
+    const source = readModule(module);
+    const routesFn = source.match(/ROUTE_AREA\s*:[^=]*=[\s\S]*?\broutes\s*:\s*([A-Za-z_][A-Za-z0-9_]*)/);
+    const start = routesFn ? source.search(new RegExp(`\\bfn ${routesFn[1]}\\s*\\(`)) : -1;
+    if (start === -1) throw new Error(`Cannot find the ROUTE_AREA routes function of area ${module}`);
+    const end = source.indexOf('\n}\n', start);
+    const body = source.slice(start, end === -1 ? undefined : end);
+    const routes = new Set();
+    for (let cursor = 0; cursor < body.length; ) {
+      const at = body.indexOf('.route(', cursor);
+      if (at === -1) break;
+      const args = balancedParen(body, at + '.route'.length);
+      cursor = at + '.route'.length + args.length + 2;
+      const pathMatch = args.match(/"([^"\n]+)"/);
+      if (pathMatch) routes.add(pathMatch[1]);
+    }
+    if (!routes.size) throw new Error(`Area ${module} registers no routes in ${routesFn[1]}()`);
+    modules.push({module, routes: [...routes].sort()});
+  }
+  return modules;
+}
+
+/** Merge per-module route lists, keeping the sorted output shape. */
+export function mergeRouteModules(...lists) {
+  const merged = new Map();
+  for (const {module, routes} of lists.flat()) {
+    if (!merged.has(module)) merged.set(module, new Set());
+    for (const route of routes) merged.get(module).add(route);
+  }
+  return [...merged.entries()]
+    .map(([module, routes]) => ({module, routes: [...routes].sort()}))
+    .sort((a, b) => a.module.localeCompare(b.module));
+}
+
 /** Modules named in the generated same-path OpenAPI document. */
 export function modulesFromOpenApi(source) {
   const modules = new Set();
@@ -380,7 +426,12 @@ export function checkNativeRouteDbTests(root, allowlist = ALLOWLIST) {
   }
   const lib = fs.readFileSync(path.join(root, LIB_RS), 'utf8');
   const openapi = fs.readFileSync(path.join(root, OPENAPI_RS), 'utf8');
-  const discovered = routeModulesFromLib(lib);
+  const areasPath = path.join(root, ROUTE_AREAS_RS);
+  const areas = fs.existsSync(areasPath)
+    ? routeModulesFromAreas(fs.readFileSync(areasPath, 'utf8'), module =>
+      fs.readFileSync(path.join(root, 'native', 'roll-service', 'src', module + '.rs'), 'utf8'))
+    : [];
+  const discovered = mergeRouteModules(routeModulesFromLib(lib), areas);
   const routeTable = buildRouteTable(discovered);
   const routeNames = new Set(discovered.map(entry => entry.module));
   // OpenAPI documentation cannot invent HTTP routes: only modules registered

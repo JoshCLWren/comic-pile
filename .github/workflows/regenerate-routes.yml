@@ -85,6 +85,8 @@ jobs:
         run: rustup show active-toolchain
 
       - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          shared-key: comicpile-contracts
 
       - name: Install locked Python runtime dependencies for route discovery
         run: uv sync --locked --no-dev

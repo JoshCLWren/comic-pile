@@ -202,6 +202,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2.9.3
         with:
+          shared-key: comicpile-contracts
           save-if: false
 
       - name: Regenerate API contracts and frontend client from this commit

@@ -51,4 +51,7 @@ if [[ "$check" == true ]]; then
     exit 1
   fi
   echo "Committed generated contracts match the code."
+else
+  echo "Regenerated bot-owned contracts. Do not commit them; before committing run:"
+  echo "  git checkout -- ${generated[*]}"
 fi

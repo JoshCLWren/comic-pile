@@ -186,6 +186,7 @@ jobs:
         run: rustup show active-toolchain
       - uses: Swatinem/rust-cache@v2.9.3
         with:
+          shared-key: comicpile-contracts
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Regenerate contracts and frontend client
         if: ${{ !(github.event_name == 'pull_request' && startsWith(github.head_ref, 'automation/route-regeneration/') && github.event.pull_request.head.repo.full_name == github.repository) }}
