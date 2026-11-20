@@ -42,24 +42,22 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
     (repository / "pyproject.toml").touch()
     (repository / "frontend" / "node_modules").mkdir(parents=True)
     (repository / "scripts").mkdir()
-    (repository / "scripts" / "lint.sh").write_text("""#!/bin/bash
-set -e
+    (repository / "scripts" / "lint.sh").write_text(
+        """#!/bin/bash
+set -euo pipefail
 
-# Check for leaked Git repository-local environment variables
-# These variables can escape from the parent worktree into sub-repositories
-# created by the pre-push hook, causing tests to pass incorrectly.
+# The hook must isolate every child process from its repository-local Git state.
 for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do
     if [[ -v "$variable" ]]; then
         echo "Leaked $variable" >&2
-        LEAKED=1
+        exit 1
     fi
 done
 
-# Signal that Git environment checks completed successfully
-printf "Git env checks completed\\n" >> "$GATE_LOG"
-
-exit 0
-""")
+# Prove that the lint stub—and therefore the environment checks above—ran.
+printf "lint\\n" >> "$LINT_LOG"
+"""
+    )
     tools_directory = tmp_path / "tools"
     tools_directory.mkdir()
     for tool in ("python", "pnpm"):
@@ -67,13 +65,11 @@ exit 0
         executable.write_text(
             "#!/bin/bash\n"
             "set -eu\n"
-            "for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do\n"
-            '  if [[ -v "$variable" ]]; then echo "Leaked $variable" >&2; exit 1; fi\n'
-            "done\n"
-            'printf "%s\\n" "$*" >> "$GATE_LOG"\n'
+            'printf "%s\\n" "$*" >> "$TEST_GATE_LOG"\n'
         )
         executable.chmod(0o755)
-    gate_log = tmp_path / "gates.log"
+    lint_log = tmp_path / "lint.log"
+    test_gate_log = tmp_path / "test-gates.log"
     environment.update(
         {
             "PATH": f"{tools_directory}:{environment['PATH']}",
@@ -82,14 +78,16 @@ exit 0
             "GIT_WORK_TREE": str(repository),
             "GIT_INDEX_FILE": str(repository / ".git" / "index"),
             "GIT_CONFIG_PARAMETERS": "'core.hooksPath'='/unexpected/hooks'",
-            "GATE_LOG": str(gate_log),
+            "LINT_LOG": str(lint_log),
+            "TEST_GATE_LOG": str(test_gate_log),
         }
     )
     result = subprocess.run(
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert gate_log.exists() and gate_log.read_text().strip() != "", (
-        f"Git environment checks did not run; gate_log is empty or missing. "
-        f"Content: {gate_log.read_text()!r}"
+    assert lint_log.exists(), "The lint stub and its Git environment checks did not run"
+    assert lint_log.read_text() == "lint\n"
+    assert not test_gate_log.exists() or test_gate_log.read_text() == "", (
+        f"Product test gates ran during pre-push: {test_gate_log.read_text()!r}"
     )

@@ -62,7 +62,7 @@ if [ -z "${VIRTUAL_ENV:-}" ]; then
 fi
 
 if ! command -v pnpm >/dev/null 2>&1; then
-    echo "ERROR: pnpm is required for frontend lint/tests."
+    echo "ERROR: pnpm is required for frontend lint."
     exit 1
 fi
 
@@ -76,5 +76,6 @@ echo "Running lint (scripts/lint.sh)..."
 bash scripts/lint.sh
 
 echo ""
-echo "Pre-push lint passed. Tests are not run on push; CI is the test gate."
+echo "Pre-push lint passed, including the static hardcoded-ID guard."
+echo "Backend product pytest, Vitest, and the rendered UI audit run in CI, not on push."
 printf '%s\n' "$HEAD_SHA" > "$VERIFY_STAMP"

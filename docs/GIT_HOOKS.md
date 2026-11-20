@@ -4,11 +4,11 @@ This repository uses git hooks to enforce code quality checks.
 
 ## Principle: fix what hooks flag
 
-Hooks run fast static checks (lint/format/types). Tests are not run in git
-hooks; CI is the test gate. If a hook blocks you, fix the lint failure. Owner
-policy (2026-11-18): factory agents may push feature branches with
-`git push --no-verify` when a local hook blocks them, then open a PR so CI runs.
-Never force-push or push to main.
+Hooks run static checks (lint/format/types), including the Python hardcoded-ID
+regression guard. Product test suites (backend pytest, Vitest, and the rendered
+UI audit) run in CI rather than git hooks. If a hook blocks you, fix the
+underlying failure; never bypass it with `--no-verify`. Never force-push or push
+to main.
 
 ## Available Hooks
 
