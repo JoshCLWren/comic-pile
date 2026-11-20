@@ -929,9 +929,17 @@ pub async fn apply_correction(
     let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
 
+    // Python behavior: str(metadata.get(field, "")) or None
+    // This converts None/null to the string "None", and missing keys to None.
+    // Use jsonb_typeof to check if the key exists and its type.
     let provider_value: Option<String> = tx
-        .query_opt(
-            "SELECT e.metadata_json ->> $2 \
+        .query_one(
+            "SELECT metadata_json ? $2 AS key_exists, \
+                      CASE \
+                          WHEN metadata_json ? $2 AND jsonb_typeof(metadata_json -> $2) = 'null' \
+                          THEN 'None'::text \
+                          ELSE metadata_json ->> $2 \
+                      END \
              FROM external_identities e \
              JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
              WHERE m.issue_id = $1 AND m.status = 'confirmed' \
@@ -940,8 +948,16 @@ pub async fn apply_correction(
         )
         .await
         .map_err(db::query_error)?
-        .and_then(|row| row.get::<_, Option<String>>(0))
-        .filter(|value| !value.is_empty());
+        .map(|row: (bool, String)| {
+            let (key_exists, value) = row;
+            if !key_exists {
+                None // Key doesn't exist -> None
+            } else if value.is_empty() {
+                None // Empty string (not "None") -> None
+            } else {
+                Some(value)
+            }
+        });
 
     tx.execute(
         "INSERT INTO issue_metadata_corrections \
