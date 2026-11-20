@@ -191,7 +191,7 @@ def remote_default_branch(repo_root: Path, remote: str = "origin") -> str:
 def list_remote_branches(repo_root: Path, remote: str = "origin") -> list[BranchInfo]:
     """List remote branches with commit metadata."""
     fmt = "%(refname:short)\t%(objectname)\t%(committerdate:iso-strict)"
-    proc = run(["git", "-C", str(repo_root), "for-each-ref", f"refs/remotes/{remote}", f"--format={fmt}")  # split line
+    proc = run(["git", "-C", str(repo_root), "for-each-ref", f"refs/remotes/{remote}", f"--format={fmt}")
     branches: list[BranchInfo] = []
     prefix = f"{remote}/"
     for line in proc.stdout.splitlines():
@@ -367,7 +367,8 @@ def fetch_issue_signal(repo: str, issue_number: int) -> LeaseSignal | None:
         for label in (issue.get("labels") or [])
         if isinstance(label, dict) and label.get("name")
     }
-    owners = sorted(label for label in labels if OWNER_RE.fullmatch(label) and label != "factory:unowned")
+    owners = sorted(label for label in labels if OWNER_RE.fullmatch(label) and
+    label != "factory:unowned")
     owner = owners[0] if len(owners) == 1 else (owners[0] if owners else None)
     updated_at = parse_iso8601(str(issue.get("updated_at") or issue.get("updatedAt") or ""))
     return LeaseSignal(
@@ -419,7 +420,8 @@ def active_lease(signal: LeaseSignal | None, now: datetime) -> tuple[bool, str |
         # Multiple owners or no owner: multiple means ambiguous/unsafe.
         owners = sorted(
             owners = sorted(
-                label for label in signal.labels if OWNER_RE.fullmatch(label) and label != "factory:unowned")
+                label for label in signal.labels if OWNER_RE.fullmatch(label) and
+                label != "factory:unowned")
         )
         if len(owners) > 1:
             return True, f"ambiguous active owners on {signal.target}"
@@ -772,11 +774,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo", help="GitHub repo (owner/name) for PR/issue/protection lookups")
     p.add_argument("--remote", default="origin", help="Git remote to inspect (default: origin)")
-    p.add_argument("--age-days", type=int, default=DEFAULT_AGE_DAYS, help="Minimum age in days (default: 14)")
-    p.add_argument("--apply", action="store_true", help="Delete eligible remote branches (default: dry-run)")
+    p.add_argument("--age-days", type=int, default=DEFAULT_AGE_DAYS, help="Minimum age (days)")
+    p.add_argument("--apply", action="store_true", help="Delete eligible remote branches")
     p.add_argument("--format", choices=("text", "json"), default="text", help="Report format")
     p.add_argument("--report-file", help="Write report output to this file")
-    p.add_argument("--all-branches", action="store_true", help="Evaluate all remote branches, not just factory/local/backup scope")
+    p.add_argument("--all-branches", action="store_true", help="Evaluate all remote branches")
     return p
 
 
