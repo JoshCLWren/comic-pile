@@ -17,6 +17,7 @@ pub mod config;
 pub mod continuity_plans;
 pub mod continuity_plans_project_preview;
 pub mod continuity_rules;
+pub mod creators;
 pub mod creators_v2;
 pub mod cron_auth;
 pub mod custom_cbl;
@@ -1127,6 +1128,9 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/threads/{thread_id}/issue-order",
             put(issue_mutation::reorder_issues),
         )
+        .route("/api/v1/creators", get(creators::list_creators))
+        .route("/api/v1/creators/", get(creators::list_creators))
+        .route("/api/v1/creators/summaries", get(creators::get_summaries))
         .route("/api/v2/creators", get(creators_v2::list_creators))
         .route(
             "/api/v2/creators/summaries",

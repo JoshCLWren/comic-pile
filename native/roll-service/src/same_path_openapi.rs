@@ -35,6 +35,8 @@ use utoipa::OpenApi;
     crate::threads::get_bare_thread_detail_documentation,
     crate::taste_discoveries::list_documentation,
     crate::taste_discoveries::dismiss_documentation,
+    crate::creators::list_creators_documentation,
+    crate::creators::get_summaries_documentation,
     crate::catalog_series_mapping_preview::documentation,
     crate::continuity_plans_project_preview::documentation,
     crate::issue_identity_adoption_preview::documentation,
