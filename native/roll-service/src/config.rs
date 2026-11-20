@@ -111,9 +111,10 @@ impl Config {
         let environment = match get("RUST_ROLL_ENV").as_deref().unwrap_or("development") {
             "development" => Environment::Development,
             "production" => Environment::Production,
+            "test" => Environment::Test,
             _ => {
                 return Err(ConfigError(
-                    "RUST_ROLL_ENV must be development or production",
+                    "RUST_ROLL_ENV must be development, test, or production",
                 ))
             }
         };
