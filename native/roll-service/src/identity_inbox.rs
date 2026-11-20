@@ -294,7 +294,7 @@ async fn fetch_item(
                     ex.provider, ex.external_id, ex.external_url, ex.metadata_json::text \
              FROM issue_external_identity_mappings cm \
              JOIN external_identities ex ON ex.id = cm.external_identity_id \
-             WHERE cm.issue_id = $1 AND cm.status IN ('candidate','confirmed','unresolved') \
+             WHERE cm.issue_id = $1 AND cm.status IN ('deferred','candidate','confirmed','unresolved') \
              ORDER BY cm.confidence DESC NULLS LAST",
             &[&issue_id],
         )
@@ -408,7 +408,7 @@ pub async fn list_inbox(
              FROM issue_external_identity_mappings cm \
              JOIN external_identities ex ON ex.id = cm.external_identity_id \
              WHERE cm.issue_id = ANY($1) \
-               AND cm.status IN ('candidate','confirmed','unresolved') \
+               AND cm.status IN ('deferred','candidate','confirmed','unresolved') \
              ORDER BY cm.issue_id, cm.confidence DESC NULLS LAST",
             &[&issue_ids],
         )
