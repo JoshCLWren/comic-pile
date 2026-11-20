@@ -705,7 +705,7 @@ async def preview_reading_graph(
                     row.id,
                     row.source_issue_id,
                     row.target_issue_id,
-                    row.origin or "converted",
+                    row.origin or "reader",
                     (row.provenance or "",),
                 )
                 for row in prerequisites

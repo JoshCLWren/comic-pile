@@ -170,7 +170,7 @@ async def load_shadow_inputs(
                     row.id,
                     row.source_issue_id,
                     row.target_issue_id,
-                    row.origin or "converted",
+                    row.origin or "reader",
                     (
                         (f"classification:{row.classification}", row.provenance or "")
                         if row.origin is not None
