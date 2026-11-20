@@ -253,14 +253,16 @@ def _routes_by_handler() -> dict[tuple[str, str], list[str]]:
     """Map every mounted ``(module, handler)`` pair to its route paths.
 
     Returns:
-        Dictionary of ``(module, handler)`` to the literal route paths
-        ``lib.rs`` mounts them on, in router order.
+        Dictionary of ``(module, handler)`` — keyed by the module the router
+        resolves the handler to, so unqualified mounts count — to the literal
+        route paths ``lib.rs`` mounts them on, in router order.
     """
     result: dict[tuple[str, str], list[str]] = {}
     for route_path, tail in _route_call_tails():
         for method, handler in _ROUTE_METHOD_RE.findall(tail):
             module, _, name = handler.rpartition("::")
-            result.setdefault((module, name), []).append(route_path)
+            resolved = _resolve_handler_module(module, name)
+            result.setdefault((resolved, name), []).append(route_path)
     return result
 
 
