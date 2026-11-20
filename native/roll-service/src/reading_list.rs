@@ -259,6 +259,52 @@ async fn owned_issue_ids(
     Ok(rows.iter().map(|row| row.get(0)).collect())
 }
 
+/// One row of one Reading List membership, resolved in Rust before any write.
+type EntryRow = (i32, i32, bool, String, &'static str, bool);
+
+/// Insert every membership row in one set-based statement.
+///
+/// A per-entry INSERT loop would make the route's statement count grow with the
+/// requested batch size; the declared SQL budget is set-based, so authoring
+/// writes the whole batch at once. Validation happens in the caller before this
+/// write, so a rejected request never reaches the database.
+async fn insert_entries(
+    tx: &Transaction<'_>,
+    list_id: i32,
+    entries: &[EntryRow],
+) -> Result<(), ApiError> {
+    if entries.is_empty() {
+        return Ok(());
+    }
+    let issue_ids: Vec<i32> = entries.iter().map(|entry| entry.0).collect();
+    let positions: Vec<i32> = entries.iter().map(|entry| entry.1).collect();
+    let checkpoints: Vec<bool> = entries.iter().map(|entry| entry.2).collect();
+    let targets: Vec<&str> = entries.iter().map(|entry| entry.3.as_str()).collect();
+    let gates: Vec<&str> = entries.iter().map(|entry| entry.4).collect();
+    let skipped: Vec<bool> = entries.iter().map(|entry| entry.5).collect();
+    tx.execute(
+        "INSERT INTO custom_cbl_entries
+           (list_id, issue_id, position, created_at, is_checkpoint,
+            checkpoint_target_issue_ids, gate, skipped)
+         SELECT $1, entry.issue_id, entry.position, NOW(), entry.is_checkpoint,
+                entry.targets::json, entry.gate, entry.skipped
+         FROM unnest($2::int[], $3::int[], $4::bool[], $5::text[], $6::text[], $7::bool[])
+           AS entry(issue_id, position, is_checkpoint, targets, gate, skipped)",
+        &[
+            &list_id,
+            &issue_ids,
+            &positions,
+            &checkpoints,
+            &targets,
+            &gates,
+            &skipped,
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
 async fn load_entries(
     tx: &Transaction<'_>,
     list_id: i32,
