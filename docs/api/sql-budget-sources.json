@@ -341,12 +341,13 @@
         "application_statements": 2,
         "transaction_control_statements": 2,
         "total_statements": 4,
-        "basis": "auth 1 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1",
+        "basis": "measured authenticated graph read: auth 1 + one-statement Option E snapshot 1 (+2 tx control), plus two connection-recovery SELECT 1 probes counted separately; set-based and fixed across 5 and 200 threads",
         "grows_with_data": false,
-        "max_statements": 4,
+        "max_statements": 6,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
@@ -354,14 +355,15 @@
       "path": "/api/v2/reading-graph/repairs",
       "sql_budget": {
         "application_statements": 6,
-        "transaction_control_statements": 2,
-        "total_statements": 8,
+        "transaction_control_statements": 4,
+        "total_statements": 10,
         "grows_with_data": false,
-        "basis": "preview path: option diagnostics 1 (+2 tx) or confirm path adds lock+delete+reload; worst case shown; refine via parity harness",
-        "max_statements": 8,
+        "basis": "measured worst case confirmed repair: auth 1 + advisory lock 1 + transactional snapshot 1 + unlink check 1 + delete 1 + post-commit snapshot 1, write START/COMMIT plus reload START/ROLLBACK, and three connection-recovery SELECT 1 probes; preview uses the same read budget with fewer statements",
+        "max_statements": 13,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py",
+        "runtime_overhead_statements": 3
       }
     },
     {
@@ -371,27 +373,29 @@
         "application_statements": 2,
         "transaction_control_statements": 0,
         "total_statements": 2,
-        "basis": "auth extractor 1 + list summary query 1; set-based",
+        "basis": "measured authenticated list read: auth extractor 1 + one set-based summary query 1, plus two connection-recovery SELECT 1 probes counted separately; fixed across 5 and 200 lists",
         "grows_with_data": false,
-        "max_statements": 2,
+        "max_statements": 4,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
       "method": "POST",
       "path": "/api/v2/reading-lists",
       "sql_budget": {
-        "application_statements": 7,
+        "application_statements": 206,
         "transaction_control_statements": 2,
-        "total_statements": 9,
+        "total_statements": 208,
         "grows_with_data": true,
-        "basis": "auth 1 + lock 1 + owned-issue check 1 + list insert 1 + graph_preflight 1 + entries load 1 + one entry insert 1 (+2 tx control); grows with entry count",
-        "max_statements": 9,
+        "basis": "measured 200-entry create ceiling: six fixed statements (auth, lock, owned-issue check, list insert, graph preflight, entries load) plus one INSERT per entry, START/COMMIT, and two connection-recovery SELECT 1 probes; the 5-entry fixture scales to 15 statements",
+        "max_statements": 210,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
@@ -401,12 +405,13 @@
         "application_statements": 4,
         "transaction_control_statements": 2,
         "total_statements": 6,
-        "basis": "auth extractor 1 + advisory lock 1 + unlinked check 1 + delete 1 (+2 tx control); set-based",
+        "basis": "measured authenticated delete: auth extractor 1 + advisory lock 1 + unlinked check 1 + delete 1 (+2 tx control) plus two connection-recovery SELECT 1 probes; top-level statements stay fixed when the target list holds 200 entries; cascade child SQL is measured separately as nested statements",
         "grows_with_data": false,
-        "max_statements": 6,
+        "max_statements": 8,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
@@ -416,27 +421,29 @@
         "application_statements": 3,
         "transaction_control_statements": 0,
         "total_statements": 3,
-        "basis": "auth extractor 1 + list load 1 + entries load 1; set-based",
+        "basis": "measured authenticated detail read: auth extractor 1 + list load 1 + entries load 1, plus two connection-recovery SELECT 1 probes counted separately; fixed across 5 and 200 entries",
         "grows_with_data": false,
-        "max_statements": 3,
+        "max_statements": 5,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
       "method": "PUT",
       "path": "/api/v2/reading-lists/{list_id}",
       "sql_budget": {
-        "application_statements": 11,
+        "application_statements": 210,
         "transaction_control_statements": 2,
-        "total_statements": 13,
+        "total_statements": 212,
         "grows_with_data": true,
-        "basis": "auth 1 + lock 1 + old entries load 1 + owned-issue check 1 + list update 1 + entries delete 1 + one entry insert 1 + graph_preflight 1 + new entries load 1 + list reload 1 (+2 tx control); grows with entry count",
-        "max_statements": 13,
+        "basis": "measured 200-entry update ceiling: ten fixed statements (auth, lock, list lock, old entries, owned check, list update, entries delete, graph preflight, new entries, post-commit reload) plus one INSERT per entry, START/COMMIT, and three connection-recovery SELECT 1 probes; the 5-entry fixture scales to 20 statements",
+        "max_statements": 215,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 3
       }
     },
     {
@@ -446,12 +453,13 @@
         "application_statements": 4,
         "transaction_control_statements": 2,
         "total_statements": 6,
-        "basis": "auth extractor 1 + list load 1 + entries load 1 + Option E snapshot 1 (+2 tx control); set-based",
+        "basis": "measured authenticated reader: auth extractor 1 + list load 1 + entries load 1 + Option E snapshot 1 (+2 tx control), plus three connection-recovery SELECT 1 probes counted separately; fixed across 5 and 200 entries",
         "grows_with_data": false,
-        "max_statements": 6,
+        "max_statements": 9,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 3
       }
     },
     {
