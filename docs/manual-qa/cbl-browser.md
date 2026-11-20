@@ -22,7 +22,7 @@
 
 **Expected:** Only the approved changes occur; no unrelated order, excluded comic or list is silently regenerated, replaced or added.
 
-**Atomic adoption and retry safety (owner clarification 2026-11-20):** A large import either commits **all** approved entries and membership changes atomically or leaves the old list unchanged, with truthful errors. After an ambiguous network timeout, inspect authoritative adoption receipts before retrying to avoid duplicate or partial imports. Do not treat partially adopted items as acceptable success. Tracked by [#5522](https://github.com/JoshCLWren/comic-pile/issues/5522).
+**Atomic adoption and retry safety (owner clarification 2026-11-20):** A large import either commits **all** approved entries and membership changes atomically or leaves the old list unchanged, with truthful errors. After an ambiguous network timeout, the browser-only QA tester reloads and verifies the resulting list before retrying: exactly one complete approved import or an unchanged list, never a partial list or duplicate membership. The backend must reconcile authoritative adoption receipts/idempotency on retries. Do not treat partially adopted items as acceptable success. Tracked by [#5522](https://github.com/JoshCLWren/comic-pile/issues/5522).
 
 ## MQA-CBL-004: Imported lists agree with Roll rules
 
