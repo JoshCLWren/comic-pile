@@ -4277,6 +4277,162 @@
         }
       }
     },
+    "/api/v2/comicvine/resolve": {
+      "get": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "resolve_input_documentation",
+        "parameters": [
+          {
+            "name": "input",
+            "in": "query",
+            "description": "Search text or ComicVine URL",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComicVineResolveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/comicvine/search/series": {
+      "get": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "search_series_documentation",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Series title query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum results (1-50, default 10)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Zero-based offset",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated series search",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComicVineSeriesSearchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/comicvine/series/{comicvine_volume_id}/issues": {
+      "get": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "comicvine_series_issues_documentation",
+        "parameters": [
+          {
+            "name": "comicvine_volume_id",
+            "in": "path",
+            "description": "ComicVine volume ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "series_name",
+            "in": "query",
+            "description": "Pre-fetched series name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Volume issue roster",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComicVineSeriesIssuesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/continuity-plans/": {
       "get": {
         "tags": [
@@ -12060,6 +12216,54 @@
           }
         }
       },
+      "ComicVineIssueCandidate": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "ComicVineMappingHealth": {
         "type": "object",
         "description": "Compact confirmed ComicVine mapping health for one queue row.",
@@ -12094,6 +12298,234 @@
           "tracked_issue_count": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ComicVineResolveResponse": {
+        "type": "object",
+        "required": [
+          "input",
+          "kind",
+          "issues"
+        ],
+        "properties": {
+          "input": {
+            "type": "string"
+          },
+          "issue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ComicVineResolvedIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComicVineIssueCandidate"
+            }
+          },
+          "kind": {
+            "type": "string",
+            "description": "`issue`, `volume` or `search`."
+          },
+          "validation_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ComicVineSeriesResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ComicVineResolvedIssue": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ComicVineSeriesIssuesResponse": {
+        "type": "object",
+        "required": [
+          "comicvine_volume_id",
+          "series_name",
+          "issues"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComicVineIssueCandidate"
+            }
+          },
+          "series_name": {
+            "type": "string"
+          }
+        }
+      },
+      "ComicVineSeriesResult": {
+        "type": "object",
+        "required": [
+          "comicvine_volume_id",
+          "name"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ComicVineSeriesSearchResponse": {
+        "type": "object",
+        "required": [
+          "query",
+          "results",
+          "offset",
+          "limit",
+          "has_more"
+        ],
+        "properties": {
+          "has_more": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_offset": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "`offset + results` can exceed `i32` at the accepted offset bound, so\npaging arithmetic is widened (#4636390843)."
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComicVineSeriesResult"
+            }
+          },
+          "total_available": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           }
         }
       },

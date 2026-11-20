@@ -1871,6 +1871,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/comicvine/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["resolve_input_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/search/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["search_series_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/series/{comicvine_volume_id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["comicvine_series_issues_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/continuity-plans/": {
         parameters: {
             query?: never;
@@ -6399,6 +6447,16 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
+        NativeComicVineIssueCandidate: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            cover_date?: string | null;
+            image_url?: string | null;
+            issue_number?: string | null;
+            name?: string | null;
+            site_detail_url?: string | null;
+            store_date?: string | null;
+        };
         /** @description Compact confirmed ComicVine mapping health for one queue row. */
         NativeComicVineMappingHealth: {
             /** Format: int32 */
@@ -6412,6 +6470,63 @@ export interface components {
             status: string;
             /** Format: int32 */
             tracked_issue_count: number;
+        };
+        NativeComicVineResolveResponse: {
+            input: string;
+            issue?: components["schemas"]["NativeComicVineResolvedIssue"] | null;
+            issues: components["schemas"]["NativeComicVineIssueCandidate"][];
+            /** @description `issue`, `volume` or `search`. */
+            kind: string;
+            validation_error?: string | null;
+            volume?: components["schemas"]["NativeComicVineSeriesResult"] | null;
+        };
+        NativeComicVineResolvedIssue: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            cover_date?: string | null;
+            image_url?: string | null;
+            issue_number?: string | null;
+            name?: string | null;
+            series_name?: string | null;
+            site_detail_url?: string | null;
+            store_date?: string | null;
+            /** Format: int32 */
+            volume_id?: number | null;
+        };
+        NativeComicVineSeriesIssuesResponse: {
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            issues: components["schemas"]["NativeComicVineIssueCandidate"][];
+            series_name: string;
+        };
+        NativeComicVineSeriesResult: {
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            image_url?: string | null;
+            /** Format: int32 */
+            issue_count?: number | null;
+            name: string;
+            publisher?: string | null;
+            site_detail_url?: string | null;
+            /** Format: int32 */
+            start_year?: number | null;
+        };
+        NativeComicVineSeriesSearchResponse: {
+            has_more: boolean;
+            /** Format: int32 */
+            limit: number;
+            /**
+             * Format: int64
+             * @description `offset + results` can exceed `i32` at the accepted offset bound, so
+             *     paging arithmetic is widened (#4636390843).
+             */
+            next_offset?: number | null;
+            /** Format: int32 */
+            offset: number;
+            query: string;
+            results: components["schemas"]["NativeComicVineSeriesResult"][];
+            /** Format: int64 */
+            total_available?: number | null;
         };
         /** @description Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`. */
         NativeDependencyGroupDetailMemberResponse: {
@@ -13692,6 +13807,124 @@ export interface operations {
             };
             /** @description Database temporarily unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolve_input_documentation: {
+        parameters: {
+            query: {
+                /** @description Search text or ComicVine URL */
+                input: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resolved input */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeComicVineResolveResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_series_documentation: {
+        parameters: {
+            query: {
+                /** @description Series title query */
+                q: string;
+                /** @description Maximum results (1-50, default 10) */
+                limit?: number;
+                /** @description Zero-based offset */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated series search */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeComicVineSeriesSearchResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    comicvine_series_issues_documentation: {
+        parameters: {
+            query?: {
+                /** @description Pre-fetched series name */
+                series_name?: string;
+            };
+            header?: never;
+            path: {
+                /** @description ComicVine volume ID */
+                comicvine_volume_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Volume issue roster */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeComicVineSeriesIssuesResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

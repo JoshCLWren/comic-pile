@@ -9,8 +9,10 @@ pub mod catalog_commit;
 pub mod catalog_series_mapping_preview;
 pub mod cbl_catalog;
 pub mod comicvine_issue;
+pub mod comicvine_limits;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
+pub mod comicvine_v2;
 pub mod config;
 pub mod continuity_plans;
 pub mod continuity_plans_project_preview;
@@ -136,6 +138,8 @@ pub struct AppState {
     /// Effective Option E setting (see [`option_e_setting`]); injectable so
     /// tests choose it per state instead of mutating process environment.
     pub option_e: bool,
+    /// Cache, rolling budget and cooldown for browser-called ComicVine routes.
+    pub comicvine_limits: comicvine_limits::ComicVineLimits,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -221,6 +225,7 @@ impl AppState {
             connection_recovery: true,
             outbound,
             option_e: config.option_e,
+            comicvine_limits: comicvine_limits::ComicVineLimits::default(),
         })
     }
 
@@ -499,6 +504,8 @@ fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
         "/api/v1/cron/release-sync" => {
             reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
         }
+        // Volume rosters page through ComicVine before answering (#4835).
+        path if comicvine_v2::needs_roster_deadline(path) => comicvine_v2::ROSTER_REQUEST_DEADLINE,
         _ => default_timeout,
     }
 }
@@ -1050,6 +1057,19 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(comicvine_resolution::series_import_status),
         )
+        // Canonical native v2 ComicVine read routes (#4835, split chunk A).
+        .route(
+            "/api/v2/comicvine/search/series",
+            get(comicvine_v2::search_series),
+        )
+        .route(
+            "/api/v2/comicvine/resolve",
+            get(comicvine_v2::resolve_input),
+        )
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+            get(comicvine_v2::series_issues),
+        )
         .route(
             "/api/v2/issues/{issue_id}/dependencies",
             get(issue_read::get_issue_dependencies),
@@ -1354,6 +1374,20 @@ mod tests {
         assert_eq!(
             request_timeout_for("/api/v2/maintenance/comicvine-metadata-repairs", default),
             Duration::from_secs(50)
+        );
+        for roster_read in [
+            "/api/v2/comicvine/series/42/issues",
+            "/api/v2/comicvine/resolve",
+        ] {
+            assert_eq!(
+                request_timeout_for(roster_read, default),
+                comicvine_v2::ROSTER_REQUEST_DEADLINE,
+                "{roster_read}"
+            );
+        }
+        assert_eq!(
+            request_timeout_for("/api/v2/comicvine/search/series", default),
+            default
         );
         assert_eq!(
             request_timeout_for("/api/v1/roll/bootstrap", default),
