@@ -455,10 +455,11 @@
         "total_statements": 6,
         "basis": "auth extractor 1 + list load 1 + entries load 1 + Option E snapshot 1 (+2 tx control); set-based",
         "grows_with_data": false,
-        "max_statements": 6,
+        "max_statements": 9,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 3
       }
     },
     {
