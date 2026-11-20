@@ -4078,9 +4078,7 @@ mod tests {
             vec![lane("l1", 0), lane("l2", 1)],
             Vec::new(),
         );
-        let err = write
-            .validate_structure()
-            .expect_err("two lanes must fail");
+        let err = write.validate_structure().expect_err("two lanes must fail");
         assert!(format!("{err:?}").contains("strict sequential plans must use exactly one lane"));
     }
 
