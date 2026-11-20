@@ -1354,8 +1354,14 @@ mod cover_source_tests {
     use serde_json::json;
 
     #[test]
-    fn stored_image_sizes_follow_python_fallback_order() {
-        for key in ["original_url", "super_url", "medium_url", "small_url"] {
+    fn stored_image_sizes_follow_provider_fallback_order() {
+        for key in [
+            "original_url",
+            "super_url",
+            "medium_url",
+            "small_url",
+            "thumb_url",
+        ] {
             let mut metadata = json!({"image": {}});
             metadata["image"][key] = json!(" https://example.com/cover.jpg ");
             assert_eq!(

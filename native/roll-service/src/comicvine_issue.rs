@@ -847,6 +847,24 @@ mod tests {
         assert_eq!(wire["metadata_status"], "complete");
     }
     #[test]
+    fn issue_intelligence_uses_thumbnail_only_artwork() {
+        let mapped = Mapped {
+            external_id: "29319".into(),
+            external_url: None,
+            metadata: json!({
+                "name": "Going For It",
+                "volume": {"id": 1, "name": "Hellblazer"},
+                "image": {"thumb_url": "https://comicvine.example/thumb.jpg"}
+            }),
+        };
+        let wire = serde_json::to_value(response(mapped, None, vec![], vec![])).unwrap();
+        assert_eq!(
+            wire["image_url"],
+            "https://comicvine.example/thumb.jpg"
+        );
+    }
+
+    #[test]
     fn render_the_existing_issue_intelligence_shape() {
         let mapped = Mapped {
             external_id: "29319".into(),
