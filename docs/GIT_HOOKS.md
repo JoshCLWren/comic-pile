@@ -42,9 +42,9 @@ still chain to `.git/hooks/pre-commit`.
 Runs automatically before each push to remote.
 
 **What it does:**
-- Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
+- Runs `bash scripts/lint.sh` (full-repo ruff + ty + hardcoded-ID guard + frontend lint)
 
-No tests run on push (no pytest, vitest, or UI audit). CI runs the tests.
+Vitest, the UI audit, and backend pytest run in CI; the hardcoded-ID guard runs as part of lint.
 
 **What happens on failure:**
 - Push is aborted

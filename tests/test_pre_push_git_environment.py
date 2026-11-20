@@ -64,9 +64,15 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
         )
         executable.chmod(0o755)
     gate_log = tmp_path / "gates.log"
+    # Create fake venv to satisfy the hook's venv check
+    (tmp_path / "venv").mkdir()
+    (tmp_path / "venv" / "bin").mkdir()
+    (tmp_path / "venv" / "bin" / "activate").write_text("#!/bin/bash\n")
+    
     environment.update(
         {
             "PATH": f"{tools_directory}:{environment['PATH']}",
+            "VIRTUAL_ENV": str(tmp_path / "venv"),
             "GIT_DIR": str(repository / ".git"),
             "GIT_WORK_TREE": str(repository),
             "GIT_INDEX_FILE": str(repository / ".git" / "index"),
