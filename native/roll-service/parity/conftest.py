@@ -3,20 +3,10 @@
 from __future__ import annotations
 
 import os
-import sys
 from collections.abc import AsyncIterator
-from pathlib import Path
 
 import asyncpg
 import pytest_asyncio
-
-# Parity tests import ``app.models`` from the repository root. CI sets
-# PYTHONPATH=. explicitly; add that root here too so a direct pytest invocation
-# of a single parity test file (for example the factory pre-push check) resolves
-# the application package regardless of the caller's environment.
-_REPOSITORY_ROOT = str(Path(__file__).resolve().parents[3])
-if _REPOSITORY_ROOT not in sys.path:
-    sys.path.insert(0, _REPOSITORY_ROOT)
 
 _PARITY_DATABASE_LOCK = 4_535_000_002
 
@@ -26,13 +16,8 @@ async def reset_canonical_schema() -> AsyncIterator[None]:
     """Serialize parity tests and reset the Alembic schema using the DML role."""
     url = os.environ.get("RUST_ROLL_PARITY_DATABASE_URL")
     if url is None:
-        # Parity tests need a provisioned roll_test_dml database. Report the
-        # missing configuration as the database connection failure it is,
-        # while keeping the actionable variable name in the error. CI always
-        # supplies the provisioned URL and never reaches this branch.
-        raise ConnectionRefusedError(
-            "RUST_ROLL_PARITY_DATABASE_URL must point to the provisioned "
-            "roll_test_dml role; could not connect to server without it"
+        raise RuntimeError(
+            "RUST_ROLL_PARITY_DATABASE_URL must point to the provisioned roll_test_dml role"
         )
 
     connection = await asyncpg.connect(url)
