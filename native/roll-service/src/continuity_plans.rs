@@ -597,26 +597,21 @@ impl ContinuityPlanWrite {
                     node.id
                 )));
             }
-            if (node.checkpoint_target_ref_id.is_some()
-                || !node.checkpoint_target_ref_ids.is_empty())
-                && !node.is_checkpoint
-            {
+            let has_target_ref_id = node.checkpoint_target_ref_id.is_some();
+            let has_target_ref_ids = node.checkpoint_target_ref_ids.as_ref().map_or(false, |v| !v.is_empty());
+            if (has_target_ref_id || has_target_ref_ids) && !node.is_checkpoint {
                 return Err(unprocessable(format!(
                     "checkpoint target on node '{}' requires is_checkpoint",
                     node.id
                 )));
             }
-            if node.checkpoint_target_ref_ids.len()
-                != node
-                    .checkpoint_target_ref_ids
-                    .iter()
-                    .collect::<HashSet<_>>()
-                    .len()
-            {
-                return Err(unprocessable(format!(
-                    "checkpoint on node '{}' contains duplicate targets",
-                    node.id
-                )));
+            if let Some(ref ids) = node.checkpoint_target_ref_ids {
+                if ids.len() != ids.iter().collect::<HashSet<_>>().len() {
+                    return Err(unprocessable(format!(
+                        "checkpoint on node '{}' contains duplicate targets",
+                        node.id
+                    )));
+                }
             }
         }
 
@@ -2197,6 +2192,43 @@ pub async fn update_continuity_plan(
         }
     }
 
+    // Load existing checkpoint targets from the database to preserve them
+    // when the incoming payload doesn't explicitly provide new targets.
+    let marker = plan_rule_marker(plan_id);
+    let existing_checkpoint_rows = tx
+        .query(
+            "SELECT source_id, target_id, checkpoint_issue_id
+             FROM continuity_rules
+             WHERE user_id = $1 AND note = $2 AND satisfaction_type = 'checkpoint'",
+            &[&user.id(), &marker],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let mut existing_targets_by_source: std::collections::HashMap<i32, (Option<i32>, Vec<i32>)> =
+        std::collections::HashMap::new();
+    for row in &existing_checkpoint_rows {
+        let source_id: i32 = row.get(0);
+        let target_id: i32 = row.get(1);
+        let checkpoint_issue_id: Option<i32> = row.get(2);
+        let entry = existing_targets_by_source.entry(source_id).or_insert((None, Vec::new()));
+        if entry.0.is_none() {
+            entry.0 = checkpoint_issue_id;
+        }
+        entry.1.push(target_id);
+    }
+
+    // Map existing targets by incoming node id (using ref_id as the key)
+    let mut existing_checkpoint_targets: std::collections::HashMap<String, (Option<i32>, Vec<i32>)> =
+        std::collections::HashMap::new();
+    for node in &payload.nodes {
+        if node.is_checkpoint && node.node_type == "issue" {
+            if let Some((checkpoint_issue_id, targets)) = existing_targets_by_source.get(&node.ref_id) {
+                existing_checkpoint_targets.insert(node.id.clone(), (Some(*checkpoint_issue_id), targets.clone()));
+            }
+        }
+    }
+
     let lanes_json: Vec<serde_json::Value> = payload
         .lanes
         .iter()
@@ -2246,6 +2278,7 @@ pub async fn update_continuity_plan(
         &payload.nodes,
         &payload.ordering_mode,
         Some(&prior_ordering_mode),
+        Some(&existing_checkpoint_targets),
     )
     .await
     {
