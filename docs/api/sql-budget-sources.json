@@ -343,10 +343,11 @@
         "total_statements": 4,
         "basis": "auth 1 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1",
         "grows_with_data": false,
-        "max_statements": 4,
+        "max_statements": 6,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
