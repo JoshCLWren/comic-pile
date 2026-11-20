@@ -258,14 +258,9 @@ fn app() -> Router {
             "/api/v2/reading-sessions/{session_id}/details",
             get(native_dispatch),
         )
-        .route("/api/undo/{session_id}/snapshots", get(native_dispatch))
-        .route("/api/v1/undo/{session_id}/snapshots", get(native_dispatch))
+        .route("/api/v2/undo/{session_id}/snapshots", get(native_dispatch))
         .route(
-            "/api/undo/{session_id}/undo/{snapshot_id}",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+            "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
             post(native_dispatch),
         )
         .route("/api/v2/roll/dice-command", post(native_dispatch))
@@ -297,14 +292,14 @@ fn app() -> Router {
         .route("/api/v2/roll/eligible-issue-ids", get(native_dispatch))
         .route("/api/v2/demo-roll", get(native_demo))
         .route("/api/v2/reading-boundaries", post(native_dispatch))
-        .route("/api/v1/reading-orders/", get(native_dispatch))
+        .route("/api/v2/reading-orders/", get(native_dispatch))
         .route(
-            "/api/v1/reading-orders/{reading_order_id}/items",
+            "/api/v2/reading-orders/{reading_order_id}/items",
             post(native_dispatch),
         )
         .route("/api/v1/cron/release-sync", get(native_dispatch))
-        .route("/api/v1/reading-plan-sync/status", get(native_dispatch))
-        .route("/api/v1/reading-plan-sync/sync", post(native_dispatch))
+        .route("/api/v2/reading-plan-sync/status", get(native_dispatch))
+        .route("/api/v2/reading-plan-sync/runs", post(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))
@@ -371,20 +366,12 @@ fn app() -> Router {
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))
+        .route("/api/v2/dependencies/blocked", get(native_dispatch))
         .route(
             "/api/v2/dependencies/{dependency_id}",
-            delete(native_dispatch),
-        )
-        .route("/api/v1/dependencies/blocked", get(native_dispatch))
-        .route("/api/v1/dependencies/", post(native_dispatch))
-        .route("/api/v1/dependencies/{dependency_id}", get(native_dispatch))
-        .route(
-            "/api/v1/dependencies/{dependency_id}",
-            patch(native_dispatch),
-        )
-        .route(
-            "/api/v1/dependencies/{dependency_id}",
-            delete(native_dispatch),
+            get(native_dispatch)
+                .patch(native_dispatch)
+                .delete(native_dispatch),
         )
         .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))
         .route(
@@ -559,52 +546,46 @@ fn app() -> Router {
             "/api/v1/continuity-rules/{rule_id}",
             delete(native_dispatch),
         )
-        .route("/api/v1/continuity-plans/", get(native_dispatch))
-        .route("/api/v1/continuity-plans/", post(native_dispatch))
         .route(
-            "/api/v1/continuity-plans/from-reading-order",
+            "/api/v2/continuity-plans/",
+            get(native_dispatch).post(native_dispatch),
+        )
+        .route(
+            "/api/v2/continuity-plans/from-reading-order",
             post(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/",
+            "/api/v2/continuity-plans/release-sources/",
             post(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/{source_id}",
-            patch(native_dispatch),
+            "/api/v2/continuity-plans/release-sources/{source_id}",
+            patch(native_dispatch).delete(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/{source_id}",
-            delete(native_dispatch),
-        )
-        .route("/api/v1/continuity-plans/{plan_id}", get(native_dispatch))
-        .route("/api/v1/continuity-plans/{plan_id}", put(native_dispatch))
-        .route(
-            "/api/v1/continuity-plans/{plan_id}",
-            delete(native_dispatch),
+            "/api/v2/continuity-plans/{plan_id}",
+            get(native_dispatch)
+                .put(native_dispatch)
+                .delete(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/membership",
+            "/api/v2/continuity-plans/{plan_id}/membership",
             get(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            post(native_dispatch).delete(native_dispatch),
+        )
+        .route(
+            "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
             post(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
-            delete(native_dispatch),
-        )
-        .route(
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/",
             get(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
             get(native_dispatch),
         )
         .route("/api/v2/releases", get(native_dispatch))

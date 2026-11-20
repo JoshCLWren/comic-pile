@@ -1808,10 +1808,10 @@ pub async fn undo_to_snapshot(
     ))
 }
 
-/// Documentation-only operation for the unversioned undo apply.
+/// Documentation-only operation for the undo restore.
 #[utoipa::path(
     post,
-    path = "/api/undo/{session_id}/undo/{snapshot_id}",
+    path = "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
     tag = "undo",
     params(
         ("session_id" = i32, Path, description = "Owned reading session"),
@@ -1829,34 +1829,10 @@ pub async fn undo_to_snapshot(
 #[allow(dead_code)]
 pub fn undo_to_snapshot_documentation() {}
 
-/// Documentation-only operation for the versioned undo apply.
-#[utoipa::path(
-    post,
-    path = "/api/v1/undo/{session_id}/undo/{snapshot_id}",
-    tag = "undo",
-    params(
-        ("session_id" = i32, Path, description = "Owned reading session"),
-        ("snapshot_id" = i32, Path, description = "Snapshot to restore")
-    ),
-    responses(
-        (status = 200, description = "Restored session", body = UndoApplyResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Session or snapshot not found"),
-        (status = 409, description = "Only the latest rating can be undone"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn undo_to_snapshot_v1_documentation() {}
-
 /// OpenAPI document for the undo apply same-path surface.
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(
-        undo_to_snapshot_documentation,
-        undo_to_snapshot_v1_documentation
-    ),
+    paths(undo_to_snapshot_documentation),
     components(schemas(
         UndoApplyResponse,
         SessionActiveThread,
@@ -1905,22 +1881,17 @@ mod tests {
     use utoipa::OpenApi;
 
     #[test]
-    fn undo_apply_openapi_covers_both_same_paths() {
+    fn undo_apply_openapi_covers_v2_path() {
         let document = serde_json::to_value(UndoApplyApi::openapi()).expect("openapi");
         let paths = document["paths"].as_object().expect("paths");
-        assert!(paths.contains_key("/api/undo/{session_id}/undo/{snapshot_id}"));
-        assert!(paths.contains_key("/api/v1/undo/{session_id}/undo/{snapshot_id}"));
-        for path in [
-            "/api/undo/{session_id}/undo/{snapshot_id}",
-            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
-        ] {
-            let operation = &document["paths"][path]["post"];
-            assert!(operation["operationId"].is_string());
-            assert!(operation["responses"]["200"].as_object().is_some());
-            assert!(operation["responses"]["404"].as_object().is_some());
-            assert!(operation["responses"]["409"].as_object().is_some());
-            assert!(operation["security"].is_array());
-        }
+        let path = "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore";
+        assert!(paths.contains_key(path));
+        let operation = &document["paths"][path]["post"];
+        assert!(operation["operationId"].is_string());
+        assert!(operation["responses"]["200"].as_object().is_some());
+        assert!(operation["responses"]["404"].as_object().is_some());
+        assert!(operation["responses"]["409"].as_object().is_some());
+        assert!(operation["security"].is_array());
         assert!(document["components"]["schemas"]["UndoApplyResponse"].is_object());
     }
 

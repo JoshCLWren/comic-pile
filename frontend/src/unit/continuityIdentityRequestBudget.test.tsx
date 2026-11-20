@@ -137,7 +137,7 @@ function responseFor(method: string, path: string, query: CanonicalQuery) {
     return undefined
   }
   if (method !== 'GET') return undefined
-  if (path === '/api/v1/continuity-plans/') return []
+  if (path === '/api/v2/continuity-plans/') return []
   if (/^\/api\/v2\/continuity-plans\/\d+\/reader$/.test(path)) {
     return planReader(Number(path.split('/')[4]))
   }
@@ -191,11 +191,11 @@ const recorder: AxiosAdapter = async (config) => {
 const GET = (path: string, params: Record<string, string | number> = {}) =>
   canonicalUrl('GET', path, canonicalQuery(params))
 
-const CONTINUITY_INDEX = GET('/api/v1/continuity-plans/')
+const CONTINUITY_INDEX = GET('/api/v2/continuity-plans/')
 const THREADS_PAGE = GET('/api/v2/threads', { page_size: 100 })
 const DEPENDENCY_GROUPS = GET('/api/v1/reading-order-groups/')
 const PLAN_READER = GET('/api/v2/continuity-plans/7/reader')
-const PLAN_DETAIL = GET('/api/v1/continuity-plans/7')
+const PLAN_DETAIL = GET('/api/v2/continuity-plans/7')
 const PLAN_TAGS = GET('/api/v2/tags/effective/plans/7')
 const TAGS_CATALOG = GET('/api/v2/tags')
 const CUSTOM_LISTS = GET('/api/v2/reading-lists')

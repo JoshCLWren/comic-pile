@@ -712,22 +712,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/reading-sessions/{session_id}/details",
             get(session_details::get_session_details),
         )
-        // Undo snapshots list (issue #4839)
+        // Undo snapshots list and restore (issues #4839, #4838/#4335)
         .route(
-            "/api/undo/{session_id}/snapshots",
+            "/api/v2/undo/{session_id}/snapshots",
             get(undo_snapshots::list_undo_snapshots),
         )
         .route(
-            "/api/v1/undo/{session_id}/snapshots",
-            get(undo_snapshots::list_undo_snapshots),
-        )
-        // Undo apply snapshot (issue #4839)
-        .route(
-            "/api/undo/{session_id}/undo/{snapshot_id}",
-            post(undo_apply::undo_to_snapshot),
-        )
-        .route(
-            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+            "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
             post(undo_apply::undo_to_snapshot),
         )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
@@ -739,11 +730,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(reading_boundary::reading_boundary_batch_v2),
         )
         .route(
-            "/api/v1/reading-orders/",
+            "/api/v2/reading-orders/",
             get(reading_orders::list_reading_orders),
         )
         .route(
-            "/api/v1/reading-orders/{reading_order_id}/items",
+            "/api/v2/reading-orders/{reading_order_id}/items",
             post(reading_orders::insert_reading_order_item),
         )
         .route(
@@ -751,11 +742,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(reading_plan_sync::scheduled_release_sync_cron),
         )
         .route(
-            "/api/v1/reading-plan-sync/status",
+            "/api/v2/reading-plan-sync/status",
             get(reading_plan_sync::get_sync_status),
         )
         .route(
-            "/api/v1/reading-plan-sync/sync",
+            "/api/v2/reading-plan-sync/runs",
             post(reading_plan_sync::sync_released_issues_endpoint),
         )
         .route(
@@ -976,21 +967,16 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(dependencies::delete_dependency),
         )
         .route(
-            "/api/v1/dependencies/blocked",
+            "/api/v2/dependencies/blocked",
             get(legacy_dependencies::blocked),
         )
-        .route("/api/v1/dependencies/", post(legacy_dependencies::create))
         .route(
-            "/api/v1/dependencies/{dependency_id}",
+            "/api/v2/dependencies/{dependency_id}",
             get(legacy_dependencies::get),
         )
         .route(
-            "/api/v1/dependencies/{dependency_id}",
+            "/api/v2/dependencies/{dependency_id}",
             patch(legacy_dependencies::update),
-        )
-        .route(
-            "/api/v1/dependencies/{dependency_id}",
-            delete(legacy_dependencies::delete),
         )
         .route("/api/v2/activity", get(activity::list_activity))
         .route("/api/v2/identity-inbox", get(identity_inbox::list_inbox))
@@ -1222,63 +1208,63 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         // Continuity plans v1 routes (cutover from Python)
         .route(
-            "/api/v1/continuity-plans/",
+            "/api/v2/continuity-plans/",
             get(continuity_plans::list_continuity_plans),
         )
         .route(
-            "/api/v1/continuity-plans/",
+            "/api/v2/continuity-plans/",
             post(continuity_plans::create_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}",
+            "/api/v2/continuity-plans/{plan_id}",
             get(continuity_plans::get_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}",
+            "/api/v2/continuity-plans/{plan_id}",
             put(continuity_plans::update_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}",
+            "/api/v2/continuity-plans/{plan_id}",
             delete(continuity_plans::delete_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/membership",
+            "/api/v2/continuity-plans/{plan_id}/membership",
             get(continuity_plans::get_continuity_plan_membership),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
             post(continuity_plans::link_plan_dependency_edge),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
             delete(continuity_plans::unlink_plan_dependency_edge),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+            "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
             post(continuity_plans::confirm_plan_projection),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/",
             get(continuity_plans::list_release_sources),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
             get(continuity_plans::list_release_sources_for_reader),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/",
+            "/api/v2/continuity-plans/release-sources/",
             post(continuity_plans::create_release_source),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/{source_id}",
+            "/api/v2/continuity-plans/release-sources/{source_id}",
             patch(continuity_plans::update_release_source),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/{source_id}",
+            "/api/v2/continuity-plans/release-sources/{source_id}",
             delete(continuity_plans::delete_release_source),
         )
         .route(
-            "/api/v1/continuity-plans/from-reading-order",
+            "/api/v2/continuity-plans/from-reading-order",
             post(continuity_plans::adopt_reading_order),
         )
         .route(
