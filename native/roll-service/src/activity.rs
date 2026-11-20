@@ -477,6 +477,52 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn activity_router_returns_owner_scoped_activity_for_authenticated_user() {
+        use crate::router;
+        use axum::{
+            body::{to_bytes, Body},
+            http::{Request, StatusCode},
+        };
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        use serde_json::json;
+        use tower::ServiceExt;
+
+        let (state, _guard) = seeded_state(PRODUCTION_SEQUENCE).await;
+        let app = router(state.clone());
+
+        let token = encode(
+            &Header::default(),
+            &json!({
+                "sub": "reader-1",
+                "type": "access",
+                "jti": "activity-router-test",
+            }),
+            &EncodingKey::from_secret(crate::test_support::TEST_JWT_SECRET.as_bytes()),
+        )
+        .unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v2/activity?limit=50")
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let items = body["items"].as_array().expect("items array");
+        assert!(!items.is_empty());
+        // The first item should be the earliest production event for user 1.
+        assert_eq!(items[0]["event_id"], 1050511);
+        assert_eq!(items[0]["event_type"], "roll");
+    }
+
     // ---- Disposable PostgreSQL: the exact production router handler ----
 
     /// The November 8, 2026 production sequence for user 1 (America/Chicago
