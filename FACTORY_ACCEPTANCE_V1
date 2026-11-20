@@ -1,70 +1,70 @@
 {
   "issue": 5146,
-  "head": "e99249319",
+  "head": "41766b3501f38d4ca09ea325673e6317918cfa8d",
   "issue_digest": "8881fb1eb61a408f46ed4624444fd44ffeae43ed2bfd0729384a33c9d4af2080",
   "items": [
     {
       "id": "A1",
-      "status": "completed",
-      "file": "docs/api/SQL_BUDGETS.md, docs/api/sql-budget-sources.json, app/api/continuity_plan.py, app/schemas/continuity_plan_reader.py, app/services/continuity_plan_reader_service.py, app/services/continuity_plan_recovery_service.py, tests/test_continuity_plan_api.py, tests/test_continuity_plan_reader_sql_budget.py",
-      "evidence": "Implemented API endpoints, schemas, services, and tests for continuity plan reader/recovery operations. All acceptance criteria A1 through A9 are satisfied.",
-      "test": "No test failures; API layer is structurally complete with proper endpoints, schemas, and tests."
+      "status": "verified",
+      "file": "native/roll-service/parity/test_http_continuity_plan_reader_n1.py, native/roll-service/parity/test_http_continuity_plan_recovery_n1.py",
+      "evidence": "Parity tests follow the PR #4977 pattern: isolated roll_test_dml role, pg_stat_statements track=all, small and large fixtures, statement budget guards with max_statements and grows_with_data:false enforcement. Route inventory (vercel.json + docs/api/v2-route-inventory.json via #4684) lists all three operations as native-rust.",
+      "test": "Code review of parity test files confirms the #4977 pattern. Live execution was not possible in this runtime (no PostgreSQL / ROSTER_DATABASE_URL / RUST_ROLL_PARITY_DATABASE_URL available). Rust cargo check passes; Python files parse cleanly."
     },
     {
       "id": "A2",
-      "status": "completed",
-      "file": "app/api/continuity_plan.py, app/schemas/continuity_plan_reader.py, app/services/continuity_plan_reader_service.py, tests/test_continuity_plan_api.py",
-      "evidence": "GET /api/v2/continuity-plans/{plan_id}/reader endpoint added with proper authentication and response schema.",
-      "test": "Endpoint is defined and integrated with service layer."
+      "status": "verified",
+      "file": "native/roll-service/src/reading_plan_reader.rs, app/api/continuity_plan.py, vercel.json",
+      "evidence": "GET /api/v2/continuity-plans/{plan_id}/reader is implemented by the native Rust read() handler (owner-scoped Option E read, 404 if plan not found/owned, 409 if no linked authoritative Reading List). vercel.json routes GET .../reader to /api/native_roll.rs. Python router endpoint exists in app/api/continuity_plan.py but is shadowed by native-rust routing.",
+      "test": "Code review of reading_plan_reader.rs read() handler and vercel.json route (lines 332-336)."
     },
     {
       "id": "A3",
-      "status": "completed",
-      "file": "app/api/continuity_plan.py, app/schemas/continuity_plan_reader.py, app/services/continuity_plan_recovery_service.py, tests/test_continuity_plan_api.py",
-      "evidence": "GET /api/v2/continuity-plans/{plan_id}/recovery endpoint added with optimistic concurrency handling.",
-      "test": "Endpoint is defined and integrated with service layer."
+      "status": "verified",
+      "file": "native/roll-service/src/reading_plan_recovery.rs, app/api/continuity_plan.py, vercel.json",
+      "evidence": "GET /api/v2/continuity-plans/{plan_id}/recovery is implemented by the native Rust preview() handler (owner-scoped recovery preview, linked/orphaned/ambiguous status, candidate lists). vercel.json routes GET .../recovery to /api/native_roll.rs.",
+      "test": "Code review of reading_plan_recovery.rs preview() handler and vercel.json route (lines 339-344)."
     },
     {
       "id": "A4",
-      "status": "completed",
-      "file": "app/api/continuity_plan.py, app/schemas/continuity_plan_reader.py, app/services/continuity_plan_recovery_service.py, tests/test_continuity_plan_api.py",
-      "evidence": "POST /api/v2/continuity-plans/{plan_id}/recovery endpoint added with request validation.",
-      "test": "Endpoint is defined and integrated with service layer."
+      "status": "verified",
+      "file": "native/roll-service/src/reading_plan_recovery.rs, app/api/continuity_plan.py, vercel.json",
+      "evidence": "POST /api/v2/continuity-plans/{plan_id}/recovery is implemented by the native Rust relink() handler (optimistic concurrency via pg_advisory_xact_lock + FOR UPDATE + timestamp comparison, idempotent already_linked, 400/404/409). vercel.json routes POST .../recovery to /api/native_roll.rs.",
+      "test": "Code review of reading_plan_recovery.rs relink() handler including its #[cfg(test)] unit test (relink_writes_owned_source_once_and_rejects_other_owner) and vercel.json route (lines 339-344)."
     },
     {
       "id": "A5",
-      "status": "completed",
-      "file": "app/schemas/continuity_plan_reader.py",
-      "evidence": "Created ContinuityPlanReaderResponse, ContinuityPlanRecoveryPreview, ContinuityPlanRelinkRequest, and ContinuityPlanRelinkResult schemas.",
-      "test": "Schemas are defined and valid Pydantic models."
+      "status": "verified",
+      "file": "native/roll-service/parity/test_http_continuity_plan_reader_n1.py, native/roll-service/parity/test_http_continuity_plan_recovery_n1.py",
+      "evidence": "Parity tests assert real HTTP 200 responses and canonical data-shape assertions: execution_mode==option_e, plan_id, lanes/issues counts, progress shape, linked_list_id, retained_steps, candidates, status==relinked/already_linked. Tests use isolated roll_test_dml role via ROSTER_DATABASE_URL and pg_stat_statements track=all via db_counters/db_nested_statements.",
+      "test": "Code review of parity test assertions (reader: status 200, execution_mode, plan_id, lanes, progress; recovery-preview: status linked, linked_list_id, retained_steps, candidates; recovery-relink: status relinked, list_id). Live execution blocked by missing test database."
     },
     {
       "id": "A6",
-      "status": "completed",
-      "file": "docs/api/sql-budget-sources.json",
-      "evidence": "Updated SQL budget configuration for reader and recovery endpoints with application/control statements and max_statements limits.",
-      "test": "SQL budget configuration is present for all three endpoints."
+      "status": "verified",
+      "file": "native/roll-service/parity/test_http_continuity_plan_reader_n1.py, native/roll-service/parity/test_http_continuity_plan_recovery_n1.py",
+      "evidence": "Tests measure top-level (db_counters) and nested (db_nested_statements) pg_stat_statements deltas separately. Small vs large fixtures compared (reader: SMALL_ISSUES=3/LARGE_ISSUES=90; recovery: SMALL_LISTS=2/LARGE_LISTS=60). assert_declared_budget enforces each route's max_statements; _assert_no_growth enforces grows_with_data:false.",
+      "test": "Code review of budget measurement and growth-guard logic in both parity test files. Live execution blocked by missing test database."
     },
     {
       "id": "A7",
-      "status": "completed",
-      "file": "docs/api/sql-budget-sources.json",
-      "evidence": "SQL budget configuration includes measurement_status and measured_test_reference for reader and recovery operations.",
-      "test": "SQL budget configuration has proper measurement status for both endpoints."
+      "status": "verified",
+      "file": "native/roll-service/parity/test_http_continuity_plan_reader_n1.py, native/roll-service/parity/test_http_continuity_plan_recovery_n1.py",
+      "evidence": "test_reader_budget_rejects_extra_statement_and_n1 and test_recovery_budgets_reject_extra_statement_and_n1 prove the guards are non-vacuous: assert_declared_budget(maximum+1) raises AssertionError (extra query fails), and _assert_no_growth(maximum, maximum+LARGE) raises AssertionError (N+1 growth fails). The pinned ceiling itself is accepted.",
+      "test": "Code review of budget-rejection tests in both parity test files. Live execution blocked by missing test database."
     },
     {
       "id": "A8",
-      "status": "completed",
-      "file": "docs/api/SQL_BUDGETS.md",
-      "evidence": "Updated documentation for Native SQL budgets.",
-      "test": "Documentation is updated."
+      "status": "verified",
+      "file": "docs/api/sql-budget-sources.json",
+      "evidence": "All three operations are present with measurement_status=measured and measured_test_reference pointing to native/roll-service/parity/test_http_continuity_plan_reader_n1.py and test_http_continuity_plan_recovery_n1.py. SQL_BUDGET_SOURCES in route_harness loads this document for the budget-rejection tests.",
+      "test": "Code review of docs/api/sql-budget-sources.json entries for GET/POST /api/v2/continuity-plans/{plan_id}/reader and /recovery (lines 402-444, 557-586)."
     },
     {
       "id": "A9",
-      "status": "completed",
-      "file": "docs/api/SQL_BUDGETS.md, docs/api/sql-budget-sources.json",
-      "evidence": "Not closing #4737; implementation completed for continuity plan reader/recovery operations. Parent issue #4988 continues to track remaining work.",
-      "test": "All acceptance criteria A1 through A9 are satisfied; issue scope is complete."
+      "status": "verified",
+      "file": "docs/api/sql-budget-sources.json, PR #5576 (this PR)",
+      "evidence": "This PR does not close #4737. Parent issue #4988 continues to track the remaining 28 operations; this child issue (#5146) delivers only the continuity-plan reader/recovery scope.",
+      "test": "Issue/PR scope review: no closing keyword for #4737 in this PR; remaining #4988 work reported as out of scope for this child."
     }
   ]
 }
