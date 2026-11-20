@@ -31,8 +31,8 @@ const STATUS_SQL: &str = "SELECT t.id, t.title, t.total_issues FROM threads t JO
 /// The owner predicate is part of the single query, matching the Python
 /// repository's no-leakage contract for retry recovery.
 pub async fn series_import_status(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Path(comicvine_volume_id): Path<i32>,
 ) -> Result<Json<SeriesImportStatusResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
@@ -103,8 +103,8 @@ pub struct IssueIdentityMapping {
 ///
 /// Wire parity with Python `api_get_issue_identity`.
 pub async fn get_issue_identity(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
     // Stub: full DB lookup in subsequent slice
@@ -124,8 +124,8 @@ pub async fn get_issue_identity(
 ///
 /// Wire parity with Python `api_confirm_identity`.
 pub async fn confirm_identity(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
     Json(_request): Json<ConfirmIdentityRequest>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
@@ -146,8 +146,8 @@ pub async fn confirm_identity(
 ///
 /// Wire parity with Python `api_replace_identity`.
 pub async fn replace_identity(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
     Json(_request): Json<ReplaceIdentityRequest>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
@@ -185,8 +185,8 @@ pub struct ListCorrectionsResponse {
 ///
 /// Wire parity with Python `api_list_corrections`.
 pub async fn list_corrections(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
 ) -> Result<Json<ListCorrectionsResponse>, ApiError> {
     // Stub: full DB lookup in subsequent slice
@@ -208,8 +208,8 @@ pub struct RefreshMetadataResponse {
 ///
 /// Wire parity with Python `api_refresh_metadata`.
 pub async fn refresh_metadata(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
 ) -> Result<Json<RefreshMetadataResponse>, ApiError> {
     // Stub: full provider refresh in subsequent slice
@@ -238,8 +238,8 @@ pub struct RevertCorrectionResponse {
 ///
 /// Wire parity with Python `api_revert_correction`.
 pub async fn revert_correction(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
     Json(_request): Json<MetadataCorrectionRevertRequest>,
 ) -> Result<Json<RevertCorrectionResponse>, ApiError> {
@@ -261,8 +261,8 @@ pub async fn revert_correction(
 ///
 /// Wire parity with Python `api_apply_correction`.
 pub async fn apply_correction(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
     Json(_request): Json<MetadataCorrectionRequest>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
@@ -306,8 +306,8 @@ pub struct ImportIssueResponse {
 ///
 /// Wire parity with Python `api_import_issue`.
 pub async fn import_issue(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Json(_request): Json<ImportIssueRequest>,
 ) -> Result<Json<ImportIssueResponse>, ApiError> {
     // Stub: full DB import in subsequent slice
@@ -337,7 +337,7 @@ pub struct ResolveResponse {
 ///
 /// Wire parity with Python `api_resolve_comicvine_input`.
 pub async fn resolve_input(
-    State(state): State<Arc<AppState>>,
+    _state_state: State<Arc<AppState>>,
     query: Result<Query<ResolveQuery>, QueryRejection>,
 ) -> Result<Json<ResolveResponse>, ApiError> {
     // Stub: full URL resolution in subsequent slice
@@ -379,7 +379,7 @@ impl SeriesSearchResponse {
 ///
 /// Wire parity with Python `api_search_comicvine_series`.
 pub async fn search_series_v1(
-    State(state): State<Arc<AppState>>,
+    _state_state: State<Arc<AppState>>,
     query: Result<Query<SearchQuery>, QueryRejection>,
 ) -> Result<Json<SeriesSearchResponse>, ApiError> {
     // Stub: full search in subsequent slice
@@ -399,8 +399,8 @@ pub struct SeriesIssuesResponse {
 ///
 /// Wire parity with Python `api_get_series_issues`.
 pub async fn series_issues_v1(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Path(comicvine_volume_id): Path<i32>,
     query: Result<Query<SeriesIssuesQuery>, QueryRejection>,
 ) -> Result<Json<SeriesIssuesResponse>, ApiError> {
@@ -441,8 +441,8 @@ pub struct ImportSeriesResponse {
 ///
 /// Wire parity with Python `api_import_series`.
 pub async fn import_series(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    _state_state: State<Arc<AppState>>,
+    _user: AuthenticatedUser,
     Json(_request): Json<ImportSeriesRequest>,
 ) -> Result<Json<ImportSeriesResponse>, ApiError> {
     // Stub: full series import in subsequent slice
