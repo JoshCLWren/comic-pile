@@ -1124,13 +1124,20 @@ async fn validation_errors_use_the_production_detail_after_authentication() {
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{path}");
         assert_eq!(body, expected, "{path}");
     }
-    // Wrong methods on v2 resource paths are a 405 from axum's router.
+    // Wrong methods on v2 resource paths are a 405 with the Starlette-style detail body.
     for (method, path) in [
         ("GET", format!("/api/v2/issues/{}/read-markers", a[0])),
         ("POST", format!("/api/v2/issues/{}/position", a[0])),
     ] {
-        let (status, _) = send(&state, authed(method, &path, &token, &csrf, None)).await;
-        assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED, "{method} {path}");
+        let (status, body) = send(&state, authed(method, &path, &token, &csrf, None)).await;
+        assert_eq!(
+            (status, body),
+            (
+                StatusCode::METHOD_NOT_ALLOWED,
+                json!({"detail": "Method Not Allowed"})
+            ),
+            "{method} {path}"
+        );
     }
     assert_eq!(issue_state(&conn, a[0]).await, ("unread".into(), false));
 }

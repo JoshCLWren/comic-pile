@@ -1146,7 +1146,7 @@ pub fn list_documentation() {}
     path = "/api/v2/identity-inbox/issue-matches",
     tag = "identity-inbox",
     params(
-        ("q" = String, Query, min_length = 1, max_length = 200, description = "Non-blank search text (required)"),
+        ("q" = String, Query, min_length = 1, description = "Non-blank search text, at most 200 UTF-8 bytes (required)"),
         ("limit" = Option<i64>, Query, minimum = 1, maximum = 50, description = "Maximum results, 1-50 (default 10)"),
         ("issue_id" = Option<i32>, Query, description = "Issue id echoed back in the response (default 0)")
     ),

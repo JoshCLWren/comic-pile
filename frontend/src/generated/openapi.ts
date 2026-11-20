@@ -15216,7 +15216,7 @@ export interface operations {
     search_documentation: {
         parameters: {
             query: {
-                /** @description Non-blank search text (required) */
+                /** @description Non-blank search text, at most 200 UTF-8 bytes (required) */
                 q: string;
                 /** @description Maximum results, 1-50 (default 10) */
                 limit?: number;

@@ -2706,11 +2706,10 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Non-blank search text (required)",
+            "description": "Non-blank search text, at most 200 UTF-8 bytes (required)",
             "required": true,
             "schema": {
               "type": "string",
-              "maxLength": 200,
               "minLength": 1
             }
           },

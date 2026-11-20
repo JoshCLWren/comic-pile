@@ -25058,12 +25058,11 @@
         "operationId": "search_documentation",
         "parameters": [
           {
-            "description": "Non-blank search text (required)",
+            "description": "Non-blank search text, at most 200 UTF-8 bytes (required)",
             "in": "query",
             "name": "q",
             "required": true,
             "schema": {
-              "maxLength": 200,
               "minLength": 1,
               "type": "string"
             }
