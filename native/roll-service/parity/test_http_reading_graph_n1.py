@@ -95,8 +95,10 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert small_body.get("status") == "ok"
         assert small_body.get("cycles") == []
         assert isinstance(small_body.get("affected_lists"), list)
+        nested_small = await db_nested_statements(engine)
         _, _, after = await db_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested_delta = (nested_small - (before and (await db_nested_statements(engine)) or 0)) if nested_small is not None else None
 
         raw = await asyncpg.connect(url)
         try:
@@ -114,12 +116,16 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert large_body.get("status") == "ok"
         assert large_body.get("cycles") == []
         assert large_body.get("unresolved_reference_count") == 0
+        nested_large = await db_nested_statements(engine)
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested_delta = (nested_large - (before2 and (await db_nested_statements(engine)) or 0)) if nested_large is not None else None
 
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
         assert_declared_budget("GET", "/api/v2/reading-graph", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert small_nested_delta is not None and large_nested_delta is not None, "nested statements must be measured"
+        assert large_nested_delta <= small_nested_delta + 2, f"nested statement count grew: {small_nested_delta} -> {large_nested_delta}"
     finally:
         await engine.dispose()
 
