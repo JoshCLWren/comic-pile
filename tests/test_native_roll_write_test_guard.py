@@ -94,7 +94,7 @@ WRITE_SQL_RE = re.compile(
     re.IGNORECASE,
 )
 ROUTE_REGISTRATION_RE = re.compile(
-    r'\.route\(\s*"(?P<route>[^"]+)"\s*,(?P<body>[^;]*?)\)\s*(?:\.route|\n\s*\.layer|\n\s*\.with_state|\n\s*;|\Z)',
+    r'\.route\(\s*"(?P<route>[^"]+)"\s*,(?P<body>[\s\S]*?)\)\s*(?=\.route\b|\.(?:layer|with_state|fallback|method_not_allowed_fallback)\b|;|\Z)',
     re.DOTALL,
 )
 ROUTE_HANDLER_RE = re.compile(
