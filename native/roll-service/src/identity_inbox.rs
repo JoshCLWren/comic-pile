@@ -294,7 +294,7 @@ async fn fetch_item(
                     ex.provider, ex.external_id, ex.external_url, ex.metadata_json::text \
              FROM issue_external_identity_mappings cm \
              JOIN external_identities ex ON ex.id = cm.external_identity_id \
-             WHERE cm.issue_id = $1 AND cm.status IN ('deferred','candidate','confirmed','unresolved') \
+             WHERE cm.issue_id = $1 AND cm.status IN ('deferred','candidate','confirmed','unresolved','rejected') \
              ORDER BY cm.confidence DESC NULLS LAST",
             &[&issue_id],
         )
@@ -386,7 +386,7 @@ pub async fn list_inbox(
              JOIN issues i ON i.id = m.issue_id \
              JOIN threads t ON t.id = i.thread_id \
              JOIN external_identities e ON e.id = m.external_identity_id \
-             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate','deferred') \
+             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate','deferred','rejected') \
              ORDER BY m.created_at DESC \
              OFFSET $2 LIMIT $3",
             &[&user.id(), &offset, &limit],
@@ -408,7 +408,7 @@ pub async fn list_inbox(
              FROM issue_external_identity_mappings cm \
              JOIN external_identities ex ON ex.id = cm.external_identity_id \
              WHERE cm.issue_id = ANY($1) \
-               AND cm.status IN ('deferred','candidate','confirmed','unresolved') \
+               AND cm.status IN ('deferred','candidate','confirmed','unresolved','rejected') \
              ORDER BY cm.issue_id, cm.confidence DESC NULLS LAST",
             &[&issue_ids],
         )
