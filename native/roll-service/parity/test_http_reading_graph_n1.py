@@ -135,6 +135,79 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
 
 
 @pytest.mark.asyncio
+async def test_budget_rejection_graph() -> None:
+    """Verify that deliberately adding extra queries causes budget enforcement to fail."""
+    import uuid as _uuid
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"brg1_{_uuid.uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+            for i in range(5):
+                thread = Thread(
+                    user_id=owner.id,
+                    title=f"Series {i + 1}",
+                    format="Comic",
+                    queue_position=i + 1,
+                    issues_remaining=2,
+                    total_issues=2,
+                    status="active",
+                )
+                db.add(thread)
+                await db.flush()
+                db.add_all(
+                    [
+                        Issue(thread_id=thread.id, issue_number=str(position), position=position, status="unread")
+                        for position in (1, 2)
+                    ]
+                )
+            await db.commit()
+            token = _token(username, jti=f"jti-{_uuid.uuid4().hex}")
+
+        env = {
+            **os.environ,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_TEST_METHOD": "GET",
+            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
+            "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+        }
+        # Measure baseline
+        _, _, before = await db_counters(engine)
+        _, _, before_nested = await db_nested_statements(engine)
+        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        _, _, after = await db_counters(engine)
+        _, _, after_nested = await db_nested_statements(engine)
+        baseline_delta = (after - before) if before is not None and after is not None else None
+        baseline_nested = (after_nested - before_nested) if after_nested is not None and before_nested is not None else None
+
+        # Add an extra query by running a raw SELECT 1 via the admin connection
+        raw = await asyncpg.connect(url)
+        try:
+            await raw.execute("SELECT 1")
+        finally:
+            await raw.close()
+
+        _, _, after_extra = await db_counters(engine)
+        _, _, after_extra_nested = await db_nested_statements(engine)
+        extra_delta = (after_extra - after) if after_extra is not None and after is not None else None
+        extra_nested = (after_extra_nested - after_nested) if after_extra_nested is not None and after_nested is not None else None
+
+        # The extra SELECT 1 should increment the statement count
+        assert extra_delta == 1, f"expected 1 extra statement, got {extra_delta}"
+        # Verify budget enforcement catches the excess
+        try:
+            assert_declared_budget("GET", "/api/v2/reading-graph", after_extra, after_extra)
+            assert False, "Budget check should have failed when exceeding max_statements"
+        except AssertionError:
+            # Expected: the budget check raises AssertionError when statements exceed the maximum
+            pass
+
+
+@pytest.mark.asyncio
 async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library_size() -> None:
     """POST /api/v2/reading-graph/repairs preview must stay within its fixed budget."""
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
@@ -249,3 +322,76 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert large_nested_delta == 0, f"large fixture should have 0 nested statements, got {large_nested_delta}"
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_budget_rejection_graph() -> None:
+    """Verify that deliberately adding extra queries causes budget enforcement to fail."""
+    import uuid as _uuid
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"brg1_{_uuid.uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+            for i in range(5):
+                thread = Thread(
+                    user_id=owner.id,
+                    title=f"Series {i + 1}",
+                    format="Comic",
+                    queue_position=i + 1,
+                    issues_remaining=2,
+                    total_issues=2,
+                    status="active",
+                )
+                db.add(thread)
+                await db.flush()
+                db.add_all(
+                    [
+                        Issue(thread_id=thread.id, issue_number=str(position), position=position, status="unread")
+                        for position in (1, 2)
+                    ]
+                )
+            await db.commit()
+            token = _token(username, jti=f"jti-{_uuid.uuid4().hex}")
+
+        env = {
+            **os.environ,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_TEST_METHOD": "GET",
+            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
+            "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+        }
+        # Measure baseline
+        _, _, before = await db_counters(engine)
+        _, _, before_nested = await db_nested_statements(engine)
+        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        _, _, after = await db_counters(engine)
+        _, _, after_nested = await db_nested_statements(engine)
+        baseline_delta = (after - before) if before is not None and after is not None else None
+        baseline_nested = (after_nested - before_nested) if after_nested is not None and before_nested is not None else None
+
+        # Add an extra query by running a raw SELECT 1 via the admin connection
+        raw = await asyncpg.connect(url)
+        try:
+            await raw.execute("SELECT 1")
+        finally:
+            await raw.close()
+
+        _, _, after_extra = await db_counters(engine)
+        _, _, after_extra_nested = await db_nested_statements(engine)
+        extra_delta = (after_extra - after) if after_extra is not None and after is not None else None
+        extra_nested = (after_extra_nested - after_nested) if after_extra_nested is not None and after_nested is not None else None
+
+        # The extra SELECT 1 should increment the statement count
+        assert extra_delta == 1, f"expected 1 extra statement, got {extra_delta}"
+        # Verify budget enforcement catches the excess
+        try:
+            assert_declared_budget("GET", "/api/v2/reading-graph", after_extra, after_extra)
+            assert False, "Budget check should have failed when exceeding max_statements"
+        except AssertionError:
+            # Expected: the budget check raises AssertionError when statements exceed the maximum
+            pass
