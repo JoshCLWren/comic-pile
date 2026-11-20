@@ -89,7 +89,16 @@ exit 0
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    # Assert that the lint script's Git environment checks ran (gate_log has content)
     assert gate_log.exists() and gate_log.read_text().strip() != "", (
         f"Git environment checks did not run; gate_log is empty or missing. "
         f"Content: {gate_log.read_text()!r}"
+    )
+    # Assert that no test commands ran; gate_log should only contain lint-related messages
+    gate_log_content = gate_log.read_text()
+    assert "pytest" not in gate_log_content, (
+        f"Test commands (pytest) should not run during pre-push lint; found in gate_log"
+    )
+    assert "vitest" not in gate_log_content, (
+        f"Test commands (vitest) should not run during pre-push lint; found in gate_log"
     )
