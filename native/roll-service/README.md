@@ -47,8 +47,8 @@ in command arguments, commits, logs, issue comments or fixtures.
 
 | Variable | Required/default | Meaning |
 | --- | --- | --- |
-| RUST_ROLL_ENV | development | development or production |
-| RUST_ROLL_BIND | 127.0.0.1:8010 | Socket address; development rejects non-loopback binds |
+| RUST_ROLL_ENV | development | development, test, or production; test is reserved for disposable container harnesses |
+| RUST_ROLL_BIND | 127.0.0.1:8010 | Socket address; development rejects non-loopback binds, while test permits them for container ingress |
 | RUST_ROLL_DATABASE_URL | required | Native postgres URI, **without** SQLAlchemy's `+asyncpg`; production requires `sslmode=require` |
 | RUST_ROLL_JWT_SECRET | required | Same signing secret as Python when authenticated handlers are enabled; no insecure default |
 | RUST_ROLL_LOG | info | Valid tracing filter; output is structured JSON |
