@@ -5,9 +5,9 @@
     "^/api/bug\\-reports(?:/.*)?$"
   ],
   "defaults": {
-    "runtime": "python-fastapi",
-    "status": "transitional",
-    "owning_issue": null,
+    "runtime": "native-rust",
+    "status": "live",
+    "owning_issue": 4852,
     "consumers": [
       "frontend/src/services/api-bug-reports.ts"
     ]
