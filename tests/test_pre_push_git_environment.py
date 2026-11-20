@@ -48,6 +48,7 @@ set -e
 # Check for leaked Git repository-local environment variables
 # These variables can escape from the parent worktree into sub-repositories
 # created by the pre-push hook, causing tests to pass incorrectly.
+LEAKED=0
 for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do
     if [[ -v "$variable" ]]; then
         echo "Leaked $variable" >&2
@@ -55,8 +56,12 @@ for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do
     fi
 done
 
-# Signal that Git environment checks completed successfully
-printf "Git env checks completed\\n" >> "$GATE_LOG"
+# Record that Git environment checks ran as part of lint
+if [ "$LEAKED" -eq 0 ]; then
+    printf "Git env checks completed (no leaks)\\"n" >> "$GATE_LOG"
+else
+    printf "Git env checks completed (leaks detected)\\"n" >> "$GATE_LOG"
+fi
 
 exit 0
 """)
@@ -92,4 +97,19 @@ exit 0
     assert gate_log.exists() and gate_log.read_text().strip() != "", (
         f"Git environment checks did not run; gate_log is empty or missing. "
         f"Content: {gate_log.read_text()!r}"
+    )
+    # Separate assertion: no test commands ran as part of the lint gate.
+    # The lint script should only perform static checks, not invoke test suites.
+    output_lower = (result.stdout + result.stderr).lower()
+    assert "pytest" not in output_lower, (
+        f"Lint gate unexpectedly ran pytest; test commands leaked into lint gate. "
+        f"Output: {result.stdout + result.stderr!r}"
+    )
+    assert "vitest" not in output_lower, (
+        f"Lint gate unexpectedly ran vitest; test commands leaked into lint gate. "
+        f"Output: {result.stdout + result.stderr!r}"
+    )
+    assert "ui audit" not in output_lower, (
+        f"Lint gate unexpectedly ran UI audit; test commands leaked into lint gate. "
+        f"Output: {result.stdout + result.stderr!r}"
     )
