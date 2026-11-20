@@ -26,14 +26,28 @@ AXUM_CAPTURE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 # method and must stay literal when building a concrete path.
 VERCEL_CAPTURE = re.compile(r"(?<=/):([A-Za-z_][A-Za-z0-9_]*)")
 
-# Retired Roll Skip operation. Reroll (POST /api/v2/roll/offer) replaced it, so
-# no native ingress may ever publish it again.
+# Retired operations that must never regain a native handler or ingress:
+# Roll Skip was replaced by Reroll (POST /api/v2/roll/offer), and the legacy
+# /api/v1/creators family was replaced by the canonical Rust-backed /api/v2
+# resources (#4836). Their old URLs now fall through to Rust's JSON 404.
 RETIRED_RUST_ROUTES: frozenset[tuple[str, str]] = frozenset(
     {
         ("POST", "/api/v1/roll/skip"),
         ("POST", "/api/roll/skip"),
         ("POST", "/api/v1/roll/skip/:thread_id/unskip"),
         ("POST", "/api/roll/skip/:thread_id/unskip"),
+        ("GET", "/api/v1/creators"),
+        ("GET", "/api/v1/creators/"),
+        ("GET", "/api/v1/creators/compare"),
+        ("GET", "/api/v1/creators/discoveries"),
+        ("GET", "/api/v1/creators/summaries"),
+        ("GET", "/api/v1/creators/team-chemistry"),
+        ("GET", "/api/v1/creators/:creator_key"),
+        ("GET", "/api/v1/creators/:creator_key/metrics/:metric_type"),
+        ("GET", "/api/v1/creators/:creator_key/metrics/rating-distribution/:rating_value"),
+        ("GET", "/api/v1/creators/:creator_key/metrics/role-stats/:role"),
+        ("GET", "/api/v1/creators/:creator_key/metrics/series-stats/:series_key"),
+        ("GET", "/api/v1/creators/:creator_key/series/:series_key/issues"),
     }
 )
 AXUM_ROUTE = re.compile(
