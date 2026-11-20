@@ -216,302 +216,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/comicvine/issues/{issue_id}/identity": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Api Get Issue Identity
-         * @description Return the current ComicVine identity state for a ComicPile issue.
-         *
-         *     Shows confirmed, candidate, and unresolved mappings.
-         *
-         *     Args:
-         *         issue_id: ComicPile issue ID.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         */
-        get: operations["api_get_issue_identity_api_v1_comicvine_issues__issue_id__identity_get"];
-        put?: never;
-        post?: never;
-        /**
-         * Api Remove Identity
-         * @description Remove the confirmed ComicVine identity mapping from an issue.
-         *
-         *     Sets the confirmed mapping status to ``unresolved``, effectively unlinking
-         *     the ComicVine badge and returning the issue to the "Not linked" state.
-         *
-         *     Args:
-         *         issue_id: ComicPile issue ID.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Confirmation of the removal.
-         */
-        delete: operations["api_remove_identity_api_v1_comicvine_issues__issue_id__identity_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/comicvine/issues/{issue_id}/identity:confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Api Confirm Identity
-         * @description Confirm a ComicVine identity for an issue.
-         *
-         *     Creates the mapping if it doesn't exist, or confirms an existing candidate.
-         *
-         *     Args:
-         *         issue_id: ComicPile issue ID.
-         *         request: Confirmation request with comicvine_issue_id.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         */
-        post: operations["api_confirm_identity_api_v1_comicvine_issues__issue_id__identity_confirm_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/comicvine/issues/{issue_id}/identity:replace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Api Replace Identity
-         * @description Replace the current confirmed ComicVine identity with a new one.
-         *
-         *     Demotes the old mapping and confirms the new one atomically.
-         *
-         *     Args:
-         *         issue_id: ComicPile issue ID.
-         *         request: Replace request with new comicvine_issue_id and optional reason.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         */
-        post: operations["api_replace_identity_api_v1_comicvine_issues__issue_id__identity_replace_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/comicvine/issues/{issue_id}/metadata:correct": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Api Apply Correction
-         * @description Apply a canonical metadata correction to an issue.
-         *
-         *     The correction preserves the provider's raw value alongside the canonical override.
-         *
-         *     Args:
-         *         issue_id: ComicPile issue ID.
-         *         request: Correction request with field_name and canonical_value.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         */
-        post: operations["api_apply_correction_api_v1_comicvine_issues__issue_id__metadata_correct_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/comicvine/issues/{issue_id}/metadata:corrections": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Api List Corrections
-         * @description List all active corrections for an issue.
-         *
-         *     Args:
-         *         issue_id: ComicPile issue ID.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         */
-        get: operations["api_list_corrections_api_v1_comicvine_issues__issue_id__metadata_corrections_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/comicvine/issues/{issue_id}/metadata:refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Api Refresh Metadata
-         * @description Request a ComicVine metadata refresh for an issue with a confirmed identity.
-         *
-         *     Returns the confirmed ComicVine issue ID for the caller to trigger hydration.
-         *
-         *     Args:
-         *         issue_id: ComicPile issue ID.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         */
-        post: operations["api_refresh_metadata_api_v1_comicvine_issues__issue_id__metadata_refresh_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/comicvine/issues/{issue_id}/metadata:revert": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Api Revert Correction
-         * @description Revert a metadata correction (soft-delete with audit trail).
-         *
-         *     Args:
-         *         issue_id: ComicPile issue ID.
-         *         request: Revert request with correction_id.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         */
-        post: operations["api_revert_correction_api_v1_comicvine_issues__issue_id__metadata_revert_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/comicvine/issues:import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Api Import Issue
-         * @description Import a ComicVine issue as a new thread with its exact identity preserved.
-         *
-         *     Creates the thread, a single issue row, and a confirmed external-identity
-         *     mapping atomically; optionally inserts the thread into a reading order
-         *     between the surrounding story-arc members.
-         *
-         *     Args:
-         *         request: Import payload with optional anchored reading-order placement.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Created identifiers and final reading-order placement.
-         */
-        post: operations["api_import_issue_api_v1_comicvine_issues_import_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/comicvine/resolve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Api Resolve Comicvine Input
-         * @description Resolve a correction input that may be a pasted ComicVine URL.
-         *
-         *     A recognized ``4000-<id>`` issue URL resolves directly to the exact issue;
-         *     a recognized ``4050-<id>`` volume URL resolves to the volume and its
-         *     issues. Unsupported or malformed URLs return a clear validation message
-         *     without mutating any identity. Ordinary text returns ``kind='search'`` and
-         *     continues through the normal title-search path.
-         *
-         *     Args:
-         *         input: Search text or pasted ComicVine URL.
-         *         current_user: Authenticated user.
-         */
-        get: operations["api_resolve_comicvine_input_api_v1_comicvine_resolve_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/comicvine/search/series": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Api Search Comicvine Series
-         * @description Search ComicVine for series/volumes by title.
-         *
-         *     Pagination uses ComicVine offset semantics: the response reports
-         *     ``offset``, ``limit``, ``has_more``, and ``next_offset`` so a client can
-         *     load more results without dead-ending at the first page.
-         *
-         *     Args:
-         *         q: Search query string.
-         *         limit: Maximum results to return.
-         *         offset: Zero-based result offset for paging.
-         *         current_user: Authenticated user.
-         */
-        get: operations["api_search_comicvine_series_api_v1_comicvine_search_series_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/comicvine/series/{comicvine_volume_id}/import-status": {
         parameters: {
             query?: never;
@@ -523,69 +227,6 @@ export interface paths {
         get: operations["series_import_status_documentation"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/comicvine/series/{comicvine_volume_id}/issues": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Api Get Series Issues
-         * @description Fetch all issues within a ComicVine series/volume.
-         *
-         *     Args:
-         *         comicvine_volume_id: ComicVine volume ID.
-         *         series_name: Optional series name to avoid extra API call.
-         *         current_user: Authenticated user.
-         */
-        get: operations["api_get_series_issues_api_v1_comicvine_series__comicvine_volume_id__issues_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/comicvine/series:import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Api Import Series
-         * @description Import a ComicVine series/volume as a new thread with all issues.
-         *
-         *     Creates a thread with the series title and adopts all issues from the
-         *     confirmed ComicVine volume using the shared provider-issue adoption
-         *     primitive. Preserves irregular issue numbers and reuses existing
-         *     canonical issues.
-         *
-         *     Args:
-         *         request: Import payload with ComicVine volume ID, optional reading
-         *             progress, and optional anchored reading-order placement.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         ImportSeriesResponse with thread details and per-issue adoption results.
-         *
-         *     Raises:
-         *         HTTPException: 503 if ComicVine unavailable, 502 if provider fails,
-         *             404 if reading order not found, 400 if series has no issues.
-         */
-        post: operations["api_import_series_api_v1_comicvine_series_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4314,27 +3955,15 @@ export interface components {
             /** Format: int32 */
             total_list_count: number;
         };
-        /**
-         * CanonicalCorrection
-         * @description A user-contributed canonical metadata override.
-         */
         CanonicalCorrection: {
-            /** Canonical Value */
             canonical_value: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
             created_at: string;
-            /** Created By */
+            /** Format: int32 */
             created_by: number;
-            /** Field Name */
             field_name: string;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Provenance */
             provenance: string;
-            /** Provider Value */
             provider_value?: string | null;
         };
         CblAdoptionCommitRequest: {
@@ -4657,24 +4286,14 @@ export interface components {
             /** Roles */
             roles?: string[];
         };
-        /**
-         * ComicVineIssueCandidate
-         * @description One issue candidate from a series for identity mapping.
-         */
         ComicVineIssueCandidate: {
-            /** Comicvine Issue Id */
+            /** Format: int32 */
             comicvine_issue_id: number;
-            /** Cover Date */
             cover_date?: string | null;
-            /** Image Url */
             image_url?: string | null;
-            /** Issue Number */
             issue_number?: string | null;
-            /** Name */
             name?: string | null;
-            /** Site Detail Url */
             site_detail_url?: string | null;
-            /** Store Date */
             store_date?: string | null;
         };
         /**
@@ -4725,119 +4344,61 @@ export interface components {
          * @enum {string}
          */
         ComicVineMappingStatus: "not_applicable" | "fully_mapped" | "partial" | "unresolved" | "needs_review";
-        /**
-         * ComicVineResolveResponse
-         * @description Result of resolving a correction input that may be a pasted URL.
-         *
-         *     ``kind`` distinguishes an exact issue resolution, an exact volume
-         *     resolution, or an ordinary title-search input. ``validation_error`` carries
-         *     a clear inline message when the input is an unsupported/malformed URL or
-         *     provider resolution failed, while leaving normal title search available.
-         */
         ComicVineResolveResponse: {
-            /** Input */
             input: string;
             issue?: components["schemas"]["ComicVineResolvedIssue"] | null;
-            /**
-             * Issues
-             * @default []
-             */
             issues: components["schemas"]["ComicVineIssueCandidate"][];
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "issue" | "volume" | "search";
-            /** Validation Error */
+            /** @description `issue`, `volume` or `search`. */
+            kind: string;
             validation_error?: string | null;
             volume?: components["schemas"]["ComicVineSeriesResult"] | null;
         };
-        /**
-         * ComicVineResolvedIssue
-         * @description A ComicVine issue resolved directly from a pasted URL.
-         *
-         *     Carries the owning series/volume metadata so the confirmation card can
-         *     render without a separate volume search.
-         */
         ComicVineResolvedIssue: {
-            /** Comicvine Issue Id */
+            /** Format: int32 */
             comicvine_issue_id: number;
-            /** Cover Date */
             cover_date?: string | null;
-            /** Image Url */
             image_url?: string | null;
-            /** Issue Number */
             issue_number?: string | null;
-            /** Name */
             name?: string | null;
-            /** Series Name */
             series_name?: string | null;
-            /** Site Detail Url */
             site_detail_url?: string | null;
-            /** Store Date */
             store_date?: string | null;
-            /** Volume Id */
+            /** Format: int32 */
             volume_id?: number | null;
         };
-        /**
-         * ComicVineSeriesIssuesResponse
-         * @description Issues within a ComicVine series.
-         */
         ComicVineSeriesIssuesResponse: {
-            /** Comicvine Volume Id */
+            /** Format: int32 */
             comicvine_volume_id: number;
-            /** Issues */
             issues: components["schemas"]["ComicVineIssueCandidate"][];
-            /** Series Name */
             series_name: string;
         };
-        /**
-         * ComicVineSeriesResult
-         * @description One ComicVine series/volume from a search.
-         */
         ComicVineSeriesResult: {
-            /** Comicvine Volume Id */
+            /** Format: int32 */
             comicvine_volume_id: number;
-            /** Image Url */
             image_url?: string | null;
-            /** Issue Count */
+            /** Format: int32 */
             issue_count?: number | null;
-            /** Name */
             name: string;
-            /** Publisher */
             publisher?: string | null;
-            /** Site Detail Url */
             site_detail_url?: string | null;
-            /** Start Year */
+            /** Format: int32 */
             start_year?: number | null;
         };
-        /**
-         * ComicVineSeriesSearchResponse
-         * @description Paginated series search results using ComicVine offset semantics.
-         */
         ComicVineSeriesSearchResponse: {
-            /**
-             * Has More
-             * @default false
-             */
             has_more: boolean;
-            /**
-             * Limit
-             * @default 10
-             */
+            /** Format: int32 */
             limit: number;
-            /** Next Offset */
-            next_offset?: number | null;
             /**
-             * Offset
-             * @default 0
+             * Format: int64
+             * @description `offset + results` can exceed `i32` at the accepted offset bound, so
+             *     paging arithmetic is widened (#4636390843).
              */
+            next_offset?: number | null;
+            /** Format: int32 */
             offset: number;
-            /** Query */
             query: string;
-            /** Results */
             results: components["schemas"]["ComicVineSeriesResult"][];
-            /** Total Available */
+            /** Format: int64 */
             total_available?: number | null;
         };
         CommitEntryOverride: {
@@ -4868,15 +4429,9 @@ export interface components {
             provider: string;
             status: string;
         };
-        /**
-         * ConfirmIdentityRequest
-         * @description Request to confirm a specific ComicVine identity for an issue.
-         */
+        /** @description Python `ConfirmIdentityRequest` (lax `int`). */
         ConfirmIdentityRequest: {
-            /**
-             * Comicvine Issue Id
-             * @description ComicVine issue ID to confirm
-             */
+            /** Format: int32 */
             comicvine_issue_id: number;
         };
         /** @description Python `ConnectedThreadInfo`. */
@@ -6090,129 +5645,79 @@ export interface components {
             volume_name?: string | null;
         };
         /**
-         * ImportIssueRequest
-         * @description Request to import a ComicVine issue as a new identity-preserving thread.
-         *
-         *     The optional reading-order placement is neighbor-anchored: the anchors are
-         *     the thread IDs of the arc members immediately surrounding the imported
-         *     issue in story-arc order. Anchors absent from the target order fall back
-         *     per ``resolve_anchored_position`` rules.
+         * @description Python `ImportIssueRequest`: `title` 1-200 characters (stored stripped),
+         *     `comicvine_issue_id > 0`, `issue_number` at most 50 characters, and the
+         *     optional reading-order ids `> 0`.
          */
         ImportIssueRequest: {
-            /** Anchor After Thread Id */
+            /** Format: int32 */
             anchor_after_thread_id?: number | null;
-            /** Anchor Before Thread Id */
+            /** Format: int32 */
             anchor_before_thread_id?: number | null;
-            /**
-             * Comicvine Issue Id
-             * @description ComicVine issue ID to preserve
-             */
+            /** Format: int32 */
             comicvine_issue_id: number;
-            /** Issue Number */
             issue_number?: string | null;
-            /** Reading Order Id */
+            /** Format: int32 */
             reading_order_id?: number | null;
-            /** Title */
             title: string;
         };
-        /**
-         * ImportIssueResponse
-         * @description Result of an identity-preserving ComicVine issue import.
-         */
         ImportIssueResponse: {
-            /** External Identity Id */
+            /** Format: int32 */
             external_identity_id: number;
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Position */
+            /** Format: int32 */
             position?: number | null;
-            /** Reading Order Id */
+            /** Format: int32 */
             reading_order_id?: number | null;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
-            /** Total Items */
+            /** Format: int32 */
             total_items?: number | null;
         };
-        /**
-         * ImportSeriesIssueResult
-         * @description Result of adopting one issue during series import.
-         */
         ImportSeriesIssueResult: {
-            /** Comicvine Issue Id */
+            /** Format: int32 */
             comicvine_issue_id: number;
-            /** Conflict Detail */
             conflict_detail?: string | null;
-            /** Hydration */
             hydration: string;
-            /** Issue Id */
+            /** Format: int32 */
             issue_id?: number | null;
-            /** Issue Number */
             issue_number?: string | null;
-            /** Outcome */
             outcome: string;
         };
-        /**
-         * ImportSeriesRequest
-         * @description Request to import a ComicVine series/volume as a new thread with all issues.
-         *
-         *     Creates a thread with the series title and adopts all issues from the
-         *     confirmed ComicVine volume using the shared provider-issue adoption
-         *     primitive. Optional reading progress indicates how many issues from
-         *     the start of the series have already been read.
-         */
         ImportSeriesRequest: {
-            /**
-             * Already Read Count
-             * @description Number of issues already read from the start of the series
-             * @default 0
-             */
-            already_read_count: number;
-            /** Anchor After Thread Id */
+            /** Format: int32 */
+            already_read_count?: number;
+            /** Format: int32 */
             anchor_after_thread_id?: number | null;
-            /** Anchor Before Thread Id */
+            /** Format: int32 */
             anchor_before_thread_id?: number | null;
-            /**
-             * Comicvine Volume Id
-             * @description ComicVine volume ID to import
-             */
+            /** Format: int32 */
             comicvine_volume_id: number;
-            /**
-             * Reading Order Id
-             * @description Optional reading order to add the thread to
-             */
+            /** Format: int32 */
             reading_order_id?: number | null;
         };
-        /**
-         * ImportSeriesResponse
-         * @description Result of a ComicVine series import.
-         */
         ImportSeriesResponse: {
-            /** Comicvine Volume Id */
+            /** Format: int32 */
             comicvine_volume_id: number;
-            /** Issue Results */
             issue_results: components["schemas"]["ImportSeriesIssueResult"][];
-            /** Issues Adopted */
+            /** Format: int32 */
             issues_adopted: number;
-            /** Issues Conflict */
+            /** Format: int32 */
             issues_conflict: number;
-            /** Issues Skipped */
+            /** Format: int32 */
             issues_skipped: number;
-            /** Position */
+            /** Format: int32 */
             position?: number | null;
-            /** Reading Order Id */
+            /** Format: int32 */
             reading_order_id?: number | null;
-            /** Series Name */
             series_name: string;
-            /**
-             * Thread Created
-             * @description True when this call created the local series thread. False when an existing thread already tracked this ComicVine volume, so a retry adopted into the original series instead of duplicating it.
-             */
             thread_created: boolean;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
-            /** Total Issues In Series */
+            /** Format: int32 */
             total_issues_in_series: number;
-            /** Total Items */
+            /** Format: int32 */
             total_items?: number | null;
         };
         InheritanceSource: {
@@ -6342,46 +5847,27 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /**
-         * IssueIdentityMapping
-         * @description One external identity mapping for a ComicPile issue.
-         */
         IssueIdentityMapping: {
-            /** Comicvine Id */
             comicvine_id: string;
-            /** Confidence */
+            /** Format: double */
             confidence?: number | null;
-            /** Created At */
             created_at?: string | null;
-            /** Evidence Source */
             evidence_source?: string | null;
-            /** External Identity Id */
+            /** Format: int32 */
             external_identity_id: number;
-            /** Provider */
             provider: string;
-            /** Status */
             status: string;
         };
-        /**
-         * IssueIdentityResponse
-         * @description Current identity state for one ComicPile issue.
-         */
         IssueIdentityResponse: {
-            /** Candidate Mappings */
             candidate_mappings: components["schemas"]["IssueIdentityMapping"][];
-            /** Comicvine Issue Id */
             comicvine_issue_id?: string | null;
-            /** Confirmed Mappings */
             confirmed_mappings: components["schemas"]["IssueIdentityMapping"][];
-            /** Has Confirmed Identity */
             has_confirmed_identity: boolean;
-            /** Has Unresolved */
             has_unresolved: boolean;
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
-            /** Thread Title */
             thread_title: string;
         };
         /** @description Wire parity with Python's ComicVineIssueIntelligence. */
@@ -6514,57 +6000,28 @@ export interface components {
             kind: "manual_select";
         };
         /**
-         * MetadataCorrectionRequest
-         * @description Request to apply a canonical metadata correction.
+         * @description Python `MetadataCorrectionRequest`: unconstrained `str` fields (empty is
+         *     accepted), `reason` `max_length=500`.
          */
         MetadataCorrectionRequest: {
-            /**
-             * Canonical Value
-             * @description Corrected canonical value
-             */
             canonical_value: string;
-            /**
-             * Field Name
-             * @description Metadata field to correct
-             */
             field_name: string;
-            /**
-             * Reason
-             * @description Reason for correction
-             */
             reason?: string | null;
         };
-        /**
-         * MetadataCorrectionRevertRequest
-         * @description Request to revert a canonical correction.
-         */
+        /** @description Python `MetadataCorrectionRevertRequest` (lax `int`). */
         MetadataCorrectionRevertRequest: {
-            /**
-             * Correction Id
-             * @description ID of the correction to revert
-             */
+            /** Format: int32 */
             correction_id: number;
         };
-        /**
-         * MetadataCorrectionsResponse
-         * @description List of corrections for a ComicPile issue.
-         */
         MetadataCorrectionsResponse: {
-            /** Corrections */
             corrections: components["schemas"]["CanonicalCorrection"][];
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
         };
-        /**
-         * MetadataRefreshResponse
-         * @description Result of a provider metadata refresh request.
-         */
         MetadataRefreshResponse: {
-            /** Comicvine Issue Id */
             comicvine_issue_id?: string | null;
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Refreshed */
             refreshed: boolean;
         };
         /**
@@ -6619,27 +6076,6 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
-        NativeCanonicalCorrection: {
-            canonical_value: string;
-            created_at: string;
-            /** Format: int32 */
-            created_by: number;
-            field_name: string;
-            /** Format: int32 */
-            id: number;
-            provenance: string;
-            provider_value?: string | null;
-        };
-        NativeComicVineIssueCandidate: {
-            /** Format: int32 */
-            comicvine_issue_id: number;
-            cover_date?: string | null;
-            image_url?: string | null;
-            issue_number?: string | null;
-            name?: string | null;
-            site_detail_url?: string | null;
-            store_date?: string | null;
-        };
         /** @description Compact confirmed ComicVine mapping health for one queue row. */
         NativeComicVineMappingHealth: {
             /** Format: int32 */
@@ -6653,68 +6089,6 @@ export interface components {
             status: string;
             /** Format: int32 */
             tracked_issue_count: number;
-        };
-        NativeComicVineResolveResponse: {
-            input: string;
-            issue?: components["schemas"]["NativeComicVineResolvedIssue"] | null;
-            issues: components["schemas"]["NativeComicVineIssueCandidate"][];
-            /** @description `issue`, `volume` or `search`. */
-            kind: string;
-            validation_error?: string | null;
-            volume?: components["schemas"]["NativeComicVineSeriesResult"] | null;
-        };
-        NativeComicVineResolvedIssue: {
-            /** Format: int32 */
-            comicvine_issue_id: number;
-            cover_date?: string | null;
-            image_url?: string | null;
-            issue_number?: string | null;
-            name?: string | null;
-            series_name?: string | null;
-            site_detail_url?: string | null;
-            store_date?: string | null;
-            /** Format: int32 */
-            volume_id?: number | null;
-        };
-        NativeComicVineSeriesIssuesResponse: {
-            /** Format: int32 */
-            comicvine_volume_id: number;
-            issues: components["schemas"]["NativeComicVineIssueCandidate"][];
-            series_name: string;
-        };
-        NativeComicVineSeriesResult: {
-            /** Format: int32 */
-            comicvine_volume_id: number;
-            image_url?: string | null;
-            /** Format: int32 */
-            issue_count?: number | null;
-            name: string;
-            publisher?: string | null;
-            site_detail_url?: string | null;
-            /** Format: int32 */
-            start_year?: number | null;
-        };
-        NativeComicVineSeriesSearchResponse: {
-            has_more: boolean;
-            /** Format: int32 */
-            limit: number;
-            /**
-             * Format: int64
-             * @description `offset + results` can exceed `i32` at the accepted offset bound, so
-             *     paging arithmetic is widened (#4636390843).
-             */
-            next_offset?: number | null;
-            /** Format: int32 */
-            offset: number;
-            query: string;
-            results: components["schemas"]["NativeComicVineSeriesResult"][];
-            /** Format: int64 */
-            total_available?: number | null;
-        };
-        /** @description Python `ConfirmIdentityRequest` (lax `int`). */
-        NativeConfirmIdentityRequest: {
-            /** Format: int32 */
-            comicvine_issue_id: number;
         };
         /** @description Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`. */
         NativeDependencyGroupDetailMemberResponse: {
@@ -6782,110 +6156,11 @@ export interface components {
             id: number;
             name: string;
         };
-        /**
-         * @description Python `ImportIssueRequest`: `title` 1-200 characters (stored stripped),
-         *     `comicvine_issue_id > 0`, `issue_number` at most 50 characters, and the
-         *     optional reading-order ids `> 0`.
-         */
-        NativeImportIssueRequest: {
-            /** Format: int32 */
-            anchor_after_thread_id?: number | null;
-            /** Format: int32 */
-            anchor_before_thread_id?: number | null;
-            /** Format: int32 */
-            comicvine_issue_id: number;
-            issue_number?: string | null;
-            /** Format: int32 */
-            reading_order_id?: number | null;
-            title: string;
-        };
-        NativeImportIssueResponse: {
-            /** Format: int32 */
-            external_identity_id: number;
-            /** Format: int32 */
-            issue_id: number;
-            /** Format: int32 */
-            position?: number | null;
-            /** Format: int32 */
-            reading_order_id?: number | null;
-            /** Format: int32 */
-            thread_id: number;
-            /** Format: int32 */
-            total_items?: number | null;
-        };
-        NativeImportSeriesIssueResult: {
-            /** Format: int32 */
-            comicvine_issue_id: number;
-            conflict_detail?: string | null;
-            hydration: string;
-            /** Format: int32 */
-            issue_id?: number | null;
-            issue_number?: string | null;
-            outcome: string;
-        };
-        NativeImportSeriesRequest: {
-            /** Format: int32 */
-            already_read_count?: number;
-            /** Format: int32 */
-            anchor_after_thread_id?: number | null;
-            /** Format: int32 */
-            anchor_before_thread_id?: number | null;
-            /** Format: int32 */
-            comicvine_volume_id: number;
-            /** Format: int32 */
-            reading_order_id?: number | null;
-        };
-        NativeImportSeriesResponse: {
-            /** Format: int32 */
-            comicvine_volume_id: number;
-            issue_results: components["schemas"]["NativeImportSeriesIssueResult"][];
-            /** Format: int32 */
-            issues_adopted: number;
-            /** Format: int32 */
-            issues_conflict: number;
-            /** Format: int32 */
-            issues_skipped: number;
-            /** Format: int32 */
-            position?: number | null;
-            /** Format: int32 */
-            reading_order_id?: number | null;
-            series_name: string;
-            thread_created: boolean;
-            /** Format: int32 */
-            thread_id: number;
-            /** Format: int32 */
-            total_issues_in_series: number;
-            /** Format: int32 */
-            total_items?: number | null;
-        };
         /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
         NativeIssueCreatorsEntry: {
             creators: components["schemas"]["CreatorCredit"][];
             /** Format: int32 */
             issue_id: number;
-        };
-        NativeIssueIdentityMapping: {
-            comicvine_id: string;
-            /** Format: double */
-            confidence?: number | null;
-            created_at?: string | null;
-            evidence_source?: string | null;
-            /** Format: int32 */
-            external_identity_id: number;
-            provider: string;
-            status: string;
-        };
-        NativeIssueIdentityResponse: {
-            candidate_mappings: components["schemas"]["NativeIssueIdentityMapping"][];
-            comicvine_issue_id?: string | null;
-            confirmed_mappings: components["schemas"]["NativeIssueIdentityMapping"][];
-            has_confirmed_identity: boolean;
-            has_unresolved: boolean;
-            /** Format: int32 */
-            issue_id: number;
-            /** Format: int32 */
-            thread_id: number;
-            thread_title: string;
         };
         /** @description One issue row (Python `IssueResponse`). */
         NativeIssueResponse: {
@@ -6899,31 +6174,6 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
-        };
-        /**
-         * @description Python `MetadataCorrectionRequest`: unconstrained `str` fields (empty is
-         *     accepted), `reason` `max_length=500`.
-         */
-        NativeMetadataCorrectionRequest: {
-            canonical_value: string;
-            field_name: string;
-            reason?: string | null;
-        };
-        /** @description Python `MetadataCorrectionRevertRequest` (lax `int`). */
-        NativeMetadataCorrectionRevertRequest: {
-            /** Format: int32 */
-            correction_id: number;
-        };
-        NativeMetadataCorrectionsResponse: {
-            corrections: components["schemas"]["NativeCanonicalCorrection"][];
-            /** Format: int32 */
-            issue_id: number;
-        };
-        NativeMetadataRefreshResponse: {
-            comicvine_issue_id?: string | null;
-            /** Format: int32 */
-            issue_id: number;
-            refreshed: boolean;
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
         NativeMigrateToIssuesRequest: {
@@ -7057,12 +6307,6 @@ export interface components {
         NativeReadingOrderProjectionRequest: {
             /** Format: int32 */
             reading_order_id: number;
-        };
-        /** @description Python `ReplaceIdentityRequest` (`reason` `max_length=500`). */
-        NativeReplaceIdentityRequest: {
-            /** Format: int32 */
-            comicvine_issue_id: number;
-            reason?: string | null;
         };
         /** @description Response body: the Python `RollResponse` projection for a manual pick. */
         NativeRollResponse: {
@@ -8540,20 +7784,10 @@ export interface components {
             title: string;
             visibility?: string;
         };
-        /**
-         * ReplaceIdentityRequest
-         * @description Request to replace the current confirmed identity with a new one.
-         */
+        /** @description Python `ReplaceIdentityRequest` (`reason` `max_length=500`). */
         ReplaceIdentityRequest: {
-            /**
-             * Comicvine Issue Id
-             * @description New ComicVine issue ID to confirm
-             */
+            /** Format: int32 */
             comicvine_issue_id: number;
-            /**
-             * Reason
-             * @description Optional reason for replacement
-             */
             reason?: string | null;
         };
         /**
@@ -10281,371 +9515,6 @@ export interface operations {
             };
         };
     };
-    api_get_issue_identity_api_v1_comicvine_issues__issue_id__identity_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IssueIdentityResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_remove_identity_api_v1_comicvine_issues__issue_id__identity_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IssueIdentityResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_confirm_identity_api_v1_comicvine_issues__issue_id__identity_confirm_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfirmIdentityRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IssueIdentityResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_replace_identity_api_v1_comicvine_issues__issue_id__identity_replace_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReplaceIdentityRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IssueIdentityResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_apply_correction_api_v1_comicvine_issues__issue_id__metadata_correct_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MetadataCorrectionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_list_corrections_api_v1_comicvine_issues__issue_id__metadata_corrections_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_refresh_metadata_api_v1_comicvine_issues__issue_id__metadata_refresh_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MetadataRefreshResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_revert_correction_api_v1_comicvine_issues__issue_id__metadata_revert_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MetadataCorrectionRevertRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_import_issue_api_v1_comicvine_issues_import_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImportIssueRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ImportIssueResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_resolve_comicvine_input_api_v1_comicvine_resolve_get: {
-        parameters: {
-            query: {
-                /** @description Search text or a pasted ComicVine issue/volume URL */
-                input: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ComicVineResolveResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_search_comicvine_series_api_v1_comicvine_search_series_get: {
-        parameters: {
-            query: {
-                /** @description Series search query */
-                q: string;
-                /** @description Maximum results */
-                limit?: number;
-                /** @description Zero-based result offset */
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ComicVineSeriesSearchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     series_import_status_documentation: {
         parameters: {
             query?: never;
@@ -10680,73 +9549,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    api_get_series_issues_api_v1_comicvine_series__comicvine_volume_id__issues_get: {
-        parameters: {
-            query?: {
-                /** @description Optional pre-fetched series name */
-                series_name?: string;
-            };
-            header?: never;
-            path: {
-                comicvine_volume_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ComicVineSeriesIssuesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_import_series_api_v1_comicvine_series_import_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImportSeriesRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ImportSeriesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
@@ -14909,7 +13711,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -14953,7 +13755,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
                 };
             };
             /** @description Identity or correction conflict */
@@ -15005,7 +13807,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeConfirmIdentityRequest"];
+                "application/json": components["schemas"]["ConfirmIdentityRequest"];
             };
         };
         responses: {
@@ -15015,7 +13817,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
                 };
             };
             /** @description Identity or correction conflict */
@@ -15067,7 +13869,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeReplaceIdentityRequest"];
+                "application/json": components["schemas"]["ReplaceIdentityRequest"];
             };
         };
         responses: {
@@ -15077,7 +13879,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
                 };
             };
             /** @description Identity or correction conflict */
@@ -15129,7 +13931,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeMetadataCorrectionRequest"];
+                "application/json": components["schemas"]["MetadataCorrectionRequest"];
             };
         };
         responses: {
@@ -15139,7 +13941,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeMetadataCorrectionsResponse"];
+                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
                 };
             };
             /** @description Identity or correction conflict */
@@ -15197,7 +13999,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeMetadataCorrectionsResponse"];
+                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -15241,7 +14043,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeMetadataRefreshResponse"];
+                    "application/json": components["schemas"]["MetadataRefreshResponse"];
                 };
             };
             /** @description Identity or correction conflict */
@@ -15293,7 +14095,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeMetadataCorrectionRevertRequest"];
+                "application/json": components["schemas"]["MetadataCorrectionRevertRequest"];
             };
         };
         responses: {
@@ -15303,7 +14105,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeMetadataCorrectionsResponse"];
+                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
                 };
             };
             /** @description Identity or correction conflict */
@@ -15352,7 +14154,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeImportIssueRequest"];
+                "application/json": components["schemas"]["ImportIssueRequest"];
             };
         };
         responses: {
@@ -15362,7 +14164,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeImportIssueResponse"];
+                    "application/json": components["schemas"]["ImportIssueResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -15420,7 +14222,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeComicVineResolveResponse"];
+                    "application/json": components["schemas"]["ComicVineResolveResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -15461,7 +14263,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeComicVineSeriesSearchResponse"];
+                    "application/json": components["schemas"]["ComicVineSeriesSearchResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -15538,7 +14340,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeComicVineSeriesIssuesResponse"];
+                    "application/json": components["schemas"]["ComicVineSeriesIssuesResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -15566,7 +14368,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeImportSeriesRequest"];
+                "application/json": components["schemas"]["ImportSeriesRequest"];
             };
         };
         responses: {
@@ -15576,7 +14378,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeImportSeriesResponse"];
+                    "application/json": components["schemas"]["ImportSeriesResponse"];
                 };
             };
             /** @description Series has no issues or already_read_count is too large */

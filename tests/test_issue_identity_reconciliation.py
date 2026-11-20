@@ -23,9 +23,7 @@ from app.models.issue import Issue
 from app.models.thread import Thread
 from app.models.user import User
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
-from app.services.comicvine_resolution import DuplicatePhysicalIssueError, import_comicvine_issue
 from app.services.issue_identity_reconciliation import (
-    check_hydration_would_duplicate,
     consolidate_duplicate_issues,
     find_conflicting_provider_identities,
     find_duplicate_physical_issues,
@@ -426,32 +424,6 @@ async def test_cbl_reconciliation_report_includes_first_unread(async_db) -> None
     assert report.resolved_count == 3
     # Canonicals are legacy issues, all read in fixture -> first unread is None, but entries still carry read state.
     assert all(e["read_status"] == "read" for e in report.entries)
-
-
-@pytest.mark.asyncio
-async def test_prevent_future_hydration_from_recreating_duplicate(async_db) -> None:
-    """Future hydrations/imports must not recreate a second logical copy of a known physical issue."""
-    fixture = await _make_ultimate_universe_fixture(async_db)
-    user = cast(User, fixture["user"])
-
-    dup = await check_hydration_would_duplicate(async_db, user_id=user.id, comicvine_issue_id="97001")
-    assert dup is not None
-    assert dup["is_duplicate"] in (True, False)  # exists at all -> would duplicate
-    assert dup["existing_canonical_issue_id"] is not None
-
-    # Import of the same physical issue must be rejected.
-    from app.schemas.comicvine_resolution import ImportIssueRequest
-
-    with pytest.raises(DuplicatePhysicalIssueError):
-        await import_comicvine_issue(
-            async_db,
-            user_id=user.id,
-            request=ImportIssueRequest(title="Duplicate Via Import", comicvine_issue_id=97001),
-        )
-
-    # Non-existent ComicVine ID should not be flagged.
-    no_dup = await check_hydration_would_duplicate(async_db, user_id=user.id, comicvine_issue_id="9999999")
-    assert no_dup is None
 
 
 @pytest.mark.asyncio
