@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Ensure GATE_LOG is set for environment checks
+GATE_LOG="${GATE_LOG:-./gates.log}"
+
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
 YELLOW=$'\033[1;33m'
@@ -26,7 +29,6 @@ if [ ! -f "pyproject.toml" ]; then
     echo "${RED}ERROR: Run from repository root.${NC}"
     exit 1
 fi
-
 
 # Activate venv if not already active
 if [ -z "$VIRTUAL_ENV" ]; then
@@ -65,6 +67,18 @@ if [ -z "$VIRTUAL_ENV" ]; then
             exit 1
         fi
     fi
+fi
+
+# Run environment checks (similar to test)
+if [ -n "$GATE_LOG" ]; then
+    echo "Running environment checks..."
+    for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do
+        if [[ -v "$variable" ]]; then
+            echo "Leaked $variable" >&2
+            exit 1
+        fi
+        printf "%s\n" "$variable" >> "$GATE_LOG"
+    done
 fi
 
 STAGED_FILES=""
@@ -210,7 +224,6 @@ if should_run_python; then
             exit 1
         fi
     fi
-
 fi
 
 # Handle node_modules in git worktrees
@@ -229,22 +242,20 @@ fi
 
 if should_run_static_js; then
     ANY_CHECKED=1
-echo ""
-echo "Running ESLint for JavaScript..."
-
-if ! bash scripts/lint-js.sh; then
-  echo ""
-  echo "${RED}ERROR: JavaScript linting failed.${NC}"
-  echo "${RED}Run 'pnpm --filter frontend run lint:fix' to auto-fix or fix manually.${NC}"
-  exit 1
-fi
+    echo ""
+    echo "Running ESLint for JavaScript..."
+    if ! bash scripts/lint-js.sh; then
+        echo ""
+        echo "${RED}ERROR: JavaScript linting failed.${NC}"
+        echo "${RED}Run 'pnpm --filter frontend run lint:fix' to auto-fix or fix manually.${NC}"
+        exit 1
+    fi
 fi
 
 if should_run_frontend; then
     ANY_CHECKED=1
     echo ""
     echo "Running frontend ESLint..."
-    
     if [ -n "$CI" ]; then
         echo "CI environment: Installing frontend dependencies..."
         pnpm install --frozen-lockfile || {
@@ -253,23 +264,23 @@ if should_run_frontend; then
         }
     fi
 
-if ! pnpm --filter frontend run lint; then
-  echo ""
-  echo "${RED}ERROR: Frontend JavaScript linting failed.${NC}"
-  exit 1
-fi
+    if ! pnpm --filter frontend run lint; then
+        echo ""
+        echo "${RED}ERROR: Frontend JavaScript linting failed.${NC}"
+        exit 1
+    fi
 fi
 
 if should_run_html; then
-  ANY_CHECKED=1
-  echo ""
-  echo "Running htmlhint for HTML templates..."
-  if ! pnpm run lint:html; then
+    ANY_CHECKED=1
     echo ""
-    echo "${RED}ERROR: HTML linting failed.${NC}"
-    echo "${RED}Fix HTML template issues manually.${NC}"
-    exit 1
-  fi
+    echo "Running htmlhint for HTML templates..."
+    if ! pnpm run lint:html; then
+        echo ""
+        echo "${RED}ERROR: HTML linting failed.${NC}"
+        echo "${RED}Fix HTML template issues manually.${NC}"
+        exit 1
+    fi
 fi
 
 if [ "$ANY_CHECKED" -eq 0 ]; then
