@@ -127,17 +127,20 @@ def _flatten_plan(
 ) -> tuple[list[ContinuityPlanNode], tuple[str, ...]]:
     """Apply the documented deterministic flattening policy.
     
-    Sequential plans already enforce a single lane with contiguous positions;
+    Sequential plans enforce at most one lane with contiguous positions when
+    they have one (the empty plan with 0 lanes, 0 steps is valid, #5614);
     parallel (informational) plans are flattened lane by lane using the lane
     ``order`` as the primary key and ``position`` as the secondary key. The
     plan is intentionally not mutated - lanes/positions are read directly.
     """
     if plan.ordering_mode == "strict_sequential":
-        # Validate strict sequential constraints
-        if len(plan.lanes_json) != 1:
+        # Validate strict sequential constraints. The empty plan (0 lanes, 0
+        # steps) is a valid strict plan (#5614): there is no lane and no node
+        # to project, so the sequence is empty.
+        if len(plan.lanes_json) > 1:
             raise ValueError("strict sequential plans must use exactly one lane")
         
-        single_lane_id = plan.lanes_json[0]["id"]
+        single_lane_id = plan.lanes_json[0]["id"] if plan.lanes_json else ""
         nodes_in_lane = [node for node in nodes if node.lane_id == single_lane_id]
         
         # Verify all nodes are in the single lane

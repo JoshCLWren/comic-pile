@@ -185,7 +185,9 @@ class ContinuityPlanWrite(ContinuityPlanRead):
         if any(len(values) != len(set(values)) for values in positions_by_lane.values()):
             raise ValueError("node positions must be unique within each lane")
         if self.ordering_mode == "strict_sequential":
-            if len(self.lanes) != 1:
+            # A strict plan uses exactly one lane when it has lanes; the empty
+            # plan (0 lanes, 0 steps) is a valid empty plan (#5614).
+            if len(self.lanes) > 1:
                 raise ValueError("strict sequential plans must use exactly one lane")
             if any(node.node_type == "thread" for node in self.nodes):
                 raise ValueError("strict sequential plans may contain only issue/crossover nodes")
