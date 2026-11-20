@@ -259,6 +259,98 @@ it('loads the next issue cover before expansion and shares its card batch with I
   fetchCards.mockRestore()
 })
 
+it('updates the Next issue title immediately after a same-tab rename and rename back (#5616)', async () => {
+  const actualUseThread = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
+  mockedUseUpdateThread.mockImplementation(actualUseThread.useUpdateThread)
+  let currentTitle = 'Superman'
+  const currentThread = () => ({
+    id: 1,
+    title: currentTitle,
+    format: 'Comics',
+    issues_remaining: 1,
+    queue_position: 1,
+    status: 'active',
+    total_issues: 1,
+    next_unread_issue_number: '1',
+    notes: null,
+  })
+  mockedThreadsApiGet.mockImplementation(async () => currentThread() as never)
+  mockedThreadsApiUpdate.mockImplementation(async (_id, data) => {
+    currentTitle = data.title ?? currentTitle
+    return currentThread() as never
+  })
+  vi.mocked(readingBoundariesApi.batch).mockImplementation(
+    async () => canonicalNextBoundary(currentTitle) as never,
+  )
+  const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockImplementation(
+    async () => [canonicalNextCard(currentTitle)],
+  )
+  const user = userEvent.setup()
+  renderPage()
+
+  await screen.findByText('Superman #1 is available next.')
+  const rename = async (nextTitle: string) => {
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    const titleInput = screen.getByDisplayValue(currentTitle)
+    await user.clear(titleInput)
+    await user.type(titleInput, nextTitle)
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    // The default findBy timeout is one second: this must never wait for the
+    // old 15–30 second stale-cache window.
+    expect(await screen.findByText(`${nextTitle} #1 is available next.`)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: `Open ${nextTitle} issue #1` })).toHaveTextContent(`${nextTitle} #1`)
+    expect(screen.getByRole('img', { name: `Cover for ${nextTitle} #1` })).toBeInTheDocument()
+  }
+
+  await rename('Superman QA Sync')
+  await rename('Superman')
+  fetchCards.mockRestore()
+})
+
+it('refreshes the Next issue title on tab visibility and focus after another-tab rename (#5616)', async () => {
+  let currentTitle = 'Superman'
+  mockedThreadsApiGet.mockImplementation(async () => ({
+    id: 1,
+    title: currentTitle,
+    format: 'Comics',
+    issues_remaining: 1,
+    queue_position: 1,
+    status: 'active',
+    total_issues: 1,
+    next_unread_issue_number: '1',
+    notes: null,
+  }) as never)
+  vi.mocked(readingBoundariesApi.batch).mockImplementation(
+    async () => canonicalNextBoundary(currentTitle) as never,
+  )
+  const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockImplementation(
+    async () => [canonicalNextCard(currentTitle)],
+  )
+  renderPage()
+  await screen.findByText('Superman #1 is available next.')
+
+  // Another tab commits the rename while this one is hidden. No reload,
+  // timer advance, or staleTime expiry is part of this reproduction.
+  currentTitle = 'Superman QA Sync2'
+  setVisibilityState('hidden')
+  fireEvent(document, new Event('visibilitychange'))
+  setVisibilityState('visible')
+  fireEvent(document, new Event('visibilitychange'))
+
+  expect(await screen.findByText('Superman QA Sync2 #1 is available next.')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Superman QA Sync2' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Open Superman QA Sync2 issue #1' })).toHaveTextContent('Superman QA Sync2 #1')
+  expect(screen.getByRole('img', { name: 'Cover for Superman QA Sync2 #1' })).toBeInTheDocument()
+
+  // Exercise the focus-only browser path as well, and restore the QA title.
+  currentTitle = 'Superman'
+  fireEvent.focus(window)
+  expect(await screen.findByText('Superman #1 is available next.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Open Superman issue #1' })).toHaveTextContent('Superman #1')
+  fetchCards.mockRestore()
+})
+
 it('fetches one bounded page when the Issues section expands', async () => {
   // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
