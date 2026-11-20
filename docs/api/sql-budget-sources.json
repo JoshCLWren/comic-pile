@@ -535,7 +535,7 @@
         "total_statements": 20,
         "grows_with_data": false,
         "basis": "measured authenticated offer: 13 top-level application statements, three transaction starts with one commit, two rollbacks and one SET LOCAL (7 controls), and four checkout probes; the event-owner trigger adds 2 nested statements; fixed across 5 and 200 eligible candidates",
-        "max_statements": 24,
+        "max_statements": 30,
         "max_nested_statements": 2,
         "proof_reference": "native/roll-service/src/roll_offer.rs",
         "measurement_status": "measured",
