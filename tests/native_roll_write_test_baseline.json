@@ -22,11 +22,13 @@
     "continuity_plans::link_plan_dependency_edge",
     "continuity_plans::unlink_plan_dependency_edge",
     "continuity_plans::update_release_source",
+    "custom_cbl::delete_overlap_decision",
     "dependency_groups::add_issue_range",
     "dependency_groups::add_member",
     "dependency_groups::create_group",
     "dependency_groups::delete_group",
     "dependency_groups::update_group",
+    "queue_exclusions::check_excluded_status",
     "roll_offer::unsnooze"
   ],
   "handlers": {
@@ -42,6 +44,8 @@
     "dependency_groups::create_group": "Handler-level HTTP coverage lives in tests/dependency_groups_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
     "dependency_groups::delete_group": "Handler-level HTTP coverage lives in tests/dependency_groups_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
     "dependency_groups::update_group": "Handler-level HTTP coverage lives in tests/dependency_groups_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "custom_cbl::delete_overlap_decision": "No existing HTTP test reaches the concrete {decision_id} delete route; add a DB-backed write-path test before changing it.",
+    "queue_exclusions::check_excluded_status": "Read-only threads-status check; no existing DB-backed HTTP test reaches /api/v2/queue-exclusions/status:check, so the route stays exempt until that read path is covered.",
     "roll_offer::unsnooze": "Handler-level HTTP coverage lives in tests/thread_ordering_v1_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry."
   }
 }
