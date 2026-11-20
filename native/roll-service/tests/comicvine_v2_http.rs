@@ -2222,3 +2222,67 @@ async fn request_coercion_matches_the_python_models() {
         assert_eq!(got, expected, "{path} {body}");
     }
 }
+
+/// Python `str(metadata_json.get(field, "")) or None` (#4636390879), with
+/// the identity metadata stored as raw JSON text so object key order is the
+/// document's, as Python's `json.loads` keeps it.
+#[tokio::test]
+async fn correction_provider_values_use_python_str() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-provider-str").await;
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Str").await;
+    let i = issue(&conn, t, "1", 1).await;
+    let identity: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
+             created_at, updated_at) VALUES ('comicvine', 'issue', '9601', \
+             '{\"cover_date\": null, \"flag\": true, \"count\": 3, \"ratio\": 1.0, \
+               \"volume\": {\"name\": \"Saga\", \"id\": 9}, \"tags\": [1, \"it''s\", null], \
+               \"empty\": \"\", \"name\": \"Pilot\"}'::json, NOW(), NOW()) RETURNING id",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
+         created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
+        &[&i, &identity],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+    let path = format!("/api/v2/comicvine/issues/{i}/metadata:correct");
+    for (field, expected) in [
+        ("cover_date", json!("None")),
+        ("flag", json!("True")),
+        ("count", json!("3")),
+        ("ratio", json!("1.0")),
+        ("volume", json!("{'name': 'Saga', 'id': 9}")),
+        ("tags", json!("[1, \"it's\", None]")),
+        ("empty", Value::Null),
+        ("missing", Value::Null),
+        ("name", json!("Pilot")),
+    ] {
+        let (status, body) = send(
+            &state,
+            call(
+                "POST",
+                &path,
+                &token,
+                &csrf,
+                Some(json!({"field_name": field, "canonical_value": "x"})),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{field}: {body:?}");
+        let last = body["corrections"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()
+            .clone();
+        assert_eq!(last["field_name"], field);
+        assert_eq!(last["provider_value"], expected, "{field}");
+    }
+}

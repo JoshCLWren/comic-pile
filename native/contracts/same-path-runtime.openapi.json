@@ -7849,6 +7849,19 @@
           }
         }
       },
+      "ConfirmIdentityRequest": {
+        "type": "object",
+        "description": "Python `ConfirmIdentityRequest` (lax `int`).",
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "ConnectedThreadInfo": {
         "type": "object",
         "description": "Python `ConnectedThreadInfo`.",
@@ -12599,6 +12612,41 @@
           }
         ]
       },
+      "MetadataCorrectionRequest": {
+        "type": "object",
+        "description": "Python `MetadataCorrectionRequest`: unconstrained `str` fields (empty is\naccepted), `reason` `max_length=500`.",
+        "required": [
+          "field_name",
+          "canonical_value"
+        ],
+        "properties": {
+          "canonical_value": {
+            "type": "string"
+          },
+          "field_name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "MetadataCorrectionRevertRequest": {
+        "type": "object",
+        "description": "Python `MetadataCorrectionRevertRequest` (lax `int`).",
+        "required": [
+          "correction_id"
+        ],
+        "properties": {
+          "correction_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "MetadataCorrectionsResponse": {
         "type": "object",
         "required": [
@@ -12615,6 +12663,28 @@
           "issue_id": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "MetadataRefreshResponse": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "refreshed"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "refreshed": {
+            "type": "boolean"
           }
         }
       },
@@ -16371,6 +16441,25 @@
           },
           "visibility": {
             "type": "string"
+          }
+        }
+      },
+      "ReplaceIdentityRequest": {
+        "type": "object",
+        "description": "Python `ReplaceIdentityRequest` (`reason` `max_length=500`).",
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
