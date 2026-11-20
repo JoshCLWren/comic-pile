@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 143,
-    "native_rust": 143,
+    "total_live_operations": 144,
+    "native_rust": 144,
     "python_fastapi": 0,
-    "native_rust_status": 143,
+    "native_rust_status": 144,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -313,6 +313,19 @@
       ],
       "method": "POST",
       "path": "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/comicvine/issues:import",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
