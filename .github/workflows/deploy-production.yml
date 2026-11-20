@@ -187,6 +187,27 @@ jobs:
           node scripts/generate_vercel_routes.mjs --check
           node scripts/generate_route_burndown.mjs --check
 
+      # Feature PRs do not commit the API contracts or the generated frontend
+      # client (owner directive 2026-11-19); the route-regeneration bot PR
+      # commits them after merge. Regenerate them from this exact commit's Rust
+      # code so the uploaded static build never ships a stale client while that
+      # bot PR is still pending (the same reason vercel.json is regenerated above). Runs before any
+      # production migration so a generation failure never leaves a migrated
+      # database without a deploy.
+      - name: Enable repository pnpm version
+        run: corepack enable
+
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          shared-key: comicpile-contracts
+          save-if: false
+
+      - name: Regenerate API contracts and frontend client from this commit
+        run: bash scripts/generate_contracts.sh
+
       - name: Get production database connection string
         id: neon
         env:

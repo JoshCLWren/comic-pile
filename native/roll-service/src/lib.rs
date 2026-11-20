@@ -74,6 +74,7 @@ pub mod roll_reset;
 pub mod roll_resources;
 pub mod roll_switch_prerequisite;
 pub mod roll_v1_openapi;
+pub mod route_areas;
 pub mod same_path_openapi;
 mod session_bandwidth;
 pub mod session_details;
@@ -1057,28 +1058,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(comicvine_resolution::series_import_status),
         )
-        // Canonical native v2 ComicVine read routes (#4835, split chunk A).
-        .route(
-            "/api/v2/comicvine/search/series",
-            get(comicvine_v2::search_series),
-        )
-        .route(
-            "/api/v2/comicvine/resolve",
-            get(comicvine_v2::resolve_input),
-        )
-        .route(
-            "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
-            get(comicvine_v2::series_issues),
-        )
-        // Native v2 ComicVine routes (#4835, split chunk B).
-        .route(
-            "/api/v2/comicvine/issues/{issue_id}/identity",
-            get(comicvine_v2::get_issue_identity),
-        )
-        .route(
-            "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
-            get(comicvine_v2::list_corrections),
-        )
         .route(
             "/api/v2/issues/{issue_id}/dependencies",
             get(issue_read::get_issue_dependencies),
@@ -1355,6 +1334,9 @@ pub fn router(state: Arc<AppState>) -> Router {
         .method_not_allowed_fallback(|| async {
             ApiError::MethodNotAllowed("Method Not Allowed".to_string())
         })
+        // Per-area routes (`route_areas::AREAS`); keep before every layer so
+        // the request bound, CSRF and runtime-identity middleware wrap them.
+        .merge(route_areas::routes())
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
         .layer(axum::middleware::from_fn(csrf_middleware))
         .layer(axum::middleware::from_fn(catch_panic))

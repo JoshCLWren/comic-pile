@@ -19,6 +19,7 @@ use axum::{
         rejection::{PathRejection, QueryRejection},
         Path, Query, State,
     },
+    routing::{get, MethodFilter},
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -1037,6 +1038,81 @@ pub async fn list_corrections(
     let response = corrections_list(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
+}
+
+// ---------------------------------------------------------------------------
+// Route-area registration (see `crate::route_areas`). Adding a ComicVine v2
+// route edits only this block: the Axum router, the canonical contract and the
+// Vercel ingress all fold over it.
+// ---------------------------------------------------------------------------
+
+/// The native v2 ComicVine route area (#4835).
+pub const ROUTE_AREA: crate::route_areas::RouteArea = crate::route_areas::RouteArea {
+    name: "comicvine_v2",
+    ingress: &[
+        (MethodFilter::GET, "/api/v2/comicvine/search/series"),
+        (MethodFilter::GET, "/api/v2/comicvine/resolve"),
+        (
+            MethodFilter::GET,
+            "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+        ),
+        (
+            MethodFilter::GET,
+            "/api/v2/comicvine/issues/{issue_id}/identity",
+        ),
+        (
+            MethodFilter::GET,
+            "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+        ),
+    ],
+    routes: area_routes,
+    openapi: area_openapi,
+};
+
+fn area_routes() -> axum::Router<Arc<AppState>> {
+    axum::Router::new()
+        .route("/api/v2/comicvine/search/series", get(search_series))
+        .route("/api/v2/comicvine/resolve", get(resolve_input))
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+            get(series_issues),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity",
+            get(get_issue_identity),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+            get(list_corrections),
+        )
+}
+
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    paths(
+        search_series_documentation,
+        resolve_input_documentation,
+        comicvine_series_issues_documentation,
+        get_issue_identity_documentation,
+        list_corrections_documentation,
+    ),
+    components(schemas(
+        ComicVineSeriesResult,
+        ComicVineSeriesSearchResponse,
+        ComicVineResolvedIssue,
+        ComicVineIssueCandidate,
+        ComicVineResolveResponse,
+        ComicVineSeriesIssuesResponse,
+        IssueIdentityMapping,
+        IssueIdentityResponse,
+        CanonicalCorrection,
+        MetadataCorrectionsResponse,
+    ))
+)]
+struct ComicVineV2Api;
+
+fn area_openapi() -> utoipa::openapi::OpenApi {
+    <ComicVineV2Api as utoipa::OpenApi>::openapi()
 }
 
 // ---------------------------------------------------------------------------

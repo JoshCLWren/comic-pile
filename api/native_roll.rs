@@ -5,7 +5,7 @@ use axum::{
     extract::{OriginalUri, Request},
     http::{Extensions, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
-    routing::{delete, get, patch, post, put},
+    routing::{delete, get, on, patch, post, put},
     Json, Router,
 };
 use comicpile_roll_service::{
@@ -491,22 +491,6 @@ fn app() -> Router {
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(native_dispatch),
         )
-        // Canonical native v2 ComicVine read routes (#4835, split chunk A).
-        .route("/api/v2/comicvine/search/series", get(native_dispatch))
-        .route("/api/v2/comicvine/resolve", get(native_dispatch))
-        .route(
-            "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
-            get(native_dispatch),
-        )
-        // Native v2 ComicVine routes (#4835, split chunk B).
-        .route(
-            "/api/v2/comicvine/issues/{issue_id}/identity",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
-            get(native_dispatch),
-        )
         .route(
             "/api/v2/issues/{issue_id}/dependencies",
             get(native_dispatch),
@@ -739,7 +723,16 @@ fn app() -> Router {
             "/api/v1/reading-order-groups/{group_id}/plans",
             get(native_dispatch),
         )
+        .merge(area_ingress())
         .fallback(native_not_found)
+}
+
+/// Forward every operation of each `route_areas` area to native Rust, so a
+/// route added inside an area module never edits this file.
+fn area_ingress() -> Router {
+    comicpile_roll_service::route_areas::ingress().fold(Router::new(), |router, (method, path)| {
+        router.route(path, on(method, native_dispatch))
+    })
 }
 
 #[tokio::main]
@@ -1138,21 +1131,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn comicvine_v2_ingress_preserves_canonical_paths_and_requires_auth() {
-        for (method, uri) in [
-            ("GET", "/api/v2/comicvine/search/series?q=batman"),
-            ("GET", "/api/v2/comicvine/resolve?input=batman"),
-            ("GET", "/api/v2/comicvine/series/42/issues"),
-            ("GET", "/api/v2/comicvine/issues/7/identity"),
-            ("GET", "/api/v2/comicvine/issues/7/metadata:corrections"),
-            // Ingress samples for every native v2 ComicVine operation.
-        ] {
+    async fn every_route_area_operation_reaches_native_rust_and_requires_auth() {
+        let mut checked = 0;
+        for (filter, path) in comicpile_roll_service::route_areas::ingress() {
+            let method = [
+                (axum::routing::MethodFilter::GET, axum::http::Method::GET),
+                (axum::routing::MethodFilter::POST, axum::http::Method::POST),
+                (axum::routing::MethodFilter::PUT, axum::http::Method::PUT),
+                (
+                    axum::routing::MethodFilter::PATCH,
+                    axum::http::Method::PATCH,
+                ),
+                (
+                    axum::routing::MethodFilter::DELETE,
+                    axum::http::Method::DELETE,
+                ),
+            ]
+            .into_iter()
+            .find(|(candidate, _)| *candidate == filter)
+            .map(|(_, method)| method)
+            .unwrap_or_else(|| panic!("unsupported area method for {path}"));
+            // Concrete sample for every `{param}` segment.
+            let uri: String = path
+                .split('/')
+                .map(|segment| {
+                    if segment.starts_with('{') && segment.ends_with('}') {
+                        "7"
+                    } else {
+                        segment
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("/");
             let mut router = app();
             let response = router
                 .call(
                     Request::builder()
-                        .method(method)
-                        .uri(uri)
+                        .method(method.clone())
+                        .uri(&uri)
                         .body(Body::empty())
                         .unwrap(),
                 )
@@ -1169,7 +1185,9 @@ mod tests {
                 "rust",
                 "{method} {uri} must be served by the native ingress"
             );
+            checked += 1;
         }
+        assert!(checked > 0, "no route-area operations were registered");
     }
 
     #[tokio::test]

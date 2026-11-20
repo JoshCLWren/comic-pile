@@ -8,9 +8,12 @@
 //! `IssueApi`) with the v2 auth, bootstrap, dice, offer, reset
 //! and reading-boundary declarations.
 //!
-//! The checked-in artifact is `native/contracts/v2-runtime.openapi.json`; see
-//! `native/contracts/README.md` for regeneration. `scripts/export_openapi_schema.mjs`
-//! merges this runtime contract into the single generated frontend client.
+//! The artifact `native/contracts/v2-runtime.openapi.json` is bot-owned: CI
+//! regenerates it from this code on every run (`scripts/generate_contracts.sh`)
+//! and the route-regeneration bot PR commits it. Feature PRs never edit it.
+//! Areas registered in [`crate::route_areas`] add their own documents.
+//! `scripts/export_openapi_schema.mjs` merges this runtime contract into the
+//! single generated frontend client.
 
 use utoipa::OpenApi;
 
@@ -138,11 +141,6 @@ use utoipa::OpenApi;
         crate::releases::publish_documentation,
         crate::releases::retract_documentation,
         crate::comicvine_resolution::series_import_status_documentation,
-        crate::comicvine_v2::search_series_documentation,
-        crate::comicvine_v2::resolve_input_documentation,
-        crate::comicvine_v2::comicvine_series_issues_documentation,
-        crate::comicvine_v2::get_issue_identity_documentation,
-        crate::comicvine_v2::list_corrections_documentation,
         crate::creators_v2::list_documentation,
         crate::creators_v2::summaries_documentation,
         crate::creators_v2::compare_documentation,
@@ -270,16 +268,6 @@ use utoipa::OpenApi;
         crate::releases::PublicReleaseResponse,
         crate::releases::ReleaseListResponse,
         crate::comicvine_resolution::SeriesImportStatusResponse,
-        crate::comicvine_v2::ComicVineSeriesResult,
-        crate::comicvine_v2::ComicVineSeriesSearchResponse,
-        crate::comicvine_v2::ComicVineResolvedIssue,
-        crate::comicvine_v2::ComicVineIssueCandidate,
-        crate::comicvine_v2::ComicVineResolveResponse,
-        crate::comicvine_v2::ComicVineSeriesIssuesResponse,
-        crate::comicvine_v2::IssueIdentityMapping,
-        crate::comicvine_v2::IssueIdentityResponse,
-        crate::comicvine_v2::CanonicalCorrection,
-        crate::comicvine_v2::MetadataCorrectionsResponse,
         crate::creators_v2::CreatorSummaryCoverage,
         crate::creators_v2::CreatorSummaryItem,
         crate::creators_v2::CreatorSummariesResponse,
@@ -355,6 +343,9 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
         .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())
         .merge_from(crate::undo_apply::UndoApplyApi::openapi());
+    // Areas registered in `route_areas` contribute their own documents, so a
+    // route added inside an area never edits this file.
+    openapi = crate::route_areas::merge_openapi(openapi);
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.
@@ -576,20 +567,6 @@ mod tests {
                 "provider_volume_id",
                 "enabled",
             ],
-        );
-    }
-
-    #[test]
-    fn checked_in_runtime_contract_is_current() {
-        let checked_in = include_str!("../../../native/contracts/v2-runtime.openapi.json");
-        let generated = canonical_openapi()
-            .to_pretty_json()
-            .expect("serializable OpenAPI document");
-        assert_eq!(
-            checked_in.trim_end(),
-            generated.trim_end(),
-            "Regenerate native/contracts/v2-runtime.openapi.json with \
-             cargo run --example v2_openapi"
         );
     }
 

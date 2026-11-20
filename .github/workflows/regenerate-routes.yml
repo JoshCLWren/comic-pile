@@ -3,6 +3,12 @@ name: Regenerate Routes (Post-Merge)
 # Post-merge regeneration of bot-owned routing artifacts.
 #
 # Route PRs touch only docs/api/route-fragments/*.json source fragments
+# and their own area code. The API contracts (native/contracts/
+# {v2-runtime,same-path-runtime}.openapi.json) and the generated frontend
+# client (frontend/src/generated/{openapi.json,openapi.ts,nativeV2Client.ts})
+# are bot-owned as well (owner directive 2026-11-19): they are regenerated
+# here from the merged Rust code by scripts/generate_contracts.sh.
+#
 # (excluding the generated vercel-rewrites.json artifact). vercel.json,
 # docs/api/v2-route-inventory.json, docs/api/route-fragments/
 # vercel-rewrites.json, and the AGENTS.md route-burndown section are
@@ -22,6 +28,13 @@ on:
       - 'docs/api/route-fragments/*.json'
       - 'docs/api/sql-budget-sources.json'
       - '.github/workflows/regenerate-routes.yml'
+      - 'native/roll-service/**'
+      - 'native/contracts/python-legacy.openapi.json'
+      - 'Cargo.lock'
+      - 'scripts/generate_contracts.sh'
+      - 'scripts/export_openapi_schema.mjs'
+      - 'scripts/generate_openapi_types.mjs'
+      - 'scripts/generate_native_client.mjs'
   workflow_dispatch:
   pull_request_target:
     types: [closed]
@@ -40,7 +53,7 @@ jobs:
   regenerate:
     name: Regenerate routing artifacts
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     permissions:
       actions: write
       contents: write
@@ -65,6 +78,16 @@ jobs:
           python-version: '3.14'
           enable-cache: true
 
+      - name: Enable repository pnpm version
+        run: corepack enable
+
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          shared-key: comicpile-contracts
+
       - name: Install locked Python runtime dependencies for route discovery
         run: uv sync --locked --no-dev
 
@@ -87,6 +110,9 @@ jobs:
           node scripts/generate_vercel_routes.mjs --check
           node scripts/generate_route_burndown.mjs --check
 
+      - name: Regenerate API contracts and frontend client from merged code
+        run: bash scripts/generate_contracts.sh
+
       - name: Open or refresh CI-gated regeneration PR
         env:
           GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
@@ -94,7 +120,12 @@ jobs:
         run: |
           set -euo pipefail
           git add vercel.json docs/api/v2-route-inventory.json \
-            docs/api/route-fragments/vercel-rewrites.json AGENTS.md
+            docs/api/route-fragments/vercel-rewrites.json AGENTS.md \
+            native/contracts/v2-runtime.openapi.json \
+            native/contracts/same-path-runtime.openapi.json \
+            frontend/src/generated/openapi.json \
+            frontend/src/generated/openapi.ts \
+            frontend/src/generated/nativeV2Client.ts
           branch='automation/route-regeneration/current'
           if [[ -z "${GH_TOKEN:-}" ]]; then
             echo '::error::PR_REBASE_TOKEN is required so the generated PR triggers normal CI.'
@@ -122,7 +153,12 @@ jobs:
             git fetch --no-tags origin "$branch"
             if git diff --quiet FETCH_HEAD HEAD -- \
               vercel.json docs/api/v2-route-inventory.json \
-              docs/api/route-fragments/vercel-rewrites.json AGENTS.md; then
+              docs/api/route-fragments/vercel-rewrites.json AGENTS.md \
+              native/contracts/v2-runtime.openapi.json \
+              native/contracts/same-path-runtime.openapi.json \
+              frontend/src/generated/openapi.json \
+              frontend/src/generated/openapi.ts \
+              frontend/src/generated/nativeV2Client.ts; then
               echo "Regenerated files match existing PR #$existing; preserving its exact CI head."
               exit 0
             fi

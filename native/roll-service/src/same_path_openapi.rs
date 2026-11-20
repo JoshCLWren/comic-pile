@@ -164,15 +164,6 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
 mod tests {
     use super::*;
 
-    #[test]
-    fn checked_in_contract_is_current() {
-        let expected = include_str!("../../contracts/same-path-runtime.openapi.json");
-        let generated = same_path_openapi()
-            .to_pretty_json()
-            .expect("serializable contract");
-        assert_eq!(expected.trim_end(), generated.trim_end());
-    }
-
     /// The thread dependency operations moved to native Rust but their browser
     /// URLs stay on v1. Their response component schemas must stay in the
     /// same-path document so retiring the Python handlers does not erase the

@@ -91,6 +91,17 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 
 Route PRs must touch only `docs/api/route-fragments/*.json` source fragments (excluding `docs/api/route-fragments/vercel-rewrites.json`). Never hand-edit `vercel.json`, `docs/api/v2-route-inventory.json`, the `<!-- route-burndown -->` section above, or `docs/api/route-fragments/vercel-rewrites.json`. Those files are bot-owned and regenerated post-merge by `.github/workflows/regenerate-routes.yml` (runs `node scripts/generate_route_burndown.mjs` then `node scripts/generate_vercel_routes.mjs`, then the burndown generator again so burndown enrichment is preserved; both `--check` gates must pass). `vercel.json` stays on `main` for Vercel deploy (do not gitignore it); the previous `main` truth remains valid until the bot lands.
 
+### Adding or migrating a route (no shared generated files; owner directive 2026-11-19)
+
+Parallel route PRs must not edit the same generated files or central registries. A route PR touches only its own area:
+
+1. **Handlers and registration live in the area module.** Each migrated area module (for example `native/roll-service/src/comicvine_v2.rs`) exports a `ROUTE_AREA: route_areas::RouteArea` with its `ingress` list, its Axum `routes()` and its `utoipa` OpenAPI document. Add or change routes only there. `lib.rs` `router()`, `openapi.rs` `canonical_openapi()` and the Vercel outer router in `api/native_roll.rs` all fold over `route_areas::AREAS`, and `route_areas` tests require each area's ingress and contract to list exactly the same operations. A new area adds one sorted line to `AREAS`. Areas not yet converted still use the central lists; when you next touch one, move it to its own `ROUTE_AREA` first, in its own PR.
+2. **Route fragment:** `docs/api/route-fragments/<area>.json`.
+3. **Tests:** the area's Rust/DB tests and its own `scripts/route-area-tests/<area>.test.mjs`. Do not add area blocks to `scripts/generate_route_burndown.test.mjs`.
+4. **Frontend:** the area's `frontend/src/services/api-<area>.ts` and its unit tests.
+
+**Never commit** `native/contracts/v2-runtime.openapi.json`, `native/contracts/same-path-runtime.openapi.json`, `frontend/src/generated/openapi.json`, `frontend/src/generated/openapi.ts` or `frontend/src/generated/nativeV2Client.ts`. Run `bash scripts/generate_contracts.sh` locally so your frontend code type-checks against your Rust contract, then restore exactly those five files before committing (`generate_contracts.sh` prints the command; do not restore the whole `native/contracts/` directory, whose other per-domain contracts are still committed by their own PRs). The CI `generated-contracts` job regenerates them from your PR's code for every frontend job. The `route-fragment-guard` job (`scripts/check_generated_files_guard.mjs`) rejects PRs that edit them. After merge, `regenerate-routes.yml` commits them through the `automation/route-regeneration/current` bot PR, where CI proves they match the code (`generate_contracts.sh --check`). Deploys regenerate them from the deployed commit.
+
 ## MANDATORY: Frontend Visual Policy
 
 **Any task that changes frontend code, UI behavior, layout, styling, or visual treatment MUST read `docs/FRONTEND_VISUAL_GRAMMAR.md` before making changes.**

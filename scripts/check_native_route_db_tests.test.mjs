@@ -10,8 +10,10 @@ import {
   buildRouteTable,
   checkNativeRouteDbTests,
   matchesRoute,
+  mergeRouteModules,
   modulesFromOpenApi,
   resolveRouteOwners,
+  routeModulesFromAreas,
   routeModulesFromLib,
   testCoversModule,
 } from './check_native_route_db_tests.mjs';
@@ -209,4 +211,38 @@ test('CLI exits 0 when every module is covered and 1 when a gap is unallowlisted
   assert.equal(red.status, 1);
   assert.match(red.stderr, /MISSING  beta/);
   assert.match(red.stderr, /MISSING  gamma/);
+});
+
+test('route-area modules are discovered from their own routes function and fail closed', () => {
+  const areas = 'pub const AREAS: &[&RouteArea] = &[\n    &crate::zeta_v2::ROUTE_AREA,\n];\n';
+  const zeta = [
+    'pub const ROUTE_AREA: crate::route_areas::RouteArea = crate::route_areas::RouteArea {',
+    '    name: "zeta_v2",',
+    '    ingress: &[(MethodFilter::GET, "/api/v2/zeta/{id}")],',
+    '    routes: zeta_routes,',
+    '    openapi: zeta_openapi,',
+    '};',
+    'fn zeta_routes() -> axum::Router<Arc<AppState>> {',
+    '    axum::Router::new()',
+    '        .route("/api/v2/zeta/{id}", get(read_zeta))',
+    '        .route("/api/v2/zeta", post(create_zeta))',
+    '}',
+    '',
+  ].join('\n');
+  const found = routeModulesFromAreas(areas, () => zeta);
+  assert.deepEqual(found, [{module: 'zeta_v2', routes: ['/api/v2/zeta', '/api/v2/zeta/{id}']}]);
+  assert.deepEqual(
+    mergeRouteModules([{module: 'zeta_v2', routes: ['/api/v1/zeta']}], found),
+    [{module: 'zeta_v2', routes: ['/api/v1/zeta', '/api/v2/zeta', '/api/v2/zeta/{id}']}],
+  );
+  assert.throws(() => routeModulesFromAreas(areas, () => zeta.replace('fn zeta_routes', 'fn other')), /Cannot find/);
+});
+
+test('the real comicvine_v2 area is checked by the guard', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const areas = fs.readFileSync(path.join(root, 'native/roll-service/src/route_areas.rs'), 'utf8');
+  const found = routeModulesFromAreas(areas, module =>
+    fs.readFileSync(path.join(root, 'native/roll-service/src', module + '.rs'), 'utf8'));
+  const comicvine = found.find(entry => entry.module === 'comicvine_v2');
+  assert.ok(comicvine?.routes.includes('/api/v2/comicvine/search/series'));
 });
