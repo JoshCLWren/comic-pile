@@ -97,6 +97,7 @@ beforeEach(() => {
   // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   mockedThreadsApiGet.mockReset()
+  mockedThreadsApiUpdate.mockReset()
   // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1,
