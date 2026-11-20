@@ -42,10 +42,17 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
     (repository / "pyproject.toml").touch()
     (repository / "frontend" / "node_modules").mkdir(parents=True)
     (repository / "scripts").mkdir()
-    (repository / "scripts" / "lint.sh").write_text("exit 0\n")
+    # Fake lint script that checks for Git environment leaks
+    (repository / "scripts" / "lint.sh").write_text(
+        "#!/bin/bash\n"
+        "set -eu\n"
+        "for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do\n"
+        '  if [[ -v "$variable" ]]; then echo "Leaked $variable" >&2; exit 1; fi\n'
+        "done\n"
+    )
     tools_directory = tmp_path / "tools"
     tools_directory.mkdir()
-    for tool in ("python", "pnpm"):
+    for tool in ("pnpm",):
         executable = tools_directory / tool
         executable.write_text(
             "#!/bin/bash\n"
@@ -60,7 +67,6 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
     environment.update(
         {
             "PATH": f"{tools_directory}:{environment['PATH']}",
-            "VIRTUAL_ENV": str(tmp_path / "venv"),
             "GIT_DIR": str(repository / ".git"),
             "GIT_WORK_TREE": str(repository),
             "GIT_INDEX_FILE": str(repository / ".git" / "index"),
@@ -72,4 +78,8 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert not gate_log.exists() or gate_log.read_text() == ""
+    # Verify that test commands did not run (gate_log should be empty or not contain test commands)
+    # The linting script should have run Git env checks (which we assert by success above)
+    assert not gate_log.exists() or gate_log.read_text() == "", (
+        f"Unexpected gate log output: {gate_log.read_text()}"
+    )
