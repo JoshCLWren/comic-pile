@@ -4,7 +4,7 @@ This document is the mandatory operating procedure for agents executing GitHub i
 
 ## Autonomous factory policy
 
-Workers operating as part of the autonomous software-delivery factory must also read and follow [docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md).
+Workers operating as part of the autonomous software-delivery factory must also read and follow [docs/AUTONOMOUS_FACTORY_POLICY.md](./AUTONOMOUS_FACTORY_POLICY.md).
 
 For autonomous factory runs, that policy is the canonical source for backlog selection, lifecycle, claim leases, exact-SHA review, gated merges, draft-PR prohibition, and CI-assisted repair loops. It overrides contradictory generic instructions in this file or `AGENTS.md`.
 
@@ -17,7 +17,7 @@ Repository engineering rules still apply. Factory workers may not skip tests, we
 - A linked local plan file guides implementation details but cannot invent owner requirements, narrow the requested final behavior, or waive repository engineering gates.
 - `AGENTS.md` is mandatory for repository engineering constraints.
 - `docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md` governs the definition of objective completion, PR size, real activation, and handoffs.
-- [docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md) is mandatory and takes precedence for autonomous factory lifecycle behavior.
+- [docs/AUTONOMOUS_FACTORY_POLICY.md](./AUTONOMOUS_FACTORY_POLICY.md) is mandatory and takes precedence for autonomous factory lifecycle behavior.
 
 ## Before changing code
 
@@ -106,7 +106,7 @@ An unresolved actionable correctness, security, ownership, data-integrity, migra
 
 ## Merge rules
 
-Autonomous factory workers may merge after every gate in [docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md) is verified for the exact current head SHA.
+Autonomous factory workers may merge after every gate in [docs/AUTONOMOUS_FACTORY_POLICY.md](./AUTONOMOUS_FACTORY_POLICY.md) is verified for the exact current head SHA.
 
 The worker must verify that the PR is open, non-draft, conflict-free, mergeable, green on every required check, complete for its declared scope, safe to integrate, and free of unresolved actionable review findings. The merge operation must include the exact expected head SHA.
 

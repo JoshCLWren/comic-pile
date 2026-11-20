@@ -19,7 +19,7 @@ Use the issue selected by that command unless the user explicitly names another 
 
 Then read the selected issue body, the files it names, `AGENTS.md`, and
 `docs/ISSUE_EXECUTION_PROTOCOL.md`. For factory work, also read
-[docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md) and the latest canonical resume packet. Do not load unrelated
+[docs/AUTONOMOUS_FACTORY_POLICY.md](../../../docs/AUTONOMOUS_FACTORY_POLICY.md) and the latest canonical resume packet. Do not load unrelated
 comment history. If the issue points to `docs/issue-plans/<number>.md`, read that plan in bounded
 chunks.
 
