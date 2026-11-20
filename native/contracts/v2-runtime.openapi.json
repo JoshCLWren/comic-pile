@@ -1980,6 +1980,98 @@
         }
       }
     },
+    "/api/v2/comicvine/issues/{issue_id}/identity": {
+      "get": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "get_issue_identity_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "ComicPile issue ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned identity state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueIdentityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "404": {
+            "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/comicvine/issues/{issue_id}/metadata:corrections": {
+      "get": {
+        "tags": [
+          "comicvine-v2"
+        ],
+        "operationId": "list_corrections_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "ComicPile issue ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active corrections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataCorrectionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "404": {
+            "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/comicvine/resolve": {
       "get": {
         "tags": [
@@ -6922,6 +7014,45 @@
           }
         }
       },
+      "CanonicalCorrection": {
+        "type": "object",
+        "required": [
+          "id",
+          "field_name",
+          "canonical_value",
+          "provenance",
+          "created_by",
+          "created_at"
+        ],
+        "properties": {
+          "canonical_value": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "field_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "provider_value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "CblAdoptionCommitRequest": {
         "type": "object",
         "required": [
@@ -11114,6 +11245,98 @@
           }
         }
       },
+      "IssueIdentityMapping": {
+        "type": "object",
+        "required": [
+          "external_identity_id",
+          "provider",
+          "comicvine_id",
+          "status"
+        ],
+        "properties": {
+          "comicvine_id": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidence_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "IssueIdentityResponse": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "has_confirmed_identity",
+          "confirmed_mappings",
+          "candidate_mappings",
+          "has_unresolved"
+        ],
+        "properties": {
+          "candidate_mappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueIdentityMapping"
+            }
+          },
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confirmed_mappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueIdentityMapping"
+            }
+          },
+          "has_confirmed_identity": {
+            "type": "boolean"
+          },
+          "has_unresolved": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
       "IssueIntelligence": {
         "type": "object",
         "description": "Wire parity with Python's ComicVineIssueIntelligence.",
@@ -11396,6 +11619,25 @@
             }
           }
         ]
+      },
+      "MetadataCorrectionsResponse": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "corrections"
+        ],
+        "properties": {
+          "corrections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanonicalCorrection"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "MinimalReleaseResponse": {
         "type": "object",

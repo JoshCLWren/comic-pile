@@ -424,6 +424,14 @@ export interface GetRequest {
 
 export type GetResponse = components['schemas']['IdentityInboxResponse']
 
+export interface GetIssueIdentityRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type GetIssueIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
+
 export interface GetLegacyDependencyRequest {
   path: {
     dependency_id: number
@@ -544,6 +552,14 @@ export interface ListActivityRequest {
 export type ListActivityResponse = components['schemas']['ActivityResponse']
 
 export type ListBlockedLegacyDependenciesResponse = Array<number>
+
+export interface ListCorrectionsRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type ListCorrectionsResponse = components['schemas']['NativeMetadataCorrectionsResponse']
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
 
@@ -1047,6 +1063,7 @@ export interface NativeV2Client {
   exportCustomCbl(args: ExportCustomCblRequest): Promise<ExportCustomCblResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
+  getIssueIdentity(args: GetIssueIdentityRequest): Promise<GetIssueIdentityResponse>
   getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
   getMetrics(): Promise<GetMetricsResponse>
   getOverlapDecisions(args: GetOverlapDecisionsRequest): Promise<GetOverlapDecisionsResponse>
@@ -1066,6 +1083,7 @@ export interface NativeV2Client {
   list(): Promise<ListResponse>
   listActivity(args?: ListActivityRequest): Promise<ListActivityResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
+  listCorrections(args: ListCorrectionsRequest): Promise<ListCorrectionsResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
   listSessionSnapshots(args: ListSessionSnapshotsRequest): Promise<ListSessionSnapshotsResponse>
   listTags(): Promise<ListTagsResponse>
@@ -1412,6 +1430,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
       )
     },
+    getIssueIdentity(args: GetIssueIdentityRequest) {
+      return client.get<GetIssueIdentityResponse>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity`,
+      )
+    },
     getLegacyDependency(args: GetLegacyDependencyRequest) {
       return client.get<GetLegacyDependencyResponse>(
         `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
@@ -1501,6 +1524,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     listBlockedLegacyDependencies() {
       return client.get<ListBlockedLegacyDependenciesResponse>("/v1/dependencies/blocked")
+    },
+    listCorrections(args: ListCorrectionsRequest) {
+      return client.get<ListCorrectionsResponse>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:corrections`,
+      )
     },
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")

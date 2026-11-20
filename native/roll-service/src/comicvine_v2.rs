@@ -7,9 +7,13 @@
 //! handlers in `app/api/comicvine_resolution.py` and
 //! `app/services/comicvine_resolution.py`. None of these routes touch the
 //! database; every provider call goes through [`crate::comicvine_limits`].
-//! The identity, correction and import operations move in later chunks.
+//!
+//! Chunk B adds the owner-scoped identity and correction READ routes
+//! (`app/services/comicvine_resolution.py` `get_issue_identity_state` and
+//! `list_metadata_corrections`). The identity/correction writes and the
+//! import operations move in later chunks.
 
-use crate::{auth::AuthenticatedUser, comicvine_repair::ProviderFailure, ApiError, AppState};
+use crate::{auth::AuthenticatedUser, comicvine_repair::ProviderFailure, db, ApiError, AppState};
 use axum::{
     extract::{
         rejection::{PathRejection, QueryRejection},
@@ -20,6 +24,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{sync::Arc, time::Duration};
+use tokio_postgres::Transaction;
 
 /// Server deadline for the roster-backed reads (series issues and volume
 /// resolve). A roster costs one first page plus `ceil((pages - 1) / 4)` waves
@@ -135,6 +140,46 @@ pub struct ComicVineSeriesIssuesResponse {
     pub issues: Vec<ComicVineIssueCandidate>,
 }
 
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct IssueIdentityMapping {
+    pub external_identity_id: i32,
+    pub provider: String,
+    pub comicvine_id: String,
+    pub status: String,
+    pub confidence: Option<f64>,
+    pub evidence_source: Option<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct IssueIdentityResponse {
+    pub issue_id: i32,
+    pub thread_id: i32,
+    pub thread_title: String,
+    pub has_confirmed_identity: bool,
+    pub comicvine_issue_id: Option<String>,
+    pub confirmed_mappings: Vec<IssueIdentityMapping>,
+    pub candidate_mappings: Vec<IssueIdentityMapping>,
+    pub has_unresolved: bool,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct CanonicalCorrection {
+    pub id: i32,
+    pub field_name: String,
+    pub provider_value: Option<String>,
+    pub canonical_value: String,
+    pub provenance: String,
+    pub created_by: i32,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct MetadataCorrectionsResponse {
+    pub issue_id: i32,
+    pub corrections: Vec<CanonicalCorrection>,
+}
+
 // ---------------------------------------------------------------------------
 // Query strings (FastAPI `Query(...)` declarations in the Python router).
 // ---------------------------------------------------------------------------
@@ -184,6 +229,10 @@ fn unprocessable(reason: &'static str) -> ApiError {
 
 fn validation_failed() -> ApiError {
     unprocessable("extractor rejection")
+}
+
+fn not_found(detail: impl Into<String>) -> ApiError {
+    ApiError::NotFound(detail.into())
 }
 
 /// Pydantic v2 lax `int` coercion for query and path values (integer strings
@@ -680,6 +729,141 @@ async fn series_issues_response(
 }
 
 // ---------------------------------------------------------------------------
+// Owner-scoped database helpers. Every caller passes the authenticated user
+// id as a bind parameter, never as interpolated SQL.
+// ---------------------------------------------------------------------------
+
+/// Python `get_owned_issue_or_404`: resolve an owned issue to its thread id
+/// and title, or `404 {"detail": "Issue <id> not found"}`.
+async fn owned_issue(
+    tx: &Transaction<'_>,
+    user: i32,
+    issue_id: i32,
+) -> Result<(i32, String), ApiError> {
+    let row = tx
+        .query_opt(
+            "SELECT t.id, t.title FROM issues i \
+             JOIN threads t ON t.id = i.thread_id \
+             WHERE i.id = $1 AND t.user_id = $2",
+            &[&issue_id, &user],
+        )
+        .await
+        .map_err(db::query_error)?;
+    row.map(|row| (row.get::<_, i32>(0), row.get::<_, String>(1)))
+        .ok_or_else(|| not_found(format!("Issue {issue_id} not found")))
+}
+
+/// Pydantic's JSON spelling of a UTC `timestamptz`: `Z` suffix, and the
+/// fractional part only when the value has one (the projection the other
+/// native v2 resources use, e.g. `preferences::iso_timestamp`).
+fn iso_timestamp(column: &str) -> String {
+    format!(
+        "CASE WHEN {column} IS NULL THEN NULL \
+         WHEN date_trunc('second', {column}) = {column} \
+         THEN to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') \
+         ELSE to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') END"
+    )
+}
+
+/// Python `get_issue_identity_state`: every mapping of one owned issue,
+/// ordered by confidence (nulls last), split into confirmed and candidate
+/// lists; an `unresolved` row only sets `has_unresolved`.
+async fn identity_state(
+    tx: &Transaction<'_>,
+    user: i32,
+    issue_id: i32,
+) -> Result<IssueIdentityResponse, ApiError> {
+    let (thread_id, thread_title) = owned_issue(tx, user, issue_id).await?;
+    let rows = tx
+        .query(
+            &format!(
+                "SELECT e.id, e.provider, e.external_id, m.status, m.confidence, \
+                        m.evidence_source, {} \
+                 FROM issue_external_identity_mappings m \
+                 JOIN external_identities e ON e.id = m.external_identity_id \
+                 WHERE m.issue_id = $1 \
+                 ORDER BY m.confidence DESC NULLS LAST, m.id ASC",
+                iso_timestamp("m.created_at")
+            ),
+            &[&issue_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut confirmed = Vec::new();
+    let mut candidates = Vec::new();
+    let mut has_unresolved = false;
+    for row in &rows {
+        let mapping = IssueIdentityMapping {
+            external_identity_id: row.get(0),
+            provider: row.get(1),
+            comicvine_id: row.get(2),
+            status: row.get(3),
+            confidence: row.get(4),
+            evidence_source: row.get(5),
+            created_at: row.get(6),
+        };
+        match mapping.status.as_str() {
+            "confirmed" => confirmed.push(mapping),
+            "candidate" => candidates.push(mapping),
+            "unresolved" => has_unresolved = true,
+            _ => {}
+        }
+    }
+    Ok(IssueIdentityResponse {
+        issue_id,
+        thread_id,
+        thread_title,
+        has_confirmed_identity: !confirmed.is_empty(),
+        comicvine_issue_id: confirmed.first().map(|m| m.comicvine_id.clone()),
+        confirmed_mappings: confirmed,
+        candidate_mappings: candidates,
+        has_unresolved,
+    })
+}
+
+/// Python `list_metadata_corrections`: the active (non-reverted)
+/// corrections of one owned issue, oldest first.
+async fn corrections_list(
+    tx: &Transaction<'_>,
+    user: i32,
+    issue_id: i32,
+) -> Result<MetadataCorrectionsResponse, ApiError> {
+    owned_issue(tx, user, issue_id).await?;
+    let rows = tx
+        .query(
+            &format!(
+                "SELECT c.id, c.field_name, c.provider_value, c.canonical_value, \
+                        c.provenance, c.created_by, {} \
+                 FROM issue_metadata_corrections c \
+                 JOIN issues i ON i.id = c.issue_id \
+                 JOIN threads t ON t.id = i.thread_id \
+                 WHERE c.issue_id = $1 AND t.user_id = $2 AND c.reverted_at IS NULL \
+                 ORDER BY c.created_at ASC, c.id ASC",
+                iso_timestamp("c.created_at")
+            ),
+            &[&issue_id, &user],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let corrections = rows
+        .iter()
+        .map(|row| CanonicalCorrection {
+            id: row.get(0),
+            field_name: row.get(1),
+            provider_value: row.get(2),
+            canonical_value: row.get(3),
+            provenance: row.get(4),
+            created_by: row.get(5),
+            created_at: row.get(6),
+        })
+        .collect();
+    Ok(MetadataCorrectionsResponse {
+        issue_id,
+        corrections,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Handlers.
 // ---------------------------------------------------------------------------
 
@@ -827,6 +1011,34 @@ pub async fn resolve_input(
     Ok(Json(response))
 }
 
+/// `GET /api/v2/comicvine/issues/{issue_id}/identity`.
+pub async fn get_issue_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    issue_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let issue_id = path_int(issue_id)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    let response = identity_state(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `GET /api/v2/comicvine/issues/{issue_id}/metadata:corrections`.
+pub async fn list_corrections(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    issue_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
+    let issue_id = path_int(issue_id)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    let response = corrections_list(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
 // ---------------------------------------------------------------------------
 // OpenAPI documentation. These no-op functions feed the canonical generated
 // v2 contract; handlers above never import documentation code at runtime.
@@ -883,6 +1095,38 @@ pub fn resolve_input_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn comicvine_series_issues_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/comicvine/issues/{issue_id}/identity",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Owned identity state", body = IssueIdentityResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Issue not owned"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_issue_identity_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Active corrections", body = MetadataCorrectionsResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Issue not owned"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_corrections_documentation() {}
 
 // ---------------------------------------------------------------------------
 // Focused unit tests (no database or provider required).

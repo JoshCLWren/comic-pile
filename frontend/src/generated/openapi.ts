@@ -2413,6 +2413,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/comicvine/issues/{issue_id}/identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_issue_identity_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/comicvine/issues/{issue_id}/metadata:corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_corrections_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/comicvine/resolve": {
         parameters: {
             query?: never;
@@ -6486,6 +6518,17 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
+        NativeCanonicalCorrection: {
+            canonical_value: string;
+            created_at: string;
+            /** Format: int32 */
+            created_by: number;
+            field_name: string;
+            /** Format: int32 */
+            id: number;
+            provenance: string;
+            provider_value?: string | null;
+        };
         NativeComicVineIssueCandidate: {
             /** Format: int32 */
             comicvine_issue_id: number;
@@ -6639,6 +6682,29 @@ export interface components {
             /** Format: int32 */
             issue_id: number;
         };
+        NativeIssueIdentityMapping: {
+            comicvine_id: string;
+            /** Format: double */
+            confidence?: number | null;
+            created_at?: string | null;
+            evidence_source?: string | null;
+            /** Format: int32 */
+            external_identity_id: number;
+            provider: string;
+            status: string;
+        };
+        NativeIssueIdentityResponse: {
+            candidate_mappings: components["schemas"]["NativeIssueIdentityMapping"][];
+            comicvine_issue_id?: string | null;
+            confirmed_mappings: components["schemas"]["NativeIssueIdentityMapping"][];
+            has_confirmed_identity: boolean;
+            has_unresolved: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
         /** @description One issue row (Python `IssueResponse`). */
         NativeIssueResponse: {
             created_at: string;
@@ -6651,6 +6717,11 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
+        };
+        NativeMetadataCorrectionsResponse: {
+            corrections: components["schemas"]["NativeCanonicalCorrection"][];
+            /** Format: int32 */
+            issue_id: number;
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
         NativeMigrateToIssuesRequest: {
@@ -15186,6 +15257,94 @@ export interface operations {
             };
             /** @description Database temporarily unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_issue_identity_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned identity state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_corrections_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active corrections */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeMetadataCorrectionsResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
