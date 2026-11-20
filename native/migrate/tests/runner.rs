@@ -305,6 +305,7 @@ async fn edited_applied_migration_is_refused() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     run(&mut client).await.unwrap();
+    assert!(!needs_work(&mut client).await.unwrap());
     client
         .execute(
             "UPDATE public.refinery_schema_history SET checksum = 0 WHERE version = 1",
@@ -312,6 +313,11 @@ async fn edited_applied_migration_is_refused() {
         )
         .await
         .unwrap();
+    let plan_error = needs_work(&mut client).await.unwrap_err();
+    assert!(
+        plan_error.0.to_lowercase().contains("divergent"),
+        "plan must reject a changed applied checksum, got: {plan_error}"
+    );
     let error = run(&mut client).await.unwrap_err();
     let msg = error.0.to_lowercase();
     assert!(
