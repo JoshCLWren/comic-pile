@@ -2838,6 +2838,15 @@ mod tests {
             None
         );
         assert_eq!(parse_comicvine_url("not a url"), None);
+        // FTP and other schemes are rejected (Python only accepts http/https)
+        assert_eq!(
+            parse_comicvine_url("ftp://comicvine.gamespot.com/issue/4000-42/"),
+            None
+        );
+        assert_eq!(
+            parse_comicvine_url("file:///comicvine.gamespot.com/4000-42/"),
+            None
+        );
     }
 
     #[test]
