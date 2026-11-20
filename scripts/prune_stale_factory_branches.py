@@ -264,25 +264,18 @@ def remote_github_repo(repo_root: Path, remote: str) -> str | None:
     return slug
 
 
-def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
-    """Fetch the complete open+closed PR history grouped by branch name.
+def _normalize_pr_pages(pages: object) -> dict[str, list[dict[str, object]]]:
+    """Normalize slurped GitHub PR pages into records grouped by head ref.
 
-    Raises on lookup failure so cleanup cannot proceed with incomplete safety
-    data. Pagination is followed to completion: a capped list would let an old
-    open PR fall outside the result and lose its protection. Normalized records
-    carry ``state``, ``mergedAt`` and ``closedAt`` so the post-merge/abandonment
-    wait is measured from the real event rather than from the last commit.
+    Args:
+        pages: Page arrays returned by ``gh api --paginate --slurp``.
+
+    Returns:
+        Pull request records grouped by head branch name.
+
+    Raises:
+        RuntimeError: If the payload is not a list of pages of PR objects.
     """
-    proc = run([
-        "gh", "api", "--paginate", "--slurp",
-        f"repos/{repo}/pulls?state=all&per_page=100",
-    ], check=False)
-    if proc.returncode != 0:
-        raise RuntimeError(f"unable to list PRs: {proc.stderr.strip() or proc.stdout.strip()}")
-    try:
-        pages = json.loads(proc.stdout or "[]")
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"unable to parse PR list: {exc}") from exc
     if not isinstance(pages, list):
         raise RuntimeError("PR list response was not a list")
     by_head: dict[str, list[dict[str, object]]] = {}
@@ -311,6 +304,91 @@ def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
             }
             by_head.setdefault(head, []).append(record)
     return by_head
+
+
+def _parse_pr_pages(stdout: str) -> dict[str, list[dict[str, object]]]:
+    """Parse slurped GitHub PR listing output into records by head ref.
+
+    Args:
+        stdout: Raw stdout of a ``gh api --paginate --slurp`` pulls listing.
+
+    Returns:
+        Pull request records grouped by head branch name.
+
+    Raises:
+        RuntimeError: If the output is not valid JSON list-of-pages data.
+    """
+    try:
+        pages = json.loads(stdout or "[]")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"unable to parse PR list: {exc}") from exc
+    return _normalize_pr_pages(pages)
+
+
+def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
+    """Fetch the complete open+closed PR history grouped by branch name.
+
+    Raises on lookup failure so cleanup cannot proceed with incomplete safety
+    data. Pagination is followed to completion: a capped list would let an old
+    open PR fall outside the result and lose its protection. Normalized records
+    carry ``state``, ``mergedAt`` and ``closedAt`` so the post-merge/abandonment
+    wait is measured from the real event rather than from the last commit.
+    """
+    proc = run([
+        "gh", "api", "--paginate", "--slurp",
+        f"repos/{repo}/pulls?state=all&per_page=100",
+    ], check=False)
+    if proc.returncode != 0:
+        raise RuntimeError(f"unable to list PRs: {proc.stderr.strip() or proc.stdout.strip()}")
+    return _parse_pr_pages(proc.stdout or "")
+
+
+def fetch_branch_pr_records(repo: str, branch_name: str) -> dict[str, list[dict[str, object]]]:
+    """Fetch the complete PR history for a single branch head.
+
+    The apply-time fresh safety re-check uses this instead of re-downloading
+    every page of the repository's PR history before each deletion. GitHub's
+    ``head`` filter requires the ``owner:ref-name`` form; a PR backed by this
+    branch always has its head in this repository, because a same-named branch
+    in a fork is a different ref that deleting this branch cannot affect. The
+    ref name is percent-encoded so query delimiters cannot weaken the filter,
+    and a response carrying any other head fails closed instead of silently
+    reporting the branch as PR-free.
+
+    Args:
+        repo: GitHub repository in ``owner/name`` form that owns the branch.
+        branch_name: Head ref name whose PR history is needed.
+
+    Returns:
+        Pull request records grouped by head branch name.
+
+    Raises:
+        RuntimeError: If the repository slug is malformed, the lookup fails, the
+            payload cannot be parsed, or the response contains a PR head other
+            than ``branch_name`` (the head filter was not honored).
+    """
+    owner, sep, name = repo.partition("/")
+    if not sep or not owner or not name:
+        raise RuntimeError(f"invalid repository slug for PR lookup: {repo}")
+    proc = run([
+        "gh", "api", "--paginate", "--slurp",
+        (
+            f"repos/{repo}/pulls?state=all&per_page=100"
+            f"&head={owner}:{quote(branch_name, safe='')}"
+        ),
+    ], check=False)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"unable to list PRs for {branch_name}: "
+            f"{proc.stderr.strip() or proc.stdout.strip()}"
+        )
+    records = _parse_pr_pages(proc.stdout or "")
+    for head in records:
+        if head != branch_name:
+            raise RuntimeError(
+                f"PR lookup for {branch_name} returned unrelated head {head}"
+            )
+    return records
 
 
 def fetch_protected_branches(repo: str) -> set[str]:
