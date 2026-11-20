@@ -498,6 +498,15 @@ fn app() -> Router {
             "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
             get(native_dispatch),
         )
+        // Native v2 ComicVine routes (#4835, split chunk B).
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+            get(native_dispatch),
+        )
         .route(
             "/api/v2/issues/{issue_id}/dependencies",
             get(native_dispatch),
@@ -1129,17 +1138,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn comicvine_v2_read_ingress_preserves_canonical_paths_and_requires_auth() {
-        for uri in [
-            "/api/v2/comicvine/search/series?q=batman",
-            "/api/v2/comicvine/resolve?input=batman",
-            "/api/v2/comicvine/series/42/issues",
+    async fn comicvine_v2_ingress_preserves_canonical_paths_and_requires_auth() {
+        for (method, uri) in [
+            ("GET", "/api/v2/comicvine/search/series?q=batman"),
+            ("GET", "/api/v2/comicvine/resolve?input=batman"),
+            ("GET", "/api/v2/comicvine/series/42/issues"),
+            ("GET", "/api/v2/comicvine/issues/7/identity"),
+            ("GET", "/api/v2/comicvine/issues/7/metadata:corrections"),
+            // Ingress samples for every native v2 ComicVine operation.
         ] {
             let mut router = app();
             let response = router
                 .call(
                     Request::builder()
-                        .method("GET")
+                        .method(method)
                         .uri(uri)
                         .body(Body::empty())
                         .unwrap(),
@@ -1149,13 +1161,13 @@ mod tests {
             assert!(
                 response.status() == StatusCode::UNAUTHORIZED
                     || response.status() == StatusCode::SERVICE_UNAVAILABLE,
-                "GET {uri} must require auth and reach Rust, got {}",
+                "{method} {uri} must require auth and reach Rust, got {}",
                 response.status()
             );
             assert_eq!(
                 response.headers().get("x-comicpile-api-runtime").unwrap(),
                 "rust",
-                "GET {uri} must be served by the native ingress"
+                "{method} {uri} must be served by the native ingress"
             );
         }
     }

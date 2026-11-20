@@ -426,6 +426,14 @@ export interface GetIssueDependenciesRequest {
 
 export type GetIssueDependenciesResponse = components['schemas']['IssueDependenciesResponse']
 
+export interface GetIssueIdentityRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type GetIssueIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
+
 export interface GetLegacyDependencyRequest {
   path: {
     dependency_id: number
@@ -598,6 +606,14 @@ export interface ListActivityRequest {
 export type ListActivityResponse = components['schemas']['ActivityResponse']
 
 export type ListBlockedLegacyDependenciesResponse = Array<number>
+
+export interface ListCorrectionsRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type ListCorrectionsResponse = components['schemas']['NativeMetadataCorrectionsResponse']
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
 
@@ -1145,6 +1161,7 @@ export interface NativeV2Client {
   get(args: GetRequest): Promise<GetResponse>
   getIssue(args: GetIssueRequest): Promise<GetIssueResponse>
   getIssueDependencies(args: GetIssueDependenciesRequest): Promise<GetIssueDependenciesResponse>
+  getIssueIdentity(args: GetIssueIdentityRequest): Promise<GetIssueIdentityResponse>
   getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
   getMetrics(): Promise<GetMetricsResponse>
   getOverlapDecisions(args: GetOverlapDecisionsRequest): Promise<GetOverlapDecisionsResponse>
@@ -1170,6 +1187,7 @@ export interface NativeV2Client {
   list(args?: ListRequest): Promise<ListResponse>
   listActivity(args?: ListActivityRequest): Promise<ListActivityResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
+  listCorrections(args: ListCorrectionsRequest): Promise<ListCorrectionsResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
   listSessionSnapshots(args: ListSessionSnapshotsRequest): Promise<ListSessionSnapshotsResponse>
   listTags(): Promise<ListTagsResponse>
@@ -1521,6 +1539,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/dependencies`,
       )
     },
+    getIssueIdentity(args: GetIssueIdentityRequest) {
+      return client.get<GetIssueIdentityResponse>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity`,
+      )
+    },
     getLegacyDependency(args: GetLegacyDependencyRequest) {
       return client.get<GetLegacyDependencyResponse>(
         `/v2/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
@@ -1644,6 +1667,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     listBlockedLegacyDependencies() {
       return client.get<ListBlockedLegacyDependenciesResponse>("/v2/dependencies/blocked")
+    },
+    listCorrections(args: ListCorrectionsRequest) {
+      return client.get<ListCorrectionsResponse>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:corrections`,
+      )
     },
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")

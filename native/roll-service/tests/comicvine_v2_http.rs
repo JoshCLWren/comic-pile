@@ -25,10 +25,12 @@ use tower::ServiceExt;
 
 static NEXT_TEST_CLIENT: AtomicUsize = AtomicUsize::new(1);
 
+/// `(state, bearer token, csrf token, user id, reset guard)`.
 type Session = (
     Arc<AppState>,
     String,
     String,
+    i32,
     tokio::sync::MutexGuard<'static, ()>,
 );
 
@@ -40,18 +42,24 @@ fn unique_suffix() -> u128 {
 }
 
 async fn setup_user(prefix: &str) -> Session {
-    setup_user_with(prefix, None).await
+    setup_user_with(prefix, 2, None).await
 }
 
 /// Every test holds the `reset_for_test` guard for its whole body, which
 /// also serializes the process-wide `COMICVINE_API_KEY` toggled by `set_key`.
-async fn setup_user_with(prefix: &str, outbound: Option<Arc<dyn OutboundHttp>>) -> Session {
+/// `pool_size` above 2 lets lock tests overlap real transactions (a 2-slot
+/// pool serialized them, #4631578582).
+async fn setup_user_with(
+    prefix: &str,
+    pool_size: usize,
+    outbound: Option<Arc<dyn OutboundHttp>>,
+) -> Session {
     let url = test_support::database_url().await;
     let mut app = test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
-            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
             _ => None,
         })
         .unwrap(),
@@ -62,11 +70,11 @@ async fn setup_user_with(prefix: &str, outbound: Option<Arc<dyn OutboundHttp>>) 
     let state = Arc::new(app);
     let guard = test_support::reset_for_test(&state).await;
     let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
-    let (token, csrf) = register_user(&state, &username).await;
-    (state, token, csrf, guard)
+    let (token, csrf, user_id) = register_user(&state, &username).await;
+    (state, token, csrf, user_id, guard)
 }
 
-async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String) {
+async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String, i32) {
     let response = router(state.clone())
         .oneshot(
             Request::builder()
@@ -106,7 +114,21 @@ async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String
     let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
     assert_eq!(status, StatusCode::OK, "{body:?}");
     let token = body["access_token"].as_str().unwrap().to_owned();
-    (token, csrf)
+    let user_id: i32 = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one("SELECT id FROM users WHERE username = $1", &[&username])
+        .await
+        .unwrap()
+        .get(0);
+    (token, csrf, user_id)
+}
+
+async fn register_extra_user(state: &Arc<AppState>, prefix: &str) -> (String, String, i32) {
+    let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
+    register_user(state, &username).await
 }
 
 async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Value) {
@@ -174,7 +196,7 @@ const RESOLVE_FAILED: &str =
 
 #[tokio::test]
 async fn every_read_requires_authentication() {
-    let (state, _token, _csrf, _guard) = setup_user("cvv2-auth").await;
+    let (state, _token, _csrf, _user, _guard) = setup_user("cvv2-auth").await;
     for path in [
         "/api/v2/comicvine/resolve?input=x",
         "/api/v2/comicvine/search/series?q=x",
@@ -196,7 +218,7 @@ async fn every_read_requires_authentication() {
 
 #[tokio::test]
 async fn malformed_requests_use_the_production_validation_contract() {
-    let (state, token, csrf, _guard) = setup_user("cvv2-validation").await;
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-validation").await;
     set_key(true);
     let expected = json!({"detail": "Validation failed"});
     let long_q = "q".repeat(201);
@@ -244,7 +266,7 @@ async fn malformed_requests_use_the_production_validation_contract() {
 
 #[tokio::test]
 async fn reads_without_a_provider_key_answer_empty_like_python() {
-    let (state, token, csrf, _guard) = setup_user("cvv2-nokey").await;
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-nokey").await;
     set_key(false);
     let (status, body) = send(
         &state,
@@ -294,7 +316,7 @@ async fn reads_without_a_provider_key_answer_empty_like_python() {
 
 #[tokio::test]
 async fn search_pages_through_the_provider_like_python() {
-    let (state, token, csrf, _guard) = setup_user("cvv2-search").await;
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-search").await;
     set_key(true);
     provider_ok(
         &state,
@@ -377,7 +399,7 @@ async fn search_pages_through_the_provider_like_python() {
 /// next_offset 2^31.
 #[tokio::test]
 async fn search_paging_at_the_accepted_offset_bound_does_not_overflow() {
-    let (state, token, csrf, _guard) = setup_user("cvv2-search-bound").await;
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-search-bound").await;
     set_key(true);
     provider_ok(
         &state,
@@ -415,7 +437,7 @@ async fn search_paging_at_the_accepted_offset_bound_does_not_overflow() {
 /// exception handler: a generic 500 `{"detail": "Internal server error"}`.
 #[tokio::test]
 async fn search_provider_failures_use_the_python_error_envelope() {
-    let (state, token, csrf, _guard) = setup_user("cvv2-search-fail").await;
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-search-fail").await;
     set_key(true);
     // No canned response: the fake fails closed like an unreachable network.
     let (status, body) = send(
@@ -429,7 +451,7 @@ async fn search_provider_failures_use_the_python_error_envelope() {
 
 #[tokio::test]
 async fn browser_provider_calls_are_cached_and_honor_throttle_cooldowns() {
-    let (state, token, csrf, _guard) = setup_user("cvv2-limits").await;
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-limits").await;
     set_key(true);
     provider_ok(
         &state,
@@ -502,7 +524,7 @@ async fn browser_provider_calls_are_cached_and_honor_throttle_cooldowns() {
 /// 403 is a plain provider error that records no cooldown.
 #[tokio::test]
 async fn http_420_cools_the_bucket_down_but_403_does_not() {
-    let (state, token, csrf, _guard) = setup_user("cvv2-420").await;
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-420").await;
     set_key(true);
     fake(&state).push_ok(
         http::StatusCode::FORBIDDEN,
@@ -551,7 +573,7 @@ async fn http_420_cools_the_bucket_down_but_403_does_not() {
 
 #[tokio::test]
 async fn resolve_classifies_input_and_resolves_issue_links() {
-    let (state, token, csrf, _guard) = setup_user("cvv2-resolve").await;
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-resolve").await;
     set_key(true);
     provider_ok(
         &state,
@@ -624,7 +646,7 @@ async fn resolve_classifies_input_and_resolves_issue_links() {
 
 #[tokio::test]
 async fn resolve_volume_links_return_the_volume_and_its_roster() {
-    let (state, token, csrf, _guard) = setup_user("cvv2-resolve-volume").await;
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-resolve-volume").await;
     set_key(true);
     provider_ok(
         &state,
@@ -685,7 +707,7 @@ async fn resolve_volume_links_return_the_volume_and_its_roster() {
 
 #[tokio::test]
 async fn series_issues_read_the_roster_and_volume_name() {
-    let (state, token, csrf, _guard) = setup_user("cvv2-series").await;
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-series").await;
     set_key(true);
     provider_ok(
         &state,
@@ -755,7 +777,7 @@ fn roster_page(volume: i32, first_id: i32, count: i32, total: Option<i32>) -> Va
 
 #[tokio::test]
 async fn rosters_beyond_one_thousand_rows_are_fetched_completely() {
-    let (state, token, csrf, _guard) = setup_user("cvv2-roster").await;
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-roster").await;
     set_key(true);
     // 1250 rows with a reported total: 13 pages, not 10.
     for page in 0..13 {
@@ -889,7 +911,7 @@ impl OutboundHttp for PagedComicVine {
 
 async fn paged_state(prefix: &str, fake: &Arc<PagedComicVine>) -> Session {
     let outbound: Arc<dyn OutboundHttp> = fake.clone();
-    setup_user_with(prefix, Some(outbound)).await
+    setup_user_with(prefix, 2, Some(outbound)).await
 }
 
 fn issue_numbers(body: &Value) -> Vec<String> {
@@ -908,7 +930,7 @@ fn issue_numbers(body: &Value) -> Vec<String> {
 #[tokio::test]
 async fn roster_pages_are_fetched_four_at_a_time_in_offset_order() {
     let paged = PagedComicVine::new(77, 1250, None);
-    let (state, token, csrf, _guard) = paged_state("cvv2-fanout", &paged).await;
+    let (state, token, csrf, _user, _guard) = paged_state("cvv2-fanout", &paged).await;
     set_key(true);
     let expected: Vec<String> = (1..=1250).map(|n| n.to_string()).collect();
     let (status, body) = send(
@@ -957,7 +979,7 @@ async fn roster_pages_are_fetched_four_at_a_time_in_offset_order() {
 #[tokio::test]
 async fn malformed_roster_pages_fail_the_roster_instead_of_truncating_it() {
     let paged = PagedComicVine::new(88, 200, Some(100));
-    let (state, token, csrf, _guard) = paged_state("cvv2-malformed", &paged).await;
+    let (state, token, csrf, _user, _guard) = paged_state("cvv2-malformed", &paged).await;
     set_key(true);
     let (status, body) = send(
         &state,
@@ -983,4 +1005,299 @@ async fn malformed_roster_pages_fail_the_roster_instead_of_truncating_it() {
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["volume"]["name"], "Paged");
     assert_eq!(body["issues"], json!([]));
+}
+
+// ---------------------------------------------------------------------------
+// Chunk B: owner-scoped identity and correction reads.
+// ---------------------------------------------------------------------------
+
+type Conn = deadpool_postgres::Object;
+
+async fn thread(conn: &Conn, user_id: i32, title: &str) -> i32 {
+    conn.query_one(
+        "INSERT INTO threads (title, format, issues_remaining, total_issues, queue_position, \
+         status, user_id) VALUES ($1, 'Comic', 1, 1, 1, 'active', $2) RETURNING id",
+        &[&title, &user_id],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
+async fn issue(conn: &Conn, thread_id: i32, number: &str, position: i32) -> i32 {
+    conn.query_one(
+        "INSERT INTO issues (thread_id, issue_number, status, created_at, position) \
+         VALUES ($1, $2, 'unread', NOW(), $3) RETURNING id",
+        &[&thread_id, &number, &position],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
+/// Seed one ComicVine identity mapping with a fixed `created_at`.
+async fn mapping(
+    conn: &Conn,
+    issue_id: i32,
+    comicvine_id: &str,
+    status: &str,
+    confidence: Option<f64>,
+    created_at: &str,
+) -> i32 {
+    let identity: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities \
+                (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'issue', $1, NULL, '{}'::json, now(), now()) \
+             ON CONFLICT ON CONSTRAINT uq_external_identity_provider_entity \
+             DO UPDATE SET updated_at = now() RETURNING id",
+            &[&comicvine_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings \
+            (issue_id, external_identity_id, status, evidence_source, evidence_json, confidence, \
+             created_at, updated_at) \
+         VALUES ($1, $2, $3, 'seed', '{}'::json, $4, $5::text::timestamptz, now())",
+        &[&issue_id, &identity, &status, &confidence, &created_at],
+    )
+    .await
+    .unwrap();
+    identity
+}
+
+async fn correction(
+    conn: &Conn,
+    issue_id: i32,
+    user_id: i32,
+    field: &str,
+    created_at: &str,
+    reverted: bool,
+) -> i32 {
+    // `name` rows carry no provider value; others echo the field name.
+    let provider_value = (field != "name").then_some(field);
+    let canonical = field.to_uppercase();
+    conn.query_one(
+        "INSERT INTO issue_metadata_corrections \
+            (issue_id, field_name, provider_value, canonical_value, provenance, created_by, \
+             reverted_at, created_at, updated_at) \
+         VALUES ($1, $2, $3, $4, 'user_correction', $5, \
+                 CASE WHEN $6 THEN now() END, $7::text::timestamptz, now()) RETURNING id",
+        &[
+            &issue_id,
+            &field,
+            &provider_value,
+            &canonical,
+            &user_id,
+            &reverted,
+            &created_at,
+        ],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
+#[tokio::test]
+async fn identity_state_reads_seeded_mappings_like_python() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-identity-read").await;
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Saga").await;
+    let i = issue(&conn, t, "1", 1).await;
+    let path = format!("/api/v2/comicvine/issues/{i}/identity");
+
+    let (status, body) = send(&state, get(&path, &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body,
+        json!({"issue_id": i, "thread_id": t, "thread_title": "Saga",
+               "has_confirmed_identity": false, "comicvine_issue_id": null,
+               "confirmed_mappings": [], "candidate_mappings": [], "has_unresolved": false})
+    );
+
+    let low = mapping(
+        &conn,
+        i,
+        "300",
+        "candidate",
+        Some(0.4),
+        "2026-01-02T03:04:05Z",
+    )
+    .await;
+    let confirmed = mapping(
+        &conn,
+        i,
+        "100",
+        "confirmed",
+        Some(1.0),
+        "2026-01-02T03:04:05.123456Z",
+    )
+    .await;
+    let unscored = mapping(&conn, i, "400", "candidate", None, "2026-01-02T03:04:05.5Z").await;
+    let high = mapping(
+        &conn,
+        i,
+        "200",
+        "candidate",
+        Some(0.9),
+        "2026-01-02T03:04:05Z",
+    )
+    .await;
+    mapping(&conn, i, "500", "unresolved", None, "2026-01-02T03:04:05Z").await;
+    mapping(
+        &conn,
+        i,
+        "600",
+        "rejected",
+        Some(0.1),
+        "2026-01-02T03:04:05Z",
+    )
+    .await;
+
+    let (status, body) = send(&state, get(&path, &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    // Confidence DESC NULLS LAST; Pydantic datetime JSON: `Z`, fraction only
+    // when present. Rejected rows are not listed and only `unresolved` sets
+    // the flag.
+    assert_eq!(
+        body,
+        json!({"issue_id": i, "thread_id": t, "thread_title": "Saga",
+               "has_confirmed_identity": true, "comicvine_issue_id": "100",
+               "confirmed_mappings": [
+                   {"external_identity_id": confirmed, "provider": "comicvine", "comicvine_id": "100",
+                    "status": "confirmed", "confidence": 1.0, "evidence_source": "seed",
+                    "created_at": "2026-01-02T03:04:05.123456Z"}],
+               "candidate_mappings": [
+                   {"external_identity_id": high, "provider": "comicvine", "comicvine_id": "200",
+                    "status": "candidate", "confidence": 0.9, "evidence_source": "seed",
+                    "created_at": "2026-01-02T03:04:05Z"},
+                   {"external_identity_id": low, "provider": "comicvine", "comicvine_id": "300",
+                    "status": "candidate", "confidence": 0.4, "evidence_source": "seed",
+                    "created_at": "2026-01-02T03:04:05Z"},
+                   {"external_identity_id": unscored, "provider": "comicvine", "comicvine_id": "400",
+                    "status": "candidate", "confidence": null, "evidence_source": "seed",
+                    "created_at": "2026-01-02T03:04:05.500000Z"}],
+               "has_unresolved": true})
+    );
+}
+
+#[tokio::test]
+async fn corrections_list_reads_active_rows_oldest_first() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-corrections-read").await;
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Saga").await;
+    let i = issue(&conn, t, "1", 1).await;
+    let other = issue(&conn, t, "2", 2).await;
+    let path = format!("/api/v2/comicvine/issues/{i}/metadata:corrections");
+
+    let (status, body) = send(&state, get(&path, &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body, json!({"issue_id": i, "corrections": []}));
+
+    let later = correction(&conn, i, user_id, "name", "2026-03-01T00:00:00Z", false).await;
+    let first = correction(
+        &conn,
+        i,
+        user_id,
+        "cover_date",
+        "2026-02-01T00:00:00.25Z",
+        false,
+    )
+    .await;
+    correction(
+        &conn,
+        i,
+        user_id,
+        "store_date",
+        "2026-01-01T00:00:00Z",
+        true,
+    )
+    .await;
+    correction(&conn, other, user_id, "name", "2026-01-01T00:00:00Z", false).await;
+
+    let (status, body) = send(&state, get(&path, &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body,
+        json!({"issue_id": i, "corrections": [
+            {"id": first, "field_name": "cover_date", "provider_value": "cover_date",
+             "canonical_value": "COVER_DATE", "provenance": "user_correction",
+             "created_by": user_id, "created_at": "2026-02-01T00:00:00.250000Z"},
+            {"id": later, "field_name": "name", "provider_value": null,
+             "canonical_value": "NAME", "provenance": "user_correction",
+             "created_by": user_id, "created_at": "2026-03-01T00:00:00Z"}]})
+    );
+}
+
+/// Python `get_owned_issue_or_404`: another reader's issue and a missing
+/// issue are both `404 {"detail": "Issue <id> not found"}`; nothing leaks.
+#[tokio::test]
+async fn identity_reads_are_owner_scoped() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-identity-owner").await;
+    let (other_token, other_csrf, _other) =
+        register_extra_user(&state, "cvv2-identity-other").await;
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Mine").await;
+    let i = issue(&conn, t, "1", 1).await;
+    mapping(
+        &conn,
+        i,
+        "100",
+        "confirmed",
+        Some(1.0),
+        "2026-01-02T03:04:05Z",
+    )
+    .await;
+    correction(&conn, i, user_id, "name", "2026-01-01T00:00:00Z", false).await;
+    for suffix in ["identity", "metadata:corrections"] {
+        let path = format!("/api/v2/comicvine/issues/{i}/{suffix}");
+        let (status, _) = send(&state, get(&path, &token, &csrf)).await;
+        assert_eq!(status, StatusCode::OK, "{path}");
+        let (status, body) = send(&state, get(&path, &other_token, &other_csrf)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path}: {body:?}");
+        assert_eq!(body, json!({"detail": format!("Issue {i} not found")}));
+        let missing = i + 1000;
+        let (status, body) = send(
+            &state,
+            get(
+                &format!("/api/v2/comicvine/issues/{missing}/{suffix}"),
+                &token,
+                &csrf,
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{suffix}: {body:?}");
+        assert_eq!(
+            body,
+            json!({"detail": format!("Issue {missing} not found")})
+        );
+    }
+}
+
+#[tokio::test]
+async fn identity_reads_require_auth_and_use_the_validation_contract() {
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-identity-contract").await;
+    for path in [
+        "/api/v2/comicvine/issues/1/identity",
+        "/api/v2/comicvine/issues/1/metadata:corrections",
+    ] {
+        let request = Request::builder()
+            .method("GET")
+            .uri(path)
+            .body(Body::empty())
+            .unwrap();
+        let (status, body) = send(&state, request).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{path}: {body:?}");
+    }
+    for path in [
+        "/api/v2/comicvine/issues/abc/identity",
+        "/api/v2/comicvine/issues/1.5/identity",
+        "/api/v2/comicvine/issues/abc/metadata:corrections",
+    ] {
+        let (status, body) = send(&state, get(path, &token, &csrf)).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{path}: {body:?}");
+        assert_eq!(body, json!({"detail": "Validation failed"}), "{path}");
+    }
 }

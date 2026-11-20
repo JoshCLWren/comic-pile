@@ -115,6 +115,32 @@
     {
       "bucket": "operations",
       "method": "GET",
+      "path": "/api/v2/comicvine/issues/{issue_id}/identity",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues/[^/]+/identity$",
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "owning_issue": 4835,
+      "runtime": "native-rust",
+      "status": "target"
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues/[^/]+/metadata:corrections$",
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "owning_issue": 4835,
+      "runtime": "native-rust",
+      "status": "target"
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
       "path": "/api/v2/comicvine/resolve",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/comicvine/resolve$",

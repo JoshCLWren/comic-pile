@@ -259,7 +259,7 @@ export const comicVineApi = {
   getSeriesIssues: (volumeId: number, seriesName = '') =>
     api.get<ComicVineSeriesIssuesResponse>(`/v2/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName }, timeout: COMICVINE_ROSTER_TIMEOUT_MS }),
   getIssueIdentity: (issueId: number) =>
-    api.get<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity`),
+    api.get<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity`),
   confirmIdentity: (issueId: number, comicvineIssueId: number) =>
     api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:confirm`, { comicvine_issue_id: comicvineIssueId }),
   replaceIdentity: (issueId: number, comicvineIssueId: number, reason?: string) =>
@@ -269,7 +269,7 @@ export const comicVineApi = {
   applyCorrection: (issueId: number, fieldName: string, canonicalValue: string, reason?: string) =>
     api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:correct`, { field_name: fieldName, canonical_value: canonicalValue, reason }),
   listCorrections: (issueId: number) =>
-    api.get<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:corrections`),
+    api.get<MetadataCorrectionsResponse>(`/v2/comicvine/issues/${issueId}/metadata:corrections`),
   revertCorrection: (issueId: number, correctionId: number) =>
     api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:revert`, { correction_id: correctionId }),
   removeIdentity: (issueId: number) =>
