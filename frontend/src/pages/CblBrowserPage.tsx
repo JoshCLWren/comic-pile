@@ -258,6 +258,7 @@ export default function CblBrowserPage() {
   useEffect(() => {
     setCustomizing(false)
     setConfirmOpen(false)
+    setAdoptionTargetId(null)
     setSeriesDecisions({})
     setEntryDecisions({})
     setExpandedGroups({})
@@ -584,6 +585,7 @@ export default function CblBrowserPage() {
   const resetSelectionState = () => {
     setCustomizing(false)
     setConfirmOpen(false)
+    setAdoptionTargetId(null)
     setSeriesDecisions({})
     setEntryDecisions({})
     setExpandedGroups({})
