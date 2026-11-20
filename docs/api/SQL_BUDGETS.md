@@ -29,4 +29,4 @@ application/transaction-control budget and must not grow between the small and
 large fixtures.
 
 The source registry currently marks 26 operations `pending-fixture`; those are
-explicit proof gaps under #4737, not passing measurement evidence.
+explicit proof gaps under #4988, not passing measurement evidence.
