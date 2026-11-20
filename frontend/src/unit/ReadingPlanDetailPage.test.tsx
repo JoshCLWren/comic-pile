@@ -554,7 +554,12 @@ describe('ReadingPlanDetailPage', () => {
       const updated = screen.getByTestId('available-now')
       expect(within(updated).getByText('X-Men QA B3 #95')).toBeInTheDocument()
       expect(within(updated).getByText('X-Men QA B3 · Next unread issue #95')).toBeInTheDocument()
+      expect(within(updated).queryByText('X-Men #95')).not.toBeInTheDocument()
+      expect(within(updated).queryByText('X-Men · Next unread issue #95')).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Read next issue' })).toHaveTextContent('X-Men QA B3 #95')
+      expect(within(screen.getByTestId('blocked-next')).getByRole('link', {
+        name: 'Open X-Men QA B3 issue #95',
+      })).toBeInTheDocument()
     })
   })
 })
