@@ -20,6 +20,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 
 STALE_BRANCH_PREFIXES = ("factory/", "local-factory/", "local/", "backup/")
 RELEASE_PREFIX = "release/"
@@ -349,6 +350,9 @@ def fetch_branch_pr_records(repo: str, branch: str) -> list[dict[str, object]]:
     branch. Using GitHub's ``head`` filter avoids re-downloading the whole
     repository PR history for every candidate, while ``state=all`` and full
     pagination retain the same older-open-PR protection as the full inventory.
+    Query values are URL-encoded so legal Git branch names containing ``+``,
+    ``&``, ``#``, ``%`` or ``=`` cannot be reinterpreted as query syntax and
+    hide an open PR that protects the branch.
 
     Args:
         repo: GitHub repository slug (``owner/name``).
@@ -362,9 +366,10 @@ def fetch_branch_pr_records(repo: str, branch: str) -> list[dict[str, object]]:
     """
     owner = repo.split("/", 1)[0]
     head = f"{owner}:{branch}"
+    query = urlencode({"state": "all", "head": head, "per_page": 100})
     proc = run([
         "gh", "api", "--paginate", "--slurp",
-        f"repos/{repo}/pulls?state=all&head={head}&per_page=100",
+        f"repos/{repo}/pulls?{query}",
     ], check=False)
     if proc.returncode != 0:
         raise RuntimeError(
