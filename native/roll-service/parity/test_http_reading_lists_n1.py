@@ -11,7 +11,7 @@ import pytest
 from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
-from app.models import Issue, Thread, User
+from app.models import User
 from route_harness import (
     RouteMeasurement,
     assert_declared_budget,
@@ -333,7 +333,6 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
 
         large = await measure_route(BINARY, env, engine, READER_ROUTE, "200 entries")
         _assert_measured(large, "GET", "/api/v2/reading-lists/{list_id}/reader", 200)
-        large_body = _body_dict(large)
         assert len(_entries(large)) == 200
         _assert_fixed_growth(small, large)
     finally:
@@ -537,7 +536,7 @@ async def test_reading_lists_budget_rejects_injected_n_plus_one() -> None:
 
         env = _run_env(token, "GET", "/api/v2/reading-lists")
         small = await _measure_with_injected_queries(url, engine, BINARY, env, 5)
-        maximum = declared_budget_max("GET", "/api/v2/reading-lists")
+        assert small > declared_budget_max("GET", "/api/v2/reading-lists")
         with pytest.raises(AssertionError, match="declared maximum"):
             assert_declared_budget("GET", "/api/v2/reading-lists", small)
 

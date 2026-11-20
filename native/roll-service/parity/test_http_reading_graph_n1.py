@@ -438,7 +438,7 @@ async def test_reading_graph_budget_rejects_injected_n_plus_one() -> None:
 
         env = _run_env(token, "GET", "/api/v2/reading-graph")
         small = await _measure_with_injected_queries(url, engine, BINARY, env, 10)
-        maximum = declared_budget_max("GET", "/api/v2/reading-graph")
+        assert small > declared_budget_max("GET", "/api/v2/reading-graph")
         with pytest.raises(AssertionError, match="declared maximum"):
             assert_declared_budget("GET", "/api/v2/reading-graph", small)
 
