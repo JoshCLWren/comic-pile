@@ -128,6 +128,70 @@ pub struct ReadingListWrite {
     pub confirmed_predecessor_changes: Option<serde_json::Value>,
 }
 
+struct NewReadingListEntry {
+    issue_id: i32,
+    position: i32,
+    is_checkpoint: bool,
+    checkpoint_target_issue_ids: String,
+    gate: String,
+    skipped: bool,
+}
+
+/// Insert a complete list membership in one set-based statement.
+async fn insert_entries(
+    tx: &Transaction<'_>,
+    list_id: i32,
+    entries: &[NewReadingListEntry],
+) -> Result<(), ApiError> {
+    let issue_ids = entries
+        .iter()
+        .map(|entry| entry.issue_id)
+        .collect::<Vec<_>>();
+    let positions = entries
+        .iter()
+        .map(|entry| entry.position)
+        .collect::<Vec<_>>();
+    let checkpoints = entries
+        .iter()
+        .map(|entry| entry.is_checkpoint)
+        .collect::<Vec<_>>();
+    let targets = entries
+        .iter()
+        .map(|entry| entry.checkpoint_target_issue_ids.clone())
+        .collect::<Vec<_>>();
+    let gates = entries
+        .iter()
+        .map(|entry| entry.gate.clone())
+        .collect::<Vec<_>>();
+    let skipped = entries
+        .iter()
+        .map(|entry| entry.skipped)
+        .collect::<Vec<_>>();
+    tx.execute(
+        "INSERT INTO custom_cbl_entries
+           (list_id, issue_id, position, created_at, is_checkpoint,
+            checkpoint_target_issue_ids, gate, skipped)
+         SELECT $1, issue_id, position, NOW(), is_checkpoint,
+                checkpoint_target_issue_ids::json, gate, skipped
+         FROM unnest(
+           $2::int[], $3::int[], $4::bool[], $5::text[], $6::text[], $7::bool[]
+         ) AS entry(issue_id, position, is_checkpoint,
+                    checkpoint_target_issue_ids, gate, skipped)",
+        &[
+            &list_id,
+            &issue_ids,
+            &positions,
+            &checkpoints,
+            &targets,
+            &gates,
+            &skipped,
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
 /// Documentation-only operation for the Reading List collection.
 #[utoipa::path(
     get,
