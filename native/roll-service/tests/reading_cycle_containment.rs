@@ -1178,11 +1178,13 @@ async fn reading_list_resources_contain_cycles_and_reject_cyclic_creation() {
         })),
     )
     .await;
-    assert_eq!(status, StatusCode::CONFLICT, "{rejected}");
-    assert!(rejected["detail"]
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{rejected}");
+    assert_eq!(rejected["detail"]["code"], "reading_list_cycle");
+    assert!(rejected["detail"]["message"]
         .as_str()
         .unwrap()
-        .contains("Nothing was changed"));
+        .contains("Reading constraint cycle"));
+    assert!(!rejected["detail"]["path"].as_array().unwrap().is_empty());
     let conn = state.pool.get().await.unwrap();
     let count: i64 = conn
         .query_one(
