@@ -404,8 +404,9 @@ enum ParsedResource {
 }
 
 /// Parse a pasted ComicVine URL into a trusted resource reference. Only the
-/// canonical host and the `4000-` (issue) / `4050-` (volume) terminal segment
-/// are accepted. Query strings, trailing slashes and `http` are tolerated.
+/// canonical host, `http`/`https` schemes, and the `4000-` (issue) / `4050-`
+/// (volume) terminal segment are accepted. Query strings and trailing slashes
+/// are tolerated.
 fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     let value = raw.trim();
     if value.is_empty() {
@@ -416,7 +417,10 @@ fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     } else {
         format!("https://{value}")
     };
-    let after_scheme = with_scheme.split_once("://")?.1;
+    let (scheme, after_scheme) = with_scheme.split_once("://")?;
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return None;
+    }
     let authority = after_scheme.split('/').next()?;
     let host = authority
         .rsplit('@')
@@ -929,9 +933,13 @@ pub async fn apply_correction(
     let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
 
+    // Python stores `str(identity_metadata.get(field, "")) or None`: a present
+    // JSON null becomes the string "None", a missing key becomes None, and
+    // containers use Python's `str` formatting. `->` preserves the null-vs-missing
+    // distinction that `->>` cannot.
     let provider_value: Option<String> = tx
         .query_opt(
-            "SELECT e.metadata_json ->> $2 \
+            "SELECT e.metadata_json -> $2 \
              FROM external_identities e \
              JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
              WHERE m.issue_id = $1 AND m.status = 'confirmed' \
@@ -940,7 +948,8 @@ pub async fn apply_correction(
         )
         .await
         .map_err(db::query_error)?
-        .and_then(|row| row.get::<_, Option<String>>(0))
+        .and_then(|row| row.get::<_, Option<serde_json::Value>>(0))
+        .map(|value| python_provider_str(&value))
         .filter(|value| !value.is_empty());
 
     tx.execute(
@@ -1217,12 +1226,17 @@ pub async fn import_issue(
         .await
         .map_err(db::query_error)?;
     let thread_id: i32 = thread_row.get(0);
+    let issue_number = request
+        .issue_number
+        .as_deref()
+        .filter(|number| !number.is_empty())
+        .unwrap_or("1");
     let issue_row = tx
         .query_one(
             "INSERT INTO issues \
                 (thread_id, issue_number, position, status, created_at) \
              VALUES ($1, $2, 1, 'unread', now()) RETURNING id",
-            &[&thread_id, &request.issue_number.as_deref().unwrap_or("1")],
+            &[&thread_id, &issue_number],
         )
         .await
         .map_err(db::query_error)?;
@@ -2097,17 +2111,21 @@ fn series_result(value: &Value, fallback_id: Option<i32>) -> Option<ComicVineSer
     })
 }
 
+fn issue_number_text(value: &Value) -> Option<String> {
+    let text = match value {
+        Value::Null => return None,
+        Value::String(text) => text.clone(),
+        Value::Number(number) => number.to_string(),
+        Value::Bool(boolean) => boolean.to_string(),
+        Value::Array(_) | Value::Object(_) => value.to_string(),
+    };
+    (!text.is_empty()).then_some(text)
+}
+
 fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
     let object = value.as_object()?;
     let id = coerce_provider_int(object.get("id"))?;
-    let issue_number = object
-        .get("issue_number")
-        .map(|value| match value {
-            Value::String(text) => text.clone(),
-            Value::Number(number) => number.to_string(),
-            _ => value.to_string(),
-        })
-        .filter(|text| !text.is_empty());
+    let issue_number = object.get("issue_number").and_then(issue_number_text);
     Some(ComicVineIssueCandidate {
         comicvine_issue_id: id,
         issue_number,
@@ -2117,6 +2135,67 @@ fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
         image_url: candidate_image_url(object.get("image")),
         site_detail_url: provider_string(object.get("site_detail_url")),
     })
+}
+
+/// Python-compatible stringification for provider metadata values.
+///
+/// `apply_metadata_correction` stores `str(identity_metadata.get(field, "")) or None`,
+/// so JSON null becomes the string `"None"`, missing keys become `None`, and
+/// container values use Python's `str`/`repr` formatting rather than JSON.
+fn python_provider_str(value: &Value) -> String {
+    match value {
+        Value::Null => "None".to_owned(),
+        Value::Bool(true) => "True".to_owned(),
+        Value::Bool(false) => "False".to_owned(),
+        Value::Number(number) => number.to_string(),
+        Value::String(text) => text.clone(),
+        Value::Array(items) => {
+            let inner = items
+                .iter()
+                .map(python_provider_repr)
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("[{inner}]")
+        }
+        Value::Object(map) => {
+            let inner = map
+                .iter()
+                .map(|(key, value)| {
+                    format!(
+                        "{}: {}",
+                        python_string_repr(key),
+                        python_provider_repr(value)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{{{inner}}}")
+        }
+    }
+}
+
+fn python_string_repr(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len() + 2);
+    escaped.push('\'');
+    for ch in text.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '\'' => escaped.push_str("\\'"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            other => escaped.push(other),
+        }
+    }
+    escaped.push('\'');
+    escaped
+}
+
+fn python_provider_repr(value: &Value) -> String {
+    match value {
+        Value::String(text) => python_string_repr(text),
+        _ => python_provider_str(value),
+    }
 }
 
 /// `GET /api/v2/comicvine/search/series`.
@@ -2137,7 +2216,9 @@ pub async fn search_series(
         return Err(unprocessable("offset out of range"));
     }
     let (limit, offset) = (query.limit, query.offset);
-    let page = offset / limit + 1;
+    let limit_i64 = i64::from(limit);
+    let offset_i64 = i64::from(offset);
+    let page = offset_i64 / limit_i64 + 1;
     if query.q.trim().is_empty() {
         return Ok(Json(ComicVineSeriesSearchResponse {
             query: query.q,
@@ -2179,8 +2260,14 @@ pub async fn search_series(
         .collect();
     let total =
         coerce_provider_int(payload.get("number_of_total_results")).unwrap_or(results.len() as i32);
-    let loaded = offset + results.len() as i32;
-    let has_more = loaded < total;
+    let loaded = offset_i64 + results.len() as i64;
+    let total_i64 = i64::from(total);
+    let has_more = loaded < total_i64;
+    let next_offset = if has_more {
+        i32::try_from(loaded).ok()
+    } else {
+        None
+    };
     Ok(Json(ComicVineSeriesSearchResponse {
         query: query.q,
         results,
@@ -2188,7 +2275,7 @@ pub async fn search_series(
         offset,
         limit,
         has_more,
-        next_offset: has_more.then_some(loaded),
+        next_offset,
     }))
 }
 
@@ -2480,14 +2567,7 @@ pub async fn resolve_input(
                     .and_then(Value::as_str)
                     .map(str::to_owned),
                 volume_id: volume.and_then(|v| coerce_provider_int(v.get("id"))),
-                issue_number: result
-                    .get("issue_number")
-                    .map(|value| match value {
-                        Value::String(text) => text.clone(),
-                        Value::Number(number) => number.to_string(),
-                        _ => value.to_string(),
-                    })
-                    .filter(|text| !text.is_empty()),
+                issue_number: result.get("issue_number").and_then(issue_number_text),
                 name: provider_string(result.get("name")),
                 cover_date: provider_string(result.get("cover_date")),
                 store_date: provider_string(result.get("store_date")),
