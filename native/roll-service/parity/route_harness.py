@@ -63,6 +63,22 @@ def assert_declared_budget(method: str, path: str, *measurements: int | None) ->
         )
 
 
+def assert_flat_growth(small: int, large: int, *, slack: int = 2) -> None:
+    """Fail when a data-driven route issues more statements for a larger fixture.
+
+    Args:
+        small: Measured statement count for the small fixture.
+        large: Measured statement count for the large fixture.
+        slack: Allowed fixed difference for cache or planner variation.
+
+    Returns:
+        None; a data-dependent statement increase raises AssertionError.
+    """
+    assert large <= small + slack, (
+        f"statement count grew with data: {small} -> {large} (allowed slack {slack})"
+    )
+
+
 @dataclass(frozen=True)
 class RouteMeasurement:
     """Measured cost of one authenticated route invocation."""

@@ -12,7 +12,15 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    SQL_BUDGET_SOURCES,
+    assert_declared_budget,
+    assert_flat_growth,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-lists-n1-secret"
 BINARY = str(cargo_example_path("http_reading_lists"))
@@ -79,6 +87,20 @@ def _run_env(token: str, method: str, uri: str, *, body: str | None = None) -> d
     return env
 
 
+async def _measure(engine, env: dict[str, str]):
+    """Run one request and return (status, top-level delta, nested delta)."""
+    _, _, top_before = await db_counters(engine)
+    nested_before = await db_nested_statements(engine)
+    response, _, _, _ = await run_rust_example(BINARY, env)
+    _, _, top_after = await db_counters(engine)
+    nested_after = await db_nested_statements(engine)
+    assert top_before is not None and top_after is not None, "pg_stat_statements is required"
+    assert nested_before is not None and nested_after is not None, (
+        "pg_stat_statements track=all is required to measure nested statements"
+    )
+    return response, top_after - top_before, nested_after - nested_before
+
+
 @pytest.mark.asyncio
 async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> None:
     """GET /api/v2/reading-lists must stay set-based across list counts."""
@@ -90,59 +112,68 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
             owner = User(username=username)
             db.add(owner)
             await db.flush()
-            threads = []
             for i in range(5):
-                t = Thread(user_id=owner.id, title=f"Series {i+1}", format="Comic", queue_position=i+1, issues_remaining=2, total_issues=2, status="active")
-                db.add(t)
+                thread = Thread(
+                    user_id=owner.id,
+                    title=f"Series {i + 1}",
+                    format="Comic",
+                    queue_position=i + 1,
+                    issues_remaining=2,
+                    total_issues=2,
+                    status="active",
+                )
+                db.add(thread)
                 await db.flush()
-                for p in (1, 2):
-                    db.add(Issue(thread_id=t.id, issue_number=str(p), position=p, status="unread"))
-                threads.append(t)
+                for position in (1, 2):
+                    db.add(
+                        Issue(
+                            thread_id=thread.id,
+                            issue_number=str(position),
+                            position=position,
+                            status="unread",
+                        )
+                    )
             await db.commit()
             token = _token(username, jti=f"jti-{uuid4().hex}")
 
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            issue_rows = await raw.fetch("SELECT id FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id=$1) ORDER BY id", owner_id)
+            issue_rows = await raw.fetch(
+                "SELECT id FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id=$1) ORDER BY id",
+                owner_id,
+            )
             issue_ids = [r["id"] for r in issue_rows]
             for i in range(5):
-                await _insert_list(raw, owner_id, f"List {i+1}", [issue_ids[i]])
+                await _insert_list(raw, owner_id, f"List {i + 1}", [issue_ids[i]])
         finally:
             await raw.close()
 
         env = _run_env(token, "GET", "/api/v2/reading-lists")
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small, small_delta, small_nested = await _measure(engine, env)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, list) and len(body) == 5
         assert body[0]["issue_count"] == 1
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
             existing = await raw.fetchval("SELECT count(*) FROM custom_cbl_lists WHERE user_id=$1", owner_id)
-            # Add more threads/issues/lists up to 200 total lists.
             for i in range(int(existing), 200):
                 _, new_issue_ids = await _insert_owned_thread(raw, owner_id, i)
-                await _insert_list(raw, owner_id, f"List {i+1}", [new_issue_ids[0]])
+                await _insert_list(raw, owner_id, f"List {i + 1}", [new_issue_ids[0]])
         finally:
             await raw.close()
 
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env)
+        large, large_delta, large_nested = await _measure(engine, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, list) and len(large_body) == 200
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
-        assert small_delta is not None and large_delta is not None
         assert_declared_budget("GET", "/api/v2/reading-lists", small_delta, large_delta)
-        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert_flat_growth(small_delta, large_delta)
+        assert_flat_growth(small_nested, large_nested)
     finally:
         await engine.dispose()
 
@@ -172,16 +203,13 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
             await raw.close()
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}")
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small, small_delta, small_nested = await _measure(engine, env)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, dict)
         assert body.get("id") == list_id
         assert body.get("issue_count") == 5
         assert isinstance(body.get("entries"), list) and len(body["entries"]) == 5
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
         try:
@@ -191,23 +219,22 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
                 await raw.execute(
                     "INSERT INTO custom_cbl_entries (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped) "
                     "VALUES ($1,$2,$3,NOW(),false,'[]','none',false)",
-                    list_id, ids[0], i + 1,
+                    list_id,
+                    ids[0],
+                    i + 1,
                 )
         finally:
             await raw.close()
 
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env)
+        large, large_delta, large_nested = await _measure(engine, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         assert len(large_body.get("entries", [])) == 200
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
-        assert small_delta is not None and large_delta is not None
         assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
-        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert_flat_growth(small_delta, large_delta)
+        assert_flat_growth(small_nested, large_nested)
     finally:
         await engine.dispose()
 
@@ -237,8 +264,7 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
             await raw.close()
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}/reader")
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small, small_delta, small_nested = await _measure(engine, env)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, dict)
@@ -246,9 +272,10 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
         assert body.get("execution_mode") == "option_e"
         entries = body.get("entries")
         assert isinstance(entries, list) and len(entries) == 5
-        assert all(e.get("availability") in {"available", "later", "blocked", "read", "excluded", "inactive"} for e in entries)
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
+        assert all(
+            e.get("availability") in {"available", "later", "blocked", "read", "excluded", "inactive"}
+            for e in entries
+        )
 
         raw = await asyncpg.connect(url)
         try:
@@ -258,30 +285,29 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
                 await raw.execute(
                     "INSERT INTO custom_cbl_entries (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped) "
                     "VALUES ($1,$2,$3,NOW(),false,'[]','none',false)",
-                    list_id, ids[0], i + 1,
+                    list_id,
+                    ids[0],
+                    i + 1,
                 )
         finally:
             await raw.close()
 
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env)
+        large, large_delta, large_nested = await _measure(engine, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict)
         assert len(large_body.get("entries", [])) == 200
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
-        assert small_delta is not None and large_delta is not None
         assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}/reader", small_delta, large_delta)
-        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert_flat_growth(small_delta, large_delta)
+        assert_flat_growth(small_nested, large_nested)
     finally:
         await engine.dispose()
 
 
 @pytest.mark.asyncio
 async def test_delete_reading_list_statements_bounded() -> None:
-    """DELETE /api/v2/reading-lists/{id} must stay within its fixed budget."""
+    """DELETE /api/v2/reading-lists/{id} must stay fixed for one-entry and long lists."""
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
     engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
@@ -292,45 +318,34 @@ async def test_delete_reading_list_statements_bounded() -> None:
             await db.commit()
             token = _token(username, jti=f"jti-{uuid4().hex}")
 
-        async def _seed_one() -> int:
+        async def _seed_list(entry_count: int, base: int) -> int:
             raw = await asyncpg.connect(url)
             try:
                 owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-                _, ids = await _insert_owned_thread(raw, owner_id, int(uuid4().int % 100000))
-                return await _insert_list(raw, owner_id, f"D-{uuid4().hex[:6]}", [ids[0]])
+                issue_ids = []
+                for offset in range(entry_count):
+                    _, ids = await _insert_owned_thread(raw, owner_id, base + offset)
+                    issue_ids.append(ids[0])
+                return await _insert_list(raw, owner_id, f"D-{uuid4().hex[:6]}", issue_ids)
             finally:
                 await raw.close()
 
-        small_id = await _seed_one()
-        env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{small_id}")
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small_id = await _seed_list(1, 0)
+        small_env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{small_id}")
+        small, small_delta, small_nested = await _measure(engine, small_env)
         assert small.get("status") == 204, small
         assert small.get("body") is None
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
 
-        large_id = await _seed_one()
-        # grow unrelated data
-        raw = await asyncpg.connect(url)
-        try:
-            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            for i in range(20, 120):
-                _, ids = await _insert_owned_thread(raw, owner_id, i)
-                await _insert_list(raw, owner_id, f"X-{i}", [ids[0]])
-        finally:
-            await raw.close()
-
-        env2 = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env2)
+        # The large case deletes a long list, so a per-entry delete regression
+        # would grow the measured statement count instead of only add data.
+        large_id = await _seed_list(200, 1000)
+        large_env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
+        large, large_delta, large_nested = await _measure(engine, large_env)
         assert large.get("status") == 204, large
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
-        assert small_delta is not None and large_delta is not None
         assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
-        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert_flat_growth(small_delta, large_delta)
+        assert_flat_growth(small_nested, large_nested)
     finally:
         await engine.dispose()
 
@@ -360,16 +375,13 @@ async def test_create_reading_list_statements_respect_budget() -> None:
 
         body_small = json.dumps({"name": "Small", "mode": "loose", "issue_ids": issue_ids_small})
         env = _run_env(token, "POST", "/api/v2/reading-lists", body=body_small)
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small, small_delta, _small_nested = await _measure(engine, env)
         assert small.get("status") == 201, small
         small_body = small.get("body")
         assert isinstance(small_body, dict)
         assert small_body.get("name") == "Small"
         assert small_body.get("issue_count") == 5
         assert len(small_body.get("entries", [])) == 5
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
         try:
@@ -383,16 +395,14 @@ async def test_create_reading_list_statements_respect_budget() -> None:
 
         body_large = json.dumps({"name": "Large", "mode": "loose", "issue_ids": issue_ids_large})
         env2 = _run_env(token, "POST", "/api/v2/reading-lists", body=body_large)
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env2)
+        large, large_delta, _large_nested = await _measure(engine, env2)
         assert large.get("status") == 201, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        assert len(large_body.get("entries", [])) == 200
 
-        assert small_delta is not None and large_delta is not None
         assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta)
+        assert_flat_growth(small_delta, large_delta)
     finally:
         await engine.dispose()
 
@@ -423,15 +433,12 @@ async def test_update_reading_list_statements_respect_budget() -> None:
 
         body_small = json.dumps({"name": "Up-small", "mode": "loose", "issue_ids": issue_ids_small})
         env = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_small)
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small, small_delta, _small_nested = await _measure(engine, env)
         assert small.get("status") == 200, small
         small_body = small.get("body")
         assert isinstance(small_body, dict)
         assert small_body.get("name") == "Up-small"
         assert small_body.get("issue_count") == 5
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
         try:
@@ -440,22 +447,65 @@ async def test_update_reading_list_statements_respect_budget() -> None:
             for i in range(5, 205):
                 _, ids = await _insert_owned_thread(raw, owner_id, i)
                 issue_ids_large.append(ids[0])
-            # reuse existing list with large payload
             full_ids = issue_ids_small + issue_ids_large
         finally:
             await raw.close()
 
         body_large = json.dumps({"name": "Up-large", "mode": "loose", "issue_ids": full_ids[:200]})
         env2 = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_large)
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env2)
+        large, large_delta, _large_nested = await _measure(engine, env2)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        assert len(large_body.get("entries", [])) == 200
 
-        assert small_delta is not None and large_delta is not None
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+        assert_flat_growth(small_delta, large_delta)
     finally:
         await engine.dispose()
+
+
+def _declared_max(method: str, path: str) -> int:
+    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
+    matching = [
+        entry
+        for entry in document["operations"]
+        if entry["method"] == method and entry["path"] == path
+    ]
+    assert len(matching) == 1
+    return matching[0]["sql_budget"]["max_statements"]
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("GET", "/api/v2/reading-lists"),
+        ("POST", "/api/v2/reading-lists"),
+        ("DELETE", "/api/v2/reading-lists/{list_id}"),
+        ("GET", "/api/v2/reading-lists/{list_id}"),
+        ("PUT", "/api/v2/reading-lists/{list_id}"),
+        ("GET", "/api/v2/reading-lists/{list_id}/reader"),
+    ],
+)
+def test_route_budget_rejects_one_extra_statement(method: str, path: str) -> None:
+    """The same budget check that passes at the declared max must reject max + 1."""
+    maximum = _declared_max(method, path)
+    assert_declared_budget(method, path, maximum)
+    with pytest.raises(AssertionError):
+        assert_declared_budget(method, path, maximum + 1)
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("GET", "/api/v2/reading-lists"),
+        ("GET", "/api/v2/reading-lists/{list_id}"),
+        ("GET", "/api/v2/reading-lists/{list_id}/reader"),
+    ],
+)
+def test_route_growth_guard_rejects_per_row_statements(method: str, path: str) -> None:
+    """A per-row N+1 must fail the same flat-growth check used by the measured routes."""
+    maximum = _declared_max(method, path)
+    assert_flat_growth(maximum, maximum + 2)
+    with pytest.raises(AssertionError):
+        assert_flat_growth(maximum, maximum + 200)
