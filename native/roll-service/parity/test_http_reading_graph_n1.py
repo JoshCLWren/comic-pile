@@ -156,11 +156,17 @@ def _assert_preview(response: dict[str, object]) -> None:
 
 
 def _assert_confirmed(response: dict[str, object]) -> None:
-    _assert_preview(response)
+    assert response.get("status") == 200, response
     body = response.get("body")
     assert isinstance(body, dict)
     assert body.get("applied") is True
+    assert body.get("status_before") == "cycle"
+    assert body.get("status_after") == "ok"
     assert body.get("removed") == "Reading List deleted"
+    graph = body.get("graph")
+    assert isinstance(graph, dict)
+    assert graph.get("status") == "ok"
+    assert graph.get("cycles") == []
 
 
 @pytest.mark.asyncio
