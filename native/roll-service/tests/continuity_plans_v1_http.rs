@@ -627,6 +627,25 @@ async fn empty_plan_reader_opens_as_editable_without_recovery_409() {
         reopened["lanes"][0]["issues"][0]["issue_number"], "1",
         "{reopened}"
     );
+    // The single unread issue in a legacy plan should be "available" (no blockers)
+    assert_eq!(
+        reopened["lanes"][0]["issues"][0]["availability"], "available",
+        "{reopened}"
+    );
+    assert_eq!(
+        reopened["available_now"].as_array().map(Vec::len),
+        Some(1),
+        "{reopened}"
+    );
+    assert_eq!(
+        reopened["available_now"][0]["issue_id"], 546211,
+        "{reopened}"
+    );
+    assert_eq!(
+        reopened["blocked_next"].as_array().map(Vec::len),
+        Some(0),
+        "{reopened}"
+    );
 }
 
 /// Issue #4724: a saved Strict plan linked to a loose (or stale) Reading List
