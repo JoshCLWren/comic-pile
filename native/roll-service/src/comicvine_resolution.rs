@@ -128,6 +128,28 @@ pub async fn refresh_metadata(
     }))
 }
 
+// Wire parity with Python `api_apply_correction`.
+// `POST /api/v1/comicvine/issues/{issue_id}/metadata:correct`.
+pub async fn apply_correction(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+    Json(request): Json<MetadataCorrectionRequest>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    // TODO: Implement full correction application
+    // For now, return a minimal response
+    Ok(Json(IssueIdentityResponse {
+        issue_id,
+        thread_id: 0,
+        thread_title: String::new(),
+        has_confirmed_identity: false,
+        comicvine_issue_id: None,
+        confirmed_mappings: vec![],
+        candidate_mappings: vec![],
+        has_unresolved: false,
+    }))
+}
+
 // Wire parity with Python `api_resolve_comicvine_input`.
 // `GET /api/v1/comicvine/resolve`.
 pub async fn resolve_input(
@@ -229,6 +251,25 @@ pub async fn import_series(
         position: None,
         total_items: None,
         thread_created: false,
+    }))
+}
+
+// Wire parity with Python `api_import_issue`.
+// `POST /api/v1/comicvine/issues:import`.
+pub async fn import_issue(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<ImportIssueRequest>,
+) -> Result<Json<ImportIssueResponse>, ApiError> {
+    // TODO: Implement full issue import
+    // For now, return a minimal response
+    Ok(Json(ImportIssueResponse {
+        thread_id: 0,
+        issue_id: 0,
+        external_identity_id: 0,
+        reading_order_id: None,
+        position: None,
+        total_items: None,
     }))
 }
 
