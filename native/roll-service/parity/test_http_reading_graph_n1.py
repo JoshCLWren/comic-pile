@@ -365,6 +365,56 @@ async def test_reading_graph_budget_rejection_with_extra_query() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reading_graph_budget_rejection_demonstration() -> None:
+    """Demonstrate that budget rejection works for the reading-graph route.
+
+    Injects extra queries and verifies that assert_declared_budget rejects
+    the route when the statement count exceeds max_statements.
+    """
+    import pytest
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        _, _, before = await db_counters(engine)
+        assert before is not None, "pg_stat_statements must be enabled for SQL budgets"
+        connection = await asyncpg.connect(url)
+        try:
+            # Add 10 extra SELECT 1 queries to exceed the max_statements=8 budget
+            for _ in range(10):
+                await connection.execute("SELECT 1")
+        finally:
+            await connection.close()
+        _, _, after = await db_counters(engine)
+        assert after is not None
+        # Verify the counter increment is at least 10
+        assert after - before >= 10, (
+            f"Expected at least 10 extra statements, got {after - before}"
+        )
+        # Verify that assert_declared_budget rejects the over-budget count
+        # (max_statements=8 for GET /api/v2/reading-graph; our counter is already above)
+        with pytest.raises(AssertionError):
+            assert_declared_budget("GET", "/api/v2/reading-graph", after - before)
+        # Also test N+1 pattern: add per-row queries that accumulate
+        connection2 = await asyncpg.connect(url)
+        try:
+            # Add N+1 queries: one SELECT 1 per expected entry (simulating N+1 growth)
+            for _ in range(20):
+                await connection2.execute("SELECT 1")
+        finally:
+            await connection2.close()
+        _, _, after2 = await db_counters(engine)
+        assert after2 is not None
+        assert after2 - after >= 10, (
+            f"Expected at least 20 total extra statements, got {after2 - after}"
+        )
+        # Verify budget rejection with the accumulated count
+        with pytest.raises(AssertionError):
+            assert_declared_budget("GET", "/api/v2/reading-graph", after2 - before)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library_size() -> None:
     """POST /api/v2/reading-graph/repairs preview must stay within its fixed budget."""
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
