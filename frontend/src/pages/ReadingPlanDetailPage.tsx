@@ -119,6 +119,16 @@ function IssueRow({ issue, sourceNames, card, blockerCards }: {
   const isRead = issue.availability === 'read'
   const isBlocked = issue.availability === 'blocked'
   const isAvailable = issue.availability === 'available'
+  // The issue-card batch is refetched on tab focus (#5486) and keeps the freshest
+  // canonical series title. The reader view can still lag a rename made in
+  // another tab, so row labels follow a card that is definitely for this exact
+  // issue. A mismatched card must never relabel a different series.
+  const matchingCard =
+    card && card.thread_id === issue.thread_id && card.issue_number === issue.issue_number
+      ? card
+      : null
+  const displayTitle = matchingCard?.thread_title?.trim() ? matchingCard.thread_title : issue.thread_title
+  const displayIssue = issue.label?.trim() ? issue : { ...issue, thread_title: displayTitle }
   return (
     <li
       data-testid="reading-plan-issue-row"
@@ -137,16 +147,16 @@ function IssueRow({ issue, sourceNames, card, blockerCards }: {
         <p
           className={`truncate font-medium ${isRead ? 'text-[var(--theme-text-muted)] line-through' : 'text-[var(--theme-text-primary)]'}`}
         >
-          {issueLabel(issue)}
+          {issueLabel(displayIssue)}
         </p>
         <p className="truncate text-sm text-[var(--theme-text-muted)]">
-          {issue.thread_title}
+          {displayTitle}
           {isAvailable ? ' · Next unread issue #' : ' · Issue #'}
           {issue.issue_number}
           {issue.is_checkpoint ? ' · Checkpoint' : ''}
         </p>
         {issue.blockers.length > 0 && <PlanIssueBlockers blockers={issue.blockers} blockerCards={blockerCards} />}
-        <ReaderIssueActions issueId={issue.issue_id} threadId={issue.thread_id} issueNumber={issue.issue_number} isRead={isRead} available={isAvailable} availability={issue.availability} seriesTitle={issue.thread_title} card={card ?? null} />
+        <ReaderIssueActions issueId={issue.issue_id} threadId={issue.thread_id} issueNumber={issue.issue_number} isRead={isRead} available={isAvailable} availability={issue.availability} seriesTitle={displayTitle} card={card ?? null} />
         {issue.source_paths.length > 0 && (
           <p className="mt-1 text-xs text-[var(--theme-text-dim)]">
             Source reading order: {sourceNames[issue.source_paths[0]] ?? displayCblSourceTitle(null, issue.source_paths[0]) ?? 'Reading order'}
