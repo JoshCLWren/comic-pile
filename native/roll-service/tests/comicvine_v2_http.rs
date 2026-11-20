@@ -1877,10 +1877,10 @@ async fn series_import_retry_into_a_reading_order_does_not_overcount_items() {
 }
 
 /// Concurrent sibling writers: while one session holds the reader's queue
-/// lock, `identity:confirm`, `issues:import` (twice) and the native
+/// lock, `identity:confirm`, `series:import`, `issues:import` (twice) and the native
 /// `DELETE /api/v2/issues/{id}` writer all wait on that same lock (none takes
 /// a row lock first), then all complete once it is released: no deadlock, and
-/// the two imports get distinct queue positions.
+/// the imports get distinct queue positions.
 #[tokio::test]
 async fn identity_and_import_writers_serialize_with_sibling_queue_writers() {
     let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-siblings", 8, None).await;
@@ -1899,7 +1899,7 @@ async fn identity_and_import_writers_serialize_with_sibling_queue_writers() {
             &format!("/api/v2/comicvine/issues/{confirm_issue}/identity:confirm"),
             &token,
             &csrf,
-            Some(json!({"comicvine_issue_id": 9301})),
+            Some(json!({"comvine_issue_id": 9301})),
         ),
     );
     let delete = spawn_send(
@@ -1927,11 +1927,21 @@ async fn identity_and_import_writers_serialize_with_sibling_queue_writers() {
             )
         })
         .collect();
+    let series_import = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 9400, "title": "Sibling Series"})),
+        ),
+    );
     wait_for_queue_lock_waiters(
         &tx,
         user_id,
-        4,
-        &[&confirm, &delete, &imports[0], &imports[1]],
+        5,
+        &[&confirm, &delete, &imports[0], &imports[1], &series_import],
     )
     .await;
     tx.commit().await.unwrap();
@@ -1947,6 +1957,10 @@ async fn identity_and_import_writers_serialize_with_sibling_queue_writers() {
         assert_eq!(status, StatusCode::CREATED, "{body:?}");
         threads.push(body["thread_id"].as_i64().unwrap() as i32);
     }
+    let (status, body) = series_import.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["series_name"], "Sibling Series");
+    threads.push(body["thread_id"].as_i64().unwrap() as i32);
     let conn = state.pool.get().await.unwrap();
     let positions: Vec<i32> = conn
         .query(
@@ -1958,10 +1972,14 @@ async fn identity_and_import_writers_serialize_with_sibling_queue_writers() {
         .iter()
         .map(|row| row.get(0))
         .collect();
-    assert_eq!(positions.len(), 2);
+    assert_eq!(positions.len(), 3);
     assert_ne!(
         positions[0], positions[1],
         "imports must not share a queue slot"
+    );
+    assert_ne!(
+        positions[1], positions[2],
+        "series import must not share a queue slot"
     );
 }
 
