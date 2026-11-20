@@ -319,6 +319,10 @@ export default function CblBrowserPage() {
     deepLinkedListId !== null
       ? (browsePage?.items.find((item) => item.id === deepLinkedListId) ?? null)
       : null
+  const selectedSourceTitle = selectedSource
+    ? (displayCblSourceTitle(selectedSource.name, selectedSource.source_path) ??
+      FALLBACK_SOURCE_TITLE)
+    : null
 
   const previewQuery = useQuery({
     queryKey: selectedSource
