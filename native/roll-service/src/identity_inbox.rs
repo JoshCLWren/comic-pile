@@ -1750,7 +1750,11 @@ mod tests {
         assert_eq!(before_defer.items.len(), 1);
         let item_before = &before_defer.items[0];
         assert_eq!(item_before.status, "unresolved");
-        assert_eq!(item_before.candidates.len(), 1, "item should have 1 candidate before deferral");
+        assert_eq!(
+            item_before.candidates.len(),
+            1,
+            "item should have 1 candidate before deferral"
+        );
         assert!(
             !item_before.why_stopped.contains("No candidates found"),
             "before deferral, collapsed header should not claim no candidates; got {:?}",
@@ -1798,14 +1802,10 @@ mod tests {
         assert_eq!(item_after.why_stopped, "1 candidate found");
 
         // Also verify get_inbox_item works correctly for deferred items
-        let detail_response = get_inbox_item(
-            State(state),
-            AuthenticatedUser::for_test(1),
-            Path(1),
-        )
-        .await
-        .unwrap()
-        .0;
+        let detail_response = get_inbox_item(State(state), AuthenticatedUser::for_test(1), Path(1))
+            .await
+            .unwrap()
+            .0;
         assert_eq!(detail_response.items.len(), 1);
         let detail_item = &detail_response.items[0];
         assert_eq!(detail_item.status, "deferred");
