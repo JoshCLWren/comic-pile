@@ -24,7 +24,9 @@ async fn inject_controlled_queries() -> Result<(), Box<dyn std::error::Error>> {
             client.simple_query("SELECT 1").await?;
         }
         "per-row" => {
-            let rows = client.query("SELECT id FROM issues ORDER BY id", &[]).await?;
+            let rows = client
+                .query("SELECT id FROM issues ORDER BY id", &[])
+                .await?;
             for row in rows {
                 let issue_id: i32 = row.get(0);
                 client
