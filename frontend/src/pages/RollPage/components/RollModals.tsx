@@ -190,14 +190,21 @@ export function RollModals({
     })
   // Issue #3704: same-named series need disambiguating progress detail in the
   // manual pick, and each eligible unique thread renders exactly once.
-  const pickerOptions = useMemo(
-    () =>
-      buildManualPickerOptions({
-        activeThreads: overrideThreads ?? [],
-        snoozedThreads,
-      }),
-    [overrideThreads, snoozedThreads],
-  )
+  const pickerOptions = useMemo(() => {
+    // The modal fetch includes all queue threads. Keep snoozed items in their
+    // own group while using the same representative-cover projection as Queue.
+    const byId = new Map((overrideThreads ?? []).map((thread) => [thread.id, thread]))
+    const snoozedIds = new Set(snoozedThreads.map((thread) => thread.id))
+    return buildManualPickerOptions({
+      activeThreads: (overrideThreads ?? []).filter(
+        (thread) => thread.status === 'active' && !snoozedIds.has(thread.id),
+      ),
+      snoozedThreads: snoozedThreads.map((thread) => ({
+        ...thread,
+        series_cover_image_url: byId.get(thread.id)?.series_cover_image_url ?? null,
+      })),
+    })
+  }, [overrideThreads, snoozedThreads])
   return (
     <>
       {showMigrationDialog && threadToMigrate && (

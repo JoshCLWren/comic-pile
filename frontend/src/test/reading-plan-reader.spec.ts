@@ -63,7 +63,7 @@ test.describe('Reading Plan reader surface', () => {
     })
     const xmenIssue = await firstIssueId(page, headers, xmen.id)
     const cableIssue = await firstIssueId(page, headers, cable.id)
-    const dependency = await page.request.post('/api/v1/dependencies/', {
+    const dependency = await page.request.post('/api/v2/dependencies/', {
       headers,
       data: {
         source_type: 'issue',
@@ -73,7 +73,7 @@ test.describe('Reading Plan reader surface', () => {
       },
     })
     expect(dependency.ok(), await dependency.text()).toBeTruthy()
-    const created = await page.request.post('/api/v1/continuity-plans/', {
+    const created = await page.request.post('/api/v2/continuity-plans/', {
       headers,
       data: {
         name: 'Reader AoA Plan',
@@ -139,19 +139,19 @@ test('Option E explains strict Julix blockers consistently and supports direct l
   const later = await createThread(page, { title: 'Julix King of Fear', format: 'Comics', issues_remaining: 1, total_issues: 1 })
   const firstIssue = await firstIssueId(page, headers, first.id)
   const laterIssue = await firstIssueId(page, headers, later.id)
-  const createdList = await page.request.post('/api/v1/custom-cbls', { headers, data: { name: 'Julix strict acceptance', mode: 'strict', issue_ids: [firstIssue, laterIssue] } })
+  const createdList = await page.request.post('/api/v2/reading-lists', { headers, data: { name: 'Julix strict acceptance', mode: 'strict', issue_ids: [firstIssue, laterIssue] } })
   expect(createdList.ok(), await createdList.text()).toBeTruthy()
   // SAFETY: successful list creation returns a numeric id; this test reads only that id.
   const list = await createdList.json() as { id: number }
-  const reader = await page.request.get(`/api/v1/custom-cbls/${list.id}/reader`, { headers })
+  const reader = await page.request.get(`/api/v2/reading-lists/${list.id}/reader`, { headers })
   expect(reader.ok(), await reader.text()).toBeTruthy()
   // SAFETY: the owned reader endpoint returns execution_mode; no other response fields are read.
   const projection = await reader.json() as { execution_mode: string }
   expect(projection.execution_mode).toBe(process.env.OPTION_E_EXPECTED_MODE ?? 'legacy')
   const enabled = projection.execution_mode === 'option_e'
-  const dependency = await page.request.post('/api/v1/dependencies/', { headers, data: { source_type: 'issue', source_id: firstIssue, target_type: 'issue', target_id: laterIssue } })
+  const dependency = await page.request.post('/api/v2/dependencies/', { headers, data: { source_type: 'issue', source_id: firstIssue, target_type: 'issue', target_id: laterIssue } })
   expect(dependency.ok(), await dependency.text()).toBeTruthy()
-  const createPlan = await page.request.post('/api/v1/continuity-plans/', { headers, data: { name: 'Reader entry point', lanes: [{ id: 'main', name: 'Main', order: 0 }], nodes: [] } })
+  const createPlan = await page.request.post('/api/v2/continuity-plans/', { headers, data: { name: 'Reader entry point', lanes: [{ id: 'main', name: 'Main', order: 0 }], nodes: [] } })
   expect(createPlan.ok(), await createPlan.text()).toBeTruthy()
   // SAFETY: successful plan creation returns a numeric id; this test reads only that id.
   const plan = await createPlan.json() as { id: number }
@@ -188,7 +188,7 @@ test('Option E explains strict Julix blockers consistently and supports direct l
     await listReader.screenshot({ path: `test-results/option-e-reader-${width}-${theme}.png` })
   }
   if (!enabled) {
-    const marked = await page.request.post(`/api/v1/issues/${firstIssue}:markRead`, { headers })
+    const marked = await page.request.post(`/api/v2/issues/${firstIssue}/read-markers`, { headers })
     expect(marked.ok(), await marked.text()).toBeTruthy()
     await page.goto(`/thread/${later.id}`)
     await expect(page.getByRole('region', { name: 'Next issue availability' })).toContainText('Next unread: #1')

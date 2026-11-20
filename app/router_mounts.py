@@ -117,15 +117,6 @@ def _register_issues(app: FastAPI) -> None:
     app.include_router(issue.router, tags=["issues"])
 
 
-def _register_comicvine_resolution(app: FastAPI) -> None:
-    """Register ComicVine resolution routers (absolute ``/api/v1`` paths)."""
-    from app.api import comicvine_resolution
-
-    app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
-
-
-
-
 def _register_sessions(app: FastAPI) -> None:
     """Register versioned reading-session routers."""
     from app.api import session
@@ -163,11 +154,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("health", frozenset({"health"}), _register_health),
     RouterMount("threads", frozenset({"threads"}), _register_threads),
     RouterMount("issues", frozenset({"issues", "threads"}), _register_issues),
-    RouterMount(
-        "comicvine-resolution",
-        frozenset({"comicvine"}),
-        _register_comicvine_resolution,
-    ),
     RouterMount("sessions", frozenset({"sessions"}), _register_sessions),
     RouterMount(
         "dependencies",

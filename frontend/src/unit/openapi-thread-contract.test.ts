@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest'
 
 import type { components } from '../generated/openapi'
-import type { Thread, ThreadListItem, ThreadListResponse } from '../types'
+import type { Thread, ThreadListItem, ThreadListResponse, ThreadQueueExclusionGroup } from '../types'
 
 type ThreadDetail = components['schemas']['ThreadResponse']
 type QueueThreadListItem = components['schemas']['QueueThreadListItem']
@@ -12,10 +12,17 @@ describe('OpenAPI Thread contract adoption (#2781)', () => {
     expectTypeOf<Thread>().toEqualTypeOf<ThreadDetail>()
   })
 
-  it('exports the queue thread list item from OpenAPI plus the native series cover (#5433)', () => {
-    // The Python-generated schema predates the native-only derived series cover,
-    // so the list item is the generated shape plus that single optional field.
-    expectTypeOf<ThreadListItem>().toEqualTypeOf<QueueThreadListItem & { series_cover_image_url?: string | null }>()
+  it('exports the queue thread list item from OpenAPI plus native extensions', () => {
+    // #5433 adds the native-only derived series cover and #5435 adds additive
+    // exclusion-group provenance on excluded rows; the checked-in generated
+    // OpenAPI schema is bot-owned and may lag runtime fields until regenerated.
+    expectTypeOf<
+      Omit<ThreadListItem, 'queue_exclusion_group' | 'series_cover_image_url'>
+    >().toEqualTypeOf<QueueThreadListItem>()
+    expectTypeOf<ThreadListItem['series_cover_image_url']>().toEqualTypeOf<string | null | undefined>()
+    expectTypeOf<ThreadListItem['queue_exclusion_group']>().toEqualTypeOf<
+      ThreadQueueExclusionGroup | null | undefined
+    >()
   })
 
   it('exports the paginated queue thread list response from OpenAPI', () => {

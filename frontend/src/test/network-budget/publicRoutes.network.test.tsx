@@ -118,7 +118,7 @@ describe('public route network budgets', () => {
     await app.settle()
     expect(app.currentPath()).toBe('/')
     expect(app.rows()).toContain('GET /api/v2/auth/me x1')
-    expect(app.rows()).toContain('GET /api/v1/users/me/preferences x1')
+    expect(app.rows()).toContain('GET /api/v2/users/me/preferences x1')
     expect(screen.queryByLabelText('Email')).not.toBeInTheDocument()
   })
 
@@ -193,8 +193,8 @@ describe('public route network budgets', () => {
     // 404 uses PublicLayout, so the authenticated page shell (and its
     // PreferencesSync read) is intentionally absent.
     expect(app.rows()).toEqual([
-      'GET /api/v1/identity-inbox?limit=1&offset=0 x1',
       'GET /api/v2/auth/me x1',
+      'GET /api/v2/identity-inbox?limit=1&offset=0 x1',
     ])
     expect(app.currentPath()).toBe('/definitely-missing')
   })

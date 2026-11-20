@@ -23,6 +23,34 @@ export function compactQuery(
   return Object.keys(params).length > 0 ? params : undefined
 }
 
+export interface ApplyCorrectionRequest {
+  path: {
+    issue_id: number
+  }
+  body: components['schemas']['MetadataCorrectionRequest']
+}
+
+export type ApplyCorrectionResponse = components['schemas']['MetadataCorrectionsResponse']
+
+export interface ApplyCustomCblRequest {
+  path: {
+    list_id: number
+    plan_id: number
+  }
+  body: components['schemas']['CustomCBLApplyRequest']
+}
+
+export type ApplyCustomCblResponse = components['schemas']['CustomCBLApplyResponse']
+
+export interface AssignTagRequest {
+  path: {
+    tag_id: number
+  }
+  body: components['schemas']['AssignTagRequest']
+}
+
+export type AssignTagResponse = components['schemas']['TagAssignmentResponse']
+
 export interface BootstrapRequest {
   query?: {
     timezone?: string
@@ -30,6 +58,54 @@ export interface BootstrapRequest {
 }
 
 export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
+
+export interface BulkAssignTagRequest {
+  path: {
+    tag_id: number
+  }
+  body: components['schemas']['BulkAssignRequest']
+}
+
+export type BulkAssignTagResponse = components['schemas']['BulkAssignResponse']
+
+export interface BulkUnassignTagRequest {
+  path: {
+    tag_id: number
+  }
+  body: components['schemas']['BulkAssignRequest']
+}
+
+export type BulkUnassignTagResponse = components['schemas']['BulkAssignResponse']
+
+export interface CblAdoptionCommitRequest {
+  path: {
+    list_id: number
+  }
+  body: components['schemas']['CblAdoptionCommitRequest']
+}
+
+export type CblAdoptionCommitResponse = components['schemas']['CblAdoptionCommitResponseWire']
+
+export interface CblTargetedAdoptionCommitRequest {
+  path: {
+    list_id: number
+    plan_id: number
+  }
+  body: components['schemas']['CblAdoptionCommitRequest']
+}
+
+export type CblTargetedAdoptionCommitResponse = components['schemas']['CblAdoptionCommitResponseWire']
+
+export interface ComicvineSeriesIssuesRequest {
+  path: {
+    comicvine_volume_id: number
+  }
+  query?: {
+    series_name?: string
+  }
+}
+
+export type ComicvineSeriesIssuesResponse = components['schemas']['ComicVineSeriesIssuesResponse']
 
 export interface CommitRequest {
   body: components['schemas']['CommitRequest']
@@ -49,10 +125,19 @@ export interface ConfirmRequest {
   path: {
     mapping_id: number
   }
-  body: components['schemas']['ActionRequest']
+  body: components['schemas']['IdentityInboxConfirmRequest']
 }
 
 export type ConfirmResponse = components['schemas']['IdentityInboxActionResponse']
+
+export interface ConfirmIdentityRequest {
+  path: {
+    issue_id: number
+  }
+  body: components['schemas']['ConfirmIdentityRequest']
+}
+
+export type ConfirmIdentityResponse = components['schemas']['IssueIdentityResponse']
 
 export interface ContinuityPlansAdoptReadingOrderRequest {
   body: components['schemas']['ReadingOrderAdoptRequest']
@@ -177,12 +262,6 @@ export interface CreateIssuesRequest {
 
 export type CreateIssuesResponse = components['schemas']['IssueListResponse']
 
-export interface CreateLegacyDependencyRequest {
-  body: components['schemas']['DependencyCreateRequest']
-}
-
-export type CreateLegacyDependencyResponse = components['schemas']['DependencyResponse']
-
 export interface CreateQueueOrderRequest {
   body: components['schemas']['QueueOrderRequest']
 }
@@ -194,6 +273,12 @@ export interface CreateReadingListRequest {
 }
 
 export type CreateReadingListResponse = components['schemas']['ReadingList']
+
+export interface CreateTagRequest {
+  body: components['schemas']['CreateTagRequest']
+}
+
+export type CreateTagResponse = components['schemas']['CreateTagResponse']
 
 export interface CreatorsListRequest {
   query?: {
@@ -233,13 +318,17 @@ export interface DeleteIssueRequest {
 
 export type DeleteIssueResponse = void
 
-export interface DeleteLegacyDependencyRequest {
+export interface DeleteOverlapDecisionRequest {
   path: {
-    dependency_id: number
+    list_id: number
+    decision_id: number
+  }
+  query?: {
+    expected_updated_at?: string
   }
 }
 
-export type DeleteLegacyDependencyResponse = unknown
+export type DeleteOverlapDecisionResponse = components['schemas']['OverlapDecisionSetResponse']
 
 export interface DeleteReadingListRequest {
   path: {
@@ -248,6 +337,14 @@ export interface DeleteReadingListRequest {
 }
 
 export type DeleteReadingListResponse = void
+
+export interface DeleteTagRequest {
+  path: {
+    tag_id: number
+  }
+}
+
+export type DeleteTagResponse = components['schemas']['TagDeleteResponse']
 
 export interface DetailRequest {
   path: {
@@ -265,6 +362,42 @@ export type DieStateResponse = components['schemas']['RollDieStateResponse']
 
 export type DiscoveriesResponse = components['schemas']['CreatorDiscoveryResponse']
 
+export type DismissPendingResponse = void
+
+export type DismissReadingModeSuggestionResponse = components['schemas']['ReadingModeResponse']
+
+export interface EffectiveIssueRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type EffectiveIssueResponse = components['schemas']['EffectiveTagsResponse']
+
+export interface EffectivePlanRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type EffectivePlanResponse = components['schemas']['EffectiveTagsResponse']
+
+export interface EffectiveThreadRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type EffectiveThreadResponse = components['schemas']['EffectiveTagsResponse']
+
+export interface EffectiveThreadIssuesRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type EffectiveThreadIssuesResponse = components['schemas']['ThreadIssuesEffectiveTagsResponse']
+
 export interface EligibleIssueIdsRequest {
   query?: {
     snoozed?: string
@@ -272,6 +405,14 @@ export interface EligibleIssueIdsRequest {
 }
 
 export type EligibleIssueIdsResponse = components['schemas']['RollEligibleIssueIdsResponse']
+
+export interface ExportCustomCblRequest {
+  path: {
+    list_id: number
+  }
+}
+
+export type ExportCustomCblResponse = string
 
 export interface ForgotPasswordRequest {
   body: components['schemas']['ForgotPasswordRequest']
@@ -287,6 +428,30 @@ export interface GetRequest {
 
 export type GetResponse = components['schemas']['IdentityInboxResponse']
 
+export interface GetIssueRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type GetIssueResponse = components['schemas']['IssueDetailResponse']
+
+export interface GetIssueDependenciesRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type GetIssueDependenciesResponse = components['schemas']['IssueDependenciesResponse']
+
+export interface GetIssueIdentityRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type GetIssueIdentityResponse = components['schemas']['IssueIdentityResponse']
+
 export interface GetLegacyDependencyRequest {
   path: {
     dependency_id: number
@@ -296,6 +461,14 @@ export interface GetLegacyDependencyRequest {
 export type GetLegacyDependencyResponse = components['schemas']['DependencyResponse']
 
 export type GetMetricsResponse = components['schemas']['StartupMetricsResponse']
+
+export interface GetOverlapDecisionsRequest {
+  path: {
+    list_id: number
+  }
+}
+
+export type GetOverlapDecisionsResponse = components['schemas']['OverlapDecisionSetResponse']
 
 export interface GetQueueEntryRequest {
   path: {
@@ -313,6 +486,24 @@ export interface GetReadingListRequest {
 
 export type GetReadingListResponse = components['schemas']['ReadingList']
 
+export type GetReadingModeResponse = components['schemas']['ReadingModeResponse']
+
+export interface GetSessionDetailsRequest {
+  path: {
+    session_id: number
+  }
+}
+
+export type GetSessionDetailsResponse = components['schemas']['SessionDetailsResponse']
+
+export interface GetTagRequest {
+  path: {
+    tag_id: number
+  }
+}
+
+export type GetTagResponse = components['schemas']['Tag']
+
 export interface GetThreadDependenciesRequest {
   path: {
     thread_id: number
@@ -329,7 +520,19 @@ export interface GetThreadIssueDependenciesRequest {
 
 export type GetThreadIssueDependenciesResponse = components['schemas']['ThreadIssueDependenciesResponse']
 
-export type GetV1MetricsResponse = components['schemas']['StartupMetricsResponse']
+export type GetUserPreferencesResponse = components['schemas']['UserPreferencesResponse']
+
+export interface ImportIssueRequest {
+  body: components['schemas']['ImportIssueRequest']
+}
+
+export type ImportIssueResponse = components['schemas']['ImportIssueResponse']
+
+export interface ImportSeriesRequest {
+  body: components['schemas']['ImportSeriesRequest']
+}
+
+export type ImportSeriesResponse = components['schemas']['ImportSeriesResponse']
 
 export interface InitializeSessionRequest {
   body: components['schemas']['InitializeSessionRequest']
@@ -369,6 +572,58 @@ export interface IssueReadRateRequest {
 
 export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
 
+export interface IssueReadStateBulkMarkReadRequest {
+  body: components['schemas']['IssueBulkRequest']
+}
+
+export type IssueReadStateBulkMarkReadResponse = void
+
+export interface IssueReadStateBulkMarkUnreadRequest {
+  body: components['schemas']['IssueBulkRequest']
+}
+
+export type IssueReadStateBulkMarkUnreadResponse = void
+
+export interface IssueReadStateMarkReadRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type IssueReadStateMarkReadResponse = void
+
+export interface IssueReadStateMarkUnreadRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type IssueReadStateMarkUnreadResponse = void
+
+export interface IssueReadStateMoveRequest {
+  path: {
+    issue_id: number
+  }
+  body: components['schemas']['IssueMoveRequest']
+}
+
+export type IssueReadStateMoveResponse = void
+
+export interface IssueReadStateReaderContextRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type IssueReadStateReaderContextResponse = components['schemas']['ReaderContextResponse']
+
+export interface ListRequest {
+  query?: {
+    offset?: number
+    limit?: number
+  }
+}
+
 export type ListResponse = components['schemas']['IdentityInboxResponse']
 
 export interface ListActivityRequest {
@@ -382,7 +637,25 @@ export type ListActivityResponse = components['schemas']['ActivityResponse']
 
 export type ListBlockedLegacyDependenciesResponse = Array<number>
 
+export interface ListCorrectionsRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type ListCorrectionsResponse = components['schemas']['MetadataCorrectionsResponse']
+
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
+
+export interface ListSessionSnapshotsRequest {
+  path: {
+    session_id: number
+  }
+}
+
+export type ListSessionSnapshotsResponse = components['schemas']['SessionSnapshotsResponse']
+
+export type ListTagsResponse = components['schemas']['TagListResponse']
 
 export interface ListThreadIssuesRequest {
   path: {
@@ -407,6 +680,14 @@ export interface ListThreadsRequest {
 }
 
 export type ListThreadsResponse = components['schemas']['ThreadListResponse']
+
+export interface ListUndoSnapshotsRequest {
+  path: {
+    session_id: number
+  }
+}
+
+export type ListUndoSnapshotsResponse = components['schemas']['UndoSnapshotsResponse']
 
 export interface LoginRequest {
   body: components['schemas']['LoginRequest']
@@ -445,6 +726,18 @@ export interface OfferRequest {
 }
 
 export type OfferResponse = components['schemas']['RollOfferResponse']
+
+export interface OverrideRollRequest {
+  body: components['schemas']['RollOverrideRequest']
+}
+
+export type OverrideRollResponse = components['schemas']['NativeRollResponse']
+
+export interface PatchUserPreferencesRequest {
+  body: components['schemas']['UserPreferencesPatchRequest']
+}
+
+export type PatchUserPreferencesResponse = components['schemas']['UserPreferencesResponse']
 
 export interface PreviewRequest {
   path: {
@@ -493,11 +786,38 @@ export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundar
 
 export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
 
+export interface ReadingOrdersInsertItemRequest {
+  path: {
+    reading_order_id: number
+  }
+  body: components['schemas']['InsertReadingOrderItemRequest']
+}
+
+export type ReadingOrdersInsertItemResponse = components['schemas']['InsertReadingOrderItemResponse']
+
+export type ReadingOrdersListResponse = components['schemas']['ReadingOrderListResponse']
+
+export interface ReadingPlanSyncRequest {
+  body: components['schemas']['SyncRequest']
+}
+
+export type ReadingPlanSyncResponse = components['schemas']['SyncResponse']
+
+export type ReadingPlanSyncStatusResponse = components['schemas']['SyncStatusResponse']
+
 export interface RefreshRequest {
   body?: components['schemas']['RefreshTokenRequest'] | null
 }
 
 export type RefreshResponse = components['schemas']['TokenResponse']
+
+export interface RefreshMetadataRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type RefreshMetadataResponse = components['schemas']['MetadataRefreshResponse']
 
 export interface RegisterRequest {
   body: components['schemas']['RegisterRequest']
@@ -509,7 +829,7 @@ export interface RejectRequest {
   path: {
     mapping_id: number
   }
-  body: components['schemas']['ActionRequest']
+  body: components['schemas']['IdentityInboxRejectRequest']
 }
 
 export type RejectResponse = components['schemas']['IdentityInboxActionResponse']
@@ -612,11 +932,28 @@ export interface RelinkRequest {
 
 export type RelinkResponse = components['schemas']['PlanRelinkResult']
 
+export interface RemoveIdentityRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type RemoveIdentityResponse = components['schemas']['IssueIdentityResponse']
+
 export interface RepairRequest {
   body: components['schemas']['ReadingGraphRepairRequest']
 }
 
 export type RepairResponse = components['schemas']['ReadingGraphRepairResponse']
+
+export interface ReplaceIdentityRequest {
+  path: {
+    issue_id: number
+  }
+  body: components['schemas']['ReplaceIdentityRequest']
+}
+
+export type ReplaceIdentityResponse = components['schemas']['IssueIdentityResponse']
 
 export interface ResetRequest {
   body: components['schemas']['ResetDiceRequest']
@@ -629,6 +966,23 @@ export interface ResetPasswordRequest {
 }
 
 export type ResetPasswordResponse = components['schemas']['PasswordResetResponse']
+
+export interface ResolveInputRequest {
+  query: {
+    input: string
+  }
+}
+
+export type ResolveInputResponse = components['schemas']['ComicVineResolveResponse']
+
+export interface RevertCorrectionRequest {
+  path: {
+    issue_id: number
+  }
+  body: components['schemas']['MetadataCorrectionRevertRequest']
+}
+
+export type RevertCorrectionResponse = components['schemas']['MetadataCorrectionsResponse']
 
 export interface RoleRequest {
   path: {
@@ -643,7 +997,43 @@ export interface RoleRequest {
 
 export type RoleResponse = components['schemas']['CreatorMetricDrilldown']
 
+export interface SaveOverlapDecisionRequest {
+  path: {
+    list_id: number
+  }
+  body: components['schemas']['OverlapDecisionWrite']
+}
+
+export type SaveOverlapDecisionResponse = components['schemas']['OverlapDecisionSetResponse']
+
+export interface SearchRequest {
+  query: {
+    q: string
+    limit?: number
+    issue_id?: number
+  }
+}
+
 export type SearchResponse = components['schemas']['IdentityInboxSearchResponse']
+
+export interface SearchCustomCblIssuesRequest {
+  query?: {
+    q?: string
+    limit?: number
+  }
+}
+
+export type SearchCustomCblIssuesResponse = Array<components['schemas']['CustomCBLIssueSearchResult']>
+
+export interface SearchSeriesRequest {
+  query: {
+    q: string
+    limit?: number
+    offset?: number
+  }
+}
+
+export type SearchSeriesResponse = components['schemas']['ComicVineSeriesSearchResponse']
 
 export interface SeriesRequest {
   path: {
@@ -666,6 +1056,14 @@ export interface SeriesImportStatusRequest {
 
 export type SeriesImportStatusResponse = components['schemas']['SeriesImportStatusResponse']
 
+export interface SeriesImportStatusV2Request {
+  path: {
+    comicvine_volume_id: number
+  }
+}
+
+export type SeriesImportStatusV2Response = components['schemas']['SeriesImportStatusResponse']
+
 export interface SeriesIssuesRequest {
   path: {
     creator_key: string
@@ -679,6 +1077,12 @@ export interface SeriesIssuesRequest {
 
 export type SeriesIssuesResponse = components['schemas']['CreatorSeriesIssueListResponse']
 
+export interface SetReadingModeRequest {
+  body: components['schemas']['ReadingModeSetRequest']
+}
+
+export type SetReadingModeResponse = components['schemas']['ReadingModeResponse']
+
 export interface SkipRequest {
   path: {
     mapping_id: number
@@ -686,6 +1090,8 @@ export interface SkipRequest {
 }
 
 export type SkipResponse = components['schemas']['IdentityInboxActionResponse']
+
+export type SuggestReadingModeResponse = components['schemas']['ReadingModeResponse']
 
 export interface SummariesRequest {
   query?: {
@@ -695,7 +1101,32 @@ export interface SummariesRequest {
 
 export type SummariesResponse = components['schemas']['CreatorSummariesResponse']
 
+export interface SwitchPrerequisiteRequest {
+  body: components['schemas']['RollPrerequisiteSwitchRequest']
+}
+
+export type SwitchPrerequisiteResponse = components['schemas']['RollPrerequisiteSwitchResponse']
+
 export type TeamChemistryResponse = components['schemas']['CreatorTeamChemistryResponse']
+
+export interface UnassignTagRequest {
+  path: {
+    tag_id: number
+    target_type: string
+    target_id: number
+  }
+}
+
+export type UnassignTagResponse = components['schemas']['TagAssignmentResponse']
+
+export interface UndoToSnapshotRequest {
+  path: {
+    session_id: number
+    snapshot_id: number
+  }
+}
+
+export type UndoToSnapshotResponse = components['schemas']['UndoApplyResponse']
 
 export interface UnsnoozeRequest {
   body: components['schemas']['UnsnoozeRequest']
@@ -730,11 +1161,37 @@ export interface UpdateReadingListRequest {
 
 export type UpdateReadingListResponse = components['schemas']['ReadingList']
 
+export interface UpdateTagRequest {
+  path: {
+    tag_id: number
+  }
+  body: components['schemas']['UpdateTagRequest']
+}
+
+export type UpdateTagResponse = components['schemas']['Tag']
+
+export interface UsageTagRequest {
+  path: {
+    tag_id: number
+  }
+}
+
+export type UsageTagResponse = components['schemas']['TagUsageResponse']
+
 export interface NativeV2Client {
+  applyCorrection(args: ApplyCorrectionRequest): Promise<ApplyCorrectionResponse>
+  applyCustomCbl(args: ApplyCustomCblRequest): Promise<ApplyCustomCblResponse>
+  assignTag(args: AssignTagRequest): Promise<AssignTagResponse>
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
+  bulkAssignTag(args: BulkAssignTagRequest): Promise<BulkAssignTagResponse>
+  bulkUnassignTag(args: BulkUnassignTagRequest): Promise<BulkUnassignTagResponse>
+  cblAdoptionCommit(args: CblAdoptionCommitRequest): Promise<CblAdoptionCommitResponse>
+  cblTargetedAdoptionCommit(args: CblTargetedAdoptionCommitRequest): Promise<CblTargetedAdoptionCommitResponse>
+  comicvineSeriesIssues(args: ComicvineSeriesIssuesRequest): Promise<ComicvineSeriesIssuesResponse>
   commit(args: CommitRequest): Promise<CommitResponse>
   compare(args?: CompareRequest): Promise<CompareResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
+  confirmIdentity(args: ConfirmIdentityRequest): Promise<ConfirmIdentityResponse>
   continuityPlansAdoptReadingOrder(args: ContinuityPlansAdoptReadingOrderRequest): Promise<ContinuityPlansAdoptReadingOrderResponse>
   continuityPlansCreate(args: ContinuityPlansCreateRequest): Promise<ContinuityPlansCreateResponse>
   continuityPlansDelete(args: ContinuityPlansDeleteRequest): Promise<ContinuityPlansDeleteResponse>
@@ -752,46 +1209,75 @@ export interface NativeV2Client {
   continuityRulesUpdate(args: ContinuityRulesUpdateRequest): Promise<ContinuityRulesUpdateResponse>
   createDependency(args: CreateDependencyRequest): Promise<CreateDependencyResponse>
   createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
-  createLegacyDependency(args: CreateLegacyDependencyRequest): Promise<CreateLegacyDependencyResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
+  createTag(args: CreateTagRequest): Promise<CreateTagResponse>
   creatorsList(args?: CreatorsListRequest): Promise<CreatorsListResponse>
   csrf(): Promise<CsrfResponse>
   defer(args: DeferRequest): Promise<DeferResponse>
   deleteDependency(args: DeleteDependencyRequest): Promise<DeleteDependencyResponse>
   deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
-  deleteLegacyDependency(args: DeleteLegacyDependencyRequest): Promise<DeleteLegacyDependencyResponse>
+  deleteOverlapDecision(args: DeleteOverlapDecisionRequest): Promise<DeleteOverlapDecisionResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
+  deleteTag(args: DeleteTagRequest): Promise<DeleteTagResponse>
   detail(args: DetailRequest): Promise<DetailResponse>
   dieState(): Promise<DieStateResponse>
   discoveries(): Promise<DiscoveriesResponse>
+  dismissPending(): Promise<DismissPendingResponse>
+  dismissReadingModeSuggestion(): Promise<DismissReadingModeSuggestionResponse>
+  effectiveIssue(args: EffectiveIssueRequest): Promise<EffectiveIssueResponse>
+  effectivePlan(args: EffectivePlanRequest): Promise<EffectivePlanResponse>
+  effectiveThread(args: EffectiveThreadRequest): Promise<EffectiveThreadResponse>
+  effectiveThreadIssues(args: EffectiveThreadIssuesRequest): Promise<EffectiveThreadIssuesResponse>
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
+  exportCustomCbl(args: ExportCustomCblRequest): Promise<ExportCustomCblResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
+  getIssue(args: GetIssueRequest): Promise<GetIssueResponse>
+  getIssueDependencies(args: GetIssueDependenciesRequest): Promise<GetIssueDependenciesResponse>
+  getIssueIdentity(args: GetIssueIdentityRequest): Promise<GetIssueIdentityResponse>
   getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
   getMetrics(): Promise<GetMetricsResponse>
+  getOverlapDecisions(args: GetOverlapDecisionsRequest): Promise<GetOverlapDecisionsResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
+  getReadingMode(): Promise<GetReadingModeResponse>
+  getSessionDetails(args: GetSessionDetailsRequest): Promise<GetSessionDetailsResponse>
+  getTag(args: GetTagRequest): Promise<GetTagResponse>
   getThreadDependencies(args: GetThreadDependenciesRequest): Promise<GetThreadDependenciesResponse>
   getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
-  getV1Metrics(): Promise<GetV1MetricsResponse>
+  getUserPreferences(): Promise<GetUserPreferencesResponse>
+  importIssue(args: ImportIssueRequest): Promise<ImportIssueResponse>
+  importSeries(args: ImportSeriesRequest): Promise<ImportSeriesResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
   issueOrder(args: IssueOrderRequest): Promise<IssueOrderResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
-  list(): Promise<ListResponse>
+  issueReadStateBulkMarkRead(args: IssueReadStateBulkMarkReadRequest): Promise<IssueReadStateBulkMarkReadResponse>
+  issueReadStateBulkMarkUnread(args: IssueReadStateBulkMarkUnreadRequest): Promise<IssueReadStateBulkMarkUnreadResponse>
+  issueReadStateMarkRead(args: IssueReadStateMarkReadRequest): Promise<IssueReadStateMarkReadResponse>
+  issueReadStateMarkUnread(args: IssueReadStateMarkUnreadRequest): Promise<IssueReadStateMarkUnreadResponse>
+  issueReadStateMove(args: IssueReadStateMoveRequest): Promise<IssueReadStateMoveResponse>
+  issueReadStateReaderContext(args: IssueReadStateReaderContextRequest): Promise<IssueReadStateReaderContextResponse>
+  list(args?: ListRequest): Promise<ListResponse>
   listActivity(args?: ListActivityRequest): Promise<ListActivityResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
+  listCorrections(args: ListCorrectionsRequest): Promise<ListCorrectionsResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
+  listSessionSnapshots(args: ListSessionSnapshotsRequest): Promise<ListSessionSnapshotsResponse>
+  listTags(): Promise<ListTagsResponse>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
+  listUndoSnapshots(args: ListUndoSnapshotsRequest): Promise<ListUndoSnapshotsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
   logout(): Promise<LogoutResponse>
   manualDie(args: ManualDieRequest): Promise<ManualDieResponse>
   me(): Promise<MeResponse>
   metric(args: MetricRequest): Promise<MetricResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
+  overrideRoll(args: OverrideRollRequest): Promise<OverrideRollResponse>
+  patchUserPreferences(args: PatchUserPreferencesRequest): Promise<PatchUserPreferencesResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
   ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
   read(args: ReadRequest): Promise<ReadResponse>
@@ -799,7 +1285,12 @@ export interface NativeV2Client {
   readReadingList(args: ReadReadingListRequest): Promise<ReadReadingListResponse>
   readingBoundaryBatch(args: ReadingBoundaryBatchRequest): Promise<ReadingBoundaryBatchResponse>
   readingGraph(): Promise<ReadingGraphResponse>
+  readingOrdersInsertItem(args: ReadingOrdersInsertItemRequest): Promise<ReadingOrdersInsertItemResponse>
+  readingOrdersList(): Promise<ReadingOrdersListResponse>
+  readingPlanSync(args: ReadingPlanSyncRequest): Promise<ReadingPlanSyncResponse>
+  readingPlanSyncStatus(): Promise<ReadingPlanSyncStatusResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
+  refreshMetadata(args: RefreshMetadataRequest): Promise<RefreshMetadataResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
   reject(args: RejectRequest): Promise<RejectResponse>
   releaseSourcesCreate(args: ReleaseSourcesCreateRequest): Promise<ReleaseSourcesCreateResponse>
@@ -813,34 +1304,97 @@ export interface NativeV2Client {
   releasesReconcile(args: ReleasesReconcileRequest): Promise<ReleasesReconcileResponse>
   releasesRetract(args: ReleasesRetractRequest): Promise<ReleasesRetractResponse>
   relink(args: RelinkRequest): Promise<RelinkResponse>
+  removeIdentity(args: RemoveIdentityRequest): Promise<RemoveIdentityResponse>
   repair(args: RepairRequest): Promise<RepairResponse>
+  replaceIdentity(args: ReplaceIdentityRequest): Promise<ReplaceIdentityResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
+  resolveInput(args: ResolveInputRequest): Promise<ResolveInputResponse>
+  revertCorrection(args: RevertCorrectionRequest): Promise<RevertCorrectionResponse>
   role(args: RoleRequest): Promise<RoleResponse>
-  search(): Promise<SearchResponse>
+  saveOverlapDecision(args: SaveOverlapDecisionRequest): Promise<SaveOverlapDecisionResponse>
+  search(args: SearchRequest): Promise<SearchResponse>
+  searchCustomCblIssues(args?: SearchCustomCblIssuesRequest): Promise<SearchCustomCblIssuesResponse>
+  searchSeries(args: SearchSeriesRequest): Promise<SearchSeriesResponse>
   series(args: SeriesRequest): Promise<SeriesResponse>
   seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
+  seriesImportStatusV2(args: SeriesImportStatusV2Request): Promise<SeriesImportStatusV2Response>
   seriesIssues(args: SeriesIssuesRequest): Promise<SeriesIssuesResponse>
+  setReadingMode(args: SetReadingModeRequest): Promise<SetReadingModeResponse>
   skip(args: SkipRequest): Promise<SkipResponse>
+  suggestReadingMode(): Promise<SuggestReadingModeResponse>
   summaries(args?: SummariesRequest): Promise<SummariesResponse>
+  switchPrerequisite(args: SwitchPrerequisiteRequest): Promise<SwitchPrerequisiteResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
+  unassignTag(args: UnassignTagRequest): Promise<UnassignTagResponse>
+  undoToSnapshot(args: UndoToSnapshotRequest): Promise<UndoToSnapshotResponse>
   unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
   updateLegacyDependency(args: UpdateLegacyDependencyRequest): Promise<UpdateLegacyDependencyResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
   updateReadingList(args: UpdateReadingListRequest): Promise<UpdateReadingListResponse>
+  updateTag(args: UpdateTagRequest): Promise<UpdateTagResponse>
+  usageTag(args: UsageTagRequest): Promise<UsageTagResponse>
 }
 
 export function createNativeV2Client(client: HttpClient): NativeV2Client {
   return {
+    applyCorrection(args: ApplyCorrectionRequest) {
+      return client.post<ApplyCorrectionResponse, ApplyCorrectionRequest['body']>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:correct`,
+        args.body,
+      )
+    },
+    applyCustomCbl(args: ApplyCustomCblRequest) {
+      return client.post<ApplyCustomCblResponse, ApplyCustomCblRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/reading-plans/${encodeURIComponent(String(args.path.plan_id))}/applications`,
+        args.body,
+      )
+    },
+    assignTag(args: AssignTagRequest) {
+      return client.post<AssignTagResponse, AssignTagRequest['body']>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/assignments`,
+        args.body,
+      )
+    },
     bootstrap(args: BootstrapRequest = {}) {
       return client.get<BootstrapResponse>(
         "/v2/roll/bootstrap",
         { params: compactQuery(args.query) },
       )
     },
+    bulkAssignTag(args: BulkAssignTagRequest) {
+      return client.post<BulkAssignTagResponse, BulkAssignTagRequest['body']>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/assignment-batches`,
+        args.body,
+      )
+    },
+    bulkUnassignTag(args: BulkUnassignTagRequest) {
+      return client.post<BulkUnassignTagResponse, BulkUnassignTagRequest['body']>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/unassignment-batches`,
+        args.body,
+      )
+    },
+    cblAdoptionCommit(args: CblAdoptionCommitRequest) {
+      return client.post<CblAdoptionCommitResponse, CblAdoptionCommitRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/adoption-commits`,
+        args.body,
+      )
+    },
+    cblTargetedAdoptionCommit(args: CblTargetedAdoptionCommitRequest) {
+      return client.post<CblTargetedAdoptionCommitResponse, CblTargetedAdoptionCommitRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/reading-plans/${encodeURIComponent(String(args.path.plan_id))}/adoption-commits`,
+        args.body,
+      )
+    },
+    comicvineSeriesIssues(args: ComicvineSeriesIssuesRequest) {
+      return client.get<ComicvineSeriesIssuesResponse>(
+        `/v2/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/issues`,
+        { params: compactQuery(args.query) },
+      )
+    },
     commit(args: CommitRequest) {
       return client.post<CommitResponse, CommitRequest['body']>(
-        "/v1/catalog/series-mappings/commit",
+        "/v2/series-mapping-commits",
         args.body,
       )
     },
@@ -852,60 +1406,66 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     confirm(args: ConfirmRequest) {
       return client.post<ConfirmResponse, ConfirmRequest['body']>(
-        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/confirm`,
+        `/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/confirmations`,
+        args.body,
+      )
+    },
+    confirmIdentity(args: ConfirmIdentityRequest) {
+      return client.post<ConfirmIdentityResponse, ConfirmIdentityRequest['body']>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity:confirm`,
         args.body,
       )
     },
     continuityPlansAdoptReadingOrder(args: ContinuityPlansAdoptReadingOrderRequest) {
       return client.post<ContinuityPlansAdoptReadingOrderResponse, ContinuityPlansAdoptReadingOrderRequest['body']>(
-        "/v1/continuity-plans/from-reading-order",
+        "/v2/continuity-plans/from-reading-order",
         args.body,
       )
     },
     continuityPlansCreate(args: ContinuityPlansCreateRequest) {
       return client.post<ContinuityPlansCreateResponse, ContinuityPlansCreateRequest['body']>(
-        "/v1/continuity-plans/",
+        "/v2/continuity-plans/",
         args.body,
       )
     },
     continuityPlansDelete(args: ContinuityPlansDeleteRequest) {
       return client.delete<ContinuityPlansDeleteResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
       )
     },
     continuityPlansGet(args: ContinuityPlansGetRequest) {
       return client.get<ContinuityPlansGetResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
       )
     },
     continuityPlansLinkDependency(args: ContinuityPlansLinkDependencyRequest) {
       return client.post<ContinuityPlansLinkDependencyResponse, ContinuityPlansLinkDependencyRequest['body']>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
         args.body,
       )
     },
     continuityPlansList() {
-      return client.get<ContinuityPlansListResponse>("/v1/continuity-plans/")
+      return client.get<ContinuityPlansListResponse>("/v2/continuity-plans/")
     },
     continuityPlansMembership(args: ContinuityPlansMembershipRequest) {
       return client.get<ContinuityPlansMembershipResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/membership`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/membership`,
       )
     },
     continuityPlansProjectToReadingOrder(args: ContinuityPlansProjectToReadingOrderRequest) {
       return client.post<ContinuityPlansProjectToReadingOrderResponse, ContinuityPlansProjectToReadingOrderRequest['body']>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reading-orders/project`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reading-orders/project`,
         args.body,
       )
     },
     continuityPlansUnlinkDependency(args: ContinuityPlansUnlinkDependencyRequest) {
       return client.delete<ContinuityPlansUnlinkDependencyResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
       )
     },
     continuityPlansUpdate(args: ContinuityPlansUpdateRequest) {
       return client.put<ContinuityPlansUpdateResponse, ContinuityPlansUpdateRequest['body']>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
         args.body,
       )
     },
@@ -946,12 +1506,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-    createLegacyDependency(args: CreateLegacyDependencyRequest) {
-      return client.post<CreateLegacyDependencyResponse, CreateLegacyDependencyRequest['body']>(
-        "/v1/dependencies/",
-        args.body,
-      )
-    },
     createQueueOrder(args: CreateQueueOrderRequest) {
       return client.post<CreateQueueOrderResponse, CreateQueueOrderRequest['body']>(
         "/v2/queue-orders",
@@ -961,6 +1515,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     createReadingList(args: CreateReadingListRequest) {
       return client.post<CreateReadingListResponse, CreateReadingListRequest['body']>(
         "/v2/reading-lists",
+        args.body,
+      )
+    },
+    createTag(args: CreateTagRequest) {
+      return client.post<CreateTagResponse, CreateTagRequest['body']>(
+        "/v2/tags",
         args.body,
       )
     },
@@ -974,7 +1534,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<CsrfResponse>("/v2/auth/csrf")
     },
     defer(args: DeferRequest) {
-      return client.post<DeferResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/defer`)
+      return client.post<DeferResponse>(`/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/deferrals`)
     },
     deleteDependency(args: DeleteDependencyRequest) {
       return client.delete<DeleteDependencyResponse>(
@@ -986,14 +1546,20 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
       )
     },
-    deleteLegacyDependency(args: DeleteLegacyDependencyRequest) {
-      return client.delete<DeleteLegacyDependencyResponse>(
-        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+    deleteOverlapDecision(args: DeleteOverlapDecisionRequest) {
+      return client.delete<DeleteOverlapDecisionResponse>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/overlap-decisions/${encodeURIComponent(String(args.path.decision_id))}`,
+        { params: compactQuery(args.query) },
       )
     },
     deleteReadingList(args: DeleteReadingListRequest) {
       return client.delete<DeleteReadingListResponse>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
+      )
+    },
+    deleteTag(args: DeleteTagRequest) {
+      return client.delete<DeleteTagResponse>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}`,
       )
     },
     detail(args: DetailRequest) {
@@ -1008,10 +1574,41 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     discoveries() {
       return client.get<DiscoveriesResponse>("/v2/creators/discoveries")
     },
+    dismissPending() {
+      return client.post<DismissPendingResponse>("/v2/roll/dismiss-pending")
+    },
+    dismissReadingModeSuggestion() {
+      return client.post<DismissReadingModeSuggestionResponse>("/v2/reading-mode/suggestion-dismissals")
+    },
+    effectiveIssue(args: EffectiveIssueRequest) {
+      return client.get<EffectiveIssueResponse>(
+        `/v2/tags/effective/issues/${encodeURIComponent(String(args.path.issue_id))}`,
+      )
+    },
+    effectivePlan(args: EffectivePlanRequest) {
+      return client.get<EffectivePlanResponse>(
+        `/v2/tags/effective/plans/${encodeURIComponent(String(args.path.plan_id))}`,
+      )
+    },
+    effectiveThread(args: EffectiveThreadRequest) {
+      return client.get<EffectiveThreadResponse>(
+        `/v2/tags/effective/threads/${encodeURIComponent(String(args.path.thread_id))}`,
+      )
+    },
+    effectiveThreadIssues(args: EffectiveThreadIssuesRequest) {
+      return client.get<EffectiveThreadIssuesResponse>(
+        `/v2/tags/effective/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
+      )
+    },
     eligibleIssueIds(args: EligibleIssueIdsRequest = {}) {
       return client.get<EligibleIssueIdsResponse>(
         "/v2/roll/eligible-issue-ids",
         { params: compactQuery(args.query) },
+      )
+    },
+    exportCustomCbl(args: ExportCustomCblRequest) {
+      return client.get<ExportCustomCblResponse>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/export`,
       )
     },
     forgotPassword(args: ForgotPasswordRequest) {
@@ -1022,16 +1619,36 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     get(args: GetRequest) {
       return client.get<GetResponse>(
-        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
+        `/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
+      )
+    },
+    getIssue(args: GetIssueRequest) {
+      return client.get<GetIssueResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
+      )
+    },
+    getIssueDependencies(args: GetIssueDependenciesRequest) {
+      return client.get<GetIssueDependenciesResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/dependencies`,
+      )
+    },
+    getIssueIdentity(args: GetIssueIdentityRequest) {
+      return client.get<GetIssueIdentityResponse>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity`,
       )
     },
     getLegacyDependency(args: GetLegacyDependencyRequest) {
       return client.get<GetLegacyDependencyResponse>(
-        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        `/v2/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
       )
     },
     getMetrics() {
       return client.get<GetMetricsResponse>("/metrics")
+    },
+    getOverlapDecisions(args: GetOverlapDecisionsRequest) {
+      return client.get<GetOverlapDecisionsResponse>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/overlap-decisions`,
+      )
     },
     getQueueEntry(args: GetQueueEntryRequest) {
       return client.get<GetQueueEntryResponse>(
@@ -1041,6 +1658,19 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     getReadingList(args: GetReadingListRequest) {
       return client.get<GetReadingListResponse>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
+      )
+    },
+    getReadingMode() {
+      return client.get<GetReadingModeResponse>("/v2/reading-mode")
+    },
+    getSessionDetails(args: GetSessionDetailsRequest) {
+      return client.get<GetSessionDetailsResponse>(
+        `/v2/reading-sessions/${encodeURIComponent(String(args.path.session_id))}/details`,
+      )
+    },
+    getTag(args: GetTagRequest) {
+      return client.get<GetTagResponse>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}`,
       )
     },
     getThreadDependencies(args: GetThreadDependenciesRequest) {
@@ -1053,8 +1683,20 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-dependencies`,
       )
     },
-    getV1Metrics() {
-      return client.get<GetV1MetricsResponse>("/v1/metrics")
+    getUserPreferences() {
+      return client.get<GetUserPreferencesResponse>("/v2/users/me/preferences")
+    },
+    importIssue(args: ImportIssueRequest) {
+      return client.post<ImportIssueResponse, ImportIssueRequest['body']>(
+        "/v2/comicvine/issues:import",
+        args.body,
+      )
+    },
+    importSeries(args: ImportSeriesRequest) {
+      return client.post<ImportSeriesResponse, ImportSeriesRequest['body']>(
+        "/v2/comicvine/series:import",
+        args.body,
+      )
     },
     initializeSession(args: InitializeSessionRequest) {
       return client.post<InitializeSessionResponse, InitializeSessionRequest['body']>(
@@ -1085,8 +1727,42 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-    list() {
-      return client.get<ListResponse>("/v1/identity-inbox")
+    issueReadStateBulkMarkRead(args: IssueReadStateBulkMarkReadRequest) {
+      return client.post<IssueReadStateBulkMarkReadResponse, IssueReadStateBulkMarkReadRequest['body']>(
+        "/v2/issue-read-markers",
+        args.body,
+      )
+    },
+    issueReadStateBulkMarkUnread(args: IssueReadStateBulkMarkUnreadRequest) {
+      return client.post<IssueReadStateBulkMarkUnreadResponse, IssueReadStateBulkMarkUnreadRequest['body']>(
+        "/v2/issue-read-marker-removals",
+        args.body,
+      )
+    },
+    issueReadStateMarkRead(args: IssueReadStateMarkReadRequest) {
+      return client.post<IssueReadStateMarkReadResponse>(`/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/read-markers`)
+    },
+    issueReadStateMarkUnread(args: IssueReadStateMarkUnreadRequest) {
+      return client.delete<IssueReadStateMarkUnreadResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/read-markers`,
+      )
+    },
+    issueReadStateMove(args: IssueReadStateMoveRequest) {
+      return client.put<IssueReadStateMoveResponse, IssueReadStateMoveRequest['body']>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/position`,
+        args.body,
+      )
+    },
+    issueReadStateReaderContext(args: IssueReadStateReaderContextRequest) {
+      return client.get<IssueReadStateReaderContextResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/reader-context`,
+      )
+    },
+    list(args: ListRequest = {}) {
+      return client.get<ListResponse>(
+        "/v2/identity-inbox",
+        { params: compactQuery(args.query) },
+      )
     },
     listActivity(args: ListActivityRequest = {}) {
       return client.get<ListActivityResponse>(
@@ -1095,10 +1771,23 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       )
     },
     listBlockedLegacyDependencies() {
-      return client.get<ListBlockedLegacyDependenciesResponse>("/v1/dependencies/blocked")
+      return client.get<ListBlockedLegacyDependenciesResponse>("/v2/dependencies/blocked")
+    },
+    listCorrections(args: ListCorrectionsRequest) {
+      return client.get<ListCorrectionsResponse>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:corrections`,
+      )
     },
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")
+    },
+    listSessionSnapshots(args: ListSessionSnapshotsRequest) {
+      return client.get<ListSessionSnapshotsResponse>(
+        `/v2/reading-sessions/${encodeURIComponent(String(args.path.session_id))}/snapshots`,
+      )
+    },
+    listTags() {
+      return client.get<ListTagsResponse>("/v2/tags")
     },
     listThreadIssues(args: ListThreadIssuesRequest) {
       return client.get<ListThreadIssuesResponse>(
@@ -1110,6 +1799,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<ListThreadsResponse>(
         "/v2/threads",
         { params: compactQuery(args.query) },
+      )
+    },
+    listUndoSnapshots(args: ListUndoSnapshotsRequest) {
+      return client.get<ListUndoSnapshotsResponse>(
+        `/v2/undo/${encodeURIComponent(String(args.path.session_id))}/snapshots`,
       )
     },
     login(args: LoginRequest) {
@@ -1139,6 +1833,18 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     offer(args: OfferRequest) {
       return client.post<OfferResponse, OfferRequest['body']>(
         "/v2/roll/offer",
+        args.body,
+      )
+    },
+    overrideRoll(args: OverrideRollRequest) {
+      return client.post<OverrideRollResponse, OverrideRollRequest['body']>(
+        "/v2/roll/override",
+        args.body,
+      )
+    },
+    patchUserPreferences(args: PatchUserPreferencesRequest) {
+      return client.patch<PatchUserPreferencesResponse, PatchUserPreferencesRequest['body']>(
+        "/v2/users/me/preferences",
         args.body,
       )
     },
@@ -1175,11 +1881,32 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     readingGraph() {
       return client.get<ReadingGraphResponse>("/v2/reading-graph")
     },
+    readingOrdersInsertItem(args: ReadingOrdersInsertItemRequest) {
+      return client.post<ReadingOrdersInsertItemResponse, ReadingOrdersInsertItemRequest['body']>(
+        `/v2/reading-orders/${encodeURIComponent(String(args.path.reading_order_id))}/items`,
+        args.body,
+      )
+    },
+    readingOrdersList() {
+      return client.get<ReadingOrdersListResponse>("/v2/reading-orders/")
+    },
+    readingPlanSync(args: ReadingPlanSyncRequest) {
+      return client.post<ReadingPlanSyncResponse, ReadingPlanSyncRequest['body']>(
+        "/v2/reading-plan-sync/runs",
+        args.body,
+      )
+    },
+    readingPlanSyncStatus() {
+      return client.get<ReadingPlanSyncStatusResponse>("/v2/reading-plan-sync/status")
+    },
     refresh(args: RefreshRequest = {}) {
       return client.post<RefreshResponse, RefreshRequest['body']>(
         "/v2/auth/refresh",
         args.body,
       )
+    },
+    refreshMetadata(args: RefreshMetadataRequest) {
+      return client.post<RefreshMetadataResponse>(`/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:refresh`)
     },
     register(args: RegisterRequest) {
       return client.post<RegisterResponse, RegisterRequest['body']>(
@@ -1189,34 +1916,34 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     reject(args: RejectRequest) {
       return client.post<RejectResponse, RejectRequest['body']>(
-        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/reject`,
+        `/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/rejections`,
         args.body,
       )
     },
     releaseSourcesCreate(args: ReleaseSourcesCreateRequest) {
       return client.post<ReleaseSourcesCreateResponse, ReleaseSourcesCreateRequest['body']>(
-        "/v1/continuity-plans/release-sources/",
+        "/v2/continuity-plans/release-sources/",
         args.body,
       )
     },
     releaseSourcesDelete(args: ReleaseSourcesDeleteRequest) {
       return client.delete<ReleaseSourcesDeleteResponse>(
-        `/v1/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
+        `/v2/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
       )
     },
     releaseSourcesList(args: ReleaseSourcesListRequest) {
       return client.get<ReleaseSourcesListResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/`,
       )
     },
     releaseSourcesListReader(args: ReleaseSourcesListReaderRequest) {
       return client.get<ReleaseSourcesListReaderResponse>(
-        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/reader`,
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/reader`,
       )
     },
     releaseSourcesUpdate(args: ReleaseSourcesUpdateRequest) {
       return client.patch<ReleaseSourcesUpdateResponse, ReleaseSourcesUpdateRequest['body']>(
-        `/v1/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
+        `/v2/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
         args.body,
       )
     },
@@ -1227,7 +1954,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     releasesList(args: ReleasesListRequest = {}) {
       return client.get<ReleasesListResponse>(
-        "/v1/releases/",
+        "/v2/releases",
         { params: compactQuery(args.query) },
       )
     },
@@ -1257,9 +1984,20 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    removeIdentity(args: RemoveIdentityRequest) {
+      return client.delete<RemoveIdentityResponse>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity`,
+      )
+    },
     repair(args: RepairRequest) {
       return client.post<RepairResponse, RepairRequest['body']>(
         "/v2/reading-graph/repairs",
+        args.body,
+      )
+    },
+    replaceIdentity(args: ReplaceIdentityRequest) {
+      return client.post<ReplaceIdentityResponse, ReplaceIdentityRequest['body']>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity:replace`,
         args.body,
       )
     },
@@ -1275,14 +2013,47 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    resolveInput(args: ResolveInputRequest) {
+      return client.get<ResolveInputResponse>(
+        "/v2/comicvine/resolve",
+        { params: compactQuery(args.query) },
+      )
+    },
+    revertCorrection(args: RevertCorrectionRequest) {
+      return client.post<RevertCorrectionResponse, RevertCorrectionRequest['body']>(
+        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:revert`,
+        args.body,
+      )
+    },
     role(args: RoleRequest) {
       return client.get<RoleResponse>(
         `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/metrics/role-stats/${encodeURIComponent(String(args.path.role))}`,
         { params: compactQuery(args.query) },
       )
     },
-    search() {
-      return client.get<SearchResponse>("/v1/identity-inbox/search/issues")
+    saveOverlapDecision(args: SaveOverlapDecisionRequest) {
+      return client.put<SaveOverlapDecisionResponse, SaveOverlapDecisionRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/overlap-decisions`,
+        args.body,
+      )
+    },
+    search(args: SearchRequest) {
+      return client.get<SearchResponse>(
+        "/v2/identity-inbox/issue-matches",
+        { params: compactQuery(args.query) },
+      )
+    },
+    searchCustomCblIssues(args: SearchCustomCblIssuesRequest = {}) {
+      return client.get<SearchCustomCblIssuesResponse>(
+        "/v2/reading-lists/issue-candidates",
+        { params: compactQuery(args.query) },
+      )
+    },
+    searchSeries(args: SearchSeriesRequest) {
+      return client.get<SearchSeriesResponse>(
+        "/v2/comicvine/search/series",
+        { params: compactQuery(args.query) },
+      )
     },
     series(args: SeriesRequest) {
       return client.get<SeriesResponse>(
@@ -1295,14 +2066,28 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v1/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
       )
     },
+    seriesImportStatusV2(args: SeriesImportStatusV2Request) {
+      return client.get<SeriesImportStatusV2Response>(
+        `/v2/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
+      )
+    },
     seriesIssues(args: SeriesIssuesRequest) {
       return client.get<SeriesIssuesResponse>(
         `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/series/${encodeURIComponent(String(args.path.series_key))}/issues`,
         { params: compactQuery(args.query) },
       )
     },
+    setReadingMode(args: SetReadingModeRequest) {
+      return client.put<SetReadingModeResponse, SetReadingModeRequest['body']>(
+        "/v2/reading-mode",
+        args.body,
+      )
+    },
     skip(args: SkipRequest) {
-      return client.post<SkipResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/skip`)
+      return client.post<SkipResponse>(`/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/skips`)
+    },
+    suggestReadingMode() {
+      return client.post<SuggestReadingModeResponse>("/v2/reading-mode/suggestions")
     },
     summaries(args: SummariesRequest = {}) {
       return client.get<SummariesResponse>(
@@ -1310,8 +2095,22 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
+    switchPrerequisite(args: SwitchPrerequisiteRequest) {
+      return client.post<SwitchPrerequisiteResponse, SwitchPrerequisiteRequest['body']>(
+        "/v2/roll/switch-prerequisite",
+        args.body,
+      )
+    },
     teamChemistry() {
       return client.get<TeamChemistryResponse>("/v2/creators/team-chemistry")
+    },
+    unassignTag(args: UnassignTagRequest) {
+      return client.delete<UnassignTagResponse>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/assignments/${encodeURIComponent(String(args.path.target_type))}/${encodeURIComponent(String(args.path.target_id))}`,
+      )
+    },
+    undoToSnapshot(args: UndoToSnapshotRequest) {
+      return client.post<UndoToSnapshotResponse>(`/v2/undo/${encodeURIComponent(String(args.path.session_id))}/snapshots/${encodeURIComponent(String(args.path.snapshot_id))}/restore`)
     },
     unsnooze(args: UnsnoozeRequest) {
       return client.post<UnsnoozeResponse, UnsnoozeRequest['body']>(
@@ -1321,7 +2120,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     updateLegacyDependency(args: UpdateLegacyDependencyRequest) {
       return client.patch<UpdateLegacyDependencyResponse, UpdateLegacyDependencyRequest['body']>(
-        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        `/v2/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
         args.body,
       )
     },
@@ -1335,6 +2134,17 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.put<UpdateReadingListResponse, UpdateReadingListRequest['body']>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
         args.body,
+      )
+    },
+    updateTag(args: UpdateTagRequest) {
+      return client.patch<UpdateTagResponse, UpdateTagRequest['body']>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}`,
+        args.body,
+      )
+    },
+    usageTag(args: UsageTagRequest) {
+      return client.get<UsageTagResponse>(
+        `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/usage`,
       )
     },
   }

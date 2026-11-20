@@ -36,6 +36,8 @@ use utoipa::OpenApi;
         crate::auth::dto::forgot_password_documentation,
         crate::auth::dto::reset_password_documentation,
         crate::catalog_commit::commit_documentation,
+        crate::issue_identity::cbl_adoption_commit_documentation,
+        crate::issue_identity::cbl_targeted_adoption_commit_documentation,
         crate::activity::list_activity_documentation,
         crate::bootstrap::bootstrap_documentation,
         crate::bootstrap::initialize_session_documentation,
@@ -43,27 +45,51 @@ use utoipa::OpenApi;
         crate::roll_offer::offer_documentation,
         crate::roll_offer::unsnooze_documentation,
         crate::roll_reset::reset_documentation,
+        crate::roll_override::override_roll_documentation,
+        crate::roll_switch_prerequisite::switch_prerequisite_documentation,
+        crate::dismiss_pending::dismiss_pending_documentation,
+        crate::session_history::list_session_snapshots_documentation,
+        crate::session_details::get_session_details_documentation,
         crate::roll_resources::die_state_documentation,
         crate::roll_resources::eligible_issue_ids_documentation,
         crate::reading_boundary::reading_boundary_batch_documentation,
         crate::demo::read_demo_roll_documentation,
         crate::metrics::get_metrics_documentation,
-        crate::metrics::get_v1_metrics_documentation,
         crate::reading_graph::reading_graph_documentation,
         crate::reading_graph::repair_documentation,
         crate::dependencies::create_dependency_documentation,
         crate::dependencies::delete_dependency_documentation,
         crate::dependencies::get_thread_dependencies_documentation,
         crate::legacy_dependencies::blocked_documentation,
-        crate::legacy_dependencies::create_documentation,
         crate::legacy_dependencies::get_documentation,
         crate::legacy_dependencies::update_documentation,
-        crate::legacy_dependencies::delete_documentation,
         crate::issue_mutation::create_issues_documentation,
         crate::issue_mutation::delete_issue_documentation,
         crate::issue_mutation::issue_order_documentation,
+        crate::issue_read::get_issue_documentation,
+        crate::issue_read::get_issue_dependencies_documentation,
         crate::issue_read::get_thread_issue_dependencies_documentation,
         crate::issue_read::list_thread_issues_documentation,
+        crate::tags::list_tags_documentation,
+        crate::tags::create_tag_documentation,
+        crate::tags::effective_issue_documentation,
+        crate::tags::effective_plan_documentation,
+        crate::tags::effective_thread_documentation,
+        crate::tags::effective_thread_issues_documentation,
+        crate::tags::get_tag_documentation,
+        crate::tags::update_tag_documentation,
+        crate::tags::delete_tag_documentation,
+        crate::tags::assign_tag_documentation,
+        crate::tags::bulk_assign_tag_documentation,
+        crate::tags::bulk_unassign_tag_documentation,
+        crate::tags::unassign_tag_documentation,
+        crate::tags::usage_tag_documentation,
+        crate::reading_mode::get_reading_mode_documentation,
+        crate::reading_mode::set_reading_mode_documentation,
+        crate::reading_mode::dismiss_reading_mode_suggestion_documentation,
+        crate::reading_mode::suggest_reading_mode_documentation,
+        crate::preferences::get_user_preferences_documentation,
+        crate::preferences::patch_user_preferences_documentation,
         crate::reading_list::list_reading_lists_documentation,
         crate::reading_list::get_reading_list_documentation,
         crate::reading_list::create_reading_list_documentation,
@@ -112,6 +138,20 @@ use utoipa::OpenApi;
         crate::releases::publish_documentation,
         crate::releases::retract_documentation,
         crate::comicvine_resolution::series_import_status_documentation,
+        crate::comicvine_v2::search_series_documentation,
+        crate::comicvine_v2::resolve_input_documentation,
+        crate::comicvine_v2::comicvine_series_issues_documentation,
+        crate::comicvine_v2::import_series_documentation,
+        crate::comicvine_v2::series_import_status_v2_documentation,
+        crate::comicvine_v2::import_issue_documentation,
+        crate::comicvine_v2::confirm_identity_documentation,
+        crate::comicvine_v2::replace_identity_documentation,
+        crate::comicvine_v2::remove_identity_documentation,
+        crate::comicvine_v2::apply_correction_documentation,
+        crate::comicvine_v2::revert_correction_documentation,
+        crate::comicvine_v2::refresh_metadata_documentation,
+        crate::comicvine_v2::get_issue_identity_documentation,
+        crate::comicvine_v2::list_corrections_documentation,
         crate::creators_v2::list_documentation,
         crate::creators_v2::summaries_documentation,
         crate::creators_v2::compare_documentation,
@@ -190,7 +230,8 @@ use utoipa::OpenApi;
         crate::reading_plan_reader::PlanReleaseSourceStatus,
         crate::reading_plan_reader::PlanReleaseCandidate,
         crate::reading_plan_reader::PlanReaderResponse,
-        crate::identity_inbox::ActionRequest,
+        crate::identity_inbox::IdentityInboxConfirmRequest,
+        crate::identity_inbox::IdentityInboxRejectRequest,
         crate::identity_inbox::IdentityInboxCandidate,
         crate::identity_inbox::IdentityInboxItem,
         crate::identity_inbox::IdentityInboxResponse,
@@ -230,9 +271,34 @@ use utoipa::OpenApi;
         crate::catalog_commit::CommitRequest,
         crate::catalog_commit::CommitResponse,
         crate::catalog_commit::CommitSeriesMapping,
+        crate::issue_identity::CommitSeriesDecision,
+        crate::issue_identity::CommitEntryOverride,
+        crate::issue_identity::CblAdoptionCommitRequest,
+        crate::issue_identity::ContinuityPlanResponseWire,
+        crate::issue_identity::CblAdoptionCommitResponseWire,
         crate::releases::PublicReleaseResponse,
         crate::releases::ReleaseListResponse,
         crate::comicvine_resolution::SeriesImportStatusResponse,
+        crate::comicvine_v2::ComicVineSeriesResult,
+        crate::comicvine_v2::ComicVineSeriesSearchResponse,
+        crate::comicvine_v2::ComicVineResolvedIssue,
+        crate::comicvine_v2::ComicVineIssueCandidate,
+        crate::comicvine_v2::ComicVineResolveResponse,
+        crate::comicvine_v2::ComicVineSeriesIssuesResponse,
+        crate::comicvine_v2::ImportSeriesRequest,
+        crate::comicvine_v2::ImportSeriesIssueResult,
+        crate::comicvine_v2::ImportSeriesResponse,
+        crate::comicvine_v2::ImportIssueRequest,
+        crate::comicvine_v2::ImportIssueResponse,
+        crate::comicvine_v2::MetadataRefreshResponse,
+        crate::comicvine_v2::ConfirmIdentityRequest,
+        crate::comicvine_v2::ReplaceIdentityRequest,
+        crate::comicvine_v2::MetadataCorrectionRequest,
+        crate::comicvine_v2::MetadataCorrectionRevertRequest,
+        crate::comicvine_v2::IssueIdentityMapping,
+        crate::comicvine_v2::IssueIdentityResponse,
+        crate::comicvine_v2::CanonicalCorrection,
+        crate::comicvine_v2::MetadataCorrectionsResponse,
         crate::creators_v2::CreatorSummaryCoverage,
         crate::creators_v2::CreatorSummaryItem,
         crate::creators_v2::CreatorSummariesResponse,
@@ -301,7 +367,13 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::queue::QueueApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
-        .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi());
+        .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
+        .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
+        .merge_from(crate::custom_cbl::CustomCblApi::openapi())
+        .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
+        .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
+        .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())
+        .merge_from(crate::undo_apply::UndoApplyApi::openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.
@@ -319,6 +391,125 @@ mod tests {
 
     fn document() -> Value {
         serde_json::to_value(canonical_openapi()).expect("canonical OpenAPI document")
+    }
+
+    /// The issue read-state and reader-context operations moved from their
+    /// `/api/v1/issues/{id}:action` URLs to v2 resources. Every method must stay
+    /// in both the domain document and the aggregate runtime contract with its
+    /// stable operationId and a success response.
+    #[test]
+    fn issue_read_state_operations_are_in_runtime_contract() {
+        let domain = serde_json::to_value(crate::issue_read_state::issue_read_state_openapi())
+            .expect("issue read-state OpenAPI");
+        let aggregate = document();
+        for (path, method, operation_id, success) in [
+            (
+                "/api/v2/issues/{issue_id}/read-markers",
+                "post",
+                "issue_read_state_mark_read",
+                "204",
+            ),
+            (
+                "/api/v2/issues/{issue_id}/read-markers",
+                "delete",
+                "issue_read_state_mark_unread",
+                "204",
+            ),
+            (
+                "/api/v2/issues/{issue_id}/position",
+                "put",
+                "issue_read_state_move",
+                "204",
+            ),
+            (
+                "/api/v2/issue-read-markers",
+                "post",
+                "issue_read_state_bulk_mark_read",
+                "204",
+            ),
+            (
+                "/api/v2/issue-read-marker-removals",
+                "post",
+                "issue_read_state_bulk_mark_unread",
+                "204",
+            ),
+            (
+                "/api/v2/issues/{issue_id}/reader-context",
+                "get",
+                "issue_read_state_reader_context",
+                "200",
+            ),
+        ] {
+            for (name, doc) in [("domain", &domain), ("aggregate", &aggregate)] {
+                let operation = &doc["paths"][path][method];
+                assert!(
+                    operation.is_object(),
+                    "missing {method} {path} in {name} contract"
+                );
+                assert_eq!(operation["operationId"], operation_id, "{name}");
+                assert!(
+                    operation["responses"][success].is_object(),
+                    "{method} {path} has no {success} response in {name} contract"
+                );
+            }
+        }
+    }
+
+    /// Generated clients must be able to page the inbox, search issue matches
+    /// and send the confirm/reject bodies the handlers require.
+    #[test]
+    fn identity_inbox_operations_declare_runtime_inputs() {
+        let doc = document();
+        let params = |path: &str| -> Vec<(String, bool)> {
+            doc["paths"][path]["get"]["parameters"]
+                .as_array()
+                .unwrap_or_else(|| panic!("{path} parameters"))
+                .iter()
+                .map(|p| {
+                    (
+                        p["name"].as_str().expect("name").to_string(),
+                        p["required"].as_bool().unwrap_or(false),
+                    )
+                })
+                .collect()
+        };
+        assert_eq!(
+            params("/api/v2/identity-inbox"),
+            vec![("offset".to_string(), false), ("limit".to_string(), false)]
+        );
+        assert_eq!(
+            params("/api/v2/identity-inbox/issue-matches"),
+            vec![
+                ("q".to_string(), true),
+                ("limit".to_string(), false),
+                ("issue_id".to_string(), false)
+            ]
+        );
+        for (action, schema, required) in [
+            (
+                "confirmations",
+                "IdentityInboxConfirmRequest",
+                vec!["external_identity_id"],
+            ),
+            (
+                "rejections",
+                "IdentityInboxRejectRequest",
+                vec!["external_identity_id", "rejection_reason"],
+            ),
+        ] {
+            let path = format!("/api/v2/identity-inbox/{{mapping_id}}/{action}");
+            let body = &doc["paths"][path.as_str()]["post"]["requestBody"]["content"]
+                ["application/json"]["schema"]["$ref"];
+            assert_eq!(body, &format!("#/components/schemas/{schema}"));
+            let mut declared: Vec<&str> = doc["components"]["schemas"][schema]["required"]
+                .as_array()
+                .unwrap_or_else(|| panic!("{schema} required"))
+                .iter()
+                .map(|v| v.as_str().expect("field"))
+                .collect();
+            declared.sort_unstable();
+            assert_eq!(declared, required, "{schema}");
+        }
     }
 
     fn operation_set(document: &Value) -> Vec<(String, String)> {
@@ -364,15 +555,15 @@ mod tests {
     fn continuity_plans_same_path_operations_and_schemas_are_documented() {
         let document = document();
         for path in [
-            "/api/v1/continuity-plans/",
-            "/api/v1/continuity-plans/from-reading-order",
-            "/api/v1/continuity-plans/{plan_id}",
-            "/api/v1/continuity-plans/{plan_id}/membership",
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
-            "/api/v1/continuity-plans/release-sources/",
-            "/api/v1/continuity-plans/release-sources/{source_id}",
-            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            "/api/v2/continuity-plans/",
+            "/api/v2/continuity-plans/from-reading-order",
+            "/api/v2/continuity-plans/{plan_id}",
+            "/api/v2/continuity-plans/{plan_id}/membership",
+            "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
+            "/api/v2/continuity-plans/release-sources/",
+            "/api/v2/continuity-plans/release-sources/{source_id}",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/",
         ] {
             assert!(
                 document["paths"].get(path).is_some(),

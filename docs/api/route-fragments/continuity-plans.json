@@ -1,6 +1,8 @@
 {
   "family": "continuity-plans",
-  "owned_path_patterns": [],
+  "owned_path_patterns": [
+    "^/api/v2/continuity-plans(?:/.*)?$"
+  ],
   "defaults": {
     "runtime": "native-rust",
     "status": "target",
@@ -8,199 +10,180 @@
   },
   "operations": [
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/continuity-plans/",
+      "path": "/api/v2/continuity-plans/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/$",
+      "src": "^/api/v2/continuity\\-plans/$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/continuity-plans/",
+      "path": "/api/v2/continuity-plans/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/$",
+      "src": "^/api/v2/continuity\\-plans/$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/continuity-plans/from-reading-order",
+      "path": "/api/v2/continuity-plans/from-reading-order",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/from\\-reading\\-order$",
+      "src": "^/api/v2/continuity\\-plans/from\\-reading\\-order$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/continuity-plans/release-sources/",
+      "path": "/api/v2/continuity-plans/release-sources/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/release\\-sources/$",
+      "src": "^/api/v2/continuity\\-plans/release\\-sources/$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "DELETE",
-      "path": "/api/v1/continuity-plans/release-sources/{source_id}",
+      "path": "/api/v2/continuity-plans/release-sources/{source_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/release\\-sources/[^/]+$",
+      "src": "^/api/v2/continuity\\-plans/release\\-sources/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "PATCH",
-      "path": "/api/v1/continuity-plans/release-sources/{source_id}",
+      "path": "/api/v2/continuity-plans/release-sources/{source_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/release\\-sources/[^/]+$",
+      "src": "^/api/v2/continuity\\-plans/release\\-sources/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "DELETE",
-      "path": "/api/v1/continuity-plans/{plan_id}",
+      "path": "/api/v2/continuity-plans/{plan_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+$",
+      "src": "^/api/v2/continuity\\-plans/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/continuity-plans/{plan_id}",
+      "path": "/api/v2/continuity-plans/{plan_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+$",
+      "src": "^/api/v2/continuity\\-plans/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "PUT",
-      "path": "/api/v1/continuity-plans/{plan_id}",
+      "path": "/api/v2/continuity-plans/{plan_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+$",
+      "src": "^/api/v2/continuity\\-plans/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/continuity-plans/{plan_id}/membership",
+      "path": "/api/v2/continuity-plans/{plan_id}/membership",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+/membership$",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/membership$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+      "path": "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project$",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/reading\\-orders/project$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/continuity-plans/{plan_id}/release-sources/",
+      "path": "/api/v2/continuity-plans/{plan_id}/release-sources/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+/release\\-sources/$",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/release\\-sources/$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
     },
     {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+      "path": "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+/release\\-sources/reader$",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/release\\-sources/reader$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4838
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/reader",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/reader$",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/recovery$",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/recovery$",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
     }
   ]
 }

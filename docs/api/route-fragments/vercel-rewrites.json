@@ -1,5 +1,5 @@
 {
-  "generated_by": "scripts/generate_route_burndown.py",
+  "generated_by": "scripts/generate_route_burndown.mjs",
   "source_fragments": [
     "activity",
     "bug-reports",
@@ -12,15 +12,19 @@
     "custom-cbl",
     "demo",
     "dependencies",
+    "identity-inbox",
     "issue-identity-cbl-catalog",
     "issue-identity",
     "issues",
     "metrics",
     "preferences",
+    "queue-exclusions",
     "reading-mode",
+    "reading-order-groups",
     "reading-orders",
     "reading-plan-sync",
     "releases",
+    "review-previews",
     "roll",
     "sessions",
     "tags",
@@ -30,9 +34,17 @@
   ],
   "routes": [
     {
-      "src": "^/api/v2/creators/(?!compare$|discoveries$|summaries$|team\\-chemistry$)[^/]+$",
+      "src": "^/api/v2/continuity-plans/[0-9]+/reader$",
       "methods": [
         "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/continuity-plans/[0-9]+/recovery$",
+      "methods": [
+        "GET",
+        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -49,142 +61,6 @@
         "POST"
       ],
       "dest": "/api/native_issue.rs"
-    },
-    {
-      "src": "^/api/v1/catalog/series\\-mappings/preview$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/issues/[^/]+/identity$",
-      "methods": [
-        "GET",
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/issues/[^/]+/identity:confirm$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/issues/[^/]+/identity:replace$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:correct$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:corrections$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:refresh$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:revert$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/issues:import$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/resolve$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/search/series$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/series/[^/]+/issues$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/series:import$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/taste/discoveries$",
-      "methods": [
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/issues/creators$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/test\\-backdate$",
-      "methods": [
-        "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
     }
   ]
 }

@@ -14,6 +14,7 @@ import type { ContinuityPlan } from '../services/api-continuity-plans'
 import { cblSourcesApi, type CBLSourceListDiscoveryItem } from '../services/api-cbl-sources'
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
+import { ComicIssueCover } from './ComicIssueCard'
 import ReadingListSeriesSkipControls from './ReadingListSeriesSkipControls'
 import { buildReplacementModel } from '../utils/readingListReplacementModel'
 import { getReadingListProgressIndex } from '../utils/readingListProgress'
@@ -31,6 +32,8 @@ import {
 interface CustomCBLBuilderProps {
   planId?: number
   initialListId?: number
+  /** When true, keep the editor bound to initialListId and prevent switching lists. */
+  lockListSelection?: boolean
   disabled?: boolean
   onApplied?: (plan: ContinuityPlan) => void
   onPendingChange?: (pending: boolean) => void
@@ -65,6 +68,7 @@ class StaleReadingListUndoError extends Error {
 export default function CustomCBLBuilder({
   planId,
   initialListId,
+  lockListSelection = false,
   disabled = false,
   onApplied,
   onPendingChange,
@@ -467,6 +471,11 @@ export default function CustomCBLBuilder({
     .filter((candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id))
     .sort((a, b) => a.series_name.localeCompare(b.series_name) || a.thread_id - b.thread_id)
 
+  // Search results have exact owned issue ids. Batch their covers independently
+  // of the saved-entry page so no result triggers a per-row fetch.
+  const searchResultCards = useIssueCards(searchResults.map((candidate) => candidate.issue_id), { enabled: open })
+  const searchResultCardsById = indexIssueCards(searchResultCards.data)
+
   // Show the series ID only when results hold several same-named series.
   const ambiguousSeriesNames = useMemo(() => {
     const ids = new Map<string, Set<number>>()
@@ -592,6 +601,7 @@ export default function CustomCBLBuilder({
     setMessage(null)
   }
   const chooseList = (value: string) => {
+    if (lockListSelection) return
     createMutation.reset()
     const next = value ? Number(value) : null
     if (next === selectedId) return
@@ -720,8 +730,14 @@ export default function CustomCBLBuilder({
           {(listsQuery.data?.length ?? 0) > 0 && (
             <label className="block text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
               Custom CBL
-              <select aria-label="Custom CBL" value={selectedId ?? ''} onChange={(event) => chooseList(event.target.value)} disabled={disabled || isPending} className="mt-1 min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)] disabled:opacity-50">
-                <option value="">Choose a custom CBL</option>
+              <select
+                aria-label="Custom CBL"
+                value={selectedId ?? ''}
+                onChange={(event) => chooseList(event.target.value)}
+                disabled={disabled || isPending || lockListSelection}
+                className="mt-1 min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)] disabled:opacity-50"
+              >
+                {!lockListSelection && <option value="">Choose a custom CBL</option>}
                 {(listsQuery.data ?? []).map((list) => <option key={list.id} value={list.id}>{list.name} · {list.issue_count} issues · {list.mode}</option>)}
               </select>
             </label>
@@ -767,8 +783,16 @@ export default function CustomCBLBuilder({
               {searchResults.length > 0 && (
                 <div ref={issueSearchResults} className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-[var(--theme-border)] p-2" aria-label="Custom CBL issue search results">
                   {searchResults.map((candidate) => (
-                    <button key={candidate.issue_id} onKeyDown={(event) => focusSearchResult(event)} type="button" onClick={() => addIssue(candidate)} disabled={disabled || isPending} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)] disabled:opacity-50">
-                      <span>{candidate.series_name} #{candidate.issue_number}{ambiguousSeriesNames.has(candidate.series_name.toLocaleLowerCase()) && <span className="ml-2 text-xs text-[var(--theme-text-dim)]">Series ID {candidate.thread_id}</span>}</span><span className="text-xs text-[var(--theme-text-dim)]">Add</span>
+                    <button key={candidate.issue_id} onKeyDown={(event) => focusSearchResult(event)} type="button" onClick={() => addIssue(candidate)} disabled={disabled || isPending} aria-label={`${candidate.series_name} #${candidate.issue_number}${ambiguousSeriesNames.has(candidate.series_name.toLocaleLowerCase()) ? ` Series ID ${candidate.thread_id}` : ''} Add`} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-sm text-[var(--theme-text-primary)] hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)] disabled:opacity-50">
+                      <ComicIssueCover
+                        coverImageUrl={searchResultCardsById.get(candidate.issue_id)?.cover_image_url ?? null}
+                        threadTitle={candidate.series_name}
+                        issueNumber={candidate.issue_number}
+                        variant="compact"
+                        imageClassName="h-full w-full object-cover"
+                        altText=""
+                      />
+                      <span className="min-w-0 flex-1">{candidate.series_name} #{candidate.issue_number}{ambiguousSeriesNames.has(candidate.series_name.toLocaleLowerCase()) && <span className="ml-2 text-xs text-[var(--theme-text-dim)]">Series ID {candidate.thread_id}</span>}</span><span className="text-xs text-[var(--theme-text-dim)]">Add</span>
                     </button>
                   ))}
                 </div>
@@ -1098,9 +1122,7 @@ export default function CustomCBLBuilder({
           <p className="text-sm text-[var(--theme-text-muted)]">This edit changes which issues wait on which. Review the new waits, then confirm to save. Cancel keeps the saved list exactly as it is.</p>
           <ul className="space-y-2" aria-label="Waiting changes">
             {(confirmationChanges ?? []).map((change) => (
-              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
-                {describePredecessorChange(change)}
-              </li>
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
             ))}
           </ul>
           <div className="flex flex-wrap justify-end gap-2">
@@ -1118,9 +1140,7 @@ export default function CustomCBLBuilder({
           <p className="text-sm text-[var(--theme-text-muted)]">Replacing this Reading List changes which issues wait on which. Review the new waits, then confirm the same replacement review. Cancel leaves the saved list exactly as it is.</p>
           <ul className="space-y-2" aria-label="Replacement waiting changes">
             {(replaceConfirmation?.changes ?? []).map((change) => (
-              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
-                {describePredecessorChange(change)}
-              </li>
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
             ))}
           </ul>
           <div className="flex flex-wrap justify-end gap-2">
@@ -1150,9 +1170,7 @@ export default function CustomCBLBuilder({
           <p className="text-sm text-[var(--theme-text-muted)]">Restoring the previous list changes which issues wait on which. Review the restored waits, then confirm. Cancel keeps the replaced list exactly as it is.</p>
           <ul className="space-y-2" aria-label="Undo waiting changes">
             {(undoConfirmation ?? []).map((change) => (
-              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">
-                {describePredecessorChange(change)}
-              </li>
+              <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
             ))}
           </ul>
           <div className="flex flex-wrap justify-end gap-2">
