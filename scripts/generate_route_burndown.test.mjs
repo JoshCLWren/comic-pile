@@ -238,19 +238,19 @@ test('real taste and bug-report fragments cannot regress to Python ingress', () 
 test('real session and undo fragments retain native-only supported operations', () => {
   const sessions = liveFragment('sessions');
   const undo = liveFragment('undo');
+
   // Session details/snapshots moved to the resource-shaped v2 surface; the
   // legacy v1/unversioned single-session and list reads are retired (#4343,
-  // #4839). Undo keeps its native same-path contracts.
+  // #4839). Undo snapshots/restore are served on the native v2 surface.
   const expectedSessions = [
     ['GET', '/api/v2/reading-sessions/{session_id}/details'],
     ['GET', '/api/v2/reading-sessions/{session_id}/snapshots'],
   ];
-  const expectedUndo = [
-    ['GET', '/api/undo/{session_id}/snapshots'],
-    ['POST', '/api/undo/{session_id}/undo/{snapshot_id}'],
-    ['GET', '/api/v1/undo/{session_id}/snapshots'],
-    ['POST', '/api/v1/undo/{session_id}/undo/{snapshot_id}'],
+  const undoExpected = [
+    ['GET', '/api/v2/undo/{session_id}/snapshots'],
+    ['POST', '/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore'],
   ];
+
   assert.equal(sessions.operations.length, expectedSessions.length);
   for (const [method, route] of expectedSessions) {
     const op = liveOperation(sessions, method, route);
@@ -258,12 +258,16 @@ test('real session and undo fragments retain native-only supported operations', 
     assert.equal(op.bucket, 'operations', route);
     assert.ok(op.consumers.includes('frontend/src/services/api-sessions.ts'), route);
   }
-  for (const [method, route] of expectedUndo) {
+
+  assert.equal(undo.operations.length, undoExpected.length);
+  for (const [method, route] of undoExpected) {
     const op = liveOperation(undo, method, route);
+    assert.equal(op.bucket, 'operations', route);
     assert.equal(op.dest, '/api/native_roll.rs', route);
-    assert.equal(op.exclude_from_inventory, true, route);
+    assert.equal(op.runtime, 'native-rust', route);
     assert.equal(op.owning_issue, 4839, route);
   }
+
   assert.ok(![...sessions.operations, ...undo.operations].some(
     op => op.path.includes('current-session') || op.path.includes('restore-session-start'),
   ));

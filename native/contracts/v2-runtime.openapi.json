@@ -74,550 +74,6 @@
         ]
       }
     },
-    "/api/v1/continuity-plans/": {
-      "get": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_list",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ContinuityPlanListItem"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_create",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ContinuityPlanWrite"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityPlanResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/continuity-plans/from-reading-order": {
-      "post": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_adopt_reading_order",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingOrderAdoptRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityPlanResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/continuity-plans/release-sources/": {
-      "post": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "release_sources_create",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReleaseSourceCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/continuity-plans/release-sources/{source_id}": {
-      "delete": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "release_sources_delete",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {}
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "release_sources_update",
-        "parameters": [
-          {
-            "name": "source_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReleaseSourceUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/continuity-plans/{plan_id}": {
-      "get": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_get",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityPlanResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "put": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_update",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ContinuityPlanWrite"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityPlanResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_delete",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {}
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
-      "post": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_link_dependency",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "dependency_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingPlanDependencyLinkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingPlanDependencyLink"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_unlink_dependency",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "dependency_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {}
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/continuity-plans/{plan_id}/membership": {
-      "get": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "continuity_plans_membership",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingPlanMembershipResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
-      "post": {
-        "tags": [
-          "reading-orders"
-        ],
-        "operationId": "continuity_plans_project_to_reading_order",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/continuity-plans/{plan_id}/release-sources/": {
-      "get": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "release_sources_list",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/continuity-plans/{plan_id}/release-sources/reader": {
-      "get": {
-        "tags": [
-          "continuity-plans"
-        ],
-        "operationId": "release_sources_list_reader",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/continuity-rules/": {
       "get": {
         "tags": [
@@ -772,224 +228,6 @@
         ],
         "responses": {
           "204": {}
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/dependencies/": {
-      "post": {
-        "tags": [
-          "dependencies"
-        ],
-        "operationId": "create_legacy_dependency",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DependencyCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Created dependency",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid dependency"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "409": {
-            "description": "Reading constraint cycle: nothing was changed"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/dependencies/blocked": {
-      "get": {
-        "tags": [
-          "dependencies"
-        ],
-        "operationId": "list_blocked_legacy_dependencies",
-        "responses": {
-          "200": {
-            "description": "Blocked thread ids",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "integer",
-                    "format": "int32"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/dependencies/{dependency_id}": {
-      "get": {
-        "tags": [
-          "dependencies"
-        ],
-        "operationId": "get_legacy_dependency",
-        "parameters": [
-          {
-            "name": "dependency_id",
-            "in": "path",
-            "description": "Dependency id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Dependency",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Dependency not found"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "dependencies"
-        ],
-        "operationId": "delete_legacy_dependency",
-        "parameters": [
-          {
-            "name": "dependency_id",
-            "in": "path",
-            "description": "Dependency id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Deleted",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Dependency not found"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "dependencies"
-        ],
-        "operationId": "update_legacy_dependency",
-        "parameters": [
-          {
-            "name": "dependency_id",
-            "in": "path",
-            "description": "Dependency id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DependencyNoteUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Dependency",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Dependency not found"
-          },
-          "422": {
-            "description": "Note must be at most 255 characters or validation failed"
-          }
         },
         "security": [
           {
@@ -2472,6 +1710,439 @@
         ]
       }
     },
+    "/api/v2/continuity-plans/": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityPlanListItem"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/continuity-plans/from-reading-order": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_adopt_reading_order",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderAdoptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/continuity-plans/release-sources/": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSourceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/continuity-plans/release-sources/{source_id}": {
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_delete",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Release source deleted"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_update",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSourceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/continuity-plans/{plan_id}": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_get",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_update",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated continuity plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale expected_updated_at: detail.code is plan_version_conflict and detail.expected_updated_at is the current version; reload before retrying"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_delete",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Plan deleted"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_link_dependency",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingPlanDependencyLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanDependencyLink"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_unlink_dependency",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Dependency unlinked"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/continuity-plans/{plan_id}/membership": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_membership",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanMembershipResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/continuity-plans/{plan_id}/reader": {
       "get": {
         "tags": [
@@ -2509,6 +2180,51 @@
           },
           "409": {
             "description": "Plan missing its authoritative Reading List"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/continuity-plans/{plan_id}/reading-orders/project": {
+      "post": {
+        "tags": [
+          "reading-orders"
+        ],
+        "operationId": "continuity_plans_project_to_reading_order",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -2609,6 +2325,82 @@
           },
           "409": {
             "description": "Stale preview or different authoritative list"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/continuity-plans/{plan_id}/release-sources/": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_list",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/continuity-plans/{plan_id}/release-sources/reader": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_list_reader",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -3352,7 +3144,80 @@
         ]
       }
     },
+    "/api/v2/dependencies/blocked": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "list_blocked_legacy_dependencies",
+        "responses": {
+          "200": {
+            "description": "Blocked thread ids",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/dependencies/{dependency_id}": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "get_legacy_dependency",
+        "parameters": [
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "description": "Dependency id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dependency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
       "delete": {
         "tags": [
           "dependencies"
@@ -3384,6 +3249,60 @@
           },
           "503": {
             "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "update_legacy_dependency",
+        "parameters": [
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "description": "Dependency id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyNoteUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dependency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          },
+          "422": {
+            "description": "Note must be at most 255 characters or validation failed"
           }
         },
         "security": [
@@ -5453,6 +5372,172 @@
         ]
       }
     },
+    "/api/v2/reading-orders/": {
+      "get": {
+        "tags": [
+          "reading-orders"
+        ],
+        "summary": "Documentation-only operation for the list handler.",
+        "operationId": "reading_orders_list",
+        "responses": {
+          "200": {
+            "description": "Reading orders owned by the caller, ordered by name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-orders/{reading_order_id}/items": {
+      "post": {
+        "tags": [
+          "reading-orders"
+        ],
+        "summary": "Documentation-only operation for the insert handler.",
+        "operationId": "reading_orders_insert_item",
+        "parameters": [
+          {
+            "name": "reading_order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InsertReadingOrderItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Thread seated at the requested position",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsertReadingOrderItemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading order or thread not found"
+          },
+          "422": {
+            "description": "Request payload failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-plan-sync/runs": {
+      "post": {
+        "tags": [
+          "reading-plan-sync"
+        ],
+        "operationId": "reading_plan_sync",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "User-triggered sync report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid request"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-plan-sync/status": {
+      "get": {
+        "tags": [
+          "reading-plan-sync"
+        ],
+        "operationId": "reading_plan_sync_status",
+        "responses": {
+          "200": {
+            "description": "Sync state for every release source owned by the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/reading-sessions": {
       "post": {
         "tags": [
@@ -6864,6 +6949,113 @@
           },
           "422": {
             "description": "Invalid reading snapshot"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/undo/{session_id}/snapshots": {
+      "get": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Documentation-only operation for the undo snapshots list.",
+        "operationId": "list_undo_snapshots_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session restore snapshots",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoSnapshotsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore": {
+      "post": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Documentation-only operation for the undo restore.",
+        "operationId": "undo_to_snapshot_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "snapshot_id",
+            "in": "path",
+            "description": "Snapshot to restore",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoApplyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session or snapshot not found"
+          },
+          "409": {
+            "description": "Only the latest rating can be undone"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -8841,8 +9033,7 @@
       "ContinuityPlanWrite": {
         "type": "object",
         "required": [
-          "name",
-          "ordering_mode"
+          "name"
         ],
         "properties": {
           "expected_updated_at": {
@@ -12231,6 +12422,52 @@
         },
         "additionalProperties": false
       },
+      "InsertReadingOrderItemRequest": {
+        "type": "object",
+        "description": "Python `InsertReadingOrderItemRequest`.",
+        "required": [
+          "thread_id",
+          "position"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "InsertReadingOrderItemResponse": {
+        "type": "object",
+        "description": "Python `InsertReadingOrderItemResponse`.",
+        "required": [
+          "reading_order_id",
+          "thread_id",
+          "position",
+          "total_items"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "IssueBulkRequest": {
         "type": "object",
         "description": "Request body for the bulk read-state operations.",
@@ -15179,6 +15416,21 @@
         },
         "additionalProperties": false
       },
+      "ReadingOrderListResponse": {
+        "type": "object",
+        "description": "Python `ReadingOrderListResponse`.",
+        "required": [
+          "reading_orders"
+        ],
+        "properties": {
+          "reading_orders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderSummary"
+            }
+          }
+        }
+      },
       "ReadingOrderProjectionConflict": {
         "type": "object",
         "required": [
@@ -15348,6 +15600,34 @@
           "updated_count": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ReadingOrderSummary": {
+        "type": "object",
+        "description": "One row of the reading-orders list (Python `ReadingOrderSummary`).",
+        "required": [
+          "id",
+          "name",
+          "total_items"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "total_items": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -16583,6 +16863,141 @@
           }
         }
       },
+      "SessionActiveThread": {
+        "type": "object",
+        "description": "Active thread projection.",
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "tags"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_read": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "last_rolled_result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionTag"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "SessionBandwidthState": {
+        "type": "object",
+        "description": "Canonical bandwidth state.",
+        "properties": {
+          "active_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "mode_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "predicted_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "SessionDetailsResponse": {
         "type": "object",
         "description": "Full session details response with events and narrative summary.",
@@ -16736,6 +17151,43 @@
           }
         }
       },
+      "SessionIntentState": {
+        "type": "object",
+        "description": "Canonical intent state.",
+        "properties": {
+          "active_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "mode_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "predicted_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "SessionSnapshotItem": {
         "type": "object",
         "required": [
@@ -16786,6 +17238,98 @@
             "items": {
               "$ref": "#/components/schemas/SessionSnapshotItem"
             }
+          }
+        }
+      },
+      "SessionTag": {
+        "type": "object",
+        "description": "Direct visible tag.",
+        "required": [
+          "id",
+          "name",
+          "normalized_name",
+          "scope",
+          "color",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "normalized_name": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionThreadSummary": {
+        "type": "object",
+        "description": "Compact thread summary.",
+        "required": [
+          "id",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "SourceSyncFailure": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "plan_id",
+          "thread_id",
+          "volume_id",
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "volume_id": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -16841,6 +17385,191 @@
               "integer",
               "null"
             ],
+            "format": "int32"
+          }
+        }
+      },
+      "SyncReport": {
+        "type": "object",
+        "required": [
+          "total_sources",
+          "enabled_sources",
+          "checked_sources",
+          "successful_sources",
+          "failed_sources",
+          "issues_checked",
+          "created_issues",
+          "reused_issues",
+          "future_skips",
+          "unknown_date_skips",
+          "conflicts",
+          "issue_failures",
+          "failures"
+        ],
+        "properties": {
+          "checked_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "conflicts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_issues": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "enabled_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "excluded_issues": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "excluded_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failed_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceSyncFailure"
+            }
+          },
+          "future_skips": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_failures": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issues_checked": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reused_issues": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "skipped_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "successful_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unknown_date_skips": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SyncRequest": {
+        "type": "object",
+        "required": [
+          "as_of"
+        ],
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "refresh": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SyncResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "result"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/SyncReport"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SyncStatusResponse": {
+        "type": "object",
+        "required": [
+          "total_sources",
+          "enabled_sources",
+          "sources"
+        ],
+        "properties": {
+          "enabled_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncStatusSource"
+            }
+          },
+          "total_sources": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SyncStatusSource": {
+        "type": "object",
+        "required": [
+          "id",
+          "reading_plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider_volume_id",
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "reading_plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
             "format": "int32"
           }
         }
@@ -17340,6 +18069,221 @@
           },
           "token_type": {
             "type": "string"
+          }
+        }
+      },
+      "UndoApplyResponse": {
+        "type": "object",
+        "description": "Full session response matching Python SessionResponse.",
+        "required": [
+          "id",
+          "started_at",
+          "start_die",
+          "user_id",
+          "ladder_path",
+          "current_die",
+          "has_restore_point",
+          "snapshot_count",
+          "snoozed_thread_ids",
+          "snoozed_threads",
+          "skipped_thread_ids",
+          "skipped_threads",
+          "reading_mode_suggested"
+        ],
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SessionActiveThread"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bandwidth": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SessionBandwidthState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_restore_point": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "intent": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SessionIntentState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "last_rolled_result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "manual_die": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "pending_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_suggested": {
+            "type": "boolean"
+          },
+          "skipped_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "skipped_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            }
+          },
+          "snapshot_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snoozed_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "snoozed_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            }
+          },
+          "start_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UndoSnapshotItem": {
+        "type": "object",
+        "description": "Snapshot item in the list response.",
+        "required": [
+          "id",
+          "session_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "session_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UndoSnapshotsResponse": {
+        "type": "object",
+        "description": "Undo snapshots list response.",
+        "required": [
+          "session_id",
+          "snapshots"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snapshots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UndoSnapshotItem"
+            }
           }
         }
       },
