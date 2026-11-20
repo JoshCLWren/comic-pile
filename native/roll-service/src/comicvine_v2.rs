@@ -2910,6 +2910,29 @@ mod tests {
     }
 
     #[test]
+    fn missing_issue_number_is_unknown_not_null_text() {
+        // ComicVine sends `issue_number: null`: Python preserves None, so the
+        // candidate must expose `None`, never the literal string `"null"`.
+        let candidate = issue_candidate(&json!({
+            "id": 100,
+            "issue_number": null,
+            "name": "Missing Number",
+        }))
+        .expect("issue candidate");
+        assert_eq!(candidate.comicvine_issue_id, 100);
+        assert_eq!(candidate.issue_number, None);
+
+        // An empty string is also treated as unknown.
+        let candidate = issue_candidate(&json!({
+            "id": 101,
+            "issue_number": "",
+            "name": "Empty Number",
+        }))
+        .expect("issue candidate");
+        assert_eq!(candidate.issue_number, None);
+    }
+
+    #[test]
     fn identity_sql_is_owner_scoped_and_bounded() {
         // The owner predicate must be a bind parameter and the mapping lookup
         // must be one set-based query, never a per-mapping round trip.

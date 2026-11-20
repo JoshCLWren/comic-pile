@@ -1717,6 +1717,33 @@ async fn malformed_requests_use_the_production_validation_contract() {
     }
 }
 
+#[tokio::test]
+async fn search_series_uses_checked_arithmetic_at_the_offset_boundary() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-offset-boundary").await;
+    set_key(true);
+    // i32::MAX with limit=1 must not overflow `offset / limit + 1` or the
+    // `next_offset` computation (debug panic / release wrap).
+    provider_ok(&state, json!({"number_of_total_results": 0, "results": []}));
+    let (status, body) = send(
+        &state,
+        call(
+            "GET",
+            "/api/v2/comicvine/search/series?q=saga&limit=1&offset=2147483647",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["offset"], 2147483647);
+    assert_eq!(body["limit"], 1);
+    assert_eq!(body["has_more"], false);
+    assert_eq!(body["next_offset"], Value::Null);
+    assert_eq!(body["total_available"], 0);
+    assert_eq!(body["results"].as_array().unwrap().len(), 0);
+}
+
 fn roster_page(volume: i32, first_id: i32, count: i32, total: Option<i32>) -> Value {
     let results: Vec<Value> = (first_id..first_id + count)
         .map(|id| json!({"id": id, "issue_number": id.to_string(), "volume": {"id": volume}}))
