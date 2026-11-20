@@ -131,7 +131,9 @@ def test_script_only_yaml_lives_in_dev_not_prod() -> None:
 
 def test_operator_runtime_dependencies_are_retained() -> None:
     """Libraries imported by retained scripts stay in the runtime set."""
-    assert {"sqlalchemy", "asyncpg", "httpx"} <= set(_project_dependency_names())
+    # comic_pile_api.py (backup/restore helpers) imports requests; it must
+    # stay in [project.dependencies] or the retained script fails in production.
+    assert {"sqlalchemy", "asyncpg", "httpx", "requests"} <= set(_project_dependency_names())
 
 
 def test_default_groups_cover_all_non_vercel_runtimes() -> None:

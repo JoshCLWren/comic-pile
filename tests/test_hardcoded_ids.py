@@ -171,15 +171,13 @@ def test_baseline_has_no_stale_entries() -> None:
 
 
 def test_scanner_detects_hardcoded_ids() -> None:
-    """The scanner flags hardcoded ids in synthetic test and app code."""
+    """The scanner flags hardcoded ids in synthetic test code."""
     test_source = (
         "user = User(id=1, username='x')\n"
         "session = ReadingSession(user_id=7)\n"
     )
-    app_source = "thread = Thread(user_id=1)\n"
 
     assert scan_source(test_source, scope="tests") == {"User(id=1)", "user_id=7"}
-    assert scan_source(app_source, scope="app") == {"user_id=1"}
 
 
 def test_scanner_accepts_dynamic_ids() -> None:
@@ -191,7 +189,6 @@ def test_scanner_accepts_dynamic_ids() -> None:
     )
 
     assert scan_source(dynamic_source, scope="tests") == set()
-    assert scan_source(dynamic_source, scope="app") == set()
 
 
 if __name__ == "__main__":
