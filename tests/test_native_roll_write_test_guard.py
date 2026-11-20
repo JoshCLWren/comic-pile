@@ -46,6 +46,10 @@ DB_TEST_MARKERS = (
 # Require the real delegation and the writer's own DB-backed mutation test.
 DELEGATED_WRITE_TESTS = {
     ("issue_handler", "read_rate_issue"): ("issue_service", "persist"),
+    ("reading_plan_sync", "sync_released_issues_endpoint"): (
+        "reading_plan_sync",
+        "sync_released_issues_for_user",
+    ),
 }
 
 # Explicit HTTP integration-test evidence. Keys are (module, handler); values
@@ -83,11 +87,15 @@ INTEGRATION_WRITE_TESTS = {
 READ_ONLY_POST_HANDLERS = {
     ("reading_boundary", "reading_boundary_batch_v2"): "reading_boundary_concurrency.rs",
     ("issue_handler", "issue_cards"): "issue_cards_http.rs",
+    ("queue_exclusions", "check_excluded_status"): "queue_exclusions_http.rs",
+    ("reading_list", "check_thread_memberships"): "custom_cbl.rs",
 }
 
 READ_ONLY_POST_ROUTE_EVIDENCE = {
     ("reading_boundary", "reading_boundary_batch_v2"): ("POST", "/api/v2/reading-boundaries"),
     ("issue_handler", "issue_cards"): ("POST", "/api/v2/issues/cards"),
+    ("queue_exclusions", "check_excluded_status"): ("POST", "/api/v2/queue-exclusions/status:check"),
+    ("reading_list", "check_thread_memberships"): ("POST", "/api/v2/reading-lists/memberships:check"),
 }
 WRITE_SQL_RE = re.compile(
     r"\b(?:INSERT\s+INTO|UPDATE\s+[A-Za-z_][A-Za-z0-9_]*\s+SET|DELETE\s+FROM)\b",
@@ -298,7 +306,10 @@ def _tests_write_path(module: str, handler: str) -> bool:
         production = (SERVICE_SOURCE / f"{resolved_module.replace('::', '/')}.rs").read_text(
             encoding="utf-8"
         )
-        if f"{writer_module}::{writer}(" not in production.split("#[cfg(test)]", 1)[0]:
+        production_body = production.split("#[cfg(test)]", 1)[0]
+        qualified_call = f"{writer_module}::{writer}("
+        direct_call = rf"(?<![A-Za-z0-9_:]){re.escape(writer)}\("
+        if qualified_call not in production_body and re.search(direct_call, production_body) is None:
             return False
         tests = _test_module(writer_module)
         handler = writer

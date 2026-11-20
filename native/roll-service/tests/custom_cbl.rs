@@ -1014,3 +1014,23 @@ async fn issue_search_returns_each_issue_once_and_keeps_same_titled_series_disti
     threads.sort();
     assert_eq!(threads, vec![910301, 910302], "{body}");
 }
+
+#[tokio::test]
+async fn check_thread_memberships_reports_owned_list_membership() {
+    let fixture = setup().await;
+    let (status, body) = send(
+        &fixture.state,
+        Request::builder()
+            .method("POST")
+            .uri("/api/v2/reading-lists/memberships:check")
+            .header(header::AUTHORIZATION, format!("Bearer {}", fixture.token))
+            .header("x-csrf-token", &fixture.csrf)
+            .header(header::COOKIE, format!("csrf_token={}", fixture.csrf))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(json!({"thread_ids": [999999]}).to_string()))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body, json!({"thread_ids": []}), "{body}");
+}

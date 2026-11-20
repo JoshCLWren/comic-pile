@@ -662,3 +662,25 @@ async fn concurrent_bulk_restore_and_single_restore_serialize_consistently() {
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["threads"].as_array().unwrap().len(), 0, "{body:?}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn check_excluded_status_reports_excluded_and_active_threads() {
+    let ctx = setup("qex-status").await;
+    let excluded = insert_thread(&ctx, "Excluded", 1, "excluded").await;
+    let active = insert_thread(&ctx, "Active", 2, "active").await;
+
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/queue-exclusions/status:check",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({ "thread_ids": [excluded, active, 999999] })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["excluded_thread_ids"], json!([excluded]), "{body:?}");
+    assert_eq!(body["active_thread_ids"], json!([active]), "{body:?}");
+}

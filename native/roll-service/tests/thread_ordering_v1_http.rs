@@ -1652,3 +1652,46 @@ async fn roll_unsnooze_of_a_removed_series_removes_only_the_snooze() {
     assert!(snoozed_ids.is_empty());
     assert_eq!(die, die_before);
 }
+
+#[tokio::test]
+async fn roll_dismiss_pending_clears_pending_roll_without_offering_replacement() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-dismiss").await;
+    let pending = thread(&state.pool.get().await.unwrap(), user_id, "Pending").await;
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "INSERT INTO sessions (user_id, started_at, start_die, pending_thread_id) VALUES ($1, NOW(), 6, $2)",
+            &[&user_id, &pending],
+        )
+        .await
+        .unwrap();
+
+    let (status, body) = send(
+        &state,
+        post(
+            "/api/v2/roll/dismiss-pending",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+
+    let current: Option<i32> = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT pending_thread_id FROM sessions WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(current, None);
+}
