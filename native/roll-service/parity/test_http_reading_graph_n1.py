@@ -126,6 +126,8 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
         assert_declared_budget("GET", "/api/v2/reading-graph", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert nested_small_delta is not None and nested_large_delta is not None, "pg_stat_statements.nested is required"
+        assert nested_large_delta <= nested_small_delta + 2, f"nested statement count grew: {nested_small_delta} -> {nested_large_delta}"
     finally:
         await engine.dispose()
 
