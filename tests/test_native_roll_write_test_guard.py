@@ -145,6 +145,209 @@ def _resolve_handler_module(module: str, handler: str) -> str:
     return module
 
 
+@lru_cache(maxsize=1)
+def _write_route_definitions() -> list[tuple[str, str, str, str]]:
+    """Return module, handler, method, and route path for each mounted mutation."""
+    source = _lib_source()
+    definitions: list[tuple[str, str, str, str]] = []
+    route_start = re.compile(r'\.route\(\s*"(?P<path>[^"]+)"\s*,')
+    method_handler = re.compile(
+        r"(?<![A-Za-z0-9_])(?P<method>post|patch|put|delete)\(\s*"
+        r"(?P<path>(?:[a-z_0-9]+::)*[a-z_0-9]+)\s*\)"
+    )
+    for route in route_start.finditer(source):
+        open_paren = source.find("(", route.start())
+        depth = 0
+        close_paren = open_paren
+        for index in range(open_paren, len(source)):
+            if source[index] == "(":
+                depth += 1
+            elif source[index] == ")":
+                depth -= 1
+                if depth == 0:
+                    close_paren = index
+                    break
+        arguments = source[open_paren + 1:close_paren]
+        for method in method_handler.finditer(arguments):
+            module, _, handler = method.group("path").rpartition("::")
+            definitions.append((
+                module,
+                handler,
+                method.group("method").upper(),
+                route.group("path"),
+            ))
+    return definitions
+
+
+def _route_matches_request(route_path: str, request_uri: str) -> bool:
+    """Match literal test URIs and format placeholders to an Axum route."""
+    expected = route_path.split("/")
+    actual = request_uri.split("?", 1)[0].split("/")
+    return len(expected) == len(actual) and all(
+        bool(value) if "{" in segment else segment == value
+        for segment, value in zip(expected, actual, strict=True)
+    )
+
+
+@lru_cache(maxsize=1)
+def _http_test_sources() -> tuple[tuple[str, str], ...]:
+    """Load the external Rust HTTP integration tests once per guard run."""
+    tests_root = REPOSITORY_ROOT / "native" / "roll-service" / "tests"
+    return tuple(
+        (path.name, path.read_text(encoding="utf-8"))
+        for path in sorted(tests_root.glob("*.rs"))
+    )
+
+
+def _rust_code(source: str) -> str:
+    """Blank strings and comments while preserving source offsets and braces."""
+    token = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"', re.DOTALL)
+    return token.sub(
+        lambda match: "".join("\n" if char == "\n" else " " for char in match.group()),
+        source,
+    )
+
+
+def _rust_functions(source: str) -> list[tuple[str, str, bool]]:
+    """Return named Rust functions with their bodies and Tokio-test status."""
+    code = _rust_code(source)
+    starts = list(re.finditer(
+        r"(?m)^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+"
+        r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b",
+        code,
+    ))
+    functions: list[tuple[str, str, bool]] = []
+    previous_end = 0
+    for start in starts:
+        if start.start() < previous_end:
+            continue
+        open_brace = code.find("{", start.end())
+        if open_brace < 0:
+            continue
+        depth = 0
+        close_brace = -1
+        for index in range(open_brace, len(code)):
+            if code[index] == "{":
+                depth += 1
+            elif code[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    close_brace = index
+                    break
+        if close_brace < 0:
+            continue
+        attributes = code[previous_end:start.start()]
+        is_test = re.search(
+            r"#\[tokio::test(?:\([^\]]*\))?\]\s*"
+            r"(?:#\[[^\]]+\]\s*)*$",
+            attributes,
+        ) is not None
+        functions.append((
+            start.group("name"),
+            source[start.start():close_brace + 1],
+            is_test,
+        ))
+        previous_end = close_brace + 1
+    return functions
+
+
+def _request_uris(source: str) -> set[str]:
+    """Resolve literal and locally formatted request URIs in a Rust function."""
+    templates = re.findall(
+        r'\blet\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:&\s*)?'
+        r'(?:format!\(\s*)?"([^"\n]+)"',
+        source,
+    )
+    names = re.findall(
+        r'\blet\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:&\s*)?'
+        r'(?:format!\(\s*)?"([^"\n]+)"',
+        source,
+    )
+    values = dict(names)
+    for _ in range(len(values) + 1):
+        changed = False
+        for name, template in tuple(values.items()):
+            def replace(match: re.Match[str]) -> str:
+                return values.get(match.group(1), match.group())
+
+            resolved = re.sub(r"\{([A-Za-z_][A-Za-z0-9_]*)\}", replace, template)
+            if resolved != values[name]:
+                values[name] = resolved
+                changed = True
+        if not changed:
+            break
+    templates.extend(values.values())
+    templates.extend(re.findall(r'format!\(\s*"([^"\n]+)"', source))
+    templates.extend(re.findall(r'"(/api/[^"\n]+)"', source))
+    resolved_templates = []
+    for template in templates:
+        resolved_templates.append(re.sub(
+            r"\{([A-Za-z_][A-Za-z0-9_]*)\}",
+            lambda match: values.get(match.group(1), match.group()),
+            template,
+        ))
+    return {template for template in resolved_templates if template.startswith("/api/")}
+
+
+def _section_has_method_and_route(section: str, method: str, route_path: str) -> bool:
+    """Return whether Rust source contains a method and matching request URI."""
+    method_marker = f'"{method}"' in section or re.search(
+        rf"(?<![A-Za-z0-9_]){method.lower()}\s*\(", section
+    )
+    return bool(method_marker) and any(
+        _route_matches_request(route_path, uri) for uri in _request_uris(section)
+    )
+
+
+def _http_tests_write_path(module: str, handler: str) -> bool:
+    """Recognize a successful exact-method/route disposable-Postgres HTTP test."""
+    routes = [
+        (method, route_path)
+        for route_module, route_handler, method, route_path in _write_route_definitions()
+        if route_handler == handler
+        and _resolve_handler_module(route_module, route_handler) == module
+    ]
+    if not routes:
+        return False
+    success_markers = (
+        "StatusCode::OK",
+        "StatusCode::CREATED",
+        "StatusCode::NO_CONTENT",
+        ".is_success()",
+    )
+    for _filename, source in _http_test_sources():
+        if not any(marker in source for marker in DB_TEST_MARKERS):
+            continue
+        if "router(" not in source and "oneshot(" not in source:
+            continue
+        functions = _rust_functions(source)
+        helpers = {name: body for name, body, is_test in functions if not is_test}
+        for _test_name, test_body, is_test in functions:
+            if not is_test:
+                continue
+            combined = test_body
+            pending = [test_body]
+            visited: set[str] = set()
+            while pending:
+                body = pending.pop()
+                for name, helper_body in helpers.items():
+                    if name in visited or not re.search(
+                        rf"(?<![A-Za-z0-9_]){re.escape(name)}\s*\(", body
+                    ):
+                        continue
+                    visited.add(name)
+                    combined += helper_body
+                    pending.append(helper_body)
+            if not any(marker in combined for marker in success_markers):
+                continue
+            if any(
+                _section_has_method_and_route(combined, method, route_path)
+                for method, route_path in routes
+            ):
+                return True
+    return False
+
+
 def _test_module(module: str) -> str:
     """Return only the ``#[cfg(test)]`` section of a service module.
 
