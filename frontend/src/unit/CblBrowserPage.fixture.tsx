@@ -90,6 +90,7 @@ vi.mock('../query/cacheEffects', () => ({
 export const mockBrowse = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.browse)
 export const mockPreview = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.preview)
 export const mockPlan = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.plan)
+export const mockCommit = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commit)
 export const mockCommitNew = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commitNew)
 export const mockGraphPreview = cast<ReturnType<typeof vi.fn>>(readingGraphApi.preview)
 export const mockListPlans = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
