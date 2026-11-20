@@ -27,7 +27,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-use tokio_postgres::{Row, Transaction};
+use tokio_postgres::Transaction;
 
 // ---------------------------------------------------------------------------
 // Wire contract (mirrors app/schemas/comicvine_resolution.py).
