@@ -218,6 +218,19 @@
     },
     {
       "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/comicvine/issues:import",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues:import$",
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "owning_issue": 4835,
+      "runtime": "native-rust",
+      "status": "target"
+    },
+    {
+      "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/comicvine/resolve",
       "dest": "/api/native_roll.rs",

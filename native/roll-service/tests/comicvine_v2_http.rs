@@ -2286,3 +2286,341 @@ async fn correction_provider_values_use_python_str() {
         assert_eq!(last["provider_value"], expected, "{field}");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Chunk D: single-issue import.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn import_issue_creates_thread_identity_and_reading_order_slot() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-impissue").await;
+    set_key(false);
+    let (other_token, other_csrf, _) = register_extra_user(&state, "cvv2-impother").await;
+    let conn = state.pool.get().await.unwrap();
+    let order: i32 = conn
+        .query_one(
+            "INSERT INTO reading_orders (user_id, name) VALUES ($1, 'Arc') RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let a = thread(&conn, user_id, "A").await;
+    let b = thread(&conn, user_id, "B").await;
+    for (thread_id, pos) in [(a, 1), (b, 2)] {
+        conn.execute(
+            "INSERT INTO reading_order_items (reading_order_id, thread_id, position) VALUES ($1, $2, $3)",
+            &[&order, &thread_id, &pos],
+        )
+        .await
+        .unwrap();
+    }
+
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({
+                "title": "  Annual Special ", "comicvine_issue_id": 555, "issue_number": "7",
+                "reading_order_id": order, "anchor_before_thread_id": a, "anchor_after_thread_id": b
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let new_thread = body["thread_id"].as_i64().unwrap() as i32;
+    assert_eq!(body["reading_order_id"], order);
+    assert_eq!(body["position"], 2);
+    assert_eq!(body["total_items"], 3);
+    let row = conn
+        .query_one(
+            "SELECT title, total_issues, issues_remaining, status FROM threads WHERE id = $1",
+            &[&new_thread],
+        )
+        .await
+        .unwrap();
+    assert_eq!(row.get::<_, String>(0), "Annual Special");
+    assert_eq!(
+        (row.get::<_, Option<i32>>(1), row.get::<_, Option<i32>>(2)),
+        (Some(1), Some(1))
+    );
+    let positions: Vec<(i32, i32)> = conn
+        .query("SELECT thread_id, position FROM reading_order_items WHERE reading_order_id = $1 ORDER BY position", &[&order])
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| (r.get(0), r.get(1)))
+        .collect();
+    assert_eq!(positions, vec![(a, 1), (new_thread, 2), (b, 3)]);
+    let mapped: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM issue_external_identity_mappings m JOIN issues i ON i.id = m.issue_id \
+             WHERE i.thread_id = $1 AND m.status = 'confirmed'",
+            &[&new_thread],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(mapped, 1);
+
+    // Duplicate physical issue: 409 with the structured Python body.
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({"title": "Again", "comicvine_issue_id": 555})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let existing = body["detail"]["existing_issue_id"].as_i64().unwrap();
+    assert_eq!(body["detail"]["code"], "duplicate_physical_issue");
+    assert_eq!(body["detail"]["comicvine_issue_id"], 555);
+    assert_eq!(
+        body["detail"]["message"],
+        format!("ComicVine issue 555 already exists as issue {existing}")
+    );
+
+    // Another reader's copy never blocks, and a foreign reading order is a 404.
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &other_token,
+            &other_csrf,
+            Some(json!({"title": "Theirs", "comicvine_issue_id": 555})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &other_token,
+            &other_csrf,
+            Some(json!({"title": "X", "comicvine_issue_id": 556, "reading_order_id": order})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["detail"], format!("Reading order {order} not found"));
+}
+
+/// Python `request.issue_number or "1"` (#4636390879): a missing, null or
+/// empty issue number is stored as `"1"`; Python stores `title.strip()`.
+#[tokio::test]
+async fn import_issue_defaults_the_issue_number_and_strips_the_title() {
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-impnumber").await;
+    for (n, number, stored) in [
+        (0, Value::Null, "1"),
+        (1, json!(""), "1"),
+        (2, json!("Annual 1"), "Annual 1"),
+    ] {
+        let mut body = json!({"title": "   ", "comicvine_issue_id": 9500 + n});
+        if n != 0 {
+            body["issue_number"] = number.clone();
+        }
+        let (status, got) = send(
+            &state,
+            call(
+                "POST",
+                "/api/v2/comicvine/issues:import",
+                &token,
+                &csrf,
+                Some(body),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{number}: {got:?}");
+        let conn = state.pool.get().await.unwrap();
+        let row = conn
+            .query_one(
+                "SELECT t.title, i.issue_number FROM issues i JOIN threads t ON t.id = i.thread_id \
+                 WHERE i.id = $1",
+                &[&(got["issue_id"].as_i64().unwrap() as i32)],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            row.get::<_, String>(0),
+            "",
+            "Python stores the stripped title"
+        );
+        assert_eq!(row.get::<_, String>(1), stored, "{number}");
+    }
+}
+
+#[tokio::test]
+async fn import_issue_requires_auth_csrf_and_uses_the_validation_contract() {
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-impcontract").await;
+    let path = "/api/v2/comicvine/issues:import";
+    let body = json!({"title": "X", "comicvine_issue_id": 1}).to_string();
+    let request = Request::builder()
+        .method("POST")
+        .uri(path)
+        .header("x-csrf-token", "pair")
+        .header(header::COOKIE, "csrf_token=pair")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.clone()))
+        .unwrap();
+    assert_eq!(send(&state, request).await.0, StatusCode::UNAUTHORIZED);
+    let request = Request::builder()
+        .method("POST")
+        .uri(path)
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body))
+        .unwrap();
+    assert_eq!(send(&state, request).await.0, StatusCode::FORBIDDEN);
+    let expected = json!({"detail": "Validation failed"});
+    for body in [
+        json!({}),
+        json!({"title": "", "comicvine_issue_id": 1}),
+        json!({"title": "t".repeat(201), "comicvine_issue_id": 1}),
+        json!({"title": "x", "comicvine_issue_id": 0}),
+        json!({"title": "x", "comicvine_issue_id": "abc"}),
+        json!({"title": "x", "comicvine_issue_id": 1, "issue_number": "9".repeat(51)}),
+        json!({"title": "x", "comicvine_issue_id": 1, "reading_order_id": 0}),
+        json!({"title": "x", "comicvine_issue_id": 1, "anchor_before_thread_id": -1}),
+        json!({"title": "x", "comicvine_issue_id": 1, "anchor_after_thread_id": 1.5}),
+        json!({"title": 5, "comicvine_issue_id": 1}),
+    ] {
+        let (status, got) = send(
+            &state,
+            call("POST", path, &token, &csrf, Some(body.clone())),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}: {got:?}");
+        assert_eq!(got, expected, "{body}");
+    }
+    // Lax ints like Pydantic: "9405" and 9406.0 are accepted.
+    for (n, id) in [json!("9405"), json!(9406.0)].into_iter().enumerate() {
+        let (status, got) = send(
+            &state,
+            call(
+                "POST",
+                path,
+                &token,
+                &csrf,
+                Some(json!({"title": format!("Lax {n}"), "comicvine_issue_id": id})),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{got:?}");
+    }
+    let conn = state.pool.get().await.unwrap();
+    let threads: i64 = conn
+        .query_one("SELECT count(*) FROM threads", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(threads, 2, "only the two valid imports wrote");
+}
+
+/// Holding the reader's queue lock blocks the import before its duplicate
+/// check and queue-position read (pg_locks waiter polling, no sleeps).
+#[tokio::test]
+async fn import_issue_takes_the_queue_lock_first() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-implock").await;
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let pending = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({"title": "Imported", "comicvine_issue_id": 9103})),
+        ),
+    );
+    wait_for_queue_lock_waiters(&tx, user_id, 1, &[&pending]).await;
+    let threads: i64 = tx
+        .query_one(
+            "SELECT count(*) FROM threads WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(threads, 0, "nothing is written before the queue lock");
+    tx.commit().await.unwrap();
+    drop(holder);
+    let (status, body) = pending.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+}
+
+/// Two imports and a sibling queue writer (issue delete) all wait on the
+/// reader's queue lock; once released, the imports get distinct queue slots.
+#[tokio::test]
+async fn imports_serialize_with_sibling_queue_writers() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-impsiblings", 8, None).await;
+    let deleted_issue = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Siblings").await;
+        issue(&conn, t, "1", 1).await
+    };
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let delete = spawn_send(
+        &state,
+        call(
+            "DELETE",
+            &format!("/api/v2/issues/{deleted_issue}"),
+            &token,
+            &csrf,
+            None,
+        ),
+    );
+    let imports: Vec<Pending> = [9302, 9303]
+        .into_iter()
+        .map(|cv| {
+            spawn_send(
+                &state,
+                call(
+                    "POST",
+                    "/api/v2/comicvine/issues:import",
+                    &token,
+                    &csrf,
+                    Some(json!({"title": format!("Sibling {cv}"), "comicvine_issue_id": cv})),
+                ),
+            )
+        })
+        .collect();
+    wait_for_queue_lock_waiters(&tx, user_id, 3, &[&delete, &imports[0], &imports[1]]).await;
+    tx.commit().await.unwrap();
+    drop(holder);
+    let (status, body) = delete.await.unwrap();
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+    let mut threads = Vec::new();
+    for import in imports {
+        let (status, body) = import.await.unwrap();
+        assert_eq!(status, StatusCode::CREATED, "{body:?}");
+        threads.push(body["thread_id"].as_i64().unwrap() as i32);
+    }
+    let conn = state.pool.get().await.unwrap();
+    let positions: Vec<i32> = conn
+        .query(
+            "SELECT queue_position FROM threads WHERE id = ANY($1) ORDER BY id",
+            &[&threads],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(positions.len(), 2);
+    assert_ne!(
+        positions[0], positions[1],
+        "imports must not share a queue slot"
+    );
+}

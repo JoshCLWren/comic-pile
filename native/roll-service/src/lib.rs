@@ -1115,6 +1115,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
             post(comicvine_v2::refresh_metadata),
         )
+        // Native v2 ComicVine routes (#4835, split chunk D).
+        .route(
+            "/api/v2/comicvine/issues:import",
+            post(comicvine_v2::import_issue),
+        )
         .route(
             "/api/v2/issues/{issue_id}/dependencies",
             get(issue_read::get_issue_dependencies),

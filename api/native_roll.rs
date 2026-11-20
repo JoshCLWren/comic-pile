@@ -541,6 +541,8 @@ fn app() -> Router {
             "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
             post(native_dispatch),
         )
+        // Native v2 ComicVine routes (#4835, split chunk D).
+        .route("/api/v2/comicvine/issues:import", post(native_dispatch))
         .route(
             "/api/v2/issues/{issue_id}/dependencies",
             get(native_dispatch),
@@ -1191,6 +1193,7 @@ mod tests {
             ("POST", "/api/v2/comicvine/issues/7/metadata:correct"),
             ("POST", "/api/v2/comicvine/issues/7/metadata:revert"),
             ("POST", "/api/v2/comicvine/issues/7/metadata:refresh"),
+            ("POST", "/api/v2/comicvine/issues:import"),
             // Ingress samples for every native v2 ComicVine operation.
         ] {
             let mut router = app();

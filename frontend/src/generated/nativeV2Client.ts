@@ -536,6 +536,12 @@ export type GetThreadIssueDependenciesResponse = components['schemas']['ThreadIs
 
 export type GetUserPreferencesResponse = components['schemas']['UserPreferencesResponse']
 
+export interface ImportIssueRequest {
+  body: components['schemas']['NativeImportIssueRequest']
+}
+
+export type ImportIssueResponse = components['schemas']['NativeImportIssueResponse']
+
 export interface InitializeSessionRequest {
   body: components['schemas']['InitializeSessionRequest']
 }
@@ -1207,6 +1213,7 @@ export interface NativeV2Client {
   getThreadDependencies(args: GetThreadDependenciesRequest): Promise<GetThreadDependenciesResponse>
   getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
   getUserPreferences(): Promise<GetUserPreferencesResponse>
+  importIssue(args: ImportIssueRequest): Promise<ImportIssueResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
@@ -1647,6 +1654,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     getUserPreferences() {
       return client.get<GetUserPreferencesResponse>("/v2/users/me/preferences")
+    },
+    importIssue(args: ImportIssueRequest) {
+      return client.post<ImportIssueResponse, ImportIssueRequest['body']>(
+        "/v2/comicvine/issues:import",
+        args.body,
+      )
     },
     initializeSession(args: InitializeSessionRequest) {
       return client.post<InitializeSessionResponse, InitializeSessionRequest['body']>(

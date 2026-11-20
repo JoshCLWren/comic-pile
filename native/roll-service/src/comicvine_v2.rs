@@ -13,8 +13,10 @@
 //! `list_metadata_corrections`). Chunk C adds the identity and correction
 //! WRITE routes. Lock order for every identity writer: the per-reader queue
 //! advisory lock ([`crate::queue::lock_queue`]) first, then the owned issue
-//! row (`FOR UPDATE OF i`), matching `thread_repository.py:155-158`. The
-//! import operations move in later chunks.
+//! row (`FOR UPDATE OF i`), matching `thread_repository.py:155-158`.
+//! Chunk D adds the single-issue import (`import_comicvine_issue`), which
+//! takes the same queue lock before its duplicate check, queue-position
+//! assignment and reading-order insert. Series import moves in chunk E.
 
 use crate::{auth::AuthenticatedUser, comicvine_repair::ProviderFailure, db, ApiError, AppState};
 use axum::{
@@ -22,11 +24,12 @@ use axum::{
         rejection::{JsonRejection, PathRejection, QueryRejection},
         Path, Query, State,
     },
+    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio_postgres::Transaction;
 
 /// Server deadline for the roster-backed reads (series issues and volume
@@ -216,6 +219,34 @@ pub struct MetadataCorrectionRequest {
     pub reason: Option<String>,
 }
 
+/// Python `ImportIssueRequest`: `title` 1-200 characters (stored stripped),
+/// `comicvine_issue_id > 0`, `issue_number` at most 50 characters, and the
+/// optional reading-order ids `> 0`.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ImportIssueRequest {
+    pub title: String,
+    #[serde(deserialize_with = "de_lax_i32")]
+    pub comicvine_issue_id: i32,
+    #[serde(default)]
+    pub issue_number: Option<String>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
+    pub reading_order_id: Option<i32>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
+    pub anchor_before_thread_id: Option<i32>,
+    #[serde(default, deserialize_with = "de_lax_opt_i32")]
+    pub anchor_after_thread_id: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ImportIssueResponse {
+    pub thread_id: i32,
+    pub issue_id: i32,
+    pub external_identity_id: i32,
+    pub reading_order_id: Option<i32>,
+    pub position: Option<i32>,
+    pub total_items: Option<i32>,
+}
+
 /// Python `MetadataCorrectionRevertRequest` (lax `int`).
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct MetadataCorrectionRevertRequest {
@@ -300,6 +331,18 @@ where
 {
     let value = Value::deserialize(deserializer)?;
     lax_i32(&value).ok_or_else(|| serde::de::Error::custom("invalid integer"))
+}
+
+fn de_lax_opt_i32<'de, D>(deserializer: D) -> Result<Option<i32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match Value::deserialize(deserializer)? {
+        Value::Null => Ok(None),
+        value => lax_i32(&value)
+            .map(Some)
+            .ok_or_else(|| serde::de::Error::custom("invalid integer")),
+    }
 }
 
 /// FastAPI `int` path parameter: lax string coercion, otherwise 422.
@@ -1464,6 +1507,268 @@ pub async fn refresh_metadata(
 }
 
 // ---------------------------------------------------------------------------
+// Single-issue import (chunk D).
+// ---------------------------------------------------------------------------
+
+/// 1-based insertion position between neighbor anchors. Mirrors the Python
+/// `resolve_anchored_position` rules exactly.
+fn resolve_anchored_position(
+    positions: &HashMap<i32, i32>,
+    before: Option<i32>,
+    after: Option<i32>,
+    total_items: usize,
+) -> i32 {
+    let before_pos = before.and_then(|id| positions.get(&id)).copied();
+    let after_pos = after.and_then(|id| positions.get(&id)).copied();
+    match (before_pos, after_pos) {
+        (Some(b), Some(a)) if b < a => a,
+        (Some(b), _) => b + 1,
+        (None, Some(a)) => a,
+        (None, None) => (total_items + 1) as i32,
+    }
+}
+
+/// Verify that a reading order belongs to the caller.
+async fn owned_reading_order(
+    tx: &Transaction<'_>,
+    user: i32,
+    order_id: i32,
+) -> Result<(), ApiError> {
+    let exists = tx
+        .query_opt(
+            "SELECT id FROM reading_orders WHERE id = $1 AND user_id = $2",
+            &[&order_id, &user],
+        )
+        .await
+        .map_err(db::query_error)?
+        .is_some();
+    if exists {
+        Ok(())
+    } else {
+        Err(not_found(format!("Reading order {order_id} not found")))
+    }
+}
+
+/// Shift an existing reading order and insert the new thread at `target_pos`
+/// (Python `apply_insert`: a thread already in the order is moved, not
+/// duplicated).
+async fn insert_into_reading_order(
+    tx: &Transaction<'_>,
+    order_id: i32,
+    thread_id: i32,
+    target_pos: i32,
+) -> Result<(), ApiError> {
+    let current: Option<i32> = tx
+        .query_opt(
+            "SELECT position FROM reading_order_items \
+             WHERE reading_order_id = $1 AND thread_id = $2 ORDER BY id LIMIT 1",
+            &[&order_id, &thread_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .map(|row| row.get(0));
+    if let Some(old_pos) = current {
+        if old_pos < target_pos {
+            tx.execute(
+                "UPDATE reading_order_items SET position = position - 1 \
+                 WHERE reading_order_id = $1 AND thread_id <> $2 \
+                   AND position > $3 AND position <= $4",
+                &[&order_id, &thread_id, &old_pos, &target_pos],
+            )
+            .await
+            .map_err(db::query_error)?;
+        } else if target_pos < old_pos {
+            tx.execute(
+                "UPDATE reading_order_items SET position = position + 1 \
+                 WHERE reading_order_id = $1 AND thread_id <> $2 \
+                   AND position >= $3 AND position < $4",
+                &[&order_id, &thread_id, &target_pos, &old_pos],
+            )
+            .await
+            .map_err(db::query_error)?;
+        }
+        tx.execute(
+            "UPDATE reading_order_items SET position = $3 \
+             WHERE reading_order_id = $1 AND thread_id = $2",
+            &[&order_id, &thread_id, &target_pos],
+        )
+        .await
+        .map_err(db::query_error)?;
+    } else {
+        tx.execute(
+            "UPDATE reading_order_items SET position = position + 1 \
+             WHERE reading_order_id = $1 AND position >= $2",
+            &[&order_id, &target_pos],
+        )
+        .await
+        .map_err(db::query_error)?;
+        tx.execute(
+            "INSERT INTO reading_order_items (reading_order_id, thread_id, position) \
+             VALUES ($1, $2, $3)",
+            &[&order_id, &thread_id, &target_pos],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+    Ok(())
+}
+
+/// `POST /api/v2/comicvine/issues:import` (Python `import_comicvine_issue`).
+pub async fn import_issue(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    request: Result<Json<ImportIssueRequest>, JsonRejection>,
+) -> Result<(StatusCode, Json<ImportIssueResponse>), ApiError> {
+    let Json(request) = request.map_err(|_| validation_failed())?;
+    // Python `title: Field(min_length=1, max_length=200)` bounds the raw
+    // string; the service then stores `title.strip()` (possibly empty).
+    let title = request.title.trim();
+    if request.title.is_empty() || request.title.chars().count() > 200 {
+        return Err(unprocessable("Invalid title"));
+    }
+    if request.comicvine_issue_id <= 0 {
+        return Err(unprocessable("Invalid comicvine_issue_id"));
+    }
+    if request
+        .issue_number
+        .as_deref()
+        .is_some_and(|n| n.chars().count() > 50)
+    {
+        return Err(unprocessable("Invalid issue number"));
+    }
+    for id in [
+        request.reading_order_id,
+        request.anchor_before_thread_id,
+        request.anchor_after_thread_id,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if id <= 0 {
+            return Err(unprocessable("Invalid reading order anchor"));
+        }
+    }
+
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    // Lock order: queue advisory lock first, then thread/issue row locks; it
+    // also serializes the duplicate check and queue-position assignment.
+    crate::queue::lock_queue(&tx, user.id()).await?;
+    let external_id = request.comicvine_issue_id.to_string();
+    if let Some(order_id) = request.reading_order_id {
+        owned_reading_order(&tx, user.id(), order_id).await?;
+    }
+    let duplicate: Option<i32> = tx
+        .query_opt(
+            "SELECT i.id FROM external_identities e \
+             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+             JOIN issues i ON i.id = m.issue_id \
+             JOIN threads t ON t.id = i.thread_id \
+             WHERE e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND e.external_id = $1 AND m.status = 'confirmed' AND t.user_id = $2 \
+             ORDER BY (i.status = 'read') DESC, i.read_at ASC NULLS LAST, i.id \
+             LIMIT 1",
+            &[&external_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .map(|row| row.get(0));
+    if let Some(existing_issue_id) = duplicate {
+        let message = format!(
+            "ComicVine issue {} already exists as issue {}",
+            request.comicvine_issue_id, existing_issue_id
+        );
+        return Err(ApiError::StructuredDetail {
+            status: StatusCode::CONFLICT,
+            message: message.clone(),
+            detail: serde_json::json!({
+                "code": "duplicate_physical_issue",
+                "comicvine_issue_id": request.comicvine_issue_id,
+                "existing_issue_id": existing_issue_id,
+                "message": message,
+            }),
+        });
+    }
+
+    let next_position: i32 = tx
+        .query_one(
+            "SELECT COALESCE(MAX(queue_position), 0) + 1 FROM threads WHERE user_id = $1",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
+    let thread_row = tx
+        .query_one(
+            "INSERT INTO threads \
+                (title, format, issues_remaining, total_issues, queue_position, status, \
+                 user_id, created_at, is_test, is_blocked) \
+             VALUES ($1, 'Comic', 1, 1, $2, 'active', $3, now(), false, false) \
+             RETURNING id",
+            &[&title, &next_position, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let thread_id: i32 = thread_row.get(0);
+    let issue_row = tx
+        .query_one(
+            "INSERT INTO issues \
+                (thread_id, issue_number, position, status, created_at) \
+             VALUES ($1, $2, 1, 'unread', now()) RETURNING id",
+            // Python `request.issue_number or "1"`: empty is "1" too (#4636390879).
+            &[
+                &thread_id,
+                &request
+                    .issue_number
+                    .as_deref()
+                    .filter(|number| !number.is_empty())
+                    .unwrap_or("1"),
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let issue_id: i32 = issue_row.get(0);
+    // Python `confirm_comicvine_identity` (no post-commit hydration on import).
+    let external_identity_id =
+        link_with_source(&tx, issue_id, request.comicvine_issue_id, "user_confirmed").await?;
+
+    let mut response = ImportIssueResponse {
+        thread_id,
+        issue_id,
+        external_identity_id,
+        reading_order_id: None,
+        position: None,
+        total_items: None,
+    };
+    if let Some(order_id) = request.reading_order_id {
+        let items = tx
+            .query(
+                "SELECT thread_id, position FROM reading_order_items \
+                 WHERE reading_order_id = $1 ORDER BY position, id",
+                &[&order_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let mut positions = HashMap::new();
+        for row in &items {
+            positions.insert(row.get::<_, i32>(0), row.get::<_, i32>(1));
+        }
+        let target = resolve_anchored_position(
+            &positions,
+            request.anchor_before_thread_id,
+            request.anchor_after_thread_id,
+            items.len(),
+        );
+        insert_into_reading_order(&tx, order_id, thread_id, target).await?;
+        response.reading_order_id = Some(order_id);
+        response.position = Some(target);
+        response.total_items = Some(items.len() as i32 + 1);
+    }
+    tx.commit().await.map_err(db::query_error)?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+// ---------------------------------------------------------------------------
 // OpenAPI documentation. These no-op functions feed the canonical generated
 // v2 contract; handlers above never import documentation code at runtime.
 // ---------------------------------------------------------------------------
@@ -1663,6 +1968,24 @@ pub fn revert_correction_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn refresh_metadata_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues:import",
+    request_body = ImportIssueRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 201, description = "Imported thread, issue and identity", body = ImportIssueResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 403, description = "CSRF validation failed"),
+        (status = 404, description = "Reading order not found"),
+        (status = 409, description = "ComicVine issue already exists for this reader"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn import_issue_documentation() {}
 
 // ---------------------------------------------------------------------------
 // Focused unit tests (no database or provider required).

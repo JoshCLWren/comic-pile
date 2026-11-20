@@ -11805,6 +11805,93 @@
           }
         }
       },
+      "ImportIssueRequest": {
+        "type": "object",
+        "description": "Python `ImportIssueRequest`: `title` 1-200 characters (stored stripped),\n`comicvine_issue_id > 0`, `issue_number` at most 50 characters, and the\noptional reading-order ids `> 0`.",
+        "required": [
+          "title",
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "anchor_after_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "anchor_before_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "ImportIssueResponse": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "issue_id",
+          "external_identity_id"
+        ],
+        "properties": {
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "InheritanceSource": {
         "type": "object",
         "required": [

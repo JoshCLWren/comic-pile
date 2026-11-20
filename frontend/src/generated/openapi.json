@@ -9246,6 +9246,93 @@
         ],
         "type": "object"
       },
+      "NativeImportIssueRequest": {
+        "description": "Python `ImportIssueRequest`: `title` 1-200 characters (stored stripped),\n`comicvine_issue_id > 0`, `issue_number` at most 50 characters, and the\noptional reading-order ids `> 0`.",
+        "properties": {
+          "anchor_after_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "anchor_before_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "comicvine_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_order_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "comicvine_issue_id"
+        ],
+        "type": "object"
+      },
+      "NativeImportIssueResponse": {
+        "properties": {
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "position": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reading_order_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_items": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "issue_id",
+          "external_identity_id"
+        ],
+        "type": "object"
+      },
       "NativeIssueCreatorsEntry": {
         "description": "Stored creator credits for one issue (Python `IssueCreatorsEntry`).",
         "properties": {
@@ -25024,6 +25111,56 @@
           },
           "404": {
             "description": "Issue not owned"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "comicvine-v2"
+        ]
+      }
+    },
+    "/api/v2/comicvine/issues:import": {
+      "post": {
+        "operationId": "import_issue_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NativeImportIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeImportIssueResponse"
+                }
+              }
+            },
+            "description": "Imported thread, issue and identity"
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "403": {
+            "description": "CSRF validation failed"
+          },
+          "404": {
+            "description": "Reading order not found"
+          },
+          "409": {
+            "description": "ComicVine issue already exists for this reader"
           },
           "422": {
             "description": "Validation failed"
