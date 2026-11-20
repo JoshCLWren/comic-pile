@@ -1368,7 +1368,8 @@ mod tests {
                       created_at, updated_at)
                  VALUES (500, 110, 50, 'confirmed', '{}'::json, now(), now()),
                         (501, 102, 51, 'confirmed', '{}'::json, now(), now()),
-                        (502, 301, 52, 'confirmed', '{}'::json, now(), now());"#)
+                        (502, 301, 52, 'confirmed', '{}'::json, now(), now()),
+                        (503, 401, 53, 'confirmed', '{}'::json, now(), now());"#)
             .await
             .expect("seed canonical schema");
         let user = AuthenticatedUser::for_test(1);
@@ -1660,8 +1661,8 @@ mod tests {
         // Production regression #4722: confirmed ComicVine mappings may have
         // only primary_image, even though Roll displays that stored artwork.
         // The batch and single-card (direct PATCH response) projections agree.
-        let covers = cards(&first, user, &[102, 301]).await.unwrap();
-        assert_eq!(covers.items.len(), 2);
+        let covers = cards(&first, user, &[102, 301, 401]).await.unwrap();
+        assert_eq!(covers.items.len(), 3);
         assert_eq!(covers.items[0].mapping_state, "confirmed");
         assert_eq!(
             covers.items[0].cover_image_url.as_deref(),
@@ -1670,6 +1671,10 @@ mod tests {
         assert_eq!(
             covers.items[1].cover_image_url.as_deref(),
             Some("https://comicvine.example/covers/dependent.jpg")
+        );
+        assert_eq!(
+            covers.items[2].cover_image_url.as_deref(),
+            Some("https://comicvine.example/covers/thumb.jpg")
         );
         let tx = first.transaction().await.unwrap();
         let direct = card(&tx, user, 102).await.unwrap();
