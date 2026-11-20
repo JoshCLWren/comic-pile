@@ -863,7 +863,7 @@ describe('CblBrowserPage adoption', () => {
     expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
 
     await openChecklist(user)
-    await expandVolume(user, 'Ultimate Spider-Man')
+    await expandVolume(user, 'X-Men (1963)')
     expect(screen.queryByRole('checkbox', { name: 'Include X-Men (1963) #120' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Skip' }))
 
