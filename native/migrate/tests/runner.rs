@@ -305,6 +305,7 @@ async fn edited_applied_migration_is_refused() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     run(&mut client).await.unwrap();
+    assert!(!needs_work(&mut client).await.unwrap());
     client
         .execute(
             "UPDATE public.refinery_schema_history SET checksum = 0 WHERE version = 1",
@@ -312,6 +313,11 @@ async fn edited_applied_migration_is_refused() {
         )
         .await
         .unwrap();
+    let plan_error = needs_work(&mut client).await.unwrap_err();
+    assert!(
+        plan_error.0.to_lowercase().contains("divergent"),
+        "plan must reject a changed applied checksum, got: {plan_error}"
+    );
     let error = run(&mut client).await.unwrap_err();
     let msg = error.0.to_lowercase();
     assert!(
@@ -320,6 +326,51 @@ async fn edited_applied_migration_is_refused() {
             || msg.contains("checksum")
             || msg.contains("modified"),
         "expected checksum/divergence error, got: {error}"
+    );
+    drop(client);
+    db.drop_database().await;
+}
+
+#[tokio::test]
+async fn needs_work_rejects_an_applied_migration_with_a_changed_name() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    run(&mut client).await.unwrap();
+    client
+        .execute(
+            "UPDATE public.refinery_schema_history SET name = 'tampered' WHERE version = 1",
+            &[],
+        )
+        .await
+        .unwrap();
+
+    let error = needs_work(&mut client).await.unwrap_err();
+    assert!(
+        error.0.to_lowercase().contains("divergent"),
+        "plan must reject a changed applied name, got: {error}"
+    );
+    drop(client);
+    db.drop_database().await;
+}
+
+#[tokio::test]
+async fn needs_work_rejects_an_applied_version_missing_from_the_binary() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    run(&mut client).await.unwrap();
+    client
+        .execute(
+            "INSERT INTO public.refinery_schema_history (version, name, applied_on, checksum) \
+             VALUES (999, 'removed_migration', NOW(), 0)",
+            &[],
+        )
+        .await
+        .unwrap();
+
+    let error = needs_work(&mut client).await.unwrap_err();
+    assert!(
+        error.0.to_lowercase().contains("missing"),
+        "plan must reject unknown applied history, got: {error}"
     );
     drop(client);
     db.drop_database().await;

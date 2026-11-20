@@ -82,6 +82,17 @@ fn reject_unbounded_settings_and_public_development_binding() {
 }
 
 #[test]
+fn disposable_test_environment_accepts_container_binding_and_local_database() {
+    let mut values = values();
+    values.insert("RUST_ROLL_ENV", "test".into());
+    values.insert("RUST_ROLL_BIND", "0.0.0.0:8000".into());
+    let config = Config::from_lookup(|key| values.get(key).cloned())
+        .expect("the disposable Docker test harness must start");
+    assert_eq!(config.environment, Environment::Test);
+    assert_eq!(config.bind.to_string(), "0.0.0.0:8000");
+}
+
+#[test]
 fn public_production_binding_requires_verified_tls_transport() {
     let mut values = values();
     values.insert("RUST_ROLL_ENV", "production".into());
