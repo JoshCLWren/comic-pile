@@ -62,7 +62,7 @@ if [ -z "${VIRTUAL_ENV:-}" ]; then
 fi
 
 if ! command -v pnpm >/dev/null 2>&1; then
-    echo "ERROR: pnpm is required for frontend lint/tests."
+    echo "ERROR: pnpm is required for frontend lint."
     exit 1
 fi
 
