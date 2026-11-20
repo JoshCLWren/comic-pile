@@ -83,13 +83,13 @@
 **Tracking:** Approved Queue/dialog work [#3558](https://github.com/JoshCLWren/comic-pile/issues/3558); related QA regression [#3771](https://github.com/JoshCLWren/comic-pile/issues/3771). Keep separately tracked functional Queue bugs independent of this usability contract.
 
 
-## MQA-QUEUE-011: Finished series stay listed
+## MQA-QUEUE-011: Finished series stay listed and can be extended
 
-**Setup:** QA account with at least one completed series.
+**Setup:** QA account with a fully read single-issue series, with its original issue rating recorded.
 
-**Test:** Open Queue, expand Finished Series, reload and navigate away and back.
+**Test:** Open Queue, expand Finished Series, reload and navigate away and back. Choose **Add Back to Queue** for the finished series, explicitly request one new unread issue in **Issues to Add**, and inspect the expanded series and read history. Independently test **Removed from Queue → Restore** on a removed (not finished) series.
 
-**Expected:** Completed series remain listed (read from the completed collection, not the active-only Queue rows). Source: #5171, fixed by #5297.
+**Expected:** Completed series remain listed before reactivation (read from the completed collection, not the active-only Queue rows). **Add Back to Queue intentionally creates the requested number of new unread issues** and reactivates the expanded series. A finished one-issue series extended by one becomes a two-issue series with its original issue still read and rated, and the new #2 unread (50% complete). Do not report the requested new #2 as a phantom issue. Verify exactly the requested addition is made, without duplicate issues or damaged existing history. In contrast, restoring a **Removed from Queue** series reactivates its existing issues and does not create new issues. Owner decision 2026-11-20; prior misclassified report [#5611](https://github.com/JoshCLWren/comic-pile/issues/5611). Source: #5171, fixed by #5297.
 
 ## MQA-QUEUE-012: Queue rows show the series cover when a confirmed cover exists
 
@@ -101,11 +101,11 @@
 
 ## MQA-QUEUE-013: Bulk remove and restore container series from Queue
 
-**Setup:** A reading list, reading plan, or crossover containing multiple active series in the Queue. Include a case where at least one member also belongs to another active list/crossover when possible.
+**Setup:** An authoritative Reading List containing multiple active series in the Queue. Include a case where at least one member also belongs to another active list/crossover when possible.
 
 **Test:** From the container page, choose "Remove all series from Queue" (or equivalent bulk action), review the affected series list, keep any series that should remain in another active context when offered, and confirm. Inspect Queue active rows, the Removed from Queue section, and Roll eligibility. Then restore the whole removal group from Queue and/or restore all from the container action.
 
-**Expected:** The action removes the selected container series from the active Queue in one operation without deleting issues, read history, ratings, mappings, or list/plan/crossover membership. Removed series appear grouped by the removal source in Queue with group and individual restore available. Restoring returns eligible series to the active Queue and updates Roll eligibility accordingly. The confirmation waits for overlap checks to complete and does not proceed if those checks fail; series intentionally kept in Queue remain active.
+**Expected:** The action removes the selected container series from the active Queue in one operation without deleting issues, read history, ratings, mappings, or Reading List membership. Removed series appear grouped by the removal source in Queue with group and individual restore available. Restoring returns eligible series to the active Queue and updates Roll eligibility accordingly. The confirmation waits for overlap checks to complete and does not proceed if those checks fail; series intentionally kept in Queue remain active.
 
 ## MQA-QUEUE-014: Delete series removes events and related rows atomically
 
