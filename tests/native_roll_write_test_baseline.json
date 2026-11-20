@@ -2,16 +2,10 @@
   "description": "Frozen, shrink-only exemptions for native Roll POST handlers that predate the write-path test rule. Add a test that calls the handler or its persist_<handler> writer before changing an entry.",
   "allowed_modules": [
     "dismiss_pending",
-    "issue_mutation",
-    "reading_graph",
-    "reading_list",
     "reading_plan_sync"
   ],
   "modules": {
     "dismiss_pending": "Legacy pending bridge handler. Add an endpoint-level DB test before its next behavioral change.",
-    "issue_mutation": "Handler-level write coverage lives in tests/reading_cycle_containment.rs against the canonical Alembic schema; the same file proves atomic rollback and order preservation.",
-    "reading_graph": "Handler-level repair coverage lives in tests/reading_cycle_containment.rs against the canonical Alembic schema; the same file proves preview/apply and owner isolation.",
-    "reading_list": "Handler-level create/delete coverage lives in tests/reading_cycle_containment.rs against the canonical Alembic schema; the same file proves cyclic creation rollback and list resources on a corrupt graph.",
     "reading_plan_sync": "Handler-level write coverage lives in module tests and HTTP call sites against the canonical schema; add a recognized per-handler write-path test before changing an entry."
   },
   "allowed_handlers": [
