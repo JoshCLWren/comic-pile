@@ -228,6 +228,8 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
         assert_declared_budget("POST", "/api/v2/reading-graph/repairs", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.asyncio

@@ -358,8 +358,9 @@
         "transaction_control_statements": 2,
         "total_statements": 8,
         "grows_with_data": false,
-        "basis": "preview path: option diagnostics 1 (+2 tx) or confirm path adds lock+delete+reload; worst case shown; refine via parity harness",
-        "max_statements": 8,
+        "basis": "preview path: option diagnostics 1 (+2 tx); confirm path adds lock+delete+reload+checkout probe (1). max_statements accounts for confirm path.",
+        "max_statements": 9,
+        "runtime_overhead_statements": 1,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
