@@ -259,6 +259,90 @@ async fn owned_issue_ids(
     Ok(rows.iter().map(|row| row.get(0)).collect())
 }
 
+/// Column-major batch for one set-based Reading List entry insert.
+///
+/// Building the whole batch up front keeps a large list to a single
+/// `INSERT ... SELECT unnest(...)`, so the route's statement budget stays fixed
+/// as entry count grows instead of issuing one `INSERT` per entry.
+#[derive(Default)]
+struct EntryColumns {
+    issue_ids: Vec<i32>,
+    positions: Vec<i32>,
+    checkpoints: Vec<bool>,
+    targets: Vec<String>,
+    gates: Vec<String>,
+    skipped: Vec<bool>,
+}
+
+impl EntryColumns {
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            issue_ids: Vec::with_capacity(capacity),
+            positions: Vec::with_capacity(capacity),
+            checkpoints: Vec::with_capacity(capacity),
+            targets: Vec::with_capacity(capacity),
+            gates: Vec::with_capacity(capacity),
+            skipped: Vec::with_capacity(capacity),
+        }
+    }
+
+    fn push(
+        &mut self,
+        issue_id: i32,
+        position: usize,
+        is_checkpoint: bool,
+        targets: &[i32],
+        gate: &str,
+        skipped: bool,
+    ) -> Result<(), ApiError> {
+        let targets_json = serde_json::to_string(targets).map_err(|error| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&error),
+                "preserved underlying error before mapping"
+            );
+            ApiError::Internal("Invalid checkpoint".to_string())
+        })?;
+        self.issue_ids.push(issue_id);
+        self.positions.push(position as i32);
+        self.checkpoints.push(is_checkpoint);
+        self.targets.push(targets_json);
+        self.gates.push(gate.to_string());
+        self.skipped.push(skipped);
+        Ok(())
+    }
+}
+
+async fn insert_entries(
+    tx: &Transaction<'_>,
+    list_id: i32,
+    columns: &EntryColumns,
+) -> Result<(), ApiError> {
+    if columns.issue_ids.is_empty() {
+        return Ok(());
+    }
+    tx.execute(
+        "INSERT INTO custom_cbl_entries
+           (list_id, issue_id, position, created_at, is_checkpoint,
+            checkpoint_target_issue_ids, gate, skipped)
+         SELECT $1, e.issue_id, e.position, NOW(), e.is_checkpoint,
+                e.targets::json, e.gate, e.skipped
+         FROM unnest($2::int[], $3::int[], $4::bool[], $5::text[], $6::text[], $7::bool[])
+              AS e(issue_id, position, is_checkpoint, targets, gate, skipped)",
+        &[
+            &list_id,
+            &columns.issue_ids,
+            &columns.positions,
+            &columns.checkpoints,
+            &columns.targets,
+            &columns.gates,
+            &columns.skipped,
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
 async fn load_entries(
     tx: &Transaction<'_>,
     list_id: i32,
