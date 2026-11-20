@@ -811,6 +811,8 @@ describe('CblBrowserPage adoption', () => {
         screen.getByRole('button', { name: 'Add this reading order' }),
       ).not.toBeDisabled()
     })
+    expect(screen.getByText('Need attention').nextElementSibling).toHaveTextContent('0')
+    expect(screen.queryByText(/still needs attention/)).not.toBeInTheDocument()
   })
 
   it('excluding the series of an unresolved entry unblocks the add (#3542)', async () => {
