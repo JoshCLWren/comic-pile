@@ -358,7 +358,7 @@
         "transaction_control_statements": 2,
         "total_statements": 8,
         "grows_with_data": false,
-        "basis": "preview path: option diagnostics 1 (+2 tx) or confirm path adds lock+delete+reload; worst case shown; refine via parity harness",
+        "basis": "preview path: option diagnostics 1 (+2 tx) or confirm path adds lock+delete+reload with persisted results; worst case shown; refine via parity harness",
         "max_statements": 8,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
         "measurement_status": "measured",
