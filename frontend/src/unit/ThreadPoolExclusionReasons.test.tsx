@@ -58,10 +58,16 @@ describe('Retired Roll exclusion details (#4441)', () => {
     expect(onThreadClick).toHaveBeenCalledWith(eligible)
   })
 
-  it('offers queue navigation for snoozed-only state without an exclusion report', () => {
-    mount({ snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }] })
+  it('offers Reset Dice and queue navigation when snoozes exhaust the pool', () => {
+    const onResetDice = vi.fn()
+    mount({
+      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
+      onResetDice,
+    })
 
     expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Dice' }))
+    expect(onResetDice).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('button', { name: 'Go to Queue' })).toBeInTheDocument()
     expect(screen.queryByText('Completed Vol. 2')).not.toBeInTheDocument()
   })

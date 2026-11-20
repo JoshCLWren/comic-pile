@@ -18,7 +18,6 @@ interface RollHeaderProps {
   dieSize: number
   displayDie: DiceSide
   snoozedThreads: RollBootstrapThread[]
-  pool: RollBootstrapThread[]
   isRatingView: boolean
   setDiePending: boolean
   onSetDie: (die: number) => Promise<boolean> | boolean

@@ -440,7 +440,6 @@ export default function RollPage() {
         dieSize={dieSize}
         displayDie={displayDie}
         snoozedThreads={snoozedThreads}
-        pool={pool}
         isRatingView={state.isRatingView}
         setDiePending={setDieMutation.isPending}
         onSetDie={actions.handleSetDie}

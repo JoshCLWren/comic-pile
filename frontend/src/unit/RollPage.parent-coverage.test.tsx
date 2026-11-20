@@ -515,7 +515,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.snoozed_threads = sessionData.snoozed_threads
     bootstrapData.snoozed_count = 6
     render(<RollPage />)
-    expect(screen.getByText('offset active')).toBeInTheDocument()
+    expect(screen.queryByText('offset active')).not.toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /^current die d6$/i }))
     expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'close modal' }))

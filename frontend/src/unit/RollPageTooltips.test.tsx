@@ -129,7 +129,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it('renders tooltip for offset indicator when snoozed threads exist', async () => {
+it('does not render the retired backfill offset when snoozed threads exist', async () => {
   render(
     <ToastProvider>
       <BugReportRestoreProvider>
@@ -138,18 +138,11 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
     </ToastProvider>
   )
 
-   // Check that the offset indicator is rendered with tooltip
-   expect(screen.getByText('+2')).toBeInTheDocument()
-
-   // Check that the offset indicator has the cursor-help class (indicating tooltip)
-   const offsetIndicator = screen.getByText('+2')
-   expect(offsetIndicator).toHaveClass('cursor-help')
-   expect(offsetIndicator).toHaveClass('border-b')
-   expect(offsetIndicator).toHaveClass('border-dashed')
-   expect(offsetIndicator).toHaveClass('border-stone-600')
+  expect(screen.queryByText('+2')).not.toBeInTheDocument()
+  expect(screen.queryByText('offset active')).not.toBeInTheDocument()
 })
 
-  it('renders tooltips for snoozed offset active text', async () => {
+  it('keeps the snoozed shelf visible without claiming a backfill offset', async () => {
     render(
       <ToastProvider>
         <BugReportRestoreProvider>
@@ -158,19 +151,8 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
       </ToastProvider>
     )
 
-    const snoozedIndicator = screen.getByText('+2')
-    expect(snoozedIndicator).toBeInTheDocument()
-    expect(snoozedIndicator).toHaveClass('cursor-help')
-    expect(snoozedIndicator).toHaveClass('border-b')
-    expect(snoozedIndicator).toHaveClass('border-dashed')
-    expect(snoozedIndicator).toHaveClass('border-stone-600')
-
-    const offsetActiveText = screen.getByText('offset active')
-    expect(offsetActiveText).toBeInTheDocument()
-    expect(offsetActiveText).toHaveClass('cursor-help')
-    expect(offsetActiveText).toHaveClass('border-b')
-    expect(offsetActiveText).toHaveClass('border-dashed')
-    expect(offsetActiveText).toHaveClass('border-stone-600')
+    expect(screen.getByText('Snoozed (2)')).toBeInTheDocument()
+    expect(screen.queryByText('offset active')).not.toBeInTheDocument()
   })
 
 it('renders tooltip for die indicator', async () => {
