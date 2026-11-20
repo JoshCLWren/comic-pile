@@ -1277,16 +1277,21 @@ async fn converted_legacy_cycle_does_not_block_creation_but_reader_cycle_does() 
         .unwrap()
         .contains("Reading constraint cycle"));
     let path = detail["path"].as_array().unwrap();
-    assert!(path.iter().any(|edge| {
-        edge["source_issue_name"] == "X-Force #3"
-            && edge["target_issue_name"] == "X-Force #1"
-            && edge["prerequisite_origin"] == "reader"
-            && edge["origin"].as_str().unwrap().contains("prerequisite")
-    }), "{detail}");
-    assert!(path.iter().any(|edge| {
-        edge["source_issue_name"] == "X-Force #1"
-            && edge["target_issue_name"] == "X-Force #2"
-    }), "{detail}");
+    assert!(
+        path.iter().any(|edge| {
+            edge["source_issue_name"] == "X-Force #3"
+                && edge["target_issue_name"] == "X-Force #1"
+                && edge["prerequisite_origin"] == "reader"
+                && edge["origin"].as_str().unwrap().contains("prerequisite")
+        }),
+        "{detail}"
+    );
+    assert!(
+        path.iter().any(|edge| {
+            edge["source_issue_name"] == "X-Force #1" && edge["target_issue_name"] == "X-Force #2"
+        }),
+        "{detail}"
+    );
 
     let list_count: i64 = conn
         .query_one(
