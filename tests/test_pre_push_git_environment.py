@@ -97,8 +97,8 @@ exit 0
     # Assert that no test commands ran; gate_log should only contain lint-related messages
     gate_log_content = gate_log.read_text()
     assert "pytest" not in gate_log_content, (
-        f"Test commands (pytest) should not run during pre-push lint; found in gate_log"
+        "Test commands (pytest) should not run during pre-push lint; found in gate_log"
     )
     assert "vitest" not in gate_log_content, (
-        f"Test commands (vitest) should not run during pre-push lint; found in gate_log"
+        "Test commands (vitest) should not run during pre-push lint; found in gate_log"
     )
