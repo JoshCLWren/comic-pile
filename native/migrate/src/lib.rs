@@ -289,18 +289,30 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
         };
     }
 
-    let applied: std::collections::BTreeSet<i32> = runner()
-        .get_applied_migrations_async(client)
-        .await?
-        .iter()
-        .map(|m| m.version())
-        .collect();
+    let applied_migrations = runner().get_applied_migrations_async(client).await?;
+    let applied: std::collections::BTreeSet<i32> =
+        applied_migrations.iter().map(|m| m.version()).collect();
     let pending = runner()
         .get_migrations()
         .iter()
         .any(|m| !applied.contains(&m.version()));
     if pending {
         return Ok(true);
+    }
+
+    // A version bump is not the only signal that a migration changed: if an
+    // applied migration's recorded name or checksum disagrees with the embedded
+    // migration, the deploy must run `up` so refinery's checksum check fires.
+    for embedded in runner().get_migrations() {
+        match applied_migrations
+            .iter()
+            .find(|recorded| recorded.version() == embedded.version())
+        {
+            Some(recorded)
+                if recorded.name() == embedded.name()
+                    && recorded.checksum() == embedded.checksum() => {}
+            _ => return Ok(true),
+        }
     }
 
     Ok(alembic_revisions(client).await?.as_deref() != Some(&[BASELINE_ALEMBIC_HEAD.to_string()]))

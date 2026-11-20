@@ -39,9 +39,9 @@ services:
       MIGRATE_DATABASE_URL: postgresql://postgres:postgres@postgres-test:5432/comic_pile_test
       SECRET_KEY: test-secret-key-for-testing-only
       RUST_ROLL_JWT_SECRET: test-secret-key-for-testing-only
-      RUST_ROLL_DATABASE_URL: postgresql://postgres:postgres@postgres-test:5432/comic_pile_test
+      RUST_ROLL_DATABASE_URL: postgresql://postgres:postgres@postgres-test:5432/comic_pile_test?sslmode=require
       RUST_ROLL_BIND: 0.0.0.0:8000
-      RUST_ROLL_ENV: test
+      RUST_ROLL_ENV: production
       ENVIRONMENT: test
     command: ["/bin/sh", "-c", "/app/bin/comicpile-migrate up && exec /app/bin/comicpile-roll-service"]
     ports:
