@@ -206,6 +206,26 @@ fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String
     if status == "candidate" {
         return "Multiple candidates require explicit review".to_string();
     }
+    if status == "deferred" {
+        // Deferred items should still show candidate evidence if candidates exist.
+        // This is handled by the candidate_count > 0 branch above, but if we reach
+        // here with candidate_count == 0, show "No candidates found".
+        let is_empty_evidence = evidence.is_null()
+            || evidence.as_object().map(|o| o.is_empty()).unwrap_or(false)
+            || evidence.as_array().map(|a| a.is_empty()).unwrap_or(false);
+        if is_empty_evidence {
+            return "No candidates found".to_string();
+        }
+        // If we have non-empty evidence but no candidates counted, show the reason.
+        if let Some(obj) = evidence.as_object() {
+            if let Some(reason) = obj.get("decision_reason").and_then(|v| v.as_str()) {
+                if !reason.is_empty() {
+                    return reason.to_string();
+                }
+            }
+        }
+        return "No candidates found".to_string();
+    }
     format!("Status: {status}")
 }
 
