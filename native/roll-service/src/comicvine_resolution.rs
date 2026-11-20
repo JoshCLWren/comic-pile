@@ -102,8 +102,7 @@ pub struct IssueIdentityMapping {
 ///
 /// Wire parity with Python `api_get_issue_identity`.
 pub async fn get_issue_identity(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
@@ -125,8 +124,7 @@ pub async fn get_issue_identity(
 ///
 /// Wire parity with Python `api_confirm_identity`.
 pub async fn confirm_identity(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
@@ -149,8 +147,7 @@ pub async fn confirm_identity(
 ///
 /// Wire parity with Python `api_replace_identity`.
 pub async fn replace_identity(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
@@ -180,8 +177,7 @@ pub struct ListCorrectionsResponse {
 ///
 /// Wire parity with Python `api_list_corrections`.
 pub async fn list_corrections(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
@@ -205,8 +201,7 @@ pub struct RefreshMetadataResponse {
 ///
 /// Wire parity with Python `api_refresh_metadata`.
 pub async fn refresh_metadata(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
@@ -237,8 +232,7 @@ pub struct RevertCorrectionResponse {
 ///
 /// Wire parity with Python `api_revert_correction`.
 pub async fn revert_correction(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
@@ -262,8 +256,7 @@ pub async fn revert_correction(
 ///
 /// Wire parity with Python `api_apply_correction`.
 pub async fn apply_correction(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
@@ -309,8 +302,7 @@ pub struct ImportIssueResponse {
 ///
 /// Wire parity with Python `api_import_issue`.
 pub async fn import_issue(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Json(_request): Json<ImportIssueRequest>,
@@ -342,8 +334,7 @@ pub struct ResolveResponse {
 ///
 /// Wire parity with Python `api_resolve_comicvine_input`.
 pub async fn resolve_input(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     query: Result<Query<ResolveQuery>, QueryRejection>,
 ) -> Result<Json<ResolveResponse>, ApiError> {
@@ -410,8 +401,7 @@ pub struct SeriesSearchResponse {
 ///
 /// Wire parity with Python `api_search_comicvine_series`.
 pub async fn search_series_v1(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     query: Result<Query<SearchQuery>, QueryRejection>,
 ) -> Result<Json<SeriesSearchResponse>, ApiError> {
@@ -479,8 +469,7 @@ pub struct SeriesIssuesResponse {
 ///
 /// Wire parity with Python `api_get_series_issues`.
 pub async fn series_issues_v1(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Path(comicvine_volume_id): Path<i32>,
@@ -523,8 +512,7 @@ pub struct ImportSeriesResponse {
 ///
 /// Wire parity with Python `api_import_series`.
 pub async fn import_series(
-    #[axum::debug_handler]
-
+    
     _state_state: State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Json(request): Json<ImportSeriesRequest>,
