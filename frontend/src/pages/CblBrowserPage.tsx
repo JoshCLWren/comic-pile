@@ -991,7 +991,7 @@ export default function CblBrowserPage() {
               <legend className="px-1 text-sm font-bold text-[var(--theme-text-primary)]">
                 Choose an existing Reading Plan
               </legend>
-              <p className="text-sm text-[var(--theme-muted)]">
+              <p className="text-sm text-[var(--theme-text-muted)]">
                 {sourceAlreadyAdopted
                   ? 'This source already belongs to a Reading Plan. Choose the exact plan to update; nothing is selected automatically.'
                   : 'A Reading Plan with this source’s name already exists. Choose the exact plan to update, or Cancel to leave it unchanged. Nothing is selected automatically.'}
