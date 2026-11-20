@@ -1257,6 +1257,142 @@ async fn session_state(state: &Arc<AppState>, user_id: i32) -> (Option<i32>, Vec
 }
 
 #[tokio::test]
+async fn roll_rerolls_shrink_top_die_without_backfill_and_reset_restores_pool() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-no-backfill").await;
+    let ids = rollable_threads(&state.pool.get().await.unwrap(), user_id, 6).await;
+
+    let (die_status, die_body) = send(
+        &state,
+        post(
+            "/api/v2/roll/dice-command",
+            &token,
+            &csrf,
+            Some(json!({
+                "kind": "manual_select",
+                "die": 4,
+                "idempotency_key": "no-backfill-manual-d4"
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(die_status, StatusCode::OK, "{die_body:?}");
+
+    let initial = offer_value(&state, &token, &csrf, "no-backfill-offer-0", None).await;
+    let mut pending = initial["thread_id"].as_i64().unwrap() as i32;
+    assert!(ids[..4].contains(&pending), "{initial:?}");
+    let mut browser_snoozes = Vec::new();
+
+    // The scoped read projects the next reroll: it excludes both the cookie
+    // snoozes and the pending offer. The original four-face window must shrink
+    // 3 -> 2 -> 1 -> 0 while ranks five and six stay out throughout.
+    for remaining in (0usize..4).rev() {
+        let query = if browser_snoozes.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "?snoozed={}",
+                browser_snoozes
+                    .iter()
+                    .map(i32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        };
+        let (pool_status, pool_body) = send(
+            &state,
+            get(
+                &format!("/api/v2/roll/eligible-issue-ids{query}"),
+                &token,
+                &csrf,
+            ),
+        )
+        .await;
+        assert_eq!(pool_status, StatusCode::OK, "{pool_body:?}");
+        assert_eq!(pool_body["die"].as_i64(), Some(4));
+        assert_eq!(pool_body["pool_reason"], "ready");
+        let projected: Vec<i32> = pool_body["thread_ids"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|id| id.as_i64().unwrap() as i32)
+            .collect();
+        assert_eq!(projected.len(), remaining, "{pool_body:?}");
+        assert!(
+            projected
+                .iter()
+                .all(|id| ids[..4].contains(id) && id != &pending),
+            "deeper ranks or the pending face leaked into {projected:?}"
+        );
+
+        let (offer_status, offer_body) = send(
+            &state,
+            post(
+                "/api/v2/roll/offer",
+                &token,
+                &csrf,
+                Some(json!({
+                    "idempotency_key": format!("no-backfill-offer-{}", browser_snoozes.len() + 1),
+                    "expected_pending_thread_id": pending,
+                    "snoozed_thread_ids": browser_snoozes,
+                })),
+            ),
+        )
+        .await;
+        if remaining == 0 {
+            assert_eq!(offer_status, StatusCode::BAD_REQUEST, "{offer_body:?}");
+            assert!(
+                offer_body["detail"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("No other eligible comics remain. Reset Dice"),
+                "{offer_body:?}"
+            );
+            break;
+        }
+
+        assert_eq!(offer_status, StatusCode::OK, "{offer_body:?}");
+        assert_eq!(
+            offer_body["snoozed_thread_id"].as_i64(),
+            Some(pending as i64)
+        );
+        let replacement = offer_body["thread_id"].as_i64().unwrap() as i32;
+        assert!(projected.contains(&replacement), "{offer_body:?}");
+        browser_snoozes.push(pending);
+        pending = replacement;
+    }
+
+    // The exhausted offer rolls back its attempted snooze. Reset remains an
+    // explicit fresh start: d6, no pending offer, no saved temporary snoozes,
+    // and all six eligible faces available under the reset die.
+    assert_eq!(
+        session_state(&state, user_id).await,
+        (Some(pending), browser_snoozes, 4)
+    );
+    let (reset_status, reset_body) = send(
+        &state,
+        post(
+            "/api/v2/roll/reset",
+            &token,
+            &csrf,
+            Some(json!({"idempotency_key": "no-backfill-reset-dice"})),
+        ),
+    )
+    .await;
+    assert_eq!(reset_status, StatusCode::OK, "{reset_body:?}");
+    assert_eq!(reset_body["die"].as_i64(), Some(6));
+    assert_eq!(session_state(&state, user_id).await, (None, vec![], 6));
+
+    let (restored_status, restored_body) = send(
+        &state,
+        get("/api/v2/roll/eligible-issue-ids", &token, &csrf),
+    )
+    .await;
+    assert_eq!(restored_status, StatusCode::OK, "{restored_body:?}");
+    assert_eq!(restored_body["die"].as_i64(), Some(6));
+    assert_eq!(restored_body["thread_ids"], json!(ids));
+}
+
+#[tokio::test]
 async fn roll_unsnooze_of_an_older_snooze_keeps_pending_roll_and_die_and_is_idempotent() {
     let (state, token, csrf, user_id, _guard) = setup_user("tord-unsnooze-old").await;
     let ids = rollable_threads(&state.pool.get().await.unwrap(), user_id, 4).await;
