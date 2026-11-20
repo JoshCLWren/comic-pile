@@ -195,8 +195,18 @@ async fn seed_confirmed_cover(
     external_id: &str,
     cover_url: Option<&str>,
 ) {
+    seed_confirmed_metadata(ctx, issue_id, external_id, cover_url, "original_url").await
+}
+
+async fn seed_confirmed_metadata(
+    ctx: &Ctx,
+    issue_id: i32,
+    external_id: &str,
+    cover_url: Option<&str>,
+    image_key: &str,
+) {
     let metadata = match cover_url {
-        Some(url) => json!({"image": {"original_url": url}}),
+        Some(url) => json!({"image": {image_key: url}}),
         None => json!({"issue_number": "1"}),
     };
     let identity: i32 = ctx
@@ -266,6 +276,29 @@ async fn series_cover_prefers_next_unread_confirmed_issue() {
     assert_eq!(
         thread_cover(&body, "Next Wins"),
         Some("https://cv.example/next.jpg".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn series_cover_uses_thumbnail_only_confirmed_issue_artwork() {
+    let ctx = setup("sc-thumb").await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Thumbnail Cover", "active", 1).await;
+    let issue = seed_issue(&ctx, thread_id, "1", 1, "unread").await;
+    set_frontier(&ctx, thread_id, Some(issue)).await;
+    seed_confirmed_metadata(
+        &ctx,
+        issue,
+        "thumb-cover-id",
+        Some("https://cv.example/thumb.jpg"),
+        "thumb_url",
+    )
+    .await;
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        thread_cover(&body, "Thumbnail Cover"),
+        Some("https://cv.example/thumb.jpg".to_owned())
     );
 }
 
