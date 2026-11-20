@@ -1,4 +1,4 @@
-"""Legacy Python catalog series-mapping preview handler (retired in favor of native Rust same-path)."""
+"""Python series-mapping preview handler shadowed by native same-path routing (#4842)."""
 
 from typing import Annotated
 

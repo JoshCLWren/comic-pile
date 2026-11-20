@@ -2,10 +2,10 @@
 
 Projections are explicit two-step operations: callers request a preview of
 the entries the plan would add or update, then confirm in a separate call.
-Both preview and confirm are served by native Rust same-path handlers; this
-Python router is retained only for legacy compatibility in non-production
-contexts and should not shadow the native ingress. The plan is never modified
-by a projection, and reading order changes do not feed back into the plan (no
+The preview and confirm steps are routed to native Rust same-path handlers; this
+Python router remains registered for non-native contexts and is pending cleanup
+after production execution proof (#4842). The plan is never modified by a
+projection, and reading order changes do not feed back into the plan (no
 two-way synchronization).
 """
 

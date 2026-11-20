@@ -1,4 +1,4 @@
-"""Legacy Python CBL reading-graph preview handler (retired in favor of native Rust same-path)."""
+"""Python CBL reading-graph preview handler shadowed by native same-path routing (#4842)."""
 
 from __future__ import annotations
 
