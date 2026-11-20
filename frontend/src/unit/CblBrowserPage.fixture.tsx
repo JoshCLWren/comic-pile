@@ -245,6 +245,7 @@ beforeEach(() => {
   queryClient.clear()
   mockGraphPreview.mockResolvedValue(withoutOverlap())
   mockBrowse.mockResolvedValue(browsePage())
+  mockListPlans.mockResolvedValue([])
 })
 
 export async function searchFor(user: ReturnType<typeof userEvent.setup>, term = 'ultimate') {
