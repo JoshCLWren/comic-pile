@@ -263,34 +263,29 @@ def remote_github_repo(repo_root: Path, remote: str) -> str | None:
     return slug
 
 
-def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
-    """Fetch the complete open+closed PR history grouped by branch name.
+def _parse_pr_pages(stdout: str, what: str) -> dict[str, list[dict[str, object]]]:
+    """Parse paginated PR API output into a map of head ref to PR records.
 
-    Raises on lookup failure so cleanup cannot proceed with incomplete safety
-    data. Pagination is followed to completion: a capped list would let an old
-    open PR fall outside the result and lose its protection. Normalized records
-    carry ``state``, ``mergedAt`` and ``closedAt`` so the post-merge/abandonment
-    wait is measured from the real event rather than from the last commit.
+    Args:
+        stdout: Raw JSON output from a paginated ``gh api`` PR list call.
+        what: Label for the caller, used in error messages.
+
+    Returns:
+        A dict keyed by head branch name, each mapping to its PR records.
     """
-    proc = run([
-        "gh", "api", "--paginate", "--slurp",
-        f"repos/{repo}/pulls?state=all&per_page=100",
-    ], check=False)
-    if proc.returncode != 0:
-        raise RuntimeError(f"unable to list PRs: {proc.stderr.strip() or proc.stdout.strip()}")
     try:
-        pages = json.loads(proc.stdout or "[]")
+        pages = json.loads(stdout or "[]")
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"unable to parse PR list: {exc}") from exc
+        raise RuntimeError(f"unable to parse {what}: {exc}") from exc
     if not isinstance(pages, list):
-        raise RuntimeError("PR list response was not a list")
+        raise RuntimeError(f"{what} response was not a list")
     by_head: dict[str, list[dict[str, object]]] = {}
     for page in pages:
         if not isinstance(page, list):
-            raise RuntimeError("PR list page was not a list")
+            raise RuntimeError(f"{what} page was not a list")
         for pr in page:
             if not isinstance(pr, dict):
-                raise RuntimeError("PR list contained a non-object entry")
+                raise RuntimeError(f"{what} contained a non-object entry")
             head_obj = pr.get("head")
             ref = head_obj.get("ref") if isinstance(head_obj, dict) else None
             head = ref if isinstance(ref, str) else ""
@@ -310,6 +305,50 @@ def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
             }
             by_head.setdefault(head, []).append(record)
     return by_head
+
+
+def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
+    """Fetch the complete open+closed PR history grouped by branch name.
+
+    Raises on lookup failure so cleanup cannot proceed with incomplete safety
+    data. Pagination is followed to completion: a capped list would let an old
+    open PR fall outside the result and lose its protection. Normalized records
+    carry ``state``, ``mergedAt`` and ``closedAt`` so the post-merge/abandonment
+    wait is measured from the real event rather than from the last commit.
+    """
+    proc = run([
+        "gh", "api", "--paginate", "--slurp",
+        f"repos/{repo}/pulls?state=all&per_page=100",
+    ], check=False)
+    if proc.returncode != 0:
+        raise RuntimeError(f"unable to list PRs: {proc.stderr.strip() or proc.stdout.strip()}")
+    return _parse_pr_pages(proc.stdout, "PR list")
+
+
+def fetch_pr_records_for_branch(repo: str, branch: str) -> dict[str, list[dict[str, object]]]:
+    """Fetch open+closed PRs for a single branch head only.
+
+    Avoids downloading the whole repository PR history when only one branch's
+    PRs are needed for a fresh pre-deletion safety check.
+
+    Args:
+        repo: GitHub ``owner/name`` slug.
+        branch: Remote branch head to look up.
+
+    Returns:
+        A dict keyed by head branch name containing that branch's PR records.
+    """
+    owner = repo.split("/", 1)[0]
+    proc = run([
+        "gh", "api", "--paginate", "--slurp",
+        f"repos/{repo}/pulls?head={owner}:{branch}&state=all&per_page=100",
+    ], check=False)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"unable to list PRs for branch {branch}: "
+            f"{proc.stderr.strip() or proc.stdout.strip()}"
+        )
+    return _parse_pr_pages(proc.stdout, f"PR list for branch {branch}")
 
 
 def fetch_protected_branches(repo: str) -> set[str]:
@@ -928,7 +967,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 fresh_protected = fetch_protected_branches(args.repo)
                 fresh_protected.update({default_branch, "main", "master", "gh-pages"})
-                fresh_pr_records = fetch_pr_records(args.repo)
+                fresh_pr_records = fetch_pr_records_for_branch(args.repo, decision.branch)
                 fresh_live_refs = local_worktree_branches(repo_root)
 
                 def fresh_lease_lookup(issue_number: int) -> LeaseSignal | None:
