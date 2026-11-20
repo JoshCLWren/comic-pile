@@ -289,18 +289,31 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
         };
     }
 
-    let applied: std::collections::BTreeSet<i32> = runner()
+    let applied: std::collections::BTreeMap<i32, (String, u64)> = runner()
         .get_applied_migrations_async(client)
         .await?
         .iter()
-        .map(|m| m.version())
+        .map(|m| (m.version(), (m.name().to_string(), m.checksum())))
         .collect();
     let pending = runner()
         .get_migrations()
         .iter()
-        .any(|m| !applied.contains(&m.version()));
+        .any(|m| !applied.contains_key(&m.version()));
     if pending {
         return Ok(true);
+    }
+
+    // No versions are missing, but the recorded history can still disagree
+    // with the embedded migrations when an applied migration's SQL changed
+    // without a version bump. Refinery's own `run` catches that divergence,
+    // but a deploy that only calls `plan` would skip `up` and proceed with a
+    // history that disagrees with the migrations about to ship.
+    for migration in runner().get_migrations() {
+        if let Some((name, checksum)) = applied.get(&migration.version()) {
+            if name.as_str() != migration.name() || *checksum != migration.checksum() {
+                return Ok(true);
+            }
+        }
     }
 
     Ok(alembic_revisions(client).await?.as_deref() != Some(&[BASELINE_ALEMBIC_HEAD.to_string()]))
