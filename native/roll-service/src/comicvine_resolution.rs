@@ -1,9 +1,10 @@
-//! Native same-path reads for the first ComicVine resolution slice (#4835).
+//! Native same-path reads for ComicVine resolution (#4835).
 //!
+//! Chunk A: import-status read (already migrated).
+//! Chunk B: identity and correction READ routes (migrated in this slice).
+//! Chunk C: writes and import operations move in subsequent slices.
 //! The Python handler remains mounted as the fallback until production proves
-//! the native path. This slice migrates only the browser-called import-status
-//! read; the remaining ComicVine search, identity, correction, and import
-//! operations stay on Python for subsequent slices.
+//! the native path.
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
