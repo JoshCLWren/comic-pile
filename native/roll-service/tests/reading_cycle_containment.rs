@@ -1284,7 +1284,7 @@ async fn converted_legacy_cycle_does_not_block_creation_but_reader_cycle_does() 
         .get(0);
     assert_eq!(list_count, 1);
     let dependency_count: i64 = conn
-        .query_one("SELECT count(*) FROM dependencies")
+        .query_one("SELECT count(*) FROM dependencies", &[])
         .await
         .unwrap()
         .get(0);
