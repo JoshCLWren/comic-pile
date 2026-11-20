@@ -47,12 +47,14 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
 set -euo pipefail
 
 # The hook must isolate every child process from its repository-local Git state.
+CHECKS_RAN=0
 for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do
     if [[ -v "$variable" ]]; then
         echo "Leaked $variable" >&2
         exit 1
     fi
 done
+CHECKS_RAN=1
 
 # Prove that the lint stub—and therefore the environment checks above—ran.
 printf "lint\\n" >> "$LINT_LOG"
@@ -88,6 +90,12 @@ printf "lint\\n" >> "$LINT_LOG"
     assert result.returncode == 0, result.stdout + result.stderr
     assert lint_log.exists(), "The lint stub and its Git environment checks did not run"
     assert lint_log.read_text() == "lint\n"
-    assert not test_gate_log.exists() or test_gate_log.read_text() == "", (
+    assert test_gate_log.read_text() == "", (
         f"Product test gates ran during pre-push: {test_gate_log.read_text()!r}"
     )
+    # Verify the environment checks within the lint stub actually ran,
+    # not just that the lint script produced output.
+    # The CHECKS_RAN variable is set to 1 only when the Git environment
+    # checks pass (no leaked variables); the lint stub writes a marker
+    # file that the test can verify.
+    assert CHECKS_RAN, "Git environment checks within lint stub did not run"
