@@ -269,7 +269,7 @@ export default function ThreadDetailView() {
       document.removeEventListener('visibilitychange', onViewFocus)
       window.removeEventListener('focus', onViewFocus)
     }
-  }, [refetch, boundaryQuery.refetch, legacyBlockingInfo.refetch, issueCardsQuery.refetch])
+  }, [refetch, boundaryQuery, legacyBlockingInfo, issueCardsQuery])
 
   // Deep-link arrival (#3626): jump straight to the exact canonical issue named
   // by `?issue=<issue_id>`, focus it so keyboard and assistive-technology users
