@@ -151,16 +151,22 @@ function groupSelectionLabel(group: CblSeriesGroup): string {
   return `${group.selectedCount} of ${group.selectableEntries.length} selected`
 }
 
+/** Whether a Reading Plan already contains placements from this exact CBL source. */
+function planMatchesSource(
+  plan: Pick<ContinuityPlanListItem, 'source_paths'>,
+  source: Pick<CBLSourceListDiscoveryItem, 'source_path'>,
+): boolean {
+  return plan.source_paths.some(
+    (path) =>
+      path === source.source_path ||
+      path.endsWith(`/${source.source_path}`) ||
+      source.source_path.endsWith(`/${path}`),
+  )
+}
+
 async function recoverAdoptedPlan(source: CBLSourceListDiscoveryItem) {
   const plans = await continuityPlansApi.list()
-  const match = plans.find((plan) =>
-    plan.source_paths.some(
-      (path) =>
-        path === source.source_path ||
-        path.endsWith(`/${source.source_path}`) ||
-        source.source_path.endsWith(`/${path}`),
-    ),
-  )
+  const match = plans.find((plan) => planMatchesSource(plan, source))
   if (!match) return null
   return continuityPlansApi.get(match.id)
 }
