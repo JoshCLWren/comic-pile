@@ -24,11 +24,13 @@
         "application_statements": 3,
         "transaction_control_statements": 2,
         "total_statements": 5,
-        "basis": "user lookup 1 + reset-token delete 1 + insert 1 inside one transaction (+2 tx control); enumeration-safe; set-based",
+        "basis": "address lookup 1 + prior-digest delete 1 + fresh-digest insert 1 inside one transaction (+2 tx control); measured 6 with one SELECT 1 checkout probe; enumeration-safe; set-based",
         "grows_with_data": false,
-        "max_statements": 5,
+        "max_statements": 6,
+        "runtime_overhead_statements": 1,
         "proof_reference": "native/roll-service/src/auth/services.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_auth_forgot_password_n1.py"
       }
     },
     {
@@ -54,11 +56,13 @@
         "application_statements": 2,
         "transaction_control_statements": 0,
         "total_statements": 2,
-        "basis": "user lookup 1 + conditional revocation insert 1; set-based",
+        "basis": "user lookup 1 + conditional revocation insert 1 on separate checkouts; measured 4 with two SELECT 1 checkout probes; set-based",
         "grows_with_data": false,
-        "max_statements": 2,
+        "max_statements": 4,
+        "runtime_overhead_statements": 2,
         "proof_reference": "native/roll-service/src/auth/services.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_auth_logout_n1.py"
       }
     },
     {
@@ -68,11 +72,13 @@
         "application_statements": 2,
         "transaction_control_statements": 0,
         "total_statements": 2,
-        "basis": "auth extractor 1 + user profile read 1; set-based, independent of library size",
+        "basis": "auth extractor 1 + user profile read 1 on separate checkouts; measured 4 with two SELECT 1 checkout probes; set-based, independent of library size",
         "grows_with_data": false,
-        "max_statements": 2,
+        "max_statements": 4,
+        "runtime_overhead_statements": 2,
         "proof_reference": "native/roll-service/src/auth/services.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_auth_me_n1.py"
       }
     },
     {
@@ -82,11 +88,13 @@
         "application_statements": 2,
         "transaction_control_statements": 0,
         "total_statements": 2,
-        "basis": "user/revocation lookup 1 + refresh-token revocation insert 1; set-based",
+        "basis": "revoked-jti/user lookup 1 + predecessor revocation insert 1 on separate checkouts; measured 4 with two SELECT 1 checkout probes; set-based",
         "grows_with_data": false,
-        "max_statements": 2,
+        "max_statements": 4,
+        "runtime_overhead_statements": 2,
         "proof_reference": "native/roll-service/src/auth/services.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_auth_refresh_n1.py"
       }
     },
     {
@@ -96,11 +104,13 @@
         "application_statements": 2,
         "transaction_control_statements": 0,
         "total_statements": 2,
-        "basis": "existing-account check 1 + conditional insert 1; bcrypt in Rust; set-based",
+        "basis": "existing-account check 1 + conditional insert 1 on one checkout; measured 3 with one SELECT 1 checkout probe; bcrypt in Rust; set-based",
         "grows_with_data": false,
-        "max_statements": 2,
+        "max_statements": 3,
+        "runtime_overhead_statements": 1,
         "proof_reference": "native/roll-service/src/auth/services.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_auth_register_n1.py"
       }
     },
     {
@@ -110,11 +120,13 @@
         "application_statements": 2,
         "transaction_control_statements": 2,
         "total_statements": 4,
-        "basis": "single-use token consume 1 + password update 1 inside one transaction (+2 tx control); bcrypt in Rust; set-based",
+        "basis": "single-use token consume 1 + password update 1 inside one transaction (+2 tx control); measured 5 with one SELECT 1 checkout probe; bcrypt in Rust; set-based",
         "grows_with_data": false,
-        "max_statements": 4,
+        "max_statements": 5,
+        "runtime_overhead_statements": 1,
         "proof_reference": "native/roll-service/src/auth/services.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_auth_reset_password_n1.py"
       }
     },
     {
