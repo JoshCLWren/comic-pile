@@ -17,7 +17,11 @@ READER_ID = 937
 
 
 def oracle(data: dict[str, object]) -> dict[str, object]:
-    """Compare complete order or error payload, including cycle origins/provenance."""
+    """Compare order/error payloads after dropping non-authoritative prerequisites.
+
+    Converted and legacy-generated edges are audit data in the canonical Rust
+    evaluator; the reader-only projection is the contract both sides compare.
+    """
     raw = json.loads(json.dumps(data))
     try:
         snapshot = ReadingSnapshot(
@@ -30,7 +34,11 @@ def oracle(data: dict[str, object]) -> dict[str, object]:
                 overlap_decisions=tuple(SeriesOverlapDecision(**d)
                                         for d in row.get("overlap_decisions", [])),
             ) for row in raw.get("lists", [])),
-            prerequisites=tuple(ReadingPrerequisite(**p) for p in raw.get("prerequisites", [])),
+            prerequisites=tuple(
+                ReadingPrerequisite(**p)
+                for p in raw.get("prerequisites", [])
+                if p.get("origin") != "converted"
+            ),
             excluded_issue_ids=frozenset(raw.get("excluded_issue_ids", [])),
         )
         return {"order": list(validate_reading_constraints(snapshot))}
@@ -92,6 +100,25 @@ def test_constraint_matrix() -> None:
     compare(cases)
     assert any("order" in oracle(c) for c in cases)
     assert any(oracle(c).get("kind") == "cycle" for c in cases)
+
+
+def test_converted_prerequisites_are_not_cycle_edges() -> None:
+    """Only explicit reader-authored requirements can close a canonical cycle."""
+    case = base()
+    converted = {
+        "prerequisite_id": 71,
+        "source_issue_id": 5,
+        "target_issue_id": 1,
+        "origin": "converted",
+        "provenance": ["historical classification unknown"],
+    }
+    reader = {**converted, "origin": "reader", "provenance": ["classification:A"]}
+    assert "order" in oracle({**case, "prerequisites": [converted]})
+    assert oracle({**case, "prerequisites": [reader]})["kind"] == "cycle"
+    compare([
+        {**case, "prerequisites": [converted]},
+        {**case, "prerequisites": [reader]},
+    ])
 
 
 def test_invalid_references_and_contracts() -> None:
