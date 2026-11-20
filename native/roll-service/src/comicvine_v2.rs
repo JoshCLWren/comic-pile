@@ -935,11 +935,17 @@ pub async fn apply_correction(
     let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
 
-    // Get the raw JSON value first to distinguish between missing field (null)
+    // Get the raw JSON value to distinguish between missing field (null)
     // and field value is null in JSON. Python stores "None" string for the latter.
+    // Use jsonb_typeof to check if the key exists vs. if the value is null.
     let provider_value: Option<String> = tx
-        .query_opt::<_, tokio_postgres::Row, _>(
-            "SELECT e.metadata_json -> $2 as raw_value, e.metadata_json ->> $2 as str_value \
+        .query_one(
+            "SELECT \
+                CASE \
+                    WHEN NOT metadata_json ? $2 THEN NULL  -- key doesn't exist -> None \
+                    WHEN metadata_json -> $2 IS NULL THEN 'None' :: text  -- key exists but value is null \
+                    ELSE metadata_json ->> $2  -- key exists with non-null value \
+                END as provider_value \
              FROM external_identities e \
              JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
              WHERE m.issue_id = $1 AND m.status = 'confirmed' \
@@ -948,16 +954,8 @@ pub async fn apply_correction(
         )
         .await
         .map_err(db::query_error)?
-        .and_then(|row| {
-            let raw: Option<Value> = row.get("raw_value");
-            let str_val: Option<String> = row.get("str_value");
-            // If the raw JSON value is null, Python stores the string "None"
-            // (via str(None) == "None")
-            match raw {
-                Some(Value::Null) => Some(String::from("None")),
-                _ => str_val.filter(|s| !s.is_empty()),
-            }
-        });
+        .get::<_, Option<String>>(0)
+        .filter(|v| !v.is_empty());
 
     tx.execute(
         "INSERT INTO issue_metadata_corrections \
