@@ -6,15 +6,184 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 137,
-    "native_rust": 137,
+    "total_live_operations": 150,
+    "native_rust": 150,
     "python_fastapi": 0,
-    "native_rust_status": 137,
+    "native_rust_status": 150,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
   },
   "operations": [
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "DELETE",
+      "path": "/api/v1/comicvine/issues/{issue_id}/identity",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v1/comicvine/issues/{issue_id}/identity",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues/{issue_id}/identity:confirm",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues/{issue_id}/identity:replace",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues/{issue_id}/metadata:correct",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v1/comicvine/issues/{issue_id}/metadata:corrections",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues/{issue_id}/metadata:refresh",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues/{issue_id}/metadata:revert",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues:import",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v1/comicvine/resolve",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v1/comicvine/search/series",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v1/comicvine/series/{comicvine_volume_id}/issues",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v1/comicvine/series:import",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
     {
       "owning_issue": 4822,
       "runtime": "native-rust",
@@ -2303,17 +2472,17 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-      "v1_total": 40,
+      "v1_total": 27,
       "v1_shadowed_by_rust": 0,
-      "v1_live_python": 13,
+      "v1_live_python": 0,
       "v1_orphaned": 0,
       "unversioned_total": 0,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
-      "total_python_surface": 40,
+      "total_python_surface": 27,
       "total_shadowed_by_rust": 0,
-      "total_live_python": 13,
+      "total_live_python": 0,
       "total_orphaned": 0
     },
     "catch_all": {
@@ -2332,175 +2501,6 @@
         "path": "/api/v1/catalog/series-mappings/preview",
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "DELETE",
-        "path": "/api/v1/comicvine/issues/{issue_id}/identity",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/comicvine/issues/{issue_id}/identity",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/comicvine/issues/{issue_id}/identity:confirm",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/comicvine/issues/{issue_id}/identity:replace",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/comicvine/issues/{issue_id}/metadata:correct",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/comicvine/issues/{issue_id}/metadata:corrections",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/comicvine/issues/{issue_id}/metadata:refresh",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/comicvine/issues/{issue_id}/metadata:revert",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/comicvine/issues:import",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/comicvine/resolve",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/comicvine/search/series",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/comicvine/series/{comicvine_volume_id}/issues",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/comicvine/series:import",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
