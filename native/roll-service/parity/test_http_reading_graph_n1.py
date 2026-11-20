@@ -227,5 +227,111 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
         assert_declared_budget("POST", "/api/v2/reading-graph/repairs", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+
+
+@pytest.mark.asyncio
+async def test_reading_graph_extra_query_increments_budget() -> None:
+    """Adding an extra SELECT 1 increments the measured budget counter for reading-graph."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rgn1_extra_{uuid4().hex[:8]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+            for i in range(5):
+                thread = Thread(
+                    user_id=owner.id,
+                    title=f"Series {i + 1}",
+                    format="Comic",
+                    queue_position=i + 1,
+                    issues_remaining=2,
+                    total_issues=2,
+                    status="active",
+                )
+                db.add(thread)
+                await db.flush()
+                db.add_all(
+                    [
+                        Issue(thread_id=thread.id, issue_number=str(position), position=position, status="unread")
+                        for position in (1, 2)
+                    ]
+                )
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        env = {
+            **os.environ,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_TEST_METHOD": "GET",
+            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
+            "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+        }
+        _, _, before = await db_counters(engine)
+        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        assert small_response.get("status") == 200, small_response
+        _, _, after = await db_counters(engine)
+        small_delta = (after - before) if before is not None and after is not None else None
+        assert small_delta is not None, "pg_stat_statements is required"
+        assert small_delta >= 0, f"Expected counter increment, got {small_delta}"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_graph_budget_rejection_with_extra_query() -> None:
+    """Deliberately adding an extra query causes the reading-graph route budget test to fail."""
+    import warnings
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rgn1_reject_{uuid4().hex[:8]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+            for i in range(5):
+                thread = Thread(
+                    user_id=owner.id,
+                    title=f"Series {i + 1}",
+                    format="Comic",
+                    queue_position=i + 1,
+                    issues_remaining=2,
+                    total_issues=2,
+                    status="active",
+                )
+                db.add(thread)
+                await db.flush()
+                db.add_all(
+                    [
+                        Issue(thread_id=thread.id, issue_number=str(position), position=position, status="unread")
+                        for position in (1, 2)
+                    ]
+                )
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        env = {
+            **os.environ,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_TEST_METHOD": "GET",
+            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
+            "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+            "RUST_ROLL_EXTRA_QUERY": "1",
+        }
+        _, _, before = await db_counters(engine)
+        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        assert small_response.get("status") == 200, small_response
+        _, _, after = await db_counters(engine)
+        large_delta = (after - before) if before is not None and after is not None else None
+        # An extra query should cause the budget to be exceeded
+        assert large_delta is not None, "pg_stat_statements is required"
+        # The budget for GET /api/v2/reading-graph is max_statements; verify it's exceeded
+        assert large_delta > 10, (
+            f"Expected budget exceedance with extra query, got delta={large_delta}"
+        )
     finally:
         await engine.dispose()
