@@ -145,6 +145,122 @@ def _resolve_handler_module(module: str, handler: str) -> str:
     return module
 
 
+@lru_cache(maxsize=1)
+def _write_route_definitions() -> list[tuple[str, str, str, str]]:
+    """Return module, handler, method, and route path for each mounted mutation."""
+    source = _lib_source()
+    definitions: list[tuple[str, str, str, str]] = []
+    route_start = re.compile(r'\.route\(\s*"(?P<path>[^"]+)"\s*,')
+    method_handler = re.compile(
+        r"(?<![A-Za-z0-9_])(?P<method>post|patch|put|delete)\(\s*"
+        r"(?P<path>(?:[a-z_0-9]+::)*[a-z_0-9]+)\s*\)"
+    )
+    for route in route_start.finditer(source):
+        open_paren = source.find("(", route.start())
+        depth = 0
+        close_paren = open_paren
+        for index in range(open_paren, len(source)):
+            if source[index] == "(":
+                depth += 1
+            elif source[index] == ")":
+                depth -= 1
+                if depth == 0:
+                    close_paren = index
+                    break
+        arguments = source[open_paren + 1:close_paren]
+        for method in method_handler.finditer(arguments):
+            module, _, handler = method.group("path").rpartition("::")
+            definitions.append((module, handler, method.group("method").upper(), route.group("path")))
+    return definitions
+
+
+def _route_matches_request(route_path: str, request_uri: str) -> bool:
+    """Match literal test URIs and format placeholders to an Axum route."""
+    expected = route_path.split("/")
+    actual = request_uri.split("?", 1)[0].split("/")
+    return len(expected) == len(actual) and all(
+        bool(value) if "{" in segment else segment == value
+        for segment, value in zip(expected, actual, strict=True)
+    )
+
+
+@lru_cache(maxsize=1)
+def _http_test_sources() -> tuple[tuple[str, str], ...]:
+    """Load the external Rust HTTP integration tests once per guard run."""
+    tests_root = REPOSITORY_ROOT / "native" / "roll-service" / "tests"
+    return tuple(
+        (path.name, path.read_text(encoding="utf-8"))
+        for path in sorted(tests_root.glob("*.rs"))
+    )
+
+
+def _section_has_method_and_route(section: str, method: str, route_path: str) -> bool:
+    """Return whether Rust source contains a method and matching request URI."""
+    method_marker = f'"{method}"' in section or re.search(
+        rf"(?<![A-Za-z0-9_]){method.lower()}\s*\(", section
+    )
+    if not method_marker:
+        return False
+    return any(
+        _route_matches_request(route_path, uri)
+        for uri in re.findall(r'"(/api/[^"\n]+)"', section)
+    )
+
+
+def _http_tests_write_path(module: str, handler: str) -> bool:
+    """Recognize a successful exact-method/route disposable-Postgres HTTP test."""
+    routes = [
+        (method, route_path)
+        for route_module, route_handler, method, route_path in _write_route_definitions()
+        if route_handler == handler
+        and _resolve_handler_module(route_module, route_handler) == module
+    ]
+    if not routes:
+        return False
+    for _filename, source in _http_test_sources():
+        if "#[tokio::test]" not in source or not any(
+            marker in source for marker in DB_TEST_MARKERS
+        ):
+            continue
+        if "router(" not in source and "oneshot(" not in source:
+            continue
+        prefix, *test_sections = re.split(r"(?m)^#\[tokio::test\]\s*$", source)
+        helper_starts = list(re.finditer(r"(?m)^async fn ([A-Za-z0-9_]+)\s*\(", prefix))
+        helpers = []
+        for index, helper in enumerate(helper_starts):
+            end = helper_starts[index + 1].start() if index + 1 < len(helper_starts) else len(prefix)
+            helpers.append((helper.group(1), prefix[helper.start():end]))
+        for method, route_path in routes:
+            for section in test_sections:
+                successful = any(
+                    marker in section
+                    for marker in (
+                        "StatusCode::OK",
+                        "StatusCode::CREATED",
+                        "StatusCode::NO_CONTENT",
+                        ".is_success()",
+                    )
+                )
+                if successful and _section_has_method_and_route(section, method, route_path):
+                    return True
+                for helper_name, helper_source in helpers:
+                    if not re.search(rf"(?<![A-Za-z0-9_]){helper_name}\s*\(", section):
+                        continue
+                    if not _section_has_method_and_route(helper_source, method, route_path):
+                        continue
+                    if successful or any(
+                        marker in helper_source
+                        for marker in (
+                            "StatusCode::OK",
+                            "StatusCode::CREATED",
+                            "StatusCode::NO_CONTENT",
+                            ".is_success()",
+                        )
+                    ):
+                        return True
+    return False
+
+
 def _test_module(module: str) -> str:
     """Return only the ``#[cfg(test)]`` section of a service module.
 
