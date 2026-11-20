@@ -398,7 +398,11 @@ def test_old_closed_pr_after_full_wait_is_eligible():
         [branch("factory/46-5103-oldabandoned", age=old_commit)],
         open_pr_heads={
             "factory/46-5103-oldabandoned": [
-                {"number": 703, "state": "CLOSED", "closedAt": (NOW - timedelta(days=30)).isoformat()},
+                {
+                    "number": 703,
+                    "state": "CLOSED",
+                    "closedAt": (NOW - timedelta(days=30)).isoformat(),
+                },
             ]
         },
     )
@@ -414,7 +418,11 @@ def test_open_pr_still_protects_branch_with_old_closed_pr():
         open_pr_heads={
             "factory/46-5104-reopened": [
                 {"number": 704, "state": "OPEN"},
-                {"number": 703, "state": "CLOSED", "closedAt": (NOW - timedelta(days=30)).isoformat()},
+                {
+                    "number": 703,
+                    "state": "CLOSED",
+                    "closedAt": (NOW - timedelta(days=30)).isoformat(),
+                },
             ]
         },
     )
@@ -466,7 +474,13 @@ def test_fetch_issue_retired_uses_supported_pagination_query(monkeypatch):
     def fake_run(cmd, *, check=True):
         calls.append(cmd)
         return _FakeResult([[
-            {"body": "retired <!-- comic-pile-factory-no-progress-retired-v1:issue-1:pr-2:sha-x:epoch-3 -->"}
+            {
+                "body": (
+                    "retired "
+                    "<!-- comic-pile-factory-no-progress-retired-v1:"
+                    "issue-1:pr-2:sha-x:epoch-3 -->"
+                )
+            },
         ]])
 
     monkeypatch.setattr(prune, "run", fake_run)
