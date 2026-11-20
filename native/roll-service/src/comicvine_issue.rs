@@ -858,10 +858,7 @@ mod tests {
             }),
         };
         let wire = serde_json::to_value(response(mapped, None, vec![], vec![])).unwrap();
-        assert_eq!(
-            wire["image_url"],
-            "https://comicvine.example/thumb.jpg"
-        );
+        assert_eq!(wire["image_url"], "https://comicvine.example/thumb.jpg");
     }
 
     #[test]

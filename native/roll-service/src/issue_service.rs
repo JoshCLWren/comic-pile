@@ -1681,7 +1681,10 @@ mod tests {
         assert_eq!(direct.comicvine_issue_id.as_deref(), Some("4000-43"));
         assert_eq!(direct.cover_image_url, covers.items[0].cover_image_url);
         let thumbnail_only = card(&tx, user, 401).await.unwrap();
-        assert_eq!(thumbnail_only.comicvine_issue_id.as_deref(), Some("4000-45"));
+        assert_eq!(
+            thumbnail_only.comicvine_issue_id.as_deref(),
+            Some("4000-45")
+        );
         assert_eq!(
             thumbnail_only.cover_image_url.as_deref(),
             Some("https://comicvine.example/covers/thumb.jpg")
