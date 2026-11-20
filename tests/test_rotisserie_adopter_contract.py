@@ -17,7 +17,6 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 RUNTIME_STEP = "rotisserie-factory-runtime"
-SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _installed_workflows() -> list[Path]:
@@ -111,8 +110,8 @@ def test_ci_summary_keeps_workflow_and_shell_gates_without_factory_tests() -> No
     assert "actions: write" not in ci
 
 
-def test_installed_factory_workflows_pin_one_rotisserie_commit() -> None:
-    """Every installed workflow runs the same exact Rotisserie commit, without secrets."""
+def test_installed_factory_workflows_track_rotisserie_main() -> None:
+    """Every installed workflow runs the latest Rotisserie main, without secrets."""
     installed = _installed_workflows()
     assert installed
     refs = set()
@@ -127,8 +126,7 @@ def test_installed_factory_workflows_pin_one_rotisserie_commit() -> None:
                     refs.add(options["ref"])
                     assert options["persist-credentials"] is False, path.name
                     assert "ssh-key" not in options, path.name
-    assert len(refs) == 1
-    assert SHA_RE.match(refs.pop())
+    assert refs == {"main"}
 
 
 def test_factory_code_is_not_tracked_here() -> None:
