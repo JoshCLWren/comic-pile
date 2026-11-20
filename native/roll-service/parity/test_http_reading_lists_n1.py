@@ -467,6 +467,7 @@ async def test_update_reading_list_statements_respect_budget() -> None:
             await raw.close()
 
         body_small = json.dumps({"name": "Up-small", "mode": "loose", "issue_ids": issue_ids_small})
+        nested_before = await db_nested_statements(engine)
         env = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_small)
         _, _, before = await db_counters(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
@@ -476,7 +477,9 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         assert small_body.get("name") == "Up-small"
         assert small_body.get("issue_count") == 5
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested_delta = (nested_after - nested_before) if nested_after is not None and nested_before is not None else None
 
         raw = await asyncpg.connect(url)
         try:
@@ -493,14 +496,20 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         body_large = json.dumps({"name": "Up-large", "mode": "loose", "issue_ids": full_ids[:200]})
         env2 = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_large)
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested_delta = (nested_after2 - nested_before2) if nested_after2 is not None and nested_before2 is not None else None
 
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+        assert small_nested_delta is not None, "nested statements must be measurable"
+        assert large_nested_delta is not None, "nested statements must be measurable"
+        assert small_nested_delta == 0, f"small fixture should have 0 nested statements, got {small_nested_delta}"
+        assert large_nested_delta == 0, f"large fixture should have 0 nested statements, got {large_nested_delta}"
     finally:
         await engine.dispose()
