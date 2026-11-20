@@ -30,16 +30,24 @@ WRITE_ROUTE_RE = re.compile(
     r'(?P<path>(?:[a-z_0-9]+::)*[a-z_0-9]+)\s*\)',
     re.DOTALL,
 )
-# A write-path test is database-backed when it reaches the disposable database.
-# `test_support` is the canonical accessor and the raw env var is the legacy /
-# skip-guard spelling, so accept either.  ``RUST_ROLL_PARITY_DATABASE_URL`` is
-# the restricted DML-role DSN used by the canonical-schema parity suite.
+# POST routes that are pure read projections (a batch body with no INSERT/UPDATE/
+# DELETE) cannot have a write path. They must instead prove the mounted HTTP route
+# against the canonical schema in a DB-backed Rust HTTP integration test.
 DB_TEST_MARKERS = (
     "RUST_ROLL_TEST_DATABASE_URL",
     "RUST_ROLL_PARITY_DATABASE_URL",
     "test_support::database_url",
     "test_support::test_state",
     "test_support::reset_for_test",
+)
+
+# Success statuses a real HTTP write-path test asserts after the mutating
+# request; a read projection would have no reason to stop here.
+SUCCESS_STATUS_MARKERS = (
+    "StatusCode::OK",
+    "StatusCode::CREATED",
+    "StatusCode::ACCEPTED",
+    "StatusCode::NO_CONTENT",
 )
 
 # PATCH issue handler delegates its write to a transaction-bound service.
