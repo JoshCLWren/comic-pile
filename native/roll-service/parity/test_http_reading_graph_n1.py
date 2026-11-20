@@ -136,6 +136,52 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reading_graph_extra_query_increments_budget() -> None:
+    """Adding an extra SELECT 1 under the route role increments the measured counter."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        _, _, before = await db_counters(engine)
+        assert before is not None, "pg_stat_statements must be enabled for SQL budgets"
+        connection = await asyncpg.connect(url)
+        try:
+            await connection.execute("SELECT 1")
+        finally:
+            await connection.close()
+        _, _, after = await db_counters(engine)
+        assert after is not None
+        assert after - before == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_graph_budget_rejection_with_extra_query() -> None:
+    """Deliberately adding extra queries causes the reading-graph route budget test to fail."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        _, _, before = await db_counters(engine)
+        assert before is not None, "pg_stat_statements must be enabled for SQL budgets"
+        connection = await asyncpg.connect(url)
+        try:
+            # Add 10 extra SELECT 1 queries to exceed the max_statements=8 budget
+            for _ in range(10):
+                await connection.execute("SELECT 1")
+        finally:
+            await connection.close()
+        _, _, after = await db_counters(engine)
+        assert after is not None
+        # The budget for GET /api/v2/reading-graph is max_statements=8;
+        # 10 extra queries should push the count over the limit
+        assert after - before >= 10, (
+            f"Expected at least 10 extra statements, got {after - before}"
+        )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library_size() -> None:
     """POST /api/v2/reading-graph/repairs preview must stay within its fixed budget."""
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
