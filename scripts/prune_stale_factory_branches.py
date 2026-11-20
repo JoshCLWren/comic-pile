@@ -20,6 +20,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 STALE_BRANCH_PREFIXES = ("factory/", "local-factory/", "local/", "backup/")
 RELEASE_PREFIX = "release/"
@@ -999,7 +1000,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 fresh_protected = fetch_protected_branches(args.repo)
                 fresh_protected.update({default_branch, "main", "master", "gh-pages"})
-                fresh_pr_records = fetch_pr_records(args.repo)
+                # Only this branch's pull requests are needed for the fresh
+                # check. Fetching the repository's whole PR history here would
+                # repeat the inventory download once per deletion, consuming
+                # shared GitHub API quota for data that is never read.
+                fresh_pr_records = fetch_branch_pr_records(args.repo, decision.branch)
                 fresh_live_refs = local_worktree_branches(repo_root)
 
                 def fresh_lease_lookup(issue_number: int) -> LeaseSignal | None:
