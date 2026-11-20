@@ -933,7 +933,7 @@ pub async fn apply_correction(
     // This converts None JSON values to the string "None", absent keys/empty strings to None.
     // Use jsonb_typeof and jsonb ? to distinguish null from absent.
     let provider_value: Option<String> = tx
-        .query_opt::<tokio_postgres::Row>(
+        .query_opt::<Row>(
             r#"
             SELECT 
                 CASE 
