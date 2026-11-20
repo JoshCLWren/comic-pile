@@ -62,6 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let status = response.status().as_u16();
     let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024).await?;
     let data: serde_json::Value = serde_json::from_slice(&bytes)?;
+    inject_controlled_queries().await?;
     println!("{}", serde_json::json!({"status": status, "body": data}));
     Ok(())
 }
