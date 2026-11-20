@@ -63,6 +63,137 @@ const clientCases: ClientCase[] = [
     ],
   },
   {
+    name: 'applies a ComicVine metadata correction',
+    invoke: (client) =>
+      client.applyCorrection({
+        path: { issue_id: 7 },
+        body: { field_name: 'issue_number', canonical_value: '42', reason: 'verified' },
+      }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/comicvine/issues/7/metadata:correct',
+      { field_name: 'issue_number', canonical_value: '42', reason: 'verified' },
+    ],
+  },
+  {
+    name: 'lists ComicVine metadata corrections',
+    invoke: (client) => client.listCorrections({ path: { issue_id: 7 } }),
+    method: 'get',
+    expectedArgs: ['/v2/comicvine/issues/7/metadata:corrections'],
+  },
+  {
+    name: 'refreshes ComicVine metadata',
+    invoke: (client) => client.refreshMetadata({ path: { issue_id: 7 } }),
+    method: 'post',
+    expectedArgs: ['/v2/comicvine/issues/7/metadata:refresh'],
+  },
+  {
+    name: 'reverts a ComicVine metadata correction',
+    invoke: (client) =>
+      client.revertCorrection({ path: { issue_id: 7 }, body: { correction_id: 9 } }),
+    method: 'post',
+    expectedArgs: ['/v2/comicvine/issues/7/metadata:revert', { correction_id: 9 }],
+  },
+  {
+    name: 'reads one ComicVine issue identity',
+    invoke: (client) => client.getIssueIdentity({ path: { issue_id: 7 } }),
+    method: 'get',
+    expectedArgs: ['/v2/comicvine/issues/7/identity'],
+  },
+  {
+    name: 'confirms a ComicVine issue identity',
+    invoke: (client) =>
+      client.confirmIdentity({
+        path: { issue_id: 7 },
+        body: { comicvine_issue_id: 123 },
+      }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/comicvine/issues/7/identity:confirm',
+      { comicvine_issue_id: 123 },
+    ],
+  },
+  {
+    name: 'replaces a ComicVine issue identity',
+    invoke: (client) =>
+      client.replaceIdentity({
+        path: { issue_id: 7 },
+        body: { comicvine_issue_id: 456, reason: 'wrong issue' },
+      }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/comicvine/issues/7/identity:replace',
+      { comicvine_issue_id: 456, reason: 'wrong issue' },
+    ],
+  },
+  {
+    name: 'removes a ComicVine issue identity',
+    invoke: (client) => client.removeIdentity({ path: { issue_id: 7 } }),
+    method: 'delete',
+    expectedArgs: ['/v2/comicvine/issues/7/identity'],
+  },
+  {
+    name: 'imports a ComicVine issue',
+    invoke: (client) =>
+      client.importIssue({
+        body: { title: 'Batman', comicvine_issue_id: 123, issue_number: '1' },
+      }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/comicvine/issues:import',
+      { title: 'Batman', comicvine_issue_id: 123, issue_number: '1' },
+    ],
+  },
+  {
+    name: 'imports a ComicVine series',
+    invoke: (client) =>
+      client.importSeries({ body: { comicvine_volume_id: 4242, already_read_count: 3 } }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/comicvine/series:import',
+      { comicvine_volume_id: 4242, already_read_count: 3 },
+    ],
+  },
+  {
+    name: 'resolves a pasted ComicVine input',
+    invoke: (client) =>
+      client.resolveInput({ query: { input: 'https://comicvine.gamespot.com/issue/4000-123/' } }),
+    method: 'get',
+    expectedArgs: [
+      '/v2/comicvine/resolve',
+      { params: { input: 'https://comicvine.gamespot.com/issue/4000-123/' } },
+    ],
+  },
+  {
+    name: 'searches ComicVine series with canonical paging',
+    invoke: (client) =>
+      client.searchSeries({ query: { q: 'batman', limit: 20, offset: 40 } }),
+    method: 'get',
+    expectedArgs: [
+      '/v2/comicvine/search/series',
+      { params: { q: 'batman', limit: 20, offset: 40 } },
+    ],
+  },
+  {
+    name: 'reads canonical v2 ComicVine import status',
+    invoke: (client) => client.seriesImportStatusV2({ path: { comicvine_volume_id: 4242 } }),
+    method: 'get',
+    expectedArgs: ['/v2/comicvine/series/4242/import-status'],
+  },
+  {
+    name: 'reads a ComicVine series roster',
+    invoke: (client) =>
+      client.comicvineSeriesIssues({
+        path: { comicvine_volume_id: 4242 },
+        query: { series_name: 'The Series' },
+      }),
+    method: 'get',
+    expectedArgs: [
+      '/v2/comicvine/series/4242/issues',
+      { params: { series_name: 'The Series' } },
+    ],
+  },
+  {
     name: 'deletes an overlap decision by encoded id',
     invoke: (client) =>
       client.deleteOverlapDecision({ path: { list_id: 5, decision_id: 9 } }),

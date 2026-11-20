@@ -493,6 +493,19 @@ impl IntoResponse for ApiError {
     }
 }
 
+/// Matches the concrete request URI for `GET /api/v2/comicvine/series/{id}/issues`.
+///
+/// `request_timeout_for` receives the live URI path (for example
+/// `/api/v2/comicvine/series/1234/issues`), not the axum route template, so the
+/// volume id has to be recognized structurally. The sibling
+/// `/api/v2/comicvine/series/{id}/import-status` route is intentionally not
+/// matched: it is a lightweight status read, not a roster fetch.
+fn is_comicvine_series_issues_path(path: &str) -> bool {
+    path.strip_prefix("/api/v2/comicvine/series/")
+        .and_then(|rest| rest.strip_suffix("/issues"))
+        .is_some_and(|volume_id| !volume_id.is_empty() && !volume_id.contains('/'))
+}
+
 /// Per-route request deadlines used by `bound_request`. Cron drains run longer
 /// than ordinary requests. The release-sync deadline is derived from the
 /// handler's own wall-clock budget (`CRON_MAX_DURATION`) with a margin so the
@@ -501,13 +514,16 @@ impl IntoResponse for ApiError {
 fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
     match path {
         "/api/v2/maintenance/comicvine-metadata-repairs" => Duration::from_secs(50),
-        // Series import fetches the volume plus every roster page before its
-        // transaction; the frontend allows 120s (api-comicvine.ts), so the
-        // server deadline must not cancel it at the 10s default.
-        "/api/v2/comicvine/series:import" => Duration::from_secs(120),
         "/api/v1/cron/release-sync" => {
             reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
         }
+        // Browser-facing ComicVine roster loads (resolve, series browse and
+        // series import) fetch the volume plus up to 100 roster pages with
+        // 4-page concurrency before responding. The frontend allows 120s for
+        // series import (api-comicvine.ts); give every roster-heavy path the
+        // same headroom so the shared 10s deadline cannot cancel it mid-fetch.
+        "/api/v2/comicvine/series:import" | "/api/v2/comicvine/resolve" => Duration::from_secs(120),
+        _ if is_comicvine_series_issues_path(path) => Duration::from_secs(120),
         _ => default_timeout,
     }
 }
@@ -1436,6 +1452,45 @@ mod tests {
             request_timeout_for("/api/v1/roll/bootstrap", default),
             default
         );
+    }
+
+    #[test]
+    fn comicvine_browser_roster_paths_get_long_deadline() {
+        let default = Duration::from_secs(10);
+        let expected = Duration::from_secs(120);
+        for path in [
+            "/api/v2/comicvine/series:import",
+            "/api/v2/comicvine/resolve",
+            "/api/v2/comicvine/series/1234/issues",
+            "/api/v2/comicvine/series/4060/issues",
+        ] {
+            assert_eq!(
+                request_timeout_for(path, default),
+                expected,
+                "roster-heavy ComicVine path {path} must not be cancelled at the default deadline"
+            );
+        }
+    }
+
+    #[test]
+    fn comicvine_non_roster_paths_keep_default_deadline() {
+        let default = Duration::from_secs(10);
+        for path in [
+            "/api/v2/comicvine/series/1234/import-status",
+            "/api/v2/comicvine/series/1234/issues/extra",
+            "/api/v2/comicvine/series//issues",
+            "/api/v2/comicvine/search/series",
+            "/api/v2/comicvine/issues:import",
+            "/api/v2/comicvine/issues/7/identity",
+            "/api/v2/comicvine/resolve/extra",
+            "/api/v1/roll/bootstrap",
+        ] {
+            assert_eq!(
+                request_timeout_for(path, default),
+                default,
+                "unrelated path {path} must keep the shared default deadline"
+            );
+        }
     }
 
     #[tokio::test]

@@ -20,6 +20,12 @@ const HOST: &str = "comicvine.gamespot.com";
 const MAX_BODY: usize = 2_000_000;
 const BATCH_LIMIT: usize = 8;
 const PROVIDER_TIMEOUT: Duration = Duration::from_secs(5);
+/// Python `DEFAULT_NO_HEADER_COOLDOWN`. Its tracker escalates this exponentially
+/// across repeated headerless throttles, but the shared helper has no per-resource
+/// attempt count, so it uses the first step (also the historical Rust default).
+const NO_HEADER_COOLDOWN_SECS: u32 = 60;
+/// ComicVine's non-standard throttle status. `http::StatusCode` has no constant.
+const COMICVINE_THROTTLE_STATUS: u16 = 420;
 // Shared with comicvine_issue.rs READ_SQL: complete rows stay fresh 30 days;
 // a deep response with empty credits is rechecked after 7 days. The two
 // implementations must use the same precise policy (see needs_provider_fetch).
@@ -254,6 +260,40 @@ fn provider_timestamp(value: &Value) -> Option<String> {
     )
 }
 
+/// Mirror `comic_pile.comicvine_provider._parse_retry_after`: a Retry-After is
+/// either delta-seconds (parsed as a float) or an HTTP date, evaluated against
+/// `now`. Unlike the old integer-only parser this keeps fractional seconds and
+/// dates, and imposes neither a 60s floor nor a 3600s ceiling. Non-finite
+/// values are rejected because they cannot become a usable whole-second delay.
+fn parse_retry_after(header: &str, now: chrono::DateTime<chrono::Utc>) -> Option<f64> {
+    let value = header.trim();
+    if value.is_empty() {
+        return None;
+    }
+    if let Ok(seconds) = value.parse::<f64>() {
+        return seconds.is_finite().then_some(seconds);
+    }
+    // IMF-fixdate (RFC 7231), the form ComicVine and Python's
+    // `email.utils.parsedate_to_datetime` use for HTTP-date Retry-After values.
+    if let Ok(parsed) = chrono::NaiveDateTime::parse_from_str(value, "%a, %d %b %Y %H:%M:%S GMT")
+    {
+        let parsed = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(parsed, chrono::Utc);
+        return Some(parsed.signed_duration_since(now).as_seconds_f64());
+    }
+    // RFC 2822 variants with an explicit numeric offset.
+    chrono::DateTime::parse_from_rfc2822(value)
+        .ok()
+        .map(|parsed| parsed.signed_duration_since(now).as_seconds_f64())
+}
+
+/// Convert Python's float cooldown to the whole-second `RateLimited(u32)`
+/// representation: round partial seconds up, never collapse a parsed throttle
+/// to zero, and saturate above `u32::MAX` (a representability bound, not the
+/// retired 3600s policy cap).
+fn whole_seconds(seconds: f64) -> u32 {
+    seconds.ceil().max(1.0).min(u32::MAX as f64) as u32
+}
+
 pub(crate) async fn provider_response(
     outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
@@ -286,14 +326,17 @@ pub(crate) async fn provider_response(
             ProviderFailure::Unavailable
         })?;
         let status = response.status;
-        if status == StatusCode::TOO_MANY_REQUESTS || status == StatusCode::FORBIDDEN {
+        // Parity with Python's transports: only HTTP 420 (ComicVine's
+        // non-standard throttle) and 429 start a cooldown. A 403 is an ordinary
+        // provider error, not a rate limit.
+        if status == StatusCode::TOO_MANY_REQUESTS || status.as_u16() == COMICVINE_THROTTLE_STATUS {
             let retry = response
                 .headers
                 .get("retry-after")
-                .and_then(|h| h.to_str().ok())
-                .and_then(|h| h.parse::<u32>().ok())
-                .unwrap_or(60)
-                .clamp(60, 3600);
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| parse_retry_after(value, chrono::Utc::now()))
+                .map(whole_seconds)
+                .unwrap_or(NO_HEADER_COOLDOWN_SECS);
             return Err(ProviderFailure::RateLimited(retry));
         }
         if !status.is_success() {
