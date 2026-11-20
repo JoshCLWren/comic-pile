@@ -256,6 +256,21 @@ export default function ThreadDetailView() {
   // start at the issue the link named, and mark it as the arrival target so it
   // is visually identifiable. Issue ids are canonical, so identically numbered
   // comics in other series cannot be targeted by mistake.
+  // Ensure cross-tab rename/title changes are reflected promptly when this
+  // tab becomes visible again (MQA-THREAD-SYNC follow-up).
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') {
+        void refetch()
+        void boundaryQuery.refetch()
+        void legacyBlockingInfo.refetch()
+        void issueCardsQuery.refetch()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [refetch, boundaryQuery, legacyBlockingInfo, issueCardsQuery])
+
   useEffect(() => {
     // The thread tag editor can be opened by an inherited-source link while a
     // deep link names an issue row. The editor owns focus then; scrolling and
