@@ -249,6 +249,7 @@ def validate_reading_constraints(
             provenance=p.provenance,
         )
         for p in snapshot.prerequisites
+        if p.origin != "converted"
     )
     adjacency: dict[int, list[ConstraintEdge]] = {issue.issue_id: [] for issue in snapshot.issues}
     indegree = dict.fromkeys(adjacency, 0)
