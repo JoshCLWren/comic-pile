@@ -183,3 +183,6 @@ def test_pre_push_runs_no_product_test_gates(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     recorded_gates = gate_log.read_text().splitlines() if gate_log.exists() else []
     assert recorded_gates == ["lint"], recorded_gates
+    assert "-m pytest" not in recorded_gates
+    assert "test" not in recorded_gates
+    assert "run audit:ui" not in recorded_gates
