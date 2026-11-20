@@ -1098,6 +1098,9 @@ export default function CblBrowserPage() {
                             {group.entries.map((entry) => {
                               const comicName = `${entry.series_name} #${entry.issue_number}`
                               const resolutionReason = identityResolutionReason(entry)
+                              const canReviewExclusion =
+                                entry.adoption_class === 'ambiguous_unresolved' ||
+                                entry.collection_exclusion_reason === 'collection_identity_requires_review'
                               return (
                                 <li
                                   key={entry.cbl_entry_id}
