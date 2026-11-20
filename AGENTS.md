@@ -163,9 +163,9 @@ If you edit files and run tests but stop before pushing, you have **not complete
 Run only targeted tests locally: select the test files or cases covering the changed behavior,
 including focused regression tests for bugs and focused Chromium tests for browser behavior.
 Leave full backend/frontend suites to CI. The Python API is frozen during the Rust cutover, so
-backend pytest no longer gates pushes or merge to main; the pre-push hook runs lint, frontend
-unit tests, and the UI audit only. Python coverage thresholds are retired during the Rust
-cutover; frontend and Rust gates remain authoritative. Do not run bare `pytest`,
+backend pytest no longer gates pushes or merge to main; the pre-push hook runs lint only
+(frontend unit tests and the rendered UI audit run in CI). Python coverage thresholds are retired
+during the Rust cutover; frontend and Rust gates remain authoritative. Do not run bare `pytest`,
 `make test`, `make pytest`, `pnpm test`, or `pnpm run test:coverage` locally unless Josh explicitly
 requests a full local run. A CI failure calls for targeted local reproduction and repair, not a
 full local suite rerun.
