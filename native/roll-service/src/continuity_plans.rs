@@ -1919,11 +1919,29 @@ pub async fn list_continuity_plans(
             name: row.get(1),
             ordering_mode: row.get(2),
             lane_count,
-            step_count,
+            step_count, // placeholder, will be replaced with membership count if available
             source_paths,
             list_ids,
             updated_at: row.get::<_, DateTime<Utc>>(5),
         });
+    }
+
+    // Bulk fetch membership counts (reading_plan_issues) for all plans.
+    // Python counts reading_plan_issues when membership exists, falls back to
+    // stored nodes only for legacy plans.
+    let plan_ids: Vec<i32> = plan_infos.iter().map(|p| p.plan_id).collect();
+    let mut membership_counts: HashMap<i32, i32> = HashMap::new();
+    if !plan_ids.is_empty() {
+        let count_rows = conn
+            .query(
+                "SELECT plan_id, COUNT(*) FROM reading_plan_issues WHERE plan_id = ANY($1::int[]) GROUP BY plan_id",
+                &[&plan_ids],
+            )
+            .await
+            .map_err(db::query_error)?;
+        for count_row in count_rows {
+            membership_counts.insert(count_row.get(0), count_row.get(1));
+        }
     }
 
     // Bulk load all custom-cbl list names in a single query
@@ -1945,7 +1963,7 @@ pub async fn list_continuity_plans(
         }
     }
 
-    // Second pass: build response using bulk-loaded names
+    // Second pass: build response using bulk-loaded names and membership counts
     let mut plans = Vec::with_capacity(plan_infos.len());
     for info in plan_infos {
         let mut source_names = serde_json::Map::new();
@@ -1956,12 +1974,15 @@ pub async fn list_continuity_plans(
             }
         }
 
+        // Use membership count if available (Python behavior), otherwise fall back to stored nodes count
+        let step_count = membership_counts.get(&info.plan_id).copied().unwrap_or(info.step_count);
+
         plans.push(ContinuityPlanListItem {
             id: info.plan_id,
             name: info.name,
             ordering_mode: info.ordering_mode,
             lane_count: info.lane_count,
-            step_count: info.step_count,
+            step_count,
             source_paths: info.source_paths,
             source_names: serde_json::Value::Object(source_names),
             updated_at: iso_utc(info.updated_at),
@@ -2900,9 +2921,8 @@ pub async fn get_continuity_plan_membership(
         })
         .collect();
 
-    // Source snapshots (Python `list_plan_sources`). `display_name` is resolved
-    // from external catalogs by the Python reader; no catalog-backed name is
-    // available to the native process, so it is reported as null here.
+    // Source snapshots (Python `list_plan_sources`). Resolve `custom-cbl:<id>`
+    // references to names of Reading Lists owned by this user (batched lookup).
     let source_rows = conn
         .query(
             "SELECT id, raw_source_path, repository, source_path, revision_sha, \
@@ -2912,18 +2932,54 @@ pub async fn get_continuity_plan_membership(
         )
         .await
         .map_err(db::query_error)?;
+
+    // Collect custom-cbl list IDs for bulk lookup
+    let mut list_ids: HashSet<i32> = HashSet::new();
+    for row in &source_rows {
+        let raw_path: String = row.get(1);
+        if let Some(id_str) = raw_path.strip_prefix("custom-cbl:") {
+            if let Ok(id) = id_str.parse::<i32>() {
+                list_ids.insert(id);
+            }
+        }
+    }
+
+    // Bulk load custom-cbl list names
+    let mut list_names: HashMap<i32, String> = HashMap::new();
+    if !list_ids.is_empty() {
+        let list_ids_vec: Vec<i32> = list_ids.into_iter().collect();
+        let name_rows = conn
+            .query(
+                "SELECT id, name FROM custom_cbl_lists WHERE user_id = $1 AND id = ANY($2::int[])",
+                &[&user.id(), &list_ids_vec],
+            )
+            .await
+            .map_err(db::query_error)?;
+        for name_row in &name_rows {
+            list_names.insert(name_row.get(0), name_row.get(1));
+        }
+    }
+
     let sources: Vec<ReadingPlanSourceSnapshot> = source_rows
         .iter()
-        .map(|row| ReadingPlanSourceSnapshot {
-            id: row.get(0),
-            raw_source_path: row.get(1),
-            display_name: None,
-            repository: row.get(2),
-            source_path: row.get(3),
-            revision_sha: row.get(4),
-            content_hash: row.get(5),
-            adopted_at: row.get(6),
-            recorded_at: row.get(7),
+        .map(|row| {
+            let raw_source_path: String = row.get(1);
+            let display_name = if let Some(id_str) = raw_source_path.strip_prefix("custom-cbl:") {
+                id_str.parse::<i32>().ok().and_then(|id| list_names.get(&id).cloned())
+            } else {
+                None
+            };
+            ReadingPlanSourceSnapshot {
+                id: row.get(0),
+                raw_source_path,
+                display_name,
+                repository: row.get(2),
+                source_path: row.get(3),
+                revision_sha: row.get(4),
+                content_hash: row.get(5),
+                adopted_at: row.get(6),
+                recorded_at: row.get(7),
+            }
         })
         .collect();
 
