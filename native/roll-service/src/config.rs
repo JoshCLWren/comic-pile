@@ -8,6 +8,7 @@ use tracing_subscriber::EnvFilter;
 pub enum Environment {
     Development,
     Production,
+    Test,
 }
 
 /// Configuration errors contain only static descriptions, never input values.
