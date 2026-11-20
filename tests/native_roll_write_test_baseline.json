@@ -1,27 +1,23 @@
 {
   "description": "Frozen, shrink-only exemptions for native Roll POST handlers that predate the write-path test rule. Add a test that calls the handler or its persist_<handler> writer before changing an entry.",
-  "allowed_modules": [
-    "custom_cbl",
-    "issue_mutation",
-    "reading_plan_sync"
-  ],
-  "modules": {
-    "custom_cbl": "delete_overlap_decision lacks a recognized database-backed HTTP write-path test; add coverage before its next behavioral change.",
-    "issue_mutation": "reorder_issues lacks a recognized database-backed HTTP write-path test; add coverage before its next behavioral change.",
-    "reading_plan_sync": "sync_released_issues_endpoint coverage is recognized via delegated core sync tests, but keep this module entry shrink-only until all handlers are individually recognized."
-  },
+  "allowed_modules": [],
+  "modules": {},
   "allowed_handlers": [
     "continuity_plans::adopt_reading_order",
     "continuity_plans::confirm_plan_projection",
     "continuity_plans::create_release_source",
     "continuity_plans::delete_release_source",
-    "continuity_plans::update_release_source"
+    "continuity_plans::update_release_source",
+    "custom_cbl::delete_overlap_decision",
+    "issue_mutation::reorder_issues"
   ],
   "handlers": {
     "continuity_plans::adopt_reading_order": "No recognized database-backed HTTP write-path test found for this mounted handler; add coverage before its next behavioral change.",
     "continuity_plans::confirm_plan_projection": "No recognized database-backed HTTP write-path test found for this mounted handler; add coverage before its next behavioral change.",
     "continuity_plans::create_release_source": "No recognized database-backed HTTP write-path test found for this mounted handler; add coverage before its next behavioral change.",
     "continuity_plans::delete_release_source": "No recognized database-backed HTTP write-path test found for this mounted handler; add coverage before its next behavioral change.",
-    "continuity_plans::update_release_source": "No recognized database-backed HTTP write-path test found for this mounted handler; add coverage before its next behavioral change."
+    "continuity_plans::update_release_source": "No recognized database-backed HTTP write-path test found for this mounted handler; add coverage before its next behavioral change.",
+    "custom_cbl::delete_overlap_decision": "No recognized database-backed HTTP write-path test found for this mounted handler; add coverage before its next behavioral change.",
+    "issue_mutation::reorder_issues": "No recognized database-backed HTTP write-path test found for this mounted handler; add coverage before its next behavioral change."
   }
 }

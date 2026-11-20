@@ -87,15 +87,11 @@ INTEGRATION_WRITE_TESTS = {
 READ_ONLY_POST_HANDLERS = {
     ("reading_boundary", "reading_boundary_batch_v2"): "reading_boundary_concurrency.rs",
     ("issue_handler", "issue_cards"): "issue_cards_http.rs",
-    ("queue_exclusions", "check_excluded_status"): "queue_exclusions_http.rs",
-    ("reading_list", "check_thread_memberships"): "custom_cbl.rs",
 }
 
 READ_ONLY_POST_ROUTE_EVIDENCE = {
     ("reading_boundary", "reading_boundary_batch_v2"): ("POST", "/api/v2/reading-boundaries"),
     ("issue_handler", "issue_cards"): ("POST", "/api/v2/issues/cards"),
-    ("queue_exclusions", "check_excluded_status"): ("POST", "/api/v2/queue-exclusions/status:check"),
-    ("reading_list", "check_thread_memberships"): ("POST", "/api/v2/reading-lists/memberships:check"),
 }
 WRITE_SQL_RE = re.compile(
     r"\b(?:INSERT\s+INTO|UPDATE\s+[A-Za-z_][A-Za-z0-9_]*\s+SET|DELETE\s+FROM)\b",
