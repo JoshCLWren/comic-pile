@@ -36,20 +36,22 @@ still chain to `.git/hooks/pre-commit`.
 **What happens on failure:**
 - Commit is aborted
 - You'll see which linting step failed
-- Can bypass with `git commit --no-verify` (not recommended)
+- Do not bypass the failure with `git commit --no-verify`
 
 ### Pre-Push Hook
 Runs automatically before each push to remote.
 
 **What it does:**
 - Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
+- Includes the static hardcoded-ID guard (`pytest tests/test_hardcoded_ids.py -q --no-cov`)
 
-No tests run on push (no pytest, vitest, or UI audit). CI runs the tests.
+The backend product pytest suite, frontend Vitest suite, and rendered UI audit
+run in CI, not on push.
 
 **What happens on failure:**
 - Push is aborted
 - You'll see which check failed
-- Can bypass with `git push --no-verify` (not recommended)
+- Do not bypass the failure with `git push --no-verify`
 
 ## Installation
 
