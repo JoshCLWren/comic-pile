@@ -87,6 +87,17 @@ export interface CblTargetedAdoptionCommitRequest {
 
 export type CblTargetedAdoptionCommitResponse = components['schemas']['CblAdoptionCommitResponseWire']
 
+export interface ComicvineSeriesIssuesRequest {
+  path: {
+    comicvine_volume_id: number
+  }
+  query?: {
+    series_name?: string
+  }
+}
+
+export type ComicvineSeriesIssuesResponse = components['schemas']['NativeComicVineSeriesIssuesResponse']
+
 export interface CommitRequest {
   body: components['schemas']['CommitRequest']
 }
@@ -804,6 +815,14 @@ export interface ResetPasswordRequest {
 
 export type ResetPasswordResponse = components['schemas']['PasswordResetResponse']
 
+export interface ResolveInputRequest {
+  query: {
+    input: string
+  }
+}
+
+export type ResolveInputResponse = components['schemas']['NativeComicVineResolveResponse']
+
 export interface RoleRequest {
   path: {
     creator_key: string
@@ -836,6 +855,16 @@ export interface SearchCustomCblIssuesRequest {
 }
 
 export type SearchCustomCblIssuesResponse = Array<components['schemas']['CustomCBLIssueSearchResult']>
+
+export interface SearchSeriesRequest {
+  query: {
+    q: string
+    limit?: number
+    offset?: number
+  }
+}
+
+export type SearchSeriesResponse = components['schemas']['NativeComicVineSeriesSearchResponse']
 
 export interface SeriesRequest {
   path: {
@@ -971,6 +1000,7 @@ export interface NativeV2Client {
   bulkUnassignTag(args: BulkUnassignTagRequest): Promise<BulkUnassignTagResponse>
   cblAdoptionCommit(args: CblAdoptionCommitRequest): Promise<CblAdoptionCommitResponse>
   cblTargetedAdoptionCommit(args: CblTargetedAdoptionCommitRequest): Promise<CblTargetedAdoptionCommitResponse>
+  comicvineSeriesIssues(args: ComicvineSeriesIssuesRequest): Promise<ComicvineSeriesIssuesResponse>
   commit(args: CommitRequest): Promise<CommitResponse>
   compare(args?: CompareRequest): Promise<CompareResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
@@ -1073,10 +1103,12 @@ export interface NativeV2Client {
   repair(args: RepairRequest): Promise<RepairResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
+  resolveInput(args: ResolveInputRequest): Promise<ResolveInputResponse>
   role(args: RoleRequest): Promise<RoleResponse>
   saveOverlapDecision(args: SaveOverlapDecisionRequest): Promise<SaveOverlapDecisionResponse>
   search(): Promise<SearchResponse>
   searchCustomCblIssues(args?: SearchCustomCblIssuesRequest): Promise<SearchCustomCblIssuesResponse>
+  searchSeries(args: SearchSeriesRequest): Promise<SearchSeriesResponse>
   series(args: SeriesRequest): Promise<SeriesResponse>
   seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
   seriesIssues(args: SeriesIssuesRequest): Promise<SeriesIssuesResponse>
@@ -1137,6 +1169,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.post<CblTargetedAdoptionCommitResponse, CblTargetedAdoptionCommitRequest['body']>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/reading-plans/${encodeURIComponent(String(args.path.plan_id))}/adoption-commits`,
         args.body,
+      )
+    },
+    comicvineSeriesIssues(args: ComicvineSeriesIssuesRequest) {
+      return client.get<ComicvineSeriesIssuesResponse>(
+        `/v2/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/issues`,
+        { params: compactQuery(args.query) },
       )
     },
     commit(args: CommitRequest) {
@@ -1662,6 +1700,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    resolveInput(args: ResolveInputRequest) {
+      return client.get<ResolveInputResponse>(
+        "/v2/comicvine/resolve",
+        { params: compactQuery(args.query) },
+      )
+    },
     role(args: RoleRequest) {
       return client.get<RoleResponse>(
         `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/metrics/role-stats/${encodeURIComponent(String(args.path.role))}`,
@@ -1680,6 +1724,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     searchCustomCblIssues(args: SearchCustomCblIssuesRequest = {}) {
       return client.get<SearchCustomCblIssuesResponse>(
         "/v2/reading-lists/issue-candidates",
+        { params: compactQuery(args.query) },
+      )
+    },
+    searchSeries(args: SearchSeriesRequest) {
+      return client.get<SearchSeriesResponse>(
+        "/v2/comicvine/search/series",
         { params: compactQuery(args.query) },
       )
     },

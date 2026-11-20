@@ -121,7 +121,9 @@
       "consumers": [
         "frontend/src/services/api-comicvine.ts"
       ],
-      "owning_issue": 4835
+      "owning_issue": 4835,
+      "runtime": "native-rust",
+      "status": "target"
     },
     {
       "bucket": "operations",
@@ -132,7 +134,9 @@
       "consumers": [
         "frontend/src/services/api-comicvine.ts"
       ],
-      "owning_issue": 4835
+      "owning_issue": 4835,
+      "runtime": "native-rust",
+      "status": "target"
     },
     {
       "bucket": "operations",
@@ -143,7 +147,9 @@
       "consumers": [
         "frontend/src/services/api-comicvine.ts"
       ],
-      "owning_issue": 4835
+      "owning_issue": 4835,
+      "runtime": "native-rust",
+      "status": "target"
     }
   ]
 }

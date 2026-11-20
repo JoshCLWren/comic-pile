@@ -10,6 +10,10 @@ import api from './api'
  */
 export const SERIES_IMPORT_TIMEOUT_MS = 120_000
 
+// Roster-backed provider reads (resolve + series issues) page through ComicVine;
+// keep above the server-side 50s roster deadline so the browser does not cancel early.
+export const COMICVINE_ROSTER_TIMEOUT_MS = 60_000
+
 export interface ComicVineCreator {
   creator_id?: number | null
   name: string

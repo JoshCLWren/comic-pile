@@ -57,11 +57,13 @@ pub struct ComicVineSeriesResult {
 pub struct ComicVineSeriesSearchResponse {
     pub query: String,
     pub results: Vec<ComicVineSeriesResult>,
-    pub total_available: Option<i32>,
+    pub total_available: Option<i64>,
     pub offset: i32,
     pub limit: i32,
     pub has_more: bool,
-    pub next_offset: Option<i32>,
+    /// `offset + results` can exceed `i32` at the accepted offset bound, so
+    /// paging arithmetic is widened (#4636390843).
+    pub next_offset: Option<i64>,
 }
 
 impl ComicVineSeriesSearchResponse {
@@ -219,28 +221,33 @@ fn python_int(value: Option<&Value>) -> Option<i32> {
 }
 
 /// Python `_coerce_provider_int`: integers and integral floats, or strings
-/// whose stripped text is all digits; never booleans.
-fn coerce_provider_int(value: Option<&Value>) -> Option<i32> {
+/// whose stripped text is all digits; never booleans. Wide (`i64`) so a
+/// provider total past `i32` still pages correctly (#4636390843).
+fn coerce_provider_i64(value: Option<&Value>) -> Option<i64> {
     match value? {
         Value::Number(n) => match n.as_i64() {
-            Some(n) => i32::try_from(n).ok(),
+            Some(n) => Some(n),
             None => n
                 .as_f64()
-                .filter(|f| {
-                    f.fract() == 0.0 && *f >= f64::from(i32::MIN) && *f <= f64::from(i32::MAX)
-                })
-                .map(|f| f as i32),
+                .filter(|f| f.fract() == 0.0 && f.abs() < 9.0e15)
+                .map(|f| f as i64),
         },
         Value::String(s) => {
             let digits = s.trim();
             if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) {
-                digits.parse::<i32>().ok()
+                digits.parse::<i64>().ok()
             } else {
                 None
             }
         }
         _ => None,
     }
+}
+
+/// [`coerce_provider_i64`] for the `i32` wire fields (`start_year`,
+/// `issue_count`); values outside `i32` are dropped.
+fn coerce_provider_int(value: Option<&Value>) -> Option<i32> {
+    coerce_provider_i64(value).and_then(|n| i32::try_from(n).ok())
 }
 
 /// Python `value if isinstance(value, str) else None` (empty strings kept).
@@ -694,7 +701,7 @@ pub async fn search_series(
         return Err(unprocessable("offset out of range"));
     }
     let (limit, offset) = (query.limit, query.offset);
-    let page = offset / limit + 1;
+    let page = i64::from(offset) / i64::from(limit) + 1;
     let key = match provider_key() {
         Some(key) if !query.q.trim().is_empty() => key,
         _ => {
@@ -723,9 +730,10 @@ pub async fn search_series(
         )));
     };
     let results: Vec<ComicVineSeriesResult> = rows.iter().filter_map(search_result).collect();
+    // Widened arithmetic: `offset` may be `i32::MAX` (#4636390843).
     let total =
-        coerce_provider_int(payload.get("number_of_total_results")).unwrap_or(results.len() as i32);
-    let loaded = offset.saturating_add(results.len() as i32);
+        coerce_provider_i64(payload.get("number_of_total_results")).unwrap_or(results.len() as i64);
+    let loaded = i64::from(offset) + results.len() as i64;
     let has_more = loaded < total;
     Ok(Json(ComicVineSeriesSearchResponse {
         query: query.q,

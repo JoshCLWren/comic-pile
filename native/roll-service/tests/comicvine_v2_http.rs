@@ -372,6 +372,45 @@ async fn search_pages_through_the_provider_like_python() {
     );
 }
 
+/// The largest accepted offset must not overflow the provider page or the
+/// next offset (#4636390843): Python's unbounded ints give page 2^31 and
+/// next_offset 2^31.
+#[tokio::test]
+async fn search_paging_at_the_accepted_offset_bound_does_not_overflow() {
+    let (state, token, csrf, _guard) = setup_user("cvv2-search-bound").await;
+    set_key(true);
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 2_147_483_649_i64, "results": [{"id": 1, "name": "Saga"}]}),
+    );
+    let (status, body) = send(
+        &state,
+        get(
+            "/api/v2/comicvine/search/series?q=saga&limit=1&offset=2147483647",
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["offset"], json!(2_147_483_647_i64));
+    assert_eq!(body["has_more"], json!(true));
+    assert_eq!(body["next_offset"], json!(2_147_483_648_i64));
+    let path = fake(&state).calls().last().unwrap().path.clone();
+    assert!(path.contains("page=2147483648"), "{path}");
+    // One past the bound is a validation error, never a wrapped page.
+    let (status, body) = send(
+        &state,
+        get(
+            "/api/v2/comicvine/search/series?q=saga&limit=1&offset=2147483648",
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
+}
+
 /// Python lets provider errors escape `search_comicvine_series` to the global
 /// exception handler: a generic 500 `{"detail": "Internal server error"}`.
 #[tokio::test]
