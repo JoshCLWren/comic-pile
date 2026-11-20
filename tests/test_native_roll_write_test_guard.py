@@ -569,7 +569,7 @@ def test_db_backed_http_tests_are_recognised_without_new_exemptions() -> None:
     assert "custom_cbl" not in baseline
     assert _http_route_test_evidence("comicvine_v2", "import_issue") is not None
     assert _http_route_test_evidence("", "save_overlap_decision") is not None
-    assert _tests_write_path("custom_cbl", "save_overlap_decision") is True
+    assert _tests_write_path("", "save_overlap_decision") is True
     assert _http_route_test_evidence("comicvine_v2", "not_a_real_handler") is None
 
 
