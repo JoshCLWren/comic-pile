@@ -20,7 +20,12 @@
       "path": "/api/v1/identity-inbox",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/identity\\-inbox$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4833,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -28,7 +33,12 @@
       "path": "/api/v1/identity-inbox/search/issues",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/identity\\-inbox/search/issues$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4833,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -36,7 +46,12 @@
       "path": "/api/v1/identity-inbox/{mapping_id}",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/identity\\-inbox/[^/]+$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4833,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -44,7 +59,12 @@
       "path": "/api/v1/identity-inbox/{mapping_id}/confirm",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/identity\\-inbox/[^/]+/confirm$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4833,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -52,7 +72,12 @@
       "path": "/api/v1/identity-inbox/{mapping_id}/defer",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/identity\\-inbox/[^/]+/defer$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4833,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -60,7 +85,12 @@
       "path": "/api/v1/identity-inbox/{mapping_id}/reject",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/identity\\-inbox/[^/]+/reject$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4833,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -68,7 +98,12 @@
       "path": "/api/v1/identity-inbox/{mapping_id}/skip",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/identity\\-inbox/[^/]+/skip$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4833,
+      "consumers": [
+        "frontend/src/services/api-identity.ts"
+      ]
     }
   ]
 }
