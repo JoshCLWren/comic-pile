@@ -263,6 +263,48 @@ def remote_github_repo(repo_root: Path, remote: str) -> str | None:
     return slug
 
 
+def fetch_pr_records_for_branch(repo: str, branch_name: str) -> list[dict[str, object]]:
+    """Fetch PR history specifically for one branch.
+    
+    Returns a list of PR records for the given branch name.
+    """
+    proc = run(
+        [
+            "gh", "api",
+            f"repos/{repo}/pulls?head={branch_name}&state=all&per_page=100",
+            "--paginate",
+            "--slurp",
+        ],
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"unable to fetch PRs for {branch_name}: {proc.stderr.strip() or proc.stdout.strip()}")
+    try:
+        pages = json.loads(proc.stdout or "[]")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"unable to parse PR list for {branch_name}: {exc}") from exc
+    
+    records: list[dict[str, object]] = []
+    for page in pages:
+        if not isinstance(page, list):
+            continue
+        for pr in page:
+            if not isinstance(pr, dict):
+                continue
+            records.append({
+                "number": pr.get("number"),
+                "headRefName": pr.get("head", {}).get("ref") if isinstance(pr.get("head"), dict) else "",
+                "state": str(pr.get("state") or "OPEN").upper(),
+                "isDraft": bool(pr.get("draft")),
+                "mergedAt": pr.get("merged_at"),
+                "closedAt": pr.get("closed_at"),
+                "updatedAt": pr.get("updated_at"),
+                "labels": pr.get("labels") or [],
+                "title": pr.get("title"),
+                "url": pr.get("html_url"),
+            })
+    return records
+
 def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
     """Fetch a paginated list of the most recent PRs to use as a fast-path inventory.
     
@@ -924,7 +966,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 fresh_protected = fetch_protected_branches(args.repo)
                 fresh_protected.update({default_branch, "main", "master", "gh-pages"})
-                fresh_pr_records = fetch_pr_records(args.repo)
+                fresh_pr_records = {decision.branch: fetch_pr_records_for_branch(args.repo, decision.branch)}
+
                 fresh_live_refs = local_worktree_branches(repo_root)
 
                 def fresh_lease_lookup(issue_number: int) -> LeaseSignal | None:
