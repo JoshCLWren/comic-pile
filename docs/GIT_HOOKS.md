@@ -76,15 +76,10 @@ chmod +x .git/hooks/pre-commit .git/hooks/pre-push
 
 ## Bypassing Hooks
 
-**Not recommended**, but if you need to bypass:
-
-```bash
-# Bypass pre-commit hook
-git commit --no-verify
-
-# Bypass pre-push hook
-git push --no-verify
-```
+Do not bypass hooks. `git commit --no-verify` and `git push --no-verify` are not
+permitted ways around a failing check ("Never use `--no-verify` or bypass hooks
+to avoid fixing issues", `AGENTS.md`). Fix what the hook flagged and run the
+command again.
 
 ## Why Hooks Exist
 
