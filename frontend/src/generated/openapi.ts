@@ -2455,6 +2455,74 @@ export interface paths {
         patch: operations["update_queue_entry_documentation"];
         trace?: never;
     };
+    "/api/v2/queue-exclusion-groups/{group_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for restoring one exclusion group. */
+        post: operations["restore_group_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/queue-exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the bulk queue exclusion write. */
+        post: operations["bulk_exclude_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/queue-exclusions/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the explicit bulk queue restore write. */
+        post: operations["bulk_restore_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/queue-exclusions/status:check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the scoped excluded-status lookup. */
+        post: operations["check_excluded_status_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/queue-orders": {
         parameters: {
             query?: never;
@@ -2561,6 +2629,23 @@ export interface paths {
         get: operations["search_custom_cbl_issues_documentation"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-lists/memberships:check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the batched reading-list membership check. */
+        post: operations["check_thread_memberships_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3872,6 +3957,26 @@ export interface components {
             /** Format: int32 */
             tag_id: number;
             target_type: string;
+        };
+        /** @description Bulk exclusion request for a set of series (threads). */
+        BulkQueueExclusionRequest: {
+            /** @description Container the removal was initiated from. */
+            source: components["schemas"]["QueueExclusionSource"];
+            /** @description Owned thread IDs to remove from the active queue. */
+            thread_ids: number[];
+        };
+        /** @description Bulk exclusion response. */
+        BulkQueueExclusionResponse: {
+            excluded_thread_ids: number[];
+            group?: components["schemas"]["QueueExclusionGroup"] | null;
+        };
+        /** @description Bulk restore request for an explicit set of threads. */
+        BulkQueueRestoreRequest: {
+            thread_ids: number[];
+        };
+        /** @description Bulk restore response. */
+        BulkQueueRestoreResponse: {
+            restored_thread_ids: number[];
         };
         CBLBreadcrumb: {
             name: string;
@@ -5540,6 +5645,22 @@ export interface components {
             target_id: number;
             target_type: string;
         };
+        /** @description Scoped excluded-status check for a set of threads. */
+        ExcludedStatusCheckRequest: {
+            thread_ids: number[];
+        };
+        /** @description Scoped excluded-status check response. */
+        ExcludedStatusCheckResponse: {
+            /**
+             * @description Requested thread IDs currently active in the queue for the reader.
+             *
+             *     Used by container bulk actions to exclude completed/inactive series from
+             *     removable selections without per-thread lookups.
+             */
+            active_thread_ids: number[];
+            /** @description Requested thread IDs currently excluded for the reader. */
+            excluded_thread_ids: number[];
+        };
         /** @description Request body for an enumeration-safe password-recovery email. */
         ForgotPasswordRequest: {
             email: string;
@@ -6755,6 +6876,16 @@ export interface components {
              */
             thread_id: number;
         };
+        /** @description Persisted exclusion group returned after a bulk removal. */
+        QueueExclusionGroup: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            source_id: number;
+            source_kind: string;
+            source_name: string;
+        };
         /** @description Bulk exclusion provenance attached to an excluded queue thread (#5435). */
         QueueExclusionGroupRef: {
             /** Format: int32 */
@@ -6763,6 +6894,14 @@ export interface components {
             source_id: number;
             source_kind: string;
             source_name: string;
+        };
+        /** @description Source container that produced a bulk queue exclusion. */
+        QueueExclusionSource: {
+            /** Format: int32 */
+            id: number;
+            /** @description `reading_list`, `reading_plan`, or `crossover`. */
+            kind: string;
+            name: string;
         };
         /** @description Queue-order (shuffle) creation request. */
         QueueOrderRequest: {
@@ -7334,6 +7473,29 @@ export interface components {
         ReadingListEntryIntent: {
             gate: string;
             skipped?: boolean;
+        };
+        /**
+         * @description Request for a batched reading-list membership check scoped to thread IDs.
+         *
+         *     Returns which of the requested threads appear in any owned reading list,
+         *     optionally excluding one list (the container the action is initiated from).
+         */
+        ReadingListMembershipCheckRequest: {
+            /**
+             * Format: int32
+             * @description When set, exclude this reading list from the membership check.
+             */
+            exclude_list_id?: number | null;
+            /** @description Thread IDs to check. Duplicates and non-positive values are ignored. */
+            thread_ids: number[];
+        };
+        /** @description Batched reading-list membership check response. */
+        ReadingListMembershipCheckResponse: {
+            /**
+             * @description Thread IDs from the request that belong to at least one other owned
+             *     reading list (after applying `exclude_list_id`).
+             */
+            thread_ids: number[];
         };
         ReadingListPredecessorChange: {
             after_issue_ids: number[];
@@ -15676,6 +15838,185 @@ export interface operations {
             };
         };
     };
+    restore_group_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned exclusion group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored group members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkQueueRestoreResponse"];
+                };
+            };
+            /** @description Invalid group id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_exclude_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkQueueExclusionRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk exclusion result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkQueueExclusionResponse"];
+                };
+            };
+            /** @description Invalid thread ids or exclusion source */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_restore_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkQueueRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Explicit restore result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkQueueRestoreResponse"];
+                };
+            };
+            /** @description Invalid thread ids */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    check_excluded_status_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExcludedStatusCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Excluded and active status for the requested threads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExcludedStatusCheckResponse"];
+                };
+            };
+            /** @description Invalid thread ids */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     create_queue_order_documentation: {
         parameters: {
             query?: never;
@@ -15999,6 +16340,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    check_thread_memberships_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingListMembershipCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Requested threads present in owned reading lists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingListMembershipCheckResponse"];
+                };
+            };
+            /** @description Invalid thread ids */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Database temporarily unavailable */
             503: {

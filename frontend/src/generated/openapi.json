@@ -1160,6 +1160,87 @@
         ],
         "type": "object"
       },
+      "BulkQueueExclusionRequest": {
+        "description": "Bulk exclusion request for a set of series (threads).",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/QueueExclusionSource",
+            "description": "Container the removal was initiated from."
+          },
+          "thread_ids": {
+            "description": "Owned thread IDs to remove from the active queue.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "thread_ids",
+          "source"
+        ],
+        "type": "object"
+      },
+      "BulkQueueExclusionResponse": {
+        "description": "Bulk exclusion response.",
+        "properties": {
+          "excluded_thread_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "group": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/QueueExclusionGroup",
+                "description": "Created provenance group when at least one thread was excluded."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "excluded_thread_ids"
+        ],
+        "type": "object"
+      },
+      "BulkQueueRestoreRequest": {
+        "description": "Bulk restore request for an explicit set of threads.",
+        "properties": {
+          "thread_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "thread_ids"
+        ],
+        "type": "object"
+      },
+      "BulkQueueRestoreResponse": {
+        "description": "Bulk restore response.",
+        "properties": {
+          "restored_thread_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "restored_thread_ids"
+        ],
+        "type": "object"
+      },
       "CBLBreadcrumb": {
         "properties": {
           "name": {
@@ -6754,6 +6835,48 @@
         ],
         "type": "object"
       },
+      "ExcludedStatusCheckRequest": {
+        "description": "Scoped excluded-status check for a set of threads.",
+        "properties": {
+          "thread_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "thread_ids"
+        ],
+        "type": "object"
+      },
+      "ExcludedStatusCheckResponse": {
+        "description": "Scoped excluded-status check response.",
+        "properties": {
+          "active_thread_ids": {
+            "description": "Requested thread IDs currently active in the queue for the reader.\n\nUsed by container bulk actions to exclude completed/inactive series from\nremovable selections without per-thread lookups.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "excluded_thread_ids": {
+            "description": "Requested thread IDs currently excluded for the reader.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "excluded_thread_ids",
+          "active_thread_ids"
+        ],
+        "type": "object"
+      },
       "ForgotPasswordRequest": {
         "description": "Request body for an enumeration-safe password-recovery email.",
         "properties": {
@@ -10624,6 +10747,36 @@
         ],
         "type": "object"
       },
+      "QueueExclusionGroup": {
+        "description": "Persisted exclusion group returned after a bulk removal.",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_kind": {
+            "type": "string"
+          },
+          "source_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_kind",
+          "source_id",
+          "source_name",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "QueueExclusionGroupRef": {
         "description": "Bulk exclusion provenance attached to an excluded queue thread (#5435).",
         "properties": {
@@ -10647,6 +10800,28 @@
           "source_kind",
           "source_id",
           "source_name"
+        ],
+        "type": "object"
+      },
+      "QueueExclusionSource": {
+        "description": "Source container that produced a bulk queue exclusion.",
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "kind": {
+            "description": "`reading_list`, `reading_plan`, or `crossover`.",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "name"
         ],
         "type": "object"
       },
@@ -12388,6 +12563,49 @@
         },
         "required": [
           "gate"
+        ],
+        "type": "object"
+      },
+      "ReadingListMembershipCheckRequest": {
+        "additionalProperties": false,
+        "description": "Request for a batched reading-list membership check scoped to thread IDs.\n\nReturns which of the requested threads appear in any owned reading list,\noptionally excluding one list (the container the action is initiated from).",
+        "properties": {
+          "exclude_list_id": {
+            "description": "When set, exclude this reading list from the membership check.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "thread_ids": {
+            "description": "Thread IDs to check. Duplicates and non-positive values are ignored.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "thread_ids"
+        ],
+        "type": "object"
+      },
+      "ReadingListMembershipCheckResponse": {
+        "description": "Batched reading-list membership check response.",
+        "properties": {
+          "thread_ids": {
+            "description": "Thread IDs from the request that belong to at least one other owned\nreading list (after applying `exclude_list_id`).",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "thread_ids"
         ],
         "type": "object"
       },
@@ -25390,6 +25608,188 @@
         ]
       }
     },
+    "/api/v2/queue-exclusion-groups/{group_id}/restore": {
+      "post": {
+        "operationId": "restore_group_documentation",
+        "parameters": [
+          {
+            "description": "Owned exclusion group identifier",
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkQueueRestoreResponse"
+                }
+              }
+            },
+            "description": "Restored group members"
+          },
+          "400": {
+            "description": "Invalid group id"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for restoring one exclusion group.",
+        "tags": [
+          "queue-exclusions"
+        ]
+      }
+    },
+    "/api/v2/queue-exclusions": {
+      "post": {
+        "operationId": "bulk_exclude_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkQueueExclusionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkQueueExclusionResponse"
+                }
+              }
+            },
+            "description": "Bulk exclusion result"
+          },
+          "400": {
+            "description": "Invalid thread ids or exclusion source"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the bulk queue exclusion write.",
+        "tags": [
+          "queue-exclusions"
+        ]
+      }
+    },
+    "/api/v2/queue-exclusions/restore": {
+      "post": {
+        "operationId": "bulk_restore_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkQueueRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkQueueRestoreResponse"
+                }
+              }
+            },
+            "description": "Explicit restore result"
+          },
+          "400": {
+            "description": "Invalid thread ids"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the explicit bulk queue restore write.",
+        "tags": [
+          "queue-exclusions"
+        ]
+      }
+    },
+    "/api/v2/queue-exclusions/status:check": {
+      "post": {
+        "operationId": "check_excluded_status_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExcludedStatusCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExcludedStatusCheckResponse"
+                }
+              }
+            },
+            "description": "Excluded and active status for the requested threads"
+          },
+          "400": {
+            "description": "Invalid thread ids"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the scoped excluded-status lookup.",
+        "tags": [
+          "queue-exclusions"
+        ]
+      }
+    },
     "/api/v2/queue-orders": {
       "post": {
         "operationId": "create_queue_order_documentation",
@@ -25721,6 +26121,51 @@
           }
         ],
         "summary": "Documentation-only operation for custom CBL issue search.",
+        "tags": [
+          "reading-lists"
+        ]
+      }
+    },
+    "/api/v2/reading-lists/memberships:check": {
+      "post": {
+        "operationId": "check_thread_memberships_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingListMembershipCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingListMembershipCheckResponse"
+                }
+              }
+            },
+            "description": "Requested threads present in owned reading lists"
+          },
+          "400": {
+            "description": "Invalid thread ids"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the batched reading-list membership check.",
         "tags": [
           "reading-lists"
         ]
