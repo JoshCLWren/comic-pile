@@ -311,10 +311,18 @@ async def test_delete_reading_list_statements_bounded() -> None:
         small_delta = (after - before) if before is not None and after is not None else None
 
         large_id = await _seed_one()
-        # grow unrelated data
+        # Seed the large list with many entries to test query-per-entry budget
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            # Add many entries to the large list itself
+            for i in range(20, 120):
+                await raw.execute(
+                    "INSERT INTO custom_cbl_entries (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped) "
+                    "VALUES ($1,$2,$3,NOW(),false,'[]','none',false)",
+                    large_id, i + 1 - 20, i + 1,
+                )
+            # grow unrelated data (other lists)
             for i in range(20, 120):
                 _, ids = await _insert_owned_thread(raw, owner_id, i)
                 await _insert_list(raw, owner_id, f"X-{i}", [ids[0]])
