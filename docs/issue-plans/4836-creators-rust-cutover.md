@@ -1,5 +1,13 @@
 # Issue #4836: MIGRATE: creators browser-called routes to Rust v2
 
+> **Superseded implementation note (2026-11-17 owner correction):** The
+> same-path `/api/v1` plan below is historical. The browser now calls the
+> canonical Rust-backed `/api/v2/creators*` resources, and the legacy
+> `/api/v1/creators*` handlers, native aliases and ingress exceptions have been
+> retired. The authoritative contract is `native/contracts/v2-runtime.openapi.json`
+> and `native/roll-service/src/creators_v2.rs`; the retired v1 URLs fall through
+> to Rust's JSON 404.
+
 ## Owner Objective
 
 Move all 11 browser-called creators routes from Python FastAPI to native Rust while preserving the exact HTTP method/path contract, OpenAPI response, authentication/ownership checks, SQL/bind/transaction semantics, and query-param/pagination handling. This is a closure-critical cutover that must be proven in production before deleting Python handlers.

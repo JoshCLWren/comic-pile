@@ -51,7 +51,8 @@ def test_native_operations_have_no_shadow_python_handlers() -> None:
     # metrics/taste/reading-plan-sync/session/undo/custom-cbl operations
     # retired on main, plus five thread-issue operations removed here
     # (POST issues, reorder, migrateToIssues, migrateToIssuesSimple,
-    # setCurrentIssue). Creators remains on Python.
+    # setCurrentIssue). All creators operations are served by the canonical
+    # Rust-backed /api/v2 resources; no v1 creator Python handler remains.
     assert len(_retired_operations()) == 124
     _assert_no_shadow_python_handlers(operations)
     assert ("POST", "/api/v1/threads/") in operations
