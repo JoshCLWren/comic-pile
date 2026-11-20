@@ -1148,7 +1148,7 @@ export default function CblBrowserPage() {
                                       Include
                                     </label>
                                   )}
-                                  {entry.adoption_decision === 'unresolved' && (
+                                  {canReviewExclusion && (
                                     <button
                                       type="button"
                                       disabled={isCommitting}
