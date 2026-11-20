@@ -980,7 +980,7 @@ pub async fn update_reading_list(
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Reading List not found"),
         (status = 409, description = "Predecessor changes must be acknowledged"),
-        (status = 422, description = "Invalid Issue or checkpoint")
+        (status = 422, description = "Invalid Issue/checkpoint or a Reading constraint cycle with a named repair path")
     ),
     security(("HTTPBearer" = []))
 )]
