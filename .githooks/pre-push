@@ -76,5 +76,6 @@ echo "Running lint (scripts/lint.sh)..."
 bash scripts/lint.sh
 
 echo ""
-echo "Pre-push lint passed. Product test suites run in CI, not on push; the static hardcoded-ID guard ran as part of lint."
+echo "Pre-push lint passed. Product test suites run in CI, not on push."
+echo "The static hardcoded-ID guard ran as part of lint."
 printf '%s\n' "$HEAD_SHA" > "$VERIFY_STAMP"
