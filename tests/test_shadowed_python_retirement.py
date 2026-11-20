@@ -45,14 +45,15 @@ def _assert_no_shadow_python_handlers(operations: set[tuple[str, str]]) -> None:
 def test_native_operations_have_no_shadow_python_handlers() -> None:
     """Retire every migrated alias while retaining unrelated Python operations."""
     operations = set(_operations(list(create_app(serve_frontend=False).routes)))
-    # 80 historical aliases plus the nine fully retired v1 creator URLs (the
-    # two v1 creator URLs with native same-path contracts were already counted)
-    # plus ten issue-identity/CBL adoption operations, plus the twenty
-    # metrics/taste/reading-plan-sync/session/undo/custom-cbl operations
-    # retired on main, plus five thread-issue operations removed here
-    # (POST issues, reorder, migrateToIssues, migrateToIssuesSimple,
-    # setCurrentIssue). All creators operations are served by the canonical
-    # Rust-backed /api/v2 resources; no v1 creator Python handler remains.
+    # 124 pinned method/path pairs: 80 historical aliases plus nine newly
+    # retired v1 creator operations (the creators list and summaries entries
+    # were already among the 80 as native same-path contracts; all 11 creator
+    # operations are now pinned and served by the canonical Rust-backed
+    # /api/v2 resources), plus ten issue-identity/CBL adoption operations,
+    # plus the twenty metrics/taste/reading-plan-sync/session/undo/custom-cbl
+    # operations retired on main, plus five thread-issue operations removed
+    # here (POST issues, reorder, migrateToIssues, migrateToIssuesSimple,
+    # setCurrentIssue). No v1 creator Python handler remains.
     assert len(_retired_operations()) == 124
     _assert_no_shadow_python_handlers(operations)
     assert ("POST", "/api/v1/threads/") in operations
