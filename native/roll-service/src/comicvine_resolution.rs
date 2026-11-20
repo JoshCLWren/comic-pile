@@ -31,8 +31,6 @@ pub struct IssueIdentityResponse {
     pub thread_title: String,
     pub has_confirmed_identity: bool,
     pub comicvine_issue_id: Option<String>,
-    pub confirmed_mappings: vec![IssueIdentityMapping],
-    pub candidate_mappings: vec![IssueIdentityMapping],
     pub has_unresolved: bool,
 }
 
