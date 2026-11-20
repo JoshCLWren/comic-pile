@@ -322,23 +322,6 @@ export default function CblBrowserPage() {
     gcTime: 20 * 60 * 1000, // 20 minutes
   })
 
-  // Check for existing same-named reading lists to detect name collisions
-  const existingListsQuery = useQuery({
-    queryKey: queryKeys.readingLists.all,
-    queryFn: () => continuityPlansApi.list(),
-    enabled: selectedSource !== null && previewQuery.data !== undefined,
-    staleTime: 60 * 1000, // 1 minute
-  })
-
-  // Find any existing list with the same name as the source
-  const conflictingList = useMemo(() => {
-    if (!selectedSource || !previewQuery.data || existingListsQuery.data) return null
-    const sourceName = selectedSource.name
-    return existingListsQuery.data.find(
-      (list) => list.name === sourceName && list.source_paths?.every((p) => !p.startsWith('cbl:'))
-    )
-  }, [selectedSource, previewQuery.data, existingListsQuery.data])
-
   const commitMutation = useMutation({
     mutationFn: ({
       source,
@@ -445,13 +428,13 @@ export default function CblBrowserPage() {
     setConfirmOpen(false)
   }, [selectedSource, previewQuery.data])
 
-  const hasChoices =
-    Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
   const preview = useMemo(() => {
     if (!previewQuery.data) return null
-    // Always apply choices if there are any, to ensure local decisions are reflected in the preview
-    // (e.g., skipping unresolved entries should reduce unresolved_count)
-    if (!hasChoices) return previewQuery.data
+    // Always apply choices if there are any, to ensure local decisions are reflected in
+    // the preview (e.g., skipping unresolved entries should reduce unresolved_count).
+    const hasLocalChoices =
+      Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
+    if (!hasLocalChoices) return previewQuery.data
     return applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
   }, [previewQuery.data, seriesDecisions, entryDecisions])
   const isPreviewing = previewQuery.isFetching
