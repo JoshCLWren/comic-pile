@@ -56,7 +56,6 @@ export function RollHeader({
   dieSize,
   displayDie,
   snoozedThreads,
-  pool,
   isRatingView,
   setDiePending,
   onSetDie,
@@ -104,20 +103,6 @@ export function RollHeader({
               <span className="text-[9px] uppercase tracking-wider text-stone-500">
                 pool at max size (d{dieSize}) - snoozing won&apos;t increase it further
               </span>
-            </div>
-          )}
-          {snoozedThreads.length > 0 && pool.length + snoozedThreads.length > dieSize && (
-            <div className="mt-1 flex items-center gap-2">
-              <Tooltip content="Snoozed offset">
-                <span className="modifier-badge cursor-help border-b border-dashed border-stone-600 text-[10px] font-black text-amber-500">
-                  +{snoozedThreads.length}
-                </span>
-              </Tooltip>
-              <Tooltip content="Snoozed offset active">
-                <span className="cursor-help border-b border-dashed border-stone-600 text-[9px] uppercase tracking-wider text-stone-500">
-                  offset active
-                </span>
-              </Tooltip>
             </div>
           )}
         </>

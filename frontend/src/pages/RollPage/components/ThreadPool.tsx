@@ -5,6 +5,7 @@ import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
 import type { RollBootstrapThread, RollPoolReason } from '../../../types/rollBootstrap'
 import type { IssueCardsResponse } from '../../../generated/nativeV2Client'
+import { rollSecondaryActionClass } from '../actionClasses'
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
@@ -24,6 +25,7 @@ interface ThreadPoolProps {
   onUnsnooze: (threadId: number) => void
   onToggleSnoozed: () => void
   onShuffle: () => void
+  onResetDice?: () => void
   unsnoozeIsPending: boolean
   shuffleIsPending: boolean
   eligibleThreadIds?: number[] | null
@@ -44,6 +46,7 @@ export function ThreadPool({
   onUnsnooze,
   onToggleSnoozed,
   onShuffle,
+  onResetDice,
   unsnoozeIsPending,
   shuffleIsPending,
   eligibleThreadIds,
@@ -188,6 +191,15 @@ export function ThreadPool({
                 Reset Dice or visit your queue to choose what to read next.
               </p>
             </div>
+            {onResetDice ? (
+              <button
+                type="button"
+                onClick={onResetDice}
+                className={`w-full ${rollSecondaryActionClass}`}
+              >
+                Reset Dice
+              </button>
+            ) : null}
             <button
               onClick={() => navigate('/queue')}
               className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
