@@ -367,7 +367,7 @@ pub async fn list_inbox(
             "SELECT COUNT(*)::bigint FROM issue_external_identity_mappings m \
              JOIN issues i ON i.id = m.issue_id \
              JOIN threads t ON t.id = i.thread_id \
-             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate','deferred')",
+             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate','deferred','rejected')",
             &[&user.id()],
         )
         .await
