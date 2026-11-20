@@ -47,17 +47,17 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
 set -euo pipefail
 
 # The hook must isolate every child process from its repository-local Git state.
-CHECKS_RAN=0
 for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do
     if [[ -v "$variable" ]]; then
         echo "Leaked $variable" >&2
         exit 1
     fi
 done
-CHECKS_RAN=1
 
 # Prove that the lint stub—and therefore the environment checks above—ran.
 printf "lint\\n" >> "$LINT_LOG"
+# Marker file: environment checks ran (no leaked Git variables).
+touch "$CHECKS_RAN_MARKER"
 """
     )
     tools_directory = tmp_path / "tools"
