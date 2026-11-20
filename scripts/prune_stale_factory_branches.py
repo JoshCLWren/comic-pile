@@ -263,8 +263,11 @@ def remote_github_repo(repo_root: Path, remote: str) -> str | None:
     return slug
 
 
-def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
+def fetch_pr_records(repo: str, branch_name: str | None = None) -> dict[str, list[dict[str, object]]]:
     """Fetch the complete open+closed PR history grouped by branch name.
+
+    If branch_name is provided, only fetch PRs for that specific branch to save
+    API quota and time during deletion checks.
 
     Raises on lookup failure so cleanup cannot proceed with incomplete safety
     data. Pagination is followed to completion: a capped list would let an old
@@ -272,10 +275,18 @@ def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
     carry ``state``, ``mergedAt`` and ``closedAt`` so the post-merge/abandonment
     wait is measured from the real event rather than from the last commit.
     """
-    proc = run([
-        "gh", "api", "--paginate", "--slurp",
-        f"repos/{repo}/pulls?state=all&per_page=100",
-    ], check=False)
+    if branch_name:
+        # Fetch only PRs for the specific branch to avoid re-reading the entire repo.
+        # We use the search API or filtering to be efficient.
+        proc = run([
+            "gh", "api", "--paginate", "--slurp",
+            f"repos/{repo}/pulls?state=all&per_page=100&head={branch_name}"
+        ], check=False)
+    else:
+        proc = run([
+            "gh", "api", "--paginate", "--slurp",
+            f"repos/{repo}/pulls?state=all&per_page=100",
+        ], check=False)
     if proc.returncode != 0:
         raise RuntimeError(f"unable to list PRs: {proc.stderr.strip() or proc.stdout.strip()}")
     try:
@@ -310,6 +321,7 @@ def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
             }
             by_head.setdefault(head, []).append(record)
     return by_head
+
 
 
 def fetch_protected_branches(repo: str) -> set[str]:
