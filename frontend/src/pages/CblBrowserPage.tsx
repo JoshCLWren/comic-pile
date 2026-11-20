@@ -992,7 +992,11 @@ export default function CblBrowserPage() {
                     : 'bg-[var(--theme-continuity-accent)] hover:bg-[var(--theme-continuity-accent)]/80'
                 }`}
               >
-                {isCommitting ? 'Adding reading order…' : 'Add this reading order'}
+                {isCommitting
+                  ? 'Adding reading order…'
+                  : selectedAdoptionTarget
+                    ? 'Update selected Reading Plan'
+                    : 'Add this reading order'}
               </button>
               {commitBlockedReason && (
                 <p className="max-w-xs text-xs text-[var(--theme-text-muted)] flex items-center gap-1">
