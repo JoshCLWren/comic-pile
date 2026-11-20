@@ -480,11 +480,7 @@ pub async fn list_inbox(
             status: status.clone(),
             provider: Some(provider),
             source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
-<<<<<<< HEAD
-            why_stopped: why_stopped(&status, &evidence),
-=======
             why_stopped: why_stopped(&status, &evidence, candidates.len()),
->>>>>>> origin/main
             candidates,
             created_at,
             updated_at,
@@ -1489,8 +1485,6 @@ mod tests {
             .any(|item| { item.candidates.iter().any(|c| c.external_identity_id == 6) }));
     }
 
-<<<<<<< HEAD
-=======
     /// Regression test for #5382: the list endpoint now batch-loads real
     /// candidates, but `why_stopped` was ported from a Python implementation
     /// whose list response always had `candidates=[]`. An unresolved mapping
@@ -1572,7 +1566,6 @@ mod tests {
         assert_eq!(two.why_stopped, "2 candidates found: ambiguous title");
     }
 
->>>>>>> origin/main
     #[tokio::test]
     async fn mutation_handlers_reach_database_write_boundary() {
         let Some(state) = test_support::test_state(2).await else {
