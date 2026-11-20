@@ -135,7 +135,7 @@ async fn graph_preflight(tx: &Transaction<'_>, user: AuthenticatedUser) -> Resul
     Ok(())
 }
 
-async fn lock_reader(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
+pub(crate) async fn lock_reader(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
     tx.execute(
         "SELECT pg_advisory_xact_lock($1,$2)",
         &[&QUEUE_LOCK_NAMESPACE, &user_id],
@@ -253,7 +253,7 @@ async fn insert_issue(
     })
 }
 
-async fn reseat_positions(
+pub(crate) async fn reseat_positions(
     tx: &Transaction<'_>,
     thread_id: i32,
     positions: &[(i32, i32)],

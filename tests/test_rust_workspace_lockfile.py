@@ -95,6 +95,34 @@ def test_rust_ci_and_prepush_lock_the_shared_workspace() -> None:
     assert "cargo build --locked -p comicpile-roll-service" in audit
 
 
+def test_lock_guard_is_wired_into_ci_and_production_build() -> None:
+    """The lock guard runs in both CI jobs and the Vercel build, not just on disk."""
+    native_vercel = (
+        REPOSITORY_ROOT / ".github/workflows/native-vercel-rust.yml"
+    ).read_text(encoding="utf-8")
+    rust_roll = (REPOSITORY_ROOT / ".github/workflows/rust-roll.yml").read_text(
+        encoding="utf-8"
+    )
+    build_script = (REPOSITORY_ROOT / "build.sh").read_text(encoding="utf-8")
+
+    # Both required CI jobs run the same guard the production build runs, and
+    # export its digest so build.rs's COMICPILE_EXPECTED_LOCK_SHA256 check is
+    # active on every subsequent cargo invocation in the job.
+    for workflow in (native_vercel, rust_roll):
+        assert "node check-rust-workspace-lock.mjs" in workflow
+        assert "COMICPILE_EXPECTED_LOCK_SHA256" in workflow
+        assert '"$GITHUB_ENV"' in workflow
+
+    # The fresh-bundle release compile must carry the digest too, so the
+    # runtime-only source tree cannot silently resolve a different lock.
+    assert 'COMICPILE_EXPECTED_LOCK_SHA256="$COMICPILE_EXPECTED_LOCK_SHA256"' in rust_roll
+
+    # @vercel/rust executes this root build.sh via runUserScripts for every
+    # native function; it must feed the same digest into build.rs.
+    assert "node check-rust-workspace-lock.mjs --lock-sha256" in build_script
+    assert 'export COMICPILE_EXPECTED_LOCK_SHA256="$lock_sha256"' in build_script
+
+
 def test_parity_tests_do_not_hardcode_nested_target_path() -> None:
     """Parity Python tests resolve example binaries through cargo_example_path."""
     parity_dir = REPOSITORY_ROOT / "native/roll-service/parity"

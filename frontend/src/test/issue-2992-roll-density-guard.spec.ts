@@ -94,8 +94,8 @@ async function installRatingRoutes(page: Page): Promise<void> {
   await page.route('**/v1/reading-order-groups/threads/*/groups', (route) =>
     route.fulfill({ json: [] }),
   )
-  await page.route('**/v1/issues/*/reader-context', (route) => route.fulfill({ json: null }))
-  await page.route('**/v1/creators/summaries', (route) =>
+  await page.route('**/v2/issues/*/reader-context', (route) => route.fulfill({ json: null }))
+  await page.route('**/v2/creators/summaries', (route) =>
     route.fulfill({ json: { summaries: {}, coverage: null } }),
   )
   await page.route('**/v1/issues/*/comicvine', (route) =>
@@ -116,7 +116,7 @@ async function installRatingRoutes(page: Page): Promise<void> {
       },
     }),
   )
-  await page.route('**/v1/comicvine/issues/*/identity', (route) =>
+  await page.route('**/v2/comicvine/issues/*/identity', (route) =>
     route.fulfill({
       json: {
         issue_id: 1,

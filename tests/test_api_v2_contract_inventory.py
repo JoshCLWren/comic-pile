@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from scripts.generate_native_client import _method_name
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -199,6 +198,12 @@ def _service_callers(path: str, method_name: str | None) -> set[str]:
     return callers
 
 
+def _method_name(operation_id: str) -> str:
+    """Mirror scripts/generate_native_client.mjs method-name derivation."""
+    words = [word for word in operation_id.removesuffix("_documentation").split("_") if word]
+    return words[0] + "".join(word[:1].upper() + word[1:] for word in words[1:])
+
+
 def _native_method_names() -> dict[tuple[str, str], str]:
     """Map each native operation to its generated client method name."""
     document = _load_json(NATIVE_CONTRACT_PATH)
@@ -275,10 +280,20 @@ def test_declared_consumers_are_the_real_service_callers() -> None:
 
 
 def test_python_transitional_operations_are_explicit() -> None:
-    """A v2 path served by Python stays visible as transitional, not silently absent."""
+    """No v2 path is served by Python after the #5289 retirement.
+
+    The last Python v2 operation (GET /api/v2/reading-boundaries/{thread_id})
+    was retired by #5289, which updated the route-burndown contract alongside
+    the retirement. Keep the two guards in sync: do not silently reintroduce a
+    Python v2 declaration here. Any future one must be published explicitly as
+    transitional with its cutover evidence.
+    """
     operations = _inventory_operations()
     python_paths = _runtime_set(operations, PYTHON_RUNTIME)
-    assert ("get", "/api/v2/reading-boundaries/{thread_id}") in python_paths
+    assert not python_paths, (
+        "a Python v2 operation reappeared after #5289; publish it explicitly as "
+        "transitional with cutover evidence instead of leaving an undeclared route"
+    )
     for operation in operations:
         if operation["runtime"] == PYTHON_RUNTIME:
             assert operation["status"] == "transitional"
@@ -292,8 +307,9 @@ def test_published_transitional_operations_are_not_marked_final() -> None:
         for operation in operations
         if operation["status"] == "transitional"
     }
+    # GET /api/v2/reading-boundaries/{thread_id} was retired by #5289 together
+    # with its route-burndown contract; keep this set in sync with that change.
     assert transitional == {
-        ("get", "/api/v2/reading-boundaries/{thread_id}"),
         ("get", "/api/v2/roll/bootstrap"),
         ("post", "/api/v2/reading-sessions"),
         ("post", "/api/v2/roll/dice-command"),

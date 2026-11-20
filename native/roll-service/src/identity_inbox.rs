@@ -1,17 +1,25 @@
 //! Owner-scoped identity reconciliation inbox.
 //!
-//! Rust replacement for the Python `/api/v1/identity-inbox/*` routes. The HTTP
+//! Rust replacement for the Python `/api/v2/identity-inbox/*` routes. The HTTP
 //! method and exact path are preserved; only the implementation moves.
 
-use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser,
+    db,
+    outbound::{OutboundHttp, OutboundRequest},
+    ApiError, AppState,
+};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
+use bytes::Bytes;
+use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
@@ -69,6 +77,24 @@ pub struct IdentityInboxResponse {
     pub total: i64,
     pub offset: i64,
     pub limit: i64,
+}
+
+// OpenAPI-only body schema: `confirm` deserializes the shared `ActionRequest`
+// and answers 400 when `external_identity_id` is missing.
+/// Body for confirming an identity inbox candidate.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct IdentityInboxConfirmRequest {
+    pub external_identity_id: i32,
+}
+
+// OpenAPI-only body schema: `reject` answers 400 when `external_identity_id`
+// is missing or `rejection_reason` is missing or blank.
+/// Body for rejecting an identity inbox candidate.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct IdentityInboxRejectRequest {
+    pub external_identity_id: i32,
+    #[schema(min_length = 1, pattern = r"\S")]
+    pub rejection_reason: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
@@ -137,7 +163,30 @@ fn source_entry_summary(thread_title: &str, issue_number: &str, metadata: &Value
     parts.join(" ")
 }
 
-fn why_stopped(status: &str, evidence: &Value) -> String {
+fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String {
+    // The collapsed inbox header renders this string. The list endpoint now
+    // batch-loads real candidates, so an evidence/status-only reason can
+    // contradict the candidate cards shown on expand (#5382). Reflect the real
+    // candidate state first. When candidates exist, keep any non-empty
+    // decision_reason so the header still explains why review is needed; only
+    // the empty-evidence "No candidates found" fallback is replaced by the
+    // count. The reasons below apply only when there are genuinely no
+    // candidates for the issue.
+    if candidate_count > 0 {
+        let count_text = if candidate_count == 1 {
+            "1 candidate found".to_string()
+        } else {
+            format!("{candidate_count} candidates found")
+        };
+        if let Some(obj) = evidence.as_object() {
+            if let Some(reason) = obj.get("decision_reason").and_then(|v| v.as_str()) {
+                if !reason.is_empty() {
+                    return format!("{count_text}: {reason}");
+                }
+            }
+        }
+        return count_text;
+    }
     let is_empty_evidence = evidence.is_null()
         || evidence.as_object().map(|o| o.is_empty()).unwrap_or(false)
         || evidence.as_array().map(|a| a.is_empty()).unwrap_or(false);
@@ -289,7 +338,7 @@ async fn fetch_item(
         status: status.clone(),
         provider,
         source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
-        why_stopped: why_stopped(&status, &evidence),
+        why_stopped: why_stopped(&status, &evidence, candidates.len()),
         candidates,
         created_at,
         updated_at,
@@ -431,7 +480,11 @@ pub async fn list_inbox(
             status: status.clone(),
             provider: Some(provider),
             source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
+<<<<<<< HEAD
             why_stopped: why_stopped(&status, &evidence),
+=======
+            why_stopped: why_stopped(&status, &evidence, candidates.len()),
+>>>>>>> origin/main
             candidates,
             created_at,
             updated_at,
@@ -468,7 +521,7 @@ pub async fn search_issues(
     user: AuthenticatedUser,
     Query(q): Query<SearchQuery>,
 ) -> Result<Json<IdentityInboxSearchResponse>, ApiError> {
-    let _ = (state, user);
+    let _ = user;
     if q.q.trim().is_empty() || q.q.len() > 200 || q.q.is_empty() {
         return Err(unprocessable("q invalid"));
     }
@@ -493,10 +546,7 @@ pub async fn search_issues(
     }
 
     let url = build_search_url(&api_key, &q.q, clamped);
-    let payload = tokio::task::spawn_blocking(move || fetch_comicvine(url))
-        .await
-        .ok()
-        .flatten();
+    let payload = fetch_comicvine(&state.outbound, url).await;
 
     let mut results = Vec::new();
     let mut total_available = Some(0i64);
@@ -630,26 +680,49 @@ fn build_search_url(api_key: &str, query: &str, limit: i64) -> String {
     )
 }
 
-fn fetch_comicvine(url: String) -> Option<Value> {
-    use native_tls::TlsConnector;
-    use std::io::{Read, Write};
+/// Search-result payload cap. ComicVine search responses are small; the cap
+/// keeps a hostile provider from driving unbounded allocation.
+const MAX_SEARCH_BODY: usize = 5_000_000;
+const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Fetch one ComicVine search page through the app's outbound seam (#5339):
+/// the real HTTPS client in production, a recording fake in test contexts
+/// that never opens a socket. Any failure yields `None`, as before.
+async fn fetch_comicvine(outbound: &Arc<dyn OutboundHttp>, url: String) -> Option<Value> {
     let without = url.strip_prefix("https://")?;
     let (host, rest) = without.split_once('/')?;
-    let path = format!("/{rest}");
-    let addr = format!("{host}:443");
-    let stream = std::net::TcpStream::connect(&addr).ok()?;
-    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
-    let connector = TlsConnector::new().ok()?;
-    let mut tls = connector.connect(host, stream).ok()?;
-    let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: ComicPile/1.0\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
-    );
-    tls.write_all(request.as_bytes()).ok()?;
-    let mut buf = Vec::new();
-    tls.read_to_end(&mut buf).ok()?;
-    let text = String::from_utf8_lossy(&buf);
-    let body = text.split("\r\n\r\n").nth(1)?;
-    serde_json::from_str(body).ok()
+    let request = OutboundRequest {
+        method: http::Method::GET,
+        path: format!("/{rest}"),
+        headers: vec![
+            ("user-agent".to_string(), "ComicPile/1.0".to_string()),
+            ("accept".to_string(), "application/json".to_string()),
+            ("connection".to_string(), "close".to_string()),
+        ],
+        body: Bytes::new(),
+    };
+    let exchange = async {
+        let response = outbound.send(host, request).await.ok()?;
+        if !response.status.is_success() {
+            return None;
+        }
+        let mut data = Vec::new();
+        let mut body = response.body;
+        while let Some(frame) = body.frame().await {
+            let frame = frame.ok()?;
+            if let Ok(bytes) = frame.into_data() {
+                data.extend_from_slice(&bytes);
+                if data.len() > MAX_SEARCH_BODY {
+                    return None;
+                }
+            }
+        }
+        serde_json::from_slice(&data).ok()
+    };
+    tokio::time::timeout(SEARCH_TIMEOUT, exchange)
+        .await
+        .ok()
+        .flatten()
 }
 
 pub async fn confirm(
@@ -914,7 +987,7 @@ pub async fn defer(
     Path(mapping_id): Path<i32>,
 ) -> Result<Json<IdentityInboxActionResponse>, ApiError> {
     let mut conn = db::checkout(&state).await?;
-    let tx = conn
+    let mut tx = conn
         .build_transaction()
         .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
         .start()
@@ -951,12 +1024,43 @@ pub async fn defer(
         return Err(bad_request("mapping not owned by this user"));
     }
 
-    tx.execute(
-        "UPDATE issue_external_identity_mappings SET status='deferred', updated_at=NOW() WHERE id=$1",
-        &[&mapping_id],
-    )
-    .await
-    .map_err(db::query_error)?;
+    // Some deployed databases are stamped at a revision that added 'deferred'
+    // to the status allow-list without the constraint change having actually
+    // run (issue #5378). Writing status='deferred' then fails with a check
+    // violation and used to surface as a generic HTTP 500. Use a savepoint so
+    // the failed statement cannot poison the outer transaction, and fall back
+    // to a representation the stale constraint accepts: a rejected mapping
+    // with an explicit defer reason. Either way the item leaves the unresolved
+    // inbox and the defer succeeds instead of returning a 500.
+    let savepoint = tx
+        .savepoint("identity_inbox_defer_status")
+        .await
+        .map_err(db::query_error)?;
+    match savepoint
+        .execute(
+            "UPDATE issue_external_identity_mappings SET status='deferred', updated_at=NOW() WHERE id=$1",
+            &[&mapping_id],
+        )
+        .await
+    {
+        Ok(_) => {
+            savepoint.commit().await.map_err(db::query_error)?;
+        }
+        Err(error)
+            if error.code() == Some(&tokio_postgres::error::SqlState::CHECK_VIOLATION) =>
+        {
+            savepoint.rollback().await.map_err(db::query_error)?;
+            tx.execute(
+                "UPDATE issue_external_identity_mappings SET status='rejected', \
+                 rejection_reason='deferred by user', evidence_source='deferred', \
+                 updated_at=NOW() WHERE id=$1",
+                &[&mapping_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        }
+        Err(error) => return Err(db::query_error(error)),
+    }
     tx.commit().await.map_err(db::query_error)?;
 
     let updated = fetch_item(&state, user.id(), mapping_id).await?;
@@ -1029,8 +1133,12 @@ pub async fn skip(
 // Documentation-only operations for OpenAPI
 #[utoipa::path(
     get,
-    path = "/api/v1/identity-inbox",
+    path = "/api/v2/identity-inbox",
     tag = "identity-inbox",
+    params(
+        ("offset" = Option<i64>, Query, minimum = 0, description = "Items to skip (default 0)"),
+        ("limit" = Option<i64>, Query, minimum = 1, maximum = 100, description = "Page size, 1-100 (default 50)")
+    ),
     responses((status = 200, description = "ok", body = IdentityInboxResponse)),
     security(("HTTPBearer" = []))
 )]
@@ -1039,8 +1147,13 @@ pub fn list_documentation() {}
 
 #[utoipa::path(
     get,
-    path = "/api/v1/identity-inbox/search/issues",
+    path = "/api/v2/identity-inbox/issue-matches",
     tag = "identity-inbox",
+    params(
+        ("q" = String, Query, min_length = 1, description = "Non-blank search text, at most 200 UTF-8 bytes (required)"),
+        ("limit" = Option<i64>, Query, minimum = 1, maximum = 50, description = "Maximum results, 1-50 (default 10)"),
+        ("issue_id" = Option<i32>, Query, description = "Issue id echoed back in the response (default 0)")
+    ),
     responses((status = 200, description = "ok", body = IdentityInboxSearchResponse)),
     security(("HTTPBearer" = []))
 )]
@@ -1049,7 +1162,7 @@ pub fn search_documentation() {}
 
 #[utoipa::path(
     get,
-    path = "/api/v1/identity-inbox/{mapping_id}",
+    path = "/api/v2/identity-inbox/{mapping_id}",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
     responses((status = 200, description = "ok", body = IdentityInboxResponse)),
@@ -1060,10 +1173,10 @@ pub fn get_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v1/identity-inbox/{mapping_id}/confirm",
+    path = "/api/v2/identity-inbox/{mapping_id}/confirmations",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
-    request_body = ActionRequest,
+    request_body = IdentityInboxConfirmRequest,
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),
     security(("HTTPBearer" = []))
 )]
@@ -1072,7 +1185,7 @@ pub fn confirm_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v1/identity-inbox/{mapping_id}/defer",
+    path = "/api/v2/identity-inbox/{mapping_id}/deferrals",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),
@@ -1083,10 +1196,10 @@ pub fn defer_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v1/identity-inbox/{mapping_id}/reject",
+    path = "/api/v2/identity-inbox/{mapping_id}/rejections",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
-    request_body = ActionRequest,
+    request_body = IdentityInboxRejectRequest,
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),
     security(("HTTPBearer" = []))
 )]
@@ -1095,7 +1208,7 @@ pub fn reject_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v1/identity-inbox/{mapping_id}/skip",
+    path = "/api/v2/identity-inbox/{mapping_id}/skips",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),
@@ -1109,6 +1222,152 @@ mod tests {
     use super::*;
     use crate::auth::AuthenticatedUser;
     use crate::test_support;
+
+    /// ComICVine search must go through the outbound seam: the fake records
+    /// the host and query and supplies the payload, never a socket (#5339).
+    #[tokio::test]
+    async fn fetch_comicvine_records_host_and_query_and_parses_the_payload() {
+        let recorder = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let fake: Arc<dyn OutboundHttp> = recorder.clone();
+        recorder.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":40001,"name":"Batman"}]}"#,
+            ),
+        );
+        let url = build_search_url("KEY123", "bat man", 10);
+        let payload = fetch_comicvine(&fake, url)
+            .await
+            .expect("canned provider payload must parse");
+        assert_eq!(payload["number_of_total_results"], 1);
+        assert_eq!(payload["results"][0]["id"], 40001);
+
+        let calls = recorder.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].host, "comicvine.gamespot.com");
+        assert_eq!(calls[0].method, "GET");
+        assert!(
+            calls[0].path.starts_with("/api/search/?api_key=KEY123"),
+            "unexpected search path {}",
+            calls[0].path
+        );
+        assert!(calls[0].path.contains("query=bat%20man"));
+        assert!(calls[0].path.contains("resources=issue"));
+    }
+
+    #[tokio::test]
+    async fn fetch_comicvine_returns_none_on_error_status_failure_and_oversize() {
+        let recorder = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let fake: Arc<dyn OutboundHttp> = recorder.clone();
+        // Non-success status.
+        recorder.push_ok(
+            http::StatusCode::INTERNAL_SERVER_ERROR,
+            http::HeaderMap::new(),
+            Bytes::from_static(br#"{"status_code":1}"#),
+        );
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        // Transport failure (the default fake behavior).
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        // Oversized body is dropped instead of allocated unbounded.
+        recorder.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from(vec![b'x'; MAX_SEARCH_BODY + 1]),
+        );
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        assert_eq!(recorder.calls().len(), 3);
+    }
+
+    /// End-to-end through the handler: a test-configured app answers search
+    /// from the recording fake, so the route never touches the network.
+    #[tokio::test]
+    async fn search_issues_serves_results_from_the_recording_fake() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        fake.clear();
+        fake.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":400077,"name":"Detective Comics","issue_number":"1","volume":{"id":40509},"site_detail_url":"https://comicvine.gamespot.com/issue/4000-77/"}]}"#,
+            ),
+        );
+        let _env = ComicvineKeyEnv::install();
+        let response = search_issues(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(SearchQuery {
+                q: "detective".to_string(),
+                limit: Some(10),
+                issue_id: None,
+            }),
+        )
+        .await
+        .expect("search must succeed against the fake");
+        assert_eq!(response.total_available, Some(1));
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].comicvine_issue_id, 400077);
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1, "exactly one outbound call, no socket");
+        assert_eq!(calls[0].host, "comicvine.gamespot.com");
+    }
+
+    /// Save/restore `COMICVINE_API_KEY` around one test (same pattern as the
+    /// bug-reports GitHub env guard).
+    struct ComicvineKeyEnv {
+        previous: Option<String>,
+    }
+
+    impl ComicvineKeyEnv {
+        fn install() -> Self {
+            let previous = std::env::var("COMICVINE_API_KEY").ok();
+            std::env::set_var("COMICVINE_API_KEY", "TESTKEY123");
+            Self { previous }
+        }
+    }
+
+    impl Drop for ComicvineKeyEnv {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(value) => std::env::set_var("COMICVINE_API_KEY", value),
+                None => std::env::remove_var("COMICVINE_API_KEY"),
+            }
+        }
+    }
+
+    #[test]
+    fn why_stopped_uses_candidate_count_and_keeps_zero_candidate_reasons() {
+        let empty = serde_json::json!({});
+        // Real candidate state wins over the empty-evidence fallback, but a
+        // non-empty decision_reason is preserved so the header still explains
+        // why review is needed.
+        assert_eq!(why_stopped("unresolved", &empty, 1), "1 candidate found");
+        assert_eq!(why_stopped("unresolved", &empty, 3), "3 candidates found");
+        let with_reason = serde_json::json!({"decision_reason": "ambiguous title"});
+        assert_eq!(
+            why_stopped("unresolved", &with_reason, 1),
+            "1 candidate found: ambiguous title"
+        );
+        assert_eq!(
+            why_stopped("candidate", &with_reason, 2),
+            "2 candidates found: ambiguous title"
+        );
+        // With no candidates the original evidence/status reasons still apply.
+        assert_eq!(why_stopped("unresolved", &empty, 0), "No candidates found");
+        assert_eq!(why_stopped("candidate", &with_reason, 0), "ambiguous title");
+    }
 
     #[tokio::test]
     async fn list_empty_returns_ok() {
@@ -1230,6 +1489,90 @@ mod tests {
             .any(|item| { item.candidates.iter().any(|c| c.external_identity_id == 6) }));
     }
 
+<<<<<<< HEAD
+=======
+    /// Regression test for #5382: the list endpoint now batch-loads real
+    /// candidates, but `why_stopped` was ported from a Python implementation
+    /// whose list response always had `candidates=[]`. An unresolved mapping
+    /// with empty `evidence_json` therefore produced "No candidates found"
+    /// while the very same response carried one candidate. The collapsed
+    /// inbox header rendered that contradiction to the user. When candidates
+    /// exist, a non-empty decision_reason is preserved alongside the count.
+    #[tokio::test]
+    async fn list_inbox_why_stopped_reflects_real_candidates() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'owner',false,NOW()); \
+             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                 (1,1,'Mutant X','comics',1,0,'active','[]'::json,false,false,false,NOW()), \
+                 (2,1,'Mutant Y','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
+                 (1,1,'#1','unread',0,NOW()), \
+                 (2,2,'#1','unread',0,NOW()); \
+             INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
+                 (1,'comicvine','issue','cv-1','{}'::json,NOW(),NOW()), \
+                 (2,'comicvine','issue','cv-2','{}'::json,NOW(),NOW()), \
+                 (3,'comicvine','issue','cv-3','{}'::json,NOW(),NOW()); \
+             INSERT INTO issue_external_identity_mappings \
+                 (id, issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) VALUES \
+                 (1,1,1,'unresolved','heuristic',0.5,NOW(),NOW(),'{\"decision_reason\":\"ambiguous title\"}'::json), \
+                 (2,2,2,'unresolved','heuristic',0.5,NOW(),NOW(),'{\"decision_reason\":\"ambiguous title\"}'::json), \
+                 (3,2,3,'confirmed','user_confirmed',0.9,NOW(),NOW(),'{}'::json);",
+        )
+        .await
+        .unwrap();
+        drop(conn);
+
+        let response = list_inbox(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(ListQuery {
+                offset: None,
+                limit: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+
+        assert_eq!(response.items.len(), 2);
+
+        let one = response
+            .items
+            .iter()
+            .find(|item| item.issue_id == 1)
+            .expect("issue 1 item");
+        assert_eq!(one.candidates.len(), 1, "issue 1 has one candidate mapping");
+        assert!(
+            !one.why_stopped.contains("No candidates found"),
+            "collapsed header must not claim no candidates when a candidate exists; got {:?}",
+            one.why_stopped,
+        );
+        assert_eq!(one.why_stopped, "1 candidate found: ambiguous title");
+
+        let two = response
+            .items
+            .iter()
+            .find(|item| item.issue_id == 2)
+            .expect("issue 2 item");
+        assert_eq!(
+            two.candidates.len(),
+            2,
+            "issue 2 has N>1 candidate mappings"
+        );
+        assert!(
+            !two.why_stopped.contains("No candidates found"),
+            "collapsed header must not claim no candidates when candidates exist; got {:?}",
+            two.why_stopped,
+        );
+        assert_eq!(two.why_stopped, "2 candidates found: ambiguous title");
+    }
+
+>>>>>>> origin/main
     #[tokio::test]
     async fn mutation_handlers_reach_database_write_boundary() {
         let Some(state) = test_support::test_state(2).await else {
@@ -1262,5 +1605,113 @@ mod tests {
         )
         .await;
         let _ = skip(State(state), AuthenticatedUser::for_test(1), Path(1)).await;
+    }
+
+    /// A raw admin connection is needed only to simulate production's stale
+    /// status constraint; the handler itself still runs as the DML-only role.
+    async fn admin_client() -> tokio_postgres::Client {
+        let (client, connection) = tokio_postgres::connect(
+            &test_support::required_test_admin_url(),
+            tokio_postgres::NoTls,
+        )
+        .await
+        .expect("admin test connection");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+    }
+
+    /// Regression for #5378: production is stamped past the revision that
+    /// added 'deferred' to the status allow-list, but its live constraint does
+    /// not contain that value. Defer must succeed (and remove the item from the
+    /// unresolved inbox) instead of failing with a check-violation 500.
+    #[tokio::test]
+    async fn defer_succeeds_when_status_constraint_predates_deferred_value() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let admin = admin_client().await;
+
+        // Reproduce the deployed constraint from before c85700000001.
+        admin
+            .batch_execute(
+                "ALTER TABLE issue_external_identity_mappings DROP CONSTRAINT IF EXISTS \
+                 ck_issue_external_identity_status; \
+                 ALTER TABLE issue_external_identity_mappings ADD CONSTRAINT \
+                 ck_issue_external_identity_status CHECK (status IN \
+                 ('unresolved','candidate','confirmed','rejected'));",
+            )
+            .await
+            .expect("install stale status constraint");
+
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'owner',false,NOW()); \
+             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                 (1,1,'Owned','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
+                 (1,1,'#6','unread',0,NOW()); \
+             INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
+                 (1,'comicvine','issue','901096','{}'::json,NOW(),NOW()); \
+             INSERT INTO issue_external_identity_mappings \
+                 (id, issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at) VALUES \
+                 (1,1,1,'unresolved','heuristic','{}'::json,NOW(),NOW());",
+        )
+        .await
+        .unwrap();
+        drop(conn);
+
+        let response = defer(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(1),
+        )
+        .await;
+
+        // Restore the canonical constraint before asserting so a failure here
+        // cannot leak the stale schema into the next serialized test.
+        admin
+            .batch_execute(
+                "ALTER TABLE issue_external_identity_mappings DROP CONSTRAINT IF EXISTS \
+                 ck_issue_external_identity_status; \
+                 ALTER TABLE issue_external_identity_mappings ADD CONSTRAINT \
+                 ck_issue_external_identity_status CHECK (status IN \
+                 ('unresolved','candidate','confirmed','rejected','deferred'));",
+            )
+            .await
+            .expect("restore canonical status constraint");
+
+        let body = response.expect("defer must succeed on a stale status constraint");
+        assert!(body.success);
+        assert_eq!(body.message, "Item deferred for later review");
+
+        let conn = state.pool.get().await.unwrap();
+        let row = conn
+            .query_one(
+                "SELECT status, rejection_reason FROM issue_external_identity_mappings WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        let status: String = row.get(0);
+        let reason: Option<String> = row.get(1);
+        assert_eq!(status, "rejected");
+        assert_eq!(reason.as_deref(), Some("deferred by user"));
+        drop(conn);
+
+        let list = list_inbox(
+            State(state),
+            AuthenticatedUser::for_test(1),
+            Query(ListQuery {
+                offset: None,
+                limit: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(list.total, 0);
     }
 }

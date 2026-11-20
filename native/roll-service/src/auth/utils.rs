@@ -6,6 +6,14 @@ use sha2::{Digest, Sha256};
 
 use crate::auth::error::AuthError;
 
+fn hex_lower(bytes: impl AsRef<[u8]>) -> String {
+    bytes
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 /// Python policy constant: minimum password length in characters.
 pub const MIN_PASSWORD_LENGTH: usize = 6;
 /// bcrypt silently truncates beyond 72 bytes, so reject longer inputs instead.
@@ -128,7 +136,7 @@ pub fn generate_csrf_token() -> String {
 pub fn token_digest(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex_lower(hasher.finalize())
 }
 
 /// Maximum characters stored in `failed_login_attempts.ip_address`.
@@ -274,5 +282,13 @@ mod tests {
             .unwrap();
         assert_eq!(bcrypt_hash_calls(), before + 1);
         assert!(verify_password("policy-password", &hash).unwrap());
+    }
+
+    #[test]
+    fn token_digest_matches_known_sha256_hex() {
+        assert_eq!(
+            token_digest("hello"),
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
     }
 }

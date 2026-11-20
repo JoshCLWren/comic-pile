@@ -190,8 +190,13 @@ pub struct BootstrapResponseV2 {
     pub rollable: Vec<BootstrapRollableItem>,
     pub pool_reason: crate::reading_constraints::PoolReason,
     pub last_read: Option<BootstrapLastRead>,
+    /// Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`
+    /// for the complete snooze set.
     pub snoozed_threads: Vec<BootstrapThreadSummary>,
     pub snoozed_count: i64,
+    /// Every owned thread the session currently has snoozed, uncapped, so
+    /// consumers such as Queue can resolve per-row snooze state.
+    pub snoozed_thread_ids: Vec<i32>,
     pub skipped_thread_ids: Vec<i32>,
     pub skipped_threads: Vec<BootstrapThreadSummary>,
     pub timezone: Option<String>,
@@ -449,21 +454,31 @@ async fn current_active_thread(
     user: AuthenticatedUser,
     session_id: i32,
     pending_thread_id: Option<i32>,
+    option_e: bool,
+    candidates: Vec<i32>,
 ) -> Result<Option<BootstrapActiveThread>, ApiError> {
     let Some(thread_id) = pending_thread_id else {
         return Ok(None);
     };
-    let row = conn
-        .query_opt(
-            "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
+    // The pending Roll view must show the same canonical display position as
+    // the Queue list, Thread Detail and Roll offer, not the raw stored
+    // `queue_position` (issue #5263).
+    let position = crate::threads::display_position_expr("$3", "$1", "$4", "$5");
+    let sql = format!(
+        "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
                t.total_issues,t.reading_progress,t.last_rating,t.next_unread_issue_id,
                i.issue_number,
                (SELECT count(*)::int FROM issues read WHERE read.thread_id=t.id AND read.status='read'),
                (SELECT e.result FROM events e WHERE e.session_id=$2 AND e.selected_thread_id=t.id
-                 AND e.type='roll' ORDER BY e.timestamp DESC,e.id DESC LIMIT 1)
-             FROM threads t LEFT JOIN issues i ON i.id=t.next_unread_issue_id AND i.thread_id=t.id
-             WHERE t.id=$1 AND t.user_id=$3",
-            &[&thread_id, &session_id, &user.id()],
+                 AND e.type='roll' ORDER BY e.timestamp DESC,e.id DESC LIMIT 1),
+               {position} AS computed_position
+         FROM threads t LEFT JOIN issues i ON i.id=t.next_unread_issue_id AND i.thread_id=t.id
+         WHERE t.id=$1 AND t.user_id=$3",
+    );
+    let row = conn
+        .query_opt(
+            &sql,
+            &[&thread_id, &session_id, &user.id(), &option_e, &candidates],
         )
         .await
         .map_err(db::query_error)?
@@ -472,7 +487,11 @@ async fn current_active_thread(
     let title: String = row.try_get(1).map_err(db::query_error)?;
     let format: String = row.try_get(2).map_err(db::query_error)?;
     let issues_remaining: i32 = row.try_get(3).map_err(db::query_error)?;
-    let queue_position: i32 = row.try_get(4).map_err(db::query_error)?;
+    // SQL NULL means the thread is outside the active queue; fall back to the
+    // stored value instead of panicking on a NULL -> i32 read.
+    let computed_position: Option<i32> = row.try_get(12).map_err(db::query_error)?;
+    let stored_position: i32 = row.try_get(4).map_err(db::query_error)?;
+    let queue_position = computed_position.unwrap_or(stored_position);
     let total_issues: Option<i32> = row.try_get(5).map_err(db::query_error)?;
     let reading_progress: Option<String> = row.try_get(6).map_err(db::query_error)?;
     let last_rating: Option<f64> = row.try_get(7).map_err(db::query_error)?;
@@ -787,7 +806,7 @@ fn recovery_chains(
 
 /// Keep the existing pending roll intact. Explain only real blocked frontiers,
 /// with actionable leaf issues derived from the *same* authoritative graph.
-fn pending_roll_recovery(
+pub(crate) fn pending_roll_recovery(
     validated: &crate::reading_constraints::ValidatedReadingInputs,
     pending_thread_id: Option<i32>,
     excluded: &HashSet<i32>,
@@ -1082,6 +1101,11 @@ pub async fn bootstrap_v2(
     };
     let mut snoozed_threads = summary(&snoozed);
     let snoozed_count = snoozed.iter().filter(|id| known.contains_key(id)).count() as i64;
+    let snoozed_thread_ids: Vec<i32> = snoozed
+        .iter()
+        .filter(|id| known.contains_key(id))
+        .copied()
+        .collect();
     let mut skipped_threads = summary(&skipped);
 
     let roll_recovery = pending_roll_recovery(
@@ -1090,8 +1114,21 @@ pub async fn bootstrap_v2(
         &legacy_excluded,
         &candidates,
     )?;
-    let active_thread =
-        current_active_thread(&conn, user, session.id, session.pending_thread_id).await?;
+    let option_e = state.option_e;
+    let eligible_candidate_ids = if option_e {
+        crate::threads::eligible_candidate_ids(&validated)?
+    } else {
+        Vec::new()
+    };
+    let active_thread = current_active_thread(
+        &conn,
+        user,
+        session.id,
+        session.pending_thread_id,
+        option_e,
+        eligible_candidate_ids,
+    )
+    .await?;
     let last_roll_result = active_thread
         .as_ref()
         .and_then(|thread| thread.last_rolled_result)
@@ -1149,6 +1186,7 @@ pub async fn bootstrap_v2(
         last_read,
         snoozed_threads,
         snoozed_count,
+        snoozed_thread_ids,
         skipped_thread_ids: skipped,
         skipped_threads,
         timezone: session.timezone.clone(),

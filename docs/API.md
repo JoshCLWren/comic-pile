@@ -47,11 +47,12 @@ The checked-in client contract
 (`frontend/src/generated/openapi.json` and `openapi.ts`) is assembled from two
 generated sources:
 
-- `app.openapi()` for the Python/FastAPI routes, and
+- `native/contracts/python-legacy.openapi.json`, a frozen snapshot of the remaining
+  Python/FastAPI routes, and
 - `native/contracts/v2-runtime.openapi.json` for the deployed native Rust v2
   operations, generated from the Rust DTOs by `cargo run --example v2_openapi`.
 
-`scripts/export_openapi_schema.py` merges them: a native operation replaces the
+`scripts/export_openapi_schema.mjs` merges them: a native operation replaces the
 same `(path, method)` because ingress routes that request to Rust, and a native
 component schema that differs from a same-named Python schema is published as
 `Native<Name>` with its internal references rewritten. The same canonical
@@ -485,37 +486,7 @@ until the visitor explicitly signs up and separately chooses a save action.
 
 Session tracking and history.
 
-### GET /sessions/current/
-
-Get the currently active session.
-
-**Response**: `200 OK`
-
-```json
-{
-  "id": 1,
-  "started_at": "2025-12-30T10:00:00",
-  "ended_at": null,
-  "start_die": 6,
-  "user_id": 1,
-  "ladder_path": "6 → 8 → 10",
-  "active_thread": {
-    "id": 3,
-    "title": "The Walking Dead Vol. 1",
-    "format": "TPB",
-    "issues_remaining": 5,
-    "position": 10
-  }
-}
-```
-
-**Response**: `404 Not Found`
-
-```json
-{
-  "detail": "No active session found"
-}
-```
+> `GET /sessions/current/` and `POST /sessions/{id}/restore-session-start` are retired (#4343); Roll state is event-derived.
 
 ### GET /sessions/
 

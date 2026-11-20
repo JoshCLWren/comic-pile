@@ -72,7 +72,7 @@ All browser-called operations in this family (re-derive from docs/api/v2-route-i
 1. **Update route inventory**:
    - Update `docs/api/v2-route-inventory.json`
    - Mark operations as `native-rust` with cutover owner
-   - Regenerate burndown table via `python3 scripts/generate_route_burndown.py`
+   - Regenerate burndown table via `node scripts/generate_route_burndown.mjs`
 
 2. **Runtime proof**:
    - Verify authenticated production requests execute in Rust
@@ -107,7 +107,7 @@ cd frontend && pnpm exec vitest run <affected-test-files>
 uv run --frozen python scripts/export_openapi_schema.py --check
 
 # Route generation
-python3 scripts/generate_route_burndown.py --check
+node scripts/generate_route_burndown.mjs --check
 ```
 
 ## Rollback Strategy
@@ -127,7 +127,7 @@ python3 scripts/generate_route_burndown.py --check
 
 - [ ] Move **every browser-called /api/v1/* and /api/* operation above to native Rust same-path**: same HTTP method and exact path (including both the /api/* and /api/v1/* twins where the family has them) served by the native binary (/api/native_roll.rs or /api/native_issue.rs via vercel.json). Front-end URLs stay unchanged. Never redirect /api/v1/* to /api/v2/* as a shortcut.
 - [ ] Preserve the wire contract: generated native OpenAPI response matches the Python response (status codes, types, required/optional fields, colon-action suffixes, trailing-slash behavior, error shapes), plus auth/ownership checks, SQL/bind/transaction semantics, and SQL budgets (no N+1, no per-row fan-out regressions).
-- [ ] Update docs/api/v2-route-inventory.json (runtime + native contract) and regenerate any burndown/AGENTS.md table via scripts/generate_route_burndown.py in the cutover PR.
+- [ ] Update docs/api/v2-route-inventory.json (runtime + native contract) and regenerate any burndown/AGENTS.md table via scripts/generate_route_burndown.mjs in the cutover PR.
 - [ ] **Prove an authenticated production request ran in Rust**: show a real authenticated production request for every operation above executing in the Rust binary (runtime evidence from deployed ingress/logs, not just health/401/READY or deployed code). Each METHOD path must have production evidence or an explicit, reviewer-approved reason why one representative proves its siblings.
 - [ ] **Then delete the Python handler**: after proof, delete the Python handler, its mount entries in app/router_mounts.py, and any now-dead Python service/repository/schema/test helpers exclusive to it. Do not delete code still shared by other operations.
 - [ ] Exact-head green required CI and independent exact-head semantic/acceptance review. Greptile is optional; any actionable Greptile finding needs a fix or concrete evidence rebuttal.

@@ -18,9 +18,9 @@ export interface UserPreferencesPatchRequest {
 export function createPreferencesApi(client: HttpClient) {
   return {
     get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
-      client.get<UserPreferencesResponse>('/v1/users/me/preferences', options),
+      client.get<UserPreferencesResponse>('/v2/users/me/preferences', options),
     patch: (data: UserPreferencesPatchRequest) =>
-      client.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
+      client.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v2/users/me/preferences', data),
   }
 }
 

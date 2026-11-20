@@ -4,8 +4,8 @@ Production must be able to distinguish ``/api/roll/bootstrap`` (legacy),
 ``/api/v1/roll/bootstrap`` (v1), and ``/api/v2/roll/bootstrap`` (v2), and must
 record whether each caller looked like a web-origin client for the later
 seven-day zero-web-origin deletion gate. These tests pin classification,
-aggregation, the authenticated snapshot, middleware wiring, and the guarantee
-that only classification facts are exposed.
+aggregation, middleware wiring, and the guarantee that only classification
+facts are exposed.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ import logging
 from collections.abc import Iterator
 
 import pytest
-from httpx import AsyncClient
 
 from app.bootstrap_route_telemetry import (
     classify_bootstrap_alias,
@@ -23,15 +22,10 @@ from app.bootstrap_route_telemetry import (
     reset_bootstrap_alias_counters_for_tests,
     bootstrap_alias_snapshot,
 )
-from app.schemas.bootstrap_telemetry import (
-    BootstrapAliasCounterSchema,
-    BootstrapAliasSnapshotSchema,
-)
 
 LEGACY_PATH = "/api/roll/bootstrap"
 V1_PATH = "/api/v1/roll/bootstrap"
 V2_PATH = "/api/v2/roll/bootstrap"
-SNAPSHOT_PATH = "/api/v1/bootstrap-alias-metrics"
 
 
 @pytest.fixture(autouse=True)
@@ -186,22 +180,3 @@ def test_record_bootstrap_alias_hit_logs_only_classification_facts(
     assert logged_fields == set()
 
 
-async def test_snapshot_endpoint_requires_authentication(client: AsyncClient) -> None:
-    """Unauthenticated callers must not read alias telemetry."""
-    response = await client.get(SNAPSHOT_PATH)
-    assert response.status_code == 401
-
-
-async def test_snapshot_endpoint_reports_counters(
-    auth_client: AsyncClient,
-) -> None:
-    """Authenticated callers receive the process-local typed snapshot."""
-    response = await auth_client.get(SNAPSHOT_PATH)
-    assert response.status_code == 200
-
-    payload = BootstrapAliasSnapshotSchema.model_validate(response.json())
-    counter_fields = set(BootstrapAliasCounterSchema.model_fields)
-    assert counter_fields == {"alias", "web_origin", "status_class", "count"}
-    for counter in payload.counters:
-        assert counter.alias in {"legacy", "v1", "v2"}
-        assert counter.count >= 0

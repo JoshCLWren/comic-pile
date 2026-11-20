@@ -8,7 +8,7 @@ vi.mock('../services/api', () => ({
   default: { post, get, put: vi.fn(), patch: vi.fn(), delete: vi.fn(), head: vi.fn() },
 }))
 
-import { SERIES_IMPORT_TIMEOUT_MS, comicVineApi } from '../services/api-comicvine'
+import { COMICVINE_ROSTER_TIMEOUT_MS, SERIES_IMPORT_TIMEOUT_MS, comicVineApi } from '../services/api-comicvine'
 
 describe('comicVineApi series import (#3445)', () => {
   beforeEach(() => {
@@ -46,5 +46,34 @@ describe('comicVineApi series import (#3445)', () => {
     expect(status.imported).toBe(true)
     expect(status.thread_id).toBe(501)
     expect(status.issue_count).toBe(12)
+  })
+})
+describe('comicVineApi native v2 provider reads (#4835)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    get.mockResolvedValue({})
+  })
+
+  it('searches series on the v2 route with the shared default budget', async () => {
+    await comicVineApi.searchSeries('Saga', 10, 20)
+
+    expect(get).toHaveBeenCalledWith('/v2/comicvine/search/series', {
+      params: { q: 'Saga', limit: 10, offset: 20 },
+    })
+  })
+
+  it('gives the roster-backed resolve and series-issues reads a budget above the 50s server deadline', async () => {
+    await comicVineApi.resolveIdentity('https://comicvine.gamespot.com/saga/4050-9/')
+    await comicVineApi.getSeriesIssues(9, 'Saga')
+
+    expect(get).toHaveBeenCalledWith('/v2/comicvine/resolve', {
+      params: { input: 'https://comicvine.gamespot.com/saga/4050-9/' },
+      timeout: COMICVINE_ROSTER_TIMEOUT_MS,
+    })
+    expect(get).toHaveBeenCalledWith('/v2/comicvine/series/9/issues', {
+      params: { series_name: 'Saga' },
+      timeout: COMICVINE_ROSTER_TIMEOUT_MS,
+    })
+    expect(COMICVINE_ROSTER_TIMEOUT_MS).toBeGreaterThan(50_000)
   })
 })

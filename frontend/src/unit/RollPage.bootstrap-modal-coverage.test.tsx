@@ -35,6 +35,7 @@ vi.mock('../hooks/useRollBootstrap', () => ({
   }),
 }))
 vi.mock('../hooks/useRoll', () => ({
+  useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: () => ({ mutate: spies.setDie, isPending: state.setDiePending }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: vi.fn(), isPending: false }),
@@ -50,6 +51,7 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToBack: () => ({ mutate: vi.fn(), isPending: false }),
   useShuffleQueue: () => ({ mutate: vi.fn(), isPending: false }),
   useActiveSeriesCount: () => null,
+  useRestoreExclusionGroup: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
 }))
 vi.mock('../hooks', () => ({ useRate: () => ({ mutate: vi.fn(), isPending: false }) }))
 vi.mock('../services/api-taste', () => ({

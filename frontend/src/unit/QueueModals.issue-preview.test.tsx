@@ -78,7 +78,7 @@ function PreviewHarness({ issues }: { issues: string }) {
     onCreated: async () => undefined,
     onUpdated: async () => undefined,
     onReactivated: async () => undefined,
-    refetchSession: async () => undefined,
+    refetchRollState: async () => undefined,
     submitCreate: async () => ({}),
     submitEdit: vi.fn(),
     submitReactivate: vi.fn(),

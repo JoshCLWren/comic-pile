@@ -17,7 +17,7 @@ import {
   useQueueThreads,
   useShuffleQueue,
 } from '../hooks/useQueue'
-import { useSession } from '../hooks/useSession'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useCompletedThreads } from '../hooks/useCompletedThreads'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
@@ -49,6 +49,7 @@ vi.mock('../hooks/useThread', () => ({
 vi.mock('../hooks/useQueue', () => ({
   useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
   useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
+  useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToPosition: vi.fn(),
@@ -56,8 +57,8 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useSession', () => ({
-  useSession: vi.fn(),
+vi.mock('../hooks/useRollBootstrap', () => ({
+  useRollBootstrap: vi.fn(),
 }))
 
 vi.mock('../hooks/useSnooze', () => ({
@@ -137,7 +138,7 @@ const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseSession = vi.mocked(useSession) as any
+const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
@@ -182,7 +183,7 @@ beforeEach(() => {
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseSession.mockReturnValue({
+  mockedUseRollBootstrap.mockReturnValue({
     data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
     refetch: vi.fn(),
   })
@@ -345,7 +346,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   })
 
   it('uses native reroll when the pending comic Snooze action is clicked', async () => {
-    mockedUseSession.mockReturnValue({
+    mockedUseRollBootstrap.mockReturnValue({
       data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [], pending_thread_id: 1 },
       refetch: vi.fn(),
     })
@@ -368,7 +369,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   })
 
   it('explains why Snooze is unavailable for a series the reader did not roll (#3260)', async () => {
-    mockedUseSession.mockReturnValue({
+    mockedUseRollBootstrap.mockReturnValue({
       data: {
         snoozed_threads: [],
         skipped_thread_ids: [],
@@ -398,7 +399,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   })
 
   it('removes thread from snooze cookie when Unsnooze action is clicked', async () => {
-    mockedUseSession.mockReturnValue({
+    mockedUseRollBootstrap.mockReturnValue({
       data: {
         snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
         skipped_thread_ids: [],
@@ -428,7 +429,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   it('does not run a second session fetch after the snooze action', async () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
-    mockedUseSession.mockReturnValue({
+    mockedUseRollBootstrap.mockReturnValue({
       data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [], pending_thread_id: 1 },
       refetch: mockRefetchSession,
     })
@@ -464,7 +465,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   it('does not run a second session fetch after the unsnooze action', async () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
-    mockedUseSession.mockReturnValue({
+    mockedUseRollBootstrap.mockReturnValue({
       data: {
         snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
         skipped_thread_ids: [],

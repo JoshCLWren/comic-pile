@@ -1,5 +1,11 @@
 # Users + Auth + Multi-Tenant + React Modernization Plan
 
+> **Status: historical.**
+>
+> This is a historical planning document (written 2026-03-17, before the Rust v2 cutover). The `app/`, `comic_pile/`, and `frontend/src/*.jsx` paths it cites describe the Python/JSX implementation that has since been removed or replaced; they are kept as history, not as pointers to current code. For the current auth runtime see `native/roll-service/src/auth/` and `frontend/src/services/api-auth.ts`.
+
+<!-- docs-path-check: historical -->
+
 Last updated: 2026-03-17
 
 ## Goals

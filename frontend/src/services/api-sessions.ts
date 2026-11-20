@@ -1,6 +1,5 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type {
-  SessionCurrent,
   SessionDetails,
   SessionListResponse,
   SessionSnapshotsResponse,
@@ -28,10 +27,8 @@ export function createSessionApi(client: HttpClient) {
       return response
     },
     get: (id: number) => client.get<SessionSummary>(`/v1/sessions/${id}`),
-    getCurrent: () => client.get<SessionCurrent>('/v1/sessions/current/'),
-    getDetails: (id: number | string) => client.get<SessionDetails>(`/v1/sessions/${id}/details`),
-    getSnapshots: (id: number | string) => client.get<SessionSnapshotsResponse>(`/v1/sessions/${id}/snapshots`),
-    restoreSessionStart: (id: number | string) => client.post<void>(`/v1/sessions/${id}/restore-session-start`),
+    getDetails: (id: number | string) => client.get<SessionDetails>(`/v2/reading-sessions/${id}/details`),
+    getSnapshots: (id: number | string) => client.get<SessionSnapshotsResponse>(`/v2/reading-sessions/${id}/snapshots`),
   }
 }
 

@@ -1,0 +1,34 @@
+{
+  "family": "review-previews",
+  "owned_path_patterns": [
+    "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
+    "^/api/v1/issue\\-identity/cbl/[^/]+/reading\\-graph\\-preview$"
+  ],
+  "defaults": {
+    "runtime": "native-rust",
+    "status": "target",
+    "owning_issue": 4842,
+    "consumers": [
+      "frontend/src/services/api-continuity-plans.ts",
+      "frontend/src/services/api-reading-orders.ts",
+      "frontend/src/services/api-cbl-sources.ts",
+      "frontend/src/services/api-reading-graph.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/reading\\-graph\\-preview$"
+    }
+  ]
+}

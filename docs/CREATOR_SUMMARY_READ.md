@@ -24,7 +24,7 @@ still scale with the number of matching issues and credits, not just the number
 of requested people. Both projection and coverage share materialized CTEs within
 one statement, so PostgreSQL extracts the large source JSON only once.
 
-`tests/test_creator_read_performance_regression.py::test_summary_projection_bounds_transferred_rows`
+`tests/test_creator_read_performance_regression.py::test_summary_projection_bounds_transferred_rows` <!-- docs-path-check: ignore -->
 compares the full and requested projections for 100/1,000 issues and 1/2/5/20
 requested keys. It checks exact credit parity, returned issue/rating sets,
 constant query count, actual driver row counts and global coverage, and prints measured durations and

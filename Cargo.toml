@@ -6,11 +6,11 @@ rust-version = "1.88"
 publish = false
 build = "build.rs"
 
-# Single Cargo workspace and root Cargo.lock for the deployed Vercel ingress and
-# the native roll-service tests. The service remains a path dependency of the
-# root package, so both resolve the exact same locked graph.
+# Single Cargo workspace and root Cargo.lock for the deployed Vercel ingress,
+# the native roll-service tests, and the CI/deploy-time migration runner. Each
+# member resolves through the same canonical lockfile.
 [workspace]
-members = ["native/roll-service"]
+members = ["native/roll-service", "native/migrate"]
 resolver = "2"
 
 [dependencies]
@@ -25,6 +25,9 @@ vercel_runtime = { version = "2.4", features = ["axum"] }
 
 [dev-dependencies]
 tokio-postgres = "0.7.18"
+
+[build-dependencies]
+sha2 = "0.11"
 
 [[bin]]
 name = "native_roll"

@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{collections::HashSet, sync::Arc};
 use tokio_postgres::IsolationLevel;
+use uuid::Uuid;
 
 /// Leave room for the derived snooze key inside the writer's 128-byte limit.
 const MAX_OFFER_KEY: usize = 100;
@@ -106,6 +107,8 @@ struct OfferMetadata {
     queue_position: i32,
     total_issues: Option<i32>,
     reading_progress: Option<String>,
+    next_unread_issue_id: Option<i32>,
+    next_unread_issue_number: Option<String>,
 }
 
 /// Load the retained thread projection only. Issue identity always comes from
@@ -114,26 +117,41 @@ async fn offer_metadata(
     conn: &tokio_postgres::Client,
     user: AuthenticatedUser,
     thread_id: i32,
+    option_e: bool,
+    candidates: Vec<i32>,
 ) -> Result<OfferMetadata, ApiError> {
+    // The pending Roll view must show the same canonical display position as
+    // the Queue list and Thread Detail, not the raw stored `queue_position`.
+    let position = crate::threads::display_position_expr("$2", "$1", "$3", "$4");
+    let sql = format!(
+        "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
+                t.total_issues,t.reading_progress,
+                {position} AS computed_position,
+                t.next_unread_issue_id,
+                i.issue_number
+          FROM threads t
+          LEFT JOIN issues i ON i.id = t.next_unread_issue_id AND i.thread_id = t.id
+          WHERE t.id=$1 AND t.user_id=$2",
+    );
     let row = conn
-        .query_opt(
-            "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
-               t.total_issues,t.reading_progress
-             FROM threads t
-             WHERE t.id=$1 AND t.user_id=$2",
-            &[&thread_id, &user.id()],
-        )
+        .query_opt(&sql, &[&thread_id, &user.id(), &option_e, &candidates])
         .await
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::Internal("Roll offer unavailable".to_string()))?;
+    // SQL NULL means the thread is outside the active queue; fall back to the
+    // stored value instead of panicking on a NULL -> i32 read.
+    let computed_position: Option<i32> = row.try_get(7).map_err(db::query_error)?;
+    let stored_position: i32 = row.try_get(4).map_err(db::query_error)?;
     Ok(OfferMetadata {
         thread_id: row.try_get(0).map_err(db::query_error)?,
         title: row.try_get(1).map_err(db::query_error)?,
         format: row.try_get(2).map_err(db::query_error)?,
         issues_remaining: row.try_get(3).map_err(db::query_error)?,
-        queue_position: row.try_get(4).map_err(db::query_error)?,
+        queue_position: computed_position.unwrap_or(stored_position),
         total_issues: row.try_get(5).map_err(db::query_error)?,
         reading_progress: row.try_get(6).map_err(db::query_error)?,
+        next_unread_issue_id: row.try_get(8).map_err(db::query_error)?,
+        next_unread_issue_number: row.try_get(9).map_err(db::query_error)?,
     })
 }
 
@@ -313,6 +331,14 @@ pub async fn offer(
     // Compute the read-only Option E snapshot before taking the write
     // connection so this request never nests two pool checkouts.
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+    // The canonical position shown for a pending Roll comes from the same
+    // Option E ordering the Queue list and Thread Detail use.
+    let option_e = state.option_e;
+    let eligible_ids = if option_e {
+        crate::threads::eligible_candidate_ids(&validated)?
+    } else {
+        Vec::new()
+    };
     let candidates = validated.eligible_frontiers().map_err(|e| {
         tracing::debug!(
             error_kind = crate::error_kind(&e),
@@ -348,7 +374,14 @@ pub async fn offer(
 
     if let Some(stored) = existing_offer(tx.client(), user, &request.idempotency_key).await? {
         tx.rollback().await.map_err(db::query_error)?;
-        let metadata = offer_metadata(&*pending.connection(), user, stored.thread_id).await?;
+        let metadata = offer_metadata(
+            &*pending.connection(),
+            user,
+            stored.thread_id,
+            option_e,
+            eligible_ids.clone(),
+        )
+        .await?;
         return Ok(Json(response(
             metadata,
             stored.issue_id,
@@ -401,6 +434,32 @@ pub async fn offer(
         die = mutation.die_after;
         excluded.insert(previous);
         snoozed_thread_id = Some(previous);
+
+        // Persist the snoozed thread in the session so it can be restored on unsnooze.
+        // Read current snoozed_thread_ids, append the new one, and write back.
+        let snoozed_raw: Option<String> = tx
+            .query_one(
+                "SELECT snoozed_thread_ids::text FROM sessions WHERE id = $1 AND user_id = $2",
+                &[&active.session.id, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?
+            .get(0);
+        let mut snoozed_ids: Vec<i32> =
+            reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
+        if !snoozed_ids.contains(&previous) {
+            snoozed_ids.push(previous);
+            tx.execute(
+                "UPDATE sessions SET snoozed_thread_ids = $1::text::json WHERE id = $2 AND user_id = $3",
+                &[
+                    &serde_json::to_string(&snoozed_ids).map_err(|_| ApiError::Internal("Invalid snooze state".to_string()))?,
+                    &active.session.id,
+                    &user.id(),
+                ],
+            )
+            .await
+            .map_err(db::query_error)?;
+        }
     }
 
     let eligible_threads: HashSet<i32> = candidate_ids.iter().copied().collect();
@@ -441,7 +500,14 @@ pub async fn offer(
     )
     .await?;
     tx.commit().await.map_err(db::query_error)?;
-    let metadata = offer_metadata(&*pending.connection(), user, selected.thread_id).await?;
+    let metadata = offer_metadata(
+        &*pending.connection(),
+        user,
+        selected.thread_id,
+        option_e,
+        eligible_ids,
+    )
+    .await?;
     pending.release();
     Ok(Json(response(
         metadata,
@@ -452,6 +518,238 @@ pub async fn offer(
         snoozed_thread_id,
     )))
 }
+
+/// Request body for unsnoozing a thread.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UnsnoozeRequest {
+    /// The thread ID to unsnooze. Idempotent: an already-removed snooze succeeds.
+    pub thread_id: i32,
+}
+
+/// Response for unsnooze, mirroring the roll offer shape so the UI can rehydrate.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct UnsnoozeResponse {
+    pub thread_id: i32,
+    pub title: String,
+    pub format: String,
+    pub issues_remaining: i32,
+    pub queue_position: i32,
+    pub die_size: i32,
+    pub result: i32,
+    pub offset: i32,
+    pub snoozed_count: i32,
+    pub issue_id: Option<i32>,
+    pub issue_number: Option<String>,
+    pub next_issue_id: Option<i32>,
+    pub next_issue_number: Option<String>,
+    pub total_issues: Option<i32>,
+    pub reading_progress: Option<String>,
+    pub explanation: Option<String>,
+    pub last_rolled_result: Option<i32>,
+    pub unsnoozed_thread_id: Option<i32>,
+    /// True when the pending roll and die were restored; false when only the
+    /// snooze was removed (older snooze, later die choice, or an already-removed
+    /// snooze replayed after a lost response).
+    pub restored: bool,
+}
+
+/// Remove a temporary snooze. When it is the latest snooze and no later die
+/// action exists, also restore it as the pending roll and revert the die.
+pub async fn unsnooze(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<UnsnoozeRequest>,
+) -> Result<Json<UnsnoozeResponse>, ApiError> {
+    let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
+
+    // Compute the read-only Option E snapshot before taking the write
+    // connection so this request never nests two pool checkouts.
+    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+    let option_e = state.option_e;
+    let eligible_ids = if option_e {
+        crate::threads::eligible_candidate_ids(&validated)?
+    } else {
+        Vec::new()
+    };
+
+    let mut pending = crate::dice_api::Pending::new(db::checkout(&state).await?);
+    let tx = pending
+        .connection()
+        .build_transaction()
+        .isolation_level(IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+
+    // Per-reader advisory lock, same as offer.
+    tx.query_one(
+        "SELECT pg_advisory_xact_lock($1::bigint)",
+        &[&(user.id() as i64)],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    // Read the session's current snoozed_thread_ids and pending thread.
+    let row = tx
+        .query_one(
+            "SELECT pending_thread_id, snoozed_thread_ids::text FROM sessions WHERE id = $1 AND user_id = $2 FOR UPDATE",
+            &[&active.session.id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let snoozed_raw: Option<String> = row.try_get(1).map_err(db::query_error)?;
+    let mut snoozed_ids: Vec<i32> =
+        reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
+
+    // Any snooze can be removed. The pending roll and die are restored only
+    // when this is the most recent snooze AND no later event of any kind
+    // (manual pick, die choice, rating, undo, reset) has superseded it, so an
+    // unsnooze never silently erases a newer reader decision.
+    let position = snoozed_ids.iter().position(|id| *id == request.thread_id);
+    let mut die_size = crate::dice_state::current_die(&tx, user).await?;
+    let mut restored = false;
+    if let Some(position) = position {
+        let was_latest_snooze = position + 1 == snoozed_ids.len();
+        snoozed_ids.remove(position);
+        tx.execute(
+            "UPDATE sessions SET snoozed_thread_ids = $1::text::json WHERE id = $2 AND user_id = $3",
+            &[
+                &serde_json::to_string(&snoozed_ids)
+                    .map_err(|_| ApiError::Internal("Invalid snooze state".to_string()))?,
+                &active.session.id,
+                &user.id(),
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+        let latest_die_event = tx
+            .query_opt(
+                "SELECT type, thread_id, die FROM events
+                 WHERE user_id = $1
+                 ORDER BY timestamp DESC, id DESC LIMIT 1",
+                &[&user.id()],
+            )
+            .await
+            .map_err(db::query_error)?;
+        if let (true, Some(event)) = (was_latest_snooze, latest_die_event) {
+            let event_type: String = event.try_get(0).map_err(db::query_error)?;
+            let event_thread: Option<i32> = event.try_get(1).map_err(db::query_error)?;
+            // Non-dice events (e.g. queue `reorder`) carry a NULL die; read it
+            // as optional and only use it for a matching snooze event.
+            let event_die: Option<i32> = event.try_get(2).map_err(db::query_error)?;
+            if let ("snooze", Some(thread), Some(die_before)) =
+                (event_type.as_str(), event_thread, event_die)
+            {
+                // The series must still belong in the pool: removing it from the
+                // Queue changes status without recording an event.
+                let still_active: bool = tx
+                    .query_opt(
+                        "SELECT status = 'active' FROM threads WHERE id = $1 AND user_id = $2",
+                        &[&request.thread_id, &user.id()],
+                    )
+                    .await
+                    .map_err(db::query_error)?
+                    .map(|row| row.get(0))
+                    .unwrap_or(false);
+                if thread == request.thread_id && still_active {
+                    let updated = tx
+                    .execute(
+                        "UPDATE sessions
+                         SET pending_thread_id=$1, pending_issue_id=NULL, pending_thread_updated_at=NOW()
+                         WHERE id=$2 AND user_id=$3",
+                        &[&request.thread_id, &active.session.id, &user.id()],
+                    )
+                    .await
+                    .map_err(db::query_error)?;
+                    if updated != 1 {
+                        return Err(ApiError::Conflict(
+                            "Reading session changed; try again".to_string(),
+                        ));
+                    }
+                    let unsnooze_key = format!("{}-unsnooze", Uuid::new_v4());
+                    let context = json!({
+                        "dice_command_key": unsnooze_key,
+                        "dice_command": { "kind": "unsnooze", "thread_id": request.thread_id },
+                    });
+                    tx.execute(
+                        "INSERT INTO events
+                       (user_id, type, timestamp, die, die_after, thread_id, context)
+                     VALUES ($1, 'unsnooze', clock_timestamp(), $2, $3, $4, $5::text::json)",
+                        &[
+                            &user.id(),
+                            &die_before,
+                            &die_before,
+                            &request.thread_id,
+                            &context.to_string(),
+                        ],
+                    )
+                    .await
+                    .map_err(db::query_error)?;
+                    die_size = die_before;
+                    restored = true;
+                }
+            }
+        }
+    }
+    let snoozed_thread = request.thread_id;
+
+    tx.commit().await.map_err(db::query_error)?;
+
+    // Fetch metadata for the restored thread.
+    let metadata = offer_metadata(
+        &*pending.connection(),
+        user,
+        snoozed_thread,
+        option_e,
+        eligible_ids,
+    )
+    .await?;
+    pending.release();
+
+    Ok(Json(UnsnoozeResponse {
+        thread_id: metadata.thread_id,
+        title: metadata.title,
+        format: metadata.format,
+        issues_remaining: metadata.issues_remaining,
+        queue_position: metadata.queue_position,
+        die_size,
+        result: 0, // No roll result for unsnooze
+        offset: 0,
+        snoozed_count: snoozed_ids.len() as i32,
+        issue_id: metadata.next_unread_issue_id,
+        issue_number: metadata.next_unread_issue_number.clone(),
+        next_issue_id: metadata.next_unread_issue_id,
+        next_issue_number: metadata.next_unread_issue_number,
+        total_issues: metadata.total_issues,
+        reading_progress: metadata.reading_progress,
+        explanation: None,
+        last_rolled_result: None,
+        unsnoozed_thread_id: Some(snoozed_thread),
+        restored,
+    }))
+}
+
+/// Documentation-only operation for the mounted v2 Roll unsnooze command.
+#[utoipa::path(
+    post,
+    path = "/api/v2/roll/unsnooze",
+    tag = "roll",
+    request_body = UnsnoozeRequest,
+    responses(
+        (status = 200, description = "Restored the previously snoozed roll", body = UnsnoozeResponse),
+        (status = 404, description = "Thread not found"),
+        (status = 401, description = "Not authenticated"),
+        (status = 409, description = "Reading session changed"),
+        (status = 500, description = "Unsnooze projection unavailable"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn unsnooze_documentation() {}
 
 /// Documentation-only operation for the mounted v2 Roll offer command.
 #[utoipa::path(
@@ -569,6 +867,15 @@ mod tests {
     }
 
     #[test]
+    fn unsnooze_request_shape_requires_explicit_thread_id_and_rejects_unknown_fields() {
+        assert!(serde_json::from_str::<UnsnoozeRequest>(r#"{"thread_id": 42}"#).is_ok());
+        assert!(
+            serde_json::from_str::<UnsnoozeRequest>(r#"{"thread_id": 42, "user_id": 9}"#).is_err()
+        );
+        assert!(serde_json::from_str::<UnsnoozeRequest>(r#"{}"#).is_err());
+    }
+
+    #[test]
     fn request_shape_requires_an_explicit_key_and_rejects_unknown_fields() {
         assert!(serde_json::from_str::<RollOfferRequest>(
             r#"{"idempotency_key":"roll-offer-0123456789","snoozed_thread_ids":[4,8]}"#
@@ -668,10 +975,47 @@ mod tests {
             .unwrap()
             .is_none());
 
-        let metadata = offer_metadata(&client, owner, 10).await.unwrap();
+        let metadata = offer_metadata(&client, owner, 10, false, Vec::new())
+            .await
+            .unwrap();
         assert_eq!(metadata.thread_id, 10);
         assert_eq!(metadata.title, "Saga");
-        assert!(offer_metadata(&client, other, 10).await.is_err());
+        assert!(offer_metadata(&client, other, 10, false, Vec::new())
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn offer_metadata_uses_canonical_display_position() {
+        let _admin = crate::test_support::required_test_admin_url();
+        let url = crate::test_support::database_url().await;
+        let (client, _db) = seeded(
+            &url,
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'Late', 'Comic', 0, 'active', 30),
+                        (11, 1, 'Early', 'Comic', 0, 'active', 10),
+                        (12, 1, 'Middle', 'Comic', 0, 'active', 20);"#,
+        )
+        .await;
+        let owner = AuthenticatedUser::for_test(1);
+
+        // All stored is_blocked flags are false, so the canonical ranking is
+        // purely queue_position: Early -> 1, Middle -> 2, Late -> 3. The old
+        // code forwarded the raw stored positions (10/20/30) instead.
+        let late = offer_metadata(&client, owner, 10, false, Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(late.queue_position, 3);
+        let middle = offer_metadata(&client, owner, 12, false, Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(middle.queue_position, 2);
+        let early = offer_metadata(&client, owner, 11, false, Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(early.queue_position, 1);
     }
 
     #[tokio::test]
@@ -849,7 +1193,8 @@ mod tests {
             }),
             &jsonwebtoken::EncodingKey::from_secret(
                 crate::test_support::TEST_JWT_SECRET.as_bytes(),
-            ),
+            )
+            .unwrap(),
         )
         .unwrap();
         let response = app

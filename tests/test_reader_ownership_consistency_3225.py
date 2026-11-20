@@ -27,7 +27,6 @@ from app.models.tag import Tag
 from app.models.thread import Thread
 from app.schemas.continuity_plan import ContinuityPlanNode
 from app.services import ownership_guard
-from app.services.dependency_service import create_dependency
 from app.services.errors import ForbiddenError, NotFoundError
 from app.services.tag_service import TagService
 
@@ -95,14 +94,6 @@ async def test_cross_user_dependency_rejected_despite_shared_catalog(
     thread_b = await _make_thread(db, sample_user2.id, "Bob thread")
     issue_a = await _make_issue(db, thread_a.id, catalog_issue_id=catalog_issue.id)
     issue_b = await _make_issue(db, thread_b.id, catalog_issue_id=catalog_issue.id)
-
-    result, reason = await create_dependency(issue_a.id, issue_b.id, sample_user.id, db)
-    assert result is None
-    assert reason == "Issue not found"
-
-    result, reason = await create_dependency(issue_b.id, issue_a.id, sample_user2.id, db)
-    assert result is None
-    assert reason == "Issue not found"
 
     with pytest.raises(HTTPException) as exc_info:
         await ownership_guard.require_dependency_endpoints_owned(
@@ -325,35 +316,3 @@ async def test_detect_violations_reports_without_private_payloads(
     await db.rollback()
 
 
-@pytest.mark.asyncio
-async def test_set_pending_thread_supersedes_cross_thread_pointer(
-    db: AsyncSession, sample_user
-) -> None:
-    """Manual selection retargets the whole pending pair to one thread."""
-    from app.services.thread_service import set_current_issue, set_pending_thread
-
-    thread_a = await _make_thread(db, sample_user.id, "Series A")
-    thread_b = await _make_thread(db, sample_user.id, "Series B")
-    await _make_issue(db, thread_a.id, number="1")
-    await _make_issue(db, thread_b.id, number="1")
-    thread_a.total_issues = 1
-    thread_b.total_issues = 1
-    await db.flush()
-
-    await set_current_issue(db, sample_user.id, thread_a.id, issue_number="1")
-    await set_pending_thread(db, sample_user.id, thread_b.id)
-
-    status = await ownership_guard.session_pending_status(
-        db,
-        (
-            await db.execute(
-                select(ReadingSession)
-                .where(
-                    ReadingSession.user_id == sample_user.id,
-                    ReadingSession.ended_at.is_(None),
-                )
-                .order_by(ReadingSession.id.desc())
-            )
-        ).scalar_one(),
-    )
-    assert status.consistent

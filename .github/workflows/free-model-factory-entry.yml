@@ -69,6 +69,15 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: f74f612d4e7a6dec65a9c17f76596c1eb567a19e
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Configure restricted Neon factory event ledger
         uses: ./.github/actions/factory-state-cache
@@ -196,7 +205,11 @@ jobs:
             echo
             echo "$message"
             echo
+            # Markdown backticks in this printf format are intentional.
+            # shellcheck disable=SC2016
             printf 'Neon terminal classification: `%s`\n' "$classification"
+            # Markdown backticks in this printf format are intentional.
+            # shellcheck disable=SC2016
             printf 'Checkpoint saved: `%s`; work PR: `%s`; checkpoint validated: `false`\n' "$saved" "${recovery_pr:-none}"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "[factory-outcome] $verdict: $message"

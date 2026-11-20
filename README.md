@@ -74,7 +74,7 @@ See `.env.example` for additional optional settings (access-token lifetime, logg
 
 ### 3. Start PostgreSQL and bootstrap
 
-`make setup` starts the local PostgreSQL container, waits for it to be ready, installs Python and frontend dependencies, runs Alembic migrations, and seeds deterministic demo data:
+`make setup` starts the local PostgreSQL container, waits for it to be ready, installs Python and frontend dependencies, runs the refinery migration runner (`native/migrate`), and seeds deterministic demo data:
 
 ```bash
 make setup
@@ -163,7 +163,7 @@ The application accepts standard `postgresql://` or `postgres://` connection str
 ## Stack
 
 - **Frontend:** React, Vite, Tailwind CSS
-- **API:** FastAPI
+- **API:** FastAPI (Python) and native Rust, with per-operation ingress routing
 - **Database:** PostgreSQL with SQLAlchemy and `asyncpg`
 - **Migrations:** Alembic with `psycopg`
 - **Production database:** Neon
@@ -175,7 +175,7 @@ The application accepts standard `postgresql://` or `postgres://` connection str
 make dev        # frontend + API development servers
 make dev-api    # API only
 make dev-native # native Rust Roll/auth service on :8010 for /api/v2/* routes
-make migrate    # run Alembic migrations
+make migrate    # run migrations (refinery runner, native/migrate)
 make seed       # seed local sample data
 make lint       # repository lint/type checks
 make verify     # complete local verification suite
@@ -208,7 +208,7 @@ Start with [`docs/README.md`](docs/README.md). It identifies the authoritative r
 
 For architectural decisions and system overview, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). For deployment and self-hosting with Neon, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-Coding agents must also follow [`AGENTS.md`](AGENTS.md). Autonomous factory workers must follow [`docs/AUTONOMOUS_FACTORY_POLICY.md`](docs/AUTONOMOUS_FACTORY_POLICY.md) and [`docs/ISSUE_EXECUTION_PROTOCOL.md`](docs/ISSUE_EXECUTION_PROTOCOL.md).
+Coding agents must also follow [`AGENTS.md`](AGENTS.md). Autonomous factory workers must follow [docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md) and [`docs/ISSUE_EXECUTION_PROTOCOL.md`](docs/ISSUE_EXECUTION_PROTOCOL.md).
 
 What's New reads the database-backed release ledger. User-facing release notes are published after merge by the dedicated release writer. [`docs/changelog.md`](docs/changelog.md) and `docs/changelog.d/` are frozen historical migration sources retained only for provenance.
 

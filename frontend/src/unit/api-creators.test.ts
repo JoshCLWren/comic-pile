@@ -76,7 +76,7 @@ describe('creatorsApi', () => {
         creatorsApi.getDetail('creator:1672', { limit: 10 }),
       ).resolves.toEqual(DETAIL_RESPONSE)
 
-      expect(client.get).toHaveBeenCalledWith('/v1/creators/creator%3A1672', {
+      expect(client.get).toHaveBeenCalledWith('/v2/creators/creator%3A1672', {
         params: { limit: 10 },
         skipAuthRedirect: true,
       })
@@ -89,7 +89,7 @@ describe('creatorsApi', () => {
         creatorsApi.getDetail('creator:1672'),
       ).resolves.toEqual(DETAIL_RESPONSE)
 
-      expect(client.get).toHaveBeenCalledWith('/v1/creators/creator%3A1672', {
+      expect(client.get).toHaveBeenCalledWith('/v2/creators/creator%3A1672', {
         params: {},
         skipAuthRedirect: true,
       })
@@ -122,7 +122,7 @@ describe('creatorsApi', () => {
       )
 
       expect(client.get).toHaveBeenCalledWith(
-        '/v1/creators/creator%3A1672/series/thread%3A7/issues',
+        '/v2/creators/creator%3A1672/series/thread%3A7/issues',
         { params: {}, skipAuthRedirect: true },
       )
     })
@@ -136,7 +136,7 @@ describe('creatorsApi', () => {
         creatorsApi.getList({ search: 'test', sort: 'name', limit: 20 }),
       ).resolves.toEqual(LIST_RESPONSE)
 
-      expect(client.get).toHaveBeenCalledWith('/v1/creators', {
+      expect(client.get).toHaveBeenCalledWith('/v2/creators', {
         params: { search: 'test', sort: 'name', limit: 20 },
         skipAuthRedirect: true,
       })
@@ -149,7 +149,7 @@ describe('creatorsApi', () => {
         creatorsApi.getList({ search: 'test' }),
       ).resolves.toEqual(LIST_RESPONSE)
 
-      expect(client.get).toHaveBeenCalledWith('/v1/creators', {
+      expect(client.get).toHaveBeenCalledWith('/v2/creators', {
         params: { search: 'test' },
         skipAuthRedirect: true,
       })
@@ -162,7 +162,7 @@ describe('creatorsApi', () => {
         creatorsApi.getList(),
       ).resolves.toEqual(LIST_RESPONSE)
 
-      expect(client.get).toHaveBeenCalledWith('/v1/creators', {
+      expect(client.get).toHaveBeenCalledWith('/v2/creators', {
         params: {},
         skipAuthRedirect: true,
       })
@@ -174,7 +174,7 @@ describe('creatorsApi', () => {
 
       await creatorsApi.getList({ search: 'rob' }, { signal: controller.signal })
 
-      expect(client.get).toHaveBeenCalledWith('/v1/creators', {
+      expect(client.get).toHaveBeenCalledWith('/v2/creators', {
         params: { search: 'rob' },
         skipAuthRedirect: true,
         signal: controller.signal,
@@ -190,7 +190,7 @@ describe('creatorsApi', () => {
         summariesApi.getSummaries(['creator:1672']),
       ).resolves.toEqual(SUMMARIES_RESPONSE)
 
-      expect(client.get).toHaveBeenCalledWith('/v1/creators/summaries', {
+      expect(client.get).toHaveBeenCalledWith('/v2/creators/summaries', {
         params: { keys: 'creator:1672' },
         skipAuthRedirect: true,
       })
@@ -297,7 +297,7 @@ describe('creator reads during recoverable auth revalidation (issue #3212)', () 
       skipAuthRedirect: true,
     })
     expect(transport.request).toHaveBeenCalledWith(expect.objectContaining({
-      url: '/v1/creators/creator%3A1672',
+      url: '/v2/creators/creator%3A1672',
       _retry: true,
       headers: expect.objectContaining({ Authorization: 'Bearer refreshed-token' }),
     }))
@@ -315,7 +315,7 @@ describe('creator reads during recoverable auth revalidation (issue #3212)', () 
 
     expect(navigations).toEqual([])
     expect(transport.request).toHaveBeenCalledWith(expect.objectContaining({
-      url: '/v1/creators',
+      url: '/v2/creators',
       _retry: true,
     }))
   })
@@ -335,7 +335,7 @@ describe('creator reads during recoverable auth revalidation (issue #3212)', () 
 
     expect(navigations).toEqual([])
     expect(transport.request).toHaveBeenCalledWith(expect.objectContaining({
-      url: '/v1/creators/summaries',
+      url: '/v2/creators/summaries',
       _retry: true,
     }))
   })
@@ -377,7 +377,7 @@ describe('creator reads during recoverable auth revalidation (issue #3212)', () 
 
     await expect(
       recoveryInterceptor({
-        config: { url: '/v1/creators/creator%3A1672', headers: {} },
+        config: { url: '/v2/creators/creator%3A1672', headers: {} },
         response: { status: 401 },
       }),
     ).rejects.toBe(refreshError)

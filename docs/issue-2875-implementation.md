@@ -4,18 +4,16 @@ Coordination issue: "Use the existing Factory to implement the first Latticery e
 
 ## What this branch adds (ComicPile side)
 
-- `app/api/delivery.py` — authenticated delivery-ledger HTTP API mounted under `/api/v1/delivery`.
+- `app/api/delivery.py` — authenticated delivery-ledger HTTP API mounted under `/api/v1/delivery`. <!-- docs-path-check: ignore -->
 - `app/main.py` — registers the delivery router on the versioned surface only.
 - `app/schemas/delivery.py` — `DeliveryFilePayload` plus `files` / `commit_message` on `CrossRepoDeliveryRequest`.
 - `app/services/delivery.py` — `list_delivery_records` and `_apply_delivery_files` so a delivery commits real file content before opening the target PR (bootstrap fix: prior behavior opened an empty branch/PR).
-- `scripts/deliver_latticery_extraction.py` — executable delivery path that stages adapted files and calls the delivery service.
-- `scripts/deliver_latticery_extraction_simple.py` — dry-run/plan printer (no repository mutation).
 - `tests/test_delivery.py` — regression coverage for file payloads and content commit behavior.
 
 ## What is already true from prior issues
 
 - #2874 is closed; the cross-repository delivery bridge exists (`DeliveryService`, ledger, credential boundary).
-- #2870 is closed; pure dependency/executable policy is staged in ComicPile at `latticery_extraction/`.
+- #2870 is closed; pure dependency/executable policy was staged in ComicPile (`latticery_extraction/`, since retired under #4750 as an abandoned handoff; the retained reference is [.github/scripts/factory_work_policy_latticery_ref.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/factory_work_policy_latticery_ref.py)).
 - Execution workers release leases while waiting on external review/CI (controller claim-release markers).
 
 ## What is still required to close #2875

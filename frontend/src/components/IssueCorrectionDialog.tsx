@@ -27,7 +27,12 @@ interface IssueCorrectionDialogProps {
   totalIssues: number | null | undefined
   threadTitle: string
   onClose: () => void
-  onSuccess: () => void
+  /**
+   * Called after the dialog applies a correction. `alreadyRefreshed` is true
+   * when the correction came from an issue-card mutation that already
+   * reconciled Roll/bootstrap caches, so callers can skip a duplicate fetch.
+   */
+  onSuccess: (options?: { alreadyRefreshed?: boolean }) => void
   /** Injectable issue-tracking API; defaults to the production issues service. */
   issuesApi?: IssueCorrectionIssuesApi
 }
@@ -280,7 +285,7 @@ export default function IssueCorrectionDialog({
                   status={selectedOwnedIssue.status === 'read' ? 'read' : 'unread'}
                   onMutated={() => {
                     void fetchIssues()
-                    onSuccess()
+                    onSuccess({ alreadyRefreshed: true })
                   }}
                 />
               </div>

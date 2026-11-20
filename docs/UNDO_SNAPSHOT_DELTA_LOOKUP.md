@@ -20,7 +20,7 @@ they remain queryable without becoming undo targets. Session-start checkpoints
 keep their `description = 'Session start' AND event_id IS NULL` identity.
 Non-object payloads classify as `unknown`. Payload format is unchanged.
 
-Writers setting the columns: `app/services/rate_service.py`
+Writers setting the columns: `app/services/rate_service.py` <!-- docs-path-check: ignore -->
 (delta + legacy full), `comic_pile/reading_session.py` (session start), and
 `scripts/clone_prod_to_local.py` (export/import round-trip, with
 `classify_snapshot` fallback for exports predating the columns).
@@ -69,7 +69,7 @@ so there is no overlap with its UI/history fixes.
   session-start, v2, unsupported, consumed, tied timestamps, cross-session),
   10k-stack bounded retrieval (statement count, `LIMIT` presence, `EXPLAIN`
   index use), writer classification, migration backfill, bounded fallback.
-- Existing suites `tests/test_delta_undo_stack.py`,
-  `tests/test_delta_undo_regressions.py`, `tests/test_undo.py`, and
+- Existing suites `tests/test_delta_undo_stack.py`, <!-- docs-path-check: ignore -->
+  `tests/test_delta_undo_regressions.py`, `tests/test_undo.py`, and <!-- docs-path-check: ignore -->
   `tests/test_session_snapshots.py` cover stack safety, isolation, and
   restore-start behavior.

@@ -50,9 +50,9 @@ method/path surface. The aggregate intentionally includes public auth entry
 points, so the artifact guard checks explicit security declarations rather than
 requiring bearer auth on every operation.
 
-`scripts/export_openapi_schema.py` merges this contract into the single
+`scripts/export_openapi_schema.mjs` merges this contract into the single
 client-facing document (`frontend/src/generated/openapi.json`) and then
-`scripts/generate_openapi_types.py` regenerates `openapi.ts` plus the thin
+`scripts/generate_openapi_types.mjs` regenerates `openapi.ts` plus the thin
 `nativeV2Client.ts` request client. A native operation replaces the same
 `(path, method)` FastAPI operation because ingress sends that request to Rust.
 A component-name collision is renamed `Native<Name>` with every reference
@@ -87,14 +87,6 @@ uses `frontend/src/services/protectedRollMutationApi.ts`. Both already call
 `/api/v1/roll/bootstrap` aliases were removed with the Python handler (#4397)
 and now fall through to the Python catch-all. V2 is a separate contract.
 
-`GET /api/v2/analytics/metrics` (#4348) is documented by
-`comicpile_roll_service::analytics::AnalyticsApi`. Emit its operation with:
-
-```sh
-cd native/roll-service
-cargo run --example analytics_openapi
-```
-
 `bug-reports-v1.openapi.json` is the generated native contract for the
 same-path bug-report slice `POST /api/bug-reports/` and
 `POST /api/v1/bug-reports/` (#4852, Part of #4335). Regenerate it with:
@@ -111,49 +103,31 @@ removed in #5162. The frontend caller
 (`frontend/src/services/api-bug-reports.ts`) keeps calling
 `/v1/bug-reports/` unchanged.
 
-`session-detail-v1.openapi.json` is the generated native contract for the
-same-path single-session slice `GET /api/sessions/{session_id}` and
-`GET /api/v1/sessions/{session_id}` (#4839, Part of #4335). Regenerate it
-with:
-
-```sh
-cd native/roll-service
-cargo run --example session_detail_openapi > ../contracts/session-detail-v1.openapi.json
-```
-
-It is generated only from
-`comicpile_roll_service::session_detail::SessionDetailApi` and preserves
-the Python wire contract (owner-scoped `Session not found` 404, ladder
-path, current die, active thread, bandwidth/intent normalization) at the
-exact same method/paths. Python handlers remain until production proof;
-the frontend caller (`frontend/src/services/api-sessions.ts`) keeps
-calling `/v1/sessions/{id}` unchanged.
-
 The unified Rust-derived contract and generated TS client are owned by #4457; this
 repository does not hand-author a second analytics schema. The merged generated
 client schema temporarily retains the legacy Python v1/bare analytics operation
 until #4348's authenticated production proof permits the post-proof cleanup.
 
 `preferences-v1.openapi.json` is the generated native contract for the
-same-path preferences and Taste Bank signal cutover in #4834:
-`GET`/`PATCH /api/v1/users/me/preferences`,
+remaining same-path Taste Bank signal surface in #4834:
 `GET /api/v1/users/me/taste-signals` and
 `PUT /api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict`.
-It is generated only from Rust declarations
-(`comicpile_roll_service::preferences::PreferencesApi`) and is not part of
-the `/api/v2` aggregate (`v2-runtime.openapi.json`), because these browser
-callers keep their `/api/v1` URLs. Regenerate it with:
+Browser-called user preferences moved to Rust v2
+(`GET`/`PATCH /api/v2/users/me/preferences`) and are documented in the
+v2 runtime/OpenAPI surface, not in this same-path contract. It is generated
+only from Rust declarations
+(`comicpile_roll_service::preferences::PreferencesApi`). Regenerate it with:
 
 ```sh
 cd native/roll-service
-cargo run --example preferences_openapi > ../contracts/preferences-v1.openapi.json
+cargo run -p comicpile-roll-service --example preferences_openapi > ../contracts/preferences-v1.openapi.json
 ```
 
 Its checked-in drift test is
 `preferences::tests::checked_in_openapi_contract_is_current`. The Python
 handlers stay mounted until authenticated production proof permits their
-removal; the schemas here match the Python `UserPreferences*` and
-`TasteSignal*`/`TasteVerdictRequest` contracts field for field.
+removal; the schemas here match the Python `TasteSignal*` and
+`TasteVerdictRequest` contracts field for field.
 
 To compare an independently generated Rust OpenAPI operation:
 
@@ -168,7 +142,7 @@ top-level response. It must receive actual native-generated output. The frozen
 Python file alone does not establish native parity, runtime behavior, or a
 production cutover.
 
-The retired `tests/test_roll_bootstrap_port_oracle.py` executed the original
+The retired `tests/test_roll_bootstrap_port_oracle.py` <!-- docs-path-check: ignore --> executed the original
 Python v1 handler, validated its response against the frozen schema and recorded
 the emitted SQL, bind shapes and connection transaction events as
 `roll-bootstrap-v1.sql.json` in the CI `rust-sql-oracle-*` artifact. The oracle was removed with the Python handler (#4397); its transcript is

@@ -9,6 +9,7 @@ import {
   useSkipInboxItem,
 } from '../hooks/useIdentityInbox'
 import type { IdentityInboxCandidate as InboxCandidate, IdentityInboxItem as InboxItem } from '../services/api-identity'
+import { ComicIssueCover } from '../components/ComicIssueCard'
 
 type MetadataValue = string | Record<string, string> | null
 type EvidenceValue = string | string[] | null
@@ -67,6 +68,19 @@ function CandidateCard({
       ? toText(volumeObj.name)
       : toText(meta.volume_name)
   const issueName = toText(meta.name) ?? toText(meta.issue_name)
+  // Candidate metadata is provider-owned, not a confirmed owned issue card.
+  // Render its own ComicVine artwork, never a cover borrowed from the issue
+  // being mapped or a candidate with a different identity.
+  const image = isObject(meta.image) ? meta.image : null
+  const coverUrl =
+    toText(meta.image_url) ??
+    toText(meta.primary_image) ??
+    (image ? (
+      toText(image.medium_url) ??
+      toText(image.small_url) ??
+      toText(image.original_url) ??
+      toText(image.thumb_url)
+    ) : null)
   const evidenceItems = Array.isArray(candidate.evidence_json.evidence)
     ? candidate.evidence_json.evidence.filter(isString)
     : []
@@ -74,6 +88,13 @@ function CandidateCard({
   return (
     <div className="border border-[var(--theme-border)] rounded-lg p-3 bg-[var(--theme-bg-panel)] hover:border-[var(--theme-text-dim)] transition-colors">
       <div className="flex items-start justify-between gap-2">
+        <ComicIssueCover
+          coverImageUrl={coverUrl}
+          threadTitle={volumeName ?? issueName ?? 'ComicVine candidate'}
+          issueNumber={toText(meta.issue_number) ?? ''}
+          variant="compact"
+          imageClassName="h-full w-full object-cover"
+        />
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-sm text-[var(--theme-text-primary)] truncate">
             {candidate.comicvine_id ? `#${candidate.comicvine_id}` : 'Unknown'}

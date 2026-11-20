@@ -8,8 +8,6 @@ see. These guards exercise the deferred registry instead:
 * every eager ``/api/*`` route is reachable after selecting mounts for its own
   path (the route-coverage guard promised by ``app.router_mounts``);
 * the retired v1 snooze route (#4338) answers the JSON 404 without catalog;
-* ``POST /api/v1/roll/switch-prerequisite`` (composed into the dependency mount)
-  answers on the first request instead of falling through to the fallback; and
 * ``import api.index`` stays inside the cold-start import budget.
 """
 
@@ -28,7 +26,6 @@ from app.router_mounts import EAGER_SEGMENTS, build_router_mounts, request_segme
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 API_FALLBACK_PATH = "/api/{path:path}"
-PREREQUISITE_SWITCH_PATH = "/api/v1/roll/switch-prerequisite"
 SNOOZE_PATH = "/api/v1/snooze/"
 #: The #3479 import-time target measured on a workstation (Python 3.14, warm
 #: cache). Slower runners must not fail this target, which is why the hard
@@ -173,23 +170,6 @@ async def test_retired_snooze_request_hits_json_404_without_heavy_mounts() -> No
     assert SNOOZE_PATH not in loaded_paths
     for heavy_path in ("/api/v1/catalog/series-mappings/preview",):
         assert heavy_path not in loaded_paths
-
-
-@pytest.mark.asyncio
-async def test_prerequisite_switch_is_reachable_on_the_first_request() -> None:
-    """The dependency-composed roll switch route must not fall through to 404."""
-    app = create_app(serve_frontend=False, defer_router_imports=True)
-    assert PREREQUISITE_SWITCH_PATH not in _route_paths(app)
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            PREREQUISITE_SWITCH_PATH,
-            json={"node_type": "issue", "node_id": 1},
-        )
-
-    assert response.status_code == 401
-    assert PREREQUISITE_SWITCH_PATH in _route_paths(app)
 
 
 def _importtime_modules(source: str) -> dict[str, int]:

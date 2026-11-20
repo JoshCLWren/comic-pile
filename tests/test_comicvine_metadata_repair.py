@@ -6,14 +6,11 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from app.api.cron import comicvine_metadata_repair_cron
 from app.models import Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.repositories.comicvine_metadata_refresh_repository import get_request
-from app.schemas.comicvine import MetadataRepairDrainResponse
 from app.services import comicvine_intelligence
 from app.services import comicvine_metadata_repair as repair
-from fastapi import Response
 
 
 @pytest.mark.asyncio
@@ -45,23 +42,6 @@ async def test_repair_is_idempotent_and_unconfigured_worker_defers(
     assert request.last_error == "provider_not_configured"
     assert request.next_attempt_at > now
     assert (await repair.drain_due_metadata_repairs(db=async_db, now=now)).claimed == 0
-
-
-@pytest.mark.asyncio
-async def test_cron_returns_schema_and_delegates_transaction(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The router projects a service report without committing the database."""
-    db = AsyncMock(spec=AsyncSession)
-    drain = AsyncMock(return_value=repair.MetadataRepairDrainReport(claimed=2, completed=2))
-    monkeypatch.setattr("app.api.cron.drain_due_metadata_repairs", drain)
-    response = Response()
-    result = await comicvine_metadata_repair_cron(db, response)
-    assert isinstance(result, MetadataRepairDrainResponse)
-    assert result.claimed == result.completed == 2
-    assert response.headers["Cache-Control"] == "no-store"
-    drain.assert_awaited_once_with(db=db, limit=10)
-    db.commit.assert_not_awaited()
 
 
 def test_schedule_without_loop_does_not_create_coroutine(monkeypatch: pytest.MonkeyPatch) -> None:

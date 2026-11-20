@@ -30,6 +30,13 @@ function normalizeSessionRecord(record: JsonRecord, index: number) {
   return normalized
 }
 
+function normalizeActivityRecord(record: JsonRecord, index: number) {
+  return {
+    ...record,
+    timestamp: stableIso(index),
+  } satisfies JsonRecord
+}
+
 /**
  * Replace only volatile, user-visible fixture fields used by audit screenshots.
  * Authentication identity and persisted test data remain untouched on the server.
@@ -39,6 +46,18 @@ export function stabilizeAuditApiPayload(pathname: string, payload: unknown) {
     return { ...payload, username: AUDIT_FIXED_USERNAME }
   }
 
+  if (pathname === '/api/v2/activity' && isJsonRecord(payload)) {
+    const stabilized: JsonRecord = { ...payload }
+    for (const key of ['activities', 'events', 'items']) {
+      const entries = payload[key]
+      if (!Array.isArray(entries)) continue
+      stabilized[key] = entries.map((entry, index) =>
+        isJsonRecord(entry) ? normalizeActivityRecord(entry, index) : entry,
+      )
+    }
+    return stabilized
+  }
+
   if (pathname === '/api/v1/sessions/' && isJsonRecord(payload) && Array.isArray(payload.sessions)) {
     return {
       ...payload,
@@ -46,10 +65,6 @@ export function stabilizeAuditApiPayload(pathname: string, payload: unknown) {
         isJsonRecord(session) ? normalizeSessionRecord(session, index) : session,
       ),
     }
-  }
-
-  if (pathname === '/api/v1/sessions/current/' && isJsonRecord(payload)) {
-    return normalizeSessionRecord(payload, 0)
   }
 
   return payload

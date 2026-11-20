@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark authenticated current-session and History API reads.
+"""Benchmark authenticated History API reads.
 
 This harness is intentionally dependency-free so it can run against local,
 preview, or production deployments without installing the application.
@@ -23,7 +23,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urljoin
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,7 @@ def _request(
     request = Request(url, headers=headers, method="GET")
     started = time.perf_counter()
     try:
-        with urlopen(request, timeout=timeout) as response:  # noqa: S310 - explicit operator URL
+        with build_opener().open(request, timeout=timeout) as response:
             body = response.read()
             elapsed_ms = (time.perf_counter() - started) * 1000
             return Sample(
@@ -149,7 +149,6 @@ def summarize(samples: list[Sample]) -> dict[str, Any]:
 
 def _build_endpoints(page_size: int, later_page_token: str | None) -> list[str]:
     endpoints = [
-        "/api/v1/sessions/current/",
         f"/api/v1/sessions/?{urlencode({'page_size': page_size})}",
     ]
     if later_page_token:
@@ -168,14 +167,12 @@ def _select_endpoints(
     endpoints = _build_endpoints(page_size, later_page_token)
     if endpoint_selection == "all":
         return endpoints
-    if endpoint_selection == "current":
-        return [endpoints[0]]
     if endpoint_selection == "history-first":
-        return [endpoints[1]]
+        return [endpoints[0]]
     if endpoint_selection == "history-later":
-        if len(endpoints) < 3:
+        if len(endpoints) < 2:
             raise ValueError("history-later requires --later-page-token")
-        return [endpoints[2]]
+        return [endpoints[1]]
     raise ValueError(f"unknown endpoint selection: {endpoint_selection}")
 
 
@@ -187,7 +184,7 @@ def main() -> int:
     parser.add_argument("--cookie", help="Raw Cookie header, useful for refresh-cookie authentication")
     parser.add_argument(
         "--endpoint",
-        choices=("all", "current", "history-first", "history-later"),
+        choices=("all", "history-first", "history-later"),
         default="all",
         help=(
             "Endpoint group to benchmark. Select one endpoint in a fresh invocation for "
