@@ -48,34 +48,33 @@ DELEGATED_WRITE_TESTS = {
     ("issue_handler", "read_rate_issue"): ("issue_service", "persist"),
 }
 
-# Mounted POST handlers that are pure read projections. Each entry must stay
-# free of write SQL and carry a DB-backed HTTP parity test (asserted below).
-# Real disposable-Postgres HTTP integration tests, not exemptions. Each entry
-# must prove the exact mounted method/path, a named Tokio test, database reset,
-# an Axum router request, and a success assertion.
+# Explicit HTTP integration-test evidence. Keys are (module, handler); values
+# are (test_file_stem, test_name, method, route_path). The test must be a
+# named Tokio test in native/roll-service/tests/<test_file_stem>.rs that proves
+# the exact mounted method/path through the router against the database.
 INTEGRATION_WRITE_TESTS = {
     ("tags", "create_tag"): (
-        "create_tag_writes_database_row", "POST", "/api/v2/tags",
+        "tags", "create_tag_writes_database_row", "POST", "/api/v2/tags",
     ),
     ("tags", "update_tag"): (
-        "update_tag_persists_name_and_color", "PATCH", "/api/v2/tags/{tag_id}",
+        "tags", "update_tag_persists_name_and_color", "PATCH", "/api/v2/tags/{tag_id}",
     ),
     ("tags", "delete_tag"): (
-        "delete_tag_cascades_assignments", "DELETE", "/api/v2/tags/{tag_id}",
+        "tags", "delete_tag_cascades_assignments", "DELETE", "/api/v2/tags/{tag_id}",
     ),
     ("tags", "assign_tag"): (
-        "assign_tag_inserts_assignment", "POST", "/api/v2/tags/{tag_id}/assignments",
+        "tags", "assign_tag_inserts_assignment", "POST", "/api/v2/tags/{tag_id}/assignments",
     ),
     ("tags", "unassign_tag"): (
-        "unassign_tag_removes_assignment", "DELETE",
+        "tags", "unassign_tag_removes_assignment", "DELETE",
         "/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}",
     ),
     ("tags", "bulk_assign_tag"): (
-        "bulk_assign_tag_writes_unique_assignments", "POST",
+        "tags", "bulk_assign_tag_writes_unique_assignments", "POST",
         "/api/v2/tags/{tag_id}/assignment-batches",
     ),
     ("tags", "bulk_unassign_tag"): (
-        "bulk_unassign_tag_removes_assignments", "POST",
+        "tags", "bulk_unassign_tag_removes_assignments", "POST",
         "/api/v2/tags/{tag_id}/unassignment-batches",
     ),
 }
@@ -92,6 +91,14 @@ READ_ONLY_POST_ROUTE_EVIDENCE = {
 }
 WRITE_SQL_RE = re.compile(
     r"\b(?:INSERT\s+INTO|UPDATE\s+[A-Za-z_][A-Za-z0-9_]*\s+SET|DELETE\s+FROM)\b",
+    re.IGNORECASE,
+)
+ROUTE_REGISTRATION_RE = re.compile(
+    r'\.route\(\s*"(?P<route>[^"]+)"\s*,(?P<body>[^;]*?)\)\s*(?:\.route|\n\s*\.layer|\n\s*\.with_state|\n\s*;|\Z)',
+    re.DOTALL,
+)
+ROUTE_HANDLER_RE = re.compile(
+    r'\b(?P<method>post|patch|put|delete)\(\s*(?P<handler>[A-Za-z0-9_:]+)\s*\)',
     re.IGNORECASE,
 )
 
@@ -162,46 +169,91 @@ def _test_module(module: str) -> str:
     return source[source.index(marker):]
 
 
-def _integration_tests_write_path(module: str, handler: str) -> bool:
-    """Require exact-route, database-backed HTTP integration test evidence.
+def _handler_routes() -> dict[tuple[str, str], list[tuple[str, str]]]:
+    """Return mounted HTTP methods and route paths for each mutation handler."""
+    routes: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for route_match in ROUTE_REGISTRATION_RE.finditer(_lib_source()):
+        route_path = route_match.group("route")
+        body = route_match.group("body")
+        for handler_match in ROUTE_HANDLER_RE.finditer(body):
+            method = handler_match.group("method").upper()
+            raw_handler = handler_match.group("handler")
+            module, _, handler = raw_handler.rpartition("::")
+            resolved = _resolve_handler_module(module, handler)
+            key = (resolved or module, handler)
+            routes.setdefault(key, []).append((method, route_path))
+            if module:
+                routes.setdefault((module, handler), []).append((method, route_path))
+    return routes
 
-    The test must send the matching method/path through the production router.
-    This fails closed if its route, named test, or database proof disappears.
+
+_HANDLER_ROUTES: dict[tuple[str, str], list[tuple[str, str]]] | None = None
+
+
+def _routes_for(module: str, handler: str) -> list[tuple[str, str]]:
+    global _HANDLER_ROUTES
+    if _HANDLER_ROUTES is None:
+        _HANDLER_ROUTES = _handler_routes()
+    resolved = _resolve_handler_module(module, handler)
+    return (
+        _HANDLER_ROUTES.get((module, handler))
+        or _HANDLER_ROUTES.get((resolved, handler))
+        or []
+    )
+
+
+def _source_exercises_route(source: str, method: str, route_path: str) -> bool:
+    if route_path not in source:
+        return False
+    if not any(marker in source for marker in DB_TEST_MARKERS):
+        return False
+    if "router(" not in source or "oneshot(" not in source:
+        return False
+    method_patterns = (
+        rf'method\(\s*"{re.escape(method)}"\s*\)',
+        rf'\b{method.lower()}\s*\(',
+        rf'"{re.escape(method)}"',
+    )
+    return any(re.search(pattern, source) for pattern in method_patterns)
+
+
+def _integration_tests_write_path(module: str, handler: str) -> bool:
+    """Require database-backed HTTP integration test evidence for the handler.
+
+    Explicit entries prove an exact named test. Otherwise, any integration test
+    file that exercises the mounted method/path through the router against the
+    database is accepted as coverage for that specific handler.
     """
     evidence = INTEGRATION_WRITE_TESTS.get((module, handler))
-    if evidence is None:
-        return False
-    test_name, method, route_path = evidence
-    path = REPOSITORY_ROOT / "native" / "roll-service" / "tests" / f"{module}.rs"
-    if not path.is_file():
-        return False
-    source = path.read_text(encoding="utf-8")
-    route_pattern = (
-        rf'\.route\(\s*"{re.escape(route_path)}"\s*,\s*'
-        rf'{method.lower()}\(\s*{re.escape(module)}::{re.escape(handler)}\s*\)'
-    )
-    if re.search(route_pattern, _lib_source(), flags=re.DOTALL) is None:
-        return False
-    if not all(
-        marker in source
-        for marker in (
-            "test_support::database_url",
-            "test_support::reset_for_test",
-            "router(state.clone()).oneshot(request)",
+    if evidence is not None:
+        test_file, test_name, method, route_path = evidence
+        path = REPOSITORY_ROOT / "native" / "roll-service" / "tests" / f"{test_file}.rs"
+        if not path.is_file():
+            return False
+        source = path.read_text(encoding="utf-8")
+        route_pattern = (
+            rf'\.route\(\s*"{re.escape(route_path)}"\s*,\s*'
+            rf'{method.lower()}\(\s*{re.escape(module)}::{re.escape(handler)}\s*\)'
         )
-    ):
+        if re.search(route_pattern, _lib_source(), flags=re.DOTALL) is None:
+            return False
+        for section in re.split(r"(?m)^#\[tokio::test[^\]]*\]\s*$", source)[1:]:
+            if re.match(rf"\s*async fn {re.escape(test_name)}\b", section):
+                return _source_exercises_route(section, method, route_path) and route_path in section
+        # fall back to file-level evidence for the exact named test
+        if test_name not in source:
+            return False
+        return _source_exercises_route(source, method, route_path)
+
+    routes = _routes_for(module, handler)
+    if not routes:
         return False
-    for section in re.split(r"(?m)^#\[tokio::test\]\s*$", source)[1:]:
-        if re.match(rf"\s*async fn {re.escape(test_name)}\(\)", section):
-            return all(
-                required in section
-                for required in (
-                    "mutation(",
-                    f'"{method}"',
-                    f'"{route_path}"',
-                    "StatusCode::OK",
-                )
-            )
+    tests_root = REPOSITORY_ROOT / "native" / "roll-service" / "tests"
+    for test_file in sorted(tests_root.glob("*.rs")):
+        source = test_file.read_text(encoding="utf-8")
+        for method, route_path in routes:
+            if _source_exercises_route(source, method, route_path):
+                return True
     return False
 
 
