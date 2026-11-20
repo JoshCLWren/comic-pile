@@ -172,6 +172,21 @@ def test_pre_push_runs_no_product_test_gates(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
     subprocess.run(["git", "init", "-q", str(repository)], env=environment, check=True)
+    subprocess.run(
+        ["git", "-C", str(repository), "config", "user.email", "test@example.com"],
+        env=environment,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repository), "config", "user.name", "Test"],
+        env=environment,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repository), "commit", "--allow-empty", "-m", "seed"],
+        env=environment,
+        check=True,
+    )
     (repository / "pyproject.toml").touch()
     (repository / "frontend" / "node_modules").mkdir(parents=True)
     (repository / "scripts").mkdir()
