@@ -516,21 +516,8 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
 
     assert mounted, "router parse found no write routes; update the guard parser"
 
-    baseline_handlers = _baseline_handlers()
-    baseline_allowed_handlers = _baseline_allowed_handlers()
-    assert set(baseline_handlers) == baseline_allowed_handlers, (
-        "Baseline handlers and allowed_handlers must match exactly; adding a new "
-        "handler exemption has to be an explicit, reviewable change."
-    )
-    for (module, handler), reason in baseline_handlers.items():
-        assert reason.strip(), f"{module}::{handler} needs a baseline reason"
-
     resolved_modules = {
         (module, handler): _resolve_handler_module(module, handler)
-        for module, handler in mounted
-    }
-    resolved_keys = {
-        (module, handler): (resolved_modules[(module, handler)], handler)
         for module, handler in mounted
     }
     missing = sorted(
@@ -540,8 +527,6 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
         and not _tests_write_path(module, handler)
         and resolved_modules[(module, handler)] not in baseline
         and module not in baseline
-        and (module, handler) not in baseline_handlers
-        and resolved_keys[(module, handler)] not in baseline_handlers
     )
     assert missing == [], (
         "Native Rust mutation handlers without a disposable-Postgres write-path "
