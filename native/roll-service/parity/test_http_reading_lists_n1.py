@@ -530,3 +530,86 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         )
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_lists_budget_rejects_injected_extra_query_and_n1() -> None:
+    """The route budget and growth checks reject real extra/per-row queries."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rlbn1_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            small_issue_ids = []
+            for i in range(5):
+                _, ids = await _insert_owned_thread(raw, owner_id, i)
+                small_issue_ids.append(ids[0])
+            for index, issue_id in enumerate(small_issue_ids):
+                await _insert_list(raw, owner_id, f"List {index + 1}", [issue_id])
+        finally:
+            await raw.close()
+
+        env = _run_env(token, "GET", "/api/v2/reading-lists")
+        path = "/api/v2/reading-lists"
+        maximum = _budget_maximum("GET", path)
+        response, baseline, _ = await _measured_route(
+            engine, env, url=url, fixture="rejection-baseline"
+        )
+        assert response.get("status") == 200, response
+        assert baseline <= maximum, f"uninjected route already over budget: {baseline}"
+
+        _, with_extra, _ = await _measured_route(
+            engine,
+            env,
+            url=url,
+            fixture="rejection-extra-query",
+            extra_statements=maximum - baseline + 1,
+        )
+        assert with_extra == maximum + 1
+        with pytest.raises(AssertionError, match="declared maximum"):
+            _assert_route_budget("GET", path, with_extra, with_extra)
+
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            for i in range(5, 200):
+                _, issue_ids = await _insert_owned_thread(raw, owner_id, i)
+                await _insert_list(raw, owner_id, f"List {i + 1}", [issue_ids[0]])
+            small_list_ids = [
+                row["id"]
+                for row in await raw.fetch(
+                    "SELECT id FROM custom_cbl_lists WHERE user_id=$1 ORDER BY id LIMIT 5",
+                    owner_id,
+                )
+            ]
+            all_list_ids = [
+                row["id"]
+                for row in await raw.fetch(
+                    "SELECT id FROM custom_cbl_lists WHERE user_id=$1 ORDER BY id", owner_id
+                )
+            ]
+        finally:
+            await raw.close()
+        assert len(small_list_ids) == 5 and len(all_list_ids) == 200
+
+        _, small_n1, _ = await _measured_route(
+            engine, env, url=url, fixture="rejection-n1-small",
+            per_row_ids=tuple(small_list_ids),
+        )
+        _, large_n1, _ = await _measured_route(
+            engine, env, url=url, fixture="rejection-n1-large",
+            per_row_ids=tuple(all_list_ids),
+        )
+        assert large_n1 > small_n1 + 2, f"injected N+1 did not grow: {small_n1} -> {large_n1}"
+        with pytest.raises(AssertionError):
+            _assert_route_budget("GET", path, small_n1, large_n1)
+    finally:
+        await engine.dispose()
