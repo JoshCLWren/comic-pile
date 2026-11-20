@@ -1,23 +1,19 @@
-"""Data access for the bounded personal creator summary aggregation (issue #2028).
+"""User-scoped creator and rating inputs for read-without-rating audit tooling.
 
-Every SQLAlchemy query used by the creator summary endpoint lives here so the
-router stays free of schema imports and ``execute`` calls (router-layering
-contract). Every query is scoped to the authenticated user by an indexed
+Every query is scoped to the authenticated user by an indexed
 ``threads.user_id`` predicate — never by a library-sized ``IN`` list — and none
-of them fans out per creator or per issue: the whole batch request is served by
-a fixed, bounded number of queries regardless of how many creator keys are
-requested.
+fans out per creator or per issue. The creator endpoint-specific requested-key
+loader was retired with the Python creator handlers; this module retains only
+the full-library inputs still consumed by the audit service.
 """
 
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
 
-from sqlalchemy import Numeric, case, cast, func, literal, or_, select, true
-from sqlalchemy.dialects.postgresql import distinct_on, JSONB
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event
