@@ -2727,3 +2727,183 @@ async fn confirmation_never_waits_on_a_refresh_row_the_repair_worker_holds() {
     );
     worker_tx.commit().await.unwrap();
 }
+
+/// Golden responses captured from the frozen Python handler
+/// (`app/api/comicvine_resolution.py::api_import_issue`, production error
+/// handlers, disposable local Postgres) for the same requests in the same
+/// order. Generated ids are normalized the same way on both sides: ids become
+/// `<key>`, the seeded reading order is `$order`, and ids inside messages are
+/// masked (Greptile 4638201496).
+const IMPORT_ISSUE_GOLDEN: &str =
+    include_str!("fixtures/comicvine/import_issue_python_golden.json");
+
+fn golden_normalize(value: &Value, order: i32) -> Value {
+    const ID_KEYS: [&str; 5] = [
+        "thread_id",
+        "issue_id",
+        "external_identity_id",
+        "existing_issue_id",
+        "reading_order_id",
+    ];
+    match value {
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(key, item)| {
+                    let normalized = match item.as_i64() {
+                        Some(id) if key == "reading_order_id" && id == i64::from(order) => {
+                            json!("$order")
+                        }
+                        Some(_) if ID_KEYS.contains(&key.as_str()) => json!(format!("<{key}>")),
+                        _ => golden_normalize(item, order),
+                    };
+                    (key.clone(), normalized)
+                })
+                .collect(),
+        ),
+        Value::Array(items) => {
+            Value::Array(items.iter().map(|v| golden_normalize(v, order)).collect())
+        }
+        Value::String(text) => {
+            let mut text = text.clone();
+            if let Some(at) = text.find("already exists as issue ") {
+                text.truncate(at);
+                text.push_str("already exists as issue <existing_issue_id>");
+            }
+            if text.starts_with("Reading order ") && text.ends_with(" not found") {
+                text = "Reading order <reading_order_id> not found".to_owned();
+            }
+            Value::String(text)
+        }
+        other => other.clone(),
+    }
+}
+
+fn golden_resolve(body: &Value, seeds: &std::collections::HashMap<&str, i32>) -> Value {
+    match body {
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(key, item)| (key.clone(), golden_resolve(item, seeds)))
+                .collect(),
+        ),
+        Value::String(text) if text.starts_with('$') => json!(seeds[text.as_str()]),
+        other => other.clone(),
+    }
+}
+
+#[tokio::test]
+async fn import_issue_matches_responses_captured_from_python() {
+    let golden: Value = serde_json::from_str(IMPORT_ISSUE_GOLDEN).unwrap();
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-golden-import").await;
+    let (other_token, other_csrf, _) = register_extra_user(&state, "cvv2-golden-other").await;
+    let (order, a, b) = {
+        let conn = state.pool.get().await.unwrap();
+        let order: i32 = conn
+            .query_one(
+                "INSERT INTO reading_orders (user_id, name) VALUES ($1, 'Arc') RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let mut threads = Vec::new();
+        for (pos, title) in [(1, "A"), (2, "B")] {
+            let id: i32 = conn
+                .query_one(
+                    "INSERT INTO threads (title, format, issues_remaining, total_issues, \
+                     queue_position, status, user_id) VALUES ($1, 'Comic', 1, 1, $2, 'active', $3) \
+                     RETURNING id",
+                    &[&title, &pos, &user_id],
+                )
+                .await
+                .unwrap()
+                .get(0);
+            conn.execute(
+                "INSERT INTO reading_order_items (reading_order_id, thread_id, position) \
+                 VALUES ($1, $2, $3)",
+                &[&order, &id, &pos],
+            )
+            .await
+            .unwrap();
+            threads.push(id);
+        }
+        (order, threads[0], threads[1])
+    };
+    let seeds = std::collections::HashMap::from([("$order", order), ("$a", a), ("$b", b)]);
+    let cases = golden["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 22, "every captured case is replayed");
+    for case in cases {
+        let name = case["name"].as_str().unwrap();
+        let body = golden_resolve(&case["body"], &seeds).to_string();
+        let builder = Request::builder()
+            .method("POST")
+            .uri("/api/v2/comicvine/issues:import")
+            .header(header::CONTENT_TYPE, "application/json");
+        let builder = match case["actor"].as_str().unwrap() {
+            "owner" | "other" => {
+                let (token, csrf) = if case["actor"] == "owner" {
+                    (&token, &csrf)
+                } else {
+                    (&other_token, &other_csrf)
+                };
+                builder
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .header("x-csrf-token", csrf.as_str())
+                    .header(header::COOKIE, format!("csrf_token={csrf}"))
+            }
+            "nocsrf" => builder.header(header::AUTHORIZATION, format!("Bearer {token}")),
+            _ => builder
+                .header("x-csrf-token", "pair")
+                .header(header::COOKIE, "csrf_token=pair"),
+        };
+        let (status, response) = send(&state, builder.body(Body::from(body)).unwrap()).await;
+        assert_eq!(
+            status.as_u16() as i64,
+            case["status"].as_i64().unwrap(),
+            "{name}: {response:?}"
+        );
+        assert_eq!(
+            golden_normalize(&response, order),
+            case["response"],
+            "{name}"
+        );
+        if status == StatusCode::CREATED {
+            let conn = state.pool.get().await.unwrap();
+            let row = conn
+                .query_one(
+                    "SELECT t.title, t.total_issues, t.issues_remaining, t.status, \
+                     (t.queue_position = (SELECT max(queue_position) FROM threads WHERE user_id = t.user_id)), \
+                     i.issue_number, i.position, i.status, \
+                     (SELECT array_agg(thread_id ORDER BY position) FROM reading_order_items \
+                      WHERE reading_order_id = $2) \
+                     FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1",
+                    &[&(response["issue_id"].as_i64().unwrap() as i32), &order],
+                )
+                .await
+                .unwrap();
+            let new_thread = response["thread_id"].as_i64().unwrap() as i32;
+            let order_threads: Vec<String> = row
+                .get::<_, Option<Vec<i32>>>(8)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|id| match id {
+                    id if id == a => "$a".to_owned(),
+                    id if id == b => "$b".to_owned(),
+                    id if id == new_thread => "$new".to_owned(),
+                    _ => "<other>".to_owned(),
+                })
+                .collect();
+            let stored = json!({
+                "title": row.get::<_, String>(0),
+                "total_issues": row.get::<_, Option<i32>>(1),
+                "issues_remaining": row.get::<_, i32>(2),
+                "status": row.get::<_, String>(3),
+                "at_tail": row.get::<_, Option<bool>>(4),
+                "issue_number": row.get::<_, String>(5),
+                "position": row.get::<_, i32>(6),
+                "issue_status": row.get::<_, String>(7),
+                "order_threads": order_threads,
+            });
+            assert_eq!(stored, case["stored"], "{name} stored rows");
+        }
+    }
+}
