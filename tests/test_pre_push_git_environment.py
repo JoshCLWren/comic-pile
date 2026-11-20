@@ -42,7 +42,9 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
     (repository / "pyproject.toml").touch()
     (repository / "frontend" / "node_modules").mkdir(parents=True)
     (repository / "scripts").mkdir()
-    (repository / "scripts" / "lint.sh").write_text("exit 0\n")
+    (repository / "scripts" / "lint.sh").write_text(
+        "set -e\npython -m ruff check .\npnpm run lint\n"
+    )
     tools_directory = tmp_path / "tools"
     tools_directory.mkdir()
     for tool in ("python", "pnpm"):
@@ -72,4 +74,19 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert not gate_log.exists() or gate_log.read_text() == ""
+    gate_log_content = gate_log.read_text() if gate_log.exists() else ""
+    logged_commands = [line for line in gate_log_content.splitlines() if line.strip()]
+    assert logged_commands, "Pre-push hook must run its lint gate before finishing"
+    assert any("ruff" in command for command in logged_commands), (
+        f"Expected the lint gate to run via the tool stub; got: {logged_commands}"
+    )
+    for logged_command in logged_commands:
+        assert "pytest" not in logged_command, (
+            f"Pre-push hook must not run product test commands; got: {logged_command}"
+        )
+        assert "vitest" not in logged_command, (
+            f"Pre-push hook must not run frontend unit tests; got: {logged_command}"
+        )
+        assert "audit:ui" not in logged_command, (
+            f"Pre-push hook must not run the rendered UI audit; got: {logged_command}"
+        )
