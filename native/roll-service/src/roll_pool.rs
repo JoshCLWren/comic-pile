@@ -1,8 +1,12 @@
 //! Shared bounding for the Option E Roll pool.
 //!
 //! Bootstrap and the Roll offer must rank the same validated frontiers and
-//! exclude temporary browser snoozes before applying the top-`die` bound.
-//! Legacy session skips and durable backoff remain outside this pool.
+//! apply the same top-`die` bound **before** this browser's temporary snoozes
+//! are removed, so a snoozed face is never backfilled from a rank below the
+//! die (owner decision #4405, MQA-ROLL-014). The pool shrinks as snoozes
+//! accumulate; when the whole top-`die` window is snoozed the offer reports
+//! exhaustion instead of refilling from deeper ranks. Legacy session skips
+//! and durable backoff remain outside this pool.
 use crate::reading_constraints::EligibleFrontier;
 use std::collections::HashSet;
 
@@ -10,7 +14,9 @@ use std::collections::HashSet;
 /// accepts, whether they arrive in a request body or in a query parameter.
 pub(crate) const MAX_TEMPORARY_SNOOZES: usize = 200;
 
-/// Take the highest-ranked `die` candidates remaining after temporary exclusions.
+/// Take the highest-ranked `die` candidates, then drop the excluded ones, so
+/// the effective pool can only shrink below the die. A candidate ranked
+/// beyond the die never enters because an earlier face was snoozed.
 pub(crate) fn bounded_pool<T>(
     candidates: impl IntoIterator<Item = T>,
     is_excluded: impl Fn(&T) -> bool,
@@ -18,8 +24,8 @@ pub(crate) fn bounded_pool<T>(
 ) -> Vec<T> {
     candidates
         .into_iter()
-        .filter(|candidate| !is_excluded(candidate))
         .take(die.max(0) as usize)
+        .filter(|candidate| !is_excluded(candidate))
         .collect()
 }
 
