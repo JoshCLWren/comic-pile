@@ -148,9 +148,7 @@ fn invalid(message: impl Into<String>) -> ValidationError {
 ///
 /// Converted and legacy-generated rows stay in the database as audit data, but
 /// they must never enter the canonical evaluator or its cycle validator.
-fn authoritative_prerequisites(
-    snapshot: &Snapshot,
-) -> impl Iterator<Item = &Prerequisite> + '_ {
+fn authoritative_prerequisites(snapshot: &Snapshot) -> impl Iterator<Item = &Prerequisite> + '_ {
     snapshot
         .prerequisites
         .iter()
