@@ -1381,38 +1381,14 @@ export default function CblBrowserPage() {
         />
       )}
 
-      <Modal
+      <CblAdoptionConfirmModal
         isOpen={confirmOpen}
-        title={selectedAdoptionTarget ? 'Update this Reading Plan?' : 'Add this reading order?'}
+        target={selectedAdoptionTarget}
+        sourceTitle={selectedSourceTitle}
+        consequenceLine={consequenceLine}
         onClose={() => setConfirmOpen(false)}
-      >
-        <p className="text-sm text-[var(--theme-text-muted)]">
-          {selectedAdoptionTarget
-            ? `Update ${selectedAdoptionTarget.name} (Reading Plan #${selectedAdoptionTarget.id}) with ${selectedSourceTitle ?? 'this source'}? Only the checked entries are applied; Cancel leaves it unchanged.`
-            : selectedSourceTitle
-              ? `Add ${selectedSourceTitle} as a Reading Plan? Cancel creates nothing.`
-              : 'Add this source as a Reading Plan? Cancel creates nothing.'}
-        </p>
-        {consequenceLine && (
-          <p className="mt-3 text-sm font-bold text-[var(--theme-text-primary)]">{consequenceLine}</p>
-        )}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={confirmCommit}
-            className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black"
-          >
-            {selectedAdoptionTarget ? 'Update Reading Plan' : 'Add reading order'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmOpen(false)}
-            className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
-          >
-            Cancel
-          </button>
-        </div>
-      </Modal>
+        onConfirm={confirmCommit}
+      />
 
     </section>
   )
