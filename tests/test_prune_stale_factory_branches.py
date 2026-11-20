@@ -466,10 +466,53 @@ def test_fetch_branch_pr_records_scopes_query_to_one_branch(monkeypatch):
     cmd = calls[0]
     assert "--paginate" in cmd and "--slurp" in cmd
     assert any("state=all" in arg for arg in cmd)
-    assert any("head=owner:local-factory/i4749" in arg for arg in cmd)
+    endpoint = next(arg for arg in cmd if "pulls?" in arg)
+    assert parse_qs(endpoint.split("?", 1)[1])["head"] == ["owner:local-factory/i4749"]
     assert not any(arg.endswith("pulls?state=all&per_page=100") for arg in cmd)
     assert len(records) == 1
     assert records[0]["number"] == 42
+    assert records[0]["state"] == "OPEN"
+
+
+def test_fetch_branch_pr_records_encodes_special_characters_in_branch_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """URL-encoding preserves PR lookup for legal Git branch names."""
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], *, check: bool = True) -> _FakeResult:
+        """Capture the gh command and return one open PR for the branch.
+
+        Args:
+            cmd: Command arguments passed to the runner.
+            check: Whether failures should raise.
+
+        Returns:
+            A completed process carrying one normalized open PR payload.
+        """
+        calls.append(cmd)
+        return _FakeResult([[
+            {
+                "number": 43,
+                "state": "open",
+                "head": {"ref": "factory/c++-cleanup"},
+                "merged_at": None,
+                "closed_at": None,
+            }
+        ]])
+
+    monkeypatch.setattr(prune, "run", fake_run)
+    branch_name = "factory/c++-cleanup&tag=#1%2=ok"
+    records = prune.fetch_branch_pr_records("owner/repo", branch_name)
+    endpoint = next(arg for arg in calls[0] if "pulls?" in arg)
+    query = parse_qs(endpoint.split("?", 1)[1])
+    assert query["state"] == ["all"]
+    assert query["head"] == [f"owner:{branch_name}"]
+    assert query["per_page"] == ["100"]
+    assert "%2B" in endpoint and "%26" in endpoint and "%23" in endpoint
+    assert branch_name not in endpoint
+    assert len(records) == 1
+    assert records[0]["number"] == 43
     assert records[0]["state"] == "OPEN"
 
 
