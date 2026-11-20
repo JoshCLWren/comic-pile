@@ -94,13 +94,14 @@ mod tests {
     }
 
     #[test]
-    fn exclusions_backfill_from_beyond_the_die() {
+    fn snoozed_faces_never_backfill_from_beyond_the_die() {
         let candidates: Vec<_> = (1..=12).map(frontier).collect();
         let excluded = HashSet::from([2, 3]);
 
+        // The d10 window is chosen first; snoozes only remove faces from it.
         let offer = offer_frontiers(&candidates, &excluded, 10);
         let ids: Vec<_> = offer.iter().map(|candidate| candidate.thread_id).collect();
-        assert_eq!(ids, vec![1, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+        assert_eq!(ids, vec![1, 4, 5, 6, 7, 8, 9, 10]);
 
         let in_play = in_play_frontiers(&candidates, 10);
         assert_eq!(
@@ -119,14 +120,38 @@ mod tests {
     }
 
     #[test]
-    fn snoozing_twenty_faces_reaches_the_rest_of_the_library() {
+    fn the_pool_shrinks_one_face_per_snooze_without_backfill() {
+        // The reported MQA-ROLL-014 regression: consecutive rerolls left
+        // 19-20 of d20 in play while pulling series ranked beyond the top 20
+        // into the pool. Snoozes can only remove faces from the top-die
+        // window, so the in-play count drops one per snooze.
+        let candidates: Vec<_> = (1..=45).map(frontier).collect();
+        let mut snoozed: HashSet<i32> = HashSet::new();
+        let mut remaining = 20_usize;
+        for _ in 0..6 {
+            snoozed.insert(snoozed.len() as i32 + 1);
+            let pool = offer_frontiers(&candidates, &snoozed, 20);
+            remaining -= 1;
+            assert_eq!(pool.len(), remaining);
+            assert!(
+                pool.iter().all(|candidate| candidate.thread_id <= 20),
+                "no face may enter from a rank below the die"
+            );
+        }
+        assert_eq!(remaining, 14);
+    }
+
+    #[test]
+    fn snoozing_every_face_of_the_die_exhausts_the_pool() {
         let candidates: Vec<_> = (1..=45).map(frontier).collect();
         let excluded = (1..=20).collect();
         let pool = offer_frontiers(&candidates, &excluded, 20);
-        assert_eq!(
-            pool.iter().map(|c| c.thread_id).collect::<Vec<_>>(),
-            (21..=40).collect::<Vec<_>>()
+        assert!(
+            pool.is_empty(),
+            "the snoozed top-die window is not refilled from ranks 21+"
         );
+        // Clearing the temporary snoozes restores the full logical pool.
+        assert_eq!(offer_frontiers(&candidates, &HashSet::new(), 20).len(), 20);
     }
 
     #[test]
