@@ -4,8 +4,8 @@ This repository uses git hooks to enforce code quality checks.
 
 ## Principle: fix what hooks flag
 
-Hooks run fast static checks (lint/format/types). Tests are not run in git
-hooks; CI is the test gate. If a hook blocks you, fix the lint failure. Owner
+Hooks run fast static checks (lint/format/types). Product tests are not run in
+git hooks; CI is the test gate. If a hook blocks you, fix the lint failure. Owner
 policy (2026-11-18): factory agents may push feature branches with
 `git push --no-verify` when a local hook blocks them, then open a PR so CI runs.
 Never force-push or push to main.
