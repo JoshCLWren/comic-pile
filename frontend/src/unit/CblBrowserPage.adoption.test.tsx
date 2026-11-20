@@ -238,6 +238,12 @@ describe('CblBrowserPage adoption', () => {
       ),
     ).toBeInTheDocument()
 
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(mockCommit).not.toHaveBeenCalled()
+    expect(mockCommitNew).not.toHaveBeenCalled()
+    expect(screen.queryByRole('heading', { name: 'Update this Reading Plan?' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Update selected Reading Plan' }))
     await user.click(screen.getByRole('button', { name: 'Update Reading Plan' }))
     await waitFor(() => {
       expect(mockCommit).toHaveBeenCalledWith(
