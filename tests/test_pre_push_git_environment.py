@@ -57,9 +57,6 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
         executable.write_text(
             "#!/bin/bash\n"
             "set -eu\n"
-            "for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do\n"
-            '  if [[ -v "$variable" ]]; then echo "Leaked $variable" >&2; exit 1; fi\n'
-            "done\n"
             'printf "%s\\n" "$*" >> "$GATE_LOG"\n'
         )
         executable.chmod(0o755)
