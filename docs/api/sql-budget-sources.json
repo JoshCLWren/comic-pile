@@ -406,7 +406,7 @@
         "total_statements": 6,
         "basis": "auth extractor 1 + advisory lock 1 + unlinked check 1 + delete 1 (+2 tx control); set-based",
         "grows_with_data": false,
-        "max_statements": 6,
+        "max_statements": 7,
         "runtime_overhead_statements": 1,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
