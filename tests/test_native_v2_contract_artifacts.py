@@ -117,11 +117,6 @@ _RUNTIME_COMMAND_PATHS: Final = frozenset(
         "/api/v2/auth/reset-password",
         "/api/v2/roll/offer",
         "/api/v2/roll/reset",
-        "/api/v1/identity-inbox/search/issues",
-        "/api/v1/identity-inbox/{mapping_id}/confirm",
-        "/api/v1/identity-inbox/{mapping_id}/defer",
-        "/api/v1/identity-inbox/{mapping_id}/reject",
-        "/api/v1/identity-inbox/{mapping_id}/skip",
         "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
     }
 )
