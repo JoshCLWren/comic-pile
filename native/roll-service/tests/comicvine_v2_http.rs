@@ -1965,6 +1965,84 @@ async fn identity_and_import_writers_serialize_with_sibling_queue_writers() {
     );
 }
 
+/// Concurrent sibling writers: while one session holds the reader's queue
+/// lock, `series:import` (reusing an existing thread) alongside `issues:import`
+/// all wait on that same lock. This tests that the larger write path for
+/// series imports maintains the correct lock order under competing writes.
+#[tokio::test]
+async fn series_import_writer_serializes_with_sibling_queue_writers() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-series-sibling", 4, None).await;
+    set_key(true);
+    
+    // Create an existing thread for series:import to reuse
+    let existing_thread = {
+        let conn = state.pool.get().await.unwrap();
+        thread(&conn, user_id, "Existing").await
+    };
+    
+    // Set up provider responses for series import
+    provider_ok(
+        &state,
+        json!({"results": {"id": 5001, "name": "Test Series"}}),
+    );
+    provider_ok(
+        &state,
+        json!({
+            "number_of_total_results": 2,
+            "results": [
+                roster_row(1, "1", 5001),
+                roster_row(2, "2", 5001)
+            ]
+        }),
+    );
+    
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    
+    // series:import reusing existing thread
+    let series_import = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 5001, "thread_id": existing_thread})),
+        ),
+    );
+    
+    // issues:import
+    let issue_import = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({"title": "Sibling Issue", "comicvine_issue_id": 9999})),
+        ),
+    );
+    
+    wait_for_queue_lock_waiters(
+        &tx,
+        user_id,
+        2,
+        &[&series_import, &issue_import],
+    )
+    .await;
+    
+    tx.commit().await.unwrap();
+    drop(holder);
+    
+    let (status, body) = series_import.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["thread_id"], existing_thread);
+    assert_eq!(body["issues_adopted"], 2);
+    
+    let (status, body) = issue_import.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+}
+
 /// Order-independent fake ComicVine: `/issues` pages are synthesized from the
 /// request's `offset`, so concurrent page fetches cannot receive each other's
 /// payloads. Every response yields to the scheduler once before resolving,

@@ -406,17 +406,22 @@ enum ParsedResource {
 /// Parse a pasted ComicVine URL into a trusted resource reference. Only the
 /// canonical host and the `4000-` (issue) / `4050-` (volume) terminal segment
 /// are accepted. Query strings, trailing slashes and `http` are tolerated.
+/// `ftp://` is rejected (Python requires http/https).
 fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     let value = raw.trim();
     if value.is_empty() {
         return None;
     }
-    let with_scheme = if value.contains("://") {
-        value.to_owned()
+    let (scheme, rest) = if let Some((s, r)) = value.split_once("://") {
+        (s.to_ascii_lowercase(), r)
     } else {
-        format!("https://{value}")
+        ("https", value) // No scheme defaults to https
     };
-    let after_scheme = with_scheme.split_once("://")?.1;
+    // Python behavior: reject ftp:// and other non-http(s) schemes
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
+    let after_scheme = rest;
     let authority = after_scheme.split('/').next()?;
     let host = authority
         .rsplit('@')
