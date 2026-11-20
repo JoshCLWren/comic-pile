@@ -289,16 +289,32 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
         };
     }
 
-    let applied: std::collections::BTreeSet<i32> = runner()
-        .get_applied_migrations_async(client)
-        .await?
+    let migration_runner = runner();
+    let applied = migration_runner.get_applied_migrations_async(client).await?;
+    let embedded = migration_runner.get_migrations();
+    for recorded in &applied {
+        let Some(expected) = embedded
+            .iter()
+            .find(|migration| migration.version() == recorded.version())
+        else {
+            return Err(MigrateError(format!(
+                "applied migration {recorded} is missing from the embedded migration history"
+            )));
+        };
+        if recorded.name() != expected.name() || recorded.checksum() != expected.checksum() {
+            return Err(MigrateError(format!(
+                "applied migration {recorded} is divergent from the embedded migration; \
+                 recorded name/checksum does not match"
+            )));
+        }
+    }
+    let applied_versions: std::collections::BTreeSet<i32> = applied
         .iter()
-        .map(|m| m.version())
+        .map(|migration| migration.version())
         .collect();
-    let pending = runner()
-        .get_migrations()
+    let pending = embedded
         .iter()
-        .any(|m| !applied.contains(&m.version()));
+        .any(|migration| !applied_versions.contains(&migration.version()));
     if pending {
         return Ok(true);
     }

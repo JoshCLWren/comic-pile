@@ -8,6 +8,8 @@ use tracing_subscriber::EnvFilter;
 pub enum Environment {
     Development,
     Production,
+    /// Disposable local container harnesses; never selected by Vercel defaults.
+    Test,
 }
 
 /// Configuration errors contain only static descriptions, never input values.
