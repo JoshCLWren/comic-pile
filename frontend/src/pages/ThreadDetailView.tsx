@@ -393,11 +393,6 @@ export default function ThreadDetailView() {
       })
 
       applyEditedThreadToQueuePages(client, updatedThread)
-      // Refresh the boundary query so the "Next issue" line shows the new series
-      // title immediately rather than waiting for a window-focus refetch (#5616).
-      if (boundaryQuery) {
-        void boundaryQuery.refetch()
-      }
       setIsEditOpen(false)
 
       if (updatedThread.total_issues !== null && issuesLoaded) {
