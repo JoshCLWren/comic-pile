@@ -2833,6 +2833,11 @@ mod tests {
             None
         );
         assert_eq!(parse_comicvine_url("not a url"), None);
+        // Python rejects non-http(s) schemes; Rust must too.
+        assert_eq!(
+            parse_comicvine_url("ftp://comicvine.gamespot.com/issue/4000-42/"),
+            None
+        );
     }
 
     #[test]
