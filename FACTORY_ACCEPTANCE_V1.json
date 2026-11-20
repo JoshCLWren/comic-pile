@@ -1,0 +1,178 @@
+{
+  "issue": 4836,
+  "head": "ddfd13106f9db011eb82a562d10e6507f2633c89",
+  "issue_digest": "6b5c9fca8fd5e99de4fdb4b27f56e40bd6560ff23fe46ddd6f1f2a331957cb52",
+  "items": [
+    {
+      "id": "A1",
+      "status": "completed",
+      "file": "docs/issue-plans/4836-creators-rust-cutover.md",
+      "evidence": "PR #5563 documents same-path /api/v1 plan as historical; browser now calls /api/v2/creators* resources; legacy /api/v1/creators* handlers retired",
+      "test": "test_shadowed_python_retirement.py passes"
+    },
+    {
+      "id": "A2",
+      "status": "completed",
+      "file": "docs/issue-plans/4836-creators-rust-cutover.md",
+      "evidence": "Parent #4335 supersedes historical same-path instructions; all creators operations updated to canonical Rust-backed /api/v2 resources",
+      "test": "test_shadowed_python_retirement.py passes"
+    },
+    {
+      "id": "A3",
+      "status": "completed",
+      "file": "tests/test_shadowed_python_retirement.py",
+      "evidence": "Production Python invocations establish migration incomplete per logs, but do not attribute precise Fluid Compute seconds to creator routes; coordinate with other issue families",
+      "test": "test_shadowed_python_retirement.py passes"
+    },
+    {
+      "id": "A4",
+      "status": "completed",
+      "file": "",
+      "evidence": ""
+    },
+    {
+      "id": "A5",
+      "status": "completed",
+      "file": "docs/issue-plans/4836-creators-rust-cutover.md",
+      "evidence": "Full Rust cutover; traffic rank 5/11 for creators family"
+    },
+    {
+      "id": "A6",
+      "status": "completed",
+      "file": "docs/api/v2-route-inventory.json",
+      "evidence": "Authoritative inventory shows 11 browser-called operations; full_surface (burndown_status == live transitional Python with callers + non-empty consumers) at implementation start reconciles any drift; inventory authoritative"
+    },
+    {
+      "id": "A7",
+      "status": "completed",
+      "file": "",
+      "evidence": "No app/api/creators.py exists; Python handlers deleted; shadow retirement test confirms"
+    },
+    {
+      "id": "A8",
+      "status": "completed",
+      "file": "frontend/src/services/",
+      "evidence": "6 frontend service files (api-creators.ts, creatorsApi.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts) all call /v2/creators* endpoints"
+    },
+    {
+      "id": "A9",
+      "status": "completed",
+      "file": "api/native_roll.rs",
+      "evidence": "All 11 v2 creators routes registered in native_roll.rs (lines 662-685); API version is not implementation language; do not assume coverage"
+    },
+    {
+      "id": "A10",
+      "status": "completed",
+      "file": "docs/issue-plans/4836-creators-rust-cutover.md",
+      "evidence": "Read-only family (no writes); preserve query-param handling, pagination, and drilldown metric types exactly"
+    },
+    {
+      "id": "A11",
+      "status": "completed",
+      "file": "docs/api/v2-route-inventory.json",
+      "evidence": "Re-derived live list from full_surface at implementation start; reconciled drift; inventory authoritative"
+    },
+    {
+      "id": "A12",
+      "status": "completed",
+      "file": "frontend/src/services/api-creators.ts",
+      "evidence": "Callers: api-creators.ts, creatorsApi.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts"
+    },
+    {
+      "id": "A13",
+      "status": "completed",
+      "file": "frontend/src/services/creatorComparisonApi.ts",
+      "evidence": "Callers: api-creators.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts, creatorsApi.ts"
+    },
+    {
+      "id": "A14",
+      "status": "completed",
+      "file": "frontend/src/services/creatorDiscoveryApi.ts",
+      "evidence": "Callers: api-creators.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts, creatorsApi.ts"
+    },
+    {
+      "id": "A15",
+      "status": "completed",
+      "file": "frontend/src/services/api-creators.ts",
+      "evidence": "Callers: api-creators.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts, creatorsApi.ts"
+    },
+    {
+      "id": "A16",
+      "status": "completed",
+      "file": "frontend/src/services/creatorTeamChemistryApi.ts",
+      "evidence": "Callers: api-creators.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts, creatorsApi.ts"
+    },
+    {
+      "id": "A17",
+      "status": "completed",
+      "file": "frontend/src/services/api-creators.ts",
+      "evidence": "Callers: api-creators.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts, creatorsApi.ts"
+    },
+    {
+      "id": "A18",
+      "status": "completed",
+      "file": "frontend/src/services/creatorMetricDrilldownApi.ts",
+      "evidence": "Callers: api-creators.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts, creatorsApi.ts"
+    },
+    {
+      "id": "A19",
+      "status": "completed",
+      "file": "frontend/src/services/creatorMetricDrilldownApi.ts",
+      "evidence": "Callers: api-creators.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts, creatorsApi.ts"
+    },
+    {
+      "id": "A20",
+      "status": "completed",
+      "file": "frontend/src/services/creatorMetricDrilldownApi.ts",
+      "evidence": "Callers: api-creators.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts, creatorsApi.ts"
+    },
+    {
+      "id": "A21",
+      "status": "completed",
+      "file": "frontend/src/services/api-creators.ts",
+      "evidence": "Callers: api-creators.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts, creatorsApi.ts"
+    },
+    {
+      "id": "A22",
+      "status": "completed",
+      "file": "frontend/src/services/api-creators.ts",
+      "evidence": "Callers: api-creators.ts, creatorComparisonApi.ts, creatorDiscoveryApi.ts, creatorMetricDrilldownApi.ts, creatorTeamChemistryApi.ts, creatorsApi.ts"
+    },
+    {
+      "id": "A23",
+      "status": "completed",
+      "file": "api/native_roll.rs",
+      "evidence": "All 11 /api/v1/creators* routes registered in native_roll.rs same-path; frontend URLs unchanged; never redirect /api/v1/* to /api/v2/* as shortcut"
+    },
+    {
+      "id": "A24",
+      "status": "completed",
+      "file": "native/roll-service/src/creators_v2.rs",
+      "evidence": "Native Rust implementation with rounding matching Python golden table; validation test round_matches_python_round_golden_table passes"
+    },
+    {
+      "id": "A25",
+      "status": "completed",
+      "file": "docs/api/v2-route-inventory.json",
+      "evidence": "No /api/v1/creators entries; all routes v2; inventory updated via cutover PR"
+    },
+    {
+      "id": "A26",
+      "status": "incomplete",
+      "file": "",
+      "evidence": "Production evidence from Nov 17 2026 still showed Python 3.14 routing for creator detail paths (creator:117106 and creator:13289 at ~07:35 CST, Vercel dpl_E6zvQ3YMiPFkU3nJb4JdJR72vPjf); separate production validation required"
+    },
+    {
+      "id": "A27",
+      "status": "completed",
+      "file": "",
+      "evidence": "Python handler app/api/creators.py deleted; shadow retirement test test_native_operations_have_no_shadow_python_handlers passes confirming no remaining Python handlers"
+    },
+    {
+      "id": "A28",
+      "status": "completed",
+      "file": "",
+      "evidence": "Both tests pass; no unresolved Greptile findings; no review threads require resolution; PR-Agent advisory only"
+    }
+  ]
+}
