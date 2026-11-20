@@ -27,7 +27,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-use tokio_postgres::{Row, Transaction};
+use tokio_postgres::Transaction;
 
 // ---------------------------------------------------------------------------
 // Wire contract (mirrors app/schemas/comicvine_resolution.py).
@@ -2158,7 +2158,7 @@ pub async fn search_series(
     // Python behavior: page = offset // limit + 1 (Python floor division).
     // For offset=2147483647, limit=1: 2147483647 / 1 + 1 overflows i32 in debug,
     // wraps in release. Use usize/i64 for the calculation.
-    let page = (offset as i64 / *limit as i64 + 1) as i32;
+    let page = (offset as i64 / limit as i64 + 1) as i32;
     if query.q.trim().is_empty() {
         return Ok(Json(ComicVineSeriesSearchResponse {
             query: query.q,
