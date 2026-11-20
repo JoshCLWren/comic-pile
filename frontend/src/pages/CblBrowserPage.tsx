@@ -350,15 +350,21 @@ export default function CblBrowserPage() {
     mutationFn: ({
       source,
       preview,
+      targetPlanId,
     }: {
       source: CBLSourceListDiscoveryItem
       preview: NonNullable<typeof previewQuery.data>
-    }) =>
-      cblSourcesApi.commitNew(source.id, preview, {
+      targetPlanId: number | null
+    }) => {
+      const choices = {
         series_decisions: seriesDecisions,
         entry_decisions: entryDecisions,
         overlap_decisions: overlapChoicePayload(graphQuery.data ?? null, overlapChoices),
-      }),
+      }
+      return targetPlanId === null
+        ? cblSourcesApi.commitNew(source.id, preview, choices)
+        : cblSourcesApi.commit(source.id, targetPlanId, preview, choices)
+    },
     onSuccess: async (committed, variables) => {
       // The write is real no matter which source the view shows, so the
       // caches must learn the committed plan. The reader's next step, instead,
