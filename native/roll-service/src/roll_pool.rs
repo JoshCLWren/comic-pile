@@ -38,7 +38,8 @@ pub(crate) fn in_play_frontiers(
     bounded_pool(candidates.iter().copied(), |_| false, die)
 }
 
-/// The offer pool: exclude snoozes across the library, then bound by the die.
+/// The offer pool: the top-`die` frontiers minus this browser's temporary
+/// snoozes. Backfill from below the die never happens; the pool only shrinks.
 pub(crate) fn offer_frontiers(
     candidates: &[EligibleFrontier],
     excluded: &HashSet<i32>,
