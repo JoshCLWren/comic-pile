@@ -732,15 +732,19 @@ export default function CblBrowserPage() {
         ? 'Refresh the preview before adding it.'
         : needsAttentionCount > 0
           ? `${countPhraseWithArticle(needsAttentionCount, 'entry still needs', 'entries still need')} attention before this source can be added.`
-          : graphCycleErrors.length > 0
-            ? 'Resolve the reading-order loop before adding this source.'
-            : graphLoading
-              ? 'Checking the reading graph…'
-              : (summary?.final_adopted_count ?? 0) === 0
-                ? 'Nothing is selected to add.'
-                : isCommitting
-                  ? null
-                  : null
+          : planCheckPending
+            ? 'Checking existing Reading Plans…'
+            : planCheckFailed
+              ? 'Check existing Reading Plans before adding this source.'
+              : mustChooseAdoptionTarget && selectedAdoptionTarget === null
+                ? 'Choose the exact Reading Plan to update before adding this source.'
+                : graphCycleErrors.length > 0
+                  ? 'Resolve the reading-order loop before adding this source.'
+                  : graphLoading
+                    ? 'Checking the reading graph…'
+                    : (summary?.final_adopted_count ?? 0) === 0
+                      ? 'Nothing is selected to add.'
+                      : null
   const commitBlocked = commitBlockedReason !== null || isCommitting || !preview
   const consequenceLine =
     preview && summary
