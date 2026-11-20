@@ -72,6 +72,7 @@ touch "$CHECKS_RAN_MARKER"
         executable.chmod(0o755)
     lint_log = tmp_path / "lint.log"
     test_gate_log = tmp_path / "test-gates.log"
+    checks_ran_marker = tmp_path / "checks-ran.marker"
     environment.update(
         {
             "PATH": f"{tools_directory}:{environment['PATH']}",
@@ -82,6 +83,7 @@ touch "$CHECKS_RAN_MARKER"
             "GIT_CONFIG_PARAMETERS": "'core.hooksPath'='/unexpected/hooks'",
             "LINT_LOG": str(lint_log),
             "TEST_GATE_LOG": str(test_gate_log),
+            "CHECKS_RAN_MARKER": str(checks_ran_marker),
         }
     )
     result = subprocess.run(
@@ -95,7 +97,7 @@ touch "$CHECKS_RAN_MARKER"
     )
     # Verify the environment checks within the lint stub actually ran,
     # not just that the lint script produced output.
-    # The CHECKS_RAN variable is set to 1 only when the Git environment
-    # checks pass (no leaked variables); the lint stub writes a marker
-    # file that the test can verify.
-    assert CHECKS_RAN, "Git environment checks within lint stub did not run"
+    assert checks_ran_marker.exists(), (
+        "Git environment checks within lint stub did not run; "
+        "marker file was not created"
+    )
