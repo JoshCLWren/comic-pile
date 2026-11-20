@@ -776,6 +776,7 @@ pub async fn update_reading_list(
     .await
     .map_err(db::query_error)?;
 
+    let mut entries = Vec::with_capacity(request.issue_ids.len());
     for (position, issue_id) in request.issue_ids.iter().enumerate() {
         let old = old_by_issue.get(issue_id);
         let intent = request
@@ -789,10 +790,6 @@ pub async fn update_reading_list(
         if !matches!(gate, "none" | "hold" | "after_previous") {
             return Err(ApiError::BadRequest("Invalid gate".into()));
         }
-        let skipped = intent
-            .map(|entry| entry.skipped)
-            .or_else(|| old.map(|entry| entry.skipped))
-            .unwrap_or(false);
         let targets: Vec<i32> = match request.checkpoint_targets.as_ref() {
             Some(requested) => requested.get(issue_id).cloned().unwrap_or_default(),
             None => {
@@ -828,21 +825,25 @@ pub async fn update_reading_list(
                 "custom_cbl_invalid_checkpoint_targets".to_string(),
             ));
         }
-        let targets_json = serde_json::to_string(&targets).map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            ApiError::Internal("Invalid checkpoint".into())
-        })?;
-        tx.execute(
-            "INSERT INTO custom_cbl_entries
-             (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[&list_id, issue_id, &(position as i32), &(!targets.is_empty()),
-              &targets_json, &gate, &skipped],
-        ).await.map_err(db::query_error)?;
+        entries.push(NewReadingListEntry {
+            issue_id: *issue_id,
+            position: position as i32,
+            is_checkpoint: !targets.is_empty(),
+            checkpoint_target_issue_ids: serde_json::to_string(&targets).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ApiError::Internal("Invalid checkpoint".into())
+            })?,
+            gate: gate.to_string(),
+            skipped: intent
+                .map(|entry| entry.skipped)
+                .or_else(|| old.map(|entry| entry.skipped))
+                .unwrap_or(false),
+        });
     }
+    insert_entries(&tx, list_id, &entries).await?;
 
     graph_preflight(&tx, user).await?;
     let entries = load_entries(&tx, list_id).await?;
