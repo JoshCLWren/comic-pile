@@ -332,7 +332,6 @@ async def test_delete_reading_list_statements_bounded() -> None:
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         # Also delete the large seeded list to verify long-list deletion is bounded
-        large_list_id = await _get_last_list_id(engine, owner_id)  # helper would be needed
         # Instead, read the large list we just created and delete it
         env3 = _run_env(token, "DELETE", f"/api/v2/reading-lists/LargeList")
         _, _, before3 = await db_counters(engine)
