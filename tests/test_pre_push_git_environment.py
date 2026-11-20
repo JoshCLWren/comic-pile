@@ -42,7 +42,18 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
     (repository / "pyproject.toml").touch()
     (repository / "frontend" / "node_modules").mkdir(parents=True)
     (repository / "scripts").mkdir()
-    (repository / "scripts" / "lint.sh").write_text("exit 0\n")
+    # The hook always runs scripts/lint.sh, so the fake lint script is the command
+    # guaranteed to execute. It carries the leaked-Git-environment checks and
+    # records that it ran, which keeps the isolation guard effective even though
+    # the hook no longer runs any test commands.
+    (repository / "scripts" / "lint.sh").write_text(
+        "#!/bin/bash\n"
+        "set -eu\n"
+        "for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do\n"
+        '  if [[ -v "$variable" ]]; then echo "Leaked $variable" >&2; exit 1; fi\n'
+        "done\n"
+        'printf "%s\\n" lint >> "$GATE_LOG"\n'
+    )
     tools_directory = tmp_path / "tools"
     tools_directory.mkdir()
     for tool in ("python", "pnpm"):
