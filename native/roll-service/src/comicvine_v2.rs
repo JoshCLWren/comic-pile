@@ -2481,14 +2481,15 @@ pub async fn resolve_input(
                     .and_then(Value::as_str)
                     .map(str::to_owned),
                 volume_id: volume.and_then(|v| coerce_provider_int(v.get("id"))),
+                // Python behavior: issue_number null -> None, number -> string, string -> string
                 issue_number: result
                     .get("issue_number")
-                    .map(|value| match value {
-                        Value::String(text) => text.clone(),
-                        Value::Number(number) => number.to_string(),
-                        _ => value.to_string(),
-                    })
-                    .filter(|text| !text.is_empty()),
+                    .and_then(|value| match value {
+                        Value::String(text) => Some(text.clone()),
+                        Value::Number(number) => Some(number.to_string()),
+                        Value::Null => None, // Python preserves None when cover_date is null
+                        _ => None,
+                    }),
                 name: provider_string(result.get("name")),
                 cover_date: provider_string(result.get("cover_date")),
                 store_date: provider_string(result.get("store_date")),
