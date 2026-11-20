@@ -1,30 +1,6 @@
 {
   "components": {
     "schemas": {
-      "ActionRequest": {
-        "properties": {
-          "external_identity_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "rejection_reason": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "search_query": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
       "ActivityItem": {
         "properties": {
           "die_after": {
@@ -7027,6 +7003,19 @@
         ],
         "type": "object"
       },
+      "IdentityInboxConfirmRequest": {
+        "description": "Body for confirming an identity inbox candidate.",
+        "properties": {
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "external_identity_id"
+        ],
+        "type": "object"
+      },
       "IdentityInboxItem": {
         "properties": {
           "candidates": {
@@ -7093,6 +7082,25 @@
           "source_entry_summary",
           "why_stopped",
           "candidates"
+        ],
+        "type": "object"
+      },
+      "IdentityInboxRejectRequest": {
+        "description": "Body for rejecting an identity inbox candidate.",
+        "properties": {
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rejection_reason": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          }
+        },
+        "required": [
+          "external_identity_id",
+          "rejection_reason"
         ],
         "type": "object"
       },
@@ -8157,7 +8165,7 @@
         "type": "object"
       },
       "IssueMoveRequest": {
-        "description": "Request body for `POST /api/v1/issues/{issue_id}:move`.",
+        "description": "Request body for `PUT /api/v2/issues/{issue_id}/position`.",
         "properties": {
           "after_issue_id": {
             "description": "Move after this issue. `null` moves the issue to position 1.",
@@ -20578,261 +20586,6 @@
         ]
       }
     },
-    "/api/v1/identity-inbox": {
-      "get": {
-        "operationId": "list_documentation",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "identity-inbox"
-        ]
-      }
-    },
-    "/api/v1/identity-inbox/search/issues": {
-      "get": {
-        "operationId": "search_documentation",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxSearchResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "identity-inbox"
-        ]
-      }
-    },
-    "/api/v1/identity-inbox/{mapping_id}": {
-      "get": {
-        "operationId": "get_documentation",
-        "parameters": [
-          {
-            "description": "Mapping id",
-            "in": "path",
-            "name": "mapping_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "identity-inbox"
-        ]
-      }
-    },
-    "/api/v1/identity-inbox/{mapping_id}/confirm": {
-      "post": {
-        "operationId": "confirm_documentation",
-        "parameters": [
-          {
-            "description": "Mapping id",
-            "in": "path",
-            "name": "mapping_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ActionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "identity-inbox"
-        ]
-      }
-    },
-    "/api/v1/identity-inbox/{mapping_id}/defer": {
-      "post": {
-        "operationId": "defer_documentation",
-        "parameters": [
-          {
-            "description": "Mapping id",
-            "in": "path",
-            "name": "mapping_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "identity-inbox"
-        ]
-      }
-    },
-    "/api/v1/identity-inbox/{mapping_id}/reject": {
-      "post": {
-        "operationId": "reject_documentation",
-        "parameters": [
-          {
-            "description": "Mapping id",
-            "in": "path",
-            "name": "mapping_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ActionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "identity-inbox"
-        ]
-      }
-    },
-    "/api/v1/identity-inbox/{mapping_id}/skip": {
-      "post": {
-        "operationId": "skip_documentation",
-        "parameters": [
-          {
-            "description": "Mapping id",
-            "in": "path",
-            "name": "mapping_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
-                }
-              }
-            },
-            "description": "ok"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "identity-inbox"
-        ]
-      }
-    },
     "/api/v1/issue-identity/cbl-sources": {
       "get": {
         "operationId": "discover_cbl_source_lists_documentation",
@@ -21487,54 +21240,6 @@
         ]
       }
     },
-    "/api/v1/issues/{issue_id}": {
-      "get": {
-        "description": "Return one owner-scoped issue. Wire parity with Python GET /api/v1/issues/{issue_id}: {id, thread_id, issue_number, position, status, read_at, created_at}. Missing or foreign issues return 404 with the Python detail text.",
-        "operationId": "get_issue_documentation",
-        "parameters": [
-          {
-            "description": "Owned Issue identifier",
-            "in": "path",
-            "name": "issue_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueDetailResponse"
-                }
-              }
-            },
-            "description": "Issue detail"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for the mounted single-issue read.",
-        "tags": [
-          "issues"
-        ]
-      }
-    },
     "/api/v1/issues/{issue_id}/comicvine": {
       "get": {
         "operationId": "issue_intelligence_docs___api_v1_issues__issue_id__comicvine",
@@ -21580,337 +21285,6 @@
             "HTTPBearer": []
           }
         ],
-        "tags": [
-          "issues"
-        ]
-      }
-    },
-    "/api/v1/issues/{issue_id}/dependencies": {
-      "get": {
-        "description": "Return owner-scoped incoming and outgoing dependency edges for one issue. Wire parity with Python GET /api/v1/issues/{issue_id}/dependencies: {issue_id, incoming, outgoing}, each edge carrying dependency_id, source_issue_id, source_issue_number, source_thread_id, source_thread_title. Bounded to two edge queries; no per-row fan-out.",
-        "operationId": "get_issue_dependencies_documentation",
-        "parameters": [
-          {
-            "description": "Owned Issue identifier",
-            "in": "path",
-            "name": "issue_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueDependenciesResponse"
-                }
-              }
-            },
-            "description": "Issue dependencies"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for the mounted issue-dependencies read.",
-        "tags": [
-          "issues"
-        ]
-      }
-    },
-    "/api/v1/issues/{issue_id}/reader-context": {
-      "get": {
-        "operationId": "issue_read_state_reader_context",
-        "parameters": [
-          {
-            "description": "Owned Issue identifier",
-            "in": "path",
-            "name": "issue_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReaderContextResponse"
-                }
-              }
-            },
-            "description": "Bounded reader context"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for reader context.",
-        "tags": [
-          "issues"
-        ]
-      }
-    },
-    "/api/v1/issues/{issue_id}:markRead": {
-      "post": {
-        "operationId": "issue_read_state_mark_read",
-        "parameters": [
-          {
-            "description": "Owned Issue identifier",
-            "in": "path",
-            "name": "issue_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Issue marked read and the thread counters refreshed"
-          },
-          "400": {
-            "description": "Issue is already marked as read"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for `:markRead`.",
-        "tags": [
-          "issues"
-        ]
-      }
-    },
-    "/api/v1/issues/{issue_id}:markUnread": {
-      "post": {
-        "operationId": "issue_read_state_mark_unread",
-        "parameters": [
-          {
-            "description": "Owned Issue identifier",
-            "in": "path",
-            "name": "issue_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Issue marked unread; a completed thread is reactivated"
-          },
-          "400": {
-            "description": "Issue is already marked as unread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for `:markUnread`.",
-        "tags": [
-          "issues"
-        ]
-      }
-    },
-    "/api/v1/issues/{issue_id}:move": {
-      "post": {
-        "operationId": "issue_read_state_move",
-        "parameters": [
-          {
-            "description": "Owned Issue identifier",
-            "in": "path",
-            "name": "issue_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueMoveRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Issue moved within its thread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue or anchor issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for `:move`.",
-        "tags": [
-          "issues"
-        ]
-      }
-    },
-    "/api/v1/issues:bulkMarkRead": {
-      "post": {
-        "operationId": "issue_read_state_bulk_mark_read",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Every issue marked read atomically"
-          },
-          "400": {
-            "description": "An issue is already marked as read"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for `:bulkMarkRead`.",
-        "tags": [
-          "issues"
-        ]
-      }
-    },
-    "/api/v1/issues:bulkMarkUnread": {
-      "post": {
-        "operationId": "issue_read_state_bulk_mark_unread",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IssueBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Every issue marked unread atomically"
-          },
-          "400": {
-            "description": "An issue is already marked as unread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for `:bulkMarkUnread`.",
         "tags": [
           "issues"
         ]
@@ -26303,6 +25677,408 @@
         ]
       }
     },
+    "/api/v2/identity-inbox": {
+      "get": {
+        "operationId": "list_documentation",
+        "parameters": [
+          {
+            "description": "Items to skip (default 0)",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size, 1-100 (default 50)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "identity-inbox"
+        ]
+      }
+    },
+    "/api/v2/identity-inbox/issue-matches": {
+      "get": {
+        "operationId": "search_documentation",
+        "parameters": [
+          {
+            "description": "Non-blank search text, at most 200 UTF-8 bytes (required)",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum results, 1-50 (default 10)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "maximum": 50,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Issue id echoed back in the response (default 0)",
+            "in": "query",
+            "name": "issue_id",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxSearchResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "identity-inbox"
+        ]
+      }
+    },
+    "/api/v2/identity-inbox/{mapping_id}": {
+      "get": {
+        "operationId": "get_documentation",
+        "parameters": [
+          {
+            "description": "Mapping id",
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "identity-inbox"
+        ]
+      }
+    },
+    "/api/v2/identity-inbox/{mapping_id}/confirmations": {
+      "post": {
+        "operationId": "confirm_documentation",
+        "parameters": [
+          {
+            "description": "Mapping id",
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityInboxConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "identity-inbox"
+        ]
+      }
+    },
+    "/api/v2/identity-inbox/{mapping_id}/deferrals": {
+      "post": {
+        "operationId": "defer_documentation",
+        "parameters": [
+          {
+            "description": "Mapping id",
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "identity-inbox"
+        ]
+      }
+    },
+    "/api/v2/identity-inbox/{mapping_id}/rejections": {
+      "post": {
+        "operationId": "reject_documentation",
+        "parameters": [
+          {
+            "description": "Mapping id",
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityInboxRejectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "identity-inbox"
+        ]
+      }
+    },
+    "/api/v2/identity-inbox/{mapping_id}/skips": {
+      "post": {
+        "operationId": "skip_documentation",
+        "parameters": [
+          {
+            "description": "Mapping id",
+            "in": "path",
+            "name": "mapping_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            },
+            "description": "ok"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "identity-inbox"
+        ]
+      }
+    },
+    "/api/v2/issue-read-marker-removals": {
+      "post": {
+        "operationId": "issue_read_state_bulk_mark_unread",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Every issue marked unread atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for removing read markers in bulk.",
+        "tags": [
+          "issues"
+        ]
+      }
+    },
+    "/api/v2/issue-read-markers": {
+      "post": {
+        "operationId": "issue_read_state_bulk_mark_read",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Every issue marked read atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for creating read markers in bulk.",
+        "tags": [
+          "issues"
+        ]
+      }
+    },
     "/api/v2/issues/cards": {
       "post": {
         "operationId": "issue_cards_documentation",
@@ -26381,6 +26157,52 @@
           }
         ],
         "summary": "Documentation-only operation for the mounted issue delete resource.",
+        "tags": [
+          "issues"
+        ]
+      },
+      "get": {
+        "description": "Return one owner-scoped issue: {id, thread_id, issue_number, position, status, read_at, created_at}. Missing or foreign issues return 404 with the Python detail text.",
+        "operationId": "get_issue_documentation",
+        "parameters": [
+          {
+            "description": "Owned Issue identifier",
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueDetailResponse"
+                }
+              }
+            },
+            "description": "Issue detail"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted single-issue read.",
         "tags": [
           "issues"
         ]
@@ -26486,6 +26308,247 @@
             "HTTPBearer": []
           }
         ],
+        "tags": [
+          "issues"
+        ]
+      }
+    },
+    "/api/v2/issues/{issue_id}/dependencies": {
+      "get": {
+        "description": "Return owner-scoped incoming and outgoing dependency edges for one issue: {issue_id, incoming, outgoing}, each edge carrying dependency_id, source_issue_id, source_issue_number, source_thread_id, source_thread_title. Bounded to two edge queries; no per-row fan-out.",
+        "operationId": "get_issue_dependencies_documentation",
+        "parameters": [
+          {
+            "description": "Owned Issue identifier",
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueDependenciesResponse"
+                }
+              }
+            },
+            "description": "Issue dependencies"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted issue-dependencies read.",
+        "tags": [
+          "issues"
+        ]
+      }
+    },
+    "/api/v2/issues/{issue_id}/position": {
+      "put": {
+        "operationId": "issue_read_state_move",
+        "parameters": [
+          {
+            "description": "Owned Issue identifier",
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueMoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Issue moved within its thread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue or anchor issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for setting an issue position.",
+        "tags": [
+          "issues"
+        ]
+      }
+    },
+    "/api/v2/issues/{issue_id}/read-markers": {
+      "delete": {
+        "operationId": "issue_read_state_mark_unread",
+        "parameters": [
+          {
+            "description": "Owned Issue identifier",
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Issue marked unread; a completed thread is reactivated"
+          },
+          "400": {
+            "description": "Issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for deleting an issue read marker.",
+        "tags": [
+          "issues"
+        ]
+      },
+      "post": {
+        "operationId": "issue_read_state_mark_read",
+        "parameters": [
+          {
+            "description": "Owned Issue identifier",
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Issue marked read and the thread counters refreshed"
+          },
+          "400": {
+            "description": "Issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for creating an issue read marker.",
+        "tags": [
+          "issues"
+        ]
+      }
+    },
+    "/api/v2/issues/{issue_id}/reader-context": {
+      "get": {
+        "operationId": "issue_read_state_reader_context",
+        "parameters": [
+          {
+            "description": "Owned Issue identifier",
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReaderContextResponse"
+                }
+              }
+            },
+            "description": "Bounded reader context"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for reader context.",
         "tags": [
           "issues"
         ]
