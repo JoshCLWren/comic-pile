@@ -482,8 +482,7 @@ async fn apply_metadata_correction(
         )
         .await
         .map_err(db::query_error)?
-        .map(|row| row.get::<_, Option<String>>(0))
-        .flatten();
+        .and_then(|row| row.get::<_, Option<String>>(0));
 
     tx.execute(
         "INSERT INTO issue_metadata_corrections \
