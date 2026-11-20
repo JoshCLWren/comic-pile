@@ -10,6 +10,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.53",
     "asyncpg>=0.29.0",
     "httpx>=0.28.1",
+    "requests>=2.32.0",
 ]
 
 # Local development and test tooling. Installed by default for `uv sync` /

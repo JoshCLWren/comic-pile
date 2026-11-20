@@ -306,33 +306,19 @@ deploy-prod:  ## Deploy to production via the GitHub Actions workflow (migration
 		echo "Rebase/merge and push before deploy to ensure deterministic release."; \
 		exit 1; \
 	fi
-	@echo "Checking for multiple Alembic heads..."
-	@HEADS=$$(uv run alembic heads 2>/dev/null | grep -c "(head)"); \
-	if [ "$$HEADS" -ne 1 ]; then \
-		echo "ERROR: $$HEADS Alembic heads detected. Resolve merge before deploying."; \
-		uv run alembic heads 2>/dev/null; \
-		exit 1; \
-	fi
 	@echo "Running frontend TypeScript typecheck..."
 	@pnpm --filter frontend run typecheck
 	@echo "Triggering production deploy workflow (migrate-then-deploy)..."
 	@gh workflow run deploy-production.yml --ref main
 	@echo "Deploy workflow dispatched. Monitor with: gh run watch --workflow=deploy-production.yml"
 
-prod-migrate:  ## Run Alembic migrations on the Neon production database (fetches the direct connection URL via the Neon API)
+prod-migrate:  ## Run Rust migrations on the Neon production database (fetches the direct connection URL via the Neon API)
 	@if [ -z "$(NEON_DIRECT_DATABASE_URL)" ]; then \
 		if [ -z "$(NEON_API_KEY)" ] || [ -z "$(NEON_PROJECT_ID)" ]; then \
 			echo "ERROR: provide NEON_DIRECT_DATABASE_URL or both NEON_API_KEY and NEON_PROJECT_ID."; \
 			echo "The GitHub deploy workflow fetches the URL automatically via the Neon API."; \
 			exit 1; \
 		fi; \
-	fi
-	@echo "Pre-flight: checking for multiple Alembic heads..."
-	@HEADS=$$(uv run alembic heads 2>/dev/null | grep -c "(head)"); \
-	if [ "$$HEADS" -ne 1 ]; then \
-		echo "ERROR: $$HEADS Alembic heads detected. Resolve merge before migrating."; \
-		uv run alembic heads 2>/dev/null; \
-		exit 1; \
 	fi
 	@echo "Resolving Neon production connection URL..."
 	@NEON_URL=$${NEON_DIRECT_DATABASE_URL:-$$(curl --fail --silent --show-error \
@@ -341,9 +327,19 @@ prod-migrate:  ## Run Alembic migrations on the Neon production database (fetche
 		--header "Authorization: Bearer $${NEON_API_KEY}" \
 		| jq -r '.uri')}; \
 	echo "Running production migrations on Neon..."; \
-	DATABASE_URL="$$NEON_URL" uv run alembic upgrade head; \
-	echo "Verifying production migration revision..."; \
-	DATABASE_URL="$$NEON_URL" uv run alembic current
+	MIGRATE_DATABASE_URL="$$NEON_URL" cargo run --locked -p comicpile-migrate -- up; \
+	echo "Verifying production migration state..."; \
+	MIGRATE_DATABASE_URL="$$NEON_URL" cargo run --locked -p comicpile-migrate -- plan; \
+	PLAN_STATUS=$$?; \
+	if [ "$$PLAN_STATUS" -eq 0 ]; then \
+		echo "Production schema is current."; \
+	elif [ "$$PLAN_STATUS" -eq 10 ]; then \
+		echo "ERROR: migrations still pending after running comicpile-migrate up." >&2; \
+		exit 1; \
+	else \
+		echo "ERROR: failed to verify production migration state." >&2; \
+		exit "$$PLAN_STATUS"; \
+	fi
 
 deploy-prod-migrate: deploy-prod  ## Deploy to production; migrations run automatically before deploy in the workflow
 
@@ -400,8 +396,10 @@ railway-control-c32-compare:  ## Compare only isolated concurrency-32 diagnostic
 		--output benchmarks/results/control-c32-diagnostic-comparison.json \
 		--csv benchmarks/results/control-c32-diagnostic-comparison.csv
 
-dev-all:  ## Run the frontend dev server (API runs on the native Rust ingress)
-	@pnpm --dir frontend dev
+dev-all:  ## Run the frontend dev server and native Rust API together
+	@trap 'kill 0 2>/dev/null || true' EXIT INT TERM; \
+	$(MAKE) dev-native & \
+	pnpm --dir frontend dev
 
 dev-native:  ## Run the native Rust Roll/auth service on :8010 for local /api/v2/* routes
 	@echo "Starting native Roll service on http://127.0.0.1:8010"

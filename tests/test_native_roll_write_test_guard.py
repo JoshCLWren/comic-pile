@@ -83,7 +83,12 @@ INTEGRATION_WRITE_TESTS = {
 
 READ_ONLY_POST_HANDLERS = {
     ("reading_boundary", "reading_boundary_batch_v2"): "reading_boundary_concurrency.rs",
-    ("issue_handler", "issue_cards"): "issue_read_state_v1_http.rs",
+    ("issue_handler", "issue_cards"): "issue_cards_http.rs",
+}
+
+READ_ONLY_POST_ROUTE_EVIDENCE = {
+    ("reading_boundary", "reading_boundary_batch_v2"): ("POST", "/api/v2/reading-boundaries"),
+    ("issue_handler", "issue_cards"): ("POST", "/api/v2/issues/cards"),
 }
 WRITE_SQL_RE = re.compile(
     r"\b(?:INSERT\s+INTO|UPDATE\s+[A-Za-z_][A-Za-z0-9_]*\s+SET|DELETE\s+FROM)\b",
@@ -122,6 +127,23 @@ def _mounted_post_routes() -> set[tuple[str, str]]:
     return set(_route_matches())
 
 
+def _resolve_handler_module(module: str, handler: str) -> str:
+    """Resolve the owning Rust module for a mounted handler.
+
+    Routes may reference handlers without a module qualifier when the router
+    imports them into scope.
+    """
+    if module:
+        return module
+    definition = re.compile(rf"(?m)^\s*pub\s+(?:async\s+)?fn\s+{re.escape(handler)}\b")
+    for candidate in sorted(SERVICE_SOURCE.glob("*.rs")):
+        if candidate.name == "lib.rs":
+            continue
+        if definition.search(candidate.read_text(encoding="utf-8")):
+            return candidate.stem
+    return module
+
+
 def _test_module(module: str) -> str:
     """Return only the ``#[cfg(test)]`` section of a service module.
 
@@ -131,6 +153,8 @@ def _test_module(module: str) -> str:
     Returns:
         Test-module source, or an empty string when the module has no tests.
     """
+    if not module:
+        return ""
     source = (SERVICE_SOURCE / f"{module.replace('::', '/')}.rs").read_text(encoding="utf-8")
     marker = "#[cfg(test)]"
     if marker not in source:
@@ -196,18 +220,27 @@ def _tests_write_path(module: str, handler: str) -> bool:
     Returns:
         True when the module's tests reference the handler write path.
     """
-    delegate = DELEGATED_WRITE_TESTS.get((module, handler))
+    resolved_module = _resolve_handler_module(module, handler)
+    delegate = DELEGATED_WRITE_TESTS.get((module, handler)) or DELEGATED_WRITE_TESTS.get(
+        (resolved_module, handler)
+    )
     if delegate is not None:
         writer_module, writer = delegate
-        production = (SERVICE_SOURCE / f"{module.replace('::', '/')}.rs").read_text(encoding="utf-8")
+        if not resolved_module:
+            return False
+        production = (SERVICE_SOURCE / f"{resolved_module.replace('::', '/')}.rs").read_text(
+            encoding="utf-8"
+        )
         if f"{writer_module}::{writer}(" not in production.split("#[cfg(test)]", 1)[0]:
             return False
         tests = _test_module(writer_module)
         handler = writer
     else:
-        if _integration_tests_write_path(module, handler):
+        if _integration_tests_write_path(module, handler) or _integration_tests_write_path(
+            resolved_module, handler
+        ):
             return True
-        tests = _test_module(module)
+        tests = _test_module(resolved_module)
     if not tests or "#[tokio::test]" not in tests:
         return False
     if not any(marker in tests for marker in DB_TEST_MARKERS):
@@ -228,7 +261,7 @@ def _baseline_modules() -> dict[str, str]:
         Mapping of module name to the documented reason it is exempt.
     """
     payload = json.loads(BASELINE.read_text(encoding="utf-8"))
-    modules = payload["modules"]
+    modules = payload.get("modules", {})
     assert isinstance(modules, dict)
     return {str(name): str(reason) for name, reason in modules.items()}
 
@@ -240,9 +273,40 @@ def _baseline_allowed() -> set[str]:
         Module names explicitly permitted in the baseline.
     """
     payload = json.loads(BASELINE.read_text(encoding="utf-8"))
-    allowed = payload["allowed_modules"]
+    allowed = payload.get("allowed_modules", [])
     assert isinstance(allowed, list)
     return {str(name) for name in allowed}
+
+
+def _baseline_handlers() -> dict[tuple[str, str], str]:
+    """Return the frozen allowlist of handlers without recognized write tests.
+
+    Some modules have mixed coverage (some handlers auto-detected, others not).
+    Handler-level exemptions keep module-level baseline shrink-only semantics
+    while allowing those uncovered handlers to be documented explicitly.
+    """
+    payload = json.loads(BASELINE.read_text(encoding="utf-8"))
+    handlers = payload.get("handlers", {})
+    assert isinstance(handlers, dict)
+    result: dict[tuple[str, str], str] = {}
+    for key, reason in handlers.items():
+        module, _, handler = str(key).rpartition("::")
+        assert module and handler, f"Invalid baseline handler key: {key!r}"
+        result[(module, handler)] = str(reason)
+    return result
+
+
+def _baseline_allowed_handlers() -> set[tuple[str, str]]:
+    """Return the frozen declaration of allowed baseline handlers."""
+    payload = json.loads(BASELINE.read_text(encoding="utf-8"))
+    allowed = payload.get("allowed_handlers", [])
+    assert isinstance(allowed, list)
+    result: set[tuple[str, str]] = set()
+    for key in allowed:
+        module, _, handler = str(key).rpartition("::")
+        assert module and handler, f"Invalid baseline handler key: {key!r}"
+        result.add((module, handler))
+    return result
 
 
 def test_router_parser_sees_every_post_call() -> None:
@@ -267,12 +331,32 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
 
     assert mounted, "router parse found no write routes; update the guard parser"
 
+    baseline_handlers = _baseline_handlers()
+    baseline_allowed_handlers = _baseline_allowed_handlers()
+    assert set(baseline_handlers) == baseline_allowed_handlers, (
+        "Baseline handlers and allowed_handlers must match exactly; adding a new "
+        "handler exemption has to be an explicit, reviewable change."
+    )
+    for (module, handler), reason in baseline_handlers.items():
+        assert reason.strip(), f"{module}::{handler} needs a baseline reason"
+
+    resolved_modules = {
+        (module, handler): _resolve_handler_module(module, handler)
+        for module, handler in mounted
+    }
+    resolved_keys = {
+        (module, handler): (resolved_modules[(module, handler)], handler)
+        for module, handler in mounted
+    }
     missing = sorted(
         (module, handler)
         for module, handler in mounted
         if (module, handler) not in READ_ONLY_POST_HANDLERS
         and not _tests_write_path(module, handler)
+        and resolved_modules[(module, handler)] not in baseline
         and module not in baseline
+        and (module, handler) not in baseline_handlers
+        and resolved_keys[(module, handler)] not in baseline_handlers
     )
     assert missing == [], (
         "Native Rust mutation handlers without a disposable-Postgres write-path "
@@ -280,20 +364,53 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
         "persist_<handler> writer, not just auth/request-shape/read helpers."
     )
 
-    stale = sorted(set(baseline) - {module for module, _handler in mounted})
+    mounted_module_names = {
+        resolved_modules[(module, handler)]
+        for module, handler in mounted
+        if resolved_modules[(module, handler)]
+    } | {module for module, _handler in mounted if module}
+    stale = sorted(set(baseline) - mounted_module_names)
     assert stale == [], (
         "Baseline entries no longer mounted on POST routes; remove them: "
         f"{stale}"
     )
 
+    mounted_pairs = set(mounted) | set(resolved_keys.values())
+    stale_handlers = sorted(
+        f"{module}::{handler}"
+        for module, handler in baseline_handlers
+        if (module, handler) not in mounted_pairs
+    )
+    assert stale_handlers == [], (
+        "Baseline handler entries no longer mounted; remove them: "
+        f"{stale_handlers}"
+    )
+
     now_tested = sorted(
-        module
-        for module, handler in mounted
-        if _tests_write_path(module, handler) and module in baseline
+        {
+            resolved_modules[(module, handler)]
+            for module, handler in mounted
+            if resolved_modules[(module, handler)] in baseline
+            and _tests_write_path(module, handler)
+        }
     )
     assert now_tested == [], (
         "These modules now have a write-path test; remove them from "
         f"{BASELINE.name}: {now_tested}"
+    )
+
+    now_tested_handlers = sorted(
+        f"{module}::{handler}"
+        for module, handler in baseline_handlers
+        if _tests_write_path(module, handler)
+        or _tests_write_path(*next(
+            (orig for orig, resolved in resolved_keys.items() if resolved == (module, handler)),
+            (module, handler),
+        ))
+    )
+    assert now_tested_handlers == [], (
+        "These handlers now have a write-path test; remove them from "
+        f"{BASELINE.name}: {now_tested_handlers}"
     )
 
 
@@ -328,6 +445,19 @@ def test_read_only_post_handlers_are_proven_by_real_schema_http_tests() -> None:
         assert any(marker in test_source for marker in DB_TEST_MARKERS), (
             f"{integration_test.name} must run against the canonical PostgreSQL "
             "database (RUST_ROLL_TEST_DATABASE_URL or a test_support accessor)"
+        )
+        method, route_path = READ_ONLY_POST_ROUTE_EVIDENCE[(module, handler)]
+        assert route_path in test_source, (
+            f"{integration_test.name} must call the mounted route {route_path} "
+            f"for {module}::{handler}"
+        )
+        assert method in test_source, (
+            f"{integration_test.name} must exercise the actual {method} "
+            f"{route_path} request for {module}::{handler}"
+        )
+        assert "router(" in test_source or "oneshot(" in test_source, (
+            f"{integration_test.name} must exercise {route_path} through the "
+            "mounted router"
         )
 
 

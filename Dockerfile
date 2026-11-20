@@ -34,6 +34,11 @@ FROM rust:1-trixie-slim AS rust-builder
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY api/ ./api/
 COPY native/ ./native/
@@ -62,7 +67,7 @@ RUN groupadd -g ${GROUP_ID} appuser && \
 WORKDIR /app
 
 # Native Rust ingress and migration runner; no Python runtime is present.
-COPY --from=rust-builder /app/target/release/native_roll ./bin/native_roll
+COPY --from=rust-builder /app/target/release/comicpile-roll-service ./bin/comicpile-roll-service
 COPY --from=rust-builder /app/target/release/comicpile-migrate ./bin/comicpile-migrate
 
 # Copy static directory structure (without react build artifacts)
@@ -82,4 +87,4 @@ USER ${USER_ID}
 
 EXPOSE 8000
 
-CMD ["/app/bin/native_roll"]
+CMD ["/app/bin/comicpile-roll-service"]

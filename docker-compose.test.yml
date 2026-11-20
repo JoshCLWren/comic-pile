@@ -27,6 +27,34 @@ services:
     networks:
       - test-network
 
+  app-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres-test:5432/comic_pile_test
+      MIGRATE_DATABASE_URL: postgresql://postgres:postgres@postgres-test:5432/comic_pile_test
+      SECRET_KEY: test-secret-key-for-testing-only
+      RUST_ROLL_JWT_SECRET: test-secret-key-for-testing-only
+      RUST_ROLL_DATABASE_URL: postgresql://postgres:postgres@postgres-test:5432/comic_pile_test
+      RUST_ROLL_BIND: 0.0.0.0:8000
+      RUST_ROLL_ENV: test
+      ENVIRONMENT: test
+    command: ["/bin/sh", "-c", "/app/bin/comicpile-migrate up && exec /app/bin/comicpile-roll-service"]
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - test-network
+
 networks:
   test-network:
     driver: bridge

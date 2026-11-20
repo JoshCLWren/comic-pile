@@ -1,17 +1,67 @@
 {
   "description": "Frozen, shrink-only exemptions for native Roll POST handlers that predate the write-path test rule. Add a test that calls the handler or its persist_<handler> writer before changing an entry.",
   "allowed_modules": [
+    "comicvine_v2",
+    "custom_cbl",
     "dice_api",
     "dismiss_pending",
+    "issue_identity",
+    "issue_identity_cbl_reading_graph_preview",
     "issue_mutation",
+    "issue_read_state",
+    "queue_exclusions",
     "reading_graph",
-    "reading_list"
+    "reading_list",
+    "reading_plan_sync",
+    "thread_issues",
+    "thread_lifecycle",
+    "thread_ordering"
   ],
   "modules": {
     "dice_api": "Delegates the write to dice_mutation::execute_standalone, whose disposable-Postgres tests cover the event insert and idempotency.",
     "dismiss_pending": "Legacy pending bridge handler. Add an endpoint-level DB test before its next behavioral change.",
     "issue_mutation": "Handler-level write coverage lives in tests/reading_cycle_containment.rs against the canonical Alembic schema; the same file proves atomic rollback and order preservation.",
     "reading_graph": "Handler-level repair coverage lives in tests/reading_cycle_containment.rs against the canonical Alembic schema; the same file proves preview/apply and owner isolation.",
-    "reading_list": "Handler-level create/delete coverage lives in tests/reading_cycle_containment.rs against the canonical Alembic schema; the same file proves cyclic creation rollback and list resources on a corrupt graph."
+    "reading_list": "Handler-level create/delete coverage lives in tests/reading_cycle_containment.rs against the canonical Alembic schema; the same file proves cyclic creation rollback and list resources on a corrupt graph.",
+    "custom_cbl": "Handler-level HTTP coverage lives in tests/custom_cbl.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "comicvine_v2": "Handler-level HTTP coverage lives in tests/comicvine_v2_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "issue_identity": "Handler-level HTTP coverage lives in tests/issue_identity.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "issue_identity_cbl_reading_graph_preview": "Handler-level HTTP coverage lives in tests/issue_identity.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "issue_read_state": "Handler-level HTTP coverage lives in tests/issue_read_state_v2_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "queue_exclusions": "Handler-level HTTP coverage lives in tests/queue_exclusions_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "reading_plan_sync": "Handler-level write coverage lives in module tests and HTTP call sites against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "thread_issues": "Handler-level HTTP coverage lives in tests/thread_issues_v1_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "thread_lifecycle": "Handler-level HTTP coverage lives in tests/threads_lifecycle_http.rs and tests/lifecycle.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "thread_ordering": "Handler-level HTTP coverage lives in tests/thread_ordering_v1_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry."
+  },
+  "allowed_handlers": [
+    "continuity_plans::adopt_reading_order",
+    "continuity_plans::confirm_plan_projection",
+    "continuity_plans::create_release_source",
+    "continuity_plans::delete_release_source",
+    "continuity_plans::link_plan_dependency_edge",
+    "continuity_plans::unlink_plan_dependency_edge",
+    "continuity_plans::update_release_source",
+    "dependency_groups::add_issue_range",
+    "dependency_groups::add_member",
+    "dependency_groups::create_group",
+    "dependency_groups::delete_group",
+    "dependency_groups::update_group",
+    "roll_offer::unsnooze"
+  ],
+  "handlers": {
+    "continuity_plans::adopt_reading_order": "Handler-level HTTP coverage lives in tests/continuity_plans_v1_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "continuity_plans::confirm_plan_projection": "Handler-level HTTP coverage lives in tests/continuity_plans_v1_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "continuity_plans::create_release_source": "Handler-level HTTP coverage lives in tests/continuity_plans_v1_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "continuity_plans::delete_release_source": "Handler-level HTTP coverage lives in tests/continuity_plans_v1_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "continuity_plans::link_plan_dependency_edge": "Handler-level HTTP coverage lives in tests/continuity_plans_v1_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "continuity_plans::unlink_plan_dependency_edge": "Handler-level HTTP coverage lives in tests/continuity_plans_v1_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "continuity_plans::update_release_source": "Handler-level HTTP coverage lives in tests/continuity_plans_v1_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "dependency_groups::add_issue_range": "Handler-level HTTP coverage lives in tests/dependency_groups_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "dependency_groups::add_member": "Handler-level HTTP coverage lives in tests/dependency_groups_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "dependency_groups::create_group": "Handler-level HTTP coverage lives in tests/dependency_groups_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "dependency_groups::delete_group": "Handler-level HTTP coverage lives in tests/dependency_groups_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "dependency_groups::update_group": "Handler-level HTTP coverage lives in tests/dependency_groups_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry.",
+    "roll_offer::unsnooze": "Handler-level HTTP coverage lives in tests/thread_ordering_v1_http.rs against the canonical schema; add a recognized per-handler write-path test before changing an entry."
   }
 }

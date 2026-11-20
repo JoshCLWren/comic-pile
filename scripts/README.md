@@ -10,12 +10,9 @@ preserved via `git mv`).
 These are tools that remain safe and useful to rerun:
 
 - Backup/restore: `backup_postgres.sh`, `restore_postgres.sh`
-- Database export/import: `export_db.py`, `import_db.py`, `clone_prod_to_local.py` <!-- docs-path-check: ignore -->
-- CBL mirror inventory and refresh: `sync_cbl_mirror.py` (see <!-- docs-path-check: ignore -->
-  [`docs/CBL_MIRROR_REFRESH.md`](../docs/CBL_MIRROR_REFRESH.md))
-- OpenAPI tooling (Node, no Python): `export_openapi_schema.mjs`, `generate_openapi_types.mjs`, `generate_native_client.mjs`
-- Route burndown (Node): `generate_route_burndown.mjs`
-- Seed and dev utilities: `seed_data.py`, `seed_dev_db.py`, `dev-all.sh` <!-- docs-path-check: ignore -->
+- OpenAPI and client tooling (Node): `export_openapi_schema.mjs`, `generate_openapi_types.mjs`, `generate_native_client.mjs`
+- Route generation/burndown (Node): `generate_route_burndown.mjs`, `generate_vercel_routes.mjs`
+- Local/e2e and verification helpers: `e2e_native_ingress.py`, `verify_wildstorm_reading_order.py`, `production_schema_audit.py`, `export_roll_test_schema.py`
 - Factory/CI automation, lint/test helpers, and monitoring tooling
 - Shared libraries used by other scripts: `comic_pile_api.py`, `wildstorm_chains.py`
 
