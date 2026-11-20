@@ -288,7 +288,7 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
                     "VALUES ($1,$2,$3,NOW(),false,'[]','none',false)",
                     list_id,
                     ids[0],
-                    i,
+                    i + 1,
                 )
         finally:
             await raw.close()
@@ -357,7 +357,7 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
                     "VALUES ($1,$2,$3,NOW(),false,'[]','none',false)",
                     list_id,
                     ids[0],
-                    i,
+                    i + 1,
                 )
         finally:
             await raw.close()

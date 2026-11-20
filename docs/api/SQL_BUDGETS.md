@@ -17,11 +17,14 @@ small and large fixtures or a single successful request. They use
 `roll_test_dml` role and current database. A missing statement view fails the
 measured tests; it is not treated as a passing budget. The dedicated
 `test_sql_budget_measurement.py` checks that an extra service-role query is
-visible to the counter.
+visible to the counter. The per-route cases also measure nested trigger and
+function statements separately, and prove that a deliberately injected extra
+query and an N+1 loop push the route over its declared maximum, so a green
+budget is measured evidence of a bounded call path rather than a static pin.
 
 `pg_stat_database` transaction and block deltas, HTTP response bytes, wall
 time, and child CPU are reported separately. Those database-wide deltas can
 include unrelated connections and are contextual telemetry, not exact route
-counts. The source registry currently marks 30 operations `pending-fixture`
+counts. The source registry currently marks 22 operations `pending-fixture`
 and the issue read-rate path `partial-branch`; these are explicit proof gaps
 under #4737, not passing measurement evidence.
