@@ -1204,7 +1204,7 @@ async fn converted_legacy_cycle_does_not_block_creation_but_reader_cycle_does() 
     };
     let (token, csrf, owner) = register(&state, "converted-cycle-owner").await;
     let auth = (token.as_str(), csrf.as_str());
-    let (_series, ids) = seed_thread(&state, owner, "X-Force", 1, &["1", "2", "3"]).await;
+    let (series, ids) = seed_thread(&state, owner, "X-Force", 1, &["1", "2", "3"]).await;
     let conn = state.pool.get().await.unwrap();
 
     // A historical converted back-edge closes the natural series order. It is
