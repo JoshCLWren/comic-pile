@@ -269,11 +269,6 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
         await engine.dispose()
 
 
-async def _entries_measurement(measurement: RouteMeasurement) -> RouteMeasurement:
-    """Return the measurement with its entry list exposed through the shared body helper."""
-    return measurement
-
-
 @pytest.mark.asyncio
 async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> None:
     """GET /api/v2/reading-lists/{id}/reader stays set-based for 5 and 200 entries."""
@@ -328,7 +323,7 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
         large = await measure_route(BINARY, env, engine, READER_ROUTE, "200 entries")
         _assert_measured(large, "GET", "/api/v2/reading-lists/{list_id}/reader", 200)
         large_body = _body_dict(large)
-        assert len(_body_list(await _entries_measurement(large))) == 200
+        assert len(_entries(large)) == 200
         _assert_fixed_growth(small, large)
     finally:
         await engine.dispose()
