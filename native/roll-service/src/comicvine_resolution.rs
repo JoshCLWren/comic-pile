@@ -579,7 +579,7 @@ pub async fn get_issue_identity(
     let issue_id = issue_id.map_err(|_| ApiError::Unprocessable("Validation failed".to_string()))?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
-    let response = identity_state(&tx, user.id(), issue_id).await?;
+    let response = identity_state(&tx, user.id(), issue_id.0).await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
 }
@@ -595,7 +595,7 @@ pub async fn confirm_identity(
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     let response =
-        save_confirmed_comicvine_identity(&tx, user.id(), issue_id, request.comicvine_issue_id, false, None)
+        save_confirmed_comicvine_identity(&tx, user.id(), issue_id.0, request.comicvine_issue_id, false, None)
             .await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
@@ -612,7 +612,7 @@ pub async fn replace_identity(
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     let response =
-        save_confirmed_comicvine_identity(&tx, user.id(), issue_id, request.comicvine_issue_id, true, request.reason.as_deref())
+        save_confirmed_comicvine_identity(&tx, user.id(), issue_id.0, request.comicvine_issue_id, true, request.reason.as_deref())
             .await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
@@ -627,7 +627,7 @@ pub async fn remove_identity(
     let issue_id = issue_id.map_err(|_| ApiError::Unprocessable("Validation failed".to_string()))?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
-    let response = remove_comicvine_identity(&tx, user.id(), issue_id).await?;
+    let response = remove_comicvine_identity(&tx, user.id(), issue_id.0).await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
 }
@@ -641,7 +641,7 @@ pub async fn list_corrections(
     let issue_id = issue_id.map_err(|_| ApiError::Unprocessable("Validation failed".to_string()))?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
-    let response = corrections_list(&tx, user.id(), issue_id).await?;
+    let response = corrections_list(&tx, user.id(), issue_id.0).await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
 }
@@ -655,10 +655,10 @@ pub async fn refresh_metadata(
     let issue_id = issue_id.map_err(|_| ApiError::Unprocessable("Validation failed".to_string()))?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
-    let comicvine_id = confirmed_comicvine_issue_id(&tx, user.id(), issue_id).await?;
+    let comicvine_id = confirmed_comicvine_issue_id(&tx, user.id(), issue_id.0).await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(RefreshMetadataResponse {
-        issue_id,
+        issue_id: issue_id.0,
         refreshed: comicvine_id.is_some(),
         comicvine_issue_id: comicvine_id.map(|s| s.to_string()),
     }))
@@ -675,7 +675,7 @@ pub async fn apply_correction(
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     let response =
-        apply_metadata_correction(&tx, user.id(), issue_id, &request.field_name, &request.canonical_value)
+        apply_metadata_correction(&tx, user.id(), issue_id.0, &request.field_name, &request.canonical_value)
             .await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
@@ -691,7 +691,7 @@ pub async fn revert_correction(
     let issue_id = issue_id.map_err(|_| ApiError::Unprocessable("Validation failed".to_string()))?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
-    let response = revert_metadata_correction(&tx, user.id(), issue_id, request.correction_id).await?;
+    let response = revert_metadata_correction(&tx, user.id(), issue_id.0, request.correction_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
 }
