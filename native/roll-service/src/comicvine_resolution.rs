@@ -709,7 +709,6 @@ pub async fn import_issue(
         reading_order_id: None,
         position: None,
         total_items: None,
-        thread_created: false,
     }))
 }
 
