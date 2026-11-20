@@ -94,8 +94,8 @@ WRITE_SQL_RE = re.compile(
     re.IGNORECASE,
 )
 ROUTE_REGISTRATION_RE = re.compile(
-    r'\.route\(\s*"(?P<route>[^"]+)"\s*,(?P<body>[\s\S]*?)\)\s*(?=\.route\b|\.(?:layer|with_state|fallback|method_not_allowed_fallback)\b|;|\Z)',
-    re.DOTALL,
+    r'\.route\(\s*"(?P<route>[^"]+)"\s*,\s*(?P<body>(?:(?:get|post|patch|put|delete|head|options)\s*\([^()]*\))(?:\s*\.\s*(?:get|post|patch|put|delete|head|options)\s*\([^()]*\))*)\s*\)',
+    re.DOTALL | re.IGNORECASE,
 )
 ROUTE_HANDLER_RE = re.compile(
     r'\b(?P<method>post|patch|put|delete)\(\s*(?P<handler>[A-Za-z0-9_:]+)\s*\)',
@@ -202,8 +202,22 @@ def _routes_for(module: str, handler: str) -> list[tuple[str, str]]:
     )
 
 
+def _route_path_in_source(source: str, route_path: str) -> bool:
+    if route_path in source:
+        return True
+    parts = re.split(r"\{[^}]+\}", route_path)
+    if len(parts) == 1:
+        return False
+    pattern = ""
+    for index, part in enumerate(parts):
+        pattern += re.escape(part)
+        if index < len(parts) - 1:
+            pattern += r"(?:\{[^}]*\}|[^/\s\"']+)"
+    return re.search(pattern, source) is not None
+
+
 def _source_exercises_route(source: str, method: str, route_path: str) -> bool:
-    if route_path not in source:
+    if not _route_path_in_source(source, route_path):
         return False
     if not any(marker in source for marker in DB_TEST_MARKERS):
         return False
@@ -211,6 +225,7 @@ def _source_exercises_route(source: str, method: str, route_path: str) -> bool:
         return False
     method_patterns = (
         rf'method\(\s*"{re.escape(method)}"\s*\)',
+        rf'Method::{re.escape(method)}',
         rf'\b{method.lower()}\s*\(',
         rf'"{re.escape(method)}"',
     )
