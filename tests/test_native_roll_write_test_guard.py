@@ -562,6 +562,17 @@ def test_patch_write_is_guarded_and_proven_by_delegated_database_test() -> None:
     assert _tests_write_path("issue_handler", "read_rate_issue")
 
 
+def test_db_backed_http_tests_are_recognised_without_new_exemptions() -> None:
+    """A real DB-backed HTTP test satisfies the guard for its mounted route."""
+    baseline = _baseline_modules()
+    assert "comicvine_v2" not in baseline
+    assert "custom_cbl" not in baseline
+    assert _http_route_test_evidence("comicvine_v2", "import_issue") is not None
+    assert _http_route_test_evidence("", "save_overlap_decision") is not None
+    assert _tests_write_path("custom_cbl", "save_overlap_decision") is True
+    assert _http_route_test_evidence("comicvine_v2", "not_a_real_handler") is None
+
+
 def test_missing_delegated_writer_fails_closed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """A mere auth test never substitutes for the actual PATCH write."""
     handler = tmp_path / "issue_handler.rs"
