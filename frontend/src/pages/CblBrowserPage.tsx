@@ -1134,7 +1134,7 @@ export default function CblBrowserPage() {
                                       </div>
                                     )}
                                   </span>
-                                  {entry.adoption_decision !== 'unresolved' && (
+                                  {!canReviewExclusion && (
                                     <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--theme-text-primary)]">
                                       <input
                                         type="checkbox"
