@@ -1,4 +1,6 @@
-use comicvine_v2::issue::issue_candidate;
+pub mod issue;
+
+pub use issue::issue_candidate;
 
 #[test]
 fn issue_candidate_handles_null_value() {
