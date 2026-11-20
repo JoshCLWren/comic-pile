@@ -2900,6 +2900,11 @@ mod tests {
             parse_comicvine_url("http://www.comicvine.gamespot.com/issue/4000-42/"),
             Some(ParsedResource::Issue(42))
         );
+        assert_eq!(
+            parse_comicvine_url("ftp://comicvine.gamespot.com/issue/4000-42/"),
+            None,
+            "non-http schemes must be rejected"
+        );
         assert_eq!(parse_comicvine_url("https://example.com/4000-42/"), None);
         assert_eq!(
             parse_comicvine_url("https://comicvine.gamespot.com/5000-42/"),
@@ -2925,6 +2930,23 @@ mod tests {
         assert_eq!(
             provider_image_url(Some(&json!({"small_url": "s", "medium_url": "m"}))),
             Some("m".to_owned())
+        );
+    }
+
+    #[test]
+    fn provider_metadata_text_preserves_python_str_semantics() {
+        assert_eq!(python_provider_str(&Value::Null), "None");
+        assert_eq!(python_provider_str(&json!(true)), "True");
+        assert_eq!(python_provider_str(&json!(false)), "False");
+        assert_eq!(python_provider_str(&json!(12)), "12");
+        assert_eq!(python_provider_str(&json!("2020-01-01")), "2020-01-01");
+        assert_eq!(python_provider_str(&json!([1, "x", null])), "[1, 'x', None]");
+        let mut object = serde_json::Map::new();
+        object.insert("a".to_owned(), json!(1));
+        object.insert("b".to_owned(), json!("x"));
+        assert_eq!(
+            python_provider_str(&Value::Object(object)),
+            "{'a': 1, 'b': 'x'}"
         );
     }
 
@@ -2980,6 +3002,14 @@ mod tests {
         assert_eq!(candidate.comicvine_issue_id, 99);
         assert_eq!(candidate.issue_number.as_deref(), Some("12"));
         assert_eq!(candidate.image_url.as_deref(), Some("thumb.jpg"));
+
+        let missing_number = issue_candidate(&json!({
+            "id": 100,
+            "issue_number": null,
+            "name": "No Number"
+        }))
+        .expect("candidate with null issue number");
+        assert_eq!(missing_number.issue_number, None);
     }
 
     #[test]

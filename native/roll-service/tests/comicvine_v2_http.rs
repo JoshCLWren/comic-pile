@@ -1717,6 +1717,88 @@ async fn malformed_requests_use_the_production_validation_contract() {
     }
 }
 
+#[tokio::test]
+async fn resolve_and_search_preserve_python_wire_semantics() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-wire").await;
+    set_key(false);
+    // FTP scheme is not a supported ComicVine issue/volume URL.
+    let (status, body) = send(
+        &state,
+        call(
+            "GET",
+            "/api/v2/comicvine/resolve?input=ftp://comicvine.gamespot.com/issue/4000-42/",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["kind"], "search");
+    assert_eq!(
+        body["validation_error"],
+        "That doesn't look like a ComicVine issue or volume URL. Paste a comicvine.gamespot.com link or search by title instead."
+    );
+
+    // A provider `issue_number: null` must stay absent/null, never the string "null".
+    set_key(true);
+    provider_ok(
+        &state,
+        json!({
+            "status_code": 1,
+            "error": "OK",
+            "results": {
+                "id": 42,
+                "issue_number": null,
+                "name": "Missing Number",
+                "volume": {"id": 7, "name": "Saga"},
+                "cover_date": null,
+                "store_date": null,
+                "image": null,
+                "site_detail_url": "https://comicvine.gamespot.com/saga/4000-42/"
+            }
+        }),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "GET",
+            "/api/v2/comicvine/resolve?input=https://comicvine.gamespot.com/saga/4000-42/",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["kind"], "issue");
+    assert!(body["issue"]["issue_number"].is_null(), "{body:?}");
+
+    // Accepted upper-bound search offset must not overflow pagination arithmetic.
+    provider_ok(
+        &state,
+        json!({
+            "number_of_total_results": 0,
+            "results": []
+        }),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "GET",
+            "/api/v2/comicvine/search/series?q=saga&offset=2147483647&limit=1",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["offset"], 2_147_483_647_i64);
+    assert_eq!(body["has_more"], false);
+    assert!(body["next_offset"].is_null(), "{body:?}");
+}
+
 fn roster_page(volume: i32, first_id: i32, count: i32, total: Option<i32>) -> Value {
     let results: Vec<Value> = (first_id..first_id + count)
         .map(|id| json!({"id": id, "issue_number": id.to_string(), "volume": {"id": volume}}))
@@ -1825,6 +1907,32 @@ async fn browser_provider_calls_are_cached_and_honor_throttle_cooldowns() {
         calls,
         "cooldown blocks provider calls"
     );
+}
+
+#[tokio::test]
+async fn issues_import_with_empty_issue_number_defaults_to_one() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-empty-number").await;
+    set_key(false);
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({"title": "Blank", "comicvine_issue_id": 95501, "issue_number": ""})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let issue_id = body["issue_id"].as_i64().unwrap() as i32;
+    let conn = state.pool.get().await.unwrap();
+    let number: String = conn
+        .query_one("SELECT issue_number FROM issues WHERE id = $1", &[&issue_id])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(number, "1");
 }
 
 #[tokio::test]
@@ -1963,6 +2071,105 @@ async fn identity_and_import_writers_serialize_with_sibling_queue_writers() {
         positions[0], positions[1],
         "imports must not share a queue slot"
     );
+}
+
+/// `series:import` is a queue writer too: when an existing thread is reused it
+/// must take the queue lock before row locks, and it serializes alongside other
+/// queue writers without deadlocking.
+#[tokio::test]
+async fn series_import_reuse_serializes_with_sibling_queue_writers() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-series-race", 8, None).await;
+    set_key(true);
+    let (reused_thread_id, deleted_issue) = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Existing Series").await;
+        let i = issue(&conn, t, "1", 1).await;
+        let series_identity: i32 = conn
+            .query_one(
+                "INSERT INTO external_identities \
+                    (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'series', '9401', 'https://comicvine.gamespot.com/volume/4050-9401/', '{}'::jsonb, now(), now()) \
+                 RETURNING id",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        conn.execute(
+            "INSERT INTO thread_external_series_mappings \
+                (thread_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at) \
+             VALUES ($1, $2, 'confirmed', 'test', 1.0, now(), now())",
+            &[&t, &series_identity],
+        )
+        .await
+        .unwrap();
+        (t, i)
+    };
+
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    // Volume response, then roster page for a fresh series import reusing the
+    // existing confirmed thread mapping.
+    provider_ok(
+        &state,
+        json!({
+            "status_code": 1,
+            "error": "OK",
+            "results": {"id": 9401, "name": "Existing Series"}
+        }),
+    );
+    provider_ok(
+        &state,
+        json!({
+            "number_of_total_results": 1,
+            "results": [{
+                "id": 940101,
+                "issue_number": "1",
+                "name": "Issue 1",
+                "volume": {"id": 9401}
+            }]
+        }),
+    );
+    let series_import = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 9401})),
+        ),
+    );
+    let issue_import = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({"title": "Sibling Issue", "comicvine_issue_id": 940102})),
+        ),
+    );
+    wait_for_queue_lock_waiters(&tx, user_id, 2, &[&series_import, &issue_import]).await;
+    tx.commit().await.unwrap();
+    drop(holder);
+
+    let (status, body) = series_import.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["thread_id"], reused_thread_id);
+    assert_eq!(body["thread_created"], false);
+    let (status, body) = issue_import.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_ne!(body["thread_id"], reused_thread_id);
+
+    // Sanity: the other existing issue is still present after concurrent work.
+    let conn = state.pool.get().await.unwrap();
+    let exists: bool = conn
+        .query_one("SELECT EXISTS(SELECT 1 FROM issues WHERE id = $1)", &[&deleted_issue])
+        .await
+        .unwrap()
+        .get(0);
+    assert!(exists);
 }
 
 /// Order-independent fake ComicVine: `/issues` pages are synthesized from the
