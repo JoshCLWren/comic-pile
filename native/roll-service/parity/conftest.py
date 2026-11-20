@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import asyncpg
 import pytest_asyncio
+
+# Parity tests import ``app.models`` from the repository root. CI sets
+# PYTHONPATH=. explicitly; add that root here too so a direct pytest invocation
+# of a single parity test file (for example the factory pre-push check) resolves
+# the application package regardless of the caller's environment.
+_REPOSITORY_ROOT = str(Path(__file__).resolve().parents[3])
+if _REPOSITORY_ROOT not in sys.path:
+    sys.path.insert(0, _REPOSITORY_ROOT)
 
 _PARITY_DATABASE_LOCK = 4_535_000_002
 
