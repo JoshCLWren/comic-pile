@@ -255,14 +255,90 @@ pub async fn read(
             let occurrence: String = row.get(0);
             source_paths.entry(occurrence).or_default().push(row.get(1));
         }
+        // For legacy mode, compute availability based on plan order.
+        // The first unread issue is "available" if no blockers, "blocked" if it has blockers.
+        // Subsequent unread issues are "later".
+        // Blocker info comes from reading_plan_dependencies (explicit plan-level blockers).
+        let mut first_unread_index: Option<usize> = None;
+        for (i, row) in retained.iter().enumerate() {
+            let status: String = row.get(6);
+            if status != "read" {
+                first_unread_index = Some(i);
+                break;
+            }
+        }
+
+        // Load blockers for issues in this plan (if any)
+        // reading_plan_dependencies links dependencies to plans; the dependency's
+        // source_issue_id is blocked by the target_issue_id
+        let blocker_rows = conn
+            .query(
+                "SELECT d.source_issue_id, d.target_issue_id,
+                        i.thread_id, t.title, i.issue_number, d.explanation
+                 FROM dependencies d
+                 JOIN reading_plan_dependencies rpd ON rpd.dependency_id = d.id
+                 JOIN issues i ON i.id = d.source_issue_id
+                 JOIN threads t ON t.id = i.thread_id AND t.user_id = $2
+                 WHERE rpd.plan_id = $1",
+                &[&plan_id, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?;
+
+        // Build map of issue_id -> blockers
+        let mut blockers_by_issue: BTreeMap<i32, Vec<PlanReaderBlocker>> = BTreeMap::new();
+        for row in blocker_rows {
+            let source_issue_id: i32 = row.get(0);
+            let target_issue_id: i32 = row.get(1);
+            let target_thread_id: i32 = row.get(2);
+            let target_thread_title: String = row.get(3);
+            let issue_number: String = row.get(4);
+            let explanation: String = row.get(5);
+
+            blockers_by_issue
+                .entry(source_issue_id)
+                .or_default()
+                .push(PlanReaderBlocker {
+                    issue_id: target_issue_id,
+                    thread_id: target_thread_id,
+                    thread_title: target_thread_title,
+                    issue_number,
+                    explanation,
+                });
+        }
+
         let steps: Vec<PlanReaderIssue> = retained
             .iter()
-            .map(|row| {
+            .enumerate()
+            .map(|(i, row)| {
                 let occurrence: String = row.get(0);
+                let issue_id: i32 = row.get(1);
                 let status: String = row.get(6);
+
+                // Determine availability:
+                // - "read" if status is "read"
+                // - "available" if this is the first unread issue with no blockers
+                // - "blocked" if this is the first unread issue with blockers
+                // - "later" if it's a subsequent unread issue
+                let availability = if status == "read" {
+                    "read".to_string()
+                } else if Some(i) == first_unread_index {
+                    let blockers = blockers_by_issue.get(&issue_id);
+                    if blockers.map_or(false, |b| !b.is_empty()) {
+                        "blocked".to_string()
+                    } else {
+                        "available".to_string()
+                    }
+                } else {
+                    "later".to_string()
+                };
+
+                // Get blockers for this issue
+                let blockers = blockers_by_issue.get(&issue_id).cloned().unwrap_or_default();
+
                 PlanReaderIssue {
                     occurrence_id: occurrence.clone(),
-                    issue_id: row.get(1),
+                    issue_id,
                     lane_id: row.get(2),
                     display_position: row.get(3),
                     issue_number: row.get(5),
@@ -270,14 +346,27 @@ pub async fn read(
                     thread_title: row.get(8),
                     status: status.clone(),
                     is_checkpoint: row.get(4),
-                    availability: if status == "read" { "read" } else { "later" }.to_string(),
-                    blockers: Vec::new(),
+                    availability,
+                    blockers,
                     source_paths: source_paths.get(&occurrence).cloned().unwrap_or_default(),
                 }
             })
             .collect();
         let total_issues = steps.len();
         let read_issues = steps.iter().filter(|step| step.status == "read").count();
+
+        // Build available_now and blocked_next from steps
+        let available_now: Vec<PlanReaderIssue> = steps
+            .iter()
+            .filter(|step| step.availability == "available")
+            .cloned()
+            .collect();
+        let blocked_next: Vec<PlanReaderIssue> = steps
+            .iter()
+            .filter(|step| step.availability == "blocked")
+            .cloned()
+            .collect();
+
         let mut by_lane: BTreeMap<String, Vec<PlanReaderIssue>> = BTreeMap::new();
         for step in steps {
             by_lane.entry(step.lane_id.clone()).or_default().push(step);
@@ -335,8 +424,8 @@ pub async fn read(
                 total_issues,
                 read_issues,
             },
-            available_now: Vec::new(),
-            blocked_next: Vec::new(),
+            available_now,
+            blocked_next,
             lanes,
             sources,
             release_sources: Vec::new(),
