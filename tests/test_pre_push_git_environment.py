@@ -42,17 +42,25 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
     (repository / "pyproject.toml").touch()
     (repository / "frontend" / "node_modules").mkdir(parents=True)
     (repository / "scripts").mkdir()
-    (repository / "scripts" / "lint.sh").write_text("exit 0\n")
+    # The hook always executes scripts/lint.sh, so the Git-isolation checks live
+    # here: any leaked repository-local Git variable fails the hook itself, and
+    # the trailing marker proves the lint gate actually ran.
+    (repository / "scripts" / "lint.sh").write_text(
+        "#!/bin/bash\n"
+        "set -eu\n"
+        "for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do\n"
+        '  if [[ -v "$variable" ]]; then echo "Leaked $variable" >&2; exit 1; fi\n'
+        "done\n"
+        'printf "lint\\n" >> "$GATE_LOG"\n'
+    )
     tools_directory = tmp_path / "tools"
     tools_directory.mkdir()
+    # Test-gate stubs log every invocation so the assertion below can prove the
+    # lint-only hook never runs backend pytest, vitest, or the UI audit.
     for tool in ("python", "pnpm"):
         executable = tools_directory / tool
         executable.write_text(
             "#!/bin/bash\n"
-            "set -eu\n"
-            "for variable in GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_CONFIG_PARAMETERS; do\n"
-            '  if [[ -v "$variable" ]]; then echo "Leaked $variable" >&2; exit 1; fi\n'
-            "done\n"
             'printf "%s\\n" "$*" >> "$GATE_LOG"\n'
         )
         executable.chmod(0o755)
