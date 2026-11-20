@@ -1997,6 +1997,215 @@ async fn identity_and_import_writers_serialize_with_sibling_queue_writers() {
     );
 }
 
+/// `POST /api/v2/comicvine/series:import` must take the reader's queue advisory
+/// lock before any thread/issue row lock (#5398/#5419), both when it creates a
+/// new thread and when a retry reuses an existing series thread. While one
+/// session holds the lock, the import is observed as an ungranted `pg_locks`
+/// waiter and a second session can still `FOR UPDATE NOWAIT` the relevant row.
+/// No sleeps or deadlines: a writer that skips the queue lock runs to
+/// completion and fails the `wait_for_queue_lock_waiters` assertion instead.
+#[tokio::test]
+async fn series_import_writers_take_the_queue_lock_before_row_locks() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-serieslocks", 8, None).await;
+    set_key(true);
+    // A pre-existing thread/issue unrelated to the import. Its row must remain
+    // NOWAIT-lockable while the import is blocked on the queue lock, proving
+    // the import took no row lock first.
+    let (seed_issue, seed_thread) = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "SeriesLockSeed").await;
+        (issue(&conn, t, "1", 1).await, t)
+    };
+
+    // ---- Case 1: a new series creates a new thread, serialized with a
+    // sibling issues:import writer. Both wait on the queue lock. ----
+    provider_ok(
+        &state,
+        json!({"results": {"id": 7001, "name": "Locked Series"}}),
+    );
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 2, "results": [
+            roster_row(7101, "1", 7001), roster_row(7102, "2", 7001)]}),
+    );
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let sibling = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({"title": "Sibling", "comicvine_issue_id": 9101})),
+        ),
+    );
+    let series = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 7001})),
+        ),
+    );
+    wait_for_queue_lock_waiters(&tx, user_id, 2, &[&sibling, &series]).await;
+    tx.query_one(
+        "SELECT id FROM issues WHERE id = $1 FOR UPDATE NOWAIT",
+        &[&seed_issue],
+    )
+    .await
+    .expect("a writer took an issue row lock before the queue lock");
+    let threads_while_blocked: i64 = tx
+        .query_one(
+            "SELECT count(*) FROM threads WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        threads_while_blocked, 1,
+        "no thread was created while blocked on the queue lock"
+    );
+    tx.commit().await.unwrap();
+    drop(holder);
+    let (status, body) = sibling.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let sibling_thread = body["thread_id"].as_i64().unwrap() as i32;
+    let (status, body) = series.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["thread_created"], true);
+    let created_thread = body["thread_id"].as_i64().unwrap() as i32;
+    assert_ne!(created_thread, seed_thread);
+    assert_ne!(created_thread, sibling_thread);
+
+    // ---- Case 2: a retry reuses the thread created above. While blocked on
+    // the queue lock, that reused thread row must still be NOWAIT-lockable. ----
+    fake(&state).clear();
+    provider_ok(
+        &state,
+        json!({"results": {"id": 7001, "name": "Locked Series"}}),
+    );
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 3, "results": [
+            roster_row(7101, "1", 7001), roster_row(7102, "2", 7001),
+            roster_row(7103, "3", 7001)]}),
+    );
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = hold_queue_lock(&mut holder, user_id).await;
+    let retry = spawn_send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 7001})),
+        ),
+    );
+    wait_for_queue_lock_waiters(&tx, user_id, 1, &[&retry]).await;
+    tx.query_one(
+        "SELECT id FROM threads WHERE id = $1 FOR UPDATE NOWAIT",
+        &[&created_thread],
+    )
+    .await
+    .expect("the retry took a thread row lock before the queue lock");
+    let threads_before_retry: i64 = tx
+        .query_one(
+            "SELECT count(*) FROM threads WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        threads_before_retry, 3,
+        "the retry must not create a thread before the queue lock"
+    );
+    tx.commit().await.unwrap();
+    drop(holder);
+    let (status, body) = retry.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(
+        body["thread_created"], false,
+        "the retry reuses the series thread"
+    );
+    assert_eq!(body["thread_id"], created_thread);
+    assert_eq!(body["issues_adopted"], 1);
+}
+
+/// The confirmation transaction still commits when hydration enqueue fails:
+/// `link_confirmed` wraps the scheduling INSERT in
+/// `SAVEPOINT comicvine_hydration_enqueue` and rolls back to it on error, so the
+/// confirmed mapping survives a failed schedule.
+///
+/// The DML-only test role cannot `CREATE TRIGGER`/`ALTER TABLE` on the permanent
+/// table, so the failure is injected deterministically through a permitted DML
+/// path instead: exhaust the refresh-request id sequence. The INSERT's default
+/// `nextval` then raises "reached maximum value" inside the savepoint, aborting
+/// only that subtransaction. Without the savepoint the aborted transaction
+/// could not commit the confirmation at all. `reset_for_test` restores every
+/// sequence for the next test, and this test restores it for its own tail.
+#[tokio::test]
+async fn hydration_enqueue_failure_does_not_undo_identity_confirmation() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-savepoint").await;
+    set_key(false);
+    let i = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Savepoint").await;
+        issue(&conn, t, "1", 1).await
+    };
+    {
+        let conn = state.pool.get().await.unwrap();
+        conn.execute(
+            "SELECT setval(pg_get_serial_sequence('comicvine_metadata_refresh_requests', 'id'), \
+             2147483647, true)",
+            &[],
+        )
+        .await
+        .unwrap();
+    }
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 9601})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["has_confirmed_identity"], true);
+    let mapping = &body["confirmed_mappings"][0];
+    assert_eq!(mapping["status"], "confirmed");
+    assert_eq!(mapping["comicvine_id"], "9601");
+    assert_eq!(mapping["evidence_source"], "user_confirmed");
+    let conn = state.pool.get().await.unwrap();
+    let queued: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM comicvine_metadata_refresh_requests",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        queued, 0,
+        "the failed enqueue left no partial refresh row behind"
+    );
+    conn.execute(
+        "SELECT setval(pg_get_serial_sequence('comicvine_metadata_refresh_requests', 'id'), 1, false)",
+        &[],
+    )
+    .await
+    .unwrap();
+}
+
 /// Order-independent fake ComicVine: `/issues` pages are synthesized from the
 /// request's `offset`, so concurrent page fetches cannot receive each other's
 /// payloads. Every response yields to the scheduler once before resolving,
