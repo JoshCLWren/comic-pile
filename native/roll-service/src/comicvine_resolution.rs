@@ -560,6 +560,9 @@ pub async fn import_series(
     ).await?;
     Ok(Json(result))
 }
+
+#[cfg(test)]
+mod tests {
     use super::*;
 
     #[test]
