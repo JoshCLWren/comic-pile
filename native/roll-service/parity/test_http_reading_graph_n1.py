@@ -196,7 +196,7 @@ async def test_reading_graph_extra_n1_query_increments_budget() -> None:
             await db.commit()
             token = _token(username, jti=f"jti-{uuid4().hex}")
 
-        # Insert 5 threads with 2 issues each (small fixture)
+        # Insert 5 threads with 2 issues each (small fixture) and capture raw connection
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
@@ -207,7 +207,7 @@ async def test_reading_graph_extra_n1_query_increments_budget() -> None:
                     await raw.execute(
                         "INSERT INTO issues (thread_id,issue_number,position,status,created_at) "
                         "VALUES ($1,$2,$3,'unread',NOW())",
-                        thread_id, str(pos), pos,
+                        owner_id, str(pos), pos,
                     )
             finally:
                 await raw.close()
@@ -230,8 +230,7 @@ async def test_reading_graph_extra_n1_query_increments_budget() -> None:
         # This adds queries that scale with the number of entries
         connection = await asyncpg.connect(url)
         try:
-            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username) if 'raw' in dir() else await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            # Query issues per thread (N+1 pattern)
+            # Query issues per thread (N+1 pattern: one query per thread)
             for t in range(5):
                 await connection.execute(
                     "SELECT id FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id=$1)",
