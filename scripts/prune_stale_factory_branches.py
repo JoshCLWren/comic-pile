@@ -175,14 +175,21 @@ def local_worktree_branches(repo_root: Path) -> set[str]:
 
 def remote_default_branch(repo_root: Path, remote: str = "origin") -> str:
     """Resolve the default branch for a remote."""
-    proc = run(["git", "-C", str(repo_root), "symbolic-ref", f"refs/remotes/{remote}/HEAD"], check=False)
+    proc = run(
+        ["git", "-C", str(repo_root), "symbolic-ref", f"refs/remotes/{remote}/HEAD"],
+        check=False,
+    )
     if proc.returncode == 0:
         ref = proc.stdout.strip()
         prefix = f"refs/remotes/{remote}/"
         if ref.startswith(prefix):
             return ref[len(prefix):]
     for candidate in ("main", "master"):
-        if run(["git", "-C", str(repo_root), "rev-parse", "--verify", f"{remote}/{candidate}"], check=False).returncode == 0:
+        verify = run(
+            ["git", "-C", str(repo_root), "rev-parse", "--verify", f"{remote}/{candidate}"],
+            check=False,
+        )
+        if verify.returncode == 0:
             return candidate
     return "main"
 
@@ -190,7 +197,16 @@ def remote_default_branch(repo_root: Path, remote: str = "origin") -> str:
 def list_remote_branches(repo_root: Path, remote: str = "origin") -> list[BranchInfo]:
     """List remote branches with commit metadata."""
     fmt = "%(refname:short)\t%(objectname)\t%(committerdate:iso-strict)"
-    proc = run(["git", "-C", str(repo_root), "for-each-ref", f"refs/remotes/{remote}", f"--format={fmt}"])
+    proc = run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "for-each-ref",
+            f"refs/remotes/{remote}",
+            f"--format={fmt}",
+        ]
+    )
     branches: list[BranchInfo] = []
     prefix = f"{remote}/"
     for line in proc.stdout.splitlines():
@@ -437,7 +453,11 @@ def fetch_issue_signal(repo: str, issue_number: int) -> LeaseSignal | None:
         for label in (issue.get("labels") or [])
         if isinstance(label, dict) and label.get("name")
     }
-    owners = sorted(label for label in labels if OWNER_RE.fullmatch(label) and label != "factory:unowned")
+    owners = sorted(
+        label
+        for label in labels
+        if OWNER_RE.fullmatch(label) and label != "factory:unowned"
+    )
     owner = owners[0] if len(owners) == 1 else (owners[0] if owners else None)
     updated_at = parse_iso8601(str(issue.get("updated_at") or issue.get("updatedAt") or ""))
     return LeaseSignal(
