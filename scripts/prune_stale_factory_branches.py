@@ -182,7 +182,8 @@ def remote_default_branch(repo_root: Path, remote: str = "origin") -> str:
         if ref.startswith(prefix):
             return ref[len(prefix):]
     for candidate in ("main", "master"):
-        if run(["git", "-C", str(repo_root), "rev-parse", "--verify", f"{remote}/{candidate}"], check=False).returncode == 0:
+        run_res = run(["git", "-C", str(repo_root), "rev-parse", "--verify", f"{remote}/{candidate}"], check=False)
+        if run_res.returncode == 0:
             return candidate
     return "main"
 
@@ -190,7 +191,7 @@ def remote_default_branch(repo_root: Path, remote: str = "origin") -> str:
 def list_remote_branches(repo_root: Path, remote: str = "origin") -> list[BranchInfo]:
     """List remote branches with commit metadata."""
     fmt = "%(refname:short)\t%(objectname)\t%(committerdate:iso-strict)"
-    proc = run(["git", "-C", str(repo_root), "for-each-ref", f"refs/remotes/{remote}", f"--format={fmt}"])
+    proc = run(["git", "-C", str(repo_root), "for-each-ref", f"refs/remotes/{remote}", f"--format={fmt}")  # split line
     branches: list[BranchInfo] = []
     prefix = f"{remote}/"
     for line in proc.stdout.splitlines():
@@ -417,7 +418,8 @@ def active_lease(signal: LeaseSignal | None, now: datetime) -> tuple[bool, str |
     if owner is None:
         # Multiple owners or no owner: multiple means ambiguous/unsafe.
         owners = sorted(
-            label for label in signal.labels if OWNER_RE.fullmatch(label) and label != "factory:unowned"
+            owners = sorted(
+                label for label in signal.labels if OWNER_RE.fullmatch(label) and label != "factory:unowned")
         )
         if len(owners) > 1:
             return True, f"ambiguous active owners on {signal.target}"
