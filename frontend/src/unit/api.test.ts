@@ -130,7 +130,7 @@ it('calls dependency endpoints with expected paths', async () => {
   await dependenciesApi.createDependency({ sourceId: 1, targetId: 2 })
   await dependenciesApi.deleteDependency(7)
 
-  expect(get).toHaveBeenCalledWith('/v1/dependencies/blocked')
+  expect(get).toHaveBeenCalledWith('/v2/dependencies/blocked')
   expect(get).toHaveBeenCalledWith('/v1/threads/11/dependencies')
   expect(post).toHaveBeenCalledWith('/v1/threads/12:getBlockingInfo')
   expect(post).toHaveBeenCalledWith('/v2/dependencies/', {
@@ -179,7 +179,7 @@ it('calls every remaining API resource endpoint', async () => {
 })
 
 
-it('uses migrated v2 session paths and canonical v1 undo paths', async () => {
+it('uses migrated v2 session detail/snapshot paths and v2 undo paths', async () => {
   await sessionApi.list()
   await sessionApi.get(7)
   await sessionApi.getDetails(7)
@@ -191,8 +191,8 @@ it('uses migrated v2 session paths and canonical v1 undo paths', async () => {
   expect(get).toHaveBeenCalledWith('/v1/sessions/7')
   expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/details')
   expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/snapshots')
-  expect(post).toHaveBeenCalledWith('/v1/undo/7/undo/3')
-  expect(get).toHaveBeenCalledWith('/v1/undo/7/snapshots')
+  expect(post).toHaveBeenCalledWith('/v2/undo/7/snapshots/3/restore')
+  expect(get).toHaveBeenCalledWith('/v2/undo/7/snapshots')
 })
 
 it('keeps the retired session lifecycle methods off the session service (#4343)', () => {
