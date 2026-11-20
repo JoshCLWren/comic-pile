@@ -782,11 +782,9 @@ mod tests {
             "the reported pool is the offer pool for the same browser snoozes"
         );
         assert_eq!(ints(&snoozed_eligible, "thread_ids"), expected_threads);
-        assert_eq!(
-            ints(&snoozed_eligible, "issue_ids"),
-            vec![100, 400, 500, 600]
-        );
-        assert_eq!(ints(&snoozed_eligible, "thread_ids"), vec![10, 40, 50, 60]);
+        // Snoozed faces are not backfilled: the d4 window still holds thread 40.
+        assert_eq!(ints(&snoozed_eligible, "issue_ids"), vec![100, 400]);
+        assert_eq!(ints(&snoozed_eligible, "thread_ids"), vec![10, 40]);
 
         // A pool that is empty only because every eligible thread was
         // browser-snoozed still reports `ready`, from the candidates before
