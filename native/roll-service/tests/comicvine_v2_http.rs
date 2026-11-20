@@ -497,6 +497,58 @@ async fn browser_provider_calls_are_cached_and_honor_throttle_cooldowns() {
     assert_eq!(fake(&state).calls().len(), calls + 1);
 }
 
+/// Python `ComicVineClient` throttle statuses (#4637589533): HTTP 420 is a
+/// throttle like 429 (a header-less one still cools the bucket down), while
+/// 403 is a plain provider error that records no cooldown.
+#[tokio::test]
+async fn http_420_cools_the_bucket_down_but_403_does_not() {
+    let (state, token, csrf, _guard) = setup_user("cvv2-420").await;
+    set_key(true);
+    fake(&state).push_ok(
+        http::StatusCode::FORBIDDEN,
+        http::HeaderMap::new(),
+        Bytes::new(),
+    );
+    let (status, _) = send(
+        &state,
+        get("/api/v2/comicvine/search/series?q=forbidden", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    provider_ok(&state, json!({"results": [{"id": 3, "name": "After 403"}]}));
+    let (status, body) = send(
+        &state,
+        get("/api/v2/comicvine/search/series?q=after", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "a 403 must not start a cooldown");
+    assert_eq!(body["results"][0]["name"], "After 403");
+
+    fake(&state).push_ok(
+        http::StatusCode::from_u16(420).unwrap(),
+        http::HeaderMap::new(),
+        Bytes::new(),
+    );
+    let (status, _) = send(
+        &state,
+        get("/api/v2/comicvine/search/series?q=slow", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    let calls = fake(&state).calls().len();
+    let (status, _) = send(
+        &state,
+        get("/api/v2/comicvine/search/series?q=blocked", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        fake(&state).calls().len(),
+        calls,
+        "a header-less 420 cools the search bucket down"
+    );
+}
+
 #[tokio::test]
 async fn resolve_classifies_input_and_resolves_issue_links() {
     let (state, token, csrf, _guard) = setup_user("cvv2-resolve").await;
