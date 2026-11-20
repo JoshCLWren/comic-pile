@@ -92,19 +92,23 @@
 
 Some deployed legacy Plan pages may still exist pending the safe, gated retirement in #3678. Test them for data preservation, secure migration/redirects, truthful diagnostics, and noninterference with Option E, **not** as a competing execution model. Do not reopen or extend old Plan authoring/eligibility code.
 
-## MQA-LIST-011: Empty authoritative Reading List creation is safe
+## MQA-LIST-011: An empty Reading Plan can be opened and edited
 
-**Test:** In the current Reading List editor, create an empty reader-owned Reading List in strict or loose mode. Save and reload. If empty lists are not supported, verify the UI explains the requirement **before submission**. Add a real owned issue and reopen the list.
+**Status: Retired (2026-11-20).** The old zero-lane Reading Plan creation/editor requirement was superseded by the owner's Option E-only decision. Legacy Plan UI is being safely retired in #3678; see #5614.
 
-**Expected:** Supported empty lists persist without fictitious issue membership; otherwise invalid saves produce a clear, actionable validation message and no partial write. Adding a selected issue to an existing list persists its stable Issue ID, order and mode without changing read history. **Do not test `/continuity-plans/new`, zero-lane creation, legacy plan editors, or orphaned-plan authoring links as supported feature flows.** Their retirement/deep-link migration belongs to #3678. Historical report [#5614](https://github.com/JoshCLWren/comic-pile/issues/5614) was superseded by owner decision 2026-11-20; earlier #5462 behavior is transition-only.
+**Test:** Create a plan with no lanes and no steps, save, then open it from the plans list and reload. Add an issue with the legacy editor, save, and reopen both the detail page and the edit route. For a plan whose Reading List was removed, open the recovery screen and click "open the Plan authoring UI".
 
-## MQA-LIST-012: Legacy Plan deep links migrate safely to canonical Reading Lists
+**Expected:** The saved plan opens as an empty plan (not a 409 recovery screen) and can be edited. Adding an issue does not strand it: the reopened detail page shows the authored issue and the editor still opens. The recovery authoring link opens that saved plan's editor, not an authority error and not a blank new plan. Source: [#5462](https://github.com/JoshCLWren/comic-pile/issues/5462).
 
-**Setup:** A historical Plan deep link with retained source information, including a case whose previously linked Reading List was deleted or is ambiguous.
+## MQA-LIST-012: Orphaned plans recover only through explicit preview and relink
 
-**Test:** Open the old deep link after the authoritative Reading List experience has replaced it. Inspect any migration/recovery preview, whether the target list identity is verified, and whether an explicit relink is required. Confirm preserved authored sequence and history.
+**Status: Retired (2026-11-20).** Orphaned legacy Plan recovery UI is retirement/migration work, not a supported parallel authoring flow. See owner contract #3678.
 
-**Expected:** Verified links redirect to the correct owner-scoped Reading List. Ambiguous or orphaned links explain the situation, preview surviving stable issue references and ask for an **explicit reader-approved** relink before any write. Never auto-create a competing legacy Plan, silently select someone else's list, fabricate eligibility, or discard read/rating/issue state. Tracking: retirement #3678; historical recovery #4684.
+**Setup:** QA plan whose Reading List identity was deleted.
+
+**Test:** Open the plan, review the recovery diff, then explicitly relink.
+
+**Expected:** The reader sees a preview of surviving issue references and chooses the relink; nothing is relinked automatically, and other owners' lists are never targets. Source: #4684 (Nov 5 recovery work).
 
 ## MQA-LIST-013: Dependency cycles are contained, not outages
 
@@ -112,7 +116,39 @@ Some deployed legacy Plan pages may still exist pending the safe, gated retireme
 
 **Expected:** The write fails closed with a clear message before any change is committed; Roll and Queue remain usable. Source: P0 #4759.
 
-## MQA-LIST-014: Canonical Reading List mode survives refresh and safe migration
+## MQA-LIST-014: Displayed plan reading mode survives refresh and recovery
+
+**Status: Retired (2026-11-20).** Legacy `strict_sequential`/`informational` Plan presentation is not an independent execution mode. Strict/loose are canonical Reading List modes. See #3678.
+
+**Setup:** A saved Strict (`strict_sequential`) Reading Plan, including one linked to a Loose (`loose`) authoritative Reading List and one that never had a List link.
+
+**Test:** Open the plan detail page, refresh it, and reopen it after an orphaned-plan recovery relink. Compare the eyebrow mode label with the plans index and the planner editor.
+
+**Expected:** Every surface shows Strict for a plan saved as Strict; a missing, stale or Loose authoritative List never silently downgrades the displayed mode to Informational. The linked Reading List remains the sole authority for actual availability, blockers and explanations (MQA-LIST-002/003), so a mode change is only ever the result of an explicit save or relink choice, never a refresh-time projection. Source: #4724 (post-Rust QA follow-up to #4684).
+
+## MQA-PLAN-SYNC: Open plan detail follows a thread rename from another tab
+
+**Status: Retired (2026-11-20).** The immediate-focus expectation for the obsolete Plan detail page was withdrawn; canonical Reading List cross-tab updates may take a short automatic delay. See #5615 and #3678.
+
+**Test:** Open a plan detail and a thread detail in separate tabs. Rename the thread in the thread tab, then switch back to the plan tab without reloading.
+
+**Expected:** The plan detail shows the new series title as soon as the tab regains focus, with no reload. Source: #5486 (part of #5264); related MQA-QUEUE-010.
+
+## MQA-LIST-015: Empty authoritative Reading List creation is safe
+
+**Test:** In the current Reading List editor, create an empty reader-owned Reading List in strict or loose mode. Save and reload. If empty lists are not supported, verify the UI explains the requirement **before submission**. Add a real owned issue and reopen the list.
+
+**Expected:** Supported empty lists persist without fictitious issue membership; otherwise invalid saves produce a clear, actionable validation message and no partial write. Adding a selected issue to an existing list persists its stable Issue ID, order and mode without changing read history. **Do not test `/continuity-plans/new`, zero-lane creation, legacy plan editors, or orphaned-plan authoring links as supported feature flows.** Their retirement/deep-link migration belongs to #3678. Historical report [#5614](https://github.com/JoshCLWren/comic-pile/issues/5614) was superseded by owner decision 2026-11-20; earlier #5462 behavior is transition-only.
+
+## MQA-LIST-016: Legacy Plan deep links migrate safely to canonical Reading Lists
+
+**Setup:** A historical Plan deep link with retained source information, including a case whose previously linked Reading List was deleted or is ambiguous.
+
+**Test:** Open the old deep link after the authoritative Reading List experience has replaced it. Inspect any migration/recovery preview, whether the target list identity is verified, and whether an explicit relink is required. Confirm preserved authored sequence and history.
+
+**Expected:** Verified links redirect to the correct owner-scoped Reading List. Ambiguous or orphaned links explain the situation, preview surviving stable issue references and ask for an **explicit reader-approved** relink before any write. Never auto-create a competing legacy Plan, silently select someone else's list, fabricate eligibility, or discard read/rating/issue state. Tracking: retirement #3678; historical recovery #4684.
+
+## MQA-LIST-017: Canonical Reading List mode survives refresh and safe migration
 
 **Setup:** A strict authoritative Reading List and a loose authoritative Reading List. Include an old saved Plan that had a contradictory display-mode field, if legacy deep links still exist.
 
@@ -120,7 +156,7 @@ Some deployed legacy Plan pages may still exist pending the safe, gated retireme
 
 **Expected:** The visible strict/loose mode is the **saved canonical Reading List mode**, not an obsolete `strict_sequential`/`informational` Plan label. A legacy Plan's old mode must never silently override the linked List or create a second eligibility source. Explicit list-mode edits persist; strict/loose evaluation, blockers and explanations agree everywhere. Historical #4724 was legacy presentation compatibility, not permission to preserve parallel Plan execution.
 
-## MQA-PLAN-SYNC: Reading List titles refresh after cross-tab rename
+## MQA-LIST-018: Reading List titles refresh after cross-tab rename
 
 **Test:** Open an authoritative Reading List and its Thread detail in separate tabs. Rename the Thread, then return to the Reading List tab without manually reloading.
 
