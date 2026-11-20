@@ -11,7 +11,6 @@ use axum::{
     Json,
 };
 use serde::Serialize;
-use serde_json::Value;
 use std::sync::Arc;
 
 /// Wire parity with Python `SeriesImportStatusResponse`.
