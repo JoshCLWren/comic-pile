@@ -3148,6 +3148,19 @@ mod tests {
     }
 
     #[test]
+    fn roster_issue_metadata_keeps_thumbnail_only_artwork() {
+        let metadata = normalize_roster_issue(&json!({
+            "id": 52,
+            "issue_number": "1",
+            "image": {"thumb_url": "https://comicvine.example/thumb.jpg"}
+        }));
+        assert_eq!(
+            metadata["primary_image"],
+            "https://comicvine.example/thumb.jpg"
+        );
+    }
+
+    #[test]
     fn roster_pages_are_validated_like_python() {
         assert!(matches!(
             roster_page(&json!({"number_of_total_results": 5}), 9),
