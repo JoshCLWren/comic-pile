@@ -494,37 +494,6 @@ def _baseline_allowed() -> set[str]:
     return {str(name) for name in allowed}
 
 
-def _baseline_handlers() -> dict[tuple[str, str], str]:
-    """Return the frozen allowlist of handlers without recognized write tests.
-
-    Some modules have mixed coverage (some handlers auto-detected, others not).
-    Handler-level exemptions keep module-level baseline shrink-only semantics
-    while allowing those uncovered handlers to be documented explicitly.
-    """
-    payload = json.loads(BASELINE.read_text(encoding="utf-8"))
-    handlers = payload.get("handlers", {})
-    assert isinstance(handlers, dict)
-    result: dict[tuple[str, str], str] = {}
-    for key, reason in handlers.items():
-        module, _, handler = str(key).rpartition("::")
-        assert module and handler, f"Invalid baseline handler key: {key!r}"
-        result[(module, handler)] = str(reason)
-    return result
-
-
-def _baseline_allowed_handlers() -> set[tuple[str, str]]:
-    """Return the frozen declaration of allowed baseline handlers."""
-    payload = json.loads(BASELINE.read_text(encoding="utf-8"))
-    allowed = payload.get("allowed_handlers", [])
-    assert isinstance(allowed, list)
-    result: set[tuple[str, str]] = set()
-    for key in allowed:
-        module, _, handler = str(key).rpartition("::")
-        assert module and handler, f"Invalid baseline handler key: {key!r}"
-        result.add((module, handler))
-    return result
-
-
 def test_router_parser_sees_every_post_call() -> None:
     """A new route syntax must fail loudly instead of silently losing coverage."""
     parsed = _route_matches()
