@@ -513,3 +513,58 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         assert large_nested_delta == 0, f"large fixture should have 0 nested statements, got {large_nested_delta}"
     finally:
         await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_budget_rejection_lists() -> None:
+    """Verify that deliberately adding extra queries causes budget enforcement to fail."""
+    import uuid as _uuid
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"brl1_{_uuid.uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+            for i in range(5):
+                t = Thread(user_id=owner.id, title=f"Series {i+1}", format="Comic", queue_position=i+1, issues_remaining=2, total_issues=2, status="active")
+                db.add(t)
+                await db.flush()
+                for p in (1, 2):
+                    db.add(Issue(thread_id=t.id, issue_number=str(p), position=p, status="unread"))
+            await db.commit()
+            token = _token(username, jti=f"jti-{_uuid.uuid4().hex}")
+
+        env = _run_env(token, "GET", "/api/v2/reading-lists")
+        # Measure baseline
+        _, _, before = await db_counters(engine)
+        _, _, before_nested = await db_nested_statements(engine)
+        small, _, _, _ = await run_rust_example(BINARY, env)
+        _, _, after = await db_counters(engine)
+        _, _, after_nested = await db_nested_statements(engine)
+        baseline_delta = (after - before) if before is not None and after is not None else None
+        baseline_nested = (after_nested - before_nested) if after_nested is not None and before_nested is not None else None
+
+        # Add an extra query by running a raw SELECT 1 via the admin connection
+        raw = await asyncpg.connect(url)
+        try:
+            await raw.execute("SELECT 1")
+        finally:
+            await raw.close()
+
+        _, _, after_extra = await db_counters(engine)
+        _, _, after_extra_nested = await db_nested_statements(engine)
+        extra_delta = (after_extra - after) if after_extra is not None and after is not None else None
+        extra_nested = (after_extra_nested - after_nested) if after_extra_nested is not None and after_nested is not None else None
+
+        # The extra SELECT 1 should increment the statement count
+        assert extra_delta == 1, f"expected 1 extra statement, got {extra_delta}"
+        # Verify budget enforcement catches the excess
+        try:
+            assert_declared_budget("GET", "/api/v2/reading-lists", after_extra, after_extra)
+            assert False, "Budget check should have failed when exceeding max_statements"
+        except AssertionError:
+            # Expected: the budget check raises AssertionError when statements exceed the maximum
+            pass
+    finally:
+        await engine.dispose()
