@@ -210,7 +210,7 @@ impl Snapshot {
             prerequisites: inputs
                 .prerequisites
                 .iter()
-                .filter(|p| p.origin == "reader")
+                .filter(|p| p.origin != "converted")
                 .map(|p| Prerequisite {
                     prerequisite_id: p.prerequisite_id,
                     source_issue_id: p.source_issue_id,
