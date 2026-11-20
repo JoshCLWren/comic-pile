@@ -80,4 +80,12 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert not gate_log.exists() or gate_log.read_text() == ""
+    # scripts/lint.sh is the one gate the hook must always execute: its marker
+    # proves it ran, and its Git-isolation checks gate the hook on any leak.
+    assert gate_log.exists(), "the hook never ran scripts/lint.sh"
+    logged_lines = gate_log.read_text().splitlines()
+    assert "lint" in logged_lines, "scripts/lint.sh did not reach its marker"
+    # No test gate (backend pytest, vitest, UI audit) may run during the push.
+    assert set(logged_lines) == {"lint"}, (
+        f"unexpected test-gate invocations: {sorted(set(logged_lines) - {'lint'})}"
+    )
