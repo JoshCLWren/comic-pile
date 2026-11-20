@@ -326,6 +326,35 @@ async fn edited_applied_migration_is_refused() {
 }
 
 #[tokio::test]
+async fn plan_refuses_a_changed_applied_migration_instead_of_skipping_up() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    run(&mut client).await.unwrap();
+
+    // A clean, fully applied database has no pending work.
+    assert!(!needs_work(&mut client).await.unwrap());
+
+    // Simulate embedded SQL changing without a version bump. `plan` must not
+    // report "no work", otherwise deployment skips `up` and bypasses
+    // refinery's checksum/divergence check.
+    client
+        .execute(
+            "UPDATE public.refinery_schema_history SET checksum = 0 WHERE version = 1",
+            &[],
+        )
+        .await
+        .unwrap();
+    let error = needs_work(&mut client).await.unwrap_err();
+    let msg = error.0.to_lowercase();
+    assert!(
+        msg.contains("diverg") || msg.contains("checksum"),
+        "expected divergence error, got: {error}"
+    );
+    drop(client);
+    db.drop_database().await;
+}
+
+#[tokio::test]
 async fn interrupted_fresh_setup_repairs_missing_alembic_stamp() {
     let db = Scratch::create().await;
     let mut client = db.client().await;

@@ -7,6 +7,10 @@ use tracing_subscriber::EnvFilter;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Environment {
     Development,
+    /// Disposable containerised test stacks: a published port needs a
+    /// non-loopback bind, and the local test database has no TLS listener.
+    /// This mode is never selected by production deployment configuration.
+    Test,
     Production,
 }
 
@@ -108,10 +112,11 @@ impl Config {
     pub fn from_lookup(get: impl Fn(&str) -> Option<String>) -> Result<Self, ConfigError> {
         let environment = match get("RUST_ROLL_ENV").as_deref().unwrap_or("development") {
             "development" => Environment::Development,
+            "test" => Environment::Test,
             "production" => Environment::Production,
             _ => {
                 return Err(ConfigError(
-                    "RUST_ROLL_ENV must be development or production",
+                    "RUST_ROLL_ENV must be development, test, or production",
                 ))
             }
         };

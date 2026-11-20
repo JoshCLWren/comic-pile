@@ -94,6 +94,22 @@ fn public_production_binding_requires_verified_tls_transport() {
     assert!(Config::from_lookup(|key| values.get(key).cloned()).is_ok());
 }
 
+#[test]
+fn container_test_environment_allows_published_bind_and_local_database() {
+    // docker-compose.test.yml publishes 8000:8000, so the service must bind a
+    // non-loopback address, and its disposable Postgres has no TLS listener.
+    let mut values = values();
+    values.insert("RUST_ROLL_ENV", "test".into());
+    values.insert("RUST_ROLL_BIND", "0.0.0.0:8000".into());
+    let config = Config::from_lookup(|key| values.get(key).cloned()).unwrap();
+    assert_eq!(config.environment, Environment::Test);
+    assert_eq!(config.bind.to_string(), "0.0.0.0:8000");
+
+    // The development rule still protects ordinary local runs.
+    values.insert("RUST_ROLL_ENV", "development".into());
+    assert!(Config::from_lookup(|key| values.get(key).cloned()).is_err());
+}
+
 #[tokio::test]
 async fn health_and_error_envelopes_work_without_database_checkout() {
     let state = Arc::new(test_support::test_app_state(config()));
