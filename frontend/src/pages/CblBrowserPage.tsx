@@ -940,6 +940,20 @@ export default function CblBrowserPage() {
             </p>
           )}
 
+          <CblAdoptionTargetFieldset
+            plans={matchingPlans}
+            selectedPlanId={adoptionTargetId}
+            sourceAlreadyAdopted={sourceAlreadyAdopted}
+            disabled={isCommitting}
+            planCheckFailed={planCheckFailed}
+            onChoose={(planId) => {
+              setAdoptionTargetId(planId)
+              setConfirmOpen(false)
+              commitMutation.reset()
+            }}
+            onRetry={() => void plansQuery.refetch()}
+          />
+
           {graphUnavailable && (
             <p role="status" className="text-xs text-[var(--theme-warning)]">
               ComicPile could not load the reading graph, so it cannot check overlapping series
