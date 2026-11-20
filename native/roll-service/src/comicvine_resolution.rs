@@ -97,6 +97,50 @@ pub async fn get_issue_identity(
     }))
 }
 
+// Wire parity with Python `api_confirm_identity`.
+// `POST /api/v1/comicvine/issues/{issue_id}/identity:confirm`.
+pub async fn confirm_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+    Json(request): Json<ConfirmIdentityRequest>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    // TODO: Implement full identity confirmation
+    // For now, return a minimal response
+    Ok(Json(IssueIdentityResponse {
+        issue_id,
+        thread_id: 0,
+        thread_title: String::new(),
+        has_confirmed_identity: false,
+        comicvine_issue_id: None,
+        confirmed_mappings: vec![],
+        candidate_mappings: vec![],
+        has_unresolved: false,
+    }))
+}
+
+// Wire parity with Python `api_replace_identity`.
+// `POST /api/v1/comicvine/issues/{issue_id}/identity:replace`.
+pub async fn replace_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+    Json(request): Json<ReplaceIdentityRequest>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    // TODO: Implement full identity replacement
+    // For now, return a minimal response
+    Ok(Json(IssueIdentityResponse {
+        issue_id,
+        thread_id: 0,
+        thread_title: String::new(),
+        has_confirmed_identity: false,
+        comicvine_issue_id: None,
+        confirmed_mappings: vec![],
+        candidate_mappings: vec![],
+        has_unresolved: false,
+    }))
+}
+
 // Wire parity with Python `api_list_corrections`.
 // `GET /api/v1/comicvine/issues/{issue_id}/metadata:corrections`.
 pub async fn list_corrections(
@@ -130,15 +174,15 @@ pub async fn refresh_metadata(
 
 // Wire parity with Python `api_apply_correction`.
 // `POST /api/v1/comicvine/issues/{issue_id}/metadata:correct`.
-pub async fn apply_correction(
+pub async fn revert_correction(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
-    Json(request): Json<MetadataCorrectionRequest>,
-) -> Result<Json<IssueIdentityResponse>, ApiError> {
-    // TODO: Implement full correction application
+    Json(request): Json<MetadataCorrectionRevertRequest>,
+) -> Result<Json<RevertCorrectionResponse>, ApiError> {
+    // TODO: Implement full correction reversion
     // For now, return a minimal response
-    Ok(Json(IssueIdentityResponse {
+    Ok(Json(RevertCorrectionResponse {
         issue_id,
         thread_id: 0,
         thread_title: String::new(),
@@ -147,11 +191,12 @@ pub async fn apply_correction(
         confirmed_mappings: vec![],
         candidate_mappings: vec![],
         has_unresolved: false,
+        corrections: vec![],
     }))
 }
 
-// Wire parity with Python `api_resolve_comicvine_input`.
-// `GET /api/v1/comicvine/resolve`.
+// Wire parity with Python `api_apply_correction`.
+// `POST /api/v1/comicvine/issues/{issue_id}/metadata:correct`.
 pub async fn resolve_input(
     State(state): State<Arc<AppState>>,
     query: Result<Query<ResolveQuery>, QueryRejection>,
@@ -176,6 +221,16 @@ pub struct SeriesSearchResponse {
     pub limit: i32,
     pub has_more: bool,
     pub next_offset: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ImportIssueResponse {
+    pub thread_id: i32,
+    pub issue_id: i32,
+    pub external_identity_id: i32,
+    pub reading_order_id: Option<i32>,
+    pub position: Option<i32>,
+    pub total_items: Option<i32>,
 }
 
 impl SeriesSearchResponse {
