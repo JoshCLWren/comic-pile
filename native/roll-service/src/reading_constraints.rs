@@ -1425,8 +1425,14 @@ mod tests {
         assert!(ValidatedReadingInputs::new(source.clone(), &BTreeMap::new()).is_ok());
         source.prerequisites[0].origin = "reader".into();
         assert!(matches!(
-            ValidatedReadingInputs::new(source, &BTreeMap::new()),
+            ValidatedReadingInputs::new(source.clone(), &BTreeMap::new()),
             Err(ValidationError::Cycle { .. })
+        ));
+        source.prerequisites[0].origin = "unknown".into();
+        assert!(matches!(
+            ValidatedReadingInputs::new(source, &BTreeMap::new()),
+            Err(ValidationError::InvalidSnapshot { message })
+                if message == "Unknown prerequisite origin: unknown"
         ));
     }
 
