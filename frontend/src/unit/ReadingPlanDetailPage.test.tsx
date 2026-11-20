@@ -529,6 +529,33 @@ describe('ReadingPlanDetailPage', () => {
     renderPage()
     expect(await screen.findByTestId('reading-plan-reader')).toBeInTheDocument()
   })
+
+  it('refreshes the Available now series titles when the tab regains focus after a rename (#5615)', async () => {
+    renderPage()
+    await screen.findByRole('heading', { name: 'Age of Apocalypse' })
+    expect(screen.getByText('X-Men #95')).toBeInTheDocument()
+    expect(screen.getByText('X-Men · Next unread issue #95')).toBeInTheDocument()
+
+    // The thread is renamed in another tab. The shared server data is fresh by
+    // the time the plan reader view refetches on focus (#5486); every label in
+    // the Available now section must show the new series title.
+    const renamed = { ...availableIssue, thread_title: 'X-Men QA B3' }
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      available_now: [renamed],
+      lanes: [{ id: 'main', name: 'Main', order: 0, issues: [renamed, blockedIssue, laterIssue] }],
+    })
+    fetchCards.mockImplementation(async (ids) => ids.map((id) => ({ ...cardFor(id), thread_title: 'X-Men QA B3' })))
+
+    await act(async () => {
+      focusManager.setFocused(false)
+      focusManager.setFocused(true)
+    })
+    await waitFor(() => {
+      expect(screen.getByText('X-Men QA B3 #95')).toBeInTheDocument()
+      expect(screen.getByText('X-Men QA B3 · Next unread issue #95')).toBeInTheDocument()
+    })
+  })
 })
 
 describe('availabilityLabel', () => {
