@@ -201,28 +201,32 @@ fn flatten(
         .unwrap_or_default();
     let mut ordered = nodes;
     if ordering_mode == "strict_sequential" {
-        if lane_ids.len() != 1 {
+        // The empty plan (0 lanes, 0 steps) is a valid strict plan (#5614);
+        // it projects as an empty sequence, so only more than one lane is
+        // malformed.
+        if lane_ids.len() > 1 {
             return Err(conflict_detail(serde_json::json!({
                 "code": "malformed_plan", "plan_id": plan_id,
                 "reason": "strict sequential plans must use exactly one lane"
             })));
         }
-        let lane = &lane_ids[0];
-        if ordered.iter().any(|node| &node.lane_id != lane) {
-            return Err(conflict_detail(serde_json::json!({
-                "code": "malformed_plan", "plan_id": plan_id,
-                "reason": "strict sequential plans must have all nodes in single lane"
-            })));
+        if let Some(lane) = lane_ids.first() {
+            if ordered.iter().any(|node| &node.lane_id != lane) {
+                return Err(conflict_detail(serde_json::json!({
+                    "code": "malformed_plan", "plan_id": plan_id,
+                    "reason": "strict sequential plans must have all nodes in single lane"
+                })));
+            }
+            let mut positions: Vec<i64> = ordered.iter().map(|node| node.position).collect();
+            positions.sort_unstable();
+            if positions != (0..positions.len() as i64).collect::<Vec<_>>() {
+                return Err(conflict_detail(serde_json::json!({
+                    "code": "malformed_plan", "plan_id": plan_id,
+                    "reason": "strict sequential positions must be contiguous starting at zero"
+                })));
+            }
+            ordered.sort_by_key(|node| node.position);
         }
-        let mut positions: Vec<i64> = ordered.iter().map(|node| node.position).collect();
-        positions.sort_unstable();
-        if positions != (0..positions.len() as i64).collect::<Vec<_>>() {
-            return Err(conflict_detail(serde_json::json!({
-                "code": "malformed_plan", "plan_id": plan_id,
-                "reason": "strict sequential positions must be contiguous starting at zero"
-            })));
-        }
-        ordered.sort_by_key(|node| node.position);
     } else {
         ordered.sort_by(|a, b| {
             lane_orders

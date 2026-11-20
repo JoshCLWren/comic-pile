@@ -4064,6 +4064,27 @@ mod tests {
     }
 
     #[test]
+    fn validate_structure_accepts_empty_strict_plan() {
+        // #5614: a Strict plan with no lanes and no steps is a valid empty
+        // plan and must save.
+        let write = payload("strict_sequential", Vec::new(), Vec::new());
+        assert!(write.validate_structure().is_ok());
+    }
+
+    #[test]
+    fn validate_structure_rejects_two_lane_strict_plan() {
+        let write = payload(
+            "strict_sequential",
+            vec![lane("l1", 0), lane("l2", 1)],
+            Vec::new(),
+        );
+        let err = write
+            .validate_structure()
+            .expect_err("two lanes must fail");
+        assert!(format!("{err:?}").contains("strict sequential plans must use exactly one lane"));
+    }
+
+    #[test]
     fn validate_structure_rejects_checkpoint_on_thread() {
         let mut checkpoint = node("n1", "thread", 1, "l1", 0);
         checkpoint.is_checkpoint = true;
