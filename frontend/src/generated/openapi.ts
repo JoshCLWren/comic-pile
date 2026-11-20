@@ -4762,7 +4762,7 @@ export interface components {
             lanes?: components["schemas"]["ContinuityPlanLane"][];
             name: string;
             nodes?: components["schemas"]["ContinuityPlanNode"][];
-            ordering_mode: string;
+            ordering_mode?: string;
         };
         ContinuityReleaseSourceResponse: {
             created_at: string;
@@ -14342,6 +14342,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Release source deleted */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -14411,6 +14412,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Updated continuity plan */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14418,6 +14420,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ContinuityPlanResponse"];
                 };
+            };
+            /** @description Stale expected_updated_at: detail.code is plan_version_conflict and detail.expected_updated_at is the current version; reload before retrying */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -14432,6 +14441,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Plan deleted */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -14478,6 +14488,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Dependency unlinked */
             204: {
                 headers: {
                     [name: string]: unknown;

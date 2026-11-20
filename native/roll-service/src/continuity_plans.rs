@@ -118,11 +118,18 @@ pub struct ContinuityPlanNode {
     pub convergence_gate: Vec<serde_json::Value>,
 }
 
+fn default_ordering_mode() -> String {
+    "informational".to_string()
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ContinuityPlanWrite {
     pub name: String,
-    #[serde(rename = "ordering_mode")]
+    // The retired Python schema defaulted this field to "informational".
+    // Keep that wire contract for the v2 Rust route so clients that omit it
+    // keep working after the cutover (see #5528 CodeRabbit review).
+    #[serde(rename = "ordering_mode", default = "default_ordering_mode")]
     pub ordering_mode: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lanes: Vec<ContinuityPlanLane>,
@@ -3905,9 +3912,9 @@ pub fn list_documentation() {}
 pub fn create_documentation() {}
 #[utoipa::path(get, path = "/api/v2/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_get", params(("plan_id" = i32, Path)), responses((status = 200, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
 pub fn get_documentation() {}
-#[utoipa::path(put, path = "/api/v2/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_update", params(("plan_id" = i32, Path)), request_body = ContinuityPlanWrite, responses((status = 200, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
+#[utoipa::path(put, path = "/api/v2/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_update", params(("plan_id" = i32, Path)), request_body = ContinuityPlanWrite, responses((status = 200, description = "Updated continuity plan", body = ContinuityPlanResponse), (status = 409, description = "Stale expected_updated_at: detail.code is plan_version_conflict and detail.expected_updated_at is the current version; reload before retrying")), security(("HTTPBearer" = [])))]
 pub fn update_documentation() {}
-#[utoipa::path(delete, path = "/api/v2/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_delete", params(("plan_id" = i32, Path)), responses((status = 204)), security(("HTTPBearer" = [])))]
+#[utoipa::path(delete, path = "/api/v2/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_delete", params(("plan_id" = i32, Path)), responses((status = 204, description = "Plan deleted")), security(("HTTPBearer" = [])))]
 pub fn delete_documentation() {}
 #[utoipa::path(post, path = "/api/v2/continuity-plans/from-reading-order", tag = "continuity-plans", operation_id = "continuity_plans_adopt_reading_order", request_body = ReadingOrderAdoptRequest, responses((status = 201, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
 pub fn adopt_reading_order_documentation() {}
@@ -3915,7 +3922,7 @@ pub fn adopt_reading_order_documentation() {}
 pub fn membership_documentation() {}
 #[utoipa::path(post, path = "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}", tag = "continuity-plans", operation_id = "continuity_plans_link_dependency", params(("plan_id" = i32, Path), ("dependency_id" = i32, Path)), request_body = ReadingPlanDependencyLinkRequest, responses((status = 201, body = ReadingPlanDependencyLink)), security(("HTTPBearer" = [])))]
 pub fn link_dependency_documentation() {}
-#[utoipa::path(delete, path = "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}", tag = "continuity-plans", operation_id = "continuity_plans_unlink_dependency", params(("plan_id" = i32, Path), ("dependency_id" = i32, Path)), responses((status = 204)), security(("HTTPBearer" = [])))]
+#[utoipa::path(delete, path = "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}", tag = "continuity-plans", operation_id = "continuity_plans_unlink_dependency", params(("plan_id" = i32, Path), ("dependency_id" = i32, Path)), responses((status = 204, description = "Dependency unlinked")), security(("HTTPBearer" = [])))]
 pub fn unlink_dependency_documentation() {}
 #[utoipa::path(post, path = "/api/v2/continuity-plans/{plan_id}/reading-orders/project", tag = "reading-orders", operation_id = "continuity_plans_project_to_reading_order", params(("plan_id" = i32, Path)), request_body = ReadingOrderProjectionRequest, responses((status = 200, body = ReadingOrderProjectionResult)), security(("HTTPBearer" = [])))]
 pub fn project_reading_order_documentation() {}
@@ -3927,12 +3934,23 @@ pub fn release_source_list_documentation() {}
 pub fn release_source_list_reader_documentation() {}
 #[utoipa::path(patch, path = "/api/v2/continuity-plans/release-sources/{source_id}", tag = "continuity-plans", operation_id = "release_sources_update", params(("source_id" = i32, Path)), request_body = ReleaseSourceUpdate, responses((status = 200, body = ReleaseSourceResponse)), security(("HTTPBearer" = [])))]
 pub fn release_source_update_documentation() {}
-#[utoipa::path(delete, path = "/api/v2/continuity-plans/release-sources/{source_id}", tag = "continuity-plans", operation_id = "release_sources_delete", params(("source_id" = i32, Path)), responses((status = 204)), security(("HTTPBearer" = [])))]
+#[utoipa::path(delete, path = "/api/v2/continuity-plans/release-sources/{source_id}", tag = "continuity-plans", operation_id = "release_sources_delete", params(("source_id" = i32, Path)), responses((status = 204, description = "Release source deleted")), security(("HTTPBearer" = [])))]
 pub fn release_source_delete_documentation() {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The retired Python schema defaulted `ordering_mode` to "informational";
+    /// a v2 caller that still omits it must keep working after the cutover.
+    #[test]
+    fn plan_write_defaults_ordering_mode_to_informational() {
+        let payload: ContinuityPlanWrite =
+            serde_json::from_str(r#"{"name":"Plan","lanes":[],"nodes":[]}"#)
+                .expect("omitted ordering_mode must deserialize");
+        assert_eq!(payload.ordering_mode, "informational");
+        payload.validate_structure().expect("defaulted mode is valid");
+    }
 
     fn lane(id: &str, order: i32) -> ContinuityPlanLane {
         ContinuityPlanLane {

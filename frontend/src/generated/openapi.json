@@ -3493,8 +3493,7 @@
           }
         },
         "required": [
-          "name",
-          "ordering_mode"
+          "name"
         ],
         "type": "object"
       },
@@ -23815,7 +23814,9 @@
           }
         ],
         "responses": {
-          "204": {}
+          "204": {
+            "description": "Release source deleted"
+          }
         },
         "security": [
           {
@@ -23885,7 +23886,9 @@
           }
         ],
         "responses": {
-          "204": {}
+          "204": {
+            "description": "Plan deleted"
+          }
         },
         "security": [
           {
@@ -23960,7 +23963,11 @@
                   "$ref": "#/components/schemas/ContinuityPlanResponse"
                 }
               }
-            }
+            },
+            "description": "Updated continuity plan"
+          },
+          "409": {
+            "description": "Stale expected_updated_at: detail.code is plan_version_conflict and detail.expected_updated_at is the current version; reload before retrying"
           }
         },
         "security": [
@@ -23997,7 +24004,9 @@
           }
         ],
         "responses": {
-          "204": {}
+          "204": {
+            "description": "Dependency unlinked"
+          }
         },
         "security": [
           {
