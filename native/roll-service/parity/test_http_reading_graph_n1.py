@@ -208,6 +208,7 @@ async def test_reading_graph_repairs_confirmed_small() -> None:
         assert isinstance(small_body, dict)
         assert small_body.get("applied") is True
         assert small_body.get("status_before") == "cycle"
+        assert small_body.get("graph").get("status") == "ok"
         assert small_body.get("status_after") != "cycle" or small_body.get("applied") is True
         # Verify the list was actually deleted from the database
         async with AsyncSession(engine, expire_on_commit=False) as db2:
