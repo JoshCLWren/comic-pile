@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 111,
-    "native_rust": 111,
+    "total_live_operations": 135,
+    "native_rust": 135,
     "python_fastapi": 0,
-    "native_rust_status": 111,
+    "native_rust_status": 135,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -253,11 +253,179 @@
       "verified_against": "vercel.json"
     },
     {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
       "method": "GET",
-      "path": "/api/v2/continuity-plans/{plan_id}/reader",
+      "path": "/api/v2/continuity-plans/",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/from-reading-order",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/release-sources/",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "DELETE",
+      "path": "/api/v2/continuity-plans/release-sources/{source_id}",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "PATCH",
+      "path": "/api/v2/continuity-plans/release-sources/{source_id}",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "DELETE",
+      "path": "/api/v2/continuity-plans/{plan_id}",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "PUT",
+      "path": "/api/v2/continuity-plans/{plan_id}",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "DELETE",
+      "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/membership",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4684,
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/reader",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts"
       ],
@@ -276,17 +444,28 @@
       "verified_against": "vercel.json"
     },
     {
-      "method": "GET",
-      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4684,
+      "owning_issue": 4838,
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
       "consumers": [
-        "frontend/src/services/api-reading-plan-recovery.ts"
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ],
       "sql_budget": {
         "application_statements": 5,
         "transaction_control_statements": 0,
@@ -296,20 +475,20 @@
         "max_statements": 5,
         "proof_reference": "native/roll-service/src/reading_plan_recovery.rs",
         "measurement_status": "pending-fixture"
-      }
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
-      "method": "POST",
-      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4684,
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
       "consumers": [
-        "frontend/src/services/api-reading-plan-recovery.ts"
+        "frontend/src/services/api-continuity-plans.ts"
       ],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
       "sql_budget": {
         "application_statements": 6,
         "transaction_control_statements": 2,
@@ -319,7 +498,38 @@
         "max_statements": 8,
         "proof_reference": "native/roll-service/src/reading_plan_recovery.rs",
         "measurement_status": "pending-fixture"
-      }
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/release-sources/",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "runtime": "native-rust",
@@ -569,6 +779,19 @@
     {
       "runtime": "native-rust",
       "status": "target",
+      "owning_issue": 4838,
+      "method": "GET",
+      "path": "/api/v2/dependencies/blocked",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
       "owning_issue": 4684,
       "method": "DELETE",
       "path": "/api/v2/dependencies/{dependency_id}",
@@ -585,6 +808,32 @@
         "proof_reference": "native/roll-service/src/dependencies.rs",
         "measurement_status": "pending-fixture"
       },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "GET",
+      "path": "/api/v2/dependencies/{dependency_id}",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
+      "method": "PATCH",
+      "path": "/api/v2/dependencies/{dependency_id}",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
@@ -1383,6 +1632,58 @@
       "verified_against": "vercel.json"
     },
     {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4851,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/reading-orders/",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4851,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/reading-orders/{reading_order_id}/items",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "native Rust",
+      "owning_issue": 4851,
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/reading-plan-sync/runs",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "native Rust",
+      "owning_issue": 4851,
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/reading-plan-sync/status",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "method": "POST",
       "path": "/api/v2/reading-sessions",
       "runtime": "native-rust",
@@ -1909,6 +2210,32 @@
         "proof_reference": "native/roll-service/src/issue_mutation.rs",
         "measurement_status": "pending-fixture"
       },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4839,
+      "consumers": [
+        "frontend/src/services/api-undo.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/undo/{session_id}/snapshots",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4839,
+      "consumers": [
+        "frontend/src/services/api-undo.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
