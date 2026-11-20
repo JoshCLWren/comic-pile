@@ -1943,7 +1943,7 @@ async fn identity_and_import_writers_serialize_with_sibling_queue_writers() {
             )
         })
         .collect();
-    let mut all_pending: Vec<&Pending> = vec![&confirm, &delete, &series_import, &imports[0], &imports[1]];
+    let all_pending: Vec<&Pending> = vec![&confirm, &delete, &series_import, &imports[0], &imports[1]];
     wait_for_queue_lock_waiters(
         &tx,
         user_id,
