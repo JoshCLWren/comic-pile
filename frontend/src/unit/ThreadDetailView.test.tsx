@@ -315,18 +315,22 @@ it('updates the Next issue title immediately after a same-tab rename and rename 
 
 it('refreshes the Next issue title on tab visibility and focus after another-tab rename (#5616)', async () => {
   let currentTitle = 'Superman'
-  mockedThreadsApiGet.mockImplementation(async () => ({
-    id: 1,
-    title: currentTitle,
-    format: 'Comics',
-    issues_remaining: 1,
-    queue_position: 1,
-    status: 'active',
-    total_issues: 1,
-    next_unread_issue_number: '1',
-    notes: null,
-  }) as never)
+  mockedThreadsApiGet.mockImplementation(
+    // SAFETY: the fixture supplies every thread field this focus-sync scenario reads.
+    async () => ({
+      id: 1,
+      title: currentTitle,
+      format: 'Comics',
+      issues_remaining: 1,
+      queue_position: 1,
+      status: 'active',
+      total_issues: 1,
+      next_unread_issue_number: '1',
+      notes: null,
+    }) as never,
+  )
   vi.mocked(readingBoundariesApi.batch).mockImplementation(
+    // SAFETY: the canonical boundary fixture supplies the complete Next-issue projection.
     async () => canonicalNextBoundary(currentTitle) as never,
   )
   const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockImplementation(
