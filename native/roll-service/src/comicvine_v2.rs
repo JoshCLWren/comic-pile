@@ -2480,6 +2480,8 @@ pub async fn resolve_input(
                 return Ok(failure());
             };
             let volume = result.get("volume").and_then(Value::as_object);
+            // Python behavior: str(issue_number) if issue_number is not None else None.
+            // Value::Null would become "null" text, but Python preserves None.
             let resolved = ComicVineResolvedIssue {
                 comicvine_issue_id: id,
                 series_name: volume
@@ -2489,6 +2491,7 @@ pub async fn resolve_input(
                 volume_id: volume.and_then(|v| coerce_provider_int(v.get("id"))),
                 issue_number: result
                     .get("issue_number")
+                    .filter(|v| !matches!(v, Value::Null))
                     .map(|value| match value {
                         Value::String(text) => text.clone(),
                         Value::Number(number) => number.to_string(),
