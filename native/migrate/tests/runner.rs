@@ -326,6 +326,51 @@ async fn edited_applied_migration_is_refused() {
 }
 
 #[tokio::test]
+async fn plan_rejects_changed_recorded_migration_names_and_checksums() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    run(&mut client).await.unwrap();
+    assert!(!needs_work(&mut client).await.unwrap());
+
+    let original_name: String = client
+        .query_one(
+            "SELECT name FROM public.refinery_schema_history WHERE version = 1",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    client
+        .execute(
+            "UPDATE public.refinery_schema_history SET name = name || '_edited' WHERE version = 1",
+            &[],
+        )
+        .await
+        .unwrap();
+    let name_error = needs_work(&mut client).await.unwrap_err();
+    assert!(
+        name_error.0.contains("different name or checksum"),
+        "expected plan to reject a changed migration name, got: {name_error}"
+    );
+
+    client
+        .execute(
+            "UPDATE public.refinery_schema_history SET name = $1, checksum = 0 WHERE version = 1",
+            &[&original_name],
+        )
+        .await
+        .unwrap();
+    let checksum_error = needs_work(&mut client).await.unwrap_err();
+    assert!(
+        checksum_error.0.contains("different name or checksum"),
+        "expected plan to reject a changed migration checksum, got: {checksum_error}"
+    );
+
+    drop(client);
+    db.drop_database().await;
+}
+
+#[tokio::test]
 async fn interrupted_fresh_setup_repairs_missing_alembic_stamp() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
