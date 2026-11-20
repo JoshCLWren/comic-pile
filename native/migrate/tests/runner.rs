@@ -3,7 +3,9 @@
 //! and drops its own scratch database on the server named by
 //! `MIGRATE_TEST_DATABASE_URL`.
 
-use comicpile_migrate::{connect, run, BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD};
+use comicpile_migrate::{
+    connect, needs_work, run, BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD,
+};
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio_postgres::Client;
 
@@ -175,6 +177,28 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
 
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
+    drop(client);
+    db.drop_database().await;
+}
+
+/// A changed applied migration without a version bump must make `plan`
+/// report work: a deploy that only runs `plan` and skips `up` would then
+/// proceed with a history that disagrees with the embedded migrations.
+#[tokio::test]
+async fn needs_work_detects_changed_applied_migration_sql() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    run(&mut client).await.unwrap();
+    assert!(!needs_work(&mut client).await.unwrap());
+
+    client
+        .execute(
+            "UPDATE public.refinery_schema_history SET checksum = 'tampered' WHERE version = 1",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert!(needs_work(&mut client).await.unwrap());
     drop(client);
     db.drop_database().await;
 }
