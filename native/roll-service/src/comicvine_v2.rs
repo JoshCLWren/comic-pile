@@ -10,13 +10,16 @@
 //!
 //! Chunk B adds the owner-scoped identity and correction READ routes
 //! (`app/services/comicvine_resolution.py` `get_issue_identity_state` and
-//! `list_metadata_corrections`). The identity/correction writes and the
+//! `list_metadata_corrections`). Chunk C adds the identity and correction
+//! WRITE routes. Lock order for every identity writer: the per-reader queue
+//! advisory lock ([`crate::queue::lock_queue`]) first, then the owned issue
+//! row (`FOR UPDATE OF i`), matching `thread_repository.py:155-158`. The
 //! import operations move in later chunks.
 
 use crate::{auth::AuthenticatedUser, comicvine_repair::ProviderFailure, db, ApiError, AppState};
 use axum::{
     extract::{
-        rejection::{PathRejection, QueryRejection},
+        rejection::{JsonRejection, PathRejection, QueryRejection},
         Path, Query, State,
     },
     Json,
@@ -180,6 +183,46 @@ pub struct MetadataCorrectionsResponse {
     pub corrections: Vec<CanonicalCorrection>,
 }
 
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct MetadataRefreshResponse {
+    pub issue_id: i32,
+    pub refreshed: bool,
+    pub comicvine_issue_id: Option<String>,
+}
+
+/// Python `ConfirmIdentityRequest` (lax `int`).
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ConfirmIdentityRequest {
+    #[serde(deserialize_with = "de_lax_i32")]
+    pub comicvine_issue_id: i32,
+}
+
+/// Python `ReplaceIdentityRequest` (`reason` `max_length=500`).
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ReplaceIdentityRequest {
+    #[serde(deserialize_with = "de_lax_i32")]
+    pub comicvine_issue_id: i32,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Python `MetadataCorrectionRequest`: unconstrained `str` fields (empty is
+/// accepted), `reason` `max_length=500`.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct MetadataCorrectionRequest {
+    pub field_name: String,
+    pub canonical_value: String,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Python `MetadataCorrectionRevertRequest` (lax `int`).
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct MetadataCorrectionRevertRequest {
+    #[serde(deserialize_with = "de_lax_i32")]
+    pub correction_id: i32,
+}
+
 // ---------------------------------------------------------------------------
 // Query strings (FastAPI `Query(...)` declarations in the Python router).
 // ---------------------------------------------------------------------------
@@ -233,6 +276,16 @@ fn validation_failed() -> ApiError {
 
 fn not_found(detail: impl Into<String>) -> ApiError {
     ApiError::NotFound(detail.into())
+}
+
+/// Python `ExternalIdentityMappingError` -> `400 {"detail": <message>}`.
+fn bad_request(detail: impl Into<String>) -> ApiError {
+    ApiError::BadRequest(detail.into())
+}
+
+/// Python Pydantic `max_length=500` on the optional `reason` fields.
+fn reason_too_long(reason: Option<&str>) -> bool {
+    reason.is_some_and(|reason| reason.chars().count() > 500)
 }
 
 /// Pydantic v2 lax `int` coercion for query and path values (integer strings
@@ -863,6 +916,155 @@ async fn corrections_list(
     })
 }
 
+/// Lock the owned issue row (`FOR UPDATE OF i`), or `404 Issue <id> not
+/// found` (Python `get_owned_issue_or_404` runs before every identity write).
+/// Callers hold the reader's queue lock already.
+async fn lock_owned_issue(tx: &Transaction<'_>, user: i32, issue_id: i32) -> Result<(), ApiError> {
+    tx.query_opt(
+        "SELECT i.id FROM issues i JOIN threads t ON t.id = i.thread_id \
+         WHERE i.id = $1 AND t.user_id = $2 FOR UPDATE OF i",
+        &[&issue_id, &user],
+    )
+    .await
+    .map_err(db::query_error)?
+    .map(|_| ())
+    .ok_or_else(|| not_found(format!("Issue {issue_id} not found")))
+}
+
+/// Python `upsert_external_identity(provider="comicvine", entity_type="issue")`:
+/// the canonical identity row, created on first use. An existing row keeps its
+/// metadata and `updated_at` (a URL rewrite is not a provider refresh).
+async fn upsert_issue_identity(
+    tx: &Transaction<'_>,
+    comicvine_issue_id: i32,
+) -> Result<i32, ApiError> {
+    let external_id = comicvine_issue_id.to_string();
+    let external_url = format!("https://comicvine.gamespot.com/issue/4000-{comicvine_issue_id}/");
+    let row = tx
+        .query_one(
+            "INSERT INTO external_identities \
+                (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'issue', $1, $2, '{}'::json, now(), now()) \
+             ON CONFLICT ON CONSTRAINT uq_external_identity_provider_entity \
+             DO UPDATE SET external_url = EXCLUDED.external_url \
+             RETURNING id",
+            &[&external_id, &external_url],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(row.get(0))
+}
+
+/// Python `link_issue_external_identity(status="confirmed")` for an issue row
+/// the caller has locked: a different confirmed ComicVine identity on the
+/// same issue is the Python 400; otherwise the mapping is created or
+/// re-confirmed (`confidence 1.0`, no rejection reason).
+async fn link_with_source(
+    tx: &Transaction<'_>,
+    issue_id: i32,
+    comicvine_issue_id: i32,
+    evidence_source: &str,
+) -> Result<i32, ApiError> {
+    let identity_id = upsert_issue_identity(tx, comicvine_issue_id).await?;
+    let conflicting = tx
+        .query_opt(
+            "SELECT m.id FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE m.issue_id = $1 AND m.status = 'confirmed' \
+               AND m.external_identity_id <> $2 AND e.provider = 'comicvine' \
+             LIMIT 1",
+            &[&issue_id, &identity_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if conflicting.is_some() {
+        return Err(bad_request(
+            "issue already has a confirmed comicvine identity",
+        ));
+    }
+    tx.execute(
+        "INSERT INTO issue_external_identity_mappings \
+            (issue_id, external_identity_id, status, evidence_source, evidence_json, \
+             confidence, rejection_reason, created_at, updated_at) \
+         VALUES ($1, $2, 'confirmed', $3, '{}'::json, 1.0, NULL, now(), now()) \
+         ON CONFLICT ON CONSTRAINT uq_issue_external_identity_mapping \
+         DO UPDATE SET status = 'confirmed', evidence_source = EXCLUDED.evidence_source, \
+                       confidence = 1.0, rejection_reason = NULL, updated_at = now()",
+        &[&issue_id, &identity_id, &evidence_source],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(identity_id)
+}
+
+/// Confirm one user-selected identity, then schedule best-effort hydration.
+/// Python commits the confirmation and hydrates after; here scheduling runs
+/// in a savepoint so its failure never undoes the mapping (#4631578606).
+async fn link_confirmed(
+    tx: &Transaction<'_>,
+    issue_id: i32,
+    comicvine_issue_id: i32,
+) -> Result<(), ApiError> {
+    let identity_id = link_with_source(tx, issue_id, comicvine_issue_id, "user_confirmed").await?;
+    tx.batch_execute("SAVEPOINT comicvine_hydration_enqueue")
+        .await
+        .map_err(db::query_error)?;
+    if enqueue_hydration_if_needed(tx, identity_id).await.is_ok() {
+        tx.batch_execute("RELEASE SAVEPOINT comicvine_hydration_enqueue")
+            .await
+            .map_err(db::query_error)?;
+    } else {
+        tracing::warn!(
+            identity_id,
+            "comicvine hydration scheduling failed; confirmation kept"
+        );
+        tx.batch_execute("ROLLBACK TO SAVEPOINT comicvine_hydration_enqueue")
+            .await
+            .map_err(db::query_error)?;
+    }
+    Ok(())
+}
+
+/// Rust analogue of Python's post-commit `refresh_issue_metadata`: when the
+/// identity lacks fresh deep provider metadata, queue a refresh for the
+/// native repair worker. The table holds one row per identity in any state
+/// (`uq_comicvine_metadata_refresh_identity`), so a finished row (completed,
+/// no_credits or failed) is reopened instead of colliding (#4631578606); a
+/// pending, running or deferred row is left alone.
+async fn enqueue_hydration_if_needed(
+    tx: &Transaction<'_>,
+    identity_id: i32,
+) -> Result<(), ApiError> {
+    let metadata: Value = tx
+        .query_one(
+            "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+            &[&identity_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get::<_, Option<String>>(0)
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or(Value::Null);
+    if !crate::comicvine_repair::needs_provider_fetch(&metadata, chrono::Utc::now()) {
+        return Ok(());
+    }
+    tx.execute(
+        "INSERT INTO comicvine_metadata_refresh_requests \
+            (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
+         VALUES ($1, 'pending', 0, now(), now(), now()) \
+         ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity \
+         DO UPDATE SET state = 'pending', attempts = 0, next_attempt_at = now(), \
+                       lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
+                       updated_at = now() \
+         WHERE comicvine_metadata_refresh_requests.state \
+               NOT IN ('pending', 'running', 'deferred')",
+        &[&identity_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Handlers.
 // ---------------------------------------------------------------------------
@@ -1039,6 +1241,228 @@ pub async fn list_corrections(
     Ok(Json(response))
 }
 
+/// `POST /api/v2/comicvine/issues/{issue_id}/identity:confirm` (Python
+/// `save_confirmed_comicvine_identity`).
+pub async fn confirm_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    issue_id: Result<Path<String>, PathRejection>,
+    request: Result<Json<ConfirmIdentityRequest>, JsonRejection>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let issue_id = path_int(issue_id)?;
+    let Json(request) = request.map_err(|_| validation_failed())?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    crate::queue::lock_queue(&tx, user.id()).await?;
+    lock_owned_issue(&tx, user.id(), issue_id).await?;
+    link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
+    let response = identity_state(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `POST /api/v2/comicvine/issues/{issue_id}/identity:replace` (Python
+/// `replace_comicvine_identity`): the issue row is locked before any mapping
+/// changes; the old confirmed ComicVine mappings become `rejected`.
+pub async fn replace_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    issue_id: Result<Path<String>, PathRejection>,
+    request: Result<Json<ReplaceIdentityRequest>, JsonRejection>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let issue_id = path_int(issue_id)?;
+    let Json(request) = request.map_err(|_| validation_failed())?;
+    if reason_too_long(request.reason.as_deref()) {
+        return Err(unprocessable("reason is too long"));
+    }
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    crate::queue::lock_queue(&tx, user.id()).await?;
+    lock_owned_issue(&tx, user.id(), issue_id).await?;
+    // Python `reason or "replaced by user"`.
+    let reason = request
+        .reason
+        .filter(|reason| !reason.is_empty())
+        .unwrap_or_else(|| "replaced by user".to_owned());
+    tx.execute(
+        "UPDATE issue_external_identity_mappings m \
+         SET status = 'rejected', rejection_reason = $2, updated_at = now() \
+         FROM external_identities e \
+         WHERE m.external_identity_id = e.id AND m.issue_id = $1 \
+           AND m.status = 'confirmed' AND e.provider = 'comicvine'",
+        &[&issue_id, &reason],
+    )
+    .await
+    .map_err(db::query_error)?;
+    link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
+    let response = identity_state(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `DELETE /api/v2/comicvine/issues/{issue_id}/identity` (Python
+/// `remove_comicvine_identity`): the confirmed mapping becomes `unresolved`.
+pub async fn remove_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    issue_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let issue_id = path_int(issue_id)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    crate::queue::lock_queue(&tx, user.id()).await?;
+    lock_owned_issue(&tx, user.id(), issue_id).await?;
+    let updated = tx
+        .execute(
+            "UPDATE issue_external_identity_mappings m \
+             SET status = 'unresolved', evidence_source = NULL, confidence = NULL, \
+                 updated_at = now() \
+             FROM external_identities e \
+             WHERE m.external_identity_id = e.id AND m.issue_id = $1 \
+               AND m.status = 'confirmed' AND e.provider = 'comicvine'",
+            &[&issue_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if updated == 0 {
+        return Err(bad_request(format!(
+            "No confirmed ComicVine identity mapping found for issue {issue_id}"
+        )));
+    }
+    let response = identity_state(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `POST /api/v2/comicvine/issues/{issue_id}/metadata:correct` (Python
+/// `apply_metadata_correction`). The provider value is Python
+/// `str(metadata_json.get(field_name, "")) or None` over the issue's
+/// confirmed identity metadata (#4636390879: `null` is `"None"`, booleans
+/// `True`/`False`, objects and lists their Python repr).
+pub async fn apply_correction(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    issue_id: Result<Path<String>, PathRejection>,
+    request: Result<Json<MetadataCorrectionRequest>, JsonRejection>,
+) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
+    let issue_id = path_int(issue_id)?;
+    let Json(request) = request.map_err(|_| validation_failed())?;
+    if reason_too_long(request.reason.as_deref()) {
+        return Err(unprocessable("reason is too long"));
+    }
+    // `field_name` is a VARCHAR(100) column: Python surfaces an oversized
+    // name as an unhandled 500 from the INSERT; Rust rejects it up front.
+    if request.field_name.chars().count() > 100 {
+        return Err(unprocessable("field_name is too long"));
+    }
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    owned_issue(&tx, user.id(), issue_id).await?;
+    let provider_value = tx
+        .query_opt(
+            "SELECT json_typeof(e.metadata_json) = 'object', (e.metadata_json -> $2)::text \
+             FROM external_identities e \
+             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+             WHERE m.issue_id = $1 AND m.status = 'confirmed' \
+             LIMIT 1",
+            &[&issue_id, &request.field_name],
+        )
+        .await
+        .map_err(db::query_error)?
+        .filter(|row| row.get::<_, Option<bool>>(0) == Some(true))
+        .and_then(|row| row.get::<_, Option<String>>(1))
+        .and_then(|text| crate::python_text::python_str_of_json(&text))
+        .filter(|value| !value.is_empty());
+    tx.execute(
+        "INSERT INTO issue_metadata_corrections \
+            (issue_id, field_name, provider_value, canonical_value, provenance, \
+             created_by, reverted_at, created_at, updated_at) \
+         VALUES ($1, $2, $3, $4, 'user_correction', $5, NULL, now(), now())",
+        &[
+            &issue_id,
+            &request.field_name,
+            &provider_value,
+            &request.canonical_value,
+            &user.id(),
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
+    let response = corrections_list(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `POST /api/v2/comicvine/issues/{issue_id}/metadata:revert` (Python
+/// `revert_metadata_correction`: a soft delete).
+pub async fn revert_correction(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    issue_id: Result<Path<String>, PathRejection>,
+    request: Result<Json<MetadataCorrectionRevertRequest>, JsonRejection>,
+) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
+    let issue_id = path_int(issue_id)?;
+    let Json(request) = request.map_err(|_| validation_failed())?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    owned_issue(&tx, user.id(), issue_id).await?;
+    let updated = tx
+        .execute(
+            "UPDATE issue_metadata_corrections c \
+             SET reverted_at = now(), updated_at = now() \
+             FROM issues i JOIN threads t ON t.id = i.thread_id \
+             WHERE c.id = $1 AND c.issue_id = $2 AND i.id = c.issue_id \
+               AND t.user_id = $3 AND c.reverted_at IS NULL",
+            &[&request.correction_id, &issue_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if updated == 0 {
+        return Err(bad_request(format!(
+            "Correction {} not found",
+            request.correction_id
+        )));
+    }
+    let response = corrections_list(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `POST /api/v2/comicvine/issues/{issue_id}/metadata:refresh` (Python
+/// `request_provider_refresh`): reports the confirmed ComicVine id; nothing
+/// is written.
+pub async fn refresh_metadata(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    issue_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<MetadataRefreshResponse>, ApiError> {
+    let issue_id = path_int(issue_id)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    owned_issue(&tx, user.id(), issue_id).await?;
+    let comicvine_issue_id: Option<String> = tx
+        .query_opt(
+            "SELECT e.external_id \
+             FROM external_identities e \
+             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+             JOIN issues i ON i.id = m.issue_id \
+             JOIN threads t ON t.id = i.thread_id \
+             WHERE i.id = $1 AND t.user_id = $2 AND m.status = 'confirmed' \
+               AND e.provider = 'comicvine' \
+             LIMIT 1",
+            &[&issue_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .map(|row| row.get(0));
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(MetadataRefreshResponse {
+        issue_id,
+        refreshed: comicvine_issue_id.is_some(),
+        comicvine_issue_id,
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // OpenAPI documentation. These no-op functions feed the canonical generated
 // v2 contract; handlers above never import documentation code at runtime.
@@ -1127,6 +1551,118 @@ pub fn get_issue_identity_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn list_corrections_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues/{issue_id}/identity:confirm",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = ConfirmIdentityRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Confirmed identity state", body = IssueIdentityResponse),
+        (status = 400, description = "Identity or correction conflict"),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 403, description = "CSRF validation failed"),
+        (status = 404, description = "Issue not owned"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn confirm_identity_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues/{issue_id}/identity:replace",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = ReplaceIdentityRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Replaced identity state", body = IssueIdentityResponse),
+        (status = 400, description = "Identity or correction conflict"),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 403, description = "CSRF validation failed"),
+        (status = 404, description = "Issue not owned"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn replace_identity_documentation() {}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v2/comicvine/issues/{issue_id}/identity",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Identity removed", body = IssueIdentityResponse),
+        (status = 400, description = "Identity or correction conflict"),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 403, description = "CSRF validation failed"),
+        (status = 404, description = "Issue not owned"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn remove_identity_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues/{issue_id}/metadata:correct",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = MetadataCorrectionRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Active corrections after the write", body = MetadataCorrectionsResponse),
+        (status = 400, description = "Identity or correction conflict"),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 403, description = "CSRF validation failed"),
+        (status = 404, description = "Issue not owned"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn apply_correction_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = MetadataCorrectionRevertRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Active corrections after the revert", body = MetadataCorrectionsResponse),
+        (status = 400, description = "Identity or correction conflict"),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 403, description = "CSRF validation failed"),
+        (status = 404, description = "Issue not owned"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn revert_correction_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Confirmed identity to refresh", body = MetadataRefreshResponse),
+        (status = 400, description = "Identity or correction conflict"),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 403, description = "CSRF validation failed"),
+        (status = 404, description = "Issue not owned"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn refresh_metadata_documentation() {}
 
 // ---------------------------------------------------------------------------
 // Focused unit tests (no database or provider required).
