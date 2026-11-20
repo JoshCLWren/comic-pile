@@ -750,11 +750,6 @@ export default function CblBrowserPage() {
     preview && summary
       ? `${countPhraseWithArticle(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhraseWithArticle(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
       : null
-  const selectedSourceTitle = selectedSource
-    ? (displayCblSourceTitle(selectedSource.name, selectedSource.source_path) ??
-      FALLBACK_SOURCE_TITLE)
-    : null
-
   const firstShown =
     browsePage && browsePage.items.length > 0
       ? (browsePage.page - 1) * browsePage.page_size + 1
