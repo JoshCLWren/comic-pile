@@ -114,14 +114,25 @@ def _assert_measured(measurement: RouteMeasurement, method: str, path: str, stat
     assert measurement.db_nested_statements is not None, (
         "pg_stat_statements.track=all is required for separate nested measurement"
     )
-    assert_declared_budget(method, path, measurement.db_statements)
+    assert_declared_budget(
+        method,
+        path,
+        measurement.db_statements,
+        measurement.db_nested_statements,
+    )
 
 
 def _assert_fixed_growth(small: RouteMeasurement, large: RouteMeasurement) -> None:
     top_small = small.db_statements
     top_large = large.db_statements
+    nested_small = small.db_nested_statements
+    nested_large = large.db_nested_statements
     assert top_small is not None and top_large is not None
+    assert nested_small is not None and nested_large is not None
     assert top_large <= top_small + 2, f"top-level statements grew: {top_small} -> {top_large}"
+    assert nested_large <= nested_small + 2, (
+        f"nested statements grew: {nested_small} -> {nested_large}"
+    )
 
 
 async def _measure_with_injected_queries(
@@ -129,8 +140,6 @@ async def _measure_with_injected_queries(
     engine: AsyncEngine,
     binary: str,
     env: dict[str, str],
-    route: str,
-    fixture: str,
     injection_count: int,
 ) -> int:
     """Measure a route plus deliberately injected queries under the route role."""
@@ -375,7 +384,7 @@ async def test_reading_graph_budget_rejects_injected_extra_query() -> None:
         maximum = declared_budget_max("GET", "/api/v2/reading-graph")
         assert normal.db_statements <= maximum
         injected_count = await _measure_with_injected_queries(
-            url, engine, BINARY, env, GET_ROUTE, "extra query", maximum - normal.db_statements + 1
+            url, engine, BINARY, env, maximum - normal.db_statements + 1
         )
         assert injected_count > maximum
         with pytest.raises(AssertionError, match="declared maximum"):
@@ -422,9 +431,7 @@ async def test_reading_graph_budget_rejects_injected_n_plus_one() -> None:
             token = _token(username, jti=f"jti-{uuid4().hex}")
 
         env = _run_env(token, "GET", "/api/v2/reading-graph")
-        small = await _measure_with_injected_queries(
-            url, engine, BINARY, env, GET_ROUTE, "N+1 10 issues", 10
-        )
+        small = await _measure_with_injected_queries(url, engine, BINARY, env, 10)
         maximum = declared_budget_max("GET", "/api/v2/reading-graph")
         with pytest.raises(AssertionError, match="declared maximum"):
             assert_declared_budget("GET", "/api/v2/reading-graph", small)
