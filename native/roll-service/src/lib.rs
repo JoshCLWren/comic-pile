@@ -1057,6 +1057,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(comicvine_resolution::series_import_status),
         )
+        .route(
+            "/api/v1/comicvine/issues/{issue_id}/identity",
+            get(comicvine_resolution::get_issue_identity),
+        )
         // Canonical native v2 ComicVine read routes (#4835, split chunk A).
         .route(
             "/api/v2/comicvine/search/series",

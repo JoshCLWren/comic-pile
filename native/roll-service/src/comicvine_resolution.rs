@@ -110,8 +110,6 @@ pub async fn get_issue_identity(
         thread_title: String::new(),
         has_confirmed_identity: false,
         comicvine_issue_id: None,
-        confirmed_mappings: vec![],
-        candidate_mappings: vec![],
         has_unresolved: false,
     }))
 }
