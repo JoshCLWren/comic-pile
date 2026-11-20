@@ -499,6 +499,47 @@ fn app() -> Router {
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(native_dispatch),
         )
+        // Canonical native v2 ComicVine identity/resolution surface (#4835).
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity",
+            get(native_dispatch).delete(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity:confirm",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity:replace",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:correct",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
+            post(native_dispatch),
+        )
+        .route("/api/v2/comicvine/search/series", get(native_dispatch))
+        .route("/api/v2/comicvine/resolve", get(native_dispatch))
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
+            get(native_dispatch),
+        )
+        .route("/api/v2/comicvine/issues:import", post(native_dispatch))
+        .route("/api/v2/comicvine/series:import", post(native_dispatch))
         .route(
             "/api/v1/issues/{issue_id}/dependencies",
             get(native_dispatch),
@@ -1133,6 +1174,49 @@ mod tests {
             response.headers().get("x-comicpile-api-runtime").unwrap(),
             "rust"
         );
+    }
+
+    #[tokio::test]
+    async fn comicvine_v2_ingress_preserves_canonical_paths_and_requires_auth() {
+        for (method, uri) in [
+            ("GET", "/api/v2/comicvine/issues/7/identity"),
+            ("DELETE", "/api/v2/comicvine/issues/7/identity"),
+            ("POST", "/api/v2/comicvine/issues/7/identity:confirm"),
+            ("POST", "/api/v2/comicvine/issues/7/identity:replace"),
+            ("GET", "/api/v2/comicvine/issues/7/metadata:corrections"),
+            ("POST", "/api/v2/comicvine/issues/7/metadata:correct"),
+            ("POST", "/api/v2/comicvine/issues/7/metadata:revert"),
+            ("POST", "/api/v2/comicvine/issues/7/metadata:refresh"),
+            ("GET", "/api/v2/comicvine/search/series?q=batman"),
+            ("GET", "/api/v2/comicvine/resolve?input=batman"),
+            ("GET", "/api/v2/comicvine/series/42/issues"),
+            ("GET", "/api/v2/comicvine/series/42/import-status"),
+            ("POST", "/api/v2/comicvine/issues:import"),
+            ("POST", "/api/v2/comicvine/series:import"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} must be served by the native ingress"
+            );
+        }
     }
 
     #[tokio::test]

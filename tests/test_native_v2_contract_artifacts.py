@@ -123,6 +123,11 @@ _RUNTIME_COMMAND_PATHS: Final = frozenset(
         "/api/v1/identity-inbox/{mapping_id}/reject",
         "/api/v1/identity-inbox/{mapping_id}/skip",
         "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+        # #4835 owner correction explicitly moves the browser-called ComicVine
+        # identity/resolution commands to canonical v2 while preserving their
+        # existing command semantics (including the colon-action suffixes).
+        "/api/v2/comicvine/search/series",
+        "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
     }
 )
 

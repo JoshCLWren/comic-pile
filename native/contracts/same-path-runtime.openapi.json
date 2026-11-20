@@ -7070,6 +7070,45 @@
           }
         }
       },
+      "CanonicalCorrection": {
+        "type": "object",
+        "required": [
+          "id",
+          "field_name",
+          "canonical_value",
+          "provenance",
+          "created_by",
+          "created_at"
+        ],
+        "properties": {
+          "canonical_value": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "field_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "provider_value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "CblAdoptionCommitRequest": {
         "type": "object",
         "required": [
@@ -8033,6 +8072,54 @@
           }
         }
       },
+      "ComicVineIssueCandidate": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "ComicVineMappingHealth": {
         "type": "object",
         "description": "Compact confirmed ComicVine mapping health for one queue row.",
@@ -8066,6 +8153,232 @@
           },
           "tracked_issue_count": {
             "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ComicVineResolveResponse": {
+        "type": "object",
+        "required": [
+          "input",
+          "kind",
+          "issues"
+        ],
+        "properties": {
+          "input": {
+            "type": "string"
+          },
+          "issue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ComicVineResolvedIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComicVineIssueCandidate"
+            }
+          },
+          "kind": {
+            "type": "string"
+          },
+          "validation_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ComicVineSeriesResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ComicVineResolvedIssue": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ComicVineSeriesIssuesResponse": {
+        "type": "object",
+        "required": [
+          "comicvine_volume_id",
+          "series_name",
+          "issues"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComicVineIssueCandidate"
+            }
+          },
+          "series_name": {
+            "type": "string"
+          }
+        }
+      },
+      "ComicVineSeriesResult": {
+        "type": "object",
+        "required": [
+          "comicvine_volume_id",
+          "name"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ComicVineSeriesSearchResponse": {
+        "type": "object",
+        "required": [
+          "query",
+          "results",
+          "offset",
+          "limit",
+          "has_more"
+        ],
+        "properties": {
+          "has_more": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_offset": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComicVineSeriesResult"
+            }
+          },
+          "total_available": {
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           }
         }
@@ -8189,6 +8502,18 @@
           },
           "status": {
             "type": "string"
+          }
+        }
+      },
+      "ConfirmIdentityRequest": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -12103,6 +12428,241 @@
           }
         }
       },
+      "ImportIssueRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "anchor_after_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "anchor_before_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "ImportIssueResponse": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "issue_id",
+          "external_identity_id"
+        ],
+        "properties": {
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ImportSeriesIssueResult": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_id",
+          "outcome",
+          "hydration"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conflict_detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hydration": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "type": "string"
+          }
+        }
+      },
+      "ImportSeriesRequest": {
+        "type": "object",
+        "required": [
+          "comicvine_volume_id"
+        ],
+        "properties": {
+          "already_read_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "anchor_after_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "anchor_before_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ImportSeriesResponse": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "series_name",
+          "comicvine_volume_id",
+          "total_issues_in_series",
+          "issues_adopted",
+          "issues_skipped",
+          "issues_conflict",
+          "issue_results",
+          "thread_created"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportSeriesIssueResult"
+            }
+          },
+          "issues_adopted": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issues_conflict": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issues_skipped": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "thread_created": {
+            "type": "boolean"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_issues_in_series": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "InheritanceSource": {
         "type": "object",
         "required": [
@@ -12442,6 +13002,98 @@
           "thread_id": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "IssueIdentityMapping": {
+        "type": "object",
+        "required": [
+          "external_identity_id",
+          "provider",
+          "comicvine_id",
+          "status"
+        ],
+        "properties": {
+          "comicvine_id": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidence_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "IssueIdentityResponse": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "has_confirmed_identity",
+          "confirmed_mappings",
+          "candidate_mappings",
+          "has_unresolved"
+        ],
+        "properties": {
+          "candidate_mappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueIdentityMapping"
+            }
+          },
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confirmed_mappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueIdentityMapping"
+            }
+          },
+          "has_confirmed_identity": {
+            "type": "boolean"
+          },
+          "has_unresolved": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": "string"
           }
         }
       },
@@ -12817,6 +13469,80 @@
             }
           }
         ]
+      },
+      "MetadataCorrectionRequest": {
+        "type": "object",
+        "required": [
+          "field_name",
+          "canonical_value"
+        ],
+        "properties": {
+          "canonical_value": {
+            "type": "string"
+          },
+          "field_name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "MetadataCorrectionRevertRequest": {
+        "type": "object",
+        "required": [
+          "correction_id"
+        ],
+        "properties": {
+          "correction_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "MetadataCorrectionsResponse": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "corrections"
+        ],
+        "properties": {
+          "corrections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanonicalCorrection"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "MetadataRefreshResponse": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "refreshed"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "refreshed": {
+            "type": "boolean"
+          }
+        }
       },
       "MigrateToIssuesRequest": {
         "type": "object",
@@ -16574,6 +17300,24 @@
           }
         }
       },
+      "ReplaceIdentityRequest": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "ReportType": {
         "type": "string",
         "description": "Report kind, mirroring Python `ReportType = Literal[\"bug\", \"feature\"]`.",
@@ -17068,7 +17812,6 @@
       },
       "SeriesImportStatusResponse": {
         "type": "object",
-        "description": "Wire parity with Python `SeriesImportStatusResponse`.",
         "required": [
           "comicvine_volume_id",
           "imported"

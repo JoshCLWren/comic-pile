@@ -1,7 +1,8 @@
 {
   "family": "comicvine",
   "owned_path_patterns": [
-    "^/api/v1/comicvine(?:/.*)?$"
+    "^/api/v1/comicvine(?:/.*)?$",
+    "^/api/v2/comicvine(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -13,81 +14,274 @@
   },
   "operations": [
     {
+      "bucket": "operations",
+      "method": "DELETE",
+      "path": "/api/v2/comicvine/issues/{issue_id}/identity",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues/[^/]+/identity$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/comicvine/issues/{issue_id}/identity",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues/[^/]+/identity$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/comicvine/issues/{issue_id}/identity:confirm",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues/[^/]+/identity:confirm$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/comicvine/issues/{issue_id}/identity:replace",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues/[^/]+/identity:replace$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/comicvine/issues/{issue_id}/metadata:correct",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues/[^/]+/metadata:correct$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues/[^/]+/metadata:corrections$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues/[^/]+/metadata:refresh$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues/[^/]+/metadata:revert$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/comicvine/issues:import",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/issues:import$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/comicvine/resolve",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/resolve$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/comicvine/search/series",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/search/series$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/series/[^/]+/import\\-status$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/series/[^/]+/issues$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/comicvine/series:import",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/comicvine/series:import$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4835,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
       "bucket": "v1_operations",
       "method": "DELETE",
       "path": "/api/v1/comicvine/issues/{issue_id}/identity",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/issues/[^/]+/identity$"
+      "src": "^/api/v1/comicvine/issues/[^/]+/identity$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/comicvine/issues/{issue_id}/identity",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/issues/[^/]+/identity$"
+      "src": "^/api/v1/comicvine/issues/[^/]+/identity$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/comicvine/issues/{issue_id}/identity:confirm",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/issues/[^/]+/identity:confirm$"
+      "src": "^/api/v1/comicvine/issues/[^/]+/identity:confirm$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/comicvine/issues/{issue_id}/identity:replace",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/issues/[^/]+/identity:replace$"
+      "src": "^/api/v1/comicvine/issues/[^/]+/identity:replace$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/comicvine/issues/{issue_id}/metadata:correct",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:correct$"
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:correct$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/comicvine/issues/{issue_id}/metadata:corrections",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:corrections$"
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:corrections$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/comicvine/issues/{issue_id}/metadata:refresh",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:refresh$"
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:refresh$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/comicvine/issues/{issue_id}/metadata:revert",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:revert$"
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:revert$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/comicvine/issues:import",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/issues:import$"
+      "src": "^/api/v1/comicvine/issues:import$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/comicvine/resolve",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/resolve$"
+      "src": "^/api/v1/comicvine/resolve$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/comicvine/search/series",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/search/series$"
+      "src": "^/api/v1/comicvine/search/series$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
@@ -95,21 +289,24 @@
       "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$",
-      "exclude_from_inventory": true
+      "exclude_from_inventory": true,
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/comicvine/series/{comicvine_volume_id}/issues",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/series/[^/]+/issues$"
+      "src": "^/api/v1/comicvine/series/[^/]+/issues$",
+      "consumers": []
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/comicvine/series:import",
       "dest": "/api/index.py",
-      "src": "^/api/v1/comicvine/series:import$"
+      "src": "^/api/v1/comicvine/series:import$",
+      "consumers": []
     }
   ]
 }

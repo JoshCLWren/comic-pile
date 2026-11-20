@@ -30,6 +30,8 @@
 
 **Expected:** Only the approved issue mapping changes; issue-level and queue indicators agree.
 
+**Rust v2 cutover (#4835, contract unchanged):** the Find ComicVine Match, Edit Series and Add Series/Issue from ComicVine dialogs now call `/api/v2/comicvine/*`. Confirming a second ComicVine identity on one issue is rejected (400, no change), replace demotes the old mapping, removing and re-adding a mapping leaves series metadata untouched, a pasted ComicVine issue/volume URL resolves while an off-site URL shows the validation message, and importing a series with more than 1000 issues adds every issue. Invalid input shows the generic "Validation failed" error.
+
 ## MQA-THREAD-005: Metadata edits preserve history
 
 **Test:** Edit thread metadata without an explicit queue move or read/rate action.

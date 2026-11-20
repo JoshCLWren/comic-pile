@@ -231,7 +231,7 @@ export const comicVineApi = {
   getIssueIntelligence: (issueId: number) =>
     api.get<ComicVineIssueIntelligence | null>(`/v2/issues/${issueId}/comicvine`),
   importIssue: (payload: ComicVineImportIssuePayload) =>
-    api.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v1/comicvine/issues:import', payload),
+    api.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v2/comicvine/issues:import', payload),
   importSeries: (payload: ComicVineImportSeriesPayload) =>
     // A series import adopts every provider issue for one volume, so a long run
     // routinely outlasts the shared 10s client default. The server keeps working
@@ -239,34 +239,34 @@ export const comicVineApi = {
     // error" on an import that had already succeeded (#3445). This request gets
     // its own budget instead of raising the default for every other call.
     api.post<ComicVineImportSeriesResult, ComicVineImportSeriesPayload>(
-      '/v1/comicvine/series:import',
+      '/v2/comicvine/series:import',
       payload,
       { timeout: SERIES_IMPORT_TIMEOUT_MS },
     ),
   getSeriesImportStatus: (volumeId: number) =>
     api.get<ComicVineSeriesImportStatus>(
-      `/v1/comicvine/series/${volumeId}/import-status`,
+      `/v2/comicvine/series/${volumeId}/import-status`,
     ),
   searchSeries: (query: string, limit = 10, offset = 0) =>
-    api.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit, offset } }),
+    api.get<ComicVineSeriesSearchResponse>(`/v2/comicvine/search/series`, { params: { q: query, limit, offset } }),
   resolveIdentity: (input: string) =>
-    api.get<ComicVineResolveResponse>(`/v1/comicvine/resolve`, { params: { input } }),
+    api.get<ComicVineResolveResponse>(`/v2/comicvine/resolve`, { params: { input } }),
   getSeriesIssues: (volumeId: number, seriesName = '') =>
-    api.get<ComicVineSeriesIssuesResponse>(`/v1/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName } }),
+    api.get<ComicVineSeriesIssuesResponse>(`/v2/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName } }),
   getIssueIdentity: (issueId: number) =>
-    api.get<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity`),
+    api.get<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity`),
   confirmIdentity: (issueId: number, comicvineIssueId: number) =>
-    api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:confirm`, { comicvine_issue_id: comicvineIssueId }),
+    api.post<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity:confirm`, { comicvine_issue_id: comicvineIssueId }),
   replaceIdentity: (issueId: number, comicvineIssueId: number, reason?: string) =>
-    api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:replace`, { comicvine_issue_id: comicvineIssueId, reason }),
+    api.post<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity:replace`, { comicvine_issue_id: comicvineIssueId, reason }),
   refreshMetadata: (issueId: number) =>
-    api.post<MetadataRefreshResponse>(`/v1/comicvine/issues/${issueId}/metadata:refresh`),
+    api.post<MetadataRefreshResponse>(`/v2/comicvine/issues/${issueId}/metadata:refresh`),
   applyCorrection: (issueId: number, fieldName: string, canonicalValue: string, reason?: string) =>
-    api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:correct`, { field_name: fieldName, canonical_value: canonicalValue, reason }),
+    api.post<MetadataCorrectionsResponse>(`/v2/comicvine/issues/${issueId}/metadata:correct`, { field_name: fieldName, canonical_value: canonicalValue, reason }),
   listCorrections: (issueId: number) =>
-    api.get<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:corrections`),
+    api.get<MetadataCorrectionsResponse>(`/v2/comicvine/issues/${issueId}/metadata:corrections`),
   revertCorrection: (issueId: number, correctionId: number) =>
-    api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:revert`, { correction_id: correctionId }),
+    api.post<MetadataCorrectionsResponse>(`/v2/comicvine/issues/${issueId}/metadata:revert`, { correction_id: correctionId }),
   removeIdentity: (issueId: number) =>
-    api.delete<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity`),
+    api.delete<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity`),
 }
