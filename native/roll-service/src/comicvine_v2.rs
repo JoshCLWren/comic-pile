@@ -2138,7 +2138,11 @@ pub async fn search_series(
         return Err(unprocessable("offset out of range"));
     }
     let (limit, offset) = (query.limit, query.offset);
-    let page = offset / limit + 1;
+    // Bounded arithmetic: use checked operations to prevent overflow
+    // Maximum offset is limited to prevent integer overflow in page calculation
+    let page = offset.checked_div(limit as i64)
+        .and_then(|p| p.checked_add(1))
+        .unwrap_or(i64::MAX); // Cap at max page if overflow
     if query.q.trim().is_empty() {
         return Ok(Json(ComicVineSeriesSearchResponse {
             query: query.q,
