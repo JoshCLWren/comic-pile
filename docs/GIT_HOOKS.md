@@ -44,7 +44,7 @@ Runs automatically before each push to remote.
 **What it does:**
 - Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
 
-No tests run on push (no pytest, vitest, or UI audit). CI runs the tests.
+Product test suites do not run on push (no backend pytest, Vitest, or UI audit); CI runs the product tests. The Python lint gate still runs its static hardcoded-ID guard (`pytest tests/test_hardcoded_ids.py`).
 
 **What happens on failure:**
 - Push is aborted
