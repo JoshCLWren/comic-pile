@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 73,
-    "native_rust": 73,
+    "total_live_operations": 93,
+    "native_rust": 93,
     "python_fastapi": 0,
-    "native_rust_status": 73,
+    "native_rust_status": 93,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -1095,6 +1095,58 @@
       "verified_against": "vercel.json"
     },
     {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/readingMode.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/reading-mode",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/readingMode.ts"
+      ],
+      "method": "PUT",
+      "path": "/api/v2/reading-mode",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/readingMode.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/reading-mode/suggestion-dismissals",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/readingMode.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/reading-mode/suggestions",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "method": "POST",
       "path": "/api/v2/reading-sessions",
       "runtime": "native-rust",
@@ -1375,6 +1427,188 @@
     {
       "runtime": "native-rust",
       "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/tags",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/tags",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/tags/effective/issues/{issue_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/tags/effective/plans/{plan_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/tags/effective/threads/{thread_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/tags/effective/threads/{thread_id}/issues",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "DELETE",
+      "path": "/api/v2/tags/{tag_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/tags/{tag_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "PATCH",
+      "path": "/api/v2/tags/{tag_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/tags/{tag_id}/assignment-batches",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/tags/{tag_id}/assignments",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "DELETE",
+      "path": "/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/tags/{tag_id}/unassignment-batches",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-tags.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/tags/{tag_id}/usage",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
       "owning_issue": 4342,
       "consumers": [
         "frontend/src/services/api-threads.ts"
@@ -1439,6 +1673,32 @@
         "proof_reference": "native/roll-service/src/issue_mutation.rs",
         "measurement_status": "pending-fixture"
       },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-preferences.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/users/me/preferences",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-preferences.ts"
+      ],
+      "method": "PATCH",
+      "path": "/api/v2/users/me/preferences",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"

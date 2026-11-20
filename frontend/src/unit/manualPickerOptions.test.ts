@@ -28,6 +28,33 @@ const labelsOf = (options: Array<{ id: number; label: string }>) =>
   options.map((option) => option.label)
 
 describe('buildManualPickerOptions (#3704)', () => {
+  it('passes the exact series cover through without changing its Thread identity', () => {
+    const result = buildManualPickerOptions({
+      activeThreads: [thread({
+        id: 1,
+        title: 'Saga',
+        series_cover_image_url: 'https://example.test/saga.jpg',
+      })],
+      snoozedThreads: [thread({
+        id: 2,
+        title: 'Hellboy',
+        series_cover_image_url: 'https://example.test/hellboy.jpg',
+      })],
+    })
+    expect(result.activeOptions).toEqual([{
+      id: 1,
+      label: 'Saga (Single Issues)',
+      threadTitle: 'Saga',
+      coverImageUrl: 'https://example.test/saga.jpg',
+    }])
+    expect(result.snoozedOptions).toEqual([{
+      id: 2,
+      label: 'Hellboy (Single Issues)',
+      threadTitle: 'Hellboy',
+      coverImageUrl: 'https://example.test/hellboy.jpg',
+    }])
+  })
+
   it('keeps the quiet label when the base label is already unique', () => {
     const result = buildManualPickerOptions({
       activeThreads: [

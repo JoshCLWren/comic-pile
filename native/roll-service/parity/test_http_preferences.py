@@ -1,10 +1,10 @@
-"""Native same-path preferences and Taste Bank signals against PostgreSQL.
+"""Native preferences (v2) and same-path Taste Bank signals (v1) against PostgreSQL.
 
-The Rust handlers replace the Python handlers at the exact same
-method/path pairs (#4834):
+The Rust handlers serve preferences as a v2 resource and keep Taste Bank
+signals at the same v1 method/path pairs (#4834, Part of #4335):
 
-* ``GET /api/v1/users/me/preferences``
-* ``PATCH /api/v1/users/me/preferences``
+* ``GET /api/v2/users/me/preferences``
+* ``PATCH /api/v2/users/me/preferences``
 * ``GET /api/v1/users/me/taste-signals``
 * ``PUT /api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict``
 
@@ -37,7 +37,7 @@ from app.models import TasteSignal, User
 SECRET = "synthetic-native-preferences-secret"
 EXAMPLE = cargo_example_path("http_preferences")
 
-PREFERENCES_URI = "/api/v1/users/me/preferences"
+PREFERENCES_URI = "/api/v2/users/me/preferences"
 SIGNALS_URI = "/api/v1/users/me/taste-signals"
 # The frontend `encodeURIComponent`s the external key, so the colon arrives
 # percent-encoded and the handler must decode it back to the stored key.

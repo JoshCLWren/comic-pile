@@ -324,6 +324,8 @@ describe('CustomCBLBuilder', () => {
       { issue_id: 40002, thread_id: 9102, series_name: 'Mutant X', issue_number: '1', status: 'unread' },
       { issue_id: 40003, thread_id: 9103, series_name: 'Starman', issue_number: '1', status: 'unread' },
     ])
+    // SAFETY: a complete consumer-facing card stub for an exact confirmed owned issue.
+    fetchCards.mockResolvedValue([{ issue_id: 40001, thread_id: 9101, thread_title: 'Mutant X', issue_number: '1', cover_image_url: 'https://example.test/mutant-x.jpg', status: 'unread', mapping_state: 'confirmed', has_confirmed_identity: true } as Awaited<ReturnType<typeof issueCardsApi.fetchCards>>[number]])
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
@@ -331,6 +333,7 @@ describe('CustomCBLBuilder', () => {
     expect(await screen.findByRole('button', { name: /Mutant X #1\s*Series ID 9101/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Mutant X #1\s*Series ID 9102/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Starman #1\s*Add$/ })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: /Mutant X #1\s*Series ID 9101/ }).querySelector('[data-testid="comic-issue-cover"] img')).toHaveAttribute('src', 'https://example.test/mutant-x.jpg'))
   })
 
   it('navigates issue results with arrows and adds only the focused canonical issue with Enter', async () => {

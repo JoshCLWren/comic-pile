@@ -449,7 +449,7 @@ describe('core route request budgets', () => {
   it('authenticated shell cold-loads preferences and inbox status exactly once each', async () => {
     installAdapterRecorder()
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v1/users/me/preferences') return { theme: 'classic', user_id: 1 }
+      if (call.url === '/v2/users/me/preferences') return { theme: 'classic', user_id: 1 }
       return {}
     })
     setDefaultHttpClient(client)
@@ -457,13 +457,13 @@ describe('core route request budgets', () => {
     render(renderShell())
 
     await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v1/users/me/preferences')).toBe(true),
+      expect(calls.some((call) => call.url === '/v2/users/me/preferences')).toBe(true),
     )
     await waitFor(() => expect(adapterCalls.length).toBeGreaterThan(0))
     await drainSettledWork()
 
     expect(requestCounts(calls)).toEqual({
-      'GET /v1/users/me/preferences': 1,
+      'GET /v2/users/me/preferences': 1,
     })
     expect(requestCounts(adapterCalls)).toEqual({
       'GET /v2/identity-inbox?limit=1&offset=0': 1,

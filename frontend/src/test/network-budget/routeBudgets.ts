@@ -29,7 +29,7 @@ export const GUEST_AUTH_PROBE = budget(
 export const AUTHENTICATED_SHELL = budget(
   'GET /api/v2/auth/me x1',
   'GET /api/v2/identity-inbox?limit=1&offset=0 x1',
-  'GET /api/v1/users/me/preferences x1',
+  'GET /api/v2/users/me/preferences x1',
 )
 
 /**
