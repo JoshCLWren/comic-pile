@@ -217,7 +217,7 @@ impl<'de> Deserialize<'de> for ContinuityPlanNode {
 #[serde(deny_unknown_fields)]
 pub struct ContinuityPlanWrite {
     pub name: String,
-    #[serde(rename = "ordering_mode")]
+    #[serde(rename = "ordering_mode", default = "default_ordering_mode")]
     pub ordering_mode: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lanes: Vec<ContinuityPlanLane>,
@@ -227,6 +227,11 @@ pub struct ContinuityPlanWrite {
     pub expected_updated_at: Option<String>,
 }
 
+/// Python defaults `ContinuityPlanWrite.ordering_mode` to `informational`.
+fn default_ordering_mode() -> String {
+    "informational".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ContinuityPlanResponse {
     pub id: i32,
@@ -234,9 +239,7 @@ pub struct ContinuityPlanResponse {
     pub name: String,
     #[serde(rename = "ordering_mode")]
     pub ordering_mode: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lanes: Vec<ContinuityPlanLane>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub nodes: Vec<ContinuityPlanNode>,
     pub created_at: String,
     pub updated_at: String,
@@ -252,9 +255,7 @@ pub struct ContinuityPlanListItem {
     pub lane_count: i32,
     #[serde(rename = "step_count")]
     pub step_count: i32,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source_paths: Vec<String>,
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub source_names: serde_json::Value,
     pub updated_at: String,
 }
