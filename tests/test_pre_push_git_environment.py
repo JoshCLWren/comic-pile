@@ -72,4 +72,7 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert not gate_log.exists() or gate_log.read_text() == ""
+    # Environment checks ran (tool stubs invoked via fake lint script)
+    assert gate_log.exists(), "Environment checks did not run; gate_log was not populated"
+    # No test commands (pytest/vitest/UI audit) ran as part of lint gate
+    assert "pytest" not in gate_log.read_text(), "Test commands found in gate_log; lint gate was bypassed"
