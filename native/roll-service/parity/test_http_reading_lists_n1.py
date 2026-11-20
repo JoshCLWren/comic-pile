@@ -130,14 +130,25 @@ def _assert_measured(measurement: RouteMeasurement, method: str, path: str, stat
     assert measurement.db_nested_statements is not None, (
         "pg_stat_statements.track=all is required for separate nested measurement"
     )
-    assert_declared_budget(method, path, measurement.db_statements)
+    assert_declared_budget(
+        method,
+        path,
+        measurement.db_statements,
+        measurement.db_nested_statements,
+    )
 
 
 def _assert_fixed_growth(small: RouteMeasurement, large: RouteMeasurement) -> None:
     top_small = small.db_statements
     top_large = large.db_statements
+    nested_small = small.db_nested_statements
+    nested_large = large.db_nested_statements
     assert top_small is not None and top_large is not None
+    assert nested_small is not None and nested_large is not None
     assert top_large <= top_small + 2, f"top-level statements grew: {top_small} -> {top_large}"
+    assert nested_large <= nested_small + 2, (
+        f"nested statements grew: {nested_small} -> {nested_large}"
+    )
 
 
 def _assert_declared_growth(small: RouteMeasurement, large: RouteMeasurement) -> None:
@@ -248,7 +259,7 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
             new_ids = await _grow_threads(raw, owner_id, 5, 200)
-            for issue_id in new_ids:
+            for issue_id in new_ids[:195]:
                 await raw.execute(
                     "INSERT INTO custom_cbl_entries (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped) "
                     "VALUES ($1,$2,$3,NOW(),false,'[]','none',false)",
@@ -309,7 +320,7 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
             new_ids = await _grow_threads(raw, owner_id, 5, 200)
-            for issue_id in new_ids:
+            for issue_id in new_ids[:195]:
                 await raw.execute(
                     "INSERT INTO custom_cbl_entries (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped) "
                     "VALUES ($1,$2,$3,NOW(),false,'[]','none',false)",

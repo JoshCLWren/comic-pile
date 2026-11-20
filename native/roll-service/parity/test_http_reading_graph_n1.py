@@ -83,6 +83,11 @@ async def _grow_library(raw: asyncpg.Connection, owner_id: int, start: int = 5) 
         await _insert_owned_thread(raw, owner_id, index)
 
 
+async def _seed_base_threads(raw: asyncpg.Connection, owner_id: int, count: int = 5) -> None:
+    for index in range(count):
+        await _insert_owned_thread(raw, owner_id, index)
+
+
 async def _seed_cycle(raw: asyncpg.Connection, owner_id: int, index: int) -> int:
     _, issue_ids = await _insert_owned_thread(raw, owner_id, index)
     list_id = await raw.fetchval(
@@ -315,6 +320,7 @@ async def test_reading_graph_confirmed_repair_measures_apply_branch() -> None:
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            await _seed_base_threads(raw, owner_id)
             small_list_id = await _seed_cycle(raw, owner_id, 200)
         finally:
             await raw.close()
@@ -448,7 +454,7 @@ async def test_reading_graph_budget_rejects_injected_n_plus_one() -> None:
             await raw.close()
 
         large = await _measure_with_injected_queries(
-            url, engine, BINARY, env, GET_ROUTE, f"N+1 {issue_count} issues", int(issue_count)
+            url, engine, BINARY, env, int(issue_count)
         )
         assert large > small + 2, f"injected N+1 did not grow: {small} -> {large}"
         with pytest.raises(AssertionError, match="declared maximum"):
