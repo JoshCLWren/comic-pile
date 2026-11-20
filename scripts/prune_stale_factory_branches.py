@@ -876,7 +876,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--format", choices=("text", "json"), default="text", help="Report format")
     p.add_argument("--report-file", help="Write report output to this file")
-    p.add_argument("--all-branches", action="store_true", help="Evaluate all remote branches, not just factory/local/backup scope")
+    p.add_argument(
+        "--all-branches",
+        action="store_true",
+        help="Evaluate all remote branches, not just factory/local/backup scope",
+    )
     return p
 
 
@@ -919,7 +923,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     fetch_proc = run(["git", "-C", str(repo_root), "fetch", remote, "--prune"], check=False)
     if fetch_proc.returncode != 0:
         raise SystemExit(
-            f"error: unable to refresh remote refs: {fetch_proc.stderr.strip() or fetch_proc.stdout.strip()}"
+            f"error: unable to refresh remote refs: "
+                f"{fetch_proc.stderr.strip() or fetch_proc.stdout.strip()}"
         )
 
     branches = list_remote_branches(repo_root, remote)

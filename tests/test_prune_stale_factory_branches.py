@@ -202,7 +202,9 @@ def test_preserves_checkpoint_handoff_branch_without_incorporation_proof():
     )
     d = by_name(decisions)["factory/work-checkpoints/issue-4853/kilo-auto-free/43724877464"]
     assert not d.eligible
-    assert any("checkpoint branch requires explicit incorporated-retirement proof" in r for r in d.reasons)
+    assert any(
+        "checkpoint branch requires explicit incorporated-retirement proof" in r for r in d.reasons
+    )
 
 
 def test_preserves_main_protected_and_release_refs():
@@ -222,7 +224,8 @@ def test_preserves_main_protected_and_release_refs():
     assert not results["master"].eligible
     assert not results["release/1.2.3"].eligible
     assert not results["factory/protected-case"].eligible
-    assert "default or release ref" in results["release/1.2.3"].reasons or "protected branch" in results["release/1.2.3"].reasons
+    reasons = results["release/1.2.3"].reasons
+    assert "default or release ref" in reasons or "protected branch" in reasons
 
 
 def test_preserves_live_local_worktree_branch():
@@ -283,7 +286,9 @@ def test_closed_issue_checkpoint_branch_still_requires_retirement_proof():
     )
     d = by_name(decisions)["factory/work-checkpoints/issue-4853/kilo-auto-free/43724877464"]
     assert not d.eligible
-    assert any("checkpoint branch requires explicit incorporated-retirement proof" in r for r in d.reasons)
+    assert any(
+        "checkpoint branch requires explicit incorporated-retirement proof" in r for r in d.reasons
+    )
 
 
 def test_local_numeric_branch_resolves_issue_for_lease_check():
