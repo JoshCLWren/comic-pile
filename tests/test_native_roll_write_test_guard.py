@@ -224,7 +224,9 @@ def _http_tests_write_path(module: str, handler: str) -> bool:
             continue
         if "router(" not in source and "oneshot(" not in source:
             continue
-        prefix, *test_sections = re.split(r"(?m)^#\[tokio::test\]\s*$", source)
+        prefix, *test_sections = re.split(
+            r'(?m)^#\[tokio::test(?:\([^\]]*\))?\]\s*$', source
+        )
         helper_starts = list(re.finditer(r"(?m)^async fn ([A-Za-z0-9_]+)\s*\(", prefix))
         helpers = []
         for index, helper in enumerate(helper_starts):
