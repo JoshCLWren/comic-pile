@@ -430,15 +430,13 @@ export default function CblBrowserPage() {
 
   const hasChoices =
     Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
-  const preview = useMemo(
-    () => {
-      if (!previewQuery.data) return null
-      return hasChoices
-        ? applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
-        : previewQuery.data
-    },
-    [previewQuery.data, seriesDecisions, entryDecisions, hasChoices],
-  )
+  const preview = useMemo(() => {
+    if (!previewQuery.data) return null
+    // Always apply choices if there are any, to ensure local decisions are reflected in the preview
+    // (e.g., skipping unresolved entries should reduce unresolved_count)
+    if (!hasChoices) return previewQuery.data
+    return applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
+  }, [previewQuery.data, seriesDecisions, entryDecisions])
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
   const seriesGroups = useMemo(() => (preview ? buildCblSeriesGroups(preview) : []), [preview])
