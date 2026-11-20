@@ -299,22 +299,17 @@ def _section_has_method_and_route(section: str, method: str, route_path: str) ->
     )
 
 
-def _http_tests_write_path(module: str, handler: str) -> bool:
-    """Recognize a successful exact-method/route disposable-Postgres HTTP test."""
-    routes = [
-        (method, route_path)
-        for route_module, route_handler, method, route_path in _write_route_definitions()
-        if route_handler == handler
-        and _resolve_handler_module(route_module, route_handler) == module
-    ]
-    if not routes:
-        return False
+@lru_cache(maxsize=1)
+def _http_test_route_evidence() -> frozenset[tuple[str, str]]:
+    """Build exact-route evidence once from successful DB-backed Tokio tests."""
+    evidence: set[tuple[str, str]] = set()
     success_markers = (
         "StatusCode::OK",
         "StatusCode::CREATED",
         "StatusCode::NO_CONTENT",
         ".is_success()",
     )
+    routes = _write_route_definitions()
     for _filename, source in _http_test_sources():
         if not any(marker in source for marker in DB_TEST_MARKERS):
             continue
@@ -340,12 +335,27 @@ def _http_tests_write_path(module: str, handler: str) -> bool:
                     pending.append(helper_body)
             if not any(marker in combined for marker in success_markers):
                 continue
-            if any(
-                _section_has_method_and_route(combined, method, route_path)
-                for method, route_path in routes
-            ):
-                return True
-    return False
+            uris = _request_uris(combined)
+            methods = {
+                method
+                for method in ("POST", "PATCH", "PUT", "DELETE")
+                if f'"{method}"' in combined
+                or re.search(rf"(?<![A-Za-z0-9_]){method.lower()}\s*\(", combined)
+            }
+            for route_module, handler, method, route_path in routes:
+                if method not in methods or not any(
+                    _route_matches_request(route_path, uri) for uri in uris
+                ):
+                    continue
+                module = _resolve_handler_module(route_module, handler)
+                if module:
+                    evidence.add((module, handler))
+    return frozenset(evidence)
+
+
+def _http_tests_write_path(module: str, handler: str) -> bool:
+    """Recognize a successful exact-method/route disposable-Postgres HTTP test."""
+    return (module, handler) in _http_test_route_evidence()
 
 
 def _test_module(module: str) -> str:
