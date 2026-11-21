@@ -23,9 +23,10 @@ Usage:
   bash scripts/factory-run --models PROVIDER
 
 Options:
-  --force-slot       Override historical slot-health ranking to try registered slots.
-                     It cannot launch a worker without claimable work, and never
-                     steals a lease or bypasses quotas, task blockers or CI.
+  --force-slot       Force a registered worker attempt: override advisory slot
+                     health, queue backpressure and retry cooldowns. A real,
+                     unowned and claimable task is still required. Never bypass
+                     leases, provider quotas, hard blockers or CI/merge gates.
   --slot N           Use the one-based provider slot N, implies --force-slot.
   --target TYPE:N    Choose an existing issue or PR instead of selecting the next task.
   --no-wait          Submit and print the Actions URL without waiting for the result.
@@ -321,8 +322,8 @@ if [[ "$interactive" == true && "$explicit_selection" == false && -z "$TARGET" ]
 fi
 if [[ "$interactive" == true && "$explicit_selection" == false && "$FORCE_SLOT" == false ]]; then
   choose_index 'How should the worker slot be chosen?' \
-    'Request a registered slot now (override historical health; requires eligible work)' \
-    'Request a specific registered slot number (still requires eligible work)' \
+    'Force a registered slot onto real claimable work (override soft scheduling)' \
+    'Force a specific registered slot onto real claimable work' \
     'Use normal automatic health-ranked scheduling'
   case "$CHOSEN" in
     0) FORCE_SLOT=true ;;
@@ -335,7 +336,7 @@ if [[ "$interactive" == true && "$explicit_selection" == false && "$FORCE_SLOT" 
   esac
 fi
 
-printf '\nFactory request:\n  provider: %s\n  model: %s\n  work: %s\n  override historical slot health: %s\n' \
+printf '\nFactory request:\n  provider: %s\n  model: %s\n  work: %s\n  operator-forced work attempt: %s\n' \
   "$PROVIDER" "$MODEL" "${TARGET:-next eligible real task}" "$FORCE_SLOT"
 [[ -z "$SLOT_INDEX" ]] || printf '  slot number: %s\n' "$SLOT_INDEX"
 if [[ "$interactive" == true && "$explicit_selection" == false ]]; then
