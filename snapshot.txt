@@ -1,39 +1,39 @@
-utc: 2026-11-21T08:54:02Z
-uptime: 601.35s load: 0.29 0.39 0.27
+utc: 2026-11-21T08:54:19Z
+uptime: 617.80s load: 0.22 0.37 0.27
 processes: 169
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1675       11079          50        3610       14308
+Mem:           15983        1691       11061          50        3612       14291
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   60G   85G  42% /
 /dev/root       145G   60G   85G  42% /
 --- top rss (KiB, name only)
-837112 kilo
-154584 Runner.Worker
+846532 kilo
+154616 Runner.Worker
 139344 provjobd3432757
-111784 Runner.Listener
+113104 Runner.Listener
 82860 dockerd
 56176 php-fpm8.5
-46696 containerd
-44388 ExtHandler
+46688 containerd
+44484 ExtHandler
 37008 Daemon
 29828 networkd-dispat
 21404 php-fpm8.5
 21404 php-fpm8.5
-17652 systemd-journal
+17660 systemd-journal
 16852 systemd
 15736 hosted-compute-
 --- top cpu (name only)
- 9.9 kilo
+ 9.8 kilo
  3.6 provjobd3432757
  1.3 Runner.Worker
  0.4 systemd
  0.2 Runner.Listener
  0.1 hv_kvp_daemon
- 0.1 pr/ttyS0
  0.1 ExtHandler
+ 0.1 pr/ttyS0
 --- kernel oom/kill
 --- shutdown/session signals
 2026-11-21T08:44:14+00:00 runnervm0hi8g hosted-compute-agent[1959]: {"level":"INFO","ts":1795250654.3569195,"logger":"hosted-compute-agent","msg":"Reading metadata to detect shutdown tag..."}
