@@ -331,6 +331,31 @@ async fn series_cover_recovers_thumbnail_from_normalized_provider_payload() {
         thread_cover(&body, "Thumbnail Cover"),
         Some("https://cv.example/thumb.jpg".to_owned())
     );
+
+    // Thread detail reads the same persisted artwork through its bounded card
+    // batch, not through the Queue's series-cover projection.
+    let response = router(ctx.state.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v2/issues/cards")
+                .header(header::AUTHORIZATION, format!("Bearer {}", ctx.token))
+                .header("x-csrf-token", &ctx.csrf)
+                .header(header::COOKIE, format!("csrf_token={}", ctx.csrf))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({"issue_ids": [issue]}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body["items"][0]["cover_image_url"],
+        json!("https://cv.example/thumb.jpg")
+    );
 }
 
 #[tokio::test]
