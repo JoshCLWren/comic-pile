@@ -15945,8 +15945,8 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Projected reading graph would cycle; nothing was changed */
-            409: {
+            /** @description Reading constraint cycle with a named repair path */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16099,7 +16099,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid Issue or checkpoint */
+            /** @description Invalid Issue/checkpoint or a Reading constraint cycle with a named repair path */
             422: {
                 headers: {
                     [name: string]: unknown;
