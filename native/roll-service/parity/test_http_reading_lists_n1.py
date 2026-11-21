@@ -323,14 +323,17 @@ async def test_delete_reading_list_statements_bounded() -> None:
         _, _, after = await db_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
 
-        large_id = await _seed_one()
-        # grow unrelated data
+        # The large target itself must carry many entries: growing only
+        # unrelated lists would let a per-entry deletion regression pass.
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            large_issue_ids = []
             for i in range(20, 120):
                 _, ids = await _insert_owned_thread(raw, owner_id, i)
-                await _insert_list(raw, owner_id, f"X-{i}", [ids[0]])
+                large_issue_ids.append(ids[0])
+            large_id = await _insert_list(raw, owner_id, "Large-target", large_issue_ids)
+            assert len(large_issue_ids) == 100
         finally:
             await raw.close()
 
@@ -475,5 +478,111 @@ async def test_update_reading_list_statements_respect_budget() -> None:
 
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_injected_extra_query_is_rejected_by_declared_budget() -> None:
+    """A deliberately added service-role query must fail the route budget check."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rlrej_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            db.add(User(username=username))
+            await db.commit()
+        token = _token(username, jti=f"jti-{uuid4().hex}")
+        env = _run_env(token, "GET", "/api/v2/reading-lists")
+
+        _, _, before = await db_counters(engine)
+        async with no_nested_statements(engine):
+            response, _, _, _ = await run_rust_example(BINARY, env)
+        assert response.get("status") == 200
+        _, _, after = await db_counters(engine)
+        assert before is not None and after is not None
+        route_delta = after - before
+        assert_declared_budget("GET", "/api/v2/reading-lists", route_delta)
+
+        # Inject extra queries as the same isolated route role inside the
+        # measured window. Ten is more than any reading-route max, so the
+        # inflated count must be rejected by assert_declared_budget.
+        connection = await asyncpg.connect(url)
+        try:
+            for _ in range(10):
+                await connection.execute("SELECT 1")
+            _, _, after_extra = await db_counters(engine)
+        finally:
+            await connection.close()
+        assert after_extra is not None
+        inflated = after_extra - before
+        assert inflated == route_delta + 10
+        with pytest.raises(AssertionError, match="declared maximum"):
+            assert_declared_budget("GET", "/api/v2/reading-lists", inflated)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_injected_per_row_query_is_rejected_by_growth_contract() -> None:
+    """A deliberately introduced per-row query must fail the small-vs-large check."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rln1rej_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            db.add(User(username=username))
+            await db.commit()
+        token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            for i in range(5):
+                _, ids = await _insert_owned_thread(raw, owner_id, i)
+                await _insert_list(raw, owner_id, f"Small-{i}", [ids[0]])
+        finally:
+            await raw.close()
+
+        env = _run_env(token, "GET", "/api/v2/reading-lists")
+        _, _, before = await db_counters(engine)
+        async with no_nested_statements(engine):
+            small, _, _, _ = await run_rust_example(BINARY, env)
+        assert small.get("status") == 200
+        _, _, after = await db_counters(engine)
+        assert before is not None and after is not None
+        small_delta = after - before
+
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            for i in range(5, 200):
+                _, ids = await _insert_owned_thread(raw, owner_id, i)
+                await _insert_list(raw, owner_id, f"Large-{i}", [ids[0]])
+        finally:
+            await raw.close()
+
+        # Simulate an N+1 regression: one extra query per added list, injected
+        # as the route role inside the measured window for the large fixture.
+        _, _, before2 = await db_counters(engine)
+        connection = await asyncpg.connect(url)
+        try:
+            for _ in range(195):
+                await connection.execute("SELECT 1")
+            async with no_nested_statements(engine):
+                large, _, _, _ = await run_rust_example(BINARY, env)
+        finally:
+            await connection.close()
+        assert large.get("status") == 200
+        _, _, after2 = await db_counters(engine)
+        assert after2 is not None
+        large_delta = after2 - before2
+
+        assert small_delta is not None and large_delta is not None
+        assert large_delta > small_delta + 2
+        with pytest.raises(AssertionError, match="statement count grew"):
+            assert large_delta <= small_delta + 2, (
+                f"statement count grew: {small_delta} -> {large_delta}"
+            )
     finally:
         await engine.dispose()
