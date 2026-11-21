@@ -1,4 +1,5 @@
 import type { CBLAdoptionPreview, CBLAdoptionPreviewEntry } from '../services/api-cbl-sources'
+import type { ContinuityPlan } from '../services/api-continuity-plans'
 
 /**
  * Include state of one Comic Vine volume group inside the CBL checklist.
