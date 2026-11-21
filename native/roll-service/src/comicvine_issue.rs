@@ -407,9 +407,15 @@ fn image(metadata: &Value) -> Option<String> {
     as_string(&metadata["image_url"])
         .or_else(|| as_string(&metadata["primary_image"]))
         .or_else(|| {
-            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
-                .iter()
-                .find_map(|key| as_string(&metadata["image"][*key]))
+            [
+                "original_url",
+                "super_url",
+                "medium_url",
+                "small_url",
+                "thumb_url",
+            ]
+            .iter()
+            .find_map(|key| as_string(&metadata["image"][*key]))
         })
 }
 
@@ -699,6 +705,25 @@ fn issue_intelligence_docs() {}
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn image_falls_back_to_thumb_url_when_no_larger_cover_exists() {
+        // Issue #5624: a mapped ComicVine issue whose provider payload only
+        // carries image.thumb_url must still expose a cover on the issue card.
+        let metadata = json!({"image": {"thumb_url": "https://example.com/t.jpg"}});
+        assert_eq!(image(&metadata), Some("https://example.com/t.jpg".into()));
+        // Higher-priority nested keys take precedence over thumb_url.
+        let metadata = json!({"image": {
+            "small_url": "https://example.com/small.jpg",
+            "thumb_url": "https://example.com/t.jpg"
+        }});
+        assert_eq!(
+            image(&metadata),
+            Some("https://example.com/small.jpg".into())
+        );
+        assert_eq!(image(&json!({"image": {}})), None);
+    }
+
     #[test]
     fn creator_merging_preserves_provider_roles_and_anonymous_rows() {
         let metadata = json!({"creator_credits":[

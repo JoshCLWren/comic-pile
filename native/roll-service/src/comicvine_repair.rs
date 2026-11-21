@@ -162,10 +162,16 @@ pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
         .get("image")
         .and_then(Value::as_object)
         .and_then(|image| {
-            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
-                .iter()
-                .filter_map(|key| image.get(*key).and_then(Value::as_str))
-                .find(|value| !value.is_empty())
+            [
+                "original_url",
+                "super_url",
+                "medium_url",
+                "small_url",
+                "thumb_url",
+            ]
+            .iter()
+            .filter_map(|key| image.get(*key).and_then(Value::as_str))
+            .find(|value| !value.is_empty())
         });
     json!({
         "name": result.get("name"),
@@ -893,6 +899,40 @@ async fn drain_authorized(
 mod tests {
     use super::*;
     use deadpool_postgres::Object;
+
+    #[test]
+    fn roster_normalization_persists_thumb_url_as_primary_image() {
+        // Issue #5624: a roster/commit row whose provider image only exposes
+        // thumb_url must persist a primary_image so mapped issues carry a
+        // cover through to thread and queue indicators.
+        let result = json!({
+            "name": "Detective Comics #5",
+            "issue_number": "5",
+            "image": {
+                "original_url": null,
+                "super_url": "",
+                "medium_url": null,
+                "small_url": " ",
+                "thumb_url": "https://example.com/thumb.jpg"
+            }
+        });
+        let normalized = normalize_roster_issue_metadata(&result);
+        assert_eq!(
+            normalized["primary_image"],
+            json!("https://example.com/thumb.jpg")
+        );
+        // A higher-priority nested key still wins over thumb_url.
+        let result = json!({
+            "image": {
+                "small_url": "https://example.com/small.jpg",
+                "thumb_url": "https://example.com/thumb.jpg"
+            }
+        });
+        assert_eq!(
+            normalize_roster_issue_metadata(&result)["primary_image"],
+            json!("https://example.com/small.jpg")
+        );
+    }
 
     async fn seed_identity(state: &AppState) -> i32 {
         let connection = db::checkout(state).await.expect("seed connection");
