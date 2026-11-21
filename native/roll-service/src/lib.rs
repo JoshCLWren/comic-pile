@@ -1136,14 +1136,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(dismiss_pending::dismiss_pending),
         )
         .route(
-            "/api/v1/roll/dismiss-pending",
-            post(dismiss_pending::dismiss_pending),
-        )
-        .route(
-            "/api/roll/dismiss-pending",
-            post(dismiss_pending::dismiss_pending),
-        )
-        .route(
             "/api/v2/users/me/preferences",
             get(preferences::get_user_preferences),
         )
