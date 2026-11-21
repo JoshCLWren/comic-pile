@@ -149,6 +149,10 @@ if should_run_python; then
         python3 -m compileall "${PYTHON_SOURCE_PATHS[@]}" -q
     fi
 
+    echo ""
+    echo "Running CI-parity Python lint and type check..."
+    ruff check .
+    ty check --error-on-warning
 
     echo ""
     echo "Checking for type/linter ignores in staged files..."
