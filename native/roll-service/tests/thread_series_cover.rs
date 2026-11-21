@@ -308,6 +308,32 @@ async fn series_cover_falls_back_to_first_confirmed_issue() {
 }
 
 #[tokio::test]
+async fn series_cover_recovers_thumbnail_from_normalized_provider_payload() {
+    let ctx = setup("sc-thumbnail").await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Thumbnail Cover", "active", 1).await;
+    let issue = seed_issue(&ctx, thread_id, "5", 1, "unread").await;
+    set_frontier(&ctx, thread_id, Some(issue)).await;
+    // Production deep hydration stores the complete provider row and a null
+    // primary_image when larger image fields are absent (#5624).
+    seed_confirmed_metadata(
+        &ctx,
+        issue,
+        "thumbnail-only-cover-id",
+        json!({"primary_image": null, "raw_provider_payload": {
+            "image": {"small_url": "", "thumb_url": "https://cv.example/thumb.jpg"}
+        }}),
+    )
+    .await;
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        thread_cover(&body, "Thumbnail Cover"),
+        Some("https://cv.example/thumb.jpg".to_owned())
+    );
+}
+
+#[tokio::test]
 async fn series_cover_uses_the_issue_card_mapping_preference() {
     // Two confirmed ComicVine mappings on one issue, both carrying covers. The
     // issue card picks the higher-confidence mapping, so the series cover must
