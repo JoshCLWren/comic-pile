@@ -733,6 +733,11 @@ pub async fn update_reading_list(
     .await
     .map_err(db::query_error)?;
 
+    let mut positions = Vec::with_capacity(request.issue_ids.len());
+    let mut entry_checkpoints = Vec::with_capacity(request.issue_ids.len());
+    let mut checkpoint_targets = Vec::with_capacity(request.issue_ids.len());
+    let mut gates = Vec::with_capacity(request.issue_ids.len());
+    let mut skipped_entries = Vec::with_capacity(request.issue_ids.len());
     for (position, issue_id) in request.issue_ids.iter().enumerate() {
         let old = old_by_issue.get(issue_id);
         let intent = request
@@ -785,21 +790,39 @@ pub async fn update_reading_list(
                 "custom_cbl_invalid_checkpoint_targets".to_string(),
             ));
         }
-        let targets_json = serde_json::to_string(&targets).map_err(|e| {
+        positions.push(position as i32);
+        entry_checkpoints.push(!targets.is_empty());
+        checkpoint_targets.push(serde_json::to_string(&targets).map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
                 "preserved underlying error before mapping"
             );
             ApiError::Internal("Invalid checkpoint".into())
-        })?;
-        tx.execute(
-            "INSERT INTO custom_cbl_entries
-             (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[&list_id, issue_id, &(position as i32), &(!targets.is_empty()),
-              &targets_json, &gate, &skipped],
-        ).await.map_err(db::query_error)?;
+        })?);
+        gates.push(gate.to_string());
+        skipped_entries.push(skipped);
     }
+    tx.execute(
+        "INSERT INTO custom_cbl_entries
+           (list_id, issue_id, position, created_at, is_checkpoint,
+            checkpoint_target_issue_ids, gate, skipped)
+         SELECT $1, issue_id, position, NOW(), is_checkpoint,
+                checkpoint_target_issue_ids::text::json, gate, skipped
+         FROM UNNEST(
+             $2::int[], $3::int[], $4::bool[], $5::text[], $6::text[], $7::bool[]
+         ) AS entry(issue_id, position, is_checkpoint, checkpoint_target_issue_ids, gate, skipped)",
+        &[
+            &list_id,
+            &request.issue_ids,
+            &positions,
+            &entry_checkpoints,
+            &checkpoint_targets,
+            &gates,
+            &skipped_entries,
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
 
     graph_preflight(&tx, user).await?;
     let entries = load_entries(&tx, list_id).await?;
