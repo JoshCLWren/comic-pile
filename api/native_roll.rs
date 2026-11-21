@@ -243,26 +243,6 @@ fn app() -> Router {
             "/api/v2/identity-inbox/{mapping_id}/skips",
             post(native_dispatch),
         )
-        // v1 identity-inbox aliases kept for Vercel rewrite parity.
-        .route("/api/v1/identity-inbox", get(native_dispatch))
-        .route("/api/v1/identity-inbox/search/issues", get(native_dispatch))
-        .route("/api/v1/identity-inbox/{mapping_id}", get(native_dispatch))
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/confirm",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/defer",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/reject",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/skip",
-            post(native_dispatch),
-        )
         .route(
             "/api/v2/maintenance/comicvine-metadata-repairs",
             get(native_dispatch),
@@ -661,8 +641,6 @@ fn app() -> Router {
             "/api/v2/tags/{tag_id}/unassignment-batches",
             post(native_dispatch),
         )
-        .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
-        .route("/api/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/roll/override", post(native_dispatch))
         .route(

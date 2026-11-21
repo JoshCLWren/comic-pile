@@ -1008,32 +1008,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/identity-inbox/{mapping_id}/skips",
             post(identity_inbox::skip),
         )
-        // v1 identity-inbox aliases kept for Vercel rewrite parity.
-        .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
-        .route(
-            "/api/v1/identity-inbox/search/issues",
-            get(identity_inbox::search_issues),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}",
-            get(identity_inbox::get_inbox_item),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/confirm",
-            post(identity_inbox::confirm),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/defer",
-            post(identity_inbox::defer),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/reject",
-            post(identity_inbox::reject),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/skip",
-            post(identity_inbox::skip),
-        )
         // Issue Identity / CBL Adoption family (#4843).
         .route(
             "/api/v1/issue-identity/cbl-sources",
@@ -1156,14 +1130,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/dependencies",
             get(dependencies::get_thread_dependencies),
-        )
-        .route(
-            "/api/v1/roll/dismiss-pending",
-            post(dismiss_pending::dismiss_pending),
-        )
-        .route(
-            "/api/roll/dismiss-pending",
-            post(dismiss_pending::dismiss_pending),
         )
         .route(
             "/api/v2/roll/dismiss-pending",

@@ -100,20 +100,6 @@ def _lib_source() -> str:
     return LIB_SOURCE.read_text(encoding="utf-8")
 
 
-def _resolve_bare_handler(handler: str) -> str:
-    """Resolve a bare handler name to its declaring service module."""
-    pattern = re.compile(
-        rf"^\s*pub\s+(?:async\s+)?fn\s+{re.escape(handler)}\b",
-        re.MULTILINE,
-    )
-    for path in sorted(SERVICE_SOURCE.glob("*.rs")):
-        if path.name == "lib.rs":
-            continue
-        if pattern.search(path.read_text(encoding="utf-8")):
-            return path.stem
-    raise AssertionError(f"Could not resolve bare handler {handler!r} to a module")
-
-
 def _route_matches() -> list[tuple[str, str]]:
     """Return every parsed mutating HTTP handler occurrence.
 
@@ -123,8 +109,6 @@ def _route_matches() -> list[tuple[str, str]]:
     matches: list[tuple[str, str]] = []
     for match in WRITE_ROUTE_RE.finditer(_lib_source()):
         module, _, handler = match.group("path").rpartition("::")
-        if not module:
-            module = _resolve_bare_handler(handler)
         matches.append((module, handler))
     return matches
 
@@ -261,19 +245,6 @@ def _baseline_allowed() -> set[str]:
     return {str(name) for name in allowed}
 
 
-def _baseline_handlers() -> dict[tuple[str, str], str]:
-    """Return handler-level exemptions for modules with partial coverage."""
-    payload = json.loads(BASELINE.read_text(encoding="utf-8"))
-    handlers = payload.get("allowed_handlers", {})
-    assert isinstance(handlers, dict)
-    parsed: dict[tuple[str, str], str] = {}
-    for key, reason in handlers.items():
-        module, _, handler = str(key).rpartition("::")
-        assert module and handler, f"Invalid allowed_handlers key: {key!r}"
-        parsed[(module, handler)] = str(reason)
-    return parsed
-
-
 def test_router_parser_sees_every_post_call() -> None:
     """A new route syntax must fail loudly instead of silently losing coverage."""
     parsed = _route_matches()
@@ -293,7 +264,6 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
     """Fail when a mounted mutation lacks a DB-backed write-path test."""
     mounted = _mounted_post_routes()
     baseline = _baseline_modules()
-    handler_baseline = _baseline_handlers()
 
     assert mounted, "router parse found no write routes; update the guard parser"
 
@@ -303,7 +273,6 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
         if (module, handler) not in READ_ONLY_POST_HANDLERS
         and not _tests_write_path(module, handler)
         and module not in baseline
-        and (module, handler) not in handler_baseline
     )
     assert missing == [], (
         "Native Rust mutation handlers without a disposable-Postgres write-path "
@@ -311,30 +280,20 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
         "persist_<handler> writer, not just auth/request-shape/read helpers."
     )
 
-    stale_modules = sorted(set(baseline) - {module for module, _handler in mounted})
-    stale_handlers = sorted(
-        f"{module}::{handler}"
-        for module, handler in handler_baseline
-        if (module, handler) not in mounted
-    )
-    assert stale_modules == [] and stale_handlers == [], (
+    stale = sorted(set(baseline) - {module for module, _handler in mounted})
+    assert stale == [], (
         "Baseline entries no longer mounted on POST routes; remove them: "
-        f"modules={stale_modules}, handlers={stale_handlers}"
+        f"{stale}"
     )
 
-    now_tested_modules = sorted(
+    now_tested = sorted(
         module
         for module, handler in mounted
         if _tests_write_path(module, handler) and module in baseline
     )
-    now_tested_handlers = sorted(
-        f"{module}::{handler}"
-        for module, handler in mounted
-        if _tests_write_path(module, handler) and (module, handler) in handler_baseline
-    )
-    assert now_tested_modules == [] and now_tested_handlers == [], (
-        "These baseline entries now have a write-path test; remove them from "
-        f"{BASELINE.name}: modules={now_tested_modules}, handlers={now_tested_handlers}"
+    assert now_tested == [], (
+        "These modules now have a write-path test; remove them from "
+        f"{BASELINE.name}: {now_tested}"
     )
 
 
@@ -389,7 +348,6 @@ def test_baseline_is_frozen_and_documented() -> None:
     """Exemptions must be enumerated explicitly and carry a reason."""
     modules = _baseline_modules()
     allowed = _baseline_allowed()
-    handlers = _baseline_handlers()
 
     assert set(modules) == allowed, (
         "Baseline modules and allowed_modules must match exactly; adding a new "
@@ -397,11 +355,6 @@ def test_baseline_is_frozen_and_documented() -> None:
     )
     for module, reason in modules.items():
         assert reason.strip(), f"{module} needs a baseline reason"
-    for (module, handler), reason in handlers.items():
-        assert module not in modules, (
-            f"{module}::{handler} is handler-exempt but {module} is already module-exempt"
-        )
-        assert reason.strip(), f"{module}::{handler} needs a baseline reason"
 
 
 def test_patch_write_is_guarded_and_proven_by_delegated_database_test() -> None:

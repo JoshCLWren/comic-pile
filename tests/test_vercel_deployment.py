@@ -116,17 +116,13 @@ def _assert_route_priorities(routes: list[dict[str, object]]) -> None:
         index for index, route in enumerate(routes)
         if route.get("dest") == "/api/index.py"
     ]
-    if python_indices:
-        assert all(index < min(python_indices) for index in native_indices), (
-            "Native routes must precede explicit Python exceptions"
-        )
-        assert all(index < api_fallback for index in python_indices), (
-            "Python exceptions must precede Rust API catch-all"
-        )
-    else:
-        assert all(index < api_fallback for index in native_indices), (
-            "Native routes must precede Rust API catch-all"
-        )
+    assert python_indices, "Expected explicit Python legacy allowlist"
+    assert all(index < min(python_indices) for index in native_indices), (
+        "Native routes must precede explicit Python exceptions"
+    )
+    assert all(index < api_fallback for index in python_indices), (
+        "Python exceptions must precede Rust API catch-all"
+    )
 
     # Vercel evaluates rewrites in order. Duplicate native method/path rewrites
     # hide whichever entry appears second and must not silently pass this guard.
@@ -275,8 +271,7 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         "src": "/api(?:/.*)?",
         "dest": "/api/native_roll.rs",
     }
-    if any(route.get("dest") == "/api/index.py" for route in routes):
-        assert any(route.get("dest") == "/api/index.py" for route in routes)
+    assert any(route.get("dest") == "/api/index.py" for route in routes)
     assert _route(routes, "^/(?:openapi\\.json|docs|redoc|health)$") == {
         "src": "^/(?:openapi\\.json|docs|redoc|health)$",
         "status": 404,
@@ -297,11 +292,10 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
 def test_unrelated_native_route_insertion_keeps_deployment_guards_stable() -> None:
     """Adding a new Rust endpoint cannot shift unrelated route assertions."""
     routes = _routes(_load_vercel_config())
-    # Insert explicit Rust routes ahead of Python exceptions when present,
-    # otherwise ahead of the Rust catch-all.
+    # Insert explicit Rust routes ahead of the generated Python exception
+    # block; Rust's catch-all is intentionally after those exceptions.
     insertion = next(
-        (i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"),
-        _route_index(routes, src="/api(?:/.*)?"),
+        i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"
     )
     expanded = [
         *routes[:insertion],
@@ -322,11 +316,10 @@ def test_unrelated_native_route_insertion_keeps_deployment_guards_stable() -> No
 def test_duplicate_native_method_and_path_rewrite_fails(methods: tuple[str, ...]) -> None:
     """Reject a native rewrite whose method and source overlap an existing one."""
     routes = _routes(_load_vercel_config())
-    # Insert explicit Rust routes ahead of Python exceptions when present,
-    # otherwise ahead of the Rust catch-all.
+    # Insert explicit Rust routes ahead of the generated Python exception
+    # block; Rust's catch-all is intentionally after those exceptions.
     insertion = next(
-        (i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"),
-        _route_index(routes, src="/api(?:/.*)?"),
+        i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"
     )
     duplicate = {
         "src": "/api/v2/auth/register",
@@ -341,11 +334,10 @@ def test_duplicate_native_method_and_path_rewrite_fails(methods: tuple[str, ...]
 def test_disjoint_methods_can_use_same_native_source() -> None:
     """Two handlers sharing a path but not its HTTP method are not duplicates."""
     routes = _routes(_load_vercel_config())
-    # Insert explicit Rust routes ahead of Python exceptions when present,
-    # otherwise ahead of the Rust catch-all.
+    # Insert explicit Rust routes ahead of the generated Python exception
+    # block; Rust's catch-all is intentionally after those exceptions.
     insertion = next(
-        (i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"),
-        _route_index(routes, src="/api(?:/.*)?"),
+        i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"
     )
     distinct_method = {
         "src": "/api/v2/auth/register",
@@ -357,13 +349,11 @@ def test_disjoint_methods_can_use_same_native_source() -> None:
 
 
 def test_rust_default_cannot_shadow_explicit_python_routes() -> None:
-    """Moving the Rust API fallback ahead of explicit routes fails."""
+    """Moving the Rust API fallback ahead of Python exceptions fails."""
     routes = _routes(_load_vercel_config()).copy()
     fallback = routes.pop(_route_index(routes, src="/api(?:/.*)?"))
     routes.insert(0, fallback)
-    has_python = any(route.get("dest") == "/api/index.py" for route in routes)
-    pattern = "Python exceptions must precede" if has_python else "Native routes must precede Rust API catch-all"
-    with pytest.raises(AssertionError, match=pattern):
+    with pytest.raises(AssertionError, match="Python exceptions must precede"):
         _assert_route_priorities(routes)
 
 
