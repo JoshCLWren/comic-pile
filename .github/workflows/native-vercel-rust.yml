@@ -1,10 +1,30 @@
 name: Native Vercel Rust
 
 on:
+  # Native Rust tests are about application/runtime changes, not the factory
+  # scheduler, AI provider catalog or CLI plumbing.
   pull_request:
+    paths: &native_inputs
+      - 'native/**'
+      - 'crates/**'
+      - 'api/**'
+      - 'migrations/**'
+      - 'docs/api/**'
+      - 'tests/fixtures/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'build.rs'
+      - 'build.sh'
+      - 'rust-toolchain.toml'
+      - 'check-rust-workspace-lock.mjs'
+      - 'vercel.json'
+      - '.vercelignore'
+      - 'scripts/generate_*.mjs'
+      - 'scripts/check_*.mjs'
+      - '.github/workflows/native-vercel-rust.yml'
   push:
-    branches:
-      - main
+    branches: [main]
+    paths: *native_inputs
 
 permissions:
   contents: read
