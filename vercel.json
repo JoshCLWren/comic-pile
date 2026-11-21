@@ -18,13 +18,6 @@
   },
   "builds": [
     {
-      "src": "api/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "excludeFiles": "{target/**,native/**/target/**}"
-      }
-    },
-    {
       "src": "api/native_roll.rs",
       "use": "@vercel/rust"
     },
