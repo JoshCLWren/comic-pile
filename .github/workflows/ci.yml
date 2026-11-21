@@ -55,7 +55,15 @@ jobs:
           fi
           git fetch --no-tags origin "$BASE_SHA" "$HEAD_SHA"
           git diff --name-only -z "$BASE_SHA" "$HEAD_SHA" > "$changed"
-          selected="$(python3 scripts/factory_ci_scope.py "$changed")"
+          # Classification policy MUST come from the trusted base, not the PR.
+          # Otherwise a PR could modify this script to report itself as fast.
+          trusted="$RUNNER_TEMP/trusted-factory-ci-scope.py"
+          if ! git show "$BASE_SHA:scripts/factory_ci_scope.py" > "$trusted"; then
+            echo 'fast_only=false' >> "$GITHUB_OUTPUT"
+            echo 'Full CI: trusted base has no approved factory scope classifier'
+            exit 0
+          fi
+          selected="$(python3 "$trusted" "$changed")"
           echo "fast_only=$selected" >> "$GITHUB_OUTPUT"
           echo "Factory-only path scope: $selected"
 
