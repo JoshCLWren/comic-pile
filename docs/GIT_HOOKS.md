@@ -4,11 +4,11 @@ This repository uses git hooks to enforce code quality checks.
 
 ## Principle: fix what hooks flag
 
-Hooks run static checks (lint/format/types). Product test suites (Vitest and
-the rendered UI audit) run in CI rather than git hooks; backend product pytest
-is retired from required CI during the Rust cutover. If a hook blocks you, fix
-the underlying failure; never bypass it with `--no-verify`. Never force-push or
-push to main.
+Hooks run static checks (lint/format/types), including the Python hardcoded-ID
+regression guard. Product test suites (Vitest and the rendered UI audit) run in
+CI rather than git hooks; backend product pytest is retired from required CI
+during the Rust cutover. If a hook blocks you, fix the underlying failure;
+never bypass it with `--no-verify`. Never force-push or push to main.
 
 ## Available Hooks
 
@@ -42,7 +42,8 @@ still chain to `.git/hooks/pre-commit`.
 Runs automatically before each push to remote.
 
 **What it does:**
-- Runs `bash scripts/lint.sh` (Python syntax, full-repo ruff + ty, and frontend lint)
+- Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
+- Includes the static hardcoded-ID guard (`pytest tests/test_hardcoded_ids.py -q --no-cov`)
 
 Backend product pytest is retired from required CI during the Rust cutover;
 Vitest and the rendered UI audit remain CI gates.

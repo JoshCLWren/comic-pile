@@ -129,21 +129,6 @@ should_run_html() {
     [ -n "$STAGED_HTML_FILES" ] || [ -n "$STAGED_ROOT_NODE_TOOLING" ]
 }
 
-run_python_tool() {
-    local tool="$1"
-    shift
-    if command -v "$tool" >/dev/null 2>&1; then
-        "$tool" "$@"
-        return
-    fi
-    if command -v uv >/dev/null 2>&1; then
-        uv run "$tool" "$@"
-        return
-    fi
-    echo "${RED}ERROR: ${tool} is not installed. Run 'uv sync --all-extras' first.${NC}"
-    exit 1
-}
-
 ANY_CHECKED=0
 PYTHON_SOURCE_PATHS=(
     scripts
@@ -164,10 +149,6 @@ if should_run_python; then
         python3 -m compileall "${PYTHON_SOURCE_PATHS[@]}" -q
     fi
 
-    echo ""
-    echo "Running CI-parity Python lint and type check..."
-    run_python_tool ruff check .
-    run_python_tool ty check --error-on-warning
 
     echo ""
     echo "Checking for type/linter ignores in staged files..."

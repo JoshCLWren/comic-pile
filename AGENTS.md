@@ -131,7 +131,7 @@ If a test is failing:
 - **Update documentation** when you find gaps or outdated information
 
 
-## MANDATORY: Full-repo ruff and ty before every Python push
+## MANDATORY: Full-repo ruff, ty, and hardcoded-ID guard before every Python push
 
 CI jobs `python-lint` and `python-typecheck` run exactly:
 
@@ -140,7 +140,7 @@ ruff check .
 ty check --error-on-warning
 ```
 
-**Path-filtered ruff or ty is not a valid CI substitute.** Those two commands, with no path arguments, are the required lint/type pair. `bash scripts/lint.sh` runs the same pair as part of the local hook gate.
+**Path-filtered ruff or ty is not a valid CI substitute.** Those two commands, with no path arguments, are the required lint/type pair. `bash scripts/check-python-ci-lint.sh` and `make python-ci-lint` run that pair **plus** `pytest tests/test_hardcoded_ids.py` (shrink-only guard against new hardcoded primary-key literals). Prefer the script as the local push gate.
 
 **Forbidden as a push gate:**
 - `ruff check` or `ty check` limited to a file list
@@ -150,9 +150,9 @@ ty check --error-on-warning
 
 **Required:**
 1. Before the first Python commit of a session, run `bash scripts/install-git-hooks.sh` so Cursor's remapped `core.hooksPath` can still chain to `.git/hooks/pre-commit`.
-2. After the last Python edit, run `ruff check .` and `ty check --error-on-warning` against the whole repo.
+2. After the last Python edit, run `bash scripts/check-python-ci-lint.sh` against the whole repo.
 3. Re-run after every later Python edit. A green run is invalid the moment sources change.
-4. Fix every ruff and ty finding locally. Do not use CI to discover them.
+4. Fix every ruff, ty, and hardcoded-ID finding locally. Do not use CI to discover them.
 
 ## CORE PRINCIPLE: PR FEEDBACK TASKS ARE NOT DONE UNTIL PUSHED
 
@@ -173,11 +173,12 @@ Run only targeted tests locally: select the test files or cases covering the cha
 including focused regression tests for bugs and focused Chromium tests for browser behavior.
 Leave full backend/frontend suites to CI. The Python API is frozen during the Rust cutover, so
 backend pytest no longer gates pushes or merge to main; the pre-push hook runs
-`scripts/lint.sh`, while frontend unit tests and the UI audit run in CI. Python coverage
-thresholds are retired during the Rust cutover; frontend and Rust gates remain authoritative.
-Do not run bare `pytest`, `make test`, `make pytest`, `pnpm test`, or `pnpm run test:coverage`
-locally unless Josh explicitly requests a full local run. A CI failure calls for targeted local
-reproduction and repair, not a full local suite rerun.
+`scripts/lint.sh` (including the static hardcoded-ID guard), while frontend unit tests and the
+UI audit run in CI. Python coverage thresholds are retired during the Rust
+cutover; frontend and Rust gates remain authoritative. Do not run bare `pytest`,
+`make test`, `make pytest`, `pnpm test`, or `pnpm run test:coverage` locally unless Josh explicitly
+requests a full local run. A CI failure calls for targeted local reproduction and repair, not a
+full local suite rerun.
 
 This rule overrides full-local-suite requirements elsewhere in repository guidance and skills.
 It does not waive whole-repo Ruff/ty, frontend lint/typecheck/build, test fixes, or CI gates.
@@ -192,8 +193,9 @@ For autonomous factory work, [docs/AUTONOMOUS_FACTORY_POLICY.md](docs/AUTONOMOUS
 Before pushing Python changes from a normal local checkout:
 1. Run `ruff check .` with no path arguments. Path-filtered ruff is not a valid CI substitute.
 2. Run `ty check --error-on-warning` with no path arguments. CI treats ty **warnings as failures**.
-3. Run the focused pytest files that cover the change.
-4. Fix every ruff, ty, and pytest failure before pushing.
+3. Prefer `bash scripts/check-python-ci-lint.sh` so ruff, ty, and the hardcoded-ID guard run as one gate.
+4. Run the focused pytest files that cover the change.
+5. Fix every ruff, ty, hardcoded-ID, and pytest failure before pushing.
 
 Before pushing frontend changes from a normal local checkout:
 1. Run `cd frontend && pnpm run lint && pnpm run typecheck`.
@@ -243,6 +245,7 @@ Write efficient PostgreSQL queries by construction. No SQL inside loops over row
 ### Linting
 ```bash
 make lint                    # All linters (Python + JS + HTML)
+make python-ci-lint          # ruff check . + ty check --error-on-warning + hardcoded-ID guard
 ruff check .                 # Python style only — not sufficient by itself
 ty check --error-on-warning  # Required Python type check; warnings fail CI
 cd frontend && pnpm run lint  # Frontend ESLint
@@ -661,3 +664,7 @@ lookups: those maps are keyed by real dependency IDs, so an auto-assigned test
 id such as `101` can be misclassified as `needs_review`. Isolate with an
 explicit test double or advance sequences past the classification map (see
 `tests/test_reader_order_migration_coordinator.py`). <!-- docs-path-check: ignore -->
+
+`bash scripts/check-python-ci-lint.sh` runs this guard after ruff/ty. Cursor
+agents also have always-on rules in `.cursor/rules/hardcoded-ids.mdc` and
+`.cursor/rules/python-ci-lint.mdc`.
