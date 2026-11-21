@@ -1178,11 +1178,13 @@ async fn reading_list_resources_contain_cycles_and_reject_cyclic_creation() {
         })),
     )
     .await;
-    assert_eq!(status, StatusCode::CONFLICT, "{rejected}");
-    assert!(rejected["detail"]
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{rejected}");
+    assert_eq!(rejected["detail"]["code"], "reading_list_cycle");
+    assert!(rejected["detail"]["message"]
         .as_str()
         .unwrap()
-        .contains("Nothing was changed"));
+        .contains("Reading constraint cycle"));
+    assert!(!rejected["detail"]["path"].as_array().unwrap().is_empty());
     let conn = state.pool.get().await.unwrap();
     let count: i64 = conn
         .query_one(
@@ -1202,7 +1204,7 @@ async fn converted_legacy_cycle_does_not_block_creation_but_reader_cycle_does() 
     };
     let (token, csrf, owner) = register(&state, "converted-cycle-owner").await;
     let auth = (token.as_str(), csrf.as_str());
-    let (_series, ids) = seed_thread(&state, owner, "X-Force", 1, &["1", "2", "3"]).await;
+    let (series, ids) = seed_thread(&state, owner, "X-Force", 1, &["1", "2", "3"]).await;
     let conn = state.pool.get().await.unwrap();
 
     // A historical converted back-edge closes the natural series order. It is
@@ -1267,12 +1269,31 @@ async fn converted_legacy_cycle_does_not_block_creation_but_reader_cycle_does() 
         })),
     )
     .await;
-    assert_eq!(status, StatusCode::CONFLICT, "{rejected}");
-    let detail = rejected["detail"].as_str().unwrap();
-    assert!(detail.contains("Reading constraint cycle"), "{detail}");
-    assert!(detail.contains("X-Force #1"), "{detail}");
-    assert!(detail.contains("prerequisite"), "{detail}");
-    assert!(detail.contains("Nothing was changed"), "{detail}");
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{rejected}");
+    let detail = &rejected["detail"];
+    assert_eq!(detail["code"], "reading_list_cycle");
+    assert!(detail["message"]
+        .as_str()
+        .unwrap()
+        .contains("Reading constraint cycle"));
+    let path = detail["path"].as_array().unwrap();
+    assert!(
+        path.iter().any(|edge| {
+            edge["source_issue_name"] == "X-Force #3"
+                && edge["target_issue_name"] == "X-Force #1"
+                && edge["source_thread_id"] == series
+                && edge["target_thread_id"] == series
+                && edge["prerequisite_origin"] == "reader"
+                && edge["origin"].as_str().unwrap().contains("prerequisite")
+        }),
+        "{detail}"
+    );
+    assert!(
+        path.iter().any(|edge| {
+            edge["source_issue_name"] == "X-Force #1" && edge["target_issue_name"] == "X-Force #2"
+        }),
+        "{detail}"
+    );
 
     let list_count: i64 = conn
         .query_one(
