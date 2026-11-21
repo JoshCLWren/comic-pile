@@ -140,7 +140,8 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            large, _, _, _ = await run_rust_example(BINARY, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, list) and len(large_body) == 200
@@ -205,7 +206,8 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            large, _, _, _ = await run_rust_example(BINARY, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
@@ -273,7 +275,8 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            large, _, _, _ = await run_rust_example(BINARY, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict)
@@ -333,7 +336,8 @@ async def test_delete_reading_list_statements_bounded() -> None:
 
         env2 = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
         _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env2)
+        async with no_nested_statements(engine):
+            large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 204, large
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
@@ -395,7 +399,8 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         body_large = json.dumps({"name": "Large", "mode": "loose", "issue_ids": issue_ids_large})
         env2 = _run_env(token, "POST", "/api/v2/reading-lists", body=body_large)
         _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env2)
+        async with no_nested_statements(engine):
+            large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 201, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
@@ -460,7 +465,8 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         body_large = json.dumps({"name": "Up-large", "mode": "loose", "issue_ids": full_ids[:200]})
         env2 = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_large)
         _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env2)
+        async with no_nested_statements(engine):
+            large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
