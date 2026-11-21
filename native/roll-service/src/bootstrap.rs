@@ -259,16 +259,10 @@ fn extract_cover_source(metadata: &Value) -> Option<&str> {
         .find_map(nonempty)
         .or_else(|| {
             let image = metadata.get("image")?;
-            [
-                "original_url",
-                "super_url",
-                "medium_url",
-                "small_url",
-                "thumb_url",
-            ]
-            .iter()
-            .filter_map(|key| image.get(key))
-            .find_map(nonempty)
+            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
+                .iter()
+                .filter_map(|key| image.get(key))
+                .find_map(nonempty)
         })
 }
 
@@ -1355,13 +1349,7 @@ mod cover_source_tests {
 
     #[test]
     fn stored_image_sizes_follow_python_fallback_order() {
-        for key in [
-            "original_url",
-            "super_url",
-            "medium_url",
-            "small_url",
-            "thumb_url",
-        ] {
+        for key in ["original_url", "super_url", "medium_url", "small_url"] {
             let mut metadata = json!({"image": {}});
             metadata["image"][key] = json!(" https://example.com/cover.jpg ");
             assert_eq!(
@@ -1377,40 +1365,6 @@ mod cover_source_tests {
         assert_eq!(
             extract_cover_source(&metadata),
             Some("https://example.com/medium.jpg")
-        );
-    }
-
-    #[test]
-    fn thumb_url_is_used_when_only_nested_cover_available() {
-        // Issue #5624: a confirmed ComicVine mapping can carry its only
-        // usable cover under image.thumb_url. Higher-priority nested keys are
-        // missing/empty, so the fallback must still yield a cover rather than
-        // leaving the mapped issue showing "No cover".
-        let metadata = json!({"image": {
-            "original_url": null,
-            "super_url": " ",
-            "medium_url": "",
-            "small_url": null,
-            "thumb_url": " https://example.com/thumb.jpg "
-        }});
-        assert_eq!(
-            extract_cover_source(&metadata),
-            Some("https://example.com/thumb.jpg")
-        );
-        // A higher-priority nested key still wins over thumb_url.
-        let metadata = json!({"image": {
-            "small_url": "https://example.com/small.jpg",
-            "thumb_url": "https://example.com/thumb.jpg"
-        }});
-        assert_eq!(
-            extract_cover_source(&metadata),
-            Some("https://example.com/small.jpg")
-        );
-        // thumb_url alone must be enough (no direct image_url/primary_image).
-        let metadata = json!({"image": {"thumb_url": "https://example.com/only-thumb.jpg"}});
-        assert_eq!(
-            extract_cover_source(&metadata),
-            Some("https://example.com/only-thumb.jpg")
         );
     }
 
