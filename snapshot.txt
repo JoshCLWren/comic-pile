@@ -1,9 +1,9 @@
-utc: 2026-11-21T09:42:03Z
-uptime: 3482.39s load: 0.29 0.25 0.27
+utc: 2026-11-21T09:42:20Z
+uptime: 3498.85s load: 0.23 0.23 0.27
 processes: 176
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1274        4379          74       10749       14708
+Mem:           15983        1271        4381          74       10749       14711
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
@@ -26,6 +26,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 18648 systemd-journal
 16856 systemd
 --- top cpu (name only)
+ 100 ps
  2.2 provjobd3432757
  1.6 dockerd
  1.0 containerd
@@ -33,6 +34,5 @@ Filesystem      Size  Used Avail Use% Mounted on
  0.3 python
  0.3 redis-server
  0.2 docker-proxy
- 0.1 hv_kvp_daemon
 --- kernel oom/kill
 --- shutdown/session signals
