@@ -236,6 +236,62 @@ fn thread_cover(body: &Value, title: &str) -> Option<String> {
         .map(|s| s.to_owned())
 }
 
+/// Seed a confirmed ComicVine mapping with an arbitrary provider metadata
+/// payload. Used by the thumb-only regression below (#5624).
+async fn seed_confirmed_metadata(ctx: &Ctx, issue_id: i32, external_id: &str, metadata: Value) {
+    let identity: i32 = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
+             created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
+            &[&external_id, &metadata],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
+             created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
+            &[&issue_id, &identity],
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn series_cover_uses_thumb_url_when_no_larger_image_exists() {
+    // MQA-THREAD-004 / #5624: a mapped ComicVine issue whose provider entry
+    // carries its only cover in `image.thumb_url` must show that cover on the
+    // thread instead of "No cover".
+    let ctx = setup("sc-thumb").await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Thumb Only", "active", 1).await;
+    let issue = seed_issue(&ctx, thread_id, "5", 1, "unread").await;
+    set_frontier(&ctx, thread_id, Some(issue)).await;
+    seed_confirmed_metadata(
+        &ctx,
+        issue,
+        "detective-comics-5",
+        json!({"image": {"thumb_url": "https://cv.example/detective5-thumb.jpg"}}),
+    )
+    .await;
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        thread_cover(&body, "Thumb Only"),
+        Some("https://cv.example/detective5-thumb.jpg".to_owned())
+    );
+}
+
 #[tokio::test]
 async fn series_cover_prefers_next_unread_confirmed_issue() {
     let ctx = setup("sc-next").await;
