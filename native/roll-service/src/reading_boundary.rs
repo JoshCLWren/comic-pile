@@ -126,9 +126,27 @@ pub struct ReadingBoundaryExplanationV2 {
     pub blockers: Vec<ReadingBoundaryBlocker>,
 }
 
+/// Deployment-level capability for the canonical evaluator behind this batch.
+///
+/// It mirrors the same `AppState::option_e` switch every handler resolves, so
+/// a client that has already observed one batch can skip the canonical read
+/// entirely on later loads when the evaluator cannot answer (`unavailable`)
+/// and consult the legacy blocking authority directly.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BoundaryEvaluator {
+    /// Option E evaluated every requested thread in this batch.
+    Enabled,
+    /// The evaluator is not effective for this deployment: every explanation
+    /// in this batch carries `state: unavailable` and the stored
+    /// `threads.is_blocked` authority remains the blocking source of truth.
+    Unavailable,
+}
+
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ReadingBoundaryBatchResponseV2 {
     pub threads: HashMap<i32, ReadingBoundaryExplanationV2>,
+    pub evaluator: BoundaryEvaluator,
 }
 
 #[derive(Debug, Serialize)]
@@ -785,7 +803,14 @@ async fn get_reading_boundary_explanations(
         );
     }
 
-    Ok(ReadingBoundaryBatchResponseV2 { threads })
+    Ok(ReadingBoundaryBatchResponseV2 {
+        threads,
+        evaluator: if state.option_e {
+            BoundaryEvaluator::Enabled
+        } else {
+            BoundaryEvaluator::Unavailable
+        },
+    })
 }
 
 fn build_eligibility_snapshot(
