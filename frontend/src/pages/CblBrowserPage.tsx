@@ -446,13 +446,18 @@ export default function CblBrowserPage() {
     setConfirmOpen(false)
   }, [selectedSource, previewQuery.data])
 
+  const hasChoices =
+    Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
   const preview = useMemo(() => {
     if (!previewQuery.data) return null
-    // Always apply local adoption choices so the summary reflects the reader's
-    // current include/exclude/skip decisions. This ensures the "need attention"
-    // count updates in real time as entries are checked/unchecked under Customize.
-    return applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
-  }, [previewQuery.data, seriesDecisions, entryDecisions])
+    // Project the reader's local include/exclude/skip decisions onto the server
+    // preview as soon as they exist, so the "need attention" count and Add state
+    // react immediately. With no local choices the server summary is already
+    // authoritative and must not be re-derived here.
+    return hasChoices
+      ? applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
+      : previewQuery.data
+  }, [previewQuery.data, seriesDecisions, entryDecisions, hasChoices])
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
   const seriesGroups = useMemo(() => (preview ? buildCblSeriesGroups(preview) : []), [preview])
@@ -720,10 +725,11 @@ export default function CblBrowserPage() {
   }
 
   const summary = preview?.summary
-  const needsAttentionCount = Math.max(
-    0,
-    (summary?.unresolved_count ?? 0) + (summary?.awaiting_opt_in_count ?? 0) - (summary?.excluded_count ?? 0),
-  )
+  // `unresolved_count` and `awaiting_opt_in_count` are disjoint: the projection
+  // moves a skipped entry into `excluded_count`, so subtracting exclusions here
+  // would undercount the remaining attention entries.
+  const needsAttentionCount =
+    (summary?.unresolved_count ?? 0) + (summary?.awaiting_opt_in_count ?? 0)
   const commitBlockedReason = isPreviewing
     ? 'Wait for the preview to finish.'
     : !preview
