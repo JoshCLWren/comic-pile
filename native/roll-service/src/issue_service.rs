@@ -223,6 +223,11 @@ async fn card(
                          NULLIF(BTRIM(x.metadata_json#>>'{image,medium_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,small_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,thumb_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,original_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,super_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,medium_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,small_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,thumb_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json->>'cover_image_url'), '')
                      )
                  ELSE NULL END AS cover_url
@@ -279,6 +284,11 @@ pub(crate) async fn cards(
                          NULLIF(BTRIM(x.metadata_json#>>'{image,medium_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,small_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,thumb_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,original_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,super_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,medium_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,small_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,thumb_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json->>'cover_image_url'), '')
                      )
                  ELSE NULL END AS cover_url
@@ -1330,6 +1340,8 @@ mod tests {
                  VALUES
                      (101, 10, '1', 'unread', 1, NULL, now()),
                      (102, 10, '2', 'unread', 2, NULL, now()),
+                     (103, 10, '3', 'unread', 11, NULL, now()),
+                     (104, 10, '4', 'unread', 12, NULL, now()),
                      (110, 10, '10', 'unread', 10, NULL, now()),
                      (201, 20, '1', 'unread', 1, NULL, now()),
                      (301, 30, '1', 'unread', 1, NULL, now()),
@@ -1359,13 +1371,21 @@ mod tests {
                          now(), now()),
                         (52, 'comicvine', 'issue', '4000-44',
                          '{"image":{"super_url":"https://comicvine.example/covers/dependent.jpg"}}'::json,
+                         now(), now()),
+                        (53, 'comicvine', 'issue', '4000-45',
+                         '{"image":{"original_url":"","super_url":"","medium_url":"","small_url":"","thumb_url":"https://comicvine.example/covers/thumb-only.jpg"}}'::json,
+                         now(), now()),
+                        (54, 'comicvine', 'issue', '4000-46',
+                         '{"primary_image":null,"raw_provider_payload":{"image":{"original_url":"","super_url":"","medium_url":"","small_url":"","thumb_url":"https://comicvine.example/covers/raw-thumb-only.jpg"}}}'::json,
                          now(), now());
-                 INSERT INTO issue_external_identity_mappings
-                     (id, issue_id, external_identity_id, status, evidence_json,
-                      created_at, updated_at)
-                 VALUES (500, 110, 50, 'confirmed', '{}'::json, now(), now()),
-                        (501, 102, 51, 'confirmed', '{}'::json, now(), now()),
-                        (502, 301, 52, 'confirmed', '{}'::json, now(), now());"#)
+             INSERT INTO issue_external_identity_mappings
+                 (id, issue_id, external_identity_id, status, evidence_json,
+                  created_at, updated_at)
+             VALUES (500, 110, 50, 'confirmed', '{}'::json, now(), now()),
+                    (501, 102, 51, 'confirmed', '{}'::json, now(), now()),
+                    (502, 301, 52, 'confirmed', '{}'::json, now(), now()),
+                    (503, 103, 53, 'confirmed', '{}'::json, now(), now()),
+                    (504, 104, 54, 'confirmed', '{}'::json, now(), now());"#)
             .await
             .expect("seed canonical schema");
         let user = AuthenticatedUser::for_test(1);
@@ -1672,6 +1692,30 @@ mod tests {
         let direct = card(&tx, user, 102).await.unwrap();
         assert_eq!(direct.comicvine_issue_id.as_deref(), Some("4000-43"));
         assert_eq!(direct.cover_image_url, covers.items[0].cover_image_url);
+        tx.rollback().await.unwrap();
+
+        // Provider entries whose only cover is the thumbnail must still render
+        // it. Regression for MQA-THREAD-004 / #5624: Detective Comics #5
+        // (1937) showed its thumbnail in the match dialog but "No cover" on
+        // the thread because normalization ignored `thumb_url`. Both the
+        // top-level image object and the retained raw provider row are real
+        // stored shapes, so both resolve to the same provider CDN URL.
+        let thumbs = cards(&first, user, &[103, 104]).await.unwrap();
+        assert_eq!(thumbs.items.len(), 2);
+        assert_eq!(
+            thumbs.items[0].cover_image_url.as_deref(),
+            Some("https://comicvine.example/covers/thumb-only.jpg")
+        );
+        assert_eq!(
+            thumbs.items[1].cover_image_url.as_deref(),
+            Some("https://comicvine.example/covers/raw-thumb-only.jpg")
+        );
+        let tx = first.transaction().await.unwrap();
+        let direct_thumb = card(&tx, user, 104).await.unwrap();
+        assert_eq!(
+            direct_thumb.cover_image_url,
+            thumbs.items[1].cover_image_url
+        );
         tx.rollback().await.unwrap();
     }
 
