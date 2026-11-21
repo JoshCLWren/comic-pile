@@ -1,24 +1,24 @@
-utc: 2026-11-21T09:11:20Z
-uptime: 1639.33s load: 0.48 0.68 0.60
-processes: 185
+utc: 2026-11-21T09:11:37Z
+uptime: 1655.84s load: 0.41 0.65 0.60
+processes: 184
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        2005        3674          73       10721       13977
+Mem:           15983        2008        3672          73       10721       13975
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   66G   79G  46% /
 /dev/root       145G   66G   79G  46% /
 --- top rss (KiB, name only)
-862760 kilo
+862096 kilo
 153604 Runner.Worker
-142792 python
+142796 python
 139072 provjobd3432757
 120200 dockerd
-118652 Runner.Listener
-62136 containerd
+118660 Runner.Listener
+62140 containerd
 56176 php-fpm8.5
-48268 ExtHandler
+48280 ExtHandler
 38420 postgres
 37008 Daemon
 29884 networkd-dispat
@@ -26,13 +26,13 @@ Filesystem      Size  Used Avail Use% Mounted on
 21404 php-fpm8.5
 18184 systemd-journal
 --- top cpu (name only)
- 7.5 kilo
+ 7.4 kilo
  3.3 provjobd3432757
  3.2 dockerd
- 1.9 containerd
- 0.8 docker-proxy
- 0.7 python
+ 1.8 containerd
+ 0.7 docker-proxy
  0.7 Runner.Worker
+ 0.7 python
  0.3 redis-server
 --- kernel oom/kill
 --- shutdown/session signals
