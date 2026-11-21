@@ -243,7 +243,6 @@ Write efficient PostgreSQL queries by construction. No SQL inside loops over row
 ### Linting
 ```bash
 make lint                    # All linters (Python + JS + HTML)
-make python-ci-lint          # ruff check . + ty check --error-on-warning + hardcoded-ID guard
 ruff check .                 # Python style only — not sufficient by itself
 ty check --error-on-warning  # Required Python type check; warnings fail CI
 cd frontend && pnpm run lint  # Frontend ESLint
