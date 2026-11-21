@@ -453,10 +453,10 @@
         "application_statements": 4,
         "transaction_control_statements": 2,
         "total_statements": 6,
-        "basis": "auth extractor 1 + list load 1 + entries load 1 + Option E snapshot 1 (+2 tx control); set-based; two SELECT 1 checkout probes added",
+        "basis": "auth extractor 1 + list load 1 + entries load 1 + Option E snapshot 1 (+2 tx control); set-based; three SELECT 1 checkout probes (auth, list connection, Option E connection) added",
         "grows_with_data": false,
-        "max_statements": 8,
-        "runtime_overhead_statements": 2,
+        "max_statements": 9,
+        "runtime_overhead_statements": 3,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
