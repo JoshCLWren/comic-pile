@@ -6,18 +6,27 @@ import {
   type ContinuityPlanListItem,
 } from '../services/api-continuity-plans'
 import type { CBLSourceListDiscoveryItem } from '../services/api-cbl-sources'
+import { isFilesystemSourceLocation } from '../utils/cblSourceDisplay'
+
+/** Apply the same reader-safe path projection as the CBL discovery API. */
+function comparableSourcePath(path: string): string {
+  const normalized = path.trim().replace(/\\/g, '/')
+  const marker = 'CBL-ReadingLists/'
+  const markerIndex = normalized.indexOf(marker)
+  if (markerIndex >= 0) return normalized.slice(markerIndex + marker.length)
+  if (isFilesystemSourceLocation(normalized)) {
+    return normalized.split('/').pop() ?? normalized
+  }
+  return normalized
+}
 
 /** Whether a Reading Plan already contains placements from this exact CBL source. */
 export function planMatchesSource(
   plan: Pick<ContinuityPlanListItem, 'source_paths'>,
   source: Pick<CBLSourceListDiscoveryItem, 'source_path'>,
 ): boolean {
-  return plan.source_paths.some(
-    (path) =>
-      path === source.source_path ||
-      path.endsWith(`/${source.source_path}`) ||
-      source.source_path.endsWith(`/${path}`),
-  )
+  const sourcePath = comparableSourcePath(source.source_path)
+  return plan.source_paths.some((path) => comparableSourcePath(path) === sourcePath)
 }
 
 /** Find existing plans that an untargeted adoption could update or collide with. */
