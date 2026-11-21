@@ -133,6 +133,22 @@ async fn call(ctx: &Ctx, method: &str, path: &str) -> (StatusCode, Value) {
     (status, body)
 }
 
+async fn call_json(ctx: &Ctx, method: &str, path: &str, json_body: Value) -> (StatusCode, Value) {
+    let mut request = authed(method, path, &ctx.token, &ctx.csrf);
+    request
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+    *request.body_mut() = Body::from(json_body.to_string());
+    let response = router(ctx.state.clone())
+        .oneshot(request)
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 256 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    (status, body)
+}
+
 async fn seed_thread(
     ctx: &Ctx,
     user_id: i32,
@@ -289,6 +305,27 @@ async fn series_cover_uses_thumb_url_when_no_larger_image_exists() {
     assert_eq!(
         thread_cover(&body, "Thumb Only"),
         Some("https://cv.example/detective5-thumb.jpg".to_owned())
+    );
+
+    // The thread detail page renders per-issue covers from the issue-card
+    // projection, which must expose the same thumb URL for the mapped issue.
+    let (card_status, card_body) = call_json(
+        &ctx,
+        "POST",
+        "/api/v2/issues/cards",
+        json!({"issue_ids": [issue]}),
+    )
+    .await;
+    assert_eq!(card_status, StatusCode::OK, "{card_body:?}");
+    assert_eq!(
+        card_body["items"][0]["cover_image_url"].as_str(),
+        Some("https://cv.example/detective5-thumb.jpg"),
+        "{card_body:?}"
+    );
+    assert_eq!(
+        card_body["items"][0]["mapping_state"].as_str(),
+        Some("confirmed"),
+        "{card_body:?}"
     );
 }
 
