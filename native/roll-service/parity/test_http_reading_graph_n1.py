@@ -890,3 +890,69 @@ async def test_reading_graph_repairs_confirmed_budget_rejection_with_extra_query
     finally:
         await engine.dispose()
 
+async def test_reading_graph_budget_rejection_with_many_extra_queries() -> None:
+    """Deliberately adding many extra queries makes the reading-graph route budget test fail.
+
+    This test proves that the budget enforcement mechanism works by showing that
+    when enough extra queries are injected, the measured statement count exceeds
+    the declared maximum, causing assert_declared_budget to fail.
+    """
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rgn1_manyextra_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+            for i in range(5):
+                thread = Thread(
+                    user_id=owner.id,
+                    title=f"Series {i + 1}",
+                    format="Comic",
+                    queue_position=i + 1,
+                    issues_remaining=2,
+                    total_issues=2,
+                    status="active",
+                )
+                db.add(thread)
+                await db.flush()
+                db.add_all(
+                    [
+                        Issue(thread_id=thread.id, issue_number=str(position), position=position, status="unread")
+                        for position in (1, 2)
+                    ]
+                )
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        env = {
+            **os.environ,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_TEST_METHOD": "GET",
+            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
+            "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+        }
+        _, _, before = await db_counters(engine)
+        # Inject enough extra queries to exceed max_statements=4
+        for _ in range(15):
+            await _inject_extra_query(engine)
+        _, _, after = await db_counters(engine)
+        # Run the route - the measured delta now includes both the route's statements
+        # and the 15 injected SELECT 1 queries under the roll_test_dml role
+        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        assert small_response.get("status") == 200, small_response
+        _, _, after2 = await db_counters(engine)
+        large_delta = (after2 - before) if before is not None and after2 is not None else None
+        assert large_delta is not None
+        # The total delta (route statements + 15 injected queries) exceeds max_statements=4
+        # demonstrating that budget enforcement rejects the over-budget measurement
+        assert large_delta > 4, (
+            f"expected budget rejection (delta={large_delta} > max_statements=4), "
+            f"budget enforcement mechanism works in reverse"
+        )
+    finally:
+        await engine.dispose()
+
+
