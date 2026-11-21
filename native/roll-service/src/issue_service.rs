@@ -1359,13 +1359,17 @@ mod tests {
                          now(), now()),
                         (52, 'comicvine', 'issue', '4000-44',
                          '{"image":{"super_url":"https://comicvine.example/covers/dependent.jpg"}}'::json,
+                         now(), now()),
+                        (53, 'comicvine', 'issue', '4000-45',
+                         '{"image":{"original_url":"","super_url":"","medium_url":"","small_url":"","thumb_url":"https://comicvine.example/covers/issue401-thumb.jpg"}}'::json,
                          now(), now());
                  INSERT INTO issue_external_identity_mappings
                      (id, issue_id, external_identity_id, status, evidence_json,
                       created_at, updated_at)
                  VALUES (500, 110, 50, 'confirmed', '{}'::json, now(), now()),
                         (501, 102, 51, 'confirmed', '{}'::json, now(), now()),
-                        (502, 301, 52, 'confirmed', '{}'::json, now(), now());"#)
+                        (502, 301, 52, 'confirmed', '{}'::json, now(), now()),
+                        (503, 401, 53, 'confirmed', '{}'::json, now(), now());"#)
             .await
             .expect("seed canonical schema");
         let user = AuthenticatedUser::for_test(1);
@@ -1667,6 +1671,15 @@ mod tests {
         assert_eq!(
             covers.items[1].cover_image_url.as_deref(),
             Some("https://comicvine.example/covers/dependent.jpg")
+        );
+        // MQA-THREAD-004 (#5624): a confirmed mapping whose provider image
+        // object only carries the thumb size still shows that cover on the
+        // thread's issue card, so the issue-level and queue indicators agree.
+        let thumb = cards(&first, user, &[401]).await.unwrap();
+        assert_eq!(thumb.items.len(), 1);
+        assert_eq!(
+            thumb.items[0].cover_image_url.as_deref(),
+            Some("https://comicvine.example/covers/issue401-thumb.jpg")
         );
         let tx = first.transaction().await.unwrap();
         let direct = card(&tx, user, 102).await.unwrap();
