@@ -105,7 +105,8 @@ def test_ci_summary_keeps_workflow_and_shell_gates_without_factory_tests() -> No
     summary = yaml.safe_load(ci)["jobs"]["check-all-jobs"]
     assert {"script-checks", "factory-actionlint", "factory-shellcheck"} <= set(summary["needs"])
     assert "factory-complete-tests" not in ci
-    assert "test_factory_" not in ci
+    assert "tests/test_factory_" not in ci
+    assert "test_factory_ci_scope.py" in ci
     assert "factory-fast-merge-wakeup:" not in ci
     assert "actions: write" not in ci
 
@@ -141,7 +142,8 @@ def test_factory_code_is_not_tracked_here() -> None:
     factory = [
         path
         for path in tracked
-        if re.search(r"(^|/)(test_)?factory[_-]", path)
+        if path not in {"scripts/factory_ci_scope.py", "scripts/test_factory_ci_scope.py", "scripts/factory-run"}
+        and re.search(r"(^|/)(test_)?factory[_-]", path)
         or path.startswith((".agents/skills/local-factory-", ".agents/skills/crouton-factory-"))
     ]
     assert factory == []
