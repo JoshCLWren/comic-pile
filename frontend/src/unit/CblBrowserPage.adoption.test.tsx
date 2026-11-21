@@ -887,6 +887,67 @@ describe('CblBrowserPage adoption', () => {
     })
   })
 
+  it('keeps unrelated exclusions out of the attention count', async () => {
+    const user = userEvent.setup()
+    const unresolvedEntry = entry({
+      cbl_position: 2,
+      cbl_entry_id: 102,
+      issue_number: '2',
+      adoption_class: 'ambiguous_unresolved',
+      adoption_decision: 'unresolved',
+      adopted: false,
+      resolved_issue_id: null,
+      canonical_issue_id: null,
+      resolution_status: 'ambiguous_no_comicvine_id',
+    })
+    const excludedEntry = entry({
+      cbl_position: 3,
+      cbl_entry_id: 103,
+      issue_number: '3',
+      series_name: 'Ultimate X-Men',
+      series_group_id: 'group-excluded',
+      adoption_class: 'existing',
+      adoption_decision: 'excluded',
+      adopted: false,
+      collection_excluded: true,
+      collection_exclusion_reason: 'collection_volume_excluded',
+    })
+    const initialPreview = preview({
+      entries: [entry({}), unresolvedEntry, excludedEntry],
+      summary: {
+        reused_existing_count: 1,
+        missing_would_create_count: 0,
+        excluded_count: 1,
+        unresolved_count: 1,
+        awaiting_opt_in_count: 0,
+        final_adopted_count: 1,
+        final_adopted_order: [1],
+        reused_existing_positions: [1],
+        missing_would_create_positions: [],
+        excluded_positions: [3],
+        unresolved_positions: [2],
+        awaiting_opt_in_positions: [],
+      },
+    })
+    renderPage()
+    await searchFor(user)
+    await selectSource(user, initialPreview)
+
+    // A collection exclusion is not an attention entry: only the unresolved
+    // entry should count, so the reader sees 1 rather than 0.
+    expect(screen.getByText('Need attention').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+
+    await openChecklist(user)
+    await expandVolume(user, 'Ultimate Spider-Man')
+    await user.click(screen.getByRole('button', { name: 'Skip' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Need attention').nextElementSibling).toHaveTextContent('0')
+      expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeEnabled()
+    })
+  })
+
   it('excluding the series of an unresolved entry unblocks the add (#3542)', async () => {
     const user = userEvent.setup()
     const unresolvedEntry = entry({
