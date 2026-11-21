@@ -340,10 +340,10 @@
       "sql_budget": {
         "application_statements": 2,
         "transaction_control_statements": 2,
-        "total_statements": 4,
-        "basis": "auth 1 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1",
+        "total_statements": 6,
+        "basis": "auth 1 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1; +2 runtime probe overhead (connection_recovery/ AppState::new SELECT 1 x2)",
         "grows_with_data": false,
-        "max_statements": 4,
+        "max_statements": 6,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
@@ -370,10 +370,10 @@
       "sql_budget": {
         "application_statements": 2,
         "transaction_control_statements": 0,
-        "total_statements": 2,
-        "basis": "auth extractor 1 + list summary query 1; set-based",
+        "total_statements": 4,
+        "basis": "auth extractor 1 + list summary query 1; set-based; +2 runtime probe overhead (connection_recovery/ AppState::new SELECT 1 x2)",
         "grows_with_data": false,
-        "max_statements": 2,
+        "max_statements": 4,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
