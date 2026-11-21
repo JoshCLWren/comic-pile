@@ -167,7 +167,7 @@ def test_model_first_operator_cli_dispatches_exact_provider_without_target(tmp_p
 
     gh = tmp_path / "gh"
     gh.write_text(
-        """#!/usr/bin/env bash
+        r"""#!/usr/bin/env bash
 printf '%s\n' "$@" > "$FACTORY_GH_ARGS"
 """,
         encoding="utf-8",
