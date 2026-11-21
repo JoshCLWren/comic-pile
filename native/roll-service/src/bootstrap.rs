@@ -258,11 +258,26 @@ fn extract_cover_source(metadata: &Value) -> Option<&str> {
         .filter_map(|key| metadata.get(key))
         .find_map(nonempty)
         .or_else(|| {
-            let image = metadata.get("image")?;
-            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
+            [
+                metadata.get("image"),
+                metadata
+                    .get("raw_provider_payload")
+                    .and_then(|payload| payload.get("image")),
+            ]
+            .into_iter()
+            .flatten()
+            .find_map(|image| {
+                [
+                    "original_url",
+                    "super_url",
+                    "medium_url",
+                    "small_url",
+                    "thumb_url",
+                ]
                 .iter()
-                .filter_map(|key| image.get(key))
+                .filter_map(|key| image.get(*key))
                 .find_map(nonempty)
+            })
         })
 }
 
@@ -1348,8 +1363,14 @@ mod cover_source_tests {
     use serde_json::json;
 
     #[test]
-    fn stored_image_sizes_follow_python_fallback_order() {
-        for key in ["original_url", "super_url", "medium_url", "small_url"] {
+    fn stored_image_sizes_include_thumbnail_fallback() {
+        for key in [
+            "original_url",
+            "super_url",
+            "medium_url",
+            "small_url",
+            "thumb_url",
+        ] {
             let mut metadata = json!({"image": {}});
             metadata["image"][key] = json!(" https://example.com/cover.jpg ");
             assert_eq!(
@@ -1365,6 +1386,15 @@ mod cover_source_tests {
         assert_eq!(
             extract_cover_source(&metadata),
             Some("https://example.com/medium.jpg")
+        );
+        // Deep hydration retains provider artwork under raw_provider_payload.
+        // #5624: a null primary_image must not hide a thumbnail-only cover.
+        let normalized = json!({"primary_image": null, "raw_provider_payload": {
+            "image": {"small_url": "", "thumb_url": " https://example.com/thumb.jpg "}
+        }});
+        assert_eq!(
+            extract_cover_source(&normalized),
+            Some("https://example.com/thumb.jpg")
         );
     }
 
