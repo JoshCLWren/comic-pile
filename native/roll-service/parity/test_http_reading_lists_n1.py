@@ -150,14 +150,11 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
             await raw.close()
 
         env = _run_env(token, "GET", "/api/v2/reading-lists")
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small, small_statements = await _measure_route(engine, env)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, list) and len(body) == 5
         assert body[0]["issue_count"] == 1
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
         try:
