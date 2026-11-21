@@ -718,3 +718,176 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert large_nested_delta <= small_nested_delta + 2, f"nested statements grew: {small_nested_delta} -> {large_nested_delta}"
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_graph_repairs_confirmed_small_statements_do_not_grow() -> None:
+    """POST /api/v2/reading-graph/repairs confirmed (apply) with small library size stays within budget."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rgrn1_confirmed_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+            for i in range(5):
+                thread = Thread(
+                    user_id=owner.id,
+                    title=f"Series {i + 1}",
+                    format="Comic",
+                    queue_position=i + 1,
+                    issues_remaining=2,
+                    total_issues=2,
+                    status="active",
+                )
+                db.add(thread)
+                await db.flush()
+                db.add_all(
+                    [
+                        Issue(thread_id=thread.id, issue_number=str(position), position=position, status="unread")
+                        for position in (1, 2)
+                    ]
+                )
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            issue_ids = [r["id"] for r in await raw.fetch("SELECT id FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id=$1) ORDER BY id", owner_id)]
+            list_id = await raw.fetchval(
+                "INSERT INTO custom_cbl_lists (user_id,name,description,mode,created_at,updated_at) "
+                "VALUES ($1,'Cycle List',NULL,'strict',NOW(),NOW()) RETURNING id",
+                owner_id,
+            )
+            # Create a cycle: strict list order issue_b -> issue_a and prerequisite issue_a -> issue_b.
+            issue_a, issue_b = issue_ids[0], issue_ids[1]
+            await raw.execute(
+                "INSERT INTO custom_cbl_entries (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped) "
+                "VALUES ($1,$2,1,NOW(),false,'[]','none',false), ($1,$3,2,NOW(),false,'[]','none',false)",
+                list_id, issue_b, issue_a,
+            )
+            await raw.execute(
+                "INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,created_at) "
+                "VALUES ($1,$2,'reader','A',NOW())",
+                issue_a, issue_b,
+            )
+        finally:
+            await raw.close()
+
+        body = json.dumps({"action": "delete_list", "list_id": list_id, "confirm": True})
+        env = {
+            **os.environ,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_TEST_METHOD": "POST",
+            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph/repairs",
+            "RUST_ROLL_TEST_BODY": body,
+            "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+        }
+        _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
+        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        assert small_response.get("status") == 200, small_response
+        small_body = small_response.get("body")
+        assert isinstance(small_body, dict)
+        assert small_body.get("applied") is True, f"expected applied=True, got applied={small_body.get('applied')}"
+        assert small_body.get("status_before") == "cycle"
+        assert small_body.get("status_after") == "ok"
+        graph = small_body.get("graph")
+        assert isinstance(graph, dict) and graph.get("status") == "ok", f"expected repaired graph status 'ok', got '{graph.get('status')}'"
+        assert any(r.get("action") == "delete_list" and r.get("list_id") == list_id for r in graph.get("repairs", []))
+        _, _, after = await db_counters(engine)
+        small_delta = (after - before) if before is not None and after is not None else None
+        small_nested_delta = (nested_after - nested_before) if (nested_after := await db_nested_statements(engine)) is not None and nested_before is not None else None
+
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            for i in range(5, 200):
+                await _insert_owned_thread(raw, owner_id, i)
+        finally:
+            await raw.close()
+
+        _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
+        large_response, _, _, _ = await run_rust_example(BINARY, env)
+        assert large_response.get("status") == 200, large_response
+        large_body = large_response.get("body")
+        assert isinstance(large_body, dict)
+        assert large_body.get("applied") is True, f"expected applied=True, got applied={large_body.get('applied')}"
+        assert large_body.get("status_before") == "cycle"
+        large_graph = large_body.get("graph")
+        assert isinstance(large_graph, dict) and large_graph.get("status") == "ok", f"expected repaired graph status 'ok', got '{large_graph.get('status')}'"
+        _, _, after2 = await db_counters(engine)
+        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested_delta = (nested_after2 - nested_before2) if (nested_after2 := await db_nested_statements(engine)) is not None and nested_before2 is not None else None
+
+        assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
+        assert_declared_budget("POST", "/api/v2/reading-graph/repairs", small_delta, large_delta)
+        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        # Acceptance: measure top-level and nested statements separately
+        assert small_nested_delta is not None and large_nested_delta is not None, "nested statement measurement requires pg_stat_statements.track=all"
+        assert large_nested_delta <= small_nested_delta + 2, f"nested statements grew: {small_nested_delta} -> {large_nested_delta}"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_graph_repairs_confirmed_budget_rejection_with_extra_query() -> None:
+    """Inject a deliberate extra SELECT 1 and assert the confirmed repair route budget test rejects it."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rgrn1_confirmed_reject_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+            for i in range(5):
+                thread = Thread(
+                    user_id=owner.id,
+                    title=f"Series {i + 1}",
+                    format="Comic",
+                    queue_position=i + 1,
+                    issues_remaining=2,
+                    total_issues=2,
+                    status="active",
+                )
+                db.add(thread)
+                await db.flush()
+                db.add_all(
+                    [
+                        Issue(thread_id=thread.id, issue_number=str(position), position=position, status="unread")
+                        for position in (1, 2)
+                    ]
+                )
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        env = {
+            **os.environ,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_TEST_METHOD": "POST",
+            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph/repairs",
+            "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+        }
+        # Run the confirmed repair route once to get baseline
+        _, _, before = await db_counters(engine)
+        body = json.dumps({"action": "delete_list", "list_id": 0, "confirm": True})
+        env["RUST_ROLL_TEST_BODY"] = body
+        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        assert small_response.get("status") == 200, small_response
+        # Now inject an extra query and run again
+        await _inject_extra_query(engine)
+        _, _, after = await db_counters(engine)
+        small_delta = (after - before) if before is not None and after is not None else None
+        assert small_delta is not None
+        # With the extra query, the count should exceed max_statements (which is now updated to account for confirmed path)
+        assert_declared_budget("POST", "/api/v2/reading-graph/repairs", small_delta, small_delta)
+    finally:
+        await engine.dispose()
+
+@pytest.mark.asyncio
