@@ -199,6 +199,15 @@ async fn seed_confirmed_cover(
         Some(url) => json!({"image": {"original_url": url}}),
         None => json!({"issue_number": "1"}),
     };
+    seed_confirmed_cover_entry(ctx, issue_id, external_id, metadata).await;
+}
+
+async fn seed_confirmed_cover_entry(
+    ctx: &Ctx,
+    issue_id: i32,
+    external_id: &str,
+    metadata: Value,
+) {
     let identity: i32 = ctx
         .state
         .pool
