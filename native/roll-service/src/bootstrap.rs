@@ -247,28 +247,37 @@ fn identity_state(confirmed: i64, candidate: i64) -> &'static str {
 
 /// Mirror Python extract_cover_source: trim strings and skip absent, null,
 /// non-string and empty values before falling back through stored image sizes.
+/// The stored raw provider row is the final size fallback because normalized
+/// issue metadata keeps the thumbnail only there; a provider entry with a
+/// thumbnail cover must still show that cover (Detective Comics #5, 1937).
 /// URL validation remains separate, so an invalid nonempty source does not
 /// silently select different artwork from a lower-priority field.
 fn extract_cover_source(metadata: &Value) -> Option<&str> {
     fn nonempty(value: &Value) -> Option<&str> {
         value.as_str().map(str::trim).filter(|s| !s.is_empty())
     }
+    fn sizes(image: &Value) -> Option<&str> {
+        [
+            "original_url",
+            "super_url",
+            "medium_url",
+            "small_url",
+            "thumb_url",
+        ]
+        .iter()
+        .filter_map(|key| image.get(key))
+        .find_map(nonempty)
+    }
     ["image_url", "primary_image"]
         .iter()
         .filter_map(|key| metadata.get(key))
         .find_map(nonempty)
+        .or_else(|| metadata.get("image").and_then(sizes))
         .or_else(|| {
-            let image = metadata.get("image")?;
-            [
-                "original_url",
-                "super_url",
-                "medium_url",
-                "small_url",
-                "thumb_url",
-            ]
-            .iter()
-            .filter_map(|key| image.get(key))
-            .find_map(nonempty)
+            metadata
+                .get("raw_provider_payload")
+                .and_then(|raw| raw.get("image"))
+                .and_then(sizes)
         })
 }
 

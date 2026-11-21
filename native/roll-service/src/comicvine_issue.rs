@@ -402,21 +402,27 @@ fn series(metadata: &Value) -> (Option<i64>, Option<String>) {
 
 /// Extract the best available image URL from metadata.
 ///
-/// Tries image_url, primary_image, then various image sizes in order of preference.
+/// Tries image_url, primary_image, then the normalized image sizes, then the
+/// stored raw provider row. Provider entries with only a thumbnail cover are
+/// real (for example Detective Comics #5, 1937), so the thumbnail is a valid
+/// last-resort cover instead of "No cover".
 fn image(metadata: &Value) -> Option<String> {
     as_string(&metadata["image_url"])
         .or_else(|| as_string(&metadata["primary_image"]))
-        .or_else(|| {
-            [
-                "original_url",
-                "super_url",
-                "medium_url",
-                "small_url",
-                "thumb_url",
-            ]
-            .iter()
-            .find_map(|key| as_string(&metadata["image"][*key]))
-        })
+        .or_else(|| image_sizes(&metadata["image"]))
+        .or_else(|| image_sizes(&metadata["raw_provider_payload"]["image"]))
+}
+
+fn image_sizes(image: &Value) -> Option<String> {
+    [
+        "original_url",
+        "super_url",
+        "medium_url",
+        "small_url",
+        "thumb_url",
+    ]
+    .iter()
+    .find_map(|key| as_string(&image[*key]))
 }
 
 /// Convert HTML text to plain text by removing tags and decoding entities.
