@@ -2,22 +2,13 @@
 
 This repository uses git hooks to enforce code quality checks.
 
-## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+## Principle: fix what hooks flag
 
-**TESTS MUST NEVER BE SKIPPED - EVER.**
-
-Git hooks that block on test failures are there for YOUR protection.
-
-When a hook blocks your commit/push:
-- ✅ Fix the failing tests
-- ✅ Fix the code that breaks the tests
-- ✅ Investigate root cause
-- ❌ **NEVER use `--no-verify` to bypass hooks**
-- ❌ **NEVER skip hooks to "save time"**
-
-**Using `git commit --no-verify` or `git push --no-verify` is unacceptable.**
-
-If a hook is blocking you, it's telling you something is wrong. **Fix it.**
+Hooks run static checks (lint/format/types), including the Python hardcoded-ID
+regression guard. Product test suites (Vitest and the rendered UI audit) run in
+CI rather than git hooks; backend product pytest is retired from required CI
+during the Rust cutover. If a hook blocks you, fix the underlying failure;
+never bypass it with `--no-verify`. Never force-push or push to main.
 
 ## Available Hooks
 
@@ -45,23 +36,22 @@ still chain to `.git/hooks/pre-commit`.
 **What happens on failure:**
 - Commit is aborted
 - You'll see which linting step failed
-- Can bypass with `git commit --no-verify` (not recommended)
+- Do not bypass the failure with `git commit --no-verify`
 
 ### Pre-Push Hook
 Runs automatically before each push to remote.
 
 **What it does:**
 - Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
-- Runs frontend unit tests (`pnpm test`)
-- Runs the rendered UI audit (`pnpm run audit:ui`)
+- Includes the static hardcoded-ID guard (`pytest tests/test_hardcoded_ids.py -q --no-cov`)
 
-The Python API is frozen during the Rust cutover, so backend pytest no longer
-gates pushes. Backend pytest runs are not part of the pre-push hook.
+Backend product pytest is retired from required CI during the Rust cutover;
+Vitest and the rendered UI audit remain CI gates.
 
 **What happens on failure:**
 - Push is aborted
 - You'll see which check failed
-- Can bypass with `git push --no-verify` (not recommended)
+- Do not bypass the failure with `git push --no-verify`
 
 ## Installation
 
@@ -84,23 +74,15 @@ Make them executable:
 chmod +x .git/hooks/pre-commit .git/hooks/pre-push
 ```
 
-## Bypassing Hooks
+## Never Bypass Hooks
 
-**Not recommended**, but if you need to bypass:
-
-```bash
-# Bypass pre-commit hook
-git commit --no-verify
-
-# Bypass pre-push hook
-git push --no-verify
-```
+`--no-verify` is prohibited. If a hook blocks a commit or push, fix the reported
+failure and rerun the relevant focused validation; do not skip the hook.
 
 ## Why Hooks Exist
 
 These hooks prevent broken code from being committed or pushed:
 - Catches linting errors locally before CI
-- Catches test failures locally before CI
 - Reduces CI/CD failures
 - Faster feedback loop (local vs remote)
 
