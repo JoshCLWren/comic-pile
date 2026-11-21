@@ -12,7 +12,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    no_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-lists-n1-secret"
 BINARY = str(cargo_example_path("http_reading_lists"))
@@ -113,7 +119,8 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
 
         env = _run_env(token, "GET", "/api/v2/reading-lists")
         _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, list) and len(body) == 5
@@ -173,7 +180,8 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}")
         _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, dict)
@@ -238,7 +246,8 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}/reader")
         _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, dict)
@@ -304,7 +313,8 @@ async def test_delete_reading_list_statements_bounded() -> None:
         small_id = await _seed_one()
         env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{small_id}")
         _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 204, small
         assert small.get("body") is None
         _, _, after = await db_counters(engine)
@@ -361,7 +371,8 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         body_small = json.dumps({"name": "Small", "mode": "loose", "issue_ids": issue_ids_small})
         env = _run_env(token, "POST", "/api/v2/reading-lists", body=body_small)
         _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 201, small
         small_body = small.get("body")
         assert isinstance(small_body, dict)
@@ -424,7 +435,8 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         body_small = json.dumps({"name": "Up-small", "mode": "loose", "issue_ids": issue_ids_small})
         env = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_small)
         _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
         small_body = small.get("body")
         assert isinstance(small_body, dict)

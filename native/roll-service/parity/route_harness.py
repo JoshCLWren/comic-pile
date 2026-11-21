@@ -158,6 +158,30 @@ async def db_nested_statements(engine: AsyncEngine) -> int | None:
         await admin_engine.dispose()
 
 
+@asynccontextmanager
+async def no_nested_statements(engine: AsyncEngine) -> AsyncIterator[None]:
+    """Assert a route invocation issues zero nested trigger/function statements.
+
+    Nested statements are tracked separately from top-level ones under
+    ``pg_stat_statements.track=all``. Route budgets are declared for the
+    top-level application/control path only, so any nested statement is a
+    budget regression that the top-level counter alone would miss.
+
+    Args:
+        engine: Route database engine; the admin DSN is read from the environment.
+
+    Yields:
+        None while the caller runs one route invocation.
+    """
+    before = await db_nested_statements(engine)
+    yield
+    after = await db_nested_statements(engine)
+    assert before is not None and after is not None, (
+        "pg_stat_statements.track=all is required to measure nested statements"
+    )
+    assert after == before, f"route issued {after - before} nested statements"
+
+
 async def run_rust_example(
     binary: str,
     env: dict[str, str],

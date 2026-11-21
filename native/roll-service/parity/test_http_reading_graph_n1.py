@@ -12,7 +12,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    no_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-graph-n1-secret"
 BINARY = str(cargo_example_path("http_reading_graph"))
@@ -88,7 +94,8 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
         _, _, before = await db_counters(engine)
-        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
         assert isinstance(small_body, dict)
@@ -107,7 +114,8 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
-        large_response, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            large_response, _, _, _ = await run_rust_example(BINARY, env)
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict)
@@ -191,7 +199,8 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
         _, _, before = await db_counters(engine)
-        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
         assert isinstance(small_body, dict)
@@ -216,7 +225,8 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
-        large_response, _, _, _ = await run_rust_example(BINARY, env)
+        async with no_nested_statements(engine):
+            large_response, _, _, _ = await run_rust_example(BINARY, env)
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict)
