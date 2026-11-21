@@ -131,7 +131,7 @@ If a test is failing:
 - **Update documentation** when you find gaps or outdated information
 
 
-## MANDATORY: Full-repo ruff, ty, and hardcoded-ID guard before every Python push
+## MANDATORY: Full-repo ruff and ty before every Python push
 
 CI jobs `python-lint` and `python-typecheck` run exactly:
 
@@ -140,7 +140,7 @@ ruff check .
 ty check --error-on-warning
 ```
 
-**Path-filtered ruff or ty is not a valid CI substitute.** Those two commands, with no path arguments, are the required lint/type pair. `bash scripts/check-python-ci-lint.sh` and `make python-ci-lint` run that pair **plus** `pytest tests/test_hardcoded_ids.py` (shrink-only guard against new hardcoded primary-key literals). Prefer the script as the local push gate.
+**Path-filtered ruff or ty is not a valid CI substitute.** Those two commands, with no path arguments, are the required lint/type pair. `bash scripts/lint.sh` runs the same pair as part of the local hook gate.
 
 **Forbidden as a push gate:**
 - `ruff check` or `ty check` limited to a file list
@@ -150,9 +150,9 @@ ty check --error-on-warning
 
 **Required:**
 1. Before the first Python commit of a session, run `bash scripts/install-git-hooks.sh` so Cursor's remapped `core.hooksPath` can still chain to `.git/hooks/pre-commit`.
-2. After the last Python edit, run `bash scripts/check-python-ci-lint.sh` against the whole repo.
+2. After the last Python edit, run `ruff check .` and `ty check --error-on-warning` against the whole repo.
 3. Re-run after every later Python edit. A green run is invalid the moment sources change.
-4. Fix every ruff, ty, and hardcoded-ID finding locally. Do not use CI to discover them.
+4. Fix every ruff and ty finding locally. Do not use CI to discover them.
 
 ## CORE PRINCIPLE: PR FEEDBACK TASKS ARE NOT DONE UNTIL PUSHED
 

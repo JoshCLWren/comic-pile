@@ -129,6 +129,21 @@ should_run_html() {
     [ -n "$STAGED_HTML_FILES" ] || [ -n "$STAGED_ROOT_NODE_TOOLING" ]
 }
 
+run_python_tool() {
+    local tool="$1"
+    shift
+    if command -v "$tool" >/dev/null 2>&1; then
+        "$tool" "$@"
+        return
+    fi
+    if command -v uv >/dev/null 2>&1; then
+        uv run "$tool" "$@"
+        return
+    fi
+    echo "${RED}ERROR: ${tool} is not installed. Run 'uv sync --all-extras' first.${NC}"
+    exit 1
+}
+
 ANY_CHECKED=0
 PYTHON_SOURCE_PATHS=(
     scripts
