@@ -661,7 +661,3 @@ lookups: those maps are keyed by real dependency IDs, so an auto-assigned test
 id such as `101` can be misclassified as `needs_review`. Isolate with an
 explicit test double or advance sequences past the classification map (see
 `tests/test_reader_order_migration_coordinator.py`). <!-- docs-path-check: ignore -->
-
-`bash scripts/check-python-ci-lint.sh` runs this guard after ruff/ty. Cursor
-agents also have always-on rules in `.cursor/rules/hardcoded-ids.mdc` and
-`.cursor/rules/python-ci-lint.mdc`.
