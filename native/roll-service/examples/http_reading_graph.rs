@@ -31,6 +31,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let response = app.oneshot(builder.body(Body::from(body))?).await?;
     let status = response.status().as_u16();
     let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024).await?;
+    // Test-only fault injection: model an accidental route query (or one query
+    // per fixture row) without changing the production handler under test.
+    let extra_queries = std::env::var("RUST_ROLL_TEST_EXTRA_QUERY_COUNT")
+        .ok()
+        .map(|value| value.parse::<u32>())
+        .transpose()?
+        .unwrap_or(0);
+    if extra_queries > 0 {
+        let connection = state.pool.get().await?;
+        for _ in 0..extra_queries {
+            connection.simple_query("SELECT 1").await?;
+        }
+    }
     let data: serde_json::Value = serde_json::from_slice(&bytes)?;
     println!("{}", serde_json::json!({"status": status, "body": data}));
     Ok(())
