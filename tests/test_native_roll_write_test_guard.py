@@ -122,6 +122,59 @@ INTEGRATION_WRITE_TESTS = {
         "metadata_corrections_apply_list_revert", "comicvine_v2_http", "POST",
         "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
     ),
+    ("continuity_plans", "adopt_reading_order"): (
+        "reading_order_adoption_projection_and_release_source_writes_round_trip",
+        "continuity_plans_v1_http", "POST", "/api/v2/continuity-plans/from-reading-order",
+    ),
+    ("continuity_plans", "confirm_plan_projection"): (
+        "reading_order_adoption_projection_and_release_source_writes_round_trip",
+        "continuity_plans_v1_http", "POST",
+        "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
+    ),
+    ("continuity_plans", "create_release_source"): (
+        "reading_order_adoption_projection_and_release_source_writes_round_trip",
+        "continuity_plans_v1_http", "POST", "/api/v2/continuity-plans/release-sources/",
+    ),
+    ("continuity_plans", "delete_release_source"): (
+        "reading_order_adoption_projection_and_release_source_writes_round_trip",
+        "continuity_plans_v1_http", "DELETE",
+        "/api/v2/continuity-plans/release-sources/{source_id}",
+    ),
+    ("continuity_plans", "link_plan_dependency_edge"): (
+        "link_dependency_is_idempotent_and_uses_composite_pk_contract",
+        "continuity_plans_v1_http", "POST",
+        "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+    ),
+    ("continuity_plans", "unlink_plan_dependency_edge"): (
+        "link_dependency_is_idempotent_and_uses_composite_pk_contract",
+        "continuity_plans_v1_http", "DELETE",
+        "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+    ),
+    ("continuity_plans", "update_release_source"): (
+        "reading_order_adoption_projection_and_release_source_writes_round_trip",
+        "continuity_plans_v1_http", "PATCH",
+        "/api/v2/continuity-plans/release-sources/{source_id}",
+    ),
+    ("dependency_groups", "add_issue_range"): (
+        "reading_order_group_routes_round_trip_over_http", "dependency_groups_http", "POST",
+        "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+    ),
+    ("dependency_groups", "add_member"): (
+        "reading_order_group_routes_round_trip_over_http", "dependency_groups_http", "POST",
+        "/api/v1/reading-order-groups/{group_id}/members",
+    ),
+    ("dependency_groups", "create_group"): (
+        "reading_order_group_routes_round_trip_over_http", "dependency_groups_http",
+        "POST", "/api/v1/reading-order-groups/",
+    ),
+    ("dependency_groups", "delete_group"): (
+        "reading_order_group_routes_round_trip_over_http", "dependency_groups_http",
+        "DELETE", "/api/v1/reading-order-groups/{group_id}",
+    ),
+    ("dependency_groups", "update_group"): (
+        "reading_order_group_routes_round_trip_over_http", "dependency_groups_http",
+        "PATCH", "/api/v1/reading-order-groups/{group_id}",
+    ),
 }
 
 
