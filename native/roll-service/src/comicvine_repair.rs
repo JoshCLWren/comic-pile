@@ -912,7 +912,7 @@ mod tests {
                 "original_url": null,
                 "super_url": "",
                 "medium_url": null,
-                "small_url": " ",
+                "small_url": "",
                 "thumb_url": "https://example.com/thumb.jpg"
             }
         });
