@@ -339,6 +339,18 @@ async def test_delete_reading_list_statements_bounded() -> None:
         finally:
             await raw.close()
 
+        # Seed a second large list with many entries for long-list deletion coverage
+        large2_id = await _seed_one(entry_count=100)
+        # grow more unrelated data to simulate a larger database state
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            for i in range(120, 200):
+                _, ids = await _insert_owned_thread(raw, owner_id, i)
+                await _insert_list(raw, owner_id, f"Y-{i}", [ids[0]])
+        finally:
+            await raw.close()
+
         env2 = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
         _, _, before2 = await db_counters(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
@@ -346,9 +358,19 @@ async def test_delete_reading_list_statements_bounded() -> None:
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
-        assert small_delta is not None and large_delta is not None
+        # Also delete the second large list and verify its budget
+        env3 = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large2_id}")
+        _, _, before3 = await db_counters(engine)
+        large2, _, _, _ = await run_rust_example(BINARY, env3)
+        assert large2.get("status") == 204, large2
+        _, _, after3 = await db_counters(engine)
+        large2_delta = (after3 - before3) if before3 is not None and after3 is not None else None
+
+        assert small_delta is not None and large_delta is not None and large2_delta is not None
         assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+        assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", small_delta, large2_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert large2_delta <= small_delta + 2, f"second large list deletion growth: {small_delta} -> {large2_delta}"
     finally:
         await engine.dispose()
 
