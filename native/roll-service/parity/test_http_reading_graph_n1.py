@@ -106,12 +106,19 @@ async def _seed_threads(
         await _insert_owned_thread(raw, owner_id, index)
 
 
-async def _seed_cycle(raw: asyncpg.Connection, owner_id: int, name: str) -> tuple[int, int]:
+async def _seed_cycle(
+    raw: asyncpg.Connection,
+    owner_id: int,
+    name: str,
+    *,
+    offset: int = 0,
+) -> tuple[int, int]:
     """Create a strict-list/prerequisite cycle and return list/dependency ids."""
     rows = await raw.fetch(
         "SELECT i.id FROM issues i JOIN threads t ON t.id=i.thread_id "
-        "WHERE t.user_id=$1 ORDER BY i.id LIMIT 2",
+        "WHERE t.user_id=$1 ORDER BY i.id LIMIT 2 OFFSET $2",
         owner_id,
+        offset,
     )
     assert len(rows) == 2
     issue_a, issue_b = (int(row["id"]) for row in rows)
