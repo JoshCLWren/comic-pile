@@ -245,14 +245,8 @@ fn app() -> Router {
         )
         // v1 identity-inbox aliases kept for Vercel rewrite parity.
         .route("/api/v1/identity-inbox", get(native_dispatch))
-        .route(
-            "/api/v1/identity-inbox/search/issues",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}",
-            get(native_dispatch),
-        )
+        .route("/api/v1/identity-inbox/search/issues", get(native_dispatch))
+        .route("/api/v1/identity-inbox/{mapping_id}", get(native_dispatch))
         .route(
             "/api/v1/identity-inbox/{mapping_id}/confirm",
             post(native_dispatch),
