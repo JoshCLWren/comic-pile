@@ -353,12 +353,12 @@
       "method": "POST",
       "path": "/api/v2/reading-graph/repairs",
       "sql_budget": {
-        "application_statements": 6,
-        "transaction_control_statements": 2,
-        "total_statements": 8,
+        "application_statements": 10,
+        "transaction_control_statements": 4,
+        "total_statements": 14,
         "grows_with_data": false,
-        "basis": "preview path: option diagnostics 1 (+2 tx) or confirm path adds lock+delete+reload; worst case shown; refine via parity harness",
-        "max_statements": 8,
+        "basis": "preview: auth 1 + snapshot tx(1+1+1)=4; confirm worst-case: auth 1 + lock tx(1+1+1+1+1)=5 + post-commit reload(1+1+1+1)=4; probes included; set-based, grows_with_data false",
+        "max_statements": 14,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"

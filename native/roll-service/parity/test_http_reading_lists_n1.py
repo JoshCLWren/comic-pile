@@ -337,14 +337,17 @@ async def test_delete_reading_list_statements_bounded() -> None:
         small_delta = (after - before) if before is not None and after is not None else None
         small_nested = (nested_after - nested_before) if nested_before is not None and nested_after is not None else None
 
-        large_id = await _seed_one()
-        # grow unrelated data
+        # Large case: delete a list with many entries; unrelated list count also grows.
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            for i in range(20, 120):
+            large_issue_ids = []
+            for i in range(20, 220):
                 _, ids = await _insert_owned_thread(raw, owner_id, i)
-                await _insert_list(raw, owner_id, f"X-{i}", [ids[0]])
+                large_issue_ids.append(ids[0])
+                if i < 120:
+                    await _insert_list(raw, owner_id, f"X-{i}", [ids[0]])
+            large_id = await _insert_list(raw, owner_id, f"D-{uuid4().hex[:6]}", large_issue_ids)
         finally:
             await raw.close()
 
