@@ -418,10 +418,7 @@ async fn thumb_only_cover_is_shared_by_thread_and_issue_card() {
         thread["comicvine_mapping"]["confirmed_issue_count"],
         json!(1)
     );
-    assert_eq!(
-        thread["comicvine_mapping"]["needs_mapping_count"],
-        json!(0)
-    );
+    assert_eq!(thread["comicvine_mapping"]["needs_mapping_count"], json!(0));
 
     let response = router(ctx.state.clone())
         .oneshot(
