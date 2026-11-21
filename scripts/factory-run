@@ -23,8 +23,9 @@ Usage:
   bash scripts/factory-run --models PROVIDER
 
 Options:
-  --force-slot       Offer a real registered slot even when advisory health is cooling.
-                     Never steal a lease or bypass quotas, task blockers, CI or review.
+  --force-slot       Override historical slot-health ranking to try registered slots.
+                     It cannot launch a worker without claimable work, and never
+                     steals a lease or bypasses quotas, task blockers or CI.
   --slot N           Use the one-based provider slot N, implies --force-slot.
   --target TYPE:N    Choose an existing issue or PR instead of selecting the next task.
   --no-wait          Submit and print the Actions URL without waiting for the result.
@@ -263,6 +264,12 @@ parse_args() {
 }
 
 parse_args "$@"
+# Complete positional provider + model is a deliberate one-command request.
+# Preserve menus for bash scripts/factory-run with omitted selections.
+explicit_selection=false
+if [[ -n "$PROVIDER" && -n "$MODEL" ]]; then
+  explicit_selection=true
+fi
 command -v gh >/dev/null 2>&1 || { echo 'Install and authenticate the GitHub CLI (gh auth login).' >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo 'python3 is required for the menu.' >&2; exit 2; }
 [[ -z "$SLOT_INDEX" || "$SLOT_INDEX" =~ ^[1-9][0-9]*$ ]] || {
@@ -309,13 +316,13 @@ fi
 
 # Explicit command-line arguments choose provider/model, while the interactive
 # console still offers independent task and slot choices.
-if [[ "$interactive" == true && -z "$TARGET" ]]; then
+if [[ "$interactive" == true && "$explicit_selection" == false && -z "$TARGET" ]]; then
   pick_work
 fi
-if [[ "$interactive" == true && "$FORCE_SLOT" == false ]]; then
+if [[ "$interactive" == true && "$explicit_selection" == false && "$FORCE_SLOT" == false ]]; then
   choose_index 'How should the worker slot be chosen?' \
-    'Force the first available registered slot (ignores advisory historical health)' \
-    'Force a specific registered slot number' \
+    'Request a registered slot now (override historical health; requires eligible work)' \
+    'Request a specific registered slot number (still requires eligible work)' \
     'Use normal automatic health-ranked scheduling'
   case "$CHOSEN" in
     0) FORCE_SLOT=true ;;
@@ -328,10 +335,10 @@ if [[ "$interactive" == true && "$FORCE_SLOT" == false ]]; then
   esac
 fi
 
-printf '\nFactory request:\n  provider: %s\n  model: %s\n  work: %s\n  force registered slot: %s\n' \
+printf '\nFactory request:\n  provider: %s\n  model: %s\n  work: %s\n  override historical slot health: %s\n' \
   "$PROVIDER" "$MODEL" "${TARGET:-next eligible real task}" "$FORCE_SLOT"
 [[ -z "$SLOT_INDEX" ]] || printf '  slot number: %s\n' "$SLOT_INDEX"
-if [[ "$interactive" == true ]]; then
+if [[ "$interactive" == true && "$explicit_selection" == false ]]; then
   read -r -p 'Run this selection? [Y/n] ' confirm
   if [[ "$confirm" =~ ^[Nn] ]]; then echo 'Cancelled.'; exit 0; fi
 fi
