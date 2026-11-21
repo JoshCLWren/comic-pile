@@ -5,7 +5,7 @@ import type { components } from '../generated/openapi'
 export type ReadingBoundaryExplanation = components['schemas']['ReadingBoundaryExplanationV2']
 export type BoundaryEditorTarget = components['schemas']['BoundaryEditorTarget']
 export type BoundaryIssue = components['schemas']['BoundaryIssue']
-type Batch = components['schemas']['ReadingBoundaryBatchResponseV2']
+type Batch = components['schemas']['NativeReadingBoundaryBatchResponseV2']
 
 /** Read canonical explanations in bounded batches, never one request per Queue row. */
 export function createReadingBoundariesApi(client: HttpClient) {
