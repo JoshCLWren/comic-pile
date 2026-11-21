@@ -100,6 +100,20 @@ def _lib_source() -> str:
     return LIB_SOURCE.read_text(encoding="utf-8")
 
 
+def _resolve_bare_handler(handler: str) -> str:
+    """Resolve a bare handler name to its declaring service module."""
+    pattern = re.compile(
+        rf"^\s*pub\s+(?:async\s+)?fn\s+{re.escape(handler)}\b",
+        re.MULTILINE,
+    )
+    for path in sorted(SERVICE_SOURCE.glob("*.rs")):
+        if path.name == "lib.rs":
+            continue
+        if pattern.search(path.read_text(encoding="utf-8")):
+            return path.stem
+    raise AssertionError(f"Could not resolve bare handler {handler!r} to a module")
+
+
 def _route_matches() -> list[tuple[str, str]]:
     """Return every parsed mutating HTTP handler occurrence.
 
@@ -109,6 +123,8 @@ def _route_matches() -> list[tuple[str, str]]:
     matches: list[tuple[str, str]] = []
     for match in WRITE_ROUTE_RE.finditer(_lib_source()):
         module, _, handler = match.group("path").rpartition("::")
+        if not module:
+            module = _resolve_bare_handler(handler)
         matches.append((module, handler))
     return matches
 
