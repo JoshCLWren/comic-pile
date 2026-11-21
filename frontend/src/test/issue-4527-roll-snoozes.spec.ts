@@ -27,6 +27,11 @@ for (const count of [1, 25]) {
           affected_threads: [], repairs: [], unresolved_reference_count: 0,
         } })
       }
+      if (path.endsWith('/roll/die-state')) {
+        return route.fulfill({ json: {
+          die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null,
+        } })
+      }
       if (path.endsWith('/roll/offer')) {
         if (count === 1) return route.fulfill({ status: 400, json: { detail: exhaustedMessage } })
         // SAFETY: this route receives the real Roll client payload; the assertion below checks its exclusion array.
