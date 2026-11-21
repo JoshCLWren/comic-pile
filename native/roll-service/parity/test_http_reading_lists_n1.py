@@ -292,16 +292,39 @@ async def test_delete_reading_list_statements_bounded() -> None:
             await db.commit()
             token = _token(username, jti=f"jti-{uuid4().hex}")
 
-        async def _seed_one() -> int:
+        async def _seed_one(list_name: str, num_entries: int = 1) -> int:
             raw = await asyncpg.connect(url)
             try:
                 owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
                 _, ids = await _insert_owned_thread(raw, owner_id, int(uuid4().int % 100000))
-                return await _insert_list(raw, owner_id, f"D-{uuid4().hex[:6]}", [ids[0]])
+                issue_ids = [ids[0]]
+                # Add extra entries if requested
+                for j in range(2, num_entries + 1):
+                    extra_id = int(uuid4().int % 100000)
+                    await raw.execute(
+                        "INSERT INTO issues (thread_id,issue_number,position,status,created_at) "
+                        "VALUES ($1,$2,$3,'unread',NOW())",
+                        thread_id := (await raw.fetchval(
+                            "SELECT id FROM threads WHERE user_id=$1 ORDER BY id LIMIT 1",
+                            owner_id,
+                        )),
+                        str(extra_id),
+                        extra_id % 100 + 1,
+                        "unread",
+                    )
+                    issue_ids.append(await raw.fetchval(
+                        "INSERT INTO issues (thread_id,issue_number,position,status,created_at) "
+                        "VALUES ($1,$2,$3,'unread',NOW()) RETURNING id",
+                        thread_id,
+                        str(extra_id),
+                        extra_id % 100 + 1,
+                    ))
+                list_id = await _insert_list(raw, owner_id, list_name, issue_ids)
+                return list_id
             finally:
                 await raw.close()
 
-        small_id = await _seed_one()
+        small_id = await _seed_one("Small-list", num_entries=1)
         env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{small_id}")
         _, _, before = await db_counters(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
@@ -310,7 +333,8 @@ async def test_delete_reading_list_statements_bounded() -> None:
         _, _, after = await db_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
 
-        large_id = await _seed_one()
+        # Seed a list with many entries to verify budget holds for long lists
+        large_id = await _seed_one("Large-list", num_entries=50)
         # grow unrelated data
         raw = await asyncpg.connect(url)
         try:
