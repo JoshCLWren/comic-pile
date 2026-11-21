@@ -1,39 +1,39 @@
-utc: 2026-11-21T11:34:50Z
-uptime: 112.68s load: 1.22 0.45 0.16
-processes: 203
+utc: 2026-11-21T11:35:06Z
+uptime: 129.24s load: 0.95 0.43 0.16
+processes: 205
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700        1150       11963          49        2944       14550
+Mem:           15700        1285       11827          49        2944       14415
 Swap:              0           0           0
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
 /dev/mapper/cow-root  145G   56G   89G  39% /
 /dev/mapper/cow-root  145G   56G   89G  39% /
 --- top rss (KiB, name only)
-206844 Runner.Worker
-147228 provjobd3977665
-107212 Runner.Listener
+374428 opencode.exe
+207300 Runner.Worker
+155848 provjobd3977665
+107200 Runner.Listener
+90520 opencode
 88028 dockerd
 55240 php-fpm8.5
-52664 containerd
+52672 containerd
 47104 snapd
-45480 gh
 30024 networkd-dispat
 21412 php-fpm8.5
 21412 php-fpm8.5
 17472 systemd-journal
-17056 hosted-compute-
+17072 hosted-compute-
 16116 systemd
-14832 udisksd
 --- top cpu (name only)
- 8.0 gh
- 6.5 Runner.Worker
- 5.5 provjobd3977665
- 1.4 systemd
- 1.2 Runner.Listener
- 0.7 pr/ttyS0
- 0.2 kworker/u16:2+flush-252:0
- 0.2 kworker/u16:0-ext4-rsv-conversion
+24.7 opencode.exe
+ 5.4 Runner.Worker
+ 4.7 provjobd3977665
+ 2.1 opencode
+ 1.2 systemd
+ 1.0 Runner.Listener
+ 0.6 pr/ttyS0
+ 0.3 kworker/u16:2-events_unbound
 --- kernel oom/kill
 --- shutdown/session signals
 2026-11-21T11:33:26+00:00 ip-10-0-139-0 hosted-compute-agent[1944]: {"level":"INFO","ts":1795260806.4704938,"logger":"hosted-compute-agent","msg":"Reading metadata to detect shutdown tag..."}
