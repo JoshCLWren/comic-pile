@@ -360,7 +360,7 @@
         "basis": "preview path: option diagnostics 1 (+2 tx) or confirm path adds lock+delete+reload; worst case shown; refine via parity harness",
         "max_statements": 8,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
-        "measurement_status": "measured",
+        "measurement_status": "partial-branch",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
       }
     },
