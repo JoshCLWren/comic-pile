@@ -27,6 +27,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import asyncpg
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
