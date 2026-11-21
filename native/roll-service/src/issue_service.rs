@@ -1682,6 +1682,13 @@ mod tests {
         let direct = card(&tx, user, 102).await.unwrap();
         assert_eq!(direct.comicvine_issue_id.as_deref(), Some("4000-43"));
         assert_eq!(direct.cover_image_url, covers.items[0].cover_image_url);
+        // #5624: deep-hydrated metadata can retain artwork only in the raw
+        // provider payload. Single-card and bounded batch reads must agree.
+        let direct_thumbnail = card(&tx, user, 301).await.unwrap();
+        assert_eq!(
+            direct_thumbnail.cover_image_url,
+            covers.items[1].cover_image_url
+        );
         tx.rollback().await.unwrap();
     }
 
