@@ -143,8 +143,22 @@ fn invalid(message: impl Into<String>) -> ValidationError {
         message: message.into(),
     }
 }
+
+/// Only explicit `origin=reader` prerequisites carry execution authority.
+///
+/// Converted and legacy-generated rows stay in the database as audit data, but
+/// they must never enter the canonical evaluator or its cycle validator.
+fn authoritative_prerequisites(snapshot: &Snapshot) -> impl Iterator<Item = &Prerequisite> + '_ {
+    snapshot
+        .prerequisites
+        .iter()
+        .filter(|prerequisite| prerequisite.origin == "reader")
+}
+
 impl Snapshot {
-    /// Preserve every owner-scoped constraint. Names default to stable numeric labels.
+    /// Preserve every authoritative owner-scoped constraint. Names default to stable
+    /// numeric labels. Converted and legacy-generated prerequisites are audit data and
+    /// are excluded here so they cannot reach evaluation or cycle validation.
     pub fn from_inputs(inputs: &OptionInputs, names: &BTreeMap<i32, String>) -> Self {
         Self {
             threads: inputs
@@ -196,6 +210,7 @@ impl Snapshot {
             prerequisites: inputs
                 .prerequisites
                 .iter()
+                .filter(|p| p.origin == "reader")
                 .map(|p| Prerequisite {
                     prerequisite_id: p.prerequisite_id,
                     source_issue_id: p.source_issue_id,
@@ -219,13 +234,6 @@ impl Snapshot {
                 .collect::<HashSet<_>>()
                 .len()
                 != self.lists.len()
-            || self
-                .prerequisites
-                .iter()
-                .map(|p| p.prerequisite_id)
-                .collect::<HashSet<_>>()
-                .len()
-                != self.prerequisites.len()
         {
             return Err(invalid("Duplicate snapshot identity"));
         }
@@ -278,6 +286,12 @@ impl Snapshot {
                     p.origin
                 )));
             }
+        }
+        let mut authoritative_ids = HashSet::new();
+        for p in authoritative_prerequisites(self) {
+            if !authoritative_ids.insert(p.prerequisite_id) {
+                return Err(invalid("Duplicate snapshot identity"));
+            }
             referenced.extend([p.source_issue_id, p.target_issue_id]);
         }
         let missing: Vec<_> = referenced
@@ -289,9 +303,7 @@ impl Snapshot {
                 "Snapshot is missing referenced issues: {missing:?}"
             )));
         }
-        if self
-            .prerequisites
-            .iter()
+        if authoritative_prerequisites(self)
             .any(|p| self.excluded_issue_ids.contains(&p.source_issue_id))
         {
             return Err(invalid(
@@ -438,7 +450,7 @@ fn constraint_edges(snapshot: &Snapshot) -> Result<BTreeSet<ConstraintEdge>, Val
             }
         }
     }
-    for p in &snapshot.prerequisites {
+    for p in authoritative_prerequisites(snapshot) {
         let suffix = if p
             .provenance
             .iter()
@@ -1355,6 +1367,66 @@ mod tests {
         assert!(matches!(
             ValidatedReadingInputs::new(unresolved, &BTreeMap::new()),
             Err(ValidationError::InvalidSnapshot { .. })
+        ));
+    }
+
+    #[test]
+    fn converted_prerequisites_do_not_enter_canonical_validation() {
+        let snapshot = Snapshot {
+            threads: vec![Thread {
+                thread_id: 1,
+                name: "X-Force".into(),
+                comicvine_volume_id: None,
+            }],
+            issues: vec![
+                Issue {
+                    issue_id: 10,
+                    thread_id: 1,
+                    position: 1,
+                },
+                Issue {
+                    issue_id: 11,
+                    thread_id: 1,
+                    position: 2,
+                },
+            ],
+            lists: vec![],
+            prerequisites: vec![Prerequisite {
+                prerequisite_id: 77,
+                source_issue_id: 11,
+                target_issue_id: 10,
+                origin: "converted".into(),
+                provenance: vec!["historical classification unknown".into()],
+            }],
+            excluded_issue_ids: BTreeSet::new(),
+        };
+        assert_eq!(validate(&snapshot).unwrap(), vec![10, 11]);
+
+        let mut reader_authored = snapshot;
+        reader_authored.prerequisites[0].origin = "reader".into();
+        reader_authored.prerequisites[0].provenance.clear();
+        let ValidationError::Cycle { message, edges } = validate(&reader_authored).unwrap_err()
+        else {
+            panic!("expected a reader-authored cycle")
+        };
+        assert!(message.contains("Issue 10 --[Thread X-Force series order]--> Issue 11"));
+        assert!(message.contains("prerequisite 77 (reader)"), "{message}");
+        assert_eq!(edges.len(), 2);
+
+        // The same invariant holds through the canonical DB-loaded input path.
+        let mut source = inputs();
+        source.prerequisites.push(OptionPrerequisite {
+            prerequisite_id: 78,
+            source_issue_id: 13,
+            target_issue_id: 12,
+            origin: "converted".into(),
+            provenance: vec!["historical classification unknown".into()],
+        });
+        assert!(ValidatedReadingInputs::new(source.clone(), &BTreeMap::new()).is_ok());
+        source.prerequisites[0].origin = "reader".into();
+        assert!(matches!(
+            ValidatedReadingInputs::new(source, &BTreeMap::new()),
+            Err(ValidationError::Cycle { .. })
         ));
     }
 

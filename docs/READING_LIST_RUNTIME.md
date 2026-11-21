@@ -47,9 +47,11 @@ surface instead of an unknown classification. This does not reclassify existing
 rows.
 Unclassified historical rows and `origin=converted` generated/plan-compiled
 edges are inactive audit data; they cannot override today's canonical Reading
-Lists. A genuinely intended independent historical restriction must be explicitly
-authorized as a reader-owned prerequisite. No provenance classification is required
-to ignore outdated generated restrictions.
+Lists. The Rust owner-scoped loader and the shared cycle validator both exclude
+them before cycle evaluation, so an unrelated legacy cycle cannot veto a canonical
+Reading List write. A genuinely intended independent historical restriction must
+be explicitly authorized as a reader-owned prerequisite. No provenance classification
+is required to ignore outdated generated restrictions.
 
 Roll/skip, manual selection, both bootstrap versions, stale picks, safe queue
 repositioning and Queue pagination consume that result. Durable snooze evidence
