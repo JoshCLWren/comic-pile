@@ -505,3 +505,96 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta, small_nested, large_nested)
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_lists_extra_query_fails_budget() -> None:
+    """A deliberately added extra query must fail the declared budget check."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rlx_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            db.add(User(username=username))
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+        env = _run_env(token, "GET", "/api/v2/reading-lists")
+        _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
+        response, _, _, _ = await run_rust_example(BINARY, env)
+        assert response.get("status") == 200, response
+        _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
+        delta = (after - before) if before is not None and after is not None else None
+        nested = (nested_after - nested_before) if nested_before is not None and nested_after is not None else None
+        assert delta is not None and nested is not None
+        budget_doc = json.loads((__import__("pathlib").Path(__file__).resolve().parents[3] / "docs/api/sql-budget-sources.json").read_text())
+        max_stmts = next(e["sql_budget"]["max_statements"] for e in budget_doc["operations"] if e["method"]=="GET" and e["path"]=="/api/v2/reading-lists")
+        raw = await asyncpg.connect(url)
+        try:
+            for _ in range(max(1, max_stmts - delta + 1)):
+                await raw.execute("SELECT 1")
+        finally:
+            await raw.close()
+        _, _, after_extra = await db_counters(engine)
+        delta_extra = (after_extra - before) if before is not None and after_extra is not None else None
+        assert delta_extra is not None
+        with pytest.raises(AssertionError):
+            assert_declared_budget("GET", "/api/v2/reading-lists", delta_extra, delta_extra, nested, nested)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_lists_n1_query_fails_growth_check() -> None:
+    """A deliberately introduced per-row N+1 query pattern must fail the growth check."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rln1x_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            for i in range(5):
+                _, ids = await _insert_owned_thread(raw, owner_id, i)
+                await _insert_list(raw, owner_id, f"L{i}", [ids[0]])
+        finally:
+            await raw.close()
+        env = _run_env(token, "GET", "/api/v2/reading-lists")
+        _, _, before = await db_counters(engine)
+        response, _, _, _ = await run_rust_example(BINARY, env)
+        assert response.get("status") == 200
+        _, _, after = await db_counters(engine)
+        small_delta = (after - before) if before is not None and after is not None else None
+
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            for i in range(5, 100):
+                _, ids = await _insert_owned_thread(raw, owner_id, i)
+                await _insert_list(raw, owner_id, f"L{i}", [ids[0]])
+        finally:
+            await raw.close()
+        _, _, before2 = await db_counters(engine)
+        response2, _, _, _ = await run_rust_example(BINARY, env)
+        assert response2.get("status") == 200
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            rows = await raw.fetch("SELECT id FROM custom_cbl_lists WHERE user_id=$1 ORDER BY id LIMIT 50", owner_id)
+            for row in rows:
+                await raw.fetchval("SELECT id FROM custom_cbl_lists WHERE id=$1", row["id"])
+        finally:
+            await raw.close()
+        _, _, after2 = await db_counters(engine)
+        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        assert small_delta is not None and large_delta is not None
+        with pytest.raises(AssertionError):
+            assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+    finally:
+        await engine.dispose()
