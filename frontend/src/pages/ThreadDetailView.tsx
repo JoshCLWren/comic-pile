@@ -252,9 +252,12 @@ export default function ThreadDetailView() {
   }, [threadId, requestedIssueId, location.key, hasIssueParam])
 
   // A rename in another tab must be reconciled as soon as this view regains
-  // focus. Listen directly as well as opting the individual queries into
-  // TanStack focus refetching: some browsers deliver only one of these events
-  // for a tab switch, and the Next issue line must not wait for staleTime.
+  // focus. TanStack Query v5's focus manager only listens for
+  // `visibilitychange`, so regaining a still-visible window (a `focus` with no
+  // visibility change) would otherwise wait out the 30s staleTime. Listen for
+  // both events and refresh only the sources this view renders; when the
+  // visibilitychange path already started a fetch, TanStack joins it instead
+  // of issuing a duplicate request.
   const refetchBoundaries = boundaryQuery.refetch
   const refetchLegacyBlockingInfo = legacyBlockingInfo.refetch
   const refetchIssueCards = issueCardsQuery.refetch
