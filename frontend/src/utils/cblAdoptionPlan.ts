@@ -128,6 +128,55 @@ export function applyCblAdoptionChoices(
   }
 }
 
+/** Complete, target-specific consequences of an explicitly selected plan update. */
+export interface CblAdoptionTargetChangePreview {
+  /** Checked entries appended after the plan's existing steps, in source order. */
+  additions: CBLAdoptionPreviewEntry[]
+  /** Checked entries already represented in the target, whose positions stay intact. */
+  alreadyPresent: CBLAdoptionPreviewEntry[]
+  /** Source entries that are not selected and therefore are not applied. */
+  unchanged: CBLAdoptionPreviewEntry[]
+  /** Number of existing target steps whose IDs and curated order are preserved. */
+  preservedStepCount: number
+}
+
+/**
+ * Compare the checked CBL entries with the exact target selected for an update.
+ *
+ * Resolved issue identities distinguish existing target steps from additions. A
+ * missing importable entry has no owned issue identity and therefore cannot
+ * already be a step in the reader's plan. Unselected source entries never
+ * remove or reorder target steps.
+ */
+export function buildCblAdoptionTargetChangePreview(
+  preview: Pick<CBLAdoptionPreview, 'entries'>,
+  targetPlan: Pick<ContinuityPlan, 'nodes'>,
+): CblAdoptionTargetChangePreview {
+  const targetIssueIds = new Set(
+    targetPlan.nodes
+      .filter((node) => node.node_type === 'issue')
+      .map((node) => node.ref_id),
+  )
+  const additions: CBLAdoptionPreviewEntry[] = []
+  const alreadyPresent: CBLAdoptionPreviewEntry[] = []
+  const unchanged: CBLAdoptionPreviewEntry[] = []
+  for (const entry of preview.entries) {
+    if (!entry.adopted) {
+      unchanged.push(entry)
+    } else if (entry.resolved_issue_id !== null && targetIssueIds.has(entry.resolved_issue_id)) {
+      alreadyPresent.push(entry)
+    } else {
+      additions.push(entry)
+    }
+  }
+  return {
+    additions,
+    alreadyPresent,
+    unchanged,
+    preservedStepCount: targetPlan.nodes.length,
+  }
+}
+
 /**
  * Label one Comic Vine volume group for the reader.
  *
