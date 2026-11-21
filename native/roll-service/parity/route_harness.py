@@ -36,6 +36,18 @@ BLOCK_BYTES = 8192
 SQL_BUDGET_SOURCES = Path(__file__).resolve().parents[3] / "docs/api/sql-budget-sources.json"
 
 
+def _budget_entry(method: str, path: str) -> dict[str, object]:
+    """Return the unique editable SQL budget source for one operation."""
+    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
+    matching = [
+        entry
+        for entry in document["operations"]
+        if entry["method"] == method and entry["path"] == path
+    ]
+    assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
+    return matching[0]
+
+
 def assert_declared_budget(method: str, path: str, *measurements: int | None) -> None:
     """Fail when a measured native route exceeds its declared source budget.
 
@@ -47,19 +59,94 @@ def assert_declared_budget(method: str, path: str, *measurements: int | None) ->
     Returns:
         None; invalid measurements raise AssertionError.
     """
-    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
-    matching = [
-        entry
-        for entry in document["operations"]
-        if entry["method"] == method and entry["path"] == path
-    ]
-    assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
-    maximum = matching[0]["sql_budget"]["max_statements"]
+    maximum = _budget_entry(method, path)["sql_budget"]["max_statements"]
     assert isinstance(maximum, int) and maximum >= 0
     for measured in measurements:
         assert measured is not None, "pg_stat_statements must measure every covered route"
         assert measured <= maximum, (
             f"{method} {path} issued {measured} statements; declared maximum is {maximum}"
+        )
+
+
+@dataclass(frozen=True)
+class StatementBreakdown:
+    """PostgreSQL statements split by application, control, runtime, and nesting."""
+
+    application: int
+    transaction_control: int
+    runtime_overhead: int
+    nested: int
+
+    @property
+    def top_level(self) -> int:
+        """Return the total top-level statement count."""
+        return self.application + self.transaction_control + self.runtime_overhead
+
+
+def assert_statement_budget(
+    method: str,
+    path: str,
+    *measurements: StatementBreakdown | None,
+    require_maximum: bool = False,
+) -> None:
+    """Enforce each declared component of a measured route's SQL budget.
+
+    Args:
+        method: HTTP method of the declared operation.
+        path: Route path of the declared operation.
+        *measurements: Statement splits that must be present and within budget.
+        require_maximum: Whether each measurement must equal the worst-case maximum.
+
+    Returns:
+        None; an invalid or over-budget measurement raises AssertionError.
+    """
+    budget = _budget_entry(method, path)["sql_budget"]
+    application_maximum = budget["application_statements"]
+    control_maximum = budget["transaction_control_statements"]
+    overhead_maximum = budget.get("runtime_overhead_statements", 0)
+    nested_maximum = budget.get("max_nested_statements", 0)
+    maximum = budget["max_statements"]
+    for measured in measurements:
+        assert measured is not None, "pg_stat_statements must measure every covered route"
+        assert measured.application <= application_maximum, (
+            f"{method} {path} application statement count changed: "
+            f"{measured.application} > {application_maximum}"
+        )
+        assert measured.transaction_control <= control_maximum, (
+            f"{method} {path} transaction-control statement count changed: "
+            f"{measured.transaction_control} > {control_maximum}"
+        )
+        assert measured.runtime_overhead <= overhead_maximum, (
+            f"{method} {path} runtime-overhead statement count changed: "
+            f"{measured.runtime_overhead} > {overhead_maximum}"
+        )
+        assert measured.nested <= nested_maximum, (
+            f"{method} {path} nested statement count changed: "
+            f"{measured.nested} > {nested_maximum}"
+        )
+        assert_declared_budget(method, path, measured.top_level)
+        if require_maximum:
+            assert measured.top_level == maximum, (
+                f"{method} {path} declares a slack budget: {measured.top_level} measured "
+                f"against a {maximum} maximum, so one extra query would still fit"
+            )
+
+
+def assert_no_statement_growth(
+    method: str,
+    path: str,
+    small: StatementBreakdown,
+    large: StatementBreakdown,
+) -> None:
+    """Fail when any fixed-budget statement component grows with data size."""
+    budget = _budget_entry(method, path)["sql_budget"]
+    assert budget["grows_with_data"] is False, f"{method} {path} must have a fixed SQL budget"
+    for component in ("application", "transaction_control", "runtime_overhead", "nested"):
+        small_count = getattr(small, component)
+        large_count = getattr(large, component)
+        assert large_count <= small_count, (
+            f"{method} {path} {component} statement count grew with data size: "
+            f"{small_count} -> {large_count}"
         )
 
 
