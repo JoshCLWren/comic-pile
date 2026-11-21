@@ -208,19 +208,21 @@ def _test_module(module: str) -> str:
 
 def _mounted_route(module: str, handler: str, method: str, route_path: str) -> bool:
     """Return whether the exact method/path mounts this handler, including chained routes."""
-    route = re.search(
+    routes = re.finditer(
         rf'\.route\(\s*"{re.escape(route_path)}"\s*,(?P<body>.*?)(?=\.route\(|\Z)',
         _lib_source(),
         flags=re.DOTALL,
     )
-    if route is None:
-        return False
     qualified_handler = rf"(?:[a-z_0-9]+::)*{re.escape(handler)}"
-    return re.search(
-        rf"(?<![A-Za-z0-9_]){method.lower()}\(\s*{qualified_handler}\s*\)",
-        route.group("body"),
-        flags=re.DOTALL,
-    ) is not None
+    return any(
+        re.search(
+            rf"(?<![A-Za-z0-9_]){method.lower()}\(\s*{qualified_handler}\s*\)",
+            route.group("body"),
+            flags=re.DOTALL,
+        )
+        is not None
+        for route in routes
+    )
 
 
 def _rust_function(source: str, name: str) -> str:
