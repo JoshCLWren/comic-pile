@@ -210,9 +210,7 @@ async def run_rust_example(
 
 def format_measurement(measurement: RouteMeasurement) -> str:
     """Return the canonical one-line record of a measurement."""
-    statements = (
-        str(measurement.db_statements) if measurement.db_statements is not None else "n/a"
-    )
+    statements = str(measurement.db_statements) if measurement.db_statements is not None else "n/a"
     nested = (
         str(measurement.db_nested_statements)
         if measurement.db_nested_statements is not None

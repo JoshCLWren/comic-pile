@@ -178,8 +178,7 @@ def _assert_fixed_budget(
     )
     assert small.db_nested_statements >= 0 and large.db_nested_statements >= 0
     assert large.db_nested_statements <= small.db_nested_statements + 2, (
-        f"nested statement count grew: {small.db_nested_statements} -> "
-        f"{large.db_nested_statements}"
+        f"nested statement count grew: {small.db_nested_statements} -> {large.db_nested_statements}"
     )
 
 
@@ -190,7 +189,9 @@ async def _assert_cycle_persisted(
 ) -> None:
     """Prove preview did not mutate the list, entries, or dependency."""
     assert await raw.fetchval("SELECT count(*) FROM custom_cbl_lists WHERE id=$1", list_id) == 1
-    assert await raw.fetchval("SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", list_id) == 2
+    assert (
+        await raw.fetchval("SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", list_id) == 2
+    )
     assert await raw.fetchval("SELECT count(*) FROM dependencies WHERE id=$1", dependency_id) == 1
 
 
@@ -201,13 +202,18 @@ async def _assert_repair_persisted(
 ) -> None:
     """Prove apply removed only the selected list and preserved other records."""
     assert await raw.fetchval("SELECT count(*) FROM custom_cbl_lists WHERE id=$1", list_id) == 0
-    assert await raw.fetchval("SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", list_id) == 0
+    assert (
+        await raw.fetchval("SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", list_id) == 0
+    )
     assert await raw.fetchval("SELECT count(*) FROM dependencies WHERE id=$1", dependency_id) == 1
-    assert await raw.fetchval(
-        "SELECT count(*) FROM issues i JOIN dependencies d ON d.id=$1 "
-        "WHERE i.id=d.source_issue_id OR i.id=d.target_issue_id",
-        dependency_id,
-    ) == 2
+    assert (
+        await raw.fetchval(
+            "SELECT count(*) FROM issues i JOIN dependencies d ON d.id=$1 "
+            "WHERE i.id=d.source_issue_id OR i.id=d.target_issue_id",
+            dependency_id,
+        )
+        == 2
+    )
 
 
 @pytest.mark.asyncio
@@ -308,9 +314,7 @@ async def test_reading_graph_confirmed_repairs_measure_small_and_large() -> None
             await _assert_repair_persisted(raw, small_list, small_dependency)
 
             await _seed_threads(raw, owner_id, 5, 200)
-            large_list, large_dependency = await _seed_cycle(
-                raw, owner_id, "Apply large", offset=2
-            )
+            large_list, large_dependency = await _seed_cycle(raw, owner_id, "Apply large", offset=2)
             large_env = _run_env(
                 token,
                 "POST",

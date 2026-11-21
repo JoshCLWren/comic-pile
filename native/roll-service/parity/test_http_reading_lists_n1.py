@@ -158,8 +158,7 @@ def _assert_fixed_budget(
     )
     assert small.db_nested_statements >= 0 and large.db_nested_statements >= 0
     assert large.db_nested_statements <= small.db_nested_statements + 2, (
-        f"nested statement count grew: {small.db_nested_statements} -> "
-        f"{large.db_nested_statements}"
+        f"nested statement count grew: {small.db_nested_statements} -> {large.db_nested_statements}"
     )
 
 
@@ -182,7 +181,9 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
             assert small_response.get("status") == 200, small_response
             small_body = small_response.get("body")
             assert isinstance(small_body, list) and len(small_body) == 5
-            assert all(isinstance(item, dict) and item.get("issue_count") == 1 for item in small_body)
+            assert all(
+                isinstance(item, dict) and item.get("issue_count") == 1 for item in small_body
+            )
 
             new_issue_ids = await _seed_issue_ids(raw, owner_id, 5, 200)
             for offset, issue_id in enumerate(new_issue_ids, start=5):
@@ -298,22 +299,34 @@ async def test_delete_reading_list_statements_bounded_for_long_list() -> None:
             )
             assert small_response.get("status") == 204, small_response
             assert small_response.get("body") is None
-            assert await raw.fetchval("SELECT count(*) FROM custom_cbl_lists WHERE id=$1", small_id) == 0
+            assert (
+                await raw.fetchval("SELECT count(*) FROM custom_cbl_lists WHERE id=$1", small_id)
+                == 0
+            )
 
             large_id = await _insert_list(raw, owner_id, "Delete large", issue_ids)
-            assert await raw.fetchval(
-                "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", large_id
-            ) == 200
+            assert (
+                await raw.fetchval(
+                    "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", large_id
+                )
+                == 200
+            )
             large_env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
             large_response, large = await measure_route_response(
                 BINARY, large_env, engine, "DELETE /api/v2/reading-lists/{list_id}", "200-entries"
             )
             assert large_response.get("status") == 204, large_response
             assert large_response.get("body") is None
-            assert await raw.fetchval("SELECT count(*) FROM custom_cbl_lists WHERE id=$1", large_id) == 0
-            assert await raw.fetchval(
-                "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", large_id
-            ) == 0
+            assert (
+                await raw.fetchval("SELECT count(*) FROM custom_cbl_lists WHERE id=$1", large_id)
+                == 0
+            )
+            assert (
+                await raw.fetchval(
+                    "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", large_id
+                )
+                == 0
+            )
             _assert_fixed_budget("DELETE", LIST_PATH, small, large)
         finally:
             await raw.close()
@@ -346,9 +359,12 @@ async def test_create_reading_list_statements_respect_fixed_budget() -> None:
             assert small_body.get("name") == "Small" and small_body.get("issue_count") == 5
             assert isinstance(small_body.get("entries"), list) and len(small_body["entries"]) == 5
             small_id = small_body.get("id")
-            assert await raw.fetchval(
-                "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", small_id
-            ) == 5
+            assert (
+                await raw.fetchval(
+                    "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", small_id
+                )
+                == 5
+            )
 
             large_env = _run_env(
                 token,
@@ -364,9 +380,12 @@ async def test_create_reading_list_statements_respect_fixed_budget() -> None:
             assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
             assert isinstance(large_body.get("entries"), list) and len(large_body["entries"]) == 200
             large_id = large_body.get("id")
-            assert await raw.fetchval(
-                "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", large_id
-            ) == 200
+            assert (
+                await raw.fetchval(
+                    "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", large_id
+                )
+                == 200
+            )
             _assert_fixed_budget("POST", LISTS_PATH, small, large)
         finally:
             await raw.close()
@@ -398,9 +417,12 @@ async def test_update_reading_list_statements_respect_fixed_budget() -> None:
             small_body = small_response.get("body")
             assert isinstance(small_body, dict)
             assert small_body.get("name") == "Up-small" and small_body.get("issue_count") == 5
-            assert await raw.fetchval(
-                "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", list_id
-            ) == 5
+            assert (
+                await raw.fetchval(
+                    "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", list_id
+                )
+                == 5
+            )
 
             large_env = _run_env(
                 token,
@@ -416,9 +438,12 @@ async def test_update_reading_list_statements_respect_fixed_budget() -> None:
             assert isinstance(large_body, dict)
             assert large_body.get("name") == "Up-large" and large_body.get("issue_count") == 200
             assert isinstance(large_body.get("entries"), list) and len(large_body["entries"]) == 200
-            assert await raw.fetchval(
-                "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", list_id
-            ) == 200
+            assert (
+                await raw.fetchval(
+                    "SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", list_id
+                )
+                == 200
+            )
             _assert_fixed_budget("PUT", LIST_PATH, small, large)
         finally:
             await raw.close()
