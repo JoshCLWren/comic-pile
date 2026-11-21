@@ -37,7 +37,7 @@ vi.mock('../hooks/useThread', async () => {
   return { ...actual, useUpdateThread: vi.fn() }
 })
 vi.mock('../services/api-threads', () => ({
-  threadsApi: { get: vi.fn() },
+  threadsApi: { get: vi.fn(), update: vi.fn() },
 }))
 vi.mock('../services/api-dependencies', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-dependencies')>()
@@ -82,6 +82,7 @@ vi.mock('../services/api-tags', async (importOriginal) => {
 })
 const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedThreadsApiGet = vi.mocked(threadsApi.get)
+const mockedThreadsApiUpdate = vi.mocked(threadsApi.update)
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
 const mockedIssuesApiListCreators = vi.mocked(issuesApi.listCreators)
 const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
@@ -96,6 +97,7 @@ beforeEach(() => {
   // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   mockedThreadsApiGet.mockReset()
+  mockedThreadsApiUpdate.mockReset()
   // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1,
@@ -122,6 +124,46 @@ function renderPage() {
       </ToastProvider>
     </MemoryRouter>,
   )
+}
+
+function canonicalNextBoundary(title: string) {
+  return {
+    threads: { 1: {
+      thread_id: 1,
+      state: 'available',
+      summary: `${title} #1 is available next.`,
+      blockers: [],
+      next: { issue: {
+        issue_id: 401,
+        thread_id: 1,
+        thread_title: title,
+        issue_number: '1',
+        label: `${title} #1`,
+        volume_label: null,
+      } },
+    } },
+  }
+}
+
+function canonicalNextCard(title: string): IssueCard {
+  return {
+    issue_id: 401,
+    thread_id: 1,
+    thread_title: title,
+    issue_number: '1',
+    status: 'unread',
+    rating: null,
+    mapping_state: 'confirmed',
+    has_confirmed_identity: true,
+    cover_image_url: 'https://comicvine.example/saga-1.jpg',
+  }
+}
+
+function setVisibilityState(state: DocumentVisibilityState): void {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value: state,
+  })
 }
 
 it('renders a thread without legacy rating content', async () => {
@@ -214,6 +256,116 @@ it('loads the next issue cover before expansion and shares its card batch with I
   expect(screen.getAllByRole('img', { name: 'Cover for Saga #3' })).toHaveLength(2)
   // One batch for the visible row IDs, never one query per issue.
   expect(fetchCards).toHaveBeenCalledTimes(2)
+  fetchCards.mockRestore()
+})
+
+it('updates the Next issue title immediately after a same-tab rename and rename back (#5616)', async () => {
+  const actualUseThread = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
+  mockedUseUpdateThread.mockImplementation(actualUseThread.useUpdateThread)
+  let currentTitle = 'Superman'
+  const currentThread = () => ({
+    id: 1,
+    title: currentTitle,
+    format: 'Comics',
+    issues_remaining: 1,
+    queue_position: 1,
+    status: 'active',
+    total_issues: 1,
+    next_unread_issue_number: '1',
+    notes: null,
+  })
+  mockedThreadsApiGet.mockImplementation(
+    // SAFETY: the fixture supplies every thread field this rename scenario reads.
+    async () => currentThread() as never,
+  )
+  mockedThreadsApiUpdate.mockImplementation(async (_id, data) => {
+    currentTitle = data.title ?? currentTitle
+    // SAFETY: the update response uses the same complete thread fixture as the read.
+    return currentThread() as never
+  })
+  vi.mocked(readingBoundariesApi.batch).mockImplementation(
+    // SAFETY: the canonical boundary fixture supplies the complete Next-issue projection.
+    async () => canonicalNextBoundary(currentTitle) as never,
+  )
+  const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockImplementation(
+    async () => [canonicalNextCard(currentTitle)],
+  )
+  const user = userEvent.setup()
+  renderPage()
+
+  await screen.findByText('Superman #1 is available next.')
+  const rename = async (nextTitle: string) => {
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    const titleInput = screen.getByDisplayValue(currentTitle)
+    await user.clear(titleInput)
+    await user.type(titleInput, nextTitle)
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    // The default findBy timeout is one second: this must never wait for the
+    // old 15–30 second stale-cache window.
+    expect(await screen.findByText(`${nextTitle} #1 is available next.`)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: `Open ${nextTitle} issue #1` })).toHaveTextContent(`${nextTitle} #1`)
+    expect(screen.getByRole('img', { name: `Cover for ${nextTitle} #1` })).toBeInTheDocument()
+  }
+
+  await rename('Superman QA Sync')
+  await rename('Superman')
+  fetchCards.mockRestore()
+})
+
+it('refreshes the Next issue title on tab visibility and focus after another-tab rename (#5616)', async () => {
+  let currentTitle = 'Superman'
+  mockedThreadsApiGet.mockImplementation(
+    // SAFETY: the fixture supplies every thread field this focus-sync scenario reads.
+    async () => ({
+      id: 1,
+      title: currentTitle,
+      format: 'Comics',
+      issues_remaining: 1,
+      queue_position: 1,
+      status: 'active',
+      total_issues: 1,
+      next_unread_issue_number: '1',
+      notes: null,
+    }) as never,
+  )
+  vi.mocked(readingBoundariesApi.batch).mockImplementation(
+    // SAFETY: the canonical boundary fixture supplies the complete Next-issue projection.
+    async () => canonicalNextBoundary(currentTitle) as never,
+  )
+  const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockImplementation(
+    async () => [canonicalNextCard(currentTitle)],
+  )
+  renderPage()
+  await screen.findByText('Superman #1 is available next.')
+
+  // Another tab commits the rename while this one is hidden. No reload,
+  // timer advance, or staleTime expiry is part of this reproduction.
+  currentTitle = 'Superman QA Sync2'
+  setVisibilityState('hidden')
+  fireEvent(document, new Event('visibilitychange'))
+  setVisibilityState('visible')
+  fireEvent(document, new Event('visibilitychange'))
+
+  expect(await screen.findByText('Superman QA Sync2 #1 is available next.')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Superman QA Sync2' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Open Superman QA Sync2 issue #1' })).toHaveTextContent('Superman QA Sync2 #1')
+  expect(screen.getByRole('img', { name: 'Cover for Superman QA Sync2 #1' })).toBeInTheDocument()
+
+  // Exercise the focus-only browser path as well, and restore the QA title.
+  currentTitle = 'Superman'
+  fireEvent.focus(window)
+  expect(await screen.findByText('Superman #1 is available next.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Open Superman issue #1' })).toHaveTextContent('Superman #1')
+
+  // The canonical boundary is available, so the legacy blocking batch is
+  // disabled; a focus refetch must not run its queryFn with a null thread id.
+  const blockingCalls = vi.mocked(dependenciesApi.getBatchBlockingInfo).mock.calls
+  expect(
+    blockingCalls.every(([threadIds]) =>
+      threadIds.every((threadId) => Number.isInteger(threadId) && threadId > 0),
+    ),
+  ).toBe(true)
   fetchCards.mockRestore()
 })
 

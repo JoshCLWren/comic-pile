@@ -251,6 +251,47 @@ export default function ThreadDetailView() {
     }
   }, [threadId, requestedIssueId, location.key, hasIssueParam])
 
+  // A rename in another tab must be reconciled as soon as this view regains
+  // focus. TanStack Query v5's focus manager only listens for
+  // `visibilitychange`, so regaining a still-visible window (a `focus` with no
+  // visibility change) would otherwise wait out the 30s staleTime. Listen for
+  // both events and refresh only the sources this view renders; when the
+  // visibilitychange path already started a fetch, TanStack joins it instead
+  // of issuing a duplicate request.
+  const refetchBoundaries = boundaryQuery.refetch
+  const refetchLegacyBlockingInfo = legacyBlockingInfo.refetch
+  const refetchIssueCards = issueCardsQuery.refetch
+  useEffect(() => {
+    function onViewFocus() {
+      if (document.visibilityState !== 'visible') return
+      // `refetch()` still runs a disabled query's queryFn, so refresh only the
+      // sources this view actually renders. Otherwise the canonical deployment
+      // would POST a null thread id to the legacy blocking batch on every focus.
+      if (threadId != null) {
+        void refetch()
+        void refetchBoundaries()
+      }
+      if (canonicalBoundaryUnavailable) void refetchLegacyBlockingInfo()
+      if (nextBoundaryIssueId != null || (issuesExpanded && !issuesError)) void refetchIssueCards()
+    }
+    document.addEventListener('visibilitychange', onViewFocus)
+    window.addEventListener('focus', onViewFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onViewFocus)
+      window.removeEventListener('focus', onViewFocus)
+    }
+  }, [
+    threadId,
+    canonicalBoundaryUnavailable,
+    nextBoundaryIssueId,
+    issuesExpanded,
+    issuesError,
+    refetch,
+    refetchBoundaries,
+    refetchLegacyBlockingInfo,
+    refetchIssueCards,
+  ])
+
   // Deep-link arrival (#3626): jump straight to the exact canonical issue named
   // by `?issue=<issue_id>`, focus it so keyboard and assistive-technology users
   // start at the issue the link named, and mark it as the arrival target so it
