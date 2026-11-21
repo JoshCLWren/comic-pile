@@ -93,6 +93,8 @@ jobs:
       FACTORY_NEON_LEASE_REQUIRED: 'true'
       FACTORY_DISCOVERY_TARGET: ${{ inputs.target }}
       FACTORY_READER_APP_ID: ${{ secrets.FACTORY_READER_APP_ID }}
+    outputs:
+      rescue_delay: ${{ steps.chain.outputs.rescue_delay }}
     concurrency:
       group: fixed-model-factory-dispatch
       queue: max
@@ -112,7 +114,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: JoshCLWren/rotisserie
-          ref: 7b3aa698b0bc606c693008f217455711c954d753
+          ref: main
           path: .rotisserie/runtime
           persist-credentials: false
       - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
@@ -636,6 +638,7 @@ jobs:
               none)
                 reason="$(jq -r '.reason // "no_work"' <<< "$assignment" 2>/dev/null || echo no_work)"
                 if [[ "$reason" == "worker_unavailable" ]]; then
+                  unavailable_count=$(( ${unavailable_count:-0} + 1 ))
                   echo "Factory ${worker}: unavailable this tick; trying next worker"
                 else
                   echo "Factory ${worker}: no executable control-plane assignment"
@@ -780,6 +783,7 @@ jobs:
 
           echo "Dispatching workers through centralized assignment: $workers"
           dispatched_count=0
+          unavailable_count=0
           dispatch_failures=0
           budget_deferred=false
           budget_unreadable=false
@@ -808,6 +812,7 @@ jobs:
           echo "budget_unreadable=${budget_unreadable}" >> "$GITHUB_OUTPUT"
           echo "Dispatched ${dispatched_count} worker entry workflow(s)"
           echo "dispatched_count=${dispatched_count}" >> "$GITHUB_OUTPUT"
+          echo "unavailable_count=${unavailable_count}" >> "$GITHUB_OUTPUT"
           if (( dispatch_failures > 0 )); then
             echo "dispatch_failed=true" >> "$GITHUB_OUTPUT"
             echo "${dispatch_failures} worker dispatch(es) failed after retries; later workers were still attempted" >&2
@@ -892,12 +897,14 @@ jobs:
           python3 .github/scripts/factory_state_metrics.py "$RUNNER_TEMP/factory-query-counts.jsonl" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Queue roster successor outside assignment lease lock
+        id: chain
         if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster')) && !inputs.target && steps.rotisserie_install.outcome == 'success' && (steps.api_budget.outputs.allow == 'true' || steps.api_budget.outputs.quota_deferred == 'true')
         continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           DISPATCHED_COUNT: ${{ steps.dispatch_workers.outputs.dispatched_count }}
+          UNAVAILABLE_COUNT: ${{ steps.dispatch_workers.outputs.unavailable_count }}
           DISPATCH_FAILED: ${{ steps.dispatch_workers.outputs.dispatch_failed }}
           API_RESET_EPOCH: ${{ steps.api_budget.outputs.reset_epoch }}
           QUOTA_DEFERRED: ${{ steps.api_budget.outputs.quota_deferred }}
@@ -923,6 +930,16 @@ jobs:
           # A valid low REST budget must not kill the roster chain until GitHub's
           # next hourly watchdog. Delegate the quota-reset delay without polling
           # or holding either concurrency lock.
+          # This job holds the assignment lock, so retry without sleeping.
+          dispatch_with_retry() {
+            local attempt
+            for attempt in 1 2 3; do
+              "$@" && return 0
+              echo "::warning::workflow dispatch failed (attempt ${attempt}/3)"
+            done
+            return 1
+          }
+
           defer_until_reset() {
             local reset_epoch="${API_RESET_EPOCH:-}" now_epoch delay_seconds
             if ! [[ "$reset_epoch" =~ ^[0-9]+$ && ${#reset_epoch} -le 11 ]]; then
@@ -937,8 +954,9 @@ jobs:
               return 1
             fi
             echo "REST reserve reached; queueing roster for quota reset in ${delay_seconds}s"
-            gh workflow run fixed-model-factory-roster-successor.yml \
-              --repo "$GITHUB_REPOSITORY" --ref main -f "delay_seconds=$delay_seconds"
+            dispatch_with_retry gh workflow run fixed-model-factory-roster-successor.yml \
+              --repo "$GITHUB_REPOSITORY" --ref main -f "delay_seconds=$delay_seconds" \
+              || { echo "rescue_delay=${delay_seconds}" >> "$GITHUB_OUTPUT"; return 1; }
           }
 
           if [[ "${QUOTA_DEFERRED:-}" == "true" || "${BUDGET_DEFERRED:-}" == "true" ]]; then
@@ -949,12 +967,17 @@ jobs:
           chain_roster_successor() {
             # Never sleep while holding fixed-model-factory-dispatch's shared
             # assignment lock or its workflow-level ingress lock.
-            gh workflow run fixed-model-factory-roster-successor.yml \
-              --repo "$GITHUB_REPOSITORY" --ref main -f delay_seconds=240
+            dispatch_with_retry gh workflow run fixed-model-factory-roster-successor.yml \
+              --repo "$GITHUB_REPOSITORY" --ref main -f delay_seconds=240 \
+              || { echo "rescue_delay=240" >> "$GITHUB_OUTPUT"; return 1; }
           }
 
           if [[ "$dispatch_failed" == "true" || ( "$dispatched_count" =~ ^[0-9]+$ && "$dispatched_count" -gt 0 ) ]]; then
             echo "Chaining roster successor (dispatched_count=${dispatched_count}, dispatch_failed=${dispatch_failed})"
+            chain_roster_successor
+          elif [[ "$dispatched_count" == "0" && "${UNAVAILABLE_COUNT:-0}" =~ ^[1-9][0-9]*$ ]]; then
+            # Unavailable workers say nothing about the queue; keep the chain.
+            echo "No dispatch, but ${UNAVAILABLE_COUNT} worker(s) were unavailable; chaining roster successor"
             chain_roster_successor
           elif [[ "$dispatched_count" == "0" && "$dispatch_failed" == "false" ]]; then
             echo 'Trustworthy zero-work tick: ending bounded roster session; hourly watchdog cron remains armed'
@@ -962,3 +985,37 @@ jobs:
             echo "Dispatch outputs missing or untrustworthy (dispatched_count=${dispatched_count:-<unset>}, dispatch_failed=${dispatch_failed:-<unset>}); chaining roster successor"
             chain_roster_successor
           fi
+
+  # The dispatch job holds the assignment lock and cannot sleep. When its
+  # quick retries all fail, back off here, after that lock is released.
+  chain_rescue:
+    needs: dispatch
+    if: always() && needs.dispatch.outputs.rescue_delay != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Queue roster successor with backoff
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESCUE_DELAY: ${{ needs.dispatch.outputs.rescue_delay }}
+        run: |
+          set -Eeuo pipefail
+          if [[ ! "$RESCUE_DELAY" =~ ^[1-9][0-9]*$ ]] || (( RESCUE_DELAY < 15 || RESCUE_DELAY > 3700 )); then
+            echo "::error::Rescue delay must be between 15 and 3700 seconds" >&2
+            exit 1
+          fi
+          for attempt in 1 2 3 4; do
+            sleep $(( 15 * (1 << (attempt - 1)) ))
+            if gh workflow run fixed-model-factory-roster-successor.yml \
+              --repo "$GITHUB_REPOSITORY" --ref main -f "delay_seconds=$RESCUE_DELAY"; then
+              echo "Roster successor queued on rescue attempt ${attempt}/4"
+              exit 0
+            fi
+            echo "::warning::rescue dispatch failed (attempt ${attempt}/4)"
+          done
+          echo "::error::Roster chain ended: successor dispatch failed after rescue retries" >&2
+          exit 1

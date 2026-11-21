@@ -220,7 +220,7 @@ tooling. Within-series `Issue.position` is never compiled into blocking
 - [REACT_ARCHITECTURE.md](REACT_ARCHITECTURE.md): Frontend-specific architecture
 - [VERCEL_ARCHITECTURE.md](VERCEL_ARCHITECTURE.md): Deployment architecture details
 - [FRONTEND_OPENAPI_TYPES.md](FRONTEND_OPENAPI_TYPES.md): Frontend type generation details
-- [AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md): Autonomous factory workflow
+- [AUTONOMOUS_FACTORY_POLICY.md](./AUTONOMOUS_FACTORY_POLICY.md): Autonomous factory workflow
 - [ISSUE_EXECUTION_PROTOCOL.md](ISSUE_EXECUTION_PROTOCOL.md): Issue execution guidelines
 
 ## Change Log
