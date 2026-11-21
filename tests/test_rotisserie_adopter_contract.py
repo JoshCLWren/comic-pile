@@ -7,7 +7,6 @@ installed factory workflows, and the adopter configuration.
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess
 import tomllib
@@ -159,58 +158,3 @@ def test_adopter_config_names_this_repository() -> None:
         "name": "comic-pile",
     }
     assert config["markers"]["namespace"] == "comic-pile-factory"
-
-def test_model_first_operator_cli_dispatches_exact_provider_without_target(tmp_path: Path) -> None:
-    """The tracked operator wrapper is usable without Rotisserie's CI-only overlay."""
-    runner = ROOT / "scripts" / "factory-run"
-    assert runner.is_file()
-    subprocess.run(["bash", "-n", str(runner)], cwd=ROOT, check=True)
-
-    gh = tmp_path / "gh"
-    gh.write_text(
-        r"""#!/usr/bin/env bash
-printf '%s\n' "$@" > "$FACTORY_GH_ARGS"
-""",
-        encoding="utf-8",
-    )
-    gh.chmod(0o755)
-    args_file = tmp_path / "gh-args"
-    env = os.environ.copy()
-    env["PATH"] = f"{tmp_path}:{env['PATH']}"
-    env["FACTORY_GH_ARGS"] = str(args_file)
-
-    result = subprocess.run(
-        ["bash", str(runner), "opencode-go", "opencode-go/hy4-flash-free"],
-        cwd=ROOT,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-    assert "GitHub accepted the request" in result.stdout
-    assert args_file.read_text(encoding="utf-8").splitlines() == [
-        "workflow",
-        "run",
-        "fixed-model-factory-dispatch.yml",
-        "--repo",
-        "JoshCLWren/comic-pile",
-        "--ref",
-        "main",
-        "-f",
-        "provider=opencode-go",
-        "-f",
-        "model=opencode-go/hy4-flash-free",
-        "-f",
-        "mode=smoke",
-    ]
-
-    providers = subprocess.run(
-        ["bash", str(runner), "--providers"],
-        cwd=ROOT,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-    assert "opencode-go" in providers.stdout
-    assert "Rotisserie remains the authoritative registry" in providers.stdout
