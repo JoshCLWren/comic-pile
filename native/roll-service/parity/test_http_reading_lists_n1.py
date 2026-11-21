@@ -263,8 +263,7 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
             await raw.close()
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}/reader")
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small, small_statements = await _measure_route(engine, env)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, dict)
@@ -272,9 +271,11 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
         assert body.get("execution_mode") == "option_e"
         entries = body.get("entries")
         assert isinstance(entries, list) and len(entries) == 5
-        assert all(e.get("availability") in {"available", "later", "blocked", "read", "excluded", "inactive"} for e in entries)
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
+        assert all(
+            e.get("availability")
+            in {"available", "later", "blocked", "read", "excluded", "inactive"}
+            for e in entries
+        )
 
         raw = await asyncpg.connect(url)
         try:
