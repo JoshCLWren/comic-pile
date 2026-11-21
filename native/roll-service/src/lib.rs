@@ -1132,6 +1132,14 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(dependencies::get_thread_dependencies),
         )
         .route(
+            "/api/v1/roll/dismiss-pending",
+            post(dismiss_pending::dismiss_pending),
+        )
+        .route(
+            "/api/roll/dismiss-pending",
+            post(dismiss_pending::dismiss_pending),
+        )
+        .route(
             "/api/v2/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
