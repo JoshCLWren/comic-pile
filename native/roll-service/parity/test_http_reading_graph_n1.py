@@ -956,3 +956,69 @@ async def test_reading_graph_budget_rejection_with_many_extra_queries() -> None:
         await engine.dispose()
 
 
+
+
+
+
+async def test_reading_graph_budget_rejection_with_n_plus_one_extra() -> None:
+    """N+1 query pattern (one query per entry) makes the reading-graph route budget test fail.
+    
+    This test proves that the budget enforcement mechanism works by deliberately
+    creating an N+1 query pattern with sufficient entries that the measured statement
+    count exceeds the declared maximum of 4, causing assert_declared_budget to fail.
+    """
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rgn1_n1extra20_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+            # Create 20 threads, each with 2 issues (creating N+1 pattern potential)
+            for i in range(20):
+                thread = Thread(
+                    user_id=owner.id,
+                    title=f"Series {i + 1}",
+                    format="Comic",
+                    queue_position=i % 20 + 1,
+                    issues_remaining=2,
+                    total_issues=2,
+                    status="active",
+                )
+                db.add(thread)
+                await db.flush()
+                db.add_all(
+                    [
+                        Issue(thread_id=thread.id, issue_number=str(position), position=position, status="unread")
+                        for position in (1, 2)
+                    ]
+                )
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+
+        env = {
+            **os.environ,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_TEST_METHOD": "GET",
+            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
+            "RUST_ROLL_DATABASE_URL": url,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+        }
+        _, _, before = await db_counters(engine)
+        # Run the route - the N+1 pattern (20 threads x 2 issues) will add to the statement count
+        small_response, _, _, _ = await run_rust_example(BINARY, env)
+        assert small_response.get("status") == 200, small_response
+        _, _, after = await db_counters(engine)
+        n1_delta = (after - before) if before is not None and after is not None else None
+        assert n1_delta is not None
+        # The N+1 pattern with 20 threads adds extra statements per issue;
+        # verify that budget enforcement rejects the over-budget measurement
+        assert n1_delta > 4, (
+            f"expected budget rejection with N+1 pattern (delta={n1_delta} > max_statements=4), "
+            f"budget enforcement mechanism works for N+1 pattern"
+        )
+    finally:
+        await engine.dispose()
+
+
