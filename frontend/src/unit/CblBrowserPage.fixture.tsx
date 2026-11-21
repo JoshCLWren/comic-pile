@@ -29,6 +29,7 @@ vi.mock('../services/api-cbl-sources', () => ({
     browse: vi.fn(),
     preview: vi.fn(),
     plan: vi.fn(),
+    commit: vi.fn(),
     commitNew: vi.fn(),
     compare: vi.fn(),
     findByComicvineIssue: vi.fn(),
@@ -89,6 +90,7 @@ vi.mock('../query/cacheEffects', () => ({
 export const mockBrowse = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.browse)
 export const mockPreview = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.preview)
 export const mockPlan = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.plan)
+export const mockCommit = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commit)
 export const mockCommitNew = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commitNew)
 export const mockGraphPreview = cast<ReturnType<typeof vi.fn>>(readingGraphApi.preview)
 export const mockListPlans = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
@@ -243,6 +245,7 @@ beforeEach(() => {
   queryClient.clear()
   mockGraphPreview.mockResolvedValue(withoutOverlap())
   mockBrowse.mockResolvedValue(browsePage())
+  mockListPlans.mockResolvedValue([])
 })
 
 export async function searchFor(user: ReturnType<typeof userEvent.setup>, term = 'ultimate') {

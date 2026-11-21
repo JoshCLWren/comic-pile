@@ -380,6 +380,8 @@ export const queryKeys = {
     readingListCandidates: (listId: number) =>
       ['cblSources', 'readingListCandidates', listId] as const,
     preview: (listId: number) => ['cblSources', 'preview', listId] as const,
+    /** Fresh existing-plan collision check for one source's adoption decision. */
+    adoptionTargets: (listId: number) => ['cblSources', 'adoptionTargets', listId] as const,
     /** All CBL adoption previews; a direct read/rate changes their row labels. */
     previewAll: () => ['cblSources', 'preview'] as const,
     adoptionPlan: (

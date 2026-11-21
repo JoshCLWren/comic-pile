@@ -2,7 +2,7 @@ import axios from 'axios'
 import { FormEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import Modal from '../components/Modal'
+import { CblAdoptionConfirmModal } from '../components/CblAdoptionConfirmModal'
 import ReadingGraphOverlapDialog from '../components/ReadingGraphOverlapDialog'
 import ReadingGraphSummary from '../components/ReadingGraphSummary'
 import TriStateCheckbox from '../components/TriStateCheckbox'
@@ -10,6 +10,8 @@ import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import { continuityPlansApi } from '../services/api-continuity-plans'
+import { CblAdoptionTargetFieldset } from '../components/CblAdoptionTargetFieldset'
+import { planMatchesSource, useCblAdoptionTarget } from '../hooks/useCblAdoptionTarget'
 import { CblSourceDetailPanel } from '../components/CblSourceDetailPanel'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
@@ -150,14 +152,7 @@ function groupSelectionLabel(group: CblSeriesGroup): string {
 
 async function recoverAdoptedPlan(source: CBLSourceListDiscoveryItem) {
   const plans = await continuityPlansApi.list()
-  const match = plans.find((plan) =>
-    plan.source_paths.some(
-      (path) =>
-        path === source.source_path ||
-        path.endsWith(`/${source.source_path}`) ||
-        source.source_path.endsWith(`/${path}`),
-    ),
-  )
+  const match = plans.find((plan) => planMatchesSource(plan, source))
   if (!match) return null
   return continuityPlansApi.get(match.id)
 }
@@ -308,6 +303,10 @@ export default function CblBrowserPage() {
     deepLinkedListId !== null
       ? (browsePage?.items.find((item) => item.id === deepLinkedListId) ?? null)
       : null
+  const selectedSourceTitle = selectedSource
+    ? (displayCblSourceTitle(selectedSource.name, selectedSource.source_path) ??
+      FALLBACK_SOURCE_TITLE)
+    : null
 
   const previewQuery = useQuery({
     queryKey: selectedSource
@@ -322,19 +321,38 @@ export default function CblBrowserPage() {
     gcTime: 20 * 60 * 1000, // 20 minutes
   })
 
+  const {
+    plansQuery,
+    matchingPlans,
+    selectedPlan: selectedAdoptionTarget,
+    selectedPlanId: adoptionTargetId,
+    sourceAlreadyAdopted,
+    planCheckPending,
+    planCheckFailed,
+    mustChooseTarget: mustChooseAdoptionTarget,
+    chooseTarget: setAdoptionTargetId,
+    resetTarget: resetAdoptionTarget,
+  } = useCblAdoptionTarget(selectedSource, selectedSourceTitle)
+
   const commitMutation = useMutation({
     mutationFn: ({
       source,
       preview,
+      targetPlanId,
     }: {
       source: CBLSourceListDiscoveryItem
       preview: NonNullable<typeof previewQuery.data>
-    }) =>
-      cblSourcesApi.commitNew(source.id, preview, {
+      targetPlanId: number | null
+    }) => {
+      const choices = {
         series_decisions: seriesDecisions,
         entry_decisions: entryDecisions,
         overlap_decisions: overlapChoicePayload(graphQuery.data ?? null, overlapChoices),
-      }),
+      }
+      return targetPlanId === null
+        ? cblSourcesApi.commitNew(source.id, preview, choices)
+        : cblSourcesApi.commit(source.id, targetPlanId, preview, choices)
+    },
     onSuccess: async (committed, variables) => {
       // The write is real no matter which source the view shows, so the
       // caches must learn the committed plan. The reader's next step, instead,
@@ -430,15 +448,16 @@ export default function CblBrowserPage() {
 
   const hasChoices =
     Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
-  const preview = useMemo(
-    () => {
-      if (!previewQuery.data) return null
-      return hasChoices
-        ? applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
-        : previewQuery.data
-    },
-    [previewQuery.data, seriesDecisions, entryDecisions, hasChoices],
-  )
+  const preview = useMemo(() => {
+    if (!previewQuery.data) return null
+    // Project the reader's local include/exclude/skip decisions onto the server
+    // preview as soon as they exist, so the "need attention" count and Add state
+    // react immediately. With no local choices the server summary is already
+    // authoritative and must not be re-derived here.
+    return hasChoices
+      ? applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
+      : previewQuery.data
+  }, [previewQuery.data, seriesDecisions, entryDecisions, hasChoices])
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
   const seriesGroups = useMemo(() => (preview ? buildCblSeriesGroups(preview) : []), [preview])
@@ -576,6 +595,7 @@ export default function CblBrowserPage() {
   const resetSelectionState = () => {
     setCustomizing(false)
     setConfirmOpen(false)
+    resetAdoptionTarget()
     setSeriesDecisions({})
     setEntryDecisions({})
     setExpandedGroups({})
@@ -705,6 +725,9 @@ export default function CblBrowserPage() {
   }
 
   const summary = preview?.summary
+  // `unresolved_count` and `awaiting_opt_in_count` are disjoint: the projection
+  // moves a skipped entry into `excluded_count`, so subtracting exclusions here
+  // would undercount the remaining attention entries.
   const needsAttentionCount =
     (summary?.unresolved_count ?? 0) + (summary?.awaiting_opt_in_count ?? 0)
   const commitBlockedReason = isPreviewing
@@ -715,25 +738,24 @@ export default function CblBrowserPage() {
         ? 'Refresh the preview before adding it.'
         : needsAttentionCount > 0
           ? `${countPhraseWithArticle(needsAttentionCount, 'entry still needs', 'entries still need')} attention before this source can be added.`
-          : graphCycleErrors.length > 0
-            ? 'Resolve the reading-order loop before adding this source.'
-            : graphLoading
-              ? 'Checking the reading graph…'
-              : (summary?.final_adopted_count ?? 0) === 0
-                ? 'Nothing is selected to add.'
-                : isCommitting
-                  ? null
-                  : null
+          : planCheckPending
+            ? 'Checking existing Reading Plans…'
+            : planCheckFailed
+              ? 'Check existing Reading Plans before adding this source.'
+              : mustChooseAdoptionTarget && selectedAdoptionTarget === null
+                ? 'Choose the exact Reading Plan to update before adding this source.'
+                : graphCycleErrors.length > 0
+                  ? 'Resolve the reading-order loop before adding this source.'
+                  : graphLoading
+                    ? 'Checking the reading graph…'
+                    : (summary?.final_adopted_count ?? 0) === 0
+                      ? 'Nothing is selected to add.'
+                      : null
   const commitBlocked = commitBlockedReason !== null || isCommitting || !preview
   const consequenceLine =
     preview && summary
       ? `${countPhraseWithArticle(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhraseWithArticle(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
       : null
-  const selectedSourceTitle = selectedSource
-    ? (displayCblSourceTitle(selectedSource.name, selectedSource.source_path) ??
-      FALLBACK_SOURCE_TITLE)
-    : null
-
   const firstShown =
     browsePage && browsePage.items.length > 0
       ? (browsePage.page - 1) * browsePage.page_size + 1
@@ -753,10 +775,14 @@ export default function CblBrowserPage() {
   }
 
   const confirmCommit = () => {
-    if (!selectedSource || !preview || isCommitting || graphCycleErrors.length > 0 || graphLoading || pendingOverlaps.length > 0 || staleReview) return
+    if (!selectedSource || !preview || commitBlocked || pendingOverlaps.length > 0) return
     setConfirmOpen(false)
     setCommitSourceId(selectedSource.id)
-    commitMutation.mutate({ source: selectedSource, preview })
+    commitMutation.mutate({
+      source: selectedSource,
+      preview,
+      targetPlanId: selectedAdoptionTarget?.id ?? null,
+    })
   }
 
   return (
@@ -920,6 +946,20 @@ export default function CblBrowserPage() {
             </p>
           )}
 
+          <CblAdoptionTargetFieldset
+            plans={matchingPlans}
+            selectedPlanId={adoptionTargetId}
+            sourceAlreadyAdopted={sourceAlreadyAdopted}
+            disabled={isCommitting}
+            planCheckFailed={planCheckFailed}
+            onChoose={(planId) => {
+              setAdoptionTargetId(planId)
+              setConfirmOpen(false)
+              commitMutation.reset()
+            }}
+            onRetry={() => void plansQuery.refetch()}
+          />
+
           {graphUnavailable && (
             <p role="status" className="text-xs text-[var(--theme-warning)]">
               ComicPile could not load the reading graph, so it cannot check overlapping series
@@ -958,7 +998,11 @@ export default function CblBrowserPage() {
                     : 'bg-[var(--theme-continuity-accent)] hover:bg-[var(--theme-continuity-accent)]/80'
                 }`}
               >
-                {isCommitting ? 'Adding reading order…' : 'Add this reading order'}
+                {isCommitting
+                  ? 'Adding reading order…'
+                  : selectedAdoptionTarget
+                    ? 'Update selected Reading Plan'
+                    : 'Add this reading order'}
               </button>
               {commitBlockedReason && (
                 <p className="max-w-xs text-xs text-[var(--theme-text-muted)] flex items-center gap-1">
@@ -1060,6 +1104,9 @@ export default function CblBrowserPage() {
                             {group.entries.map((entry) => {
                               const comicName = `${entry.series_name} #${entry.issue_number}`
                               const resolutionReason = identityResolutionReason(entry)
+                              const canReviewExclusion =
+                                entry.adoption_class === 'ambiguous_unresolved' ||
+                                entry.collection_exclusion_reason === 'collection_identity_requires_review'
                               return (
                                 <li
                                   key={entry.cbl_entry_id}
@@ -1093,7 +1140,7 @@ export default function CblBrowserPage() {
                                       </div>
                                     )}
                                   </span>
-                                  {entry.adoption_class !== 'ambiguous_unresolved' && (
+                                  {!canReviewExclusion && (
                                     <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--theme-text-primary)]">
                                       <input
                                         type="checkbox"
@@ -1107,7 +1154,7 @@ export default function CblBrowserPage() {
                                       Include
                                     </label>
                                   )}
-                                  {entry.adoption_class === 'ambiguous_unresolved' && (
+                                  {canReviewExclusion && (
                                     <button
                                       type="button"
                                       disabled={isCommitting}
@@ -1340,36 +1387,14 @@ export default function CblBrowserPage() {
         />
       )}
 
-      <Modal
+      <CblAdoptionConfirmModal
         isOpen={confirmOpen}
-        title="Add this reading order?"
+        target={selectedAdoptionTarget}
+        sourceTitle={selectedSourceTitle}
+        consequenceLine={consequenceLine}
         onClose={() => setConfirmOpen(false)}
-      >
-        <p className="text-sm text-[var(--theme-text-muted)]">
-          {selectedSourceTitle
-            ? `Add ${selectedSourceTitle} as a Reading Plan? Cancel creates nothing.`
-            : 'Add this source as a Reading Plan? Cancel creates nothing.'}
-        </p>
-        {consequenceLine && (
-          <p className="mt-3 text-sm font-bold text-[var(--theme-text-primary)]">{consequenceLine}</p>
-        )}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={confirmCommit}
-            className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black"
-          >
-            Add reading order
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmOpen(false)}
-            className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
-          >
-            Cancel
-          </button>
-        </div>
-      </Modal>
+        onConfirm={confirmCommit}
+      />
 
     </section>
   )
