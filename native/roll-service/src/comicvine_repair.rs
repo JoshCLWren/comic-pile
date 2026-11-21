@@ -215,10 +215,16 @@ fn normalized_metadata(
     }
     let image = obj.get("image").and_then(Value::as_object);
     let cover = image.and_then(|v| {
-        ["original_url", "super_url", "medium_url", "small_url"]
-            .iter()
-            .filter_map(|k| v.get(*k).and_then(Value::as_str))
-            .find(|s| !s.is_empty())
+        [
+            "original_url",
+            "super_url",
+            "medium_url",
+            "small_url",
+            "thumb_url",
+        ]
+        .iter()
+        .filter_map(|k| v.get(*k).and_then(Value::as_str))
+        .find(|s| !s.is_empty())
     });
     let person = compact_refs(&result["person_credits"]);
     let present = person.as_array().is_some_and(|v| !v.is_empty());
@@ -1230,6 +1236,33 @@ mod tests {
         let mut incomplete = result;
         incomplete.as_object_mut().unwrap().remove("person_credits");
         assert!(normalized_metadata(&incomplete, 29319).is_err());
+    }
+    #[test]
+    fn thumb_only_provider_cover_still_becomes_primary_image() {
+        // MQA-THREAD-004 (#5624): an old issue whose provider image object
+        // only carries the smallest size must still hydrate a cover, otherwise
+        // the stored metadata has no primary_image for the thread to render.
+        let result = json!({"id": 400029319, "name":"Detective Comics #5",
+            "issue_number":"5", "cover_date":"1937-07-01", "store_date":null,
+            "image": {"original_url":"", "super_url":"", "medium_url":"",
+                      "small_url":"", "thumb_url":"https://cv.example/detective5.jpg"},
+            "volume":{"id": 4001,"name":"Detective Comics"},
+            "person_credits":[], "character_credits":[], "team_credits":[],
+            "story_arc_credits":[],
+            "date_last_updated":"2026-11-01T00:00:00+00:00"});
+        let (metadata, _, _, _) = normalized_metadata(&result, 400029319).unwrap();
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://cv.example/detective5.jpg")
+        );
+        // Larger sizes still win when they are present.
+        let mut with_original = result.clone();
+        with_original["image"]["original_url"] = json!("https://cv.example/original.jpg");
+        let (metadata, _, _, _) = normalized_metadata(&with_original, 400029319).unwrap();
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://cv.example/original.jpg")
+        );
     }
     #[test]
     fn provider_timestamp_accepts_rfc3339_and_comicvine_space_format() {
