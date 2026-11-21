@@ -106,7 +106,7 @@ def test_ci_summary_keeps_workflow_and_shell_gates_without_factory_tests() -> No
     summary = yaml.safe_load(ci)["jobs"]["check-all-jobs"]
     assert {"script-checks", "factory-actionlint", "factory-shellcheck"} <= set(summary["needs"])
     assert "factory-complete-tests" not in ci
-    assert "test_factory_" not in ci
+    assert "test_factory_ci_scope.py" in ci  # A path classifier test, not runtime factory tests
     assert "factory-fast-merge-wakeup:" not in ci
     assert "actions: write" not in ci
 
