@@ -890,4 +890,3 @@ async def test_reading_graph_repairs_confirmed_budget_rejection_with_extra_query
     finally:
         await engine.dispose()
 
-@pytest.mark.asyncio
