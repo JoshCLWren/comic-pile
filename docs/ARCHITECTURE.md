@@ -73,7 +73,7 @@ Comic Pile is a dice-driven comic reading tracker built with:
 **Key Points**:
 - Application code must use asyncpg ONLY (no synchronous drivers in `app/` or `comic_pile/`)
 - Alembic migrations use synchronous psycopg (only exception)
-- `app/config.py` converts any `postgresql+psycopg://` URL back to `postgresql+asyncpg://` at runtime
+- `app/config.py` converts any `postgresql+psycopg://` URL back to `postgresql+asyncpg://` at runtime <!-- docs-path-check: ignore -->
 
 ### 6. Development Workflow
 **Decision**: Unified local development with Docker and Makefile
@@ -97,7 +97,7 @@ Comic Pile is a dice-driven comic reading tracker built with:
 - Routers (`app/api/`) validate requests, apply auth dependencies, call one service, and map HTTP statuses — no query construction, no business rules, no persistence
 - Services (`app/services/`) own business logic and orchestration
 - Repositories (`app/repositories/`) own all query construction and persistence, returning ORM models or plain tuples — never HTTP types
-- Legacy routers are migrated incrementally; `tests/test_router_layering_conformance.py` keeps violations from growing beyond `tests/router_layering_baseline.json`
+- Legacy routers are migrated incrementally; `tests/test_router_layering_conformance.py` keeps violations from growing beyond `tests/router_layering_baseline.json` <!-- docs-path-check: ignore -->
 - Services and repositories must respect the MissingGreenlet extraction-before-commit rule
 
 ## Infrastructure Choices

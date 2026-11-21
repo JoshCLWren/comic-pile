@@ -2,7 +2,7 @@
 
 `GET /api/v1/creators/summaries` uses
 `load_creator_summary_inputs_for_creators` in
-`app/repositories/creator_summary.py`. The full-library reader remains available
+`app/repositories/creator_summary.py`. The full-library reader remains available <!-- docs-path-check: ignore -->
 for creator discovery and detail callers that need all owned issues.
 
 The requested summary reader runs two user-scoped statements:

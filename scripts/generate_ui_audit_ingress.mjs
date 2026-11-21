@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 /** Generate the UI audit's HTTP-method-aware nginx ingress from production routing.
  *
- * The browser audit exercises both live Rust and transitional Python handlers.
+ * Every API request is owned by native Rust after the Python API teardown.
  * Never maintain a separate hand-written API allowlist here: it drifts during
- * the cutover and turns real Rust endpoints into misleading Python 404s.
+ * the cutover and turns real Rust endpoints into misleading 404s.
  */
 import {readFileSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
-const PYTHON = '/api/index.py';
 const RUST = new Set(['/api/native_roll.rs', '/api/native_issue.rs']);
+// main's bot-owned vercel.json can still carry stale Python exceptions until
+// regenerate-routes.yml lands; they must be exercised as Rust 404s now.
+const RETIRED_PYTHON = '/api/index.py';
 const FALLBACK = '/api(?:/.*)?';
 const ALL_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
@@ -25,7 +27,7 @@ export function renderAuditIngress(config) {
       continue;
     }
     if (!route.src?.startsWith('/api/') && !route.src?.startsWith('^/api/')) continue;
-    if (route.dest !== PYTHON && !RUST.has(route.dest)) {
+    if (!RUST.has(route.dest) && route.dest !== RETIRED_PYTHON) {
       throw new Error(`Unknown API destination ${route.dest} for ${route.src}`);
     }
     if (/[\r\n;]/.test(route.src)) throw new Error('Unsafe nginx ingress expression');
@@ -36,9 +38,8 @@ export function renderAuditIngress(config) {
     }
     const source = route.src.replace(/^\^/, '').replace(/\$$/, '');
     const expression = `~^(?:${methods.join('|')}):(?:${source})$`;
-    const runtime = route.dest === PYTHON ? 'python' : 'rust';
-    if (runtime === 'rust') nativeOperations += 1;
-    expressions.push(`    ${expression} ${runtime};`);
+    nativeOperations += 1;
+    expressions.push(`    ${expression} rust;`);
   }
   if (!hasRustFallback || !nativeOperations) {
     throw new Error('Audit requires explicit native Rust routes and Rust default');
@@ -52,7 +53,6 @@ ${expressions.join('\n')}
 
 map $audit_api_runtime $audit_api_upstream {
     rust http://127.0.0.1:8010;
-    python http://127.0.0.1:8000;
 }
 
 server {
@@ -73,11 +73,14 @@ server {
         proxy_set_header Host $host;
         add_header X-ComicPile-API-Runtime $audit_api_runtime always;
     }
-    location / {
-        proxy_pass http://127.0.0.1:8000;
+    location = /health {
+        proxy_pass http://127.0.0.1:8010/health;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location / {
+        root /usr/share/nginx/html;
+        try_files $uri /index.html;
     }
 }
 `;

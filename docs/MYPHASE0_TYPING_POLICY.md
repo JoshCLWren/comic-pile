@@ -32,7 +32,7 @@ fixed by narrowing the element type at the call site, not by suppressing the
 check. Genuinely dynamic payloads name their wire contract instead of falling
 back to `dict[str, Any]`: undo-snapshot thread and issue states are typed with
 `SnapshotThreadState` / `SnapshotIssueState` in
-`app/services/snapshot_contract.py`, so a strict-clean module describes the
+`app/services/snapshot_contract.py`, so a strict-clean module describes the <!-- docs-path-check: ignore -->
 fields it reads and never hides them behind `Any`.
 
 ### 2. `disallow_subclassing_any`

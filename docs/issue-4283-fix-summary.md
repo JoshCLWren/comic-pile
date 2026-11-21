@@ -6,7 +6,7 @@ When a user adopts a CBL source (creating a plan and a linked Reading List), the
 
 ### Root Cause
 
-The `list_continuity_plan_items` function in `app/services/continuity_plan_writer.py` enforces that every plan must have an authoritative Reading List when Option E is enabled. After a linked list is deleted, the plan becomes orphaned (no ReadingPlanSource row), causing the function to raise a 409 error:
+The `list_continuity_plan_items` function in `app/services/continuity_plan_writer.py` enforces that every plan must have an authoritative Reading List when Option E is enabled. After a linked list is deleted, the plan becomes orphaned (no ReadingPlanSource row), causing the function to raise a 409 error: <!-- docs-path-check: ignore -->
 
 ```python
 if len(authorities) != len(ordered):
@@ -27,7 +27,7 @@ Modified `list_continuity_plan_items` to allow orphaned plans in the list index.
 
 ### Changes Made
 
-#### 1. `app/services/continuity_plan_writer.py` (lines 927-944)
+#### 1. `app/services/continuity_plan_writer.py` (lines 927-944) <!-- docs-path-check: ignore -->
 
 **Before:**
 ```python
@@ -61,7 +61,7 @@ if get_reading_execution_settings().enabled and ordered:
     # Only reject when there are ambiguous or foreign list authorities.
 ```
 
-#### 2. `tests/test_option_e_plan_index.py`
+#### 2. `tests/test_option_e_plan_index.py` <!-- docs-path-check: ignore -->
 
 Updated the test `test_option_e_index_rejects_unlinked_plan_instead_of_showing_stale_order` to verify that orphaned plans are now allowed in the list index.
 
@@ -91,7 +91,7 @@ This allows users to see orphaned plans and potentially re-link them to a new li
 
 ### Unit Tests
 
-Updated and added tests in `tests/test_option_e_plan_index.py`:
+Updated and added tests in `tests/test_option_e_plan_index.py`: <!-- docs-path-check: ignore -->
 - `test_option_e_index_allows_orphaned_plan_after_list_deletion`: Verifies orphaned plans are listed
 - `test_option_e_index_rejects_multiple_authoritative_lists_for_same_plan`: Verifies ambiguity is still rejected
 

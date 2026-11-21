@@ -69,6 +69,12 @@ test('generated config idempotence and anchored parameter matching', () => {
   assert(new RegExp(routeRegex('/api/v1/threads/{id}')).test('/api/v1/threads/7'));
   assert(!new RegExp(routeRegex('/api/v1/threads/{id}')).test('/api/v1/threads/7/other'));
 });
+test('an empty Python operation set leaves the fragment-owned inventory untouched', () => {
+  const inventory = {full_surface: {v1_operations: [
+    {method: 'GET', path: '/api/v1/tags/', consumers: ['client.ts'], status: 'transitional', owning_issue: 5},
+  ], unversioned_operations: [], catch_all: {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'}}};
+  assert.equal(updateInventory(inventory, []), inventory);
+});
 test('deleted Python routes leave the inventory, surviving caller metadata persists', () => {
   const inventory = {full_surface: {v1_operations: [
     {method: 'GET', path: '/api/v1/threads/{id}', consumers: ['client.ts'], status: 'transitional', owning_issue: 5},

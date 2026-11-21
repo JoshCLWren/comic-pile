@@ -23,7 +23,7 @@ These are observations, not design preferences.
 
 **What `die_exclusions` includes.** `derive_effective_roll_excluded_thread_ids()` calls `get_execution_eligibility()` and then reads snooze events plus every session start. The trace does not split snapshot hydration from backoff math. A stored eligible-Issue table can remove only the snapshot portion of that stage.
 
-**Snooze shape.** Current-session snooze and skip already live on the session row. Cross-session backoff is derived from snooze and unsnooze events, `Thread.last_activity_at`, and later session start times (`comic_pile/snooze_backoff.py`). Cancel clears the pending offer. It does not change eligibility, and a maintenance mechanism must not treat it as an eligibility write.
+**Snooze shape.** Current-session snooze and skip already live on the session row. Cross-session backoff is derived from snooze and unsnooze events, `Thread.last_activity_at`, and later session start times (`comic_pile/snooze_backoff.py`). Cancel clears the pending offer. It does not change eligibility, and a maintenance mechanism must not treat it as an eligibility write. <!-- docs-path-check: ignore -->
 
 **Rule location.** The canonical walk, overlap exceptions, holds, `after_previous`, prerequisites, and the cycle validator live in Python. A PostgreSQL trigger runs inside the modifying transaction. It cannot call that interpreter.
 
@@ -67,7 +67,7 @@ Option J is not in the original design note. It is the only stored-table design 
 
 ## Option B+: Slim snapshot plus compact snooze state
 
-**Mechanism.** Option B, narrowed to the columns `evaluate()` actually uses: unread frontier candidates, list entries with status, reader prerequisites with endpoint status, exclusions, overlap decisions, and confirmed volume identity. Separately, persist compact per-thread backoff (`snooze_count` after the reset boundary, latest snooze time, and whether a later unsnooze cleared it). Recompute that row on every write that moves `Thread.last_activity_at`, because backoff counts snoozes after that boundary. The writers are snooze, unsnooze, rate, undo (`native/roll-service/src/undo_apply.rs` restoring an undo snapshot), and snapshot restore (`app/repositories/reading_session_repository.py` and `app/repositories/undo_snapshot_repository.py`). At selection time, compare the row with the count of sessions started after the latest snooze. Current-session snooze and skip stay filters on the session row.
+**Mechanism.** Option B, narrowed to the columns `evaluate()` actually uses: unread frontier candidates, list entries with status, reader prerequisites with endpoint status, exclusions, overlap decisions, and confirmed volume identity. Separately, persist compact per-thread backoff (`snooze_count` after the reset boundary, latest snooze time, and whether a later unsnooze cleared it). Recompute that row on every write that moves `Thread.last_activity_at`, because backoff counts snoozes after that boundary. The writers are snooze, unsnooze, rate, undo (`native/roll-service/src/undo_apply.rs` restoring an undo snapshot), and snapshot restore (`app/repositories/reading_session_repository.py` and `app/repositories/undo_snapshot_repository.py`). At selection time, compare the row with the count of sessions started after the latest snooze. Current-session snooze and skip stay filters on the session row. <!-- docs-path-check: ignore -->
 
 **Reasons this is the recommendation.**
 

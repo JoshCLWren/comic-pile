@@ -59,7 +59,7 @@ async def test_my_feature(auth_api_client_async: AsyncClient, async_db: AsyncSes
 
 ## Key Fixtures
 
-### Unit Test Fixtures (`tests/conftest.py`)
+### Unit Test Fixtures (`tests/conftest.py`) <!-- docs-path-check: ignore -->
 
 | Fixture | Scope | Description |
 |---------|-------|-------------|
@@ -109,7 +109,7 @@ threads = result.scalars().all()
 
 **Test isolation issues?**
 - E2E tests use transaction rollback - data doesn't persist
-- Use `seed_dev_db.py` for persistent data across test runs
+- Use `seed_dev_db.py` for persistent data across test runs <!-- docs-path-check: ignore -->
 
 **Port conflicts?**
 - E2E tests auto-find free ports

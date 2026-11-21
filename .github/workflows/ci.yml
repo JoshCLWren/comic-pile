@@ -60,7 +60,7 @@ jobs:
       - run: npm test
 
   rust-ingress:
-    name: Rust-default API ingress (real FastAPI registry)
+    name: Rust-default API ingress (fragment-derived)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -69,16 +69,11 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.14'
-          enable-cache: true
-      - name: Install locked Python runtime dependencies for read-only route discovery
-        run: uv sync --locked --no-dev
+          python-version: '3.12'
       - name: Prove regeneration PR contains only current deterministic artifacts
         if: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'automation/route-regeneration/') && github.event.pull_request.head.repo.full_name == github.repository }}
-        env:
-          ROUTE_PYTHON: .venv/bin/python
         run: |
           set -euo pipefail
           python3 scripts/check_route_fragment_guard.py --allow-generated \
@@ -87,18 +82,14 @@ jobs:
           node scripts/generate_vercel_routes.mjs --check
           node scripts/generate_route_burndown.mjs --check
 
-      - name: Generate and validate real FastAPI ingress
-        env:
-          ROUTE_PYTHON: .venv/bin/python
+      - name: Generate and validate fragment-derived ingress
         run: |
           set -euo pipefail
           node scripts/generate_vercel_routes.mjs
           node scripts/generate_route_burndown.mjs
           node scripts/generate_vercel_routes.mjs --check
           node scripts/generate_route_burndown.mjs --check
-          node --test scripts/generate_route_burndown.test.mjs scripts/generate_openapi_types.test.mjs scripts/generate_vercel_routes.test.mjs scripts/vercel_slim_routes.test.mjs scripts/generate_ui_audit_ingress.test.mjs
-      - name: Retired v1 plan-reader guard (real FastAPI app and checked-in ingress)
-        run: uv run --no-sync --with pytest pytest -o addopts='' --noconftest -q tests/test_continuity_plan_reader_rust_only.py
+          node --test scripts/generate_route_burndown.test.mjs scripts/generate_openapi_types.test.mjs scripts/generate_vercel_routes.test.mjs scripts/vercel_slim_routes.test.mjs scripts/generate_ui_audit_ingress.test.mjs scripts/strip_python_build.test.mjs
 
       - name: Publish resolved ingress for frontend jobs
         uses: actions/upload-artifact@v7
@@ -464,10 +455,10 @@ jobs:
   production-runtime-migrations:
     name: Production Runtime Migrations
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       CI: true
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/comic_pile_test
+      MIGRATE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comic_pile_test
     services:
       postgres:
         image: postgres:16
@@ -487,37 +478,20 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Set up Python
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-        with:
-          python-version: "3.14"
-          enable-cache: true
-
-      # Match Deploy Production exactly; dev tools can mask missing runtime
-      # dependencies (Playwright brings greenlet into the ordinary CI image).
-      - name: Install locked runtime dependencies
-        run: uv sync --locked --no-dev
-
-      - name: Verify async runtime imports
-        run: .venv/bin/python -c "import greenlet; import app.database; import app.models"
-
-      - name: Apply all migrations from scratch with production dependencies
-        run: .venv/bin/alembic upgrade head
+      # Match Deploy Production exactly: the same comicpile-migrate runner
+      # applies the embedded refinery baseline to an empty database.
+      - name: Apply all migrations from scratch with the production runner
+        run: cargo run --locked -p comicpile-migrate -- up
 
   migration-health:
     name: Migration Health
     runs-on: ubuntu-latest
-    container:
-      image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
-    needs: [build, build-fork]
-    if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       CI: true
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+      MIGRATE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/comic_pile_test
     services:
       postgres:
         image: postgres:16
@@ -537,41 +511,22 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
-
-      - name: Install fork CI toolchain
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: ./.github/actions/fork-ci-toolchain
-
-      - name: Remove .env files
-        run: rm -f .env .env.test .env.backup .envrc
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: Wait for PostgreSQL
         run: |
           i=1
           while [ $i -le 30 ]; do
-            if pg_isready -h postgres -p 5432 -U postgres; then exit 0; fi
+            if pg_isready -h localhost -p 5432 -U postgres; then exit 0; fi
             sleep 2; i=$((i + 1))
           done
           exit 1
 
-      - name: Check single Alembic head
-        run: |
-          HEADS=$(alembic heads 2>/dev/null | grep -c "(head)")
-          if [ "$HEADS" -ne 1 ]; then
-            echo "ERROR: $HEADS Alembic heads detected - resolve before merging"
-            alembic heads
-            exit 1
-          fi
-          echo "Single head confirmed: $(alembic heads 2>/dev/null)"
+      - name: Apply every embedded migration from scratch
+        run: cargo run --locked -p comicpile-migrate -- up
 
-      - name: Apply all migrations from scratch
-        run: alembic upgrade head
-
-      # Note: alembic check is intentionally omitted. The reviews table uses a
-      # NULLS NOT DISTINCT unique index (uq_review_user_thread_issue) applied via
-      # raw SQL in migration 4882a6a20f35. SQLAlchemy has no native representation
-      # for this, so alembic check always reports a false-positive difference.
-      # Single-head enforcement + clean upgrade-from-scratch is the effective gate.
+      - name: Re-running the runner is idempotent
+        run: cargo run --locked -p comicpile-migrate -- up
 
   docs-code-paths:
     name: Docs code-path check

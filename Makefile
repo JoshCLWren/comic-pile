@@ -1,18 +1,14 @@
-.PHONY: help init setup next-task start-task lint python-ci-lint verify verify-e2e verify-e2e-regression pytest sync venv githook install-githook tidy
+.PHONY: help setup lint verify verify-e2e verify-e2e-regression sync venv githook install-githook tidy
 .PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
-.PHONY: dev dev-api test seed seed-dev migrate db-up db-down worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
+.PHONY: dev migrate db-up db-down worktrees status deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
 .PHONY: docker-test-up docker-test-down docker-test-logs docker-test-health test-e2e-browser-docker test-e2e-browser-quick
 .PHONY: test-e2e-prod-smoke check-prod-assets clone-prod-export clone-prod-import
-.PHONY: verify-reading-order railway-control-baseline railway-control-compare
-.PHONY: railway-control-results railway-control-c32-diagnostic railway-control-c32-compare
 
 # Configuration
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
-PYTHON ?= .venv/bin/python
-PYTEST ?= $(PYTHON) -m pytest
 PROD_BASE_URL ?= https://comic-pile.vercel.app
 # Neon credentials used by make prod-migrate to fetch the production connection URL via the Neon API.
 # Both are created automatically by the Neon GitHub integration.
@@ -39,20 +35,6 @@ tidy:  ## Sweep local generated artifacts
 	# Remove accidental shell-redirection artifact files
 	find . -maxdepth 1 -name "=*" -type f -delete
 
-init:  ## Initialize project with new name (Usage: make init NAME=your-project)
-	@if [ -z "$(NAME)" ]; then echo "Usage: make init NAME=your-project"; exit 1; fi
-	@echo "Initializing project as $(NAME)..."
-	@sed -i.bak "s/python-starter-template/$(NAME)/g" pyproject.toml && rm pyproject.toml.bak
-	@sed -i.bak "s/example_module/$(NAME)/g" pyproject.toml && rm pyproject.toml.bak
-	@if [ -d "example_module" ]; then \
-		echo "Renaming example_module to $(NAME)..."; \
-		mv example_module $(NAME); \
-		find . -type f -name "*.py" -exec sed -i.bak "s/from example_module/from $(NAME)/g" {} +; \
-		find . -type f -name "*.py.bak" -delete; \
-	fi
-	@echo "Project initialized as $(NAME)"
-	@echo "Run 'uv sync --all-extras' to install dependencies"
-
 lint:  ## Run code linting
 	# Check for accidental shell-redirection artifact files
 	if find . -maxdepth 1 -name "=*" -type f | grep -q .; then \
@@ -63,25 +45,13 @@ lint:  ## Run code linting
 	fi
 	bash scripts/lint.sh
 
-python-ci-lint:  ## Full-repo ruff + ty + hardcoded-ID guard (no path filter)
-	bash scripts/check-python-ci-lint.sh
-
-setup:  ## Install dependencies, start PostgreSQL, migrate, and seed deterministic demo data
-	@uv sync --all-extras
+setup:  ## Install dependencies, start PostgreSQL, and migrate with the Rust runner
 	@pnpm install --frozen-lockfile
 	@docker compose up -d db
 	@echo "Waiting for PostgreSQL..."
 	@until docker compose exec -T db pg_isready -U comicpile -d comicpile >/dev/null 2>&1; do sleep 1; done
 	@$(MAKE) migrate
-	@$(MAKE) seed-dev
 	@echo "Setup complete. Run 'make dev-all' and open http://localhost:5173."
-
-next-task:  ## Select the next executable GitHub issue for an agent
-	@$(PYTHON) scripts/next_task.py
-
-start-task:  ## Validate and start a GitHub issue (Usage: make start-task ISSUE=644)
-	@if [ -z "$(ISSUE)" ]; then echo "Usage: make start-task ISSUE=644"; exit 1; fi
-	@$(PYTHON) scripts/next_task.py start $(ISSUE)
 
 db-up:  ## Start local PostgreSQL without changing its data
 	@docker compose up -d db
@@ -108,12 +78,6 @@ install-githook:  ## Install git hooks for new developers
 
 githook: install-githook  ## Run lint checks manually (installs pre-commit hook if missing)
 	bash scripts/lint.sh
-
-test:  ## Run tests with coverage (pytest --cov=comic_pile --cov-report=term-missing)
-	$(PYTEST) --cov=comic_pile --cov-report=term-missing
-
-pytest:  ## Run tests (pytest)
-	@bash -c 'set -a; source .env.test; set +a; $(PYTHON) -m pytest -o addopts='
 
 sync:  ## Install dependencies via uv
 	uv sync --all-extras
@@ -223,26 +187,9 @@ merge-phase9:  ## Merge Phase 9 to main
 dev:  ## Run the frontend and API development servers together
 	@$(MAKE) dev-all
 
-dev-api:  ## Run only the FastAPI development server
-	@echo "Starting FastAPI development server on http://0.0.0.0:${PORT}"
-	@uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --reload
-
-seed:  ## Seed database with sample data (python -m scripts.seed_data)
-	@echo "Seeding database with Faker data..."
-	@python -m scripts.seed_data
-
-seed-dev:  ## Reset the local demo user and queue with deterministic data
-	@python scripts/seed_dev_db.py
-
 migrate:  ## Run database migrations (refinery runner, native/migrate)
 	@echo "Running database migrations..."
 	@cargo run --locked -p comicpile-migrate -- up
-
-roll-test-schema:  ## Regenerate native/migrate/migrations/V1__baseline.sql from Alembic head
-	@uv run python scripts/export_roll_test_schema.py --database-url "$(DATABASE_URL)"
-
-production-schema-audit:  ## Read-only production schema audit vs canonical fixture (#4735); requires PRODUCTION_SCHEMA_AUDIT_DATABASE_URL
-	@python3 scripts/production_schema_audit.py --diff-output /tmp/production-schema-diff.txt
 
 worktrees:  ## List all git worktrees
 	@echo "Git worktrees:"
@@ -251,18 +198,7 @@ worktrees:  ## List all git worktrees
 status:  ## Show current task status
 	@cat TASKS.md | head -100
 
-test-integration:  ## Run Playwright integration tests
-	@echo "Running e2e API workflow tests..."
-	@echo "Note: Browser tests require a running test database and web server."
-	@echo "For browser tests, use: make test-e2e-browser"
-	@echo ""
-	@$(PYTEST) tests_e2e/test_api_workflows.py --no-cov -v
-
 test-e2e-browser: verify-e2e  ## Backwards-compatible alias for TypeScript Playwright tests
-
-test-e2e-api:  ## Run e2e API tests (no browser/server needed)
-	@echo "Running e2e API tests..."
-	@$(PYTEST) tests_e2e/test_api_workflows.py --no-cov -v
 
 test-e2e-prod-smoke:  ## Run Playwright prod smoke test (set PROD_BASE_URL=https://...)
 	@if [ -z "$(PROD_BASE_URL)" ]; then \
@@ -271,46 +207,6 @@ test-e2e-prod-smoke:  ## Run Playwright prod smoke test (set PROD_BASE_URL=https
 	fi
 	@PROD_BASE_URL="$(PROD_BASE_URL)" pnpm --filter frontend run test:e2e:prod-smoke
  
-save-db:  ## Save database to JSON (python -m scripts.export_db)
-	@echo "Exporting database to db_export.json..."
-	@python -m scripts.export_db
-	@echo "Database saved to db_export.json"
-
-load-db:  ## Load database from JSON (python -m scripts.import_db)
-	@echo "WARNING: This will wipe the current database and restore from db_export.json"
-	@read -p "Are you sure? (yes/no): " confirm; \
-	if [ "$$confirm" = "yes" ]; then \
-		echo "Loading database from db_export.json..."; \
-		python -m scripts.import_db; \
-		echo "Database restored from db_export.json"; \
-	else \
-		echo "Load cancelled"; \
-	fi
-
-backup:  ## Create timestamped backup with rotation (python -m scripts.backup_database)
-	@echo "Creating timestamped backup..."
-	@python -m scripts.backup_database
-	@echo "Backup complete"
-
-list-backups:  ## List all timestamped backups
-	@echo "Available backups:"
-	@ls -lh backups/db_export_*.json 2>/dev/null || echo "No backups found"
-
-restore-backup:  ## Restore from a specific backup (make restore-backup FILE=backups/db_export_20240104_102530.json)
-	@echo "WARNING: This will wipe the current database and restore from $$FILE"
-	@read -p "Are you sure? (yes/no): " confirm; \
-	if [ "$$confirm" = "yes" ]; then \
-		if [ -f "$$FILE" ]; then \
-			cp "$$FILE" db_export.json; \
-			python -m scripts.import_db; \
-			echo "Database restored from $$FILE"; \
-		else \
-			echo "Error: File $$FILE not found"; \
-		fi \
-	else \
-		echo "Restore cancelled"; \
-	fi
-
 docker-build:  ## Build Docker images (docker compose build)
 	@echo "Building Docker images..."
 	@docker compose build
@@ -362,33 +258,19 @@ deploy-prod:  ## Deploy to production via the GitHub Actions workflow (migration
 		echo "Rebase/merge and push before deploy to ensure deterministic release."; \
 		exit 1; \
 	fi
-	@echo "Checking for multiple Alembic heads..."
-	@HEADS=$$(uv run alembic heads 2>/dev/null | grep -c "(head)"); \
-	if [ "$$HEADS" -ne 1 ]; then \
-		echo "ERROR: $$HEADS Alembic heads detected. Resolve merge before deploying."; \
-		uv run alembic heads 2>/dev/null; \
-		exit 1; \
-	fi
 	@echo "Running frontend TypeScript typecheck..."
 	@pnpm --filter frontend run typecheck
 	@echo "Triggering production deploy workflow (migrate-then-deploy)..."
 	@gh workflow run deploy-production.yml --ref main
 	@echo "Deploy workflow dispatched. Monitor with: gh run watch --workflow=deploy-production.yml"
 
-prod-migrate:  ## Run Alembic migrations on the Neon production database (fetches the direct connection URL via the Neon API)
+prod-migrate:  ## Run Rust migrations on the Neon production database (fetches the direct connection URL via the Neon API)
 	@if [ -z "$(NEON_DIRECT_DATABASE_URL)" ]; then \
 		if [ -z "$(NEON_API_KEY)" ] || [ -z "$(NEON_PROJECT_ID)" ]; then \
 			echo "ERROR: provide NEON_DIRECT_DATABASE_URL or both NEON_API_KEY and NEON_PROJECT_ID."; \
 			echo "The GitHub deploy workflow fetches the URL automatically via the Neon API."; \
 			exit 1; \
 		fi; \
-	fi
-	@echo "Pre-flight: checking for multiple Alembic heads..."
-	@HEADS=$$(uv run alembic heads 2>/dev/null | grep -c "(head)"); \
-	if [ "$$HEADS" -ne 1 ]; then \
-		echo "ERROR: $$HEADS Alembic heads detected. Resolve merge before migrating."; \
-		uv run alembic heads 2>/dev/null; \
-		exit 1; \
 	fi
 	@echo "Resolving Neon production connection URL..."
 	@NEON_URL=$${NEON_DIRECT_DATABASE_URL:-$$(curl --fail --silent --show-error \
@@ -397,9 +279,19 @@ prod-migrate:  ## Run Alembic migrations on the Neon production database (fetche
 		--header "Authorization: Bearer $${NEON_API_KEY}" \
 		| jq -r '.uri')}; \
 	echo "Running production migrations on Neon..."; \
-	DATABASE_URL="$$NEON_URL" uv run alembic upgrade head; \
-	echo "Verifying production migration revision..."; \
-	DATABASE_URL="$$NEON_URL" uv run alembic current
+	MIGRATE_DATABASE_URL="$$NEON_URL" cargo run --locked -p comicpile-migrate -- up; \
+	echo "Verifying production migration state..."; \
+	MIGRATE_DATABASE_URL="$$NEON_URL" cargo run --locked -p comicpile-migrate -- plan; \
+	PLAN_STATUS=$$?; \
+	if [ "$$PLAN_STATUS" -eq 0 ]; then \
+		echo "Production schema is current."; \
+	elif [ "$$PLAN_STATUS" -eq 10 ]; then \
+		echo "ERROR: migrations still pending after running comicpile-migrate up." >&2; \
+		exit 1; \
+	else \
+		echo "ERROR: failed to verify production migration state." >&2; \
+		exit "$$PLAN_STATUS"; \
+	fi
 
 deploy-prod-migrate: deploy-prod  ## Deploy to production; migrations run automatically before deploy in the workflow
 
@@ -410,54 +302,10 @@ check-prod-assets:  ## Validate deployed frontend assets (make check-prod-assets
 	fi
 	@bash scripts/check_frontend_assets.sh "$(PROD_BASE_URL)"
 
-railway-control-baseline:  ## Run the safe read-only Railway control baseline
-	@mkdir -p benchmarks/results
-	@uv run python scripts/railway_loadtest.py \
-		--profile control-safe \
-		--concurrency 1 --concurrency 2 --concurrency 4 --concurrency 8 \
-		--warmup-seconds 10 --duration-seconds 30 --interval-ms 200 \
-		--run-set control-smoke
-
-railway-control-results:  ## Run the longer safe control matrix through concurrency 32
-	@mkdir -p benchmarks/results
-	@uv run python scripts/railway_loadtest.py \
-		--profile control-safe --preset results \
-		--run-set control-results \
-		--metadata-output benchmarks/control-environment.json
-
-railway-control-c32-diagnostic:  ## Run one isolated concurrency-32 control diagnostic
-	@mkdir -p benchmarks/results
-	@uv run python scripts/railway_loadtest.py \
-		--profile control-safe --preset c32-diagnostic \
-		--run-set control-c32-diagnostic \
-		--failure-log benchmarks/results/control-c32-diagnostic-failures-$$(date -u +%Y%m%dT%H%M%SZ).ndjson \
-		--metadata-output benchmarks/control-environment-c32-diagnostic.json
-
-railway-control-compare:  ## Compare only timestamped control-results runs
-	@mkdir -p benchmarks/results
-	@if [ -z "$(RAILWAY_CONTROL_RESULTS)" ]; then \
-		echo "No control-results files found under benchmarks/results/" >&2; \
-		exit 1; \
-	fi
-	@uv run python scripts/compare_railway_runs.py \
-		$(RAILWAY_CONTROL_RESULTS) \
-		--output benchmarks/results/control-results-comparison.json \
-		--csv benchmarks/results/control-results-comparison.csv
-
-railway-control-c32-compare:  ## Compare only isolated concurrency-32 diagnostic runs
-	@mkdir -p benchmarks/results
-	@if [ -z "$(RAILWAY_CONTROL_C32_RESULTS)" ]; then \
-		echo "No control-c32-diagnostic files found under benchmarks/results/" >&2; \
-		exit 1; \
-	fi
-	@uv run python scripts/compare_railway_runs.py \
-		$(RAILWAY_CONTROL_C32_RESULTS) \
-		--run-set control-c32-diagnostic \
-		--output benchmarks/results/control-c32-diagnostic-comparison.json \
-		--csv benchmarks/results/control-c32-diagnostic-comparison.csv
-
-dev-all:  ## Run both frontend and backend dev servers (Vite proxies /api to backend)
-	@bash scripts/dev-all.sh
+dev-all:  ## Run the frontend dev server and native Rust API together
+	@trap 'kill 0 2>/dev/null || true' EXIT INT TERM; \
+	$(MAKE) dev-native & \
+	pnpm --dir frontend dev
 
 dev-native:  ## Run the native Rust Roll/auth service on :8010 for local /api/v2/* routes
 	@echo "Starting native Roll service on http://127.0.0.1:8010"
@@ -514,19 +362,3 @@ test-e2e-browser-quick:  ## Run TypeScript Playwright tests (Docker must already
 	@echo "Running TypeScript Playwright tests (assumes services are running)..."
 	@pnpm --filter frontend run test:e2e:quick
 
-verify-reading-order:  ## Verify Wildstorm reading order dependencies
-	@echo "Verifying Wildstorm reading order..."
-	@cd scripts && python verify_wildstorm_reading_order.py
-
-clone-prod-export:  ## Backup production user data (ex: make clone-prod-export ARGS='--username Josh')
-	@python -m scripts.clone_prod_to_local export $(ARGS)
-
-clone-prod-import:  ## Restore backup into local dev database
-	@python -m scripts.clone_prod_to_local import $(ARGS)
-
-.PHONY: mypy-check mypy-inventory
-mypy-check:  ## Check the explicit strict-clean mypy ratchet (same as CI)
-	uv run --locked python scripts/mypy_baseline.py check
-
-mypy-inventory:  ## Refresh full strict mypy migration evidence
-	uv run --locked python scripts/mypy_baseline.py inventory

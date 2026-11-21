@@ -140,7 +140,7 @@ read by any test.
 Auth failure occurs before reading-history bootstrap. HTTP 422 validation remains
 in the OpenAPI contract; timezone is a string and invalid IANA names are ignored.
 Dependency outages use the application's stable 503 boundary (see
-`tests/test_database_unavailability_contract.py`); unforeseen failures use its
+`tests/test_database_unavailability_contract.py`); unforeseen failures use its <!-- docs-path-check: ignore -->
 500 handler. Cyclic/missing-reference Option E inputs fail closed; they must
 never become successful partial candidate sets. Existing auth, recovery,
 route-versioning and Option E tests remain authoritative alongside

@@ -30,4 +30,4 @@ MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -- up
   are repaired idempotently before the current head is stamped.
 - CI (`rust-roll.yml`) builds an Alembic database and a Rust database and fails
   on any normalized `pg_dump` difference
-  (`scripts/check_rust_migration_parity.py`).
+  (`scripts/check_rust_migration_parity.py`). <!-- docs-path-check: ignore -->

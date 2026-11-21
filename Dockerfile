@@ -4,31 +4,6 @@ ARG GROUP_ID=1000
 ARG BUILD_TIMESTAMP=unknown
 
 # ============================
-# Python dependency stage
-# ============================
-FROM python:3.14-slim AS python-builder
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-# System deps needed to build Python wheels
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy uv binary from a pinned tag for reproducible builds.
-COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /usr/local/bin/uv
-
-WORKDIR /app
-
-# Copy Python dependency metadata
-COPY pyproject.toml uv.lock ./
-
-# Install the exact committed runtime dependency set.
-RUN uv sync --locked --no-dev
-
-# ============================
 # Frontend build stage
 # ============================
 FROM node:22.23.1-trixie-slim AS frontend-builder
@@ -53,20 +28,35 @@ RUN echo "Build timestamp: ${BUILD_TIMESTAMP:-$(date -u +%s)}" && pnpm --filter 
 # Vite writes to /app/static/react based on outDir in vite config
 
 # ============================
+# Rust build stage
+# ============================
+FROM rust:1-trixie-slim AS rust-builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY Cargo.toml Cargo.lock build.rs ./
+COPY api/ ./api/
+COPY native/ ./native/
+
+RUN cargo build --release --locked -p comicpile-roll-service -p comicpile-migrate
+
+# ============================
 # Runtime stage
 # ============================
-FROM python:3.14-slim
+FROM debian:trixie-slim
 
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-# Runtime system deps only
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
+    ca-certificates \
     curl \
+    libpq5 \
     tzdata \
     && rm -rf /var/lib/apt/lists/*
 
@@ -76,14 +66,9 @@ RUN groupadd -g ${GROUP_ID} appuser && \
 
 WORKDIR /app
 
-# Copy Python runtime environment
-COPY --from=python-builder /app/.venv /app/.venv
-
-# Copy only runtime application files
-COPY app/ ./app/
-COPY comic_pile/ ./comic_pile/
-COPY alembic/ ./alembic/
-COPY alembic.ini ./alembic.ini
+# Native Rust ingress and migration runner; no Python runtime is present.
+COPY --from=rust-builder /app/target/release/comicpile-roll-service ./bin/comicpile-roll-service
+COPY --from=rust-builder /app/target/release/comicpile-migrate ./bin/comicpile-migrate
 
 # Copy static directory structure (without react build artifacts)
 COPY static/assets ./static/assets
@@ -102,8 +87,4 @@ USER ${USER_ID}
 
 EXPOSE 8000
 
-# IMPORTANT:
-# - no `activate`
-# - no PATH reliance
-# - absolute interpreter path
-CMD ["sh", "-c", "exec /app/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-2}"]
+CMD ["/app/bin/comicpile-roll-service"]

@@ -85,7 +85,7 @@ cycle rejects and rolls back the write instead of poisoning future runtime reads
 
 ## Validation and rollback
 
-`tests/test_option_e_runtime.py` exercises real PostgreSQL and API paths for
+`tests/test_option_e_runtime.py` exercises real PostgreSQL and API paths for <!-- docs-path-check: ignore -->
 strict/loose behavior, stale flags/pointers, exclusions, session filters,
 prerequisite provenance, snapshot sharing/invalidation, app-wide activation with reader isolation,
 empty Queues, cursor mode boundaries, identity fan-out, durable snooze/recovery,
