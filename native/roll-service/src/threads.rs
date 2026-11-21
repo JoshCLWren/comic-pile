@@ -1237,7 +1237,6 @@ issue_cover AS (
                NULLIF(BTRIM(ei.metadata_json#>>'{image,super_url}'), ''),
                NULLIF(BTRIM(ei.metadata_json#>>'{image,medium_url}'), ''),
                NULLIF(BTRIM(ei.metadata_json#>>'{image,small_url}'), ''),
-               NULLIF(BTRIM(ei.metadata_json#>>'{image,thumb_url}'), ''),
                NULLIF(BTRIM(ei.metadata_json->>'cover_image_url'), '')
            ) AS cover_url
     FROM page p
