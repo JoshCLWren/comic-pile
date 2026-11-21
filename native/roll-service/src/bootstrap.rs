@@ -1355,7 +1355,13 @@ mod cover_source_tests {
 
     #[test]
     fn stored_image_sizes_follow_python_fallback_order() {
-        for key in ["original_url", "super_url", "medium_url", "small_url"] {
+        for key in [
+            "original_url",
+            "super_url",
+            "medium_url",
+            "small_url",
+            "thumb_url",
+        ] {
             let mut metadata = json!({"image": {}});
             metadata["image"][key] = json!(" https://example.com/cover.jpg ");
             assert_eq!(
@@ -1366,11 +1372,21 @@ mod cover_source_tests {
         let metadata = json!({"image": {
             "original_url": null, "super_url": " ",
             "medium_url": "https://example.com/medium.jpg",
-            "small_url": "https://example.com/small.jpg"
+            "small_url": "https://example.com/small.jpg",
+            "thumb_url": "https://example.com/thumb.jpg"
         }});
         assert_eq!(
             extract_cover_source(&metadata),
             Some("https://example.com/medium.jpg")
+        );
+        let metadata = json!({"image": {
+            "original_url": null, "super_url": " ",
+            "medium_url": "", "small_url": null,
+            "thumb_url": "https://example.com/thumb.jpg"
+        }});
+        assert_eq!(
+            extract_cover_source(&metadata),
+            Some("https://example.com/thumb.jpg")
         );
     }
 
