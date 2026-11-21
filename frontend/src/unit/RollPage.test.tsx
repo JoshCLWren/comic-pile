@@ -24,6 +24,7 @@ import { writeRollSnoozes } from '../services/api-roll'
 import { cast } from '../utils/cast'
 
 const navigateSpy = vi.fn()
+const resetDiceMutateSpy = vi.hoisted(() => vi.fn().mockResolvedValue({ die: 6, replayed: false }))
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
@@ -48,7 +49,7 @@ vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn()
 vi.mock('../hooks/useRoll', () => ({
   useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: vi.fn(),
-  useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
+  useResetDice: () => ({ mutate: resetDiceMutateSpy, isPending: false }),
   useRoll: vi.fn(),
   useOverrideRoll: vi.fn(),
   useDismissPending: vi.fn(),
