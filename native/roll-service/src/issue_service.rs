@@ -1334,6 +1334,7 @@ mod tests {
                      (201, 20, '1', 'unread', 1, NULL, now()),
                      (301, 30, '1', 'unread', 1, NULL, now()),
                      (401, 40, '1', 'unread', 1, NULL, now()),
+                     (402, 40, '2', 'unread', 2, NULL, now()),
                      (501, 50, '1', 'read', 1, NOW(), now());
                  UPDATE threads SET next_unread_issue_id = 101 WHERE id = 10;
                  UPDATE threads SET next_unread_issue_id = 201 WHERE id = 20;
@@ -1359,13 +1360,18 @@ mod tests {
                          now(), now()),
                         (52, 'comicvine', 'issue', '4000-44',
                          '{"image":{"super_url":"https://comicvine.example/covers/dependent.jpg"}}'::json,
+                         now(), now()),
+                        (53, 'comicvine', 'issue', '4000-45',
+                         '{"image":{"original_url":null,"super_url":"","medium_url":" ",
+                           "small_url":"","thumb_url":"https://comicvine.example/covers/thumb-only.jpg"}}'::json,
                          now(), now());
                  INSERT INTO issue_external_identity_mappings
                      (id, issue_id, external_identity_id, status, evidence_json,
                       created_at, updated_at)
                  VALUES (500, 110, 50, 'confirmed', '{}'::json, now(), now()),
                         (501, 102, 51, 'confirmed', '{}'::json, now(), now()),
-                        (502, 301, 52, 'confirmed', '{}'::json, now(), now());"#)
+                        (502, 301, 52, 'confirmed', '{}'::json, now(), now()),
+                        (503, 402, 53, 'confirmed', '{}'::json, now(), now());"#)
             .await
             .expect("seed canonical schema");
         let user = AuthenticatedUser::for_test(1);
