@@ -428,12 +428,12 @@
       "method": "PUT",
       "path": "/api/v2/reading-lists/{list_id}",
       "sql_budget": {
-        "application_statements": 12,
+        "application_statements": 14,
         "transaction_control_statements": 2,
-        "total_statements": 14,
+        "total_statements": 16,
         "grows_with_data": false,
-        "basis": "auth 1+probe 1 + handler probe 1+BEGIN 1+lock 1+old entries 1+owned check 1+list update 1+entries delete 1+batch insert 1+graph preflight snapshot 1+new entries 1+list reload 1+COMMIT 1; set-based after batch insert, checkout recovery probes included",
-        "max_statements": 14,
+        "basis": "auth 1+probe 1 + handler probe 1+BEGIN 1+lock 1+old entries 1+owned check 1+list update 1+entries delete 1+batch insert 1+graph preflight snapshot 1+new entries 1+COMMIT 1 + post-commit probe 1+list reload 1; set-based after batch insert, checkout recovery probes included",
+        "max_statements": 16,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
