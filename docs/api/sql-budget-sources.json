@@ -341,12 +341,13 @@
         "application_statements": 2,
         "transaction_control_statements": 2,
         "total_statements": 4,
-        "basis": "auth 1 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1",
+        "basis": "auth 1 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1; measured cold-pool path adds two SELECT 1 checkout probes",
         "grows_with_data": false,
-        "max_statements": 4,
+        "max_statements": 6,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
@@ -354,14 +355,15 @@
       "path": "/api/v2/reading-graph/repairs",
       "sql_budget": {
         "application_statements": 6,
-        "transaction_control_statements": 2,
-        "total_statements": 8,
+        "transaction_control_statements": 4,
+        "total_statements": 10,
         "grows_with_data": false,
-        "basis": "preview path: option diagnostics 1 (+2 tx) or confirm path adds lock+delete+reload; worst case shown; refine via parity harness",
-        "max_statements": 8,
+        "basis": "confirmed worst case: auth 1 + advisory lock 1 + initial snapshot 1 + unlinked check 1 + delete 1 + persisted graph reload 1 (+4 tx control); preview is smaller; measured cold-pool apply path adds three SELECT 1 checkout probes",
+        "max_statements": 13,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py",
+        "runtime_overhead_statements": 3
       }
     },
     {
@@ -371,12 +373,13 @@
         "application_statements": 2,
         "transaction_control_statements": 0,
         "total_statements": 2,
-        "basis": "auth extractor 1 + list summary query 1; set-based",
+        "basis": "auth extractor 1 + list summary query 1; set-based; measured cold-pool path adds two SELECT 1 checkout probes",
         "grows_with_data": false,
-        "max_statements": 2,
+        "max_statements": 4,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
@@ -386,12 +389,13 @@
         "application_statements": 7,
         "transaction_control_statements": 2,
         "total_statements": 9,
-        "grows_with_data": true,
-        "basis": "auth 1 + lock 1 + owned-issue check 1 + list insert 1 + graph_preflight 1 + entries load 1 + one entry insert 1 (+2 tx control); grows with entry count",
-        "max_statements": 9,
+        "grows_with_data": false,
+        "basis": "auth 1 + lock 1 + owned-issue check 1 + list insert 1 + one set-based entry insert 1 + graph_preflight 1 + entries load 1 (+2 tx control); independent of entry count; measured cold-pool path adds two SELECT 1 checkout probes",
+        "max_statements": 11,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
@@ -401,12 +405,13 @@
         "application_statements": 4,
         "transaction_control_statements": 2,
         "total_statements": 6,
-        "basis": "auth extractor 1 + advisory lock 1 + unlinked check 1 + delete 1 (+2 tx control); set-based",
+        "basis": "auth extractor 1 + advisory lock 1 + unlinked check 1 + cascading list delete 1 (+2 tx control); independent of entry count; measured cold-pool path adds two SELECT 1 checkout probes",
         "grows_with_data": false,
-        "max_statements": 6,
+        "max_statements": 8,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
@@ -416,12 +421,13 @@
         "application_statements": 3,
         "transaction_control_statements": 0,
         "total_statements": 3,
-        "basis": "auth extractor 1 + list load 1 + entries load 1; set-based",
+        "basis": "auth extractor 1 + list load 1 + entries load 1; set-based; measured cold-pool path adds two SELECT 1 checkout probes",
         "grows_with_data": false,
-        "max_statements": 3,
+        "max_statements": 5,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
@@ -431,12 +437,13 @@
         "application_statements": 11,
         "transaction_control_statements": 2,
         "total_statements": 13,
-        "grows_with_data": true,
-        "basis": "auth 1 + lock 1 + old entries load 1 + owned-issue check 1 + list update 1 + entries delete 1 + one entry insert 1 + graph_preflight 1 + new entries load 1 + list reload 1 (+2 tx control); grows with entry count",
-        "max_statements": 13,
+        "grows_with_data": false,
+        "basis": "auth 1 + lock 1 + list row 1 + old entries load 1 + owned-issue check 1 + list update 1 + entries delete 1 + one set-based entry insert 1 + graph_preflight 1 + new entries load 1 + list reload 1 (+2 tx control); independent of entry count; measured cold-pool path adds three SELECT 1 checkout probes",
+        "max_statements": 16,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 3
       }
     },
     {
@@ -446,12 +453,13 @@
         "application_statements": 4,
         "transaction_control_statements": 2,
         "total_statements": 6,
-        "basis": "auth extractor 1 + list load 1 + entries load 1 + Option E snapshot 1 (+2 tx control); set-based",
+        "basis": "auth extractor 1 + list load 1 + entries load 1 + Option E snapshot 1 (+2 tx control); set-based; measured cold-pool path adds three SELECT 1 checkout probes",
         "grows_with_data": false,
-        "max_statements": 6,
+        "max_statements": 9,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 3
       }
     },
     {
