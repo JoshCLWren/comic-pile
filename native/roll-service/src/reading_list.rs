@@ -445,7 +445,7 @@ pub async fn create_reading_list(
         .unwrap_or_default()
         .into_iter()
         .collect();
-    let issues: Vec<i32> = request.issue_ids.iter().copied().collect();
+    let issues: Vec<i32> = request.issue_ids.to_vec();
     let mut batch_issue_ids: Vec<i32> = Vec::with_capacity(issues.len());
     let mut batch_positions: Vec<i32> = Vec::with_capacity(issues.len());
     let mut batch_is_checkpoints: Vec<String> = Vec::with_capacity(issues.len());
@@ -739,7 +739,7 @@ pub async fn update_reading_list(
     .await
     .map_err(db::query_error)?;
 
-    let issues: Vec<i32> = request.issue_ids.iter().copied().collect();
+    let issues: Vec<i32> = request.issue_ids.to_vec();
     let mut batch_issue_ids: Vec<i32> = Vec::with_capacity(issues.len());
     let mut batch_positions: Vec<i32> = Vec::with_capacity(issues.len());
     let mut batch_is_checkpoints: Vec<String> = Vec::with_capacity(issues.len());
