@@ -233,3 +233,6 @@ docs/typing/mypy-inventory.json
 
 # Rotisserie factory runtime checkout (see .rotisserie/config.toml)
 /.rotisserie/runtime/
+
+# Generated nginx ingress for make docker-test-up
+/.docker-test-ingress.conf

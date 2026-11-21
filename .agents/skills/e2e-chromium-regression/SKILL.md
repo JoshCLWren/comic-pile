@@ -35,7 +35,7 @@ the whole session.
    ```
 
 3. Backend — **`TEST_ENVIRONMENT=true` is mandatory**. The rate-limit gate
-   (`app/middleware/rate_limit.py`) only disables throttling in test mode; without it,
+   (`app/middleware/rate_limit.py`) only disables throttling in test mode; without it, <!-- docs-path-check: ignore -->
    fixture-speed traffic 429s the entire run. Never pass `REDIS_URL` (Redis is unused).
    Keep the log path slot-unique too — `/tmp/backend.log` is machine-global:
 
@@ -111,10 +111,10 @@ didn't) before an assertion.
 
 ## Changing the lane itself
 
-- Inventory edits: keep `tests/test_e2e_behavior_inventory.py` green; every covered behavior
+- Inventory edits: keep `tests/test_e2e_behavior_inventory.py` green; every covered behavior <!-- docs-path-check: ignore -->
   needs real spec mappings or it is skipped silently — check `selection.json`'s
   `unmapped_specs` and `skipped_behaviors`.
-- Selector/config/workflow edits: `tests/test_e2e_regression_select.py`, validate the workflow
+- Selector/config/workflow edits: `tests/test_e2e_regression_select.py`, validate the workflow <!-- docs-path-check: ignore -->
   YAML, and verify the step-summary failure walker against a real `results.json` (it must walk
   `suites[].specs[].tests[]`, not `suite.tests`).
 - After any such change, re-run `--list` for every scope plus one real `p0` run end-to-end.

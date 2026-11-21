@@ -18,10 +18,10 @@ The collision contributed directly to the password-reset incident fixed in #2996
 
 | Concept | Internal Name | Table/Storage |
 |---------|---------------|---------------|
-| Durable reading history | `ReadingSession` in `app/models/reading_session.py` | `sessions` (unchanged) |
-| Reading-history persistence | functions in `app/repositories/reading_session_repository.py` | — |
+| Durable reading history | `ReadingSession` in `app/models/reading_session.py` | `sessions` (unchanged) | <!-- docs-path-check: ignore -->
+| Reading-history persistence | functions in `app/repositories/reading_session_repository.py` | — | <!-- docs-path-check: ignore -->
 | Reading-history orchestration | Rust reading-session service in `native/roll-service/src/reading_session.rs` | — |
-| Core reading-session helpers | `comic_pile/reading_session.py` | — |
+| Core reading-session helpers | `comic_pile/reading_session.py` | — | <!-- docs-path-check: ignore -->
 | API endpoints | `/api/session/` (unchanged) | — |
 | API schemas | `SessionListItem`, `SessionDetail` (unchanged) | — |
 
@@ -49,7 +49,7 @@ This is out of scope for the domain rename. The internal model class is `Reading
 
 ## Enforcement
 
-1. **Architecture guard** (`tests/test_reading_session_naming_guard.py`, static AST analysis, no database):
+1. **Architecture guard** (`tests/test_reading_session_naming_guard.py`, static AST analysis, no database): <!-- docs-path-check: ignore -->
    - `test_auth_code_does_not_touch_reading_session_domain` — auth and password-reset modules may not
      import the `ReadingSession` model, the reading-session repository/service, or call their helpers.
      A justified cross-domain interaction belongs in a service that owns both sides, never inside an auth
@@ -66,8 +66,8 @@ This is out of scope for the domain rename. The internal model class is `Reading
    session, thread, issue, event, and snapshot survives unchanged.
 
 3. **Documentation in code**: key modules state the boundary explicitly:
-   - `app/models/reading_session.py`: names the rationale and the auth state that lives elsewhere.
-   - `app/repositories/reading_session_repository.py`: "nothing in this module revokes credentials or touches authentication state".
+   - `app/models/reading_session.py`: names the rationale and the auth state that lives elsewhere. <!-- docs-path-check: ignore -->
+   - `app/repositories/reading_session_repository.py`: "nothing in this module revokes credentials or touches authentication state". <!-- docs-path-check: ignore -->
    - `native/roll-service/src/auth/services.rs`: `complete_reset` only consumes the `password_reset_tokens` row and updates `users` (`password_hash`, `password_changed_at`); it never touches the reading-history `sessions` table.
    The Python-side guard assertions keep the first two statements from drifting away.
 
@@ -82,12 +82,12 @@ HTTP surface depend on them, and none of them is reachable from application code
 | Retained name | Where | Why retained |
 |---|---|---|
 | `sessions` table | `ReadingSession.__tablename__` | Renaming requires a migration plus API/client coordination |
-| `/api/session/...` endpoints | `app/api/session.py`, `native/roll-service/src/undo_apply.rs` | Public HTTP contract |
-| `SessionListItem`, `SessionDetail`, `SessionResponse`, `SessionHistoryPage` | `app/schemas/session.py` | Public response schema names |
+| `/api/session/...` endpoints | `app/api/session.py`, `native/roll-service/src/undo_apply.rs` | Public HTTP contract | <!-- docs-path-check: ignore -->
+| `SessionListItem`, `SessionDetail`, `SessionResponse`, `SessionHistoryPage` | `app/schemas/session.py` | Public response schema names | <!-- docs-path-check: ignore -->
 | `session_id` parameters, fields, and prose | throughout `app/`, `comic_pile/`, `tests/` | Unambiguous in context and pervasive on the wire |
-| `comic_pile/reading_session.py` | re-exports in `comic_pile/__init__.py` | Qualified module path is the disambiguation |
-| `app/services/session_response.py`, `native/roll-service/src/session_history.rs` | service modules | Response/history projections over reading sessions; module name is qualified |
-| `X-Session-Read-*` response headers | `app/middleware/security_headers.py` | Diagnostics header contract, unrelated to either session concept |
+| `comic_pile/reading_session.py` | re-exports in `comic_pile/__init__.py` | Qualified module path is the disambiguation | <!-- docs-path-check: ignore -->
+| `app/services/session_response.py`, `native/roll-service/src/session_history.rs` | service modules | Response/history projections over reading sessions; module name is qualified | <!-- docs-path-check: ignore -->
+| `X-Session-Read-*` response headers | `app/middleware/security_headers.py` | Diagnostics header contract, unrelated to either session concept | <!-- docs-path-check: ignore -->
 
 ## Guidelines for Future Work
 

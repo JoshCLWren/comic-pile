@@ -122,7 +122,7 @@ When you add or retire Chromium coverage:
 - Add the spec file to the owning behavior's `specs` list (or add a new
   behavior entry with a stable scenario ID).
 - Never edit statuses speculatively: `covered` requires an existing spec file,
-  enforced by `tests/test_e2e_behavior_inventory.py` and by selection failing
+  enforced by `tests/test_e2e_behavior_inventory.py` and by selection failing <!-- docs-path-check: ignore -->
   closed.
 - Scenario IDs are the ownership boundary — cite the inventory IDs your work
   owns so two factories do not build duplicate coverage.

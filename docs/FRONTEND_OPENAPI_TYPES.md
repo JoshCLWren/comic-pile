@@ -55,15 +55,6 @@ applies the two presentation normalizations the reader UI needs (narrowed
 `status`, optional `position`) and keeps `next_page_token` required because the
 pagination consumers read it unconditionally and the handler always serializes it.
 
-## Duplicate-authority guard
-
-`tests/test_frontend_server_contract_types.py` fails when a new handwritten
-`export interface` or inline `export type ... = {` reuses a generated component
-schema name. Known pre-#4457 duplicates are frozen in
-`tests/frontend_server_contract_types_baseline.json`, which is shrink-only: the
-guard also fails when a baseline entry stops existing, so the inventory must be
-removed as each type migrates. Regenerate nothing here — migrate the type to a
-generated alias and delete its baseline entry.
 
 ## Generated request-method decision
 
@@ -96,5 +87,5 @@ and `nativeV2Client.ts` without overwriting repository artifacts. Custom
 `--schema`/`--output` runs do not touch the checked-in native client.
 
 `docs/api/v2-route-inventory.json` and
-`tests/test_api_v2_contract_inventory.py` record and enforce which runtime
+`tests/test_api_v2_contract_inventory.py` record and enforce which runtime <!-- docs-path-check: ignore -->
 serves each live `/api/v2` operation.

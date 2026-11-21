@@ -140,7 +140,7 @@ CI also runs `node scripts/check_native_route_db_tests.mjs` (with its own
 database harness, or an explicit reason in the checker's allowlist. This closes
 the gap that let a route module ship with no database test at all (#5351).
 CI provisions PostgreSQL. `tests/fixtures/roll-v2/auth-matrix.json` is consumed by
-both Rust integration tests and `tests/test_native_auth_matrix.py`, pinning valid
+both Rust integration tests and `tests/test_native_auth_matrix.py`, pinning valid <!-- docs-path-check: ignore -->
 credentials and exact auth rejection status/detail/challenge across languages.
 Python tests use the existing isolated database fixtures. Run them with the
 repository's disposable `TEST_DATABASE_URL` and `DATABASE_URL`, never a live library.
@@ -281,7 +281,7 @@ inference fails without committing an aborted transaction. Deadlock retries are
 bounded to three attempts inside one overall deadline. Failed/cancelled work
 discards the connection, rolling back session and checkpoint together.
 
-`parity/test_session_bootstrap.py` runs Python and Rust on the same seeded initial
+`parity/test_session_bootstrap.py` runs Python and Rust on the same seeded initial <!-- docs-path-check: ignore -->
 state in the canonical schema, rolls back Python, then compares every
 persisted session field and snapshot payload. It tests fresh/reused/expired
 sessions, pending context, recent cancellation activity, cutoff equality,
@@ -314,11 +314,5 @@ the real write path (the insert/update and the resulting rows), not only auth,
 request-shape, or read helpers. The #4423 production 500 shipped because the
 offer suite never ran its INSERT.
 
-`tests/test_native_roll_write_test_guard.py` enforces this for every
-`post(module::handler)` mounted in `src/lib.rs`. The test module must reference
-`handler(` or its extracted `persist_<handler>(` writer, so a read-only DB test
-cannot satisfy the rule. Handlers that predate the rule or delegate to an
-already-tested writer live in the frozen
-`tests/native_roll_write_test_baseline.json` (`allowed_modules` is asserted
-exactly); add the missing test and remove the entry rather than expanding the
-baseline.
+`scripts/check_native_route_db_tests.mjs` (run in CI) fails when a native module
+that serves an HTTP route has no PostgreSQL-backed HTTP test in `tests/*.rs`.

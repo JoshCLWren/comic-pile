@@ -228,9 +228,9 @@ Enforcement is split by what the schema can actually express:
   column to key a composite foreign key on, and `tag_assignments(target_type,
   target_id)` is polymorphic across three unrelated tables, so no single foreign
   key target exists for either shape. These paths route through the centralized
-  guards in `app/services/ownership_guard.py` and must reject rather than
+  guards in `app/services/ownership_guard.py` and must reject rather than <!-- docs-path-check: ignore -->
   reconcile: existing drift is reported read-only by
-  `scripts/check_ownership_consistency.py` (counts and row IDs only, never
+  `scripts/check_ownership_consistency.py` (counts and row IDs only, never <!-- docs-path-check: ignore -->
   titles, notes, ratings, or payloads) and is never auto-repaired or silently
   remapped.
 

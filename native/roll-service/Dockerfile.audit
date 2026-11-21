@@ -13,11 +13,14 @@ COPY native/roll-service/src/ ./native/roll-service/src/
 # building the service. The migration crate's binary/SQL are not needed here.
 COPY native/migrate/Cargo.toml ./native/migrate/
 COPY native/migrate/src/ ./native/migrate/src/
+COPY native/migrate/migrations/ ./native/migrate/migrations/
 # Test fixtures are loaded on demand by Rust tests; no SQL dump belongs in a
 # deployable service image or is required to compile the runtime binary.
-RUN cargo build --locked -p comicpile-roll-service --bin comicpile-roll-service
+RUN cargo build --locked -p comicpile-roll-service --bin comicpile-roll-service \
+    -p comicpile-migrate --bin comicpile-migrate
 
 FROM debian:bookworm-slim
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /workspace/target/debug/comicpile-roll-service /usr/local/bin/comicpile-roll-service
+COPY --from=builder /workspace/target/debug/comicpile-migrate /usr/local/bin/comicpile-migrate
 ENTRYPOINT ["/usr/local/bin/comicpile-roll-service"]

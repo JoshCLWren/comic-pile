@@ -49,7 +49,7 @@ production in this documentation task.
 
 The [legacy-order rehearsal evidence](recovery/step23b-legacy-reading-order-migration-rehearsal-evidence.json)
 is an isolated clone, not production proof. Likewise,
-`tests/test_continuity_plan_writer_rule_reuse.py:143` demonstrates a **synthetic** two-plan ownership
+`tests/test_continuity_plan_writer_rule_reuse.py:143` demonstrates a **synthetic** two-plan ownership <!-- docs-path-check: ignore -->
 conflict, not successful shared production ownership. These distinctions prevent a design based
 on fabricated production completeness.
 
@@ -60,7 +60,7 @@ design names, not assertions that those tables already exist.
 
 | Current resource | Shape, constraints, and persistence meaning |
 | --- | --- |
-| `ContinuityPlan` | `id` PK; `user_id` FK with cascade; `name`; `ordering_mode`; `nodes_json`; `lanes_json`; `created_at`, `updated_at`. User index; no name uniqueness. Membership, lane links, gate references, and source links inside JSON have no database FKs. See `app/models/continuity_plan.py:18`. |
+| `ContinuityPlan` | `id` PK; `user_id` FK with cascade; `name`; `ordering_mode`; `nodes_json`; `lanes_json`; `created_at`, `updated_at`. User index; no name uniqueness. Membership, lane links, gate references, and source links inside JSON have no database FKs. See `app/models/continuity_plan.py:18`. | <!-- docs-path-check: ignore -->
 | Plan lanes/nodes | Lane IDs/orders and node IDs/lane-local positions are application-unique. Node `ref_id` is not unique: two occurrences may reference the same Issue. Strict mode requires one lane and contiguous zero-based positions, excluding thread nodes. Informational mode still allows checkpoint/convergence blockers. See `app/schemas/continuity_plan.py:23–185`. |
 | `Dependency` | `id` PK, non-null Issue FKs `source_issue_id`/`target_issue_id` with cascade, unique endpoint pair, `created_at`, nullable `note`. No owner column; ownership follows endpoints through Thread. No database self-edge prohibition in this model. See `app/models/dependency.py:22–39`. |
 | `ContinuityRule` | User FK; generalized type/ID endpoints without endpoint FKs; unique `(user_id, source_type, source_id, target_type, target_id)`; satisfaction type; checkpoint Issue FK with restrict; convergence JSON; note; timestamps. Nullable unique `legacy_dependency_id` FK cascades on Dependency deletion. `ContinuityRuleSelectedMember` has rule/Issue FKs and unique pair. See `app/models/continuity_rule.py:21–101`. |

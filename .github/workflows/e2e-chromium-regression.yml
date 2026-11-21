@@ -125,29 +125,19 @@ jobs:
 
       - name: Apply migrations
         # DATABASE_URL / TEST_DATABASE_URL come from the shared top-level env.
-        # Refinery runner (#5431); Alembic is frozen.
+        # Refinery runner (#5431); the Alembic tree is deleted.
         run: CARGO_TARGET_DIR=native/roll-service/target cargo run --release --locked -p comicpile-migrate -- up
 
-      - name: Start backend and native v2 ingress
+      - name: Start native v2 service and ingress
         run: |
-          nohup .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 9001 --workers 2 \
-            > /tmp/backend.log 2>&1 &
           nohup native/roll-service/target/release/comicpile-roll-service \
             > /tmp/native.log 2>&1 &
-          nohup .venv/bin/python scripts/e2e_native_ingress.py \
+          nohup python3 scripts/e2e_native_ingress.py \
             > /tmp/ingress.log 2>&1 &
           ready=0
           for _ in $(seq 1 45); do
-            python_ready=0
-            native_ready=0
-            if curl -fsS http://127.0.0.1:9001/health >/dev/null; then
-              python_ready=1
-            fi
             if [ "$(curl --silent --output /dev/null --write-out '%{http_code}' \
-              http://127.0.0.1:8010/api/v2/threads || true)" = "401" ]; then
-              native_ready=1
-            fi
-            if [ "$python_ready" -eq 1 ] && [ "$native_ready" -eq 1 ] \
+              http://127.0.0.1:8010/api/v2/threads || true)" = "401" ] \
               && curl -fsS http://127.0.0.1:9000/health >/dev/null; then
               ready=1
               break
@@ -155,8 +145,7 @@ jobs:
             sleep 2
           done
           if [ "$ready" -ne 1 ]; then
-            echo "::error::Backend or native v2 ingress failed on :9000"
-            tail -n 200 /tmp/backend.log || true
+            echo "::error::Native v2 service or ingress failed on :9000"
             tail -n 200 /tmp/native.log || true
             tail -n 200 /tmp/ingress.log || true
             exit 1

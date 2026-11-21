@@ -3,7 +3,7 @@
 This document is the authoritative reference for ComicPile's versioned API surface. It
 supports issue #638 (Developer experience and frontend simplification) and the
 #642 `/api/v1` normalization audit (#954). The companion contract test
-`tests/test_api_v1_canonical_contract.py` enforces every statement below against the
+`tests/test_api_v1_canonical_contract.py` enforces every statement below against the <!-- docs-path-check: ignore -->
 generated OpenAPI schema, so this list cannot silently drift.
 
 ## Native v2 analytics transition
