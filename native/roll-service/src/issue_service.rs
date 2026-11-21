@@ -1674,6 +1674,31 @@ mod tests {
         assert_eq!(direct.cover_image_url, covers.items[0].cover_image_url);
         tx.rollback().await.unwrap();
     }
+    // MQA-THREAD-004: the confirm dialog renders a provider entry whose
+    // only stored size is `thumb_url`; the thread card must agree instead
+    // of falling back to "No cover". Both projections use the same URL.
+    #[tokio::test]
+    async fn thumb_only_cover_agreement() {
+        let user = AuthenticatedUser::for_test(1);
+        let mut command = request(Some("read"), Some(4.5));
+        let tx = first.transaction().await.unwrap();
+        let read = persist(&tx, user, 110, &command).await.unwrap();
+        tx.commit().await.unwrap();
+        let thumb_only = cards(&first, user, &[402]).await.unwrap();
+        assert_eq!(thumb_only.items.len(), 1);
+        assert_eq!(thumb_only.items[0].mapping_state, "confirmed");
+        assert_eq!(
+            thumb_only.items[0].cover_image_url.as_deref(),
+            Some("https://comicvine.example/covers/thumb-only.jpg")
+        );
+        let tx = first.transaction().await.unwrap();
+        let thumb_direct = card(&tx, user, 402).await.unwrap();
+        assert_eq!(
+            thumb_direct.cover_image_url,
+            thumb_only.items[0].cover_image_url
+        );
+        tx.rollback().await.unwrap();
+    }
 
     #[tokio::test]
     async fn roll_offer_rating_steps_the_die_down_and_moves_the_series_forward() {
