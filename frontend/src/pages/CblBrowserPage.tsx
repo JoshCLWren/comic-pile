@@ -724,8 +724,10 @@ export default function CblBrowserPage() {
   }
 
   const summary = preview?.summary
-  const needsAttentionCount =
-    (summary?.unresolved_count ?? 0) + (summary?.awaiting_opt_in_count ?? 0)
+  const needsAttentionCount = Math.max(
+    0,
+    (summary?.unresolved_count ?? 0) + (summary?.awaiting_opt_in_count ?? 0) - (summary?.excluded_count ?? 0),
+  )
   const commitBlockedReason = isPreviewing
     ? 'Wait for the preview to finish.'
     : !preview
