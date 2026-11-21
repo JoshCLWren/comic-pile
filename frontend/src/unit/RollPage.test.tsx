@@ -293,6 +293,41 @@ it('prefers the scoped pool reason over bootstrap for the empty-pool copy (#4719
   expect(screen.queryByText(/waiting on earlier issues/i)).not.toBeInTheDocument()
 })
 
+it('opens Reset Dice confirmation from an idle snooze-exhausted pool', async () => {
+  const user = userEvent.setup()
+  writeRollSnoozes([1])
+  mockedUseRollBootstrap.mockReturnValue({
+    data: {
+      ...bootstrap,
+      current_die: 20,
+      roll_pool: [],
+      pool_reason: 'ready',
+      snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
+      snoozed_count: 1,
+    },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  mockedUseRollEligibleIssueIds.mockReturnValue({
+    data: { die: 20, issue_ids: [], thread_ids: [], pool_reason: 'ready' },
+  })
+  mockedUseRollIssueCards.mockReturnValue({ data: { items: [] } })
+
+  renderRollPage()
+
+  expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
+  expect(resetDiceMutateSpy).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('button', { name: 'Reset Dice', exact: true }))
+  expect(screen.getByRole('dialog', { name: 'Select Die' })).toBeInTheDocument()
+  expect(resetDiceMutateSpy).not.toHaveBeenCalled()
+
+  await user.click(screen.getByTestId('reset-dice'))
+
+  await waitFor(() => expect(resetDiceMutateSpy).toHaveBeenCalledTimes(1))
+})
+
 it('ignores retired diagnostic reports while retaining the active pool (#4441)', () => {
   mockedUseRollBootstrap.mockReturnValue({
     data: {
