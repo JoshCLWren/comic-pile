@@ -3148,6 +3148,26 @@ mod tests {
     }
 
     #[test]
+    fn roster_normalization_keeps_thumbnail_only_cover() {
+        // Provider entries with only a thumbnail are real (Detective Comics #5,
+        // 1937). Normalization must keep that cover instead of storing null.
+        let metadata = normalize_roster_issue(&json!({
+            "id": 99,
+            "name": "Detective Comics",
+            "issue_number": "5",
+            "cover_date": "1937-07-01",
+            "store_date": null,
+            "image": {"original_url": "", "super_url": "", "medium_url": "",
+                      "small_url": "", "thumb_url": "https://cv.example/thumb.jpg"},
+            "volume": {"id": 4050, "name": "Detective Comics"}
+        }));
+        assert_eq!(
+            metadata["primary_image"],
+            "https://cv.example/thumb.jpg"
+        );
+    }
+
+    #[test]
     fn roster_pages_are_validated_like_python() {
         assert!(matches!(
             roster_page(&json!({"number_of_total_results": 5}), 9),

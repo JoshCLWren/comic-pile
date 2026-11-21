@@ -712,6 +712,22 @@ mod tests {
     use super::*;
     use serde_json::json;
     #[test]
+    fn image_falls_back_to_thumbnail_in_every_stored_shape() {
+        assert_eq!(
+            image(&json!({"image": {"thumb_url": "https://cv.example/thumb.jpg"}})).as_deref(),
+            Some("https://cv.example/thumb.jpg")
+        );
+        assert_eq!(
+            image(&json!({"primary_image": null, "raw_provider_payload": {
+                "image": {"small_url": "", "thumb_url": "https://cv.example/raw-thumb.jpg"}
+            }}))
+            .as_deref(),
+            Some("https://cv.example/raw-thumb.jpg")
+        );
+        assert_eq!(image(&json!({})), None);
+    }
+
+    #[test]
     fn creator_merging_preserves_provider_roles_and_anonymous_rows() {
         let metadata = json!({"creator_credits":[
             {"id":1,"name":"Jamie Delano","role":"writer"},

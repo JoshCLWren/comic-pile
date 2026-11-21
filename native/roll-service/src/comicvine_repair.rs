@@ -1224,7 +1224,9 @@ mod tests {
     #[test]
     fn only_verified_singular_issue_payload_completes() {
         let result = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
-            "cover_date":"1988-03-01", "store_date":"1988-03-24", "image":{},
+            "cover_date":"1988-03-01", "store_date":"1988-03-24",
+            "image":{"original_url":"","super_url":"","medium_url":"","small_url":"",
+                     "thumb_url":"https://comicvine.example/thumb-only.jpg"},
             "volume":{"id": 4001,"name":"Hellblazer"},
             "person_credits":[{"id":1,"name":"Jamie Delano","api_detail_url":"https://example"}],
             "character_credits":[], "team_credits":[], "story_arc_credits":[],
@@ -1232,6 +1234,12 @@ mod tests {
         let (metadata, present, _, _) = normalized_metadata(&result, 29319).unwrap();
         assert!(present);
         assert_eq!(metadata["creator_credits"][0]["name"], "Jamie Delano");
+        // A provider entry whose only populated image size is the thumbnail is
+        // still a cover; dropping it produced the MQA-THREAD-004 "No cover".
+        assert_eq!(
+            metadata["primary_image"],
+            "https://comicvine.example/thumb-only.jpg"
+        );
         assert!(normalized_metadata(&result, 29320).is_err());
         let mut incomplete = result;
         incomplete.as_object_mut().unwrap().remove("person_credits");

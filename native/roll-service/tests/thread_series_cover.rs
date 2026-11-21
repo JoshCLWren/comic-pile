@@ -227,6 +227,40 @@ async fn seed_confirmed_cover(
         .unwrap();
 }
 
+async fn seed_confirmed_cover_metadata(
+    ctx: &Ctx,
+    issue_id: i32,
+    external_id: &str,
+    metadata: Value,
+) {
+    let identity: i32 = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
+             created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
+            &[&external_id, &metadata],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
+             created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
+            &[&issue_id, &identity],
+        )
+        .await
+        .unwrap();
+}
+
 fn thread_cover(body: &Value, title: &str) -> Option<String> {
     let threads = body["threads"].as_array()?;
     threads
@@ -361,6 +395,58 @@ async fn series_cover_uses_the_issue_card_mapping_preference() {
     assert_eq!(
         thread_cover(&body, "Confidence Wins"),
         Some("https://cv.example/high.jpg".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn series_cover_uses_thumbnail_only_provider_cover() {
+    // Regression for MQA-THREAD-004 / #5624: Detective Comics #5 (1937) showed
+    // its thumbnail in the match dialog but the queue said "No cover" because
+    // only `thumb_url` was populated. Both stored shapes must resolve.
+    let ctx = setup("sc-thumb-only").await;
+
+    let raw_thread = seed_thread(&ctx, ctx.user_id, "Thumb Raw", "active", 1).await;
+    let raw_issue = seed_issue(&ctx, raw_thread, "5", 1, "unread").await;
+    set_frontier(&ctx, raw_thread, Some(raw_issue)).await;
+    seed_confirmed_cover_metadata(
+        &ctx,
+        raw_issue,
+        "thumb-raw-id",
+        json!({
+            "primary_image": null,
+            "raw_provider_payload": {"image": {
+                "original_url": "", "super_url": "", "medium_url": "",
+                "small_url": "", "thumb_url": "https://cv.example/raw-thumb.jpg"
+            }}
+        }),
+    )
+    .await;
+
+    let top_thread = seed_thread(&ctx, ctx.user_id, "Thumb Top", "active", 2).await;
+    let top_issue = seed_issue(&ctx, top_thread, "5", 1, "unread").await;
+    set_frontier(&ctx, top_thread, Some(top_issue)).await;
+    seed_confirmed_cover_metadata(
+        &ctx,
+        top_issue,
+        "thumb-top-id",
+        json!({
+            "image": {
+                "original_url": "", "super_url": "", "medium_url": "",
+                "small_url": "", "thumb_url": "https://cv.example/top-thumb.jpg"
+            }
+        }),
+    )
+    .await;
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        thread_cover(&body, "Thumb Raw"),
+        Some("https://cv.example/raw-thumb.jpg".to_owned())
+    );
+    assert_eq!(
+        thread_cover(&body, "Thumb Top"),
+        Some("https://cv.example/top-thumb.jpg".to_owned())
     );
 }
 
