@@ -556,6 +556,7 @@ export default function RollPage() {
               onToggleSnoozed={() => state.setSnoozedExpanded(!state.snoozedExpanded)}
 
               onShuffle={actions.handleShufflePool}
+              onResetDice={() => state.setIsDieModalOpen(true)}
               unsnoozeIsPending={false}
               shuffleIsPending={shuffleQueueMutation.isPending}
             />
