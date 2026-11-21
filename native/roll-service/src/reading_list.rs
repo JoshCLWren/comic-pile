@@ -737,6 +737,12 @@ pub async fn update_reading_list(
     .await
     .map_err(db::query_error)?;
 
+    let mut issue_ids: Vec<i32> = Vec::with_capacity(request.issue_ids.len());
+    let mut positions: Vec<i32> = Vec::with_capacity(request.issue_ids.len());
+    let mut is_checkpoints: Vec<bool> = Vec::with_capacity(request.issue_ids.len());
+    let mut target_jsons: Vec<String> = Vec::with_capacity(request.issue_ids.len());
+    let mut gates: Vec<String> = Vec::with_capacity(request.issue_ids.len());
+    let mut skipped_flags: Vec<bool> = Vec::with_capacity(request.issue_ids.len());
     for (position, issue_id) in request.issue_ids.iter().enumerate() {
         let old = old_by_issue.get(issue_id);
         let intent = request
@@ -796,13 +802,33 @@ pub async fn update_reading_list(
             );
             ApiError::Internal("Invalid checkpoint".into())
         })?;
+        issue_ids.push(*issue_id);
+        positions.push(position as i32);
+        is_checkpoints.push(!targets.is_empty());
+        target_jsons.push(targets_json);
+        gates.push(gate.to_string());
+        skipped_flags.push(skipped);
+    }
+    if !issue_ids.is_empty() {
         tx.execute(
             "INSERT INTO custom_cbl_entries
              (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[&list_id, issue_id, &(position as i32), &(!targets.is_empty()),
-              &targets_json, &gate, &skipped],
-        ).await.map_err(db::query_error)?;
+             SELECT $1, x.issue_id, x.position, NOW(), x.is_checkpoint,
+                    x.targets::json, x.gate, x.skipped
+             FROM UNNEST($2::int[], $3::int[], $4::bool[], $5::text[], $6::text[], $7::bool[])
+               AS x(issue_id, position, is_checkpoint, targets, gate, skipped)",
+            &[
+                &list_id,
+                &issue_ids,
+                &positions,
+                &is_checkpoints,
+                &target_jsons,
+                &gates,
+                &skipped_flags,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
     }
 
     graph_preflight(&tx, user).await?;
