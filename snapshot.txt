@@ -1,20 +1,20 @@
-utc: 2026-11-21T05:51:34Z
-uptime: 217.70s load: 0.22 0.17 0.07
+utc: 2026-11-21T05:51:50Z
+uptime: 234.15s load: 0.17 0.16 0.07
 processes: 173
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1215       12146          49        2985       14767
+Mem:           15983        1209       12152          49        2986       14773
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   60G   86G  41% /
 /dev/root       145G   60G   86G  41% /
 --- top rss (KiB, name only)
-329556 opencode.exe
-157400 Runner.Worker
-137580 provjobd3599077
-109316 Runner.Listener
-87680 opencode
+330108 opencode.exe
+157404 Runner.Worker
+137656 provjobd3599077
+107900 Runner.Listener
+87136 opencode
 83492 dockerd
 56240 php-fpm8.5
 46196 containerd
@@ -23,17 +23,17 @@ Filesystem      Size  Used Avail Use% Mounted on
 29732 networkd-dispat
 21444 php-fpm8.5
 21444 php-fpm8.5
-17500 systemd-journal
+17516 systemd-journal
 16896 systemd
 --- top cpu (name only)
- 2.5 opencode.exe
- 2.4 Runner.Worker
- 2.1 provjobd3599077
+ 2.3 opencode.exe
+ 2.2 Runner.Worker
+ 2.0 provjobd3599077
  0.9 systemd
  0.4 Runner.Listener
  0.2 pr/ttyS0
- 0.2 opencode
  0.2 ExtHandler
+ 0.2 opencode
 --- kernel oom/kill
 --- shutdown/session signals
 2026-11-21T05:48:05+00:00 runnervm0hi8g python3[1243]: 2026-11-21T05:48:05.881618Z INFO MonitorHandler ExtHandler KernelSoftLockup: Boot ID changed (saved=5bb7bdae-77f0-4a56-bfdb-5bdb68c01274, current=e4ff92dd-9f18-4e6b-bc4d-058cb7eb6855). Resetting timestamp watermark due to reboot.
