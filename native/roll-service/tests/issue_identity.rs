@@ -645,6 +645,92 @@ async fn adoption_commit_creates_plan_with_valid_fingerprint() {
 }
 
 #[tokio::test]
+async fn adoption_commit_name_collision_creates_distinct_plan_without_touching_original() {
+    let (state, token, csrf, _guard) = setup().await;
+    let conn = state.pool.get().await.unwrap();
+    let user_id: i32 = conn
+        .query_one("SELECT id FROM users LIMIT 1", &[])
+        .await
+        .unwrap()
+        .get(0);
+    let original_nodes = json!([{
+        "id": "curated-original",
+        "node_type": "note",
+        "lane_id": "default",
+        "position": 17,
+        "label": "Do not replace"
+    }]);
+    let original = conn
+        .query_one(
+            "INSERT INTO continuity_plans
+                 (user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+             VALUES ($1, 'Mister Miracle 1989', 'strict_sequential', $2, '[]'::json, NOW(), NOW())
+             RETURNING id, name, ordering_mode, nodes_json, updated_at::text",
+            &[&user_id, &original_nodes],
+        )
+        .await
+        .unwrap();
+    let original_plan_id: i32 = original.get(0);
+    let original_snapshot = (
+        original.get::<_, String>(1),
+        original.get::<_, String>(2),
+        original.get::<_, Value>(3),
+        original.get::<_, String>(4),
+    );
+    drop(conn);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let new_plan_id = body["id"].as_i64().expect("new plan id");
+    assert_ne!(new_plan_id, i64::from(original_plan_id), "{body}");
+    assert_eq!(
+        body["name"],
+        format!("Mister Miracle 1989 (CBL #{new_plan_id})"),
+        "{body}"
+    );
+
+    let conn = state.pool.get().await.unwrap();
+    let original_after = conn
+        .query_one(
+            "SELECT name, ordering_mode, nodes_json, updated_at::text
+             FROM continuity_plans WHERE id = $1",
+            &[&original_plan_id],
+        )
+        .await
+        .unwrap();
+    let original_after_snapshot = (
+        original_after.get::<_, String>(0),
+        original_after.get::<_, String>(1),
+        original_after.get::<_, Value>(2),
+        original_after.get::<_, String>(3),
+    );
+    assert_eq!(original_after_snapshot, original_snapshot);
+    let same_named_plans: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM continuity_plans
+             WHERE user_id = $1 AND name = 'Mister Miracle 1989'",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(same_named_plans, 1, "the original name must not be reused");
+}
+
+#[tokio::test]
 async fn adoption_plan_reports_title_number_ambiguity_statuses() {
     let (state, token, csrf, _guard) = setup().await;
 
