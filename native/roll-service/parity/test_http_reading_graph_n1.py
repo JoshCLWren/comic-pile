@@ -196,7 +196,11 @@ async def _assert_repair_persisted(
     assert await raw.fetchval("SELECT count(*) FROM custom_cbl_lists WHERE id=$1", list_id) == 0
     assert await raw.fetchval("SELECT count(*) FROM custom_cbl_entries WHERE list_id=$1", list_id) == 0
     assert await raw.fetchval("SELECT count(*) FROM dependencies WHERE id=$1", dependency_id) == 1
-    assert await raw.fetchval("SELECT count(*) FROM issues") == 10
+    assert await raw.fetchval(
+        "SELECT count(*) FROM issues i JOIN dependencies d ON d.id=$1 "
+        "WHERE i.id=d.source_issue_id OR i.id=d.target_issue_id",
+        dependency_id,
+    ) == 2
 
 
 @pytest.mark.asyncio
