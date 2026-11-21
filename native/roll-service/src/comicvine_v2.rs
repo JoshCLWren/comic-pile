@@ -3150,6 +3150,29 @@ mod tests {
     }
 
     #[test]
+    fn roster_issue_normalization_keeps_a_thumbnail_only_cover() {
+        // MQA-THREAD-004: series import stores the curated primary_image from
+        // the roster row; a row whose larger sizes are empty must still keep
+        // the provider thumbnail instead of becoming "No cover".
+        let metadata = normalize_roster_issue(&json!({
+            "id": 4005,
+            "issue_number": "5",
+            "image": {
+                "original_url": null,
+                "super_url": "",
+                "medium_url": " ",
+                "small_url": "",
+                "thumb_url": "https://comicvine.example/thumb.jpg"
+            },
+            "volume": {"id": 4050, "name": "Detective Comics"}
+        }));
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://comicvine.example/thumb.jpg")
+        );
+    }
+
+    #[test]
     fn roster_pages_are_validated_like_python() {
         assert!(matches!(
             roster_page(&json!({"number_of_total_results": 5}), 9),

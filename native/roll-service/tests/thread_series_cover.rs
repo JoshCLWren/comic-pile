@@ -199,6 +199,10 @@ async fn seed_confirmed_cover(
         Some(url) => json!({"image": {"original_url": url}}),
         None => json!({"issue_number": "1"}),
     };
+    seed_confirmed_metadata(ctx, issue_id, external_id, metadata).await;
+}
+
+async fn seed_confirmed_metadata(ctx: &Ctx, issue_id: i32, external_id: &str, metadata: Value) {
     let identity: i32 = ctx
         .state
         .pool
@@ -361,6 +365,37 @@ async fn series_cover_uses_the_issue_card_mapping_preference() {
     assert_eq!(
         thread_cover(&body, "Confidence Wins"),
         Some("https://cv.example/high.jpg".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn series_cover_uses_a_thumbnail_only_confirmed_mapping() {
+    // MQA-THREAD-004: the search/confirm dialog renders `thumb_url` when the
+    // larger provider sizes are empty. A confirmed mapping must therefore not
+    // lose its cover on the thread/queue surface either.
+    let ctx = setup("sc-thumb").await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Thumb Wins", "active", 1).await;
+    let issue = seed_issue(&ctx, thread_id, "1", 1, "unread").await;
+    set_frontier(&ctx, thread_id, Some(issue)).await;
+    seed_confirmed_metadata(
+        &ctx,
+        issue,
+        "thumb-only-id",
+        json!({"image": {
+            "original_url": null,
+            "super_url": "",
+            "medium_url": " ",
+            "small_url": "",
+            "thumb_url": "https://cv.example/thumb.jpg"
+        }}),
+    )
+    .await;
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        thread_cover(&body, "Thumb Wins"),
+        Some("https://cv.example/thumb.jpg".to_owned())
     );
 }
 

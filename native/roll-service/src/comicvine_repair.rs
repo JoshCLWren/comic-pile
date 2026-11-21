@@ -1241,6 +1241,25 @@ mod tests {
         assert!(normalized_metadata(&incomplete, 29319).is_err());
     }
     #[test]
+    fn thumbnail_only_provider_image_is_kept_as_primary_image() {
+        // MQA-THREAD-004: a deep refresh must not drop the cover when the
+        // provider only supplies `thumb_url`; the card projection falls back to
+        // primary_image for confirmed mappings.
+        let result = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
+            "cover_date":"1988-03-01", "store_date":"1988-03-24",
+            "image":{"original_url":null,"super_url":"","medium_url":" ",
+                     "small_url":"","thumb_url":"https://comicvine.example/thumb.jpg"},
+            "volume":{"id": 4001,"name":"Hellblazer"},
+            "person_credits":[{"id":1,"name":"Jamie Delano","api_detail_url":"https://example"}],
+            "character_credits":[], "team_credits":[], "story_arc_credits":[],
+            "date_last_updated":"2020-01-01T00:00:00+00:00"});
+        let (metadata, _, _, _) = normalized_metadata(&result, 29319).unwrap();
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://comicvine.example/thumb.jpg")
+        );
+    }
+    #[test]
     fn provider_timestamp_accepts_rfc3339_and_comicvine_space_format() {
         assert_eq!(
             provider_timestamp(&json!("2020-01-01T00:00:00+00:00")).as_deref(),
