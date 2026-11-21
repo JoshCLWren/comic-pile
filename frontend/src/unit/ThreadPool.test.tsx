@@ -230,4 +230,20 @@ describe('ThreadPool Component', () => {
     expect(screen.getByText(/every series is completed/i)).toBeInTheDocument()
     expect(screen.queryByText(/Every series is snoozed/i)).not.toBeInTheDocument()
   })
+
+  it('offers Reset Dice when every in-play series is snoozed', () => {
+    let resetRequests = 0
+    renderPool({
+      pool: [],
+      eligibleThreadIds: [],
+      emptyPoolReason: 'ready',
+      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
+      onResetDice: () => { resetRequests += 1 },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Dice', exact: true }))
+
+    expect(resetRequests).toBe(1)
+    expect(screen.getByText(/Every series is snoozed/i)).toBeInTheDocument()
+  })
 })
