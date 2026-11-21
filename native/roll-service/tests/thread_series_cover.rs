@@ -227,6 +227,7 @@ async fn seed_confirmed_cover(
         .unwrap();
 }
 
+
 async fn seed_confirmed_metadata(ctx: &Ctx, issue_id: i32, external_id: &str, metadata: Value) {
     let identity: i32 = ctx
         .state
@@ -235,7 +236,7 @@ async fn seed_confirmed_metadata(ctx: &Ctx, issue_id: i32, external_id: &str, me
         .await
         .unwrap()
         .query_one(
-            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \n             created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json,              created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
             &[&external_id, &metadata],
         )
         .await
@@ -247,13 +248,12 @@ async fn seed_confirmed_metadata(ctx: &Ctx, issue_id: i32, external_id: &str, me
         .await
         .unwrap()
         .execute(
-            "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \n             created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
+            "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status,              created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
             &[&issue_id, &identity],
         )
         .await
         .unwrap();
 }
-
 fn thread_cover(body: &Value, title: &str) -> Option<String> {
     let threads = body["threads"].as_array()?;
     threads
@@ -575,4 +575,36 @@ async fn seed_confirmed_cover_raw(
         )
         .await
         .unwrap();
+}
+
+
+#[tokio::test]
+async fn series_cover_uses_a_thumbnail_only_confirmed_mapping() {
+    // MQA-THREAD-004: the search/confirm dialog renders `thumb_url` when the
+    // larger provider sizes are empty. A confirmed mapping must therefore not
+    // lose its cover on the thread/queue surface either.
+    let ctx = setup("sc-thumb").await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Thumb Wins", "active", 1).await;
+    let issue = seed_issue(&ctx, thread_id, "1", 1, "unread").await;
+    set_frontier(&ctx, thread_id, Some(issue)).await;
+    seed_confirmed_metadata(
+        &ctx,
+        issue,
+        "thumb-only-id",
+        json!({"image": {
+            "original_url": null,
+            "super_url": "",
+            "medium_url": " ",
+            "small_url": "",
+            "thumb_url": "https://cv.example/thumb.jpg"
+        }}),
+    )
+    .await;
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        thread_cover(&body, "Thumb Wins"),
+        Some("https://cv.example/thumb.jpg".to_owned())
+    );
 }
