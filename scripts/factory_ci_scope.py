@@ -31,6 +31,7 @@ def factory_only(paths: list[str]) -> bool:
 
 
 def main() -> int:
+    """Read the authoritative git diff and print a single boolean classification."""
     if len(sys.argv) != 2:
         print("usage: factory_ci_scope.py <null-delimited-changed-paths>", file=sys.stderr)
         return 2
