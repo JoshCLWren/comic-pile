@@ -213,6 +213,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
             "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
+        nested_before = await db_nested_statements(engine)
         _, _, before = await db_counters(engine)
         small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
@@ -226,7 +227,13 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert graph.get("cycles") == []
         assert graph.get("repairs") == []
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested = (
+            (nested_after - nested_before)
+            if nested_before is not None and nested_after is not None
+            else None
+        )
 
         raw = await asyncpg.connect(url)
         try:
@@ -236,6 +243,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         finally:
             await raw.close()
 
+        nested_before2 = await db_nested_statements(engine)
         _, _, before2 = await db_counters(engine)
         large_response, _, _, _ = await run_rust_example(BINARY, env)
         assert large_response.get("status") == 200, large_response
@@ -248,10 +256,31 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert isinstance(large_graph, dict) and large_graph.get("status") == "ok"
         assert large_graph.get("cycles") == []
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
+        assert small_nested is not None and large_nested is not None, "pg_stat_statements nested is required"
+        assert small_nested == 0, f"unexpected nested statements: {small_nested}"
+        assert large_nested == 0, f"unexpected nested statements: {large_nested}"
         assert_declared_budget("POST", "/api/v2/reading-graph/repairs", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
+
+
+def test_reading_graph_budget_rejects_extra_query_and_n1() -> None:
+    """Deliberate extra query and N+1 growth must fail the same budget checks."""
+    with pytest.raises(AssertionError, match="issued .* statements"):
+        assert_declared_budget("GET", "/api/v2/reading-graph", 999)
+    with pytest.raises(AssertionError, match="issued .* statements"):
+        assert_declared_budget("POST", "/api/v2/reading-graph/repairs", 999)
+    with pytest.raises(AssertionError, match="issued .* statements"):
+        assert_declared_budget("GET", "/api/v2/reading-graph", 5, 200)
+    with pytest.raises(AssertionError, match="issued .* statements"):
+        assert_declared_budget("POST", "/api/v2/reading-graph/repairs", 5, 200)
