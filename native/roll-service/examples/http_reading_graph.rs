@@ -16,7 +16,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::var("RUST_ROLL_TEST_URI").unwrap_or_else(|_| "/api/v2/reading-graph".to_string());
     let body = std::env::var("RUST_ROLL_TEST_BODY").unwrap_or_default();
     let config = Config::from_env()?;
-    let app = router(Arc::new(AppState::new(config)?));
+    let state = Arc::new(AppState::new(config)?);
+    let app = router(Arc::clone(&state));
     let mut builder = Request::builder()
         .method(method.as_str())
         .uri(uri)
