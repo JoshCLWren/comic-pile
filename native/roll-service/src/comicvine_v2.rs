@@ -3121,6 +3121,19 @@ mod tests {
     }
 
     #[test]
+    fn roster_normalization_preserves_a_thumb_only_cover() {
+        let normalized = normalize_roster_issue(&json!({
+            "id": 5,
+            "issue_number": "5",
+            "image": {"thumb_url": "https://comicvine.example/detective-5-thumb.jpg"}
+        }));
+        assert_eq!(
+            normalized["primary_image"].as_str(),
+            Some("https://comicvine.example/detective-5-thumb.jpg")
+        );
+    }
+
+    #[test]
     fn roster_candidates_keep_empty_strings_like_python() {
         let candidate = issue_candidate(&json!({
             "id": 99,

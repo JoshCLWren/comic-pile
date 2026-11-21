@@ -1222,6 +1222,34 @@ mod tests {
         );
     }
     #[test]
+    fn thumb_only_provider_image_survives_roster_and_deep_normalization() {
+        let result = json!({
+            "id": 5,
+            "name": "Detective Comics #5",
+            "issue_number": "5",
+            "cover_date": "1937-07-01",
+            "store_date": null,
+            "image": {"thumb_url": "https://comicvine.example/detective-5-thumb.jpg"},
+            "volume": {"id": 1, "name": "Detective Comics"},
+            "person_credits": [],
+            "character_credits": [],
+            "team_credits": [],
+            "story_arc_credits": [],
+            "date_last_updated": "2026-11-20T00:00:00+00:00"
+        });
+        let roster = normalize_roster_issue_metadata(&result);
+        assert_eq!(
+            roster["primary_image"].as_str(),
+            Some("https://comicvine.example/detective-5-thumb.jpg")
+        );
+        let (deep, _, _, _) = normalized_metadata(&result, 5).expect("valid provider payload");
+        assert_eq!(
+            deep["primary_image"].as_str(),
+            Some("https://comicvine.example/detective-5-thumb.jpg")
+        );
+    }
+
+    #[test]
     fn only_verified_singular_issue_payload_completes() {
         let result = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
             "cover_date":"1988-03-01", "store_date":"1988-03-24", "image":{},
