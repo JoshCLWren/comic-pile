@@ -889,6 +889,141 @@ async fn targeted_adoption_commit_route_returns_200() {
 }
 
 #[tokio::test]
+async fn targeted_adoption_commit_preserves_curated_nodes_exclusions_and_read_state() {
+    let (state, token, csrf, _guard) = setup().await;
+    let conn = state.pool.get().await.unwrap();
+    let user_id: i32 = conn
+        .query_one("SELECT id FROM users LIMIT 1", &[])
+        .await
+        .unwrap()
+        .get(0);
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
+        VALUES (950, {user_id}, 'Mister Miracle', 'comic', 0, 1, 'active', 1, 'completed', NOW());
+        INSERT INTO issues (id, thread_id, issue_number, position, status, read_at, created_at)
+        VALUES (9501, 950, '1', 0, 'read', '2024-01-02T03:04:05Z', NOW());
+        INSERT INTO issue_external_identity_mappings
+          (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at)
+        VALUES (9501, 1, 'confirmed', 'test', '{{}}'::json, NOW(), NOW());
+        "#
+    ))
+    .await
+    .unwrap();
+
+    let unrelated_node = json!({
+        "id": "curated-unrelated",
+        "node_type": "note",
+        "lane_id": "curated",
+        "position": 9,
+        "label": "Unrelated and unchanged",
+        "custom": {"keep": true}
+    });
+    let curated_nodes = json!([
+        unrelated_node.clone(),
+        {
+            "id": "curated-issue",
+            "node_type": "issue",
+            "ref_id": 9501,
+            "lane_id": "curated",
+            "position": 4,
+            "is_checkpoint": true,
+            "convergence_gate": ["keep-gate"],
+            "label": "Curated issue label",
+            "source_paths": ["curated/source.cbl"],
+            "source_cbl_placements": [{"source_path": "curated/source.cbl", "position": 99}]
+        }
+    ]);
+    let plan_id: i32 = conn
+        .query_one(
+            "INSERT INTO continuity_plans
+                 (user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+             VALUES ($1, 'Curated target', 'strict_sequential', $2, $3, NOW(), NOW())
+             RETURNING id",
+            &[
+                &user_id,
+                &curated_nodes,
+                &json!([{"id": "curated", "name": "Curated", "order": 0}]),
+            ],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let read_at_before: String = conn
+        .query_one("SELECT read_at::text FROM issues WHERE id = 9501", &[])
+        .await
+        .unwrap()
+        .get(0);
+    drop(conn);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        &format!("/api/v2/reading-lists/1/reading-plans/{plan_id}/adoption-commits"),
+        json!({
+            "entry_decisions": {"1": "exclude"},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["id"], plan_id, "{body}");
+    assert_eq!(body["name"], "Curated target", "{body}");
+    assert_eq!(body["reused_positions"], json!([0]), "{body}");
+    assert_eq!(body["created_positions"], json!([]), "{body}");
+    assert_eq!(body["excluded_positions"], json!([1]), "{body}");
+    assert_eq!(body["unresolved_positions"], json!([]), "{body}");
+
+    let nodes = body["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 2, "{body}");
+    let node_ids: Vec<&str> = nodes
+        .iter()
+        .map(|node| node["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(node_ids, vec!["curated-unrelated", "curated-issue"]);
+    assert_eq!(nodes[0], unrelated_node, "unrelated node changed: {body}");
+    assert_eq!(nodes[1]["position"], 4, "{body}");
+    assert_eq!(nodes[1]["ref_id"], 9501, "{body}");
+    assert_eq!(nodes[1]["is_checkpoint"], true, "{body}");
+    assert_eq!(nodes[1]["convergence_gate"], json!(["keep-gate"]));
+    assert_eq!(nodes[1]["label"], "Curated issue label", "{body}");
+    assert_eq!(
+        nodes[1]["source_paths"],
+        json!(["curated/source.cbl", MIRROR_SOURCE_PATH]),
+        "{body}"
+    );
+    assert_eq!(
+        nodes[1]["source_cbl_placements"],
+        json!([
+            {"source_path": "curated/source.cbl", "position": 99},
+            {"source_path": MIRROR_SOURCE_PATH, "position": 0}
+        ]),
+        "the excluded source position must not be added: {body}"
+    );
+
+    let conn = state.pool.get().await.unwrap();
+    let stored_nodes: Value = conn
+        .query_one(
+            "SELECT nodes_json FROM continuity_plans WHERE id = $1",
+            &[&plan_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(stored_nodes, body["nodes"]);
+    let read_at_after: String = conn
+        .query_one("SELECT read_at::text FROM issues WHERE id = 9501", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(read_at_after, read_at_before);
+}
+
+#[tokio::test]
 async fn adoption_commit_invalid_decision_returns_422_enum() {
     let (state, token, csrf, _guard) = setup().await;
     let (status, body) = post_json(
