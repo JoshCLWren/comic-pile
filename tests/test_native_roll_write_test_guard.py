@@ -389,6 +389,7 @@ def test_baseline_is_frozen_and_documented() -> None:
     """Exemptions must be enumerated explicitly and carry a reason."""
     modules = _baseline_modules()
     allowed = _baseline_allowed()
+    handlers = _baseline_handlers()
 
     assert set(modules) == allowed, (
         "Baseline modules and allowed_modules must match exactly; adding a new "
@@ -396,6 +397,11 @@ def test_baseline_is_frozen_and_documented() -> None:
     )
     for module, reason in modules.items():
         assert reason.strip(), f"{module} needs a baseline reason"
+    for (module, handler), reason in handlers.items():
+        assert module not in modules, (
+            f"{module}::{handler} is handler-exempt but {module} is already module-exempt"
+        )
+        assert reason.strip(), f"{module}::{handler} needs a baseline reason"
 
 
 def test_patch_write_is_guarded_and_proven_by_delegated_database_test() -> None:
