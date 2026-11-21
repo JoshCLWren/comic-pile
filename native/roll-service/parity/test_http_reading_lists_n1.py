@@ -12,7 +12,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-lists-n1-secret"
 BINARY = str(cargo_example_path("http_reading_lists"))
@@ -63,6 +69,21 @@ async def _insert_list(raw: asyncpg.Connection, owner_id: int, name: str, issue_
             position,
         )
     return list_id
+
+
+def _assert_nested_clean(nested_before: int | None, nested_after: int | None, label: str) -> None:
+    """Require nested statements to be measured separately and stay absent.
+
+    ``db_nested_statements`` returns ``None`` unless ``pg_stat_statements.track``
+    is ``all``, so this also rejects a ``track=top`` measurement setup. Reading
+    list routes issue only top-level SQL; no trigger adds nested statements.
+    """
+    assert nested_before is not None and nested_after is not None, (
+        "pg_stat_statements.track=all is required to measure nested statements"
+    )
+    assert nested_after - nested_before == 0, (
+        f"{label} recorded nested statements: {nested_before} -> {nested_after}"
+    )
 
 
 def _run_env(token: str, method: str, uri: str, *, body: str | None = None) -> dict[str, str]:
