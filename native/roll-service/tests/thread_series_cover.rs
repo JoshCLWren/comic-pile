@@ -83,7 +83,7 @@ async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String
                 ))
                 .unwrap(),
         )
-        .await
+        .await .unwrap();
         .unwrap();
     let status = response.status();
     let csrf = response
@@ -102,10 +102,10 @@ async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String
     let user_id: i32 = state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .query_one("SELECT id FROM users WHERE username = $1", &[&username])
-        .await
+        .await .unwrap();
         .unwrap()
         .get(0);
     (token, csrf, user_id)
@@ -125,7 +125,7 @@ fn authed(method: &str, path: &str, token: &str, csrf: &str) -> Request<Body> {
 async fn call(ctx: &Ctx, method: &str, path: &str) -> (StatusCode, Value) {
     let response = router(ctx.state.clone())
         .oneshot(authed(method, path, &ctx.token, &ctx.csrf))
-        .await
+        .await .unwrap();
         .unwrap();
     let status = response.status();
     let bytes = to_bytes(response.into_body(), 256 * 1024).await.unwrap();
@@ -143,7 +143,7 @@ async fn seed_thread(
     ctx.state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .query_one(
             "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position,
@@ -153,7 +153,7 @@ async fn seed_thread(
              RETURNING id",
             &[&user_id, &title, &queue_position, &status],
         )
-        .await
+        .await .unwrap();
         .unwrap()
         .get(0)
 }
@@ -162,14 +162,14 @@ async fn seed_issue(ctx: &Ctx, thread_id: i32, number: &str, position: i32, stat
     ctx.state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .query_one(
             "INSERT INTO issues (thread_id, issue_number, status, position, created_at)
              VALUES ($1, $2, $3, $4, NOW()) RETURNING id",
             &[&thread_id, &number, &status, &position],
         )
-        .await
+        .await .unwrap();
         .unwrap()
         .get(0)
 }
@@ -178,14 +178,14 @@ async fn set_frontier(ctx: &Ctx, thread_id: i32, next_unread_issue_id: Option<i3
     ctx.state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .execute(
             "UPDATE threads SET next_unread_issue_id = $2, reading_progress = 'in_progress'
              WHERE id = $1",
             &[&thread_id, &next_unread_issue_id],
         )
-        .await
+        .await .unwrap();
         .unwrap();
 }
 
@@ -203,27 +203,27 @@ async fn seed_confirmed_cover(
         .state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .query_one(
             "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
              created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
             &[&external_id, &metadata],
         )
-        .await
+        .await .unwrap();
         .unwrap()
         .get(0);
     ctx.state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .execute(
             "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
              created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
             &[&issue_id, &identity],
         )
-        .await
+        .await .unwrap();
         .unwrap();
 }
 
@@ -333,7 +333,7 @@ async fn series_cover_uses_the_issue_card_mapping_preference() {
              RETURNING id, external_id",
             &[&external_ids, &metadata],
         )
-        .await
+        .await .unwrap();
         .unwrap();
     let identity_by_external: std::collections::HashMap<String, i32> = identity_rows
         .iter()
@@ -352,7 +352,7 @@ async fn series_cover_uses_the_issue_card_mapping_preference() {
              FROM unnest($2::int4[], $3::float8[]) AS m(ident, conf)",
             &[&issue, &identity_ids, &confidences],
         )
-        .await
+        .await .unwrap();
         .unwrap();
     drop(client);
 
@@ -435,7 +435,7 @@ async fn series_cover_is_owner_scoped() {
     // The other user can see their own series cover.
     let response = router(ctx.state.clone())
         .oneshot(authed("GET", "/api/v2/threads", &other_token, &other_csrf))
-        .await
+        .await .unwrap();
         .unwrap();
     let bytes = to_bytes(response.into_body(), 256 * 1024).await.unwrap();
     let other_body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
@@ -457,7 +457,7 @@ async fn seed_thread_raw(
     state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .query_one(
             "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position,
@@ -467,7 +467,7 @@ async fn seed_thread_raw(
              RETURNING id",
             &[&user_id, &title, &queue_position, &status],
         )
-        .await
+        .await .unwrap();
         .unwrap()
         .get(0)
 }
@@ -482,14 +482,14 @@ async fn seed_issue_raw(
     state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .query_one(
             "INSERT INTO issues (thread_id, issue_number, status, position, created_at)
              VALUES ($1, $2, $3, $4, NOW()) RETURNING id",
             &[&thread_id, &number, &status, &position],
         )
-        .await
+        .await .unwrap();
         .unwrap()
         .get(0)
 }
@@ -502,14 +502,14 @@ async fn set_frontier_raw(
     state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .execute(
             "UPDATE threads SET next_unread_issue_id = $2, reading_progress = 'in_progress'
              WHERE id = $1",
             &[&thread_id, &next_unread_issue_id],
         )
-        .await
+        .await .unwrap();
         .unwrap();
 }
 
@@ -526,27 +526,27 @@ async fn seed_confirmed_cover_raw(
     let identity: i32 = state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .query_one(
             "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
              created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
             &[&external_id, &metadata],
         )
-        .await
+        .await .unwrap();
         .unwrap()
         .get(0);
     state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .execute(
             "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
              created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
             &[&issue_id, &identity],
         )
-        .await
+        .await .unwrap();
         .unwrap();
 }
 
@@ -570,27 +570,27 @@ async fn seed_confirmed_metadata(ctx: &Ctx, issue_id: i32, external_id: &str, me
         .state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .query_one(
             "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
              created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
             &[&external_id, &metadata],
         )
-        .await
+        .await .unwrap();
         .unwrap()
         .get(0);
     ctx.state
         .pool
         .get()
-        .await
+        .await .unwrap();
         .unwrap()
         .execute(
             "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
              created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
             &[&issue_id, &identity],
         )
-        .await
+        .await .unwrap();
 }
 
 #[tokio::test]
