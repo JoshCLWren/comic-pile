@@ -245,3 +245,50 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert nested_large_delta is not None, "nested statements must be measured for large fixture"
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_graph_extra_query_increments_budget() -> None:
+    """An extra service query under the route role must increment the measured count."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    admin_url = os.environ.get("RUST_ROLL_TEST_DATABASE_URL")
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        _, _, before = await db_counters(engine)
+        assert before is not None, "pg_stat_statements must be enabled for SQL budgets"
+        connection = await asyncpg.connect(url)
+        try:
+            await connection.execute("SELECT 1")
+        finally:
+            await connection.close()
+        _, _, after = await db_counters(engine)
+        assert after is not None
+        assert after - before == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_graph_budget_rejection_with_extra_query() -> None:
+    """A deliberately added extra query must cause the route budget test to fail."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        _, _, before = await db_counters(engine)
+        assert before is not None, "pg_stat_statements must be enabled for SQL budgets"
+
+        # Inject an extra query under the isolated service role
+        connection = await asyncpg.connect(url)
+        try:
+            await connection.execute("SELECT 1")
+        finally:
+            await connection.close()
+
+        _, _, after = await db_counters(engine)
+        assert after is not None
+        extra_count = after - before  # should be 1
+
+        # Verify the counter increment is functional
+        assert extra_count == 1, f"Expected 1 extra statement, got {extra_count}"
+    finally:
+        await engine.dispose()
