@@ -114,6 +114,10 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "tests_e2e"]
+# Standalone parity suites under native/roll-service/parity/ have no __init__.py,
+# so pytest would otherwise omit the repository root from sys.path and fail to
+# import `app` (CI supplies the same path via `PYTHONPATH: .`).
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
