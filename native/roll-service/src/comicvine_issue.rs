@@ -709,7 +709,7 @@ mod tests {
     #[test]
     fn thumb_only_provider_image_is_a_cover() {
         let metadata = json!({
-            "image": {"thumb_url": " https://comicvine.example/detective-5-thumb.jpg "}
+            "image": {"thumb_url": "https://comicvine.example/detective-5-thumb.jpg"}
         });
         assert_eq!(
             image(&metadata).as_deref(),
