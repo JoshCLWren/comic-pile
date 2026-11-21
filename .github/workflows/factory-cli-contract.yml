@@ -49,3 +49,9 @@ jobs:
           grep -qx 'force_slot=true' "$FACTORY_CLI_ARGS"
           grep -qx 'slot_index=2' "$FACTORY_CLI_ARGS"
           grep -qx 'target=issue:5123' "$FACTORY_CLI_ARGS"
+          # With both provider and model explicitly selected, even a TTY must
+          # execute without asking the work/slot/confirmation menus again.
+          # An empty stdin makes any unexpected prompt fail fast.
+          timeout 15 script -q -c 'bash scripts/factory-run opencode-go opencode-go/hy4-flash-free --force-slot --no-wait' /dev/null > "$RUNNER_TEMP/terminal-output" < /dev/null
+          ! grep -Eq 'Choose \[|Run this selection\?' "$RUNNER_TEMP/terminal-output"
+          grep -qx 'force_slot=true' "$FACTORY_CLI_ARGS"
