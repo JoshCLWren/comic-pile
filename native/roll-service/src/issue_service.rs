@@ -1671,8 +1671,8 @@ mod tests {
         // Production regression #4722: confirmed ComicVine mappings may have
         // only primary_image, even though Roll displays that stored artwork.
         // The batch and single-card (direct PATCH response) projections agree.
-        let covers = cards(&first, user, &[102, 301]).await.unwrap();
-        assert_eq!(covers.items.len(), 2);
+        let covers = cards(&first, user, &[102, 301, 401]).await.unwrap();
+        assert_eq!(covers.items.len(), 3);
         assert_eq!(covers.items[0].mapping_state, "confirmed");
         assert_eq!(
             covers.items[0].cover_image_url.as_deref(),
@@ -1682,16 +1682,20 @@ mod tests {
             covers.items[1].cover_image_url.as_deref(),
             Some("https://comicvine.example/covers/dependent.jpg")
         );
+        assert_eq!(
+            covers.items[2].cover_image_url.as_deref(),
+            Some("https://comicvine.example/covers/thumbnail.jpg")
+        );
         let tx = first.transaction().await.unwrap();
         let direct = card(&tx, user, 102).await.unwrap();
         assert_eq!(direct.comicvine_issue_id.as_deref(), Some("4000-43"));
         assert_eq!(direct.cover_image_url, covers.items[0].cover_image_url);
         // #5624: deep-hydrated metadata can retain artwork only in the raw
         // provider payload. Single-card and bounded batch reads must agree.
-        let direct_thumbnail = card(&tx, user, 301).await.unwrap();
+        let direct_thumbnail = card(&tx, user, 401).await.unwrap();
         assert_eq!(
             direct_thumbnail.cover_image_url,
-            covers.items[1].cover_image_url
+            covers.items[2].cover_image_url
         );
         tx.rollback().await.unwrap();
     }
