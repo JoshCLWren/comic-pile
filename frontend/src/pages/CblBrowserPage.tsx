@@ -448,14 +448,10 @@ export default function CblBrowserPage() {
 
   const preview = useMemo(() => {
     if (!previewQuery.data) return null
-    // Always apply choices if there are any, to ensure local decisions are reflected in
-    // the preview (e.g., skipping unresolved entries should reduce unresolved_count).
-    const hasLocalChoices =
-      Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
-    if (!hasLocalChoices) return previewQuery.data
+    // Always apply local adoption choices so the summary reflects the reader's
+    // current include/exclude/skip decisions. This ensures the "need attention"
+    // count updates in real time as entries are checked/unchecked under Customize.
     return applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
-    // previewQuery.data must stay a dependency: the memo must recompute when the
-    // preview response arrives, or the preview stays null and Add never unblocks.
   }, [previewQuery.data, seriesDecisions, entryDecisions])
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
