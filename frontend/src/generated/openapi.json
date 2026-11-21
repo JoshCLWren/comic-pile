@@ -931,6 +931,14 @@
         ],
         "type": "object"
       },
+      "BoundaryEvaluator": {
+        "description": "Deployment-level capability for the canonical evaluator behind this batch.\n\nIt mirrors the same `AppState::option_e` switch every handler resolves, so\na client that has already observed one batch can skip the canonical read\nentirely on later loads when the evaluator cannot answer (`unavailable`)\nand consult the legacy blocking authority directly.",
+        "enum": [
+          "enabled",
+          "unavailable"
+        ],
+        "type": "string"
+      },
       "BoundaryIssue": {
         "properties": {
           "issue_id": {
@@ -8731,6 +8739,28 @@
             ]
           }
         },
+        "type": "object"
+      },
+      "NativeReadingBoundaryBatchResponseV2": {
+        "properties": {
+          "evaluator": {
+            "$ref": "#/components/schemas/BoundaryEvaluator"
+          },
+          "threads": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReadingBoundaryExplanationV2"
+            },
+            "propertyNames": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "threads",
+          "evaluator"
+        ],
         "type": "object"
       },
       "NativeReadingGraphBlocker": {
@@ -25460,7 +25490,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadingBoundaryBatchResponseV2"
+                  "$ref": "#/components/schemas/NativeReadingBoundaryBatchResponseV2"
                 }
               }
             },
