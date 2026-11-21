@@ -167,44 +167,43 @@ async def test_reading_graph_budget_rejection_with_extra_query() -> None:
     """Deliberately adding extra queries makes the route budget test fail."""
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
     engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    try:
-        username = f"rgr_{uuid4().hex[:12]}"
-        async with AsyncSession(engine, expire_on_commit=False) as db:
-            owner = User(username=username)
-            db.add(owner)
-            await db.commit()
-            token = _token(username, jti=f"jti-{uuid4().hex}")
+    username = f"rgr_{uuid4().hex[:12]}"
+    async with AsyncSession(engine, expire_on_commit=False) as db:
+        owner = User(username=username)
+        db.add(owner)
+        await db.commit()
+        token = _token(username, jti=f"jti-{uuid4().hex}")
 
-        base_env = {
-            **os.environ,
-            "RUST_ROLL_TEST_TOKEN": token,
-            "RUST_ROLL_TEST_METHOD": "GET",
-            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
-            "RUST_ROLL_DATABASE_URL": url,
-            "RUST_ROLL_JWT_SECRET": SECRET,
-        }
+    base_env = {
+        **os.environ,
+        "RUST_ROLL_TEST_TOKEN": token,
+        "RUST_ROLL_TEST_METHOD": "GET",
+        "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
+        "RUST_ROLL_DATABASE_URL": url,
+        "RUST_ROLL_JWT_SECRET": SECRET,
+    }
 
-        # Run the route once to get a baseline
-        _, _, before = await db_counters(engine)
-        _, _, _ = await run_rust_example(BINARY, base_env)
-        _, _, after_base = await db_counters(engine)
+    # Run the route once to get a baseline
+    _, _, before = await db_counters(engine)
+    _, _, _ = await run_rust_example(BINARY, base_env)
+    _, _, after_base = await db_counters(engine)
 
-        # Now add an extra SELECT 1 via a direct database operation
-        # that runs under the same route role, to simulate an N+1 regression
-        extra_env = {
-            **os.environ,
-            "RUST_ROLL_TEST_TOKEN": token,
-            "RUST_ROLL_TEST_METHOD": "GET",
-            "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
-            "RUST_ROLL_DATABASE_URL": url,
-            "RUST_ROLL_JWT_SECRET": SECRET,
-        }
+    # Now add an extra SELECT 1 via a direct database operation
+    # that runs under the same route role, to simulate an N+1 regression
+    extra_env = {
+        **os.environ,
+        "RUST_ROLL_TEST_TOKEN": token,
+        "RUST_ROLL_TEST_METHOD": "GET",
+        "RUST_ROLL_TEST_URI": "/api/v2/reading-graph",
+        "RUST_ROLL_DATABASE_URL": url,
+        "RUST_ROLL_JWT_SECRET": SECRET,
+    }
 
-        # Run the route a second time; the extra query from the test setup
-        # should cause the counter to increase further
-        _, _, after = await db_counters(engine)
-        # Verify the counter increased due to the extra query
-        assert after > after_base, "Extra query should increment the statement counter"
+    # Run the route a second time; the extra query from the test setup
+    # should cause the counter to increase further
+    _, _, after = await db_counters(engine)
+    # Verify the counter increased due to the extra query
+    assert after > after_base, "Extra query should increment the statement counter"
 
 
 @pytest.mark.asyncio
@@ -319,4 +318,3 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
         assert small_nested_delta is not None and large_nested_delta is not None, "nested statements must be measured"
         assert large_nested_delta <= small_nested_delta + 2, f"nested statement count grew: {small_nested_delta} -> {large_nested_delta}"
-    finally:
