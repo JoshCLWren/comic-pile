@@ -1,5 +1,7 @@
 """Factory-only CI may not skip application or pipeline changes."""
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -32,6 +34,32 @@ class FactoryScopeTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertFalse(factory_only([".github/scripts/factory_opencode_go.py", path]))
+
+
+    def test_git_rename_from_frontend_to_factory_cannot_use_fast_path(self):
+        """Git move detection must expose both ends of a cross-scope rename."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            old = repo / "frontend/src/App.tsx"
+            new = repo / "docs/factory/App.tsx"
+            old.parent.mkdir(parents=True)
+            old.write_text("export const App = 42;\n")
+            subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+            subprocess.run([
+                "git", "-C", str(repo), "-c", "user.name=CI",
+                "-c", "user.email=ci@example.invalid", "commit", "-qm", "base",
+            ], check=True)
+            new.parent.mkdir(parents=True)
+            old.rename(new)
+            subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+            paths = subprocess.run([
+                "git", "-C", str(repo), "diff", "--cached", "--no-renames",
+                "--name-only", "-z",
+            ], capture_output=True, check=True).stdout
+            names = [part.decode() for part in paths.split(b"\0") if part]
+            self.assertEqual(sorted(names), ["docs/factory/App.tsx", "frontend/src/App.tsx"])
+            self.assertFalse(factory_only(names))
 
     def test_empty_and_unsafe(self):
         """No-diff and directory traversal cases cannot bypass full CI."""
