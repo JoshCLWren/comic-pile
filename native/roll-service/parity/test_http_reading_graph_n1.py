@@ -9,7 +9,7 @@ from uuid import uuid4
 import asyncpg
 import pytest
 from jose import jwt
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
 from route_harness import (
@@ -24,7 +24,7 @@ SECRET = "synthetic-native-reading-graph-n1-secret"
 BINARY = str(cargo_example_path("http_reading_graph"))
 
 
-async def _statement_counters(engine) -> tuple[int | None, int | None]:
+async def _statement_counters(engine: AsyncEngine) -> tuple[int | None, int | None]:
     """Return (top-level, nested) statement counts for the isolated route role."""
     _, _, top = await db_counters(engine)
     nested = await db_nested_statements(engine)

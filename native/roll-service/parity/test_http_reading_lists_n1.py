@@ -9,7 +9,7 @@ from uuid import uuid4
 import asyncpg
 import pytest
 from jose import jwt
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
 from route_harness import (
@@ -24,7 +24,7 @@ SECRET = "synthetic-native-reading-lists-n1-secret"
 BINARY = str(cargo_example_path("http_reading_lists"))
 
 
-async def _statement_counters(engine) -> tuple[int | None, int | None]:
+async def _statement_counters(engine: AsyncEngine) -> tuple[int | None, int | None]:
     """Return (top-level, nested) statement counts for the isolated route role."""
     _, _, top = await db_counters(engine)
     nested = await db_nested_statements(engine)
@@ -382,14 +382,17 @@ async def test_delete_reading_list_statements_bounded() -> None:
             else None
         )
 
-        large_id = await _seed_one()
-        # grow unrelated data
+        # Seed a dedicated large deletion target with many entries, so a
+        # per-entry DELETE regression is caught by the fixed budget rather
+        # than hidden by growing only unrelated lists.
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            for i in range(20, 120):
-                _, ids = await _insert_owned_thread(raw, owner_id, i)
-                await _insert_list(raw, owner_id, f"X-{i}", [ids[0]])
+            many_issue_ids: list[int] = []
+            for i in range(200):
+                _, ids = await _insert_owned_thread(raw, owner_id, 200 + i)
+                many_issue_ids.append(ids[0])
+            large_id = await _insert_list(raw, owner_id, "Long delete target", many_issue_ids)
         finally:
             await raw.close()
 
@@ -578,5 +581,55 @@ async def test_update_reading_list_statements_respect_budget() -> None:
             f"nested statements appeared: {nested_small_delta} -> {nested_large_delta}"
         )
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_lists_budget_rejects_extra_and_per_row_queries() -> None:
+    """Prove the checks used above reject an extra query and an N+1 pattern."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        method, path = "GET", "/api/v2/reading-lists"
+
+        # Extra query: inject statements under the isolated route role and show
+        # the same assert_declared_budget used by the route test rejects the
+        # over-budget measurement.
+        _, _, before = await db_counters(engine)
+        assert before is not None, "pg_stat_statements is required"
+        connection = await asyncpg.connect(url)
+        try:
+            for _ in range(20):
+                await connection.execute("SELECT 1")
+        finally:
+            await connection.close()
+        _, _, after = await db_counters(engine)
+        assert after is not None
+        extra_delta = after - before
+        assert extra_delta >= 20, f"injected queries not measured: {extra_delta}"
+        with pytest.raises(AssertionError, match="declared maximum"):
+            assert_declared_budget(method, path, extra_delta)
+
+        # N+1 (per-row) queries: a small and a large row set yield growing
+        # counts, so the small-vs-large growth invariant used by the route test
+        # must reject the large measurement.
+        async def _per_row_queries(count: int) -> int:
+            _, _, start = await db_counters(engine)
+            connection = await asyncpg.connect(url)
+            try:
+                for _ in range(count):
+                    await connection.fetchval("SELECT 1")
+            finally:
+                await connection.close()
+            _, _, end = await db_counters(engine)
+            assert start is not None and end is not None
+            return end - start
+
+        small_n1 = await _per_row_queries(5)
+        large_n1 = await _per_row_queries(200)
+        assert large_n1 > small_n1 + 2, f"expected N+1 growth, got {small_n1} -> {large_n1}"
+        with pytest.raises(AssertionError, match="statement count grew"):
+            assert large_n1 <= small_n1 + 2, f"statement count grew: {small_n1} -> {large_n1}"
     finally:
         await engine.dispose()
