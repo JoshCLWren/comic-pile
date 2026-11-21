@@ -173,7 +173,7 @@ pub fn get_reading_list_documentation() {}
         (status = 201, description = "Created Reading List", body = ReadingList),
         (status = 400, description = "Invalid list metadata or membership"),
         (status = 401, description = "Not authenticated"),
-        (status = 409, description = "Projected reading graph would cycle; nothing was changed"),
+        (status = 422, description = "Reading constraint cycle with a named repair path"),
         (status = 503, description = "Database temporarily unavailable")
     ),
     security(("HTTPBearer" = []))
@@ -523,7 +523,7 @@ async fn graph_preflight(
         .map(|list| (list.list_id, list.name.clone()))
         .collect();
     ValidatedReadingInputs::new(inputs.clone(), &names)
-        .map_err(|error| crate::reading_graph::cycle_conflict(error, &inputs))?;
+        .map_err(|error| crate::reading_graph::custom_cbl_cycle_conflict(error, &inputs))?;
     Ok(inputs)
 }
 
@@ -980,7 +980,7 @@ pub async fn update_reading_list(
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Reading List not found"),
         (status = 409, description = "Predecessor changes must be acknowledged"),
-        (status = 422, description = "Invalid Issue or checkpoint")
+        (status = 422, description = "Invalid Issue/checkpoint or a Reading constraint cycle with a named repair path")
     ),
     security(("HTTPBearer" = []))
 )]

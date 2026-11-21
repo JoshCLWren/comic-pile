@@ -29,8 +29,9 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     // SAFETY: successful plan creation returns its numeric ID.
     const plan = await planResponse.json() as { id: number }
 
-    // Legacy invalid graph state cannot be authored through the protected API.
-    // Supply its documented 422 response only; all navigation/editor reads are real.
+    // A genuine reader cycle cannot be authored through the protected API because
+    // the write is correctly rejected. Supply its documented 422 response only;
+    // the Rust integration regression verifies the real payload and rollback.
     await page.route('**/api/v2/reading-lists', async (route) => {
       if (route.request().method() !== 'POST') return route.continue()
       await route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ detail: {
@@ -38,7 +39,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
         path: [{ source_issue_id: second, target_issue_id: first,
           source_issue_name: `${threadTitle} #2`, target_issue_name: `${threadTitle} #1`,
           source_thread_id: thread.id, target_thread_id: thread.id,
-          origin: 'prerequisite 123 (converted)', prerequisite_origin: 'converted', provenance: [],
+          origin: 'prerequisite 123 (reader)', prerequisite_origin: 'reader', provenance: [],
         }],
       } }) })
     })
