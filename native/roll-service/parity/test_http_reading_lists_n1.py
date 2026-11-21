@@ -437,6 +437,7 @@ async def test_create_reading_list_statements_respect_budget() -> None:
 
         body_small = json.dumps({"name": "Small", "mode": "loose", "issue_ids": issue_ids_small})
         env = _run_env(token, "POST", "/api/v2/reading-lists", body=body_small)
+        nested_before = await db_nested_statements(engine)
         _, _, before = await db_counters(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 201, small
@@ -446,7 +447,13 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         assert small_body.get("issue_count") == 5
         assert len(small_body.get("entries", [])) == 5
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested = (
+            (nested_after - nested_before)
+            if nested_before is not None and nested_after is not None
+            else None
+        )
 
         raw = await asyncpg.connect(url)
         try:
@@ -460,16 +467,27 @@ async def test_create_reading_list_statements_respect_budget() -> None:
 
         body_large = json.dumps({"name": "Large", "mode": "loose", "issue_ids": issue_ids_large})
         env2 = _run_env(token, "POST", "/api/v2/reading-lists", body=body_large)
+        nested_before2 = await db_nested_statements(engine)
         _, _, before2 = await db_counters(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 201, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None
+        assert small_nested is not None and large_nested is not None
+        assert small_nested == 0, f"unexpected nested statements: {small_nested}"
+        assert large_nested == 0, f"unexpected nested statements: {large_nested}"
         assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta)
+        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
 
@@ -500,6 +518,7 @@ async def test_update_reading_list_statements_respect_budget() -> None:
 
         body_small = json.dumps({"name": "Up-small", "mode": "loose", "issue_ids": issue_ids_small})
         env = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_small)
+        nested_before = await db_nested_statements(engine)
         _, _, before = await db_counters(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
@@ -508,7 +527,13 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         assert small_body.get("name") == "Up-small"
         assert small_body.get("issue_count") == 5
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested = (
+            (nested_after - nested_before)
+            if nested_before is not None and nested_after is not None
+            else None
+        )
 
         raw = await asyncpg.connect(url)
         try:
@@ -524,15 +549,42 @@ async def test_update_reading_list_statements_respect_budget() -> None:
 
         body_large = json.dumps({"name": "Up-large", "mode": "loose", "issue_ids": full_ids[:200]})
         env2 = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_large)
+        nested_before2 = await db_nested_statements(engine)
         _, _, before2 = await db_counters(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None
+        assert small_nested is not None and large_nested is not None
+        assert small_nested == 0, f"unexpected nested statements: {small_nested}"
+        assert large_nested == 0, f"unexpected nested statements: {large_nested}"
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
+
+
+def test_reading_lists_budget_rejects_extra_query_and_n1() -> None:
+    """Deliberate extra query and N+1 growth must fail the same budget checks."""
+    for method, path in [
+        ("GET", "/api/v2/reading-lists"),
+        ("POST", "/api/v2/reading-lists"),
+        ("DELETE", "/api/v2/reading-lists/{list_id}"),
+        ("GET", "/api/v2/reading-lists/{list_id}"),
+        ("PUT", "/api/v2/reading-lists/{list_id}"),
+        ("GET", "/api/v2/reading-lists/{list_id}/reader"),
+    ]:
+        with pytest.raises(AssertionError, match="issued .* statements"):
+            assert_declared_budget(method, path, 999)
+        with pytest.raises(AssertionError, match="issued .* statements"):
+            assert_declared_budget(method, path, 5, 200)
