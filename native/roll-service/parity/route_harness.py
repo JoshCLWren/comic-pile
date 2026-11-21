@@ -55,6 +55,7 @@ def assert_declared_budget(method: str, path: str, *measurements: int | None) ->
     ]
     assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
     maximum = matching[0]["sql_budget"]["max_statements"]
+    print(f"BUDGET_MEASURE {method} {path} measurements={measurements} max={maximum}", flush=True)
     assert isinstance(maximum, int) and maximum >= 0
     for measured in measurements:
         assert measured is not None, "pg_stat_statements must measure every covered route"
