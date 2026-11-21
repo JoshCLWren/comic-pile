@@ -74,9 +74,13 @@ def test_reading_graph_sql_budget_matches_handler_call_path() -> None:
     # The snapshot runs inside a read-only transaction (BEGIN + ROLLBACK).
     assert budget.get("transaction_control_statements") == 2
     assert budget.get("total_statements") == expected + 2
+    # AppState::new enables connection recovery, so the parity runner pays one
+    # cold-pool checkout probe before the authenticated snapshot.
+    assert budget.get("runtime_overhead_statements") == 1
+    assert budget.get("max_statements") == expected + 2 + 1
     assert budget.get("basis") == (
-        "auth 1 + one-statement Option E snapshot 1 (+2 tx control); "
-        "set-based, independent of library size, no per-row N+1"
+        "auth 1 + one-statement Option E snapshot 1 plus one cold-pool checkout probe "
+        "(+2 tx control); set-based, independent of library size, no per-row N+1"
     )
 
 
