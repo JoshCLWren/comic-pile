@@ -376,11 +376,11 @@ jobs:
       - name: Check syntax of every maintained shell script
         run: |
           set -euo pipefail
-          find .github/scripts scripts -type f -name '*.sh' -print0 | xargs -0 -r -n 1 bash -n
+          find .github/scripts scripts -type f \( -name '*.sh' -o -path 'scripts/factory-run' \) -print0 | xargs -0 -r -n 1 bash -n
       - name: Shellcheck maintained shell scripts
         run: |
           set -euo pipefail
-          find .github/scripts scripts -type f -name '*.sh' -print0 | xargs -0 -r shellcheck --severity=error
+          find .github/scripts scripts -type f \( -name '*.sh' -o -path 'scripts/factory-run' \) -print0 | xargs -0 -r shellcheck --severity=error
 
   native-route-db-test-guard:
     needs: [factory-scope]
