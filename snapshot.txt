@@ -1,9 +1,9 @@
-utc: 2026-11-21T10:31:53Z
-uptime: 6471.78s load: 0.29 0.20 0.18
+utc: 2026-11-21T10:32:09Z
+uptime: 6488.32s load: 0.22 0.19 0.18
 processes: 176
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1261        4387          74       10753       14721
+Mem:           15983        1265        4383          74       10753       14717
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
@@ -33,6 +33,6 @@ Filesystem      Size  Used Avail Use% Mounted on
  0.3 redis-server
  0.2 python
  0.1 hv_kvp_daemon
- 0.0 docker-proxy
+ 0.0 containerd-shim
 --- kernel oom/kill
 --- shutdown/session signals
