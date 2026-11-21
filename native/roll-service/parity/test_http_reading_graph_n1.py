@@ -308,7 +308,9 @@ async def test_reading_graph_confirmed_repairs_measure_small_and_large() -> None
             await _assert_repair_persisted(raw, small_list, small_dependency)
 
             await _seed_threads(raw, owner_id, 5, 200)
-            large_list, large_dependency = await _seed_cycle(raw, owner_id, "Apply large")
+            large_list, large_dependency = await _seed_cycle(
+                raw, owner_id, "Apply large", offset=2
+            )
             large_env = _run_env(
                 token,
                 "POST",
