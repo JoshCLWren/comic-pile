@@ -3817,6 +3817,16 @@ export interface components {
             /** Format: int32 */
             thread_id?: number | null;
         };
+        /**
+         * @description Deployment-level capability for the canonical evaluator behind this batch.
+         *
+         *     It mirrors the same `AppState::option_e` switch every handler resolves, so
+         *     a client that has already observed one batch can skip the canonical read
+         *     entirely on later loads when the evaluator cannot answer (`unavailable`)
+         *     and consult the legacy blocking authority directly.
+         * @enum {string}
+         */
+        BoundaryEvaluator: "enabled" | "unavailable";
         BoundaryIssue: {
             /** Format: int32 */
             issue_id: number;
@@ -6180,6 +6190,12 @@ export interface components {
             volume?: string | null;
             /** Format: int32 */
             year?: number | null;
+        };
+        NativeReadingBoundaryBatchResponseV2: {
+            evaluator: components["schemas"]["BoundaryEvaluator"];
+            threads: {
+                [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
+            };
         };
         NativeReadingGraphBlocker: {
             explanation: string;
@@ -15742,7 +15758,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingBoundaryBatchResponseV2"];
+                    "application/json": components["schemas"]["NativeReadingBoundaryBatchResponseV2"];
                 };
             };
             /** @description Not authenticated */
