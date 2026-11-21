@@ -78,6 +78,50 @@ INTEGRATION_WRITE_TESTS = {
         "bulk_unassign_tag_removes_assignments", "POST",
         "/api/v2/tags/{tag_id}/unassignment-batches",
     ),
+    ("custom_cbl", "apply_custom_cbl"): (
+        "apply_rebuilds_membership_and_compiled_rules", "custom_cbl", "POST",
+        "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
+    ),
+    ("custom_cbl", "delete_overlap_decision"): (
+        "overlap_decisions_accept_non_numeric_comicvine_volume_keys", "custom_cbl", "DELETE",
+        "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
+    ),
+    ("custom_cbl", "save_overlap_decision"): (
+        "overlap_decisions_accept_non_numeric_comicvine_volume_keys", "custom_cbl", "PUT",
+        "/api/v2/reading-lists/{list_id}/overlap-decisions",
+    ),
+    ("comicvine_v2", "apply_correction"): (
+        "metadata_corrections_apply_list_revert", "comicvine_v2_http", "POST",
+        "/api/v2/comicvine/issues/{issue_id}/metadata:correct",
+    ),
+    ("comicvine_v2", "confirm_identity"): (
+        "identity_confirm_replace_remove_flow_matches_python", "comicvine_v2_http", "POST",
+        "/api/v2/comicvine/issues/{issue_id}/identity:confirm",
+    ),
+    ("comicvine_v2", "import_issue"): (
+        "import_issue_creates_thread_identity_and_reading_order_slot", "comicvine_v2_http",
+        "POST", "/api/v2/comicvine/issues:import",
+    ),
+    ("comicvine_v2", "import_series"): (
+        "import_series_adopts_roster_and_reuses_on_retry", "comicvine_v2_http",
+        "POST", "/api/v2/comicvine/series:import",
+    ),
+    ("comicvine_v2", "refresh_metadata"): (
+        "identity_confirm_replace_remove_flow_matches_python", "comicvine_v2_http", "POST",
+        "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
+    ),
+    ("comicvine_v2", "remove_identity"): (
+        "identity_confirm_replace_remove_flow_matches_python", "comicvine_v2_http", "DELETE",
+        "/api/v2/comicvine/issues/{issue_id}/identity",
+    ),
+    ("comicvine_v2", "replace_identity"): (
+        "identity_confirm_replace_remove_flow_matches_python", "comicvine_v2_http", "POST",
+        "/api/v2/comicvine/issues/{issue_id}/identity:replace",
+    ),
+    ("comicvine_v2", "revert_correction"): (
+        "metadata_corrections_apply_list_revert", "comicvine_v2_http", "POST",
+        "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
+    ),
 }
 
 
