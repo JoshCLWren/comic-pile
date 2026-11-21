@@ -225,18 +225,15 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
         finally:
             await raw.close()
 
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env)
+        large, large_statements = await _measure_route(engine, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         assert len(large_body.get("entries", [])) == 200
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
-        assert small_delta is not None and large_delta is not None
-        assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
-        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        _assert_fixed_route_budget(
+            "GET", "/api/v2/reading-lists/{list_id}", small_statements, large_statements
+        )
     finally:
         await engine.dispose()
 
