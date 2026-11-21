@@ -258,11 +258,26 @@ fn extract_cover_source(metadata: &Value) -> Option<&str> {
         .filter_map(|key| metadata.get(key))
         .find_map(nonempty)
         .or_else(|| {
-            let image = metadata.get("image")?;
-            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
+            [
+                metadata.get("image"),
+                metadata
+                    .get("raw_provider_payload")
+                    .and_then(|payload| payload.get("image")),
+            ]
+            .into_iter()
+            .flatten()
+            .find_map(|image| {
+                [
+                    "original_url",
+                    "super_url",
+                    "medium_url",
+                    "small_url",
+                    "thumb_url",
+                ]
                 .iter()
-                .filter_map(|key| image.get(key))
+                .filter_map(|key| image.get(*key))
                 .find_map(nonempty)
+            })
         })
 }
 
