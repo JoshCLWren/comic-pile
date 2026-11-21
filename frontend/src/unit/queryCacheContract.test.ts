@@ -499,7 +499,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.excluded.pages(),
     })
-    expect(invalidateQueries).toHaveBeenCalledTimes(6)
+    expect(invalidateQueries).toHaveBeenCalledTimes(7)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -523,6 +523,9 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.queue.activeCount(),
       exact: true,
     })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.excluded.memberStatusAll(),
+    })
   })
 
   it('skips only the session refresh when the owning mutation already refreshed it (#4276)', async () => {
@@ -537,7 +540,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
-    expect(invalidateQueries).toHaveBeenCalledTimes(5)
+    expect(invalidateQueries).toHaveBeenCalledTimes(6)
     expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -560,6 +563,9 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.activeCount(),
       exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.excluded.memberStatusAll(),
     })
   })
 
@@ -623,7 +629,7 @@ describe('targeted cache effects', () => {
     // Exact-count guards restored: two queue-movement resets and the full
     // invalidation set below. No extra key may creep into either pass.
     expect(resetQueries).toHaveBeenCalledTimes(2)
-    expect(invalidateQueries).toHaveBeenCalledTimes(15)
+    expect(invalidateQueries).toHaveBeenCalledTimes(16)
     // The queue half is composed from the queue-movement effect, not re-implemented.
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
@@ -648,6 +654,9 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.activeCount(),
       exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.excluded.memberStatusAll(),
     })
     // The history card's "N issues read" total must stop counting an undone rating (#3194).
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.pages() })

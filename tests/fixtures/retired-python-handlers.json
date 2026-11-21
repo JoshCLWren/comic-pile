@@ -999,5 +999,109 @@
     ],
     "module": "app.api.issue",
     "name": "reorder_issues"
+  },
+  {
+    "path": "/api/v1/comicvine/search/series",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_search_comicvine_series"
+  },
+  {
+    "path": "/api/v1/comicvine/resolve",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_resolve_comicvine_input"
+  },
+  {
+    "path": "/api/v1/comicvine/series/{comicvine_volume_id}/issues",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_get_series_issues"
+  },
+  {
+    "path": "/api/v1/comicvine/issues/{issue_id}/identity",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_get_issue_identity"
+  },
+  {
+    "path": "/api/v1/comicvine/issues/{issue_id}/identity:confirm",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_confirm_identity"
+  },
+  {
+    "path": "/api/v1/comicvine/issues:import",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_import_issue"
+  },
+  {
+    "path": "/api/v1/comicvine/series:import",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_import_series"
+  },
+  {
+    "path": "/api/v1/comicvine/issues/{issue_id}/identity:replace",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_replace_identity"
+  },
+  {
+    "path": "/api/v1/comicvine/issues/{issue_id}/metadata:refresh",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_refresh_metadata"
+  },
+  {
+    "path": "/api/v1/comicvine/issues/{issue_id}/metadata:correct",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_apply_correction"
+  },
+  {
+    "path": "/api/v1/comicvine/issues/{issue_id}/metadata:corrections",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_list_corrections"
+  },
+  {
+    "path": "/api/v1/comicvine/issues/{issue_id}/metadata:revert",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_revert_correction"
+  },
+  {
+    "path": "/api/v1/comicvine/issues/{issue_id}/identity",
+    "methods": [
+      "DELETE"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_remove_identity"
   }
 ]

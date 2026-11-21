@@ -1,5 +1,13 @@
 import type { components } from '../generated/openapi'
 
+/** Bulk exclusion provenance attached to an excluded queue thread (issue #5435). */
+export interface ThreadQueueExclusionGroup {
+  id: number
+  source_kind: 'reading_list' | 'reading_plan' | 'crossover'
+  source_id: number
+  source_name: string
+}
+
 /**
  * Represents a thread in list view (QueuePage).
  *
@@ -9,6 +17,7 @@ import type { components } from '../generated/openapi'
  * size for large lists.
  */
 export type ThreadListItem = components['schemas']['QueueThreadListItem'] & {
+  queue_exclusion_group?: ThreadQueueExclusionGroup | null
   /**
    * Derived series cover from the native `/api/v2/threads` projection (#5433):
    * the next unread confirmed issue's provider CDN URL, else the first confirmed
@@ -17,6 +26,30 @@ export type ThreadListItem = components['schemas']['QueueThreadListItem'] & {
    * replaces it.
    */
   series_cover_image_url?: string | null
+}
+
+export interface BulkQueueExclusionRequest {
+  thread_ids: number[]
+  source: {
+    kind: 'reading_list' | 'reading_plan' | 'crossover'
+    id: number
+    name: string
+  }
+}
+
+export interface BulkQueueExclusionResponse {
+  group: {
+    id: number
+    source_kind: 'reading_list' | 'reading_plan' | 'crossover'
+    source_id: number
+    source_name: string
+    created_at: string
+  } | null
+  excluded_thread_ids: number[]
+}
+
+export interface BulkQueueRestoreResponse {
+  restored_thread_ids: number[]
 }
 
 /**
@@ -559,7 +592,7 @@ export interface SetCurrentIssueResponse {
 export type BugReportResponse = components['schemas']['BugReportResponse']
 
 /**
- * Reader-context response from GET /v1/issues/{issue_id}/reader-context
+ * Reader-context response from GET /v2/issues/{issue_id}/reader-context
  * As defined in issue #1401
  */
 export interface ReaderContextResponse {

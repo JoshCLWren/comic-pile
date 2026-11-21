@@ -103,49 +103,31 @@ removed in #5162. The frontend caller
 (`frontend/src/services/api-bug-reports.ts`) keeps calling
 `/v1/bug-reports/` unchanged.
 
-`session-detail-v1.openapi.json` is the generated native contract for the
-same-path single-session slice `GET /api/sessions/{session_id}` and
-`GET /api/v1/sessions/{session_id}` (#4839, Part of #4335). Regenerate it
-with:
-
-```sh
-cd native/roll-service
-cargo run --example session_detail_openapi > ../contracts/session-detail-v1.openapi.json
-```
-
-It is generated only from
-`comicpile_roll_service::session_detail::SessionDetailApi` and preserves
-the Python wire contract (owner-scoped `Session not found` 404, ladder
-path, current die, active thread, bandwidth/intent normalization) at the
-exact same method/paths. Python handlers remain until production proof;
-the frontend caller (`frontend/src/services/api-sessions.ts`) keeps
-calling `/v1/sessions/{id}` unchanged.
-
 The unified Rust-derived contract and generated TS client are owned by #4457; this
 repository does not hand-author a second analytics schema. The merged generated
 client schema temporarily retains the legacy Python v1/bare analytics operation
 until #4348's authenticated production proof permits the post-proof cleanup.
 
 `preferences-v1.openapi.json` is the generated native contract for the
-same-path preferences and Taste Bank signal cutover in #4834:
-`GET`/`PATCH /api/v1/users/me/preferences`,
+remaining same-path Taste Bank signal surface in #4834:
 `GET /api/v1/users/me/taste-signals` and
 `PUT /api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict`.
-It is generated only from Rust declarations
-(`comicpile_roll_service::preferences::PreferencesApi`) and is not part of
-the `/api/v2` aggregate (`v2-runtime.openapi.json`), because these browser
-callers keep their `/api/v1` URLs. Regenerate it with:
+Browser-called user preferences moved to Rust v2
+(`GET`/`PATCH /api/v2/users/me/preferences`) and are documented in the
+v2 runtime/OpenAPI surface, not in this same-path contract. It is generated
+only from Rust declarations
+(`comicpile_roll_service::preferences::PreferencesApi`). Regenerate it with:
 
 ```sh
 cd native/roll-service
-cargo run --example preferences_openapi > ../contracts/preferences-v1.openapi.json
+cargo run -p comicpile-roll-service --example preferences_openapi > ../contracts/preferences-v1.openapi.json
 ```
 
 Its checked-in drift test is
 `preferences::tests::checked_in_openapi_contract_is_current`. The Python
 handlers stay mounted until authenticated production proof permits their
-removal; the schemas here match the Python `UserPreferences*` and
-`TasteSignal*`/`TasteVerdictRequest` contracts field for field.
+removal; the schemas here match the Python `TasteSignal*` and
+`TasteVerdictRequest` contracts field for field.
 
 To compare an independently generated Rust OpenAPI operation:
 

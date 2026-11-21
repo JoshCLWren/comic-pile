@@ -9,6 +9,7 @@
 //! * `POST /api/v1/threads/check-duplicates`
 //! * `POST /api/v1/threads/groups:batch`
 //! * `GET /api/v1/threads/excluded/threads`
+//! * `PUT /api/v1/threads/{thread_id}/test-backdate` (TEST_ENVIRONMENT-only)
 //!
 //! The Python handlers (`app/api/thread.py`, `app/api/dependency_group_batch.py`
 //! and `app/services/thread_service.py`) are the behavioral oracle. Status
@@ -20,9 +21,8 @@
 //!   preview is honored for the dense Queue ordinal in lifecycle responses;
 //!   `stale` and `set-pending` fail closed with 503 while the preview is
 //!   active because their candidate pool is then the evaluated graph.
-//! * `PUT /api/v1/threads/{thread_id}/test-backdate` is a TEST_ENVIRONMENT-only
-//!   helper with no product caller; it is retired (Rust JSON 404) instead of
-//!   ported.
+//! * `test-backdate` is only available when `TEST_ENVIRONMENT` is set, matching
+//!   the Python test helper's guard.
 //! * Python's in-process `slowapi` limits (30-120 requests per minute) are
 //!   per-instance memory and are not ported.
 #![forbid(unsafe_code)]
@@ -1288,7 +1288,7 @@ async fn exclude_once(
         }
         tx.execute(
             "UPDATE threads SET status = 'excluded', queue_position = 0,
-                queue_position_is_manual = false
+                queue_position_is_manual = false, queue_exclusion_group_id = NULL
          WHERE id = $1",
             &[&thread.id],
         )
@@ -1371,7 +1371,7 @@ async fn restore_once(
         };
         tx.execute(
             "UPDATE threads SET status = $2, queue_position = $3,
-                queue_position_is_manual = false
+                queue_position_is_manual = false, queue_exclusion_group_id = NULL
          WHERE id = $1",
             &[&thread.id, &status, &position],
         )
@@ -1823,6 +1823,67 @@ pub async fn set_pending_thread(
     reject_option_e_preview(&state)?;
     let response = set_pending_once(&state, user, thread_id.unwrap_or_default(), expected).await?;
     Ok(json_response(StatusCode::OK, response))
+}
+
+// ---------------------------------------------------------------------------
+// PUT /api/v1/threads/{thread_id}/test-backdate
+// ---------------------------------------------------------------------------
+
+fn test_environment_enabled() -> bool {
+    std::env::var_os("TEST_ENVIRONMENT").is_some_and(|value| !value.is_empty())
+}
+
+/// `PUT /api/v1/threads/{thread_id}/test-backdate`
+pub async fn backdate_thread_for_testing(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(raw_id): Path<String>,
+    RawQuery(raw): RawQuery,
+) -> HandlerResult {
+    let mut check = Check::default();
+    let thread_id = path_int(&mut check, "thread_id", &raw_id);
+    let pairs = query_pairs(raw.as_deref());
+    let days_param = query_value(&pairs, "days_ago");
+    let days_param_value = days_param.map(Value::String);
+    let days_ago = int_field(
+        &mut check,
+        &["query", "days_ago"],
+        days_param_value.as_ref(),
+        Bounds {
+            ge: Some(1),
+            le: Some(3650),
+            ..Bounds::default()
+        },
+        false,
+        true,
+    );
+    check.finish(Value::Null)?;
+
+    if !test_environment_enabled() {
+        return Err(LifecycleError::Api(ApiError::Forbidden(
+            "This endpoint is only available in test environment".to_string(),
+        )));
+    }
+
+    let user_id = user.id();
+    let thread_id = thread_id.unwrap_or_default();
+    let days_ago = days_ago.unwrap_or_default();
+    let updated_id = with_tx!(&state, tx, db::tx_error, {
+        // Match every sibling lifecycle writer: take the per-reader queue
+        // advisory lock before the thread row lock (`find_owned(.., true)`),
+        // never the reverse (#5398/#5419 lock-order rule).
+        acquire_queue_lock(&tx, user_id).await?;
+        let thread = find_owned(&tx, user_id, thread_id, true).await?;
+        tx.execute(
+            "UPDATE threads SET last_activity_at = NOW() - ($2::bigint * INTERVAL '1 day')
+             WHERE id = $1",
+            &[&thread.id, &days_ago],
+        )
+        .await
+        .map_err(db::tx_error)?;
+        Ok(thread.id)
+    })?;
+    respond_thread(&state, user, updated_id, StatusCode::OK).await
 }
 
 // ---------------------------------------------------------------------------

@@ -3,13 +3,16 @@
 use utoipa::OpenApi;
 
 #[derive(utoipa::OpenApi)]
+// Both v1 same-path documentation families intentionally dropped from this list:
+// #5532 moved issue read-state/identity-inbox reads to canonical v2, and #5528
+// moved continuity-plans/reading-plan-sync/undo to v2. Keep both removals when
+// re-resolving the merge; those operations now live only in the v2 contract.
 #[openapi(paths(
+    crate::dismiss_pending::dismiss_pending_documentation,
     crate::reading_mode::get_reading_mode_documentation,
     crate::reading_mode::set_reading_mode_documentation,
     crate::reading_mode::dismiss_reading_mode_suggestion_documentation,
     crate::reading_mode::suggest_reading_mode_documentation,
-    crate::dismiss_pending::dismiss_pending_documentation,
-    crate::dismiss_pending::dismiss_pending_legacy_documentation,
     crate::tags::list_tags_documentation,
     crate::tags::create_tag_documentation,
     crate::tags::effective_issue_documentation,
@@ -25,16 +28,9 @@ use utoipa::OpenApi;
     crate::tags::unassign_tag_documentation,
     crate::tags::usage_tag_documentation,
     crate::session_history::list_session_snapshots_documentation,
-    crate::session_list::list_sessions_documentation,
-    crate::session_list::list_sessions_v1_documentation,
     crate::session_details::get_session_details_documentation,
-    crate::session_details::get_session_details_v1_documentation,
     crate::undo_snapshots::list_undo_snapshots_documentation,
-    crate::undo_snapshots::list_undo_snapshots_v1_documentation,
     crate::undo_apply::undo_to_snapshot_documentation,
-    crate::undo_apply::undo_to_snapshot_v1_documentation,
-    crate::issue_read::get_issue_documentation,
-    crate::issue_read::get_issue_dependencies_documentation,
     crate::threads::get_thread_detail_documentation,
     crate::threads::get_bare_thread_detail_documentation,
     crate::taste_discoveries::list_documentation,
@@ -86,21 +82,16 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::bug_reports::BugReportsApi::openapi())
         .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
         .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
-        .merge_from(crate::session_detail::SessionDetailApi::openapi())
-        .merge_from(crate::session_list::SessionListApi::openapi())
-        .merge_from(crate::session_details::SessionDetailsApi::openapi())
         .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())
         .merge_from(crate::undo_apply::UndoApplyApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::cbl_catalog::CblCatalogApi::openapi())
         .merge_from(crate::issue_identity::IssueIdentityApi::openapi())
-        .merge_from(crate::custom_cbl::CustomCblApi::openapi())
         // The browser still calls these v1 thread dependency URLs, which now
         // run in Rust. Publishing their contract here keeps the generated TS
         // client types after the shadowed Python handlers retire (#5440).
         .merge_from(crate::thread_ordering::ThreadOrderingApi::openapi())
         .merge_from(crate::thread_issues::ThreadIssuesApi::openapi())
-        .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
         .merge_from(crate::dependency_groups::DependencyGroupsApi::openapi());
 
     // Each alias is mounted to the identical handler in the native router.
@@ -136,12 +127,12 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
             "/api/v1/threads/{thread_id}/dependencies",
         ),
         (
-            "/api/v2/threads/{thread_id}/issue-dependencies",
-            "/api/v1/threads/{thread_id}/issue-dependencies",
+            "/api/v2/issues/{issue_id}/dependencies",
+            "/api/v1/issues/{issue_id}/dependencies",
         ),
         (
-            "/api/v1/sessions/{session_id}/snapshots",
-            "/api/sessions/{session_id}/snapshots",
+            "/api/v2/threads/{thread_id}/issue-dependencies",
+            "/api/v1/threads/{thread_id}/issue-dependencies",
         ),
     ] {
         if let Some(item) = document.paths.paths.get(source).cloned() {
@@ -151,6 +142,7 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
                 .insert(alias.to_string(), alias_item(item, alias));
         }
     }
+
     // utoipa's `schema_with` supplies the full `limit` schema but suppresses the
     // parameter-level description. Restore the Python `Query(description=...)`
     // text so the generated client contract matches the retired FastAPI route.
@@ -165,14 +157,9 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
             }
         }
     }
-    document
-        .paths
-        .paths
-        .retain(|path, _| !path.starts_with("/api/v2/"));
-    document.info.title = "ComicPile native same-path API".to_string();
+
     document
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,11 +232,6 @@ mod tests {
                 "get",
             ),
             ("/api/v1/issue-identity/cbl/{list_id}/adoption-plan", "post"),
-            ("/api/v1/cbl/{list_id}/adoption-commit", "post"),
-            (
-                "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
-                "post",
-            ),
         ] {
             let operation = &paths[path][method];
             assert!(
@@ -296,63 +278,13 @@ mod tests {
         }
     }
 
-    /// The issue read-state and reader-context cutover (#4832 part C) keeps its
-    /// original v1 URLs, so every operation must stay in the same-path document
-    /// to survive retirement of the shadowed Python handlers.
-    #[test]
-    fn same_path_contract_documents_issue_read_state_operations() {
-        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
-        let paths = document["paths"].as_object().expect("paths");
-        for (path, method, operation_id) in [
-            (
-                "/api/v1/issues/{issue_id}:markRead",
-                "post",
-                "issue_read_state_mark_read",
-            ),
-            (
-                "/api/v1/issues/{issue_id}:markUnread",
-                "post",
-                "issue_read_state_mark_unread",
-            ),
-            (
-                "/api/v1/issues/{issue_id}:move",
-                "post",
-                "issue_read_state_move",
-            ),
-            (
-                "/api/v1/issues:bulkMarkRead",
-                "post",
-                "issue_read_state_bulk_mark_read",
-            ),
-            (
-                "/api/v1/issues:bulkMarkUnread",
-                "post",
-                "issue_read_state_bulk_mark_unread",
-            ),
-            (
-                "/api/v1/issues/{issue_id}/reader-context",
-                "get",
-                "issue_read_state_reader_context",
-            ),
-        ] {
-            let operation = &paths[path][method];
-            assert!(operation.is_object(), "missing {method} {path} in contract");
-            assert_eq!(operation["operationId"], operation_id);
-            assert!(
-                operation["responses"]["204"].is_object()
-                    || operation["responses"]["200"].is_object(),
-                "{method} {path} has no success response"
-            );
-        }
-    }
-
     #[test]
     fn same_path_contract_claims_reading_plan_sync_status() {
         let document = same_path_openapi();
         let item = document
             .paths
             .paths
-            .get("/api/v1/reading-plan-sync/status")
+            .get("/api/v2/reading-plan-sync/status")
             .expect("native reading-plan-sync status operation in same-path contract");
         let operation = item.get.as_ref().expect("GET status operation");
         assert_eq!(

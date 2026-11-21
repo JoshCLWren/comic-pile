@@ -767,6 +767,32 @@
           }
         }
       },
+      "QueueExclusionGroupRef": {
+        "type": "object",
+        "description": "Bulk exclusion provenance attached to an excluded queue thread (#5435).",
+        "required": [
+          "id",
+          "source_kind",
+          "source_id",
+          "source_name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_kind": {
+            "type": "string"
+          },
+          "source_name": {
+            "type": "string"
+          }
+        }
+      },
       "QueueSeriesMetadata": {
         "type": "object",
         "description": "Confirmed provider series metadata for one queue row.",
@@ -1027,6 +1053,17 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "queue_exclusion_group": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/QueueExclusionGroupRef",
+                "description": "Present when this excluded thread was removed as part of a bulk action."
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "queue_position": {

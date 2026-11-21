@@ -45,7 +45,7 @@ test.describe('Auth Outage Recovery', () => {
     mockApi.get('/api/v2/threads').as('threads').replyAlways(200, { threads: [], next_page_token: null })
     mockApi.get('/api/v1/threads/completed/threads').as('completedThreads').replyAlways(200, { threads: [], next_page_token: null })
     mockApi.get('/api/v1/threads/excluded/threads').as('excludedThreads').replyAlways(200, { threads: [], next_page_token: null })
-    mockApi.get('/api/v1/identity-inbox').as('identityInbox').replyAlways(200, { items: [], total: 0, offset: 0, limit: 50 })
+    mockApi.get('/api/v2/identity-inbox').as('identityInbox').replyAlways(200, { items: [], total: 0, offset: 0, limit: 50 })
     mockApi.get('/api/v2/reading-graph').as('readingGraph').replyAlways(200, {
       status: 'ok',
       cycles: [],
@@ -102,7 +102,7 @@ test.describe('Auth Outage Recovery', () => {
     })
     mockApi.get('/api/v2/roll/eligible-issue-ids').as('eligibleIssueIds').replyAlways(200, { die: 6, issue_ids: [] })
     mockApi.post('/api/v2/issues/cards').as('issueCards').replyAlways(200, { cards: [] })
-    mockApi.get('/api/v1/users/me/preferences').as('preferences').replyAlways(200, { theme: 'classic', user_id: 1 })
+    mockApi.get('/api/v2/users/me/preferences').as('preferences').replyAlways(200, { theme: 'classic', user_id: 1 })
     mockApi.get('/api/v1/taste/discoveries').as('tasteDiscoveries').replyAlways(200, { discoveries: [], generated_at: '' })
   }
 

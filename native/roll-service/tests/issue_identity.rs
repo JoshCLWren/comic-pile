@@ -599,7 +599,7 @@ async fn adoption_commit_rejects_stale_fingerprint() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/1/adoption-commit",
+        "/api/v2/reading-lists/1/adoption-commits",
         json!({
             "entry_decisions": {},
             "series_decisions": [],
@@ -620,7 +620,7 @@ async fn adoption_commit_creates_plan_with_valid_fingerprint() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/1/adoption-commit",
+        "/api/v2/reading-lists/1/adoption-commits",
         json!({
             "entry_decisions": {},
             "series_decisions": [],
@@ -741,7 +741,7 @@ async fn adoption_commit_materializes_missing_importable_issue() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/30/adoption-commit",
+        "/api/v2/reading-lists/30/adoption-commits",
         json!({
             "entry_decisions": {},
             "series_decisions": [],
@@ -767,7 +767,7 @@ async fn targeted_adoption_commit_route_returns_200() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/1/adoption-commit",
+        "/api/v2/reading-lists/1/adoption-commits",
         json!({
             "entry_decisions": {},
             "series_decisions": [],
@@ -787,7 +787,7 @@ async fn targeted_adoption_commit_route_returns_200() {
         &state,
         &token,
         &csrf,
-        &format!("/api/v1/cbl/1/reading-plans/{plan_id}/adoption-commit"),
+        &format!("/api/v2/reading-lists/1/reading-plans/{plan_id}/adoption-commits"),
         json!({
             "entry_decisions": {},
             "series_decisions": [],
@@ -808,7 +808,7 @@ async fn adoption_commit_invalid_decision_returns_422_enum() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/1/adoption-commit",
+        "/api/v2/reading-lists/1/adoption-commits",
         json!({
             "entry_decisions": {"0": "bogus"},
             "series_decisions": [],
@@ -830,7 +830,7 @@ async fn adoption_commit_invalid_decision_returns_422_enum() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/1/reading-plans/1/adoption-commit",
+        "/api/v2/reading-lists/1/reading-plans/1/adoption-commits",
         json!({
             "series_decisions": [{"series_name": "S", "decision": "nope"}],
             "entry_decisions": {},
@@ -852,7 +852,7 @@ async fn adoption_commit_unauthenticated_returns_401() {
         &state,
         Request::builder()
             .method("POST")
-            .uri("/api/v1/cbl/1/adoption-commit")
+            .uri("/api/v2/reading-lists/1/adoption-commits")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(
                 json!({
@@ -874,8 +874,8 @@ async fn adoption_commit_unauthenticated_returns_401() {
 async fn adoption_commit_routes_require_double_submit_csrf() {
     let (state, token, _csrf, _guard) = setup().await;
     for uri in [
-        "/api/v1/cbl/1/adoption-commit",
-        "/api/v1/cbl/1/reading-plans/1/adoption-commit",
+        "/api/v2/reading-lists/1/adoption-commits",
+        "/api/v2/reading-lists/1/reading-plans/1/adoption-commits",
     ] {
         // A valid bearer token is not enough: the double-submit CSRF pair is
         // checked before authentication, so a missing pair must be rejected
@@ -915,7 +915,7 @@ async fn targeted_adoption_commit_other_users_plan_returns_422() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/1/adoption-commit",
+        "/api/v2/reading-lists/1/adoption-commits",
         json!({
             "entry_decisions": {},
             "series_decisions": [],
@@ -938,7 +938,7 @@ async fn targeted_adoption_commit_other_users_plan_returns_422() {
         &state,
         &token2,
         &csrf2,
-        &format!("/api/v1/cbl/1/reading-plans/{plan_id}/adoption-commit"),
+        &format!("/api/v2/reading-lists/1/reading-plans/{plan_id}/adoption-commits"),
         json!({
             "entry_decisions": {},
             "series_decisions": [],
@@ -1037,7 +1037,7 @@ async fn adoption_commit_other_users_thread_not_reused() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/1/adoption-commit",
+        "/api/v2/reading-lists/1/adoption-commits",
         json!({
             "entry_decisions": {},
             "series_decisions": [],
@@ -1084,7 +1084,7 @@ async fn adoption_commit_recommit_is_idempotent() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/1/adoption-commit",
+        "/api/v2/reading-lists/1/adoption-commits",
         payload.clone(),
     )
     .await;
@@ -1099,7 +1099,7 @@ async fn adoption_commit_recommit_is_idempotent() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/1/adoption-commit",
+        "/api/v2/reading-lists/1/adoption-commits",
         payload,
     )
     .await;
@@ -1130,7 +1130,7 @@ async fn adoption_commit_inactive_list_returns_422() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/3/adoption-commit",
+        "/api/v2/reading-lists/3/adoption-commits",
         json!({
             "entry_decisions": {},
             "series_decisions": [],
@@ -1182,7 +1182,7 @@ async fn adoption_commit_returns_503_on_database_outage() {
         &state,
         Request::builder()
             .method("POST")
-            .uri("/api/v1/cbl/1/adoption-commit")
+            .uri("/api/v2/reading-lists/1/adoption-commits")
             .header(header::AUTHORIZATION, format!("Bearer {token}"))
             .header(header::CONTENT_TYPE, "application/json")
             .header("x-csrf-token", "csrf")
@@ -1242,7 +1242,7 @@ async fn adoption_preview_and_explicit_include_cannot_restore_excluded_volumes()
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/1/adoption-commit",
+        "/api/v2/reading-lists/1/adoption-commits",
         json!({
             "entry_decisions": {"1": "include", "2": "include"},
             "series_decisions": [],
@@ -1305,7 +1305,7 @@ async fn adoption_commit_rechecks_exclusions_added_after_preview() {
         &state,
         &token,
         &csrf,
-        "/api/v1/cbl/1/adoption-commit",
+        "/api/v2/reading-lists/1/adoption-commits",
         json!({
             "entry_decisions": {},
             "series_decisions": [],

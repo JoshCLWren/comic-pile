@@ -6,16 +6,13 @@ import asyncio
 import time
 from pathlib import Path
 from typing import NamedTuple
-from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.services.comicvine_resolution import get_comicvine_series_issues
 from comic_pile.comicvine_provider import (
     COLLECTION_PAGE_LIMIT,
     VOLUME_ISSUES_PAGE_CONCURRENCY,
     ComicVineClient,
-    ComicVineError,
     PersistentResourceThrottleTracker,
 )
 
@@ -295,87 +292,3 @@ async def test_successful_page_does_not_clear_a_sibling_throttle(
 
     assert len(rows) == 1
     assert client.throttle_tracker.is_throttled("issues")
-
-
-@pytest.mark.asyncio
-async def test_service_overlaps_volume_metadata_with_roster() -> None:
-    """Both provider reads must be in flight together rather than back to back."""
-    mock_client = Mock()
-    both_started = asyncio.Event()
-    release = asyncio.Event()
-    in_flight = 0
-
-    async def fetch_volume(volume_id: int) -> Mock:
-        nonlocal in_flight
-        in_flight += 1
-        if in_flight == 2:
-            both_started.set()
-        await release.wait()
-        return Mock(payload={"results": {"id": VOLUME_ID, "name": "Test Series"}})
-
-    async def fetch_volume_issues(volume_id: int) -> list[dict[str, object]]:
-        nonlocal in_flight
-        in_flight += 1
-        if in_flight == 2:
-            both_started.set()
-        await release.wait()
-        return [_row(1), _row(2)]
-
-    mock_client.fetch_volume = fetch_volume
-    mock_client.fetch_volume_issues = fetch_volume_issues
-
-    pending = asyncio.ensure_future(
-        get_comicvine_series_issues(mock_client, VOLUME_ID, series_name="")
-    )
-    try:
-        await asyncio.wait_for(both_started.wait(), timeout=5.0)
-    finally:
-        release.set()
-    result = await pending
-
-    assert result.series_name == "Test Series"
-    assert len(result.issues) == 2
-
-
-@pytest.mark.asyncio
-async def test_service_skips_volume_read_when_series_name_is_known() -> None:
-    """A pre-resolved series name avoids the extra volume request entirely."""
-    mock_client = Mock()
-    mock_client.fetch_volume_issues = AsyncMock(return_value=[_row(1)])
-
-    result = await get_comicvine_series_issues(
-        mock_client, VOLUME_ID, series_name="Pre-fetched Series"
-    )
-
-    mock_client.fetch_volume.assert_not_called()
-    mock_client.fetch_volume_issues.assert_called_once_with(VOLUME_ID)
-    assert result.series_name == "Pre-fetched Series"
-    assert len(result.issues) == 1
-
-
-@pytest.mark.asyncio
-async def test_service_keeps_issues_when_volume_metadata_fails() -> None:
-    """A volume-metadata failure falls back to the generic label instead of dropping issues."""
-    mock_client = Mock()
-    mock_client.fetch_volume = AsyncMock(side_effect=ComicVineError("volume unavailable"))
-    mock_client.fetch_volume_issues = AsyncMock(return_value=[_row(1), _row(2)])
-
-    result = await get_comicvine_series_issues(mock_client, VOLUME_ID, series_name="")
-
-    assert result.series_name == f"Volume {VOLUME_ID}"
-    assert len(result.issues) == 2
-
-
-@pytest.mark.asyncio
-async def test_service_keeps_volume_metadata_when_roster_fails() -> None:
-    """A roster failure still resolves the series name from the volume read."""
-    mock_client = Mock()
-    mock_client.fetch_volume = AsyncMock(
-        return_value=Mock(payload={"results": {"id": VOLUME_ID, "name": "Test Series"}})
-    )
-    mock_client.fetch_volume_issues = AsyncMock(side_effect=ComicVineError("issues unavailable"))
-
-    result = await get_comicvine_series_issues(mock_client, VOLUME_ID, series_name="")
-
-    assert result.series_name == "Test Series"
-    assert result.issues == []

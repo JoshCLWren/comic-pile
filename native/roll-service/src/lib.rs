@@ -9,8 +9,10 @@ pub mod catalog_commit;
 pub mod catalog_series_mapping_preview;
 pub mod cbl_catalog;
 pub mod comicvine_issue;
+pub mod comicvine_limits;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
+pub mod comicvine_v2;
 pub mod config;
 pub mod continuity_plans;
 pub mod continuity_plans_project_preview;
@@ -45,7 +47,9 @@ pub mod outbound;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 mod preview_validation;
+pub(crate) mod python_text;
 pub mod queue;
+pub mod queue_exclusions;
 pub mod reader_context;
 pub mod reading_blocker_projection;
 pub mod reading_boundary;
@@ -73,10 +77,8 @@ pub mod roll_switch_prerequisite;
 pub mod roll_v1_openapi;
 pub mod same_path_openapi;
 mod session_bandwidth;
-pub mod session_detail;
 pub mod session_details;
 pub mod session_history;
-pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod thread_issues;
@@ -137,6 +139,8 @@ pub struct AppState {
     /// Effective Option E setting (see [`option_e_setting`]); injectable so
     /// tests choose it per state instead of mutating process environment.
     pub option_e: bool,
+    /// Cache, rolling budget and cooldown for browser-called ComicVine routes.
+    pub comicvine_limits: comicvine_limits::ComicVineLimits,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -222,6 +226,7 @@ impl AppState {
             connection_recovery: true,
             outbound,
             option_e: config.option_e,
+            comicvine_limits: comicvine_limits::ComicVineLimits::default(),
         })
     }
 
@@ -500,6 +505,12 @@ fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
         "/api/v1/cron/release-sync" => {
             reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
         }
+        // Series import fetches the volume and its full roster, then adopts
+        // every issue in one transaction; the browser allows 120 s
+        // (`SERIES_IMPORT_TIMEOUT_MS`), so the server must too (#4631578684).
+        "/api/v2/comicvine/series:import" => comicvine_v2::SERIES_IMPORT_REQUEST_DEADLINE,
+        // Volume rosters page through ComicVine before answering (#4835).
+        path if comicvine_v2::needs_roster_deadline(path) => comicvine_v2::ROSTER_REQUEST_DEADLINE,
         _ => default_timeout,
     }
 }
@@ -591,9 +602,8 @@ async fn runtime_identity(request: Request, next: Next) -> Response {
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::middleware::csrf_middleware;
     use custom_cbl::{
-        apply_custom_cbl, create_custom_cbl, delete_overlap_decision, export_custom_cbl,
-        get_custom_cbl, get_overlap_decisions, list_custom_cbls, read_custom_cbl,
-        save_overlap_decision, search_custom_cbl_issues, update_custom_cbl,
+        apply_custom_cbl, delete_overlap_decision, export_custom_cbl, get_overlap_decisions,
+        save_overlap_decision, search_custom_cbl_issues,
     };
     Router::new()
         .route(
@@ -633,7 +643,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(auth::handlers::reset_password),
         )
         .route(
-            "/api/v1/catalog/series-mappings/commit",
+            "/api/v2/series-mapping-commits",
             post(catalog_commit::commit_series_mapping_handler),
         )
         .route(
@@ -673,14 +683,12 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/demo-roll", get(demo::read_demo_roll))
         .route("/api/metrics", get(metrics::get_metrics))
-        .route("/api/v1/metrics", get(metrics::get_metrics))
         .route("/api/v2/roll/die-state", get(roll_resources::die_state))
         .route(
             "/api/v2/roll/eligible-issue-ids",
             get(roll_resources::eligible_issue_ids),
         )
-        .route("/api/v1/roll/override", post(roll_override::override_roll))
-        .route("/api/roll/override", post(roll_override::override_roll))
+        .route("/api/v2/roll/override", post(roll_override::override_roll))
         .route(
             "/api/v1/roll/events/{event_id}/recommendation-explanation",
             get(recommendation_explanation::get_recommendation_explanation),
@@ -690,57 +698,31 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(recommendation_explanation::get_recommendation_explanation),
         )
         .route(
-            "/api/v1/roll/switch-prerequisite",
+            "/api/v2/roll/switch-prerequisite",
             post(roll_switch_prerequisite::switch_prerequisite),
         )
         .route(
             "/api/v2/reading-sessions",
             post(bootstrap::initialize_session),
         )
+        // Session reads moved to the resource-shaped v2 surface (#4335).
+        // The v1 single-session/list reads and the unversioned aliases are
+        // retired (#4343); only the snapshot and details reads remain.
         .route(
-            "/api/sessions/{session_id}",
-            get(session_detail::get_session),
-        )
-        .route(
-            "/api/v1/sessions/{session_id}",
-            get(session_detail::get_session),
-        )
-        .route(
-            "/api/sessions/{session_id}/snapshots",
+            "/api/v2/reading-sessions/{session_id}/snapshots",
             get(session_history::list_session_snapshots),
         )
         .route(
-            "/api/v1/sessions/{session_id}/snapshots",
-            get(session_history::list_session_snapshots),
-        )
-        // Session list (issue #4839)
-        .route("/api/sessions/", get(session_list::list_sessions))
-        .route("/api/v1/sessions/", get(session_list::list_sessions))
-        // Session details (issue #4839)
-        .route(
-            "/api/sessions/{session_id}/details",
+            "/api/v2/reading-sessions/{session_id}/details",
             get(session_details::get_session_details),
         )
+        // Undo snapshots list and restore (issues #4839, #4838/#4335)
         .route(
-            "/api/v1/sessions/{session_id}/details",
-            get(session_details::get_session_details),
-        )
-        // Undo snapshots list (issue #4839)
-        .route(
-            "/api/undo/{session_id}/snapshots",
+            "/api/v2/undo/{session_id}/snapshots",
             get(undo_snapshots::list_undo_snapshots),
         )
         .route(
-            "/api/v1/undo/{session_id}/snapshots",
-            get(undo_snapshots::list_undo_snapshots),
-        )
-        // Undo apply snapshot (issue #4839)
-        .route(
-            "/api/undo/{session_id}/undo/{snapshot_id}",
-            post(undo_apply::undo_to_snapshot),
-        )
-        .route(
-            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+            "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
             post(undo_apply::undo_to_snapshot),
         )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
@@ -752,11 +734,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(reading_boundary::reading_boundary_batch_v2),
         )
         .route(
-            "/api/v1/reading-orders/",
+            "/api/v2/reading-orders/",
             get(reading_orders::list_reading_orders),
         )
         .route(
-            "/api/v1/reading-orders/{reading_order_id}/items",
+            "/api/v2/reading-orders/{reading_order_id}/items",
             post(reading_orders::insert_reading_order_item),
         )
         .route(
@@ -764,11 +746,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(reading_plan_sync::scheduled_release_sync_cron),
         )
         .route(
-            "/api/v1/reading-plan-sync/status",
+            "/api/v2/reading-plan-sync/status",
             get(reading_plan_sync::get_sync_status),
         )
         .route(
-            "/api/v1/reading-plan-sync/sync",
+            "/api/v2/reading-plan-sync/runs",
             post(reading_plan_sync::sync_released_issues_endpoint),
         )
         .route(
@@ -780,6 +762,22 @@ pub fn router(state: Arc<AppState>) -> Router {
             patch(queue::update_queue_entry),
         )
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
+        .route(
+            "/api/v2/queue-exclusions",
+            post(queue_exclusions::bulk_exclude),
+        )
+        .route(
+            "/api/v2/queue-exclusions/status:check",
+            post(queue_exclusions::check_excluded_status),
+        )
+        .route(
+            "/api/v2/queue-exclusions/restore",
+            post(queue_exclusions::bulk_restore),
+        )
+        .route(
+            "/api/v2/queue-exclusion-groups/{group_id}/restore",
+            post(queue_exclusions::restore_group),
+        )
         .route("/api/v2/threads", get(threads::list_threads))
         .route(
             "/api/v1/threads/{thread_id}",
@@ -797,21 +795,24 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}",
             post(thread_ordering::post_thread_action),
         )
-        // Same single-segment technique for `{issue_id}:markRead|markUnread|move`.
         .route(
-            "/api/v1/issues/{issue_id}",
-            post(issue_read_state::post_issue_action),
+            "/api/v2/issues/{issue_id}/read-markers",
+            post(issue_read_state::create_read_marker).delete(issue_read_state::delete_read_marker),
         )
         .route(
-            "/api/v1/issues:bulkMarkRead",
-            post(issue_read_state::bulk_mark_issues_read),
+            "/api/v2/issues/{issue_id}/position",
+            put(issue_read_state::put_issue_position),
         )
         .route(
-            "/api/v1/issues:bulkMarkUnread",
-            post(issue_read_state::bulk_mark_issues_unread),
+            "/api/v2/issue-read-markers",
+            post(issue_read_state::create_read_markers),
         )
         .route(
-            "/api/v1/issues/{issue_id}/reader-context",
+            "/api/v2/issue-read-marker-removals",
+            post(issue_read_state::remove_read_markers),
+        )
+        .route(
+            "/api/v2/issues/{issue_id}/reader-context",
             get(reader_context::get_issue_reader_context),
         )
         .route(
@@ -829,6 +830,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/issues",
             post(thread_issues::create_thread_issues),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(thread_issues::list_thread_issue_creators),
         )
         .route(
             "/api/v1/threads/{thread_id}/issues:reorder",
@@ -888,12 +893,20 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(thread_lifecycle::set_pending_thread),
         )
         .route(
+            "/api/v1/threads/{thread_id}/test-backdate",
+            put(thread_lifecycle::backdate_thread_for_testing),
+        )
+        .route(
             "/api/v2/reading-lists",
             get(reading_list::list_reading_lists),
         )
         .route(
             "/api/v2/reading-lists",
             post(reading_list::create_reading_list),
+        )
+        .route(
+            "/api/v2/reading-lists/memberships:check",
+            post(reading_list::check_thread_memberships),
         )
         .route(
             "/api/v2/reading-lists/{list_id}",
@@ -911,37 +924,28 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/reading-lists/{list_id}/reader",
             get(reading_list::read_reading_list),
         )
-        // Custom CBL (Reading List) endpoints on /api/v1/custom-cbls paths
-        .route("/api/v1/custom-cbls", get(list_custom_cbls))
-        .route("/api/v1/custom-cbls", post(create_custom_cbl))
         .route(
-            "/api/v1/custom-cbls/issue-search",
+            "/api/v2/reading-lists/issue-candidates",
             get(search_custom_cbl_issues),
         )
-        .route("/api/v1/custom-cbls/{list_id}", get(get_custom_cbl))
-        .route("/api/v1/custom-cbls/{list_id}", put(update_custom_cbl))
         .route(
-            "/api/v1/custom-cbls/{list_id}/export",
+            "/api/v2/reading-lists/{list_id}/export",
             get(export_custom_cbl),
         )
-        .route("/api/v1/custom-cbls/{list_id}/reader", get(read_custom_cbl))
-        // Axum (matchit) forbids a parameter sharing a segment with a literal,
-        // so the colon-action wire suffix is captured whole and parsed inside
-        // the handler; the public path stays exactly `{plan_id}:apply`.
         .route(
-            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_action}",
+            "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
             post(apply_custom_cbl),
         )
         .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            "/api/v2/reading-lists/{list_id}/overlap-decisions",
             get(get_overlap_decisions),
         )
         .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            "/api/v2/reading-lists/{list_id}/overlap-decisions",
             put(save_overlap_decision),
         )
         .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+            "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
             delete(delete_overlap_decision),
         )
         .route(
@@ -967,46 +971,41 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(dependencies::delete_dependency),
         )
         .route(
-            "/api/v1/dependencies/blocked",
+            "/api/v2/dependencies/blocked",
             get(legacy_dependencies::blocked),
         )
-        .route("/api/v1/dependencies/", post(legacy_dependencies::create))
         .route(
-            "/api/v1/dependencies/{dependency_id}",
+            "/api/v2/dependencies/{dependency_id}",
             get(legacy_dependencies::get),
         )
         .route(
-            "/api/v1/dependencies/{dependency_id}",
+            "/api/v2/dependencies/{dependency_id}",
             patch(legacy_dependencies::update),
         )
-        .route(
-            "/api/v1/dependencies/{dependency_id}",
-            delete(legacy_dependencies::delete),
-        )
         .route("/api/v2/activity", get(activity::list_activity))
-        .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
+        .route("/api/v2/identity-inbox", get(identity_inbox::list_inbox))
         .route(
-            "/api/v1/identity-inbox/search/issues",
+            "/api/v2/identity-inbox/issue-matches",
             get(identity_inbox::search_issues),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}",
+            "/api/v2/identity-inbox/{mapping_id}",
             get(identity_inbox::get_inbox_item),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/confirm",
+            "/api/v2/identity-inbox/{mapping_id}/confirmations",
             post(identity_inbox::confirm),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/defer",
+            "/api/v2/identity-inbox/{mapping_id}/deferrals",
             post(identity_inbox::defer),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/reject",
+            "/api/v2/identity-inbox/{mapping_id}/rejections",
             post(identity_inbox::reject),
         )
         .route(
-            "/api/v1/identity-inbox/{mapping_id}/skip",
+            "/api/v2/identity-inbox/{mapping_id}/skips",
             post(identity_inbox::skip),
         )
         // Issue Identity / CBL Adoption family (#4843).
@@ -1035,18 +1034,18 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(issue_identity::cbl_adoption_plan),
         )
         .route(
-            "/api/v1/cbl/{list_id}/adoption-commit",
+            "/api/v2/reading-lists/{list_id}/adoption-commits",
             post(issue_identity::cbl_adoption_commit),
         )
         .route(
-            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+            "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits",
             post(issue_identity::cbl_targeted_adoption_commit),
         )
         .route(
             "/api/v2/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
         )
-        .route("/api/v1/issues/{issue_id}", get(issue_read::get_issue))
+        .route("/api/v2/issues/{issue_id}", get(issue_read::get_issue))
         .route(
             "/api/v1/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
@@ -1063,8 +1062,65 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(comicvine_resolution::series_import_status),
         )
+        // Canonical native v2 ComicVine read routes (#4835, split chunk A).
         .route(
-            "/api/v1/issues/{issue_id}/dependencies",
+            "/api/v2/comicvine/search/series",
+            get(comicvine_v2::search_series),
+        )
+        .route(
+            "/api/v2/comicvine/resolve",
+            get(comicvine_v2::resolve_input),
+        )
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+            get(comicvine_v2::series_issues),
+        )
+        // Native v2 ComicVine routes (#4835, split chunk B).
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity",
+            get(comicvine_v2::get_issue_identity).delete(comicvine_v2::remove_identity),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+            get(comicvine_v2::list_corrections),
+        )
+        // Native v2 ComicVine routes (#4835, split chunk C).
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity:confirm",
+            post(comicvine_v2::confirm_identity),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity:replace",
+            post(comicvine_v2::replace_identity),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:correct",
+            post(comicvine_v2::apply_correction),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
+            post(comicvine_v2::revert_correction),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
+            post(comicvine_v2::refresh_metadata),
+        )
+        // Native v2 ComicVine routes (#4835, split chunk D).
+        .route(
+            "/api/v2/comicvine/issues:import",
+            post(comicvine_v2::import_issue),
+        )
+        // Native v2 ComicVine routes (#4835, split chunk E).
+        .route(
+            "/api/v2/comicvine/series:import",
+            post(comicvine_v2::import_series),
+        )
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
+            get(comicvine_v2::series_import_status),
+        )
+        .route(
+            "/api/v2/issues/{issue_id}/dependencies",
             get(issue_read::get_issue_dependencies),
         )
         .route(
@@ -1076,19 +1132,15 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(dependencies::get_thread_dependencies),
         )
         .route(
-            "/api/v1/roll/dismiss-pending",
+            "/api/v2/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
         .route(
-            "/api/roll/dismiss-pending",
-            post(dismiss_pending::dismiss_pending),
-        )
-        .route(
-            "/api/v1/users/me/preferences",
+            "/api/v2/users/me/preferences",
             get(preferences::get_user_preferences),
         )
         .route(
-            "/api/v1/users/me/preferences",
+            "/api/v2/users/me/preferences",
             patch(preferences::patch_user_preferences),
         )
         .route(
@@ -1169,63 +1221,63 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         // Continuity plans v1 routes (cutover from Python)
         .route(
-            "/api/v1/continuity-plans/",
+            "/api/v2/continuity-plans/",
             get(continuity_plans::list_continuity_plans),
         )
         .route(
-            "/api/v1/continuity-plans/",
+            "/api/v2/continuity-plans/",
             post(continuity_plans::create_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}",
+            "/api/v2/continuity-plans/{plan_id}",
             get(continuity_plans::get_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}",
+            "/api/v2/continuity-plans/{plan_id}",
             put(continuity_plans::update_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}",
+            "/api/v2/continuity-plans/{plan_id}",
             delete(continuity_plans::delete_continuity_plan),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/membership",
+            "/api/v2/continuity-plans/{plan_id}/membership",
             get(continuity_plans::get_continuity_plan_membership),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
             post(continuity_plans::link_plan_dependency_edge),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
             delete(continuity_plans::unlink_plan_dependency_edge),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+            "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
             post(continuity_plans::confirm_plan_projection),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/",
             get(continuity_plans::list_release_sources),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+            "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
             get(continuity_plans::list_release_sources_for_reader),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/",
+            "/api/v2/continuity-plans/release-sources/",
             post(continuity_plans::create_release_source),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/{source_id}",
+            "/api/v2/continuity-plans/release-sources/{source_id}",
             patch(continuity_plans::update_release_source),
         )
         .route(
-            "/api/v1/continuity-plans/release-sources/{source_id}",
+            "/api/v2/continuity-plans/release-sources/{source_id}",
             delete(continuity_plans::delete_release_source),
         )
         .route(
-            "/api/v1/continuity-plans/from-reading-order",
+            "/api/v2/continuity-plans/from-reading-order",
             post(continuity_plans::adopt_reading_order),
         )
         .route(
@@ -1238,59 +1290,57 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/bug-reports/", post(bug_reports::create))
         .route("/api/v1/bug-reports/", post(bug_reports::create))
-        .route(
-            "/api/v1/releases/",
-            get(releases::list).put(releases::publish),
-        )
+        .route("/api/v1/releases/", put(releases::publish))
+        .route("/api/v2/releases", get(releases::list))
         .route("/api/v1/releases/source", get(releases::reconcile))
         .route("/api/v1/releases/{release_id}", get(releases::get))
         .route(
             "/api/v1/releases/{release_id}/retract",
             post(releases::retract),
         )
-        .route("/api/v1/tags/", get(tags::list_tags))
-        .route("/api/v1/tags/", post(tags::create_tag))
+        .route("/api/v2/tags", get(tags::list_tags))
+        .route("/api/v2/tags", post(tags::create_tag))
         .route(
-            "/api/v1/tags/effective/issue/{issue_id}/",
+            "/api/v2/tags/effective/issues/{issue_id}",
             get(tags::effective_for_issue),
         )
         .route(
-            "/api/v1/tags/effective/plan/{plan_id}/",
+            "/api/v2/tags/effective/plans/{plan_id}",
             get(tags::effective_for_plan),
         )
         .route(
-            "/api/v1/tags/effective/thread/{thread_id}/",
+            "/api/v2/tags/effective/threads/{thread_id}",
             get(tags::effective_for_thread),
         )
         .route(
-            "/api/v1/tags/effective/thread/{thread_id}/issues/",
+            "/api/v2/tags/effective/threads/{thread_id}/issues",
             get(tags::thread_issues_effective),
         )
-        .route("/api/v1/tags/{tag_id}/", get(tags::get_tag))
-        .route("/api/v1/tags/{tag_id}/", put(tags::update_tag))
-        .route("/api/v1/tags/{tag_id}/", delete(tags::delete_tag))
-        .route("/api/v1/tags/{tag_id}/assign/", post(tags::assign_tag))
+        .route("/api/v2/tags/{tag_id}", get(tags::get_tag))
+        .route("/api/v2/tags/{tag_id}", patch(tags::update_tag))
+        .route("/api/v2/tags/{tag_id}", delete(tags::delete_tag))
+        .route("/api/v2/tags/{tag_id}/usage", get(tags::get_tag_usage))
+        .route("/api/v2/tags/{tag_id}/assignments", post(tags::assign_tag))
         .route(
-            "/api/v1/tags/{tag_id}/bulk-assign/",
+            "/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}",
+            delete(tags::unassign_tag),
+        )
+        .route(
+            "/api/v2/tags/{tag_id}/assignment-batches",
             post(tags::bulk_assign_tag),
         )
         .route(
-            "/api/v1/tags/{tag_id}/bulk-unassign/",
+            "/api/v2/tags/{tag_id}/unassignment-batches",
             post(tags::bulk_unassign_tag),
         )
+        .route("/api/v2/reading-mode", get(reading_mode::get_reading_mode))
+        .route("/api/v2/reading-mode", put(reading_mode::set_reading_mode))
         .route(
-            "/api/v1/tags/{tag_id}/unassign/",
-            delete(tags::unassign_tag),
-        )
-        .route("/api/v1/tags/{tag_id}/usage/", get(tags::get_tag_usage))
-        .route("/api/v1/reading-mode", get(reading_mode::get_reading_mode))
-        .route("/api/v1/reading-mode", post(reading_mode::set_reading_mode))
-        .route(
-            "/api/v1/reading-mode/dismiss-suggestion",
+            "/api/v2/reading-mode/suggestion-dismissals",
             post(reading_mode::dismiss_reading_mode_suggestion),
         )
         .route(
-            "/api/v1/reading-mode/suggest",
+            "/api/v2/reading-mode/suggestions",
             post(reading_mode::suggest_reading_mode),
         )
         .route(
@@ -1373,6 +1423,28 @@ mod tests {
         assert_eq!(
             request_timeout_for("/api/v2/maintenance/comicvine-metadata-repairs", default),
             Duration::from_secs(50)
+        );
+        for roster_read in [
+            "/api/v2/comicvine/series/42/issues",
+            "/api/v2/comicvine/resolve",
+        ] {
+            assert_eq!(
+                request_timeout_for(roster_read, default),
+                comicvine_v2::ROSTER_REQUEST_DEADLINE,
+                "{roster_read}"
+            );
+        }
+        assert_eq!(
+            request_timeout_for("/api/v2/comicvine/search/series", default),
+            default
+        );
+        assert_eq!(
+            request_timeout_for("/api/v2/comicvine/series:import", default),
+            Duration::from_secs(120)
+        );
+        assert_eq!(
+            request_timeout_for("/api/v2/comicvine/series/42/import-status", default),
+            default
         );
         assert_eq!(
             request_timeout_for("/api/v1/roll/bootstrap", default),
