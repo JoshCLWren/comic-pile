@@ -190,7 +190,17 @@ export function ThreadPool({
                 Reset Dice or visit your queue to choose what to read next.
               </p>
             </div>
+            {onResetDice ? (
+              <button
+                type="button"
+                onClick={onResetDice}
+                className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
+              >
+                Reset Dice
+              </button>
+            ) : null}
             <button
+              type="button"
               onClick={() => navigate('/queue')}
               className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
             >
