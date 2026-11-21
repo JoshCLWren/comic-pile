@@ -173,12 +173,11 @@ Run only targeted tests locally: select the test files or cases covering the cha
 including focused regression tests for bugs and focused Chromium tests for browser behavior.
 Leave full backend/frontend suites to CI. The Python API is frozen during the Rust cutover, so
 backend pytest no longer gates pushes or merge to main; the pre-push hook runs
-`scripts/lint.sh` (including the static hardcoded-ID guard), while frontend unit tests and the
-UI audit run in CI. Python coverage thresholds are retired during the Rust
-cutover; frontend and Rust gates remain authoritative. Do not run bare `pytest`,
-`make test`, `make pytest`, `pnpm test`, or `pnpm run test:coverage` locally unless Josh explicitly
-requests a full local run. A CI failure calls for targeted local reproduction and repair, not a
-full local suite rerun.
+`scripts/lint.sh`, while frontend unit tests and the UI audit run in CI. Python coverage
+thresholds are retired during the Rust cutover; frontend and Rust gates remain authoritative.
+Do not run bare `pytest`, `make test`, `make pytest`, `pnpm test`, or `pnpm run test:coverage`
+locally unless Josh explicitly requests a full local run. A CI failure calls for targeted local
+reproduction and repair, not a full local suite rerun.
 
 This rule overrides full-local-suite requirements elsewhere in repository guidance and skills.
 It does not waive whole-repo Ruff/ty, frontend lint/typecheck/build, test fixes, or CI gates.
@@ -193,9 +192,8 @@ For autonomous factory work, [docs/AUTONOMOUS_FACTORY_POLICY.md](docs/AUTONOMOUS
 Before pushing Python changes from a normal local checkout:
 1. Run `ruff check .` with no path arguments. Path-filtered ruff is not a valid CI substitute.
 2. Run `ty check --error-on-warning` with no path arguments. CI treats ty **warnings as failures**.
-3. Prefer `bash scripts/check-python-ci-lint.sh` so ruff, ty, and the hardcoded-ID guard run as one gate.
-4. Run the focused pytest files that cover the change.
-5. Fix every ruff, ty, hardcoded-ID, and pytest failure before pushing.
+3. Run the focused pytest files that cover the change.
+4. Fix every ruff, ty, and pytest failure before pushing.
 
 Before pushing frontend changes from a normal local checkout:
 1. Run `cd frontend && pnpm run lint && pnpm run typecheck`.

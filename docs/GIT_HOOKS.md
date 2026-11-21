@@ -42,8 +42,7 @@ still chain to `.git/hooks/pre-commit`.
 Runs automatically before each push to remote.
 
 **What it does:**
-- Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
-- Includes the static hardcoded-ID guard (`pytest tests/test_hardcoded_ids.py -q --no-cov`)
+- Runs `bash scripts/lint.sh` (Python syntax, full-repo ruff + ty, and frontend lint)
 
 Backend product pytest is retired from required CI during the Rust cutover;
 Vitest and the rendered UI audit remain CI gates.
