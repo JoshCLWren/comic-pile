@@ -1,0 +1,51 @@
+name: Factory CLI Contract
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/factory-run'
+      - '.github/workflows/factory-cli-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/factory-run'
+      - '.github/workflows/factory-cli-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cli-contract:
+    name: Factory CLI behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check CLI syntax and both JSON key orders
+        run: |
+          set -Eeuo pipefail
+          bash -n scripts/factory-run
+          bash scripts/factory-run --self-test
+          bash scripts/factory-run --providers | grep -q 'opencode-go'
+      - name: Verify provider/model/slot/target arguments without dispatching
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat > "$RUNNER_TEMP/bin/gh" <<'GH'
+          #!/usr/bin/env bash
+          printf '%s\n' "$@" > "$FACTORY_CLI_ARGS"
+          printf 'https://github.com/JoshCLWren/comic-pile/actions/runs/123456\n'
+          GH
+          chmod +x "$RUNNER_TEMP/bin/gh"
+          export FACTORY_CLI_ARGS="$RUNNER_TEMP/gh-args"
+          export PATH="$RUNNER_TEMP/bin:$PATH"
+          bash scripts/factory-run opencode-go opencode-go/hy4-flash-free \
+            --force-slot --slot 2 --target issue:5123 --no-wait
+          grep -qx 'provider=opencode-go' "$FACTORY_CLI_ARGS"
+          grep -qx 'model=opencode-go/hy4-flash-free' "$FACTORY_CLI_ARGS"
+          grep -qx 'force_slot=true' "$FACTORY_CLI_ARGS"
+          grep -qx 'slot_index=2' "$FACTORY_CLI_ARGS"
+          grep -qx 'target=issue:5123' "$FACTORY_CLI_ARGS"

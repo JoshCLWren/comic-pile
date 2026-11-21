@@ -169,10 +169,61 @@ except (ValueError,KeyError,TypeError): pass
   esac
 }
 
+# Parse JSON anywhere in a log line. The controller makes no promise about
+# object key order, and job-prefix text may precede the JSON payload.
+parse_dispatch() {
+  python3 -c '
+import json,sys
+decoder=json.JSONDecoder()
+matches=[]
+for line in sys.stdin:
+    for start,char in enumerate(line):
+        if char != "{":
+            continue
+        try:
+            obj,_ = decoder.raw_decode(line[start:])
+        except (json.JSONDecodeError,TypeError):
+            continue
+        if isinstance(obj,dict) and obj.get("status") in ("dispatched","deferred"):
+            matches.append(obj)
+            break
+if not matches:
+    print("The workflow finished, but no confirmed worker assignment was found.")
+    sys.exit(2)
+obj=matches[-1]
+if obj["status"]=="dispatched":
+    print("DISPATCHED: "+str(obj.get("kind"))+" #"+str(obj.get("number"))+
+          " | worker "+str(obj.get("worker"))+
+          " | model "+str(obj.get("model"))+
+          " | action "+str(obj.get("action")))
+else:
+    print("DEFERRED: "+str(obj.get("reason","No executable assignment")))
+    for detail in obj.get("details",[]):
+        print("  - "+str(detail))
+    sys.exit(3)
+'
+}
+
+self_test_result_parser() {
+  local message result
+  message="$(printf '%s\n' 'factory log: {"kind":"issue","number":5123,"status":"dispatched","worker":"123","model":"hy4","action":"implement"}' | parse_dispatch)"
+  [[ "$message" == 'DISPATCHED: issue #5123 | worker 123 | model hy4 | action implement' ]] || return 1
+  message="$(printf '%s\n' '{"status":"dispatched","kind":"pr","number":42,"worker":"123","model":"hy4","action":"review"}' | parse_dispatch)"
+  [[ "$message" == 'DISPATCHED: pr #42 | worker 123 | model hy4 | action review' ]] || return 1
+  result=0
+  printf '%s\n' 'dispatch: {"reason":"Slot held by active Neon lease","status":"deferred","details":["lease active"]}' | parse_dispatch >/dev/null || result=$?
+  [[ "$result" == 3 ]] || return 1
+  result=0
+  printf '%s\n' 'irrelevant workflow log' | parse_dispatch >/dev/null || result=$?
+  [[ "$result" == 2 ]] || return 1
+  echo 'factory CLI result parser: all cases passed'
+}
+
 parse_args() {
   while (( $# )); do
     case "$1" in
       -h|--help) usage; exit 0 ;;
+      --self-test) self_test_result_parser; exit 0 ;;
       --providers) print_providers; exit 0 ;;
       --models)
         (( $# >= 2 )) || { echo '--models needs a provider' >&2; exit 2; }
@@ -317,29 +368,4 @@ if [[ -z "$logs" ]]; then
   echo "Workflow ended, but the assignment log is unavailable: $run_url" >&2
   exit 2
 fi
-printf '%s\n' "$logs" | python3 -c '
-import json,sys
-matches=[]
-for line in sys.stdin:
-    start=line.find("{\"status\":")
-    if start < 0:
-        continue
-    try: obj=json.loads(line[start:].strip())
-    except (ValueError,TypeError): continue
-    if isinstance(obj,dict) and obj.get("status") in ("dispatched","deferred"):
-        matches.append(obj)
-if not matches:
-    print("The workflow finished, but no confirmed worker assignment was found.")
-    sys.exit(2)
-obj=matches[-1]
-if obj["status"]=="dispatched":
-    print("DISPATCHED: "+str(obj.get("kind"))+" #"+str(obj.get("number"))+
-          " | worker "+str(obj.get("worker"))+
-          " | model "+str(obj.get("model"))+
-          " | action "+str(obj.get("action")))
-else:
-    print("DEFERRED: "+str(obj.get("reason","No executable assignment")))
-    for detail in obj.get("details",[]):
-        print("  - "+str(detail))
-    sys.exit(3)
-'
+printf '%s\n' "$logs" | parse_dispatch
