@@ -31,7 +31,7 @@ reading-session and undo services explicitly request `/v1/...`; thread listing
 uses `/v2/threads`. They need no product transport changes.
 
 The remaining executable bare-thread callers were the create/migrate methods in
-`scripts/comic_pile_api.py` and browser setup in `helpers.ts`, `fixtures.ts`,
+`scripts/comic_pile_api.py` (since deleted) and browser setup <!-- docs-path-check: ignore --> in `helpers.ts`, `fixtures.ts`,
 `cbl-replace-review.spec.ts`, and `issue-1885-roll-target-sizes.spec.ts`. Those
 callers now use the existing `/api/v1/threads/...` equivalents. Two session
 semantic tests now exercise `/api/v1/sessions/current/`. Observability fixtures

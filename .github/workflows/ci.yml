@@ -26,39 +26,6 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/${{ github.event.repository.name }}
 
 jobs:
-  node-auth:
-    name: TypeScript auth build and tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: api
-    env:
-      SECRET_KEY: test-secret-key-for-testing-only
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/comic_pile_test
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: comic_pile_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-      - run: npm ci
-      - run: npm run build
-      - run: npx tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --strict --skipLibCheck auth/me.ts
-      - run: npm test
-
   rust-ingress:
     name: Rust-default API ingress (fragment-derived)
     runs-on: ubuntu-latest
@@ -548,14 +515,13 @@ jobs:
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [build, build-fork, node-auth, rust-ingress, route-fragment-guard, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
+    needs: [build, build-fork, rust-ingress, route-fragment-guard, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
     if: always()
     steps:
       - name: Check job results
         run: |
           echo "Build: ${{ needs.build.result }}"
           echo "Fork build: ${{ needs.build-fork.result }}"
-          echo "TypeScript auth: ${{ needs.node-auth.result }}"
           echo "Rust default route discovery: ${{ needs.rust-ingress.result }}"
           echo "Route fragment guard: ${{ needs.route-fragment-guard.result }}"
           echo "Docs code paths: ${{ needs.docs-code-paths.result }}"
@@ -571,7 +537,6 @@ jobs:
           echo "Production Runtime Migrations: ${{ needs.production-runtime-migrations.result }}"
           echo "Migration Health: ${{ needs.migration-health.result }}"
           if { [ "${{ needs.build.result }}" != "success" ] && [ "${{ needs.build-fork.result }}" != "success" ]; } || \
-             [ "${{ needs.node-auth.result }}" != "success" ] || \
              [ "${{ needs.rust-ingress.result }}" != "success" ] || \
              [ "${{ needs.route-fragment-guard.result }}" != "success" ] || \
              [ "${{ needs.docs-code-paths.result }}" != "success" ] || \

@@ -658,27 +658,6 @@ Never wait for the user to request these routine label corrections.
 
 ## Test identity validation
 
-**Never hardcode primary-key IDs.** Agents and humans must not introduce new
-literal identities that the shrink-only guard in `tests/test_hardcoded_ids.py`
-would catch.
-
-Forbidden in new or edited `tests/` code (Call keyword integer constants):
-- `User(id=<int>)`
-- `user_id=<int>` on any constructor or helper call, including
-  `ReadingSnapshot(user_id=1)` and `replace(snapshot, user_id=2)`
-
-Forbidden in new or edited `app/` code: additional `user_id=1` literals.
-
-Required instead:
-- Fixture-owned / DB-generated IDs: `default_user.id`, values from
-  `get_or_create_user_async`, flushed ORM `.id` attributes
-- Pure evaluator snapshots should take `user_id=default_user.id` (or another
-  fixture id). A module constant only works when the Call uses the **name**
-  (`user_id=READER_ID`); bare `user_id=1` still fails the AST guard.
-
-Do **not** expand `tests/hardcoded_ids_baseline.json`. When removing a coupling,
-shrink the matching baseline entry.
-
 Synthetic migration fixtures must isolate production Step 14+ classification
 lookups: those maps are keyed by real dependency IDs, so an auto-assigned test
 id such as `101` can be misclassified as `needs_review`. Isolate with an

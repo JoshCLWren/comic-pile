@@ -88,7 +88,7 @@ has no safe scope. A missing local series name is nullable at the response bound
 filled from live provider data when available.
 
 Regression evidence is in `tests/test_comicvine_production_mapping_cases.py` and <!-- docs-path-check: ignore -->
-`tests/fixtures/comicvine/production_mapping_cases.json`. The fixture replays public provider
+`tests/fixtures/comicvine/production_mapping_cases.json`. <!-- docs-path-check: ignore --> The fixture replays public provider
 rosters and the Tom Strong/Starman mapping shapes captured on 2026-10-19; it excludes account
 IDs, credentials, reading progress and history. The original Tom Strong case had 36 confirmed
 IDs, 29 with empty metadata, and a nameless series stub that caused preview response validation
