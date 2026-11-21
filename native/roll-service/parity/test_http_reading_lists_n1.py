@@ -86,6 +86,37 @@ def _run_env(token: str, method: str, uri: str, *, body: str | None = None) -> d
     return env
 
 
+async def _measure_route(
+    engine: AsyncEngine, env: dict[str, str]
+) -> tuple[dict[str, object], StatementBreakdown]:
+    """Run one real HTTP request and return its isolated SQL statement split."""
+    before = await db_statement_breakdown(engine)
+    response, _, _, _ = await run_rust_example(BINARY, env)
+    after = await db_statement_breakdown(engine)
+    assert before is not None and after is not None, (
+        "pg_stat_statements.track=all and the administrative URL are required"
+    )
+    measured = StatementBreakdown(
+        application=after.application - before.application,
+        transaction_control=after.transaction_control - before.transaction_control,
+        runtime_overhead=after.runtime_overhead - before.runtime_overhead,
+        nested=after.nested - before.nested,
+    )
+    print(f"reading-list statements={measured}", flush=True)
+    return response, measured
+
+
+def _assert_fixed_route_budget(
+    method: str,
+    path: str,
+    small: StatementBreakdown,
+    large: StatementBreakdown,
+) -> None:
+    """Enforce absolute, component-level, nested, and growth budgets."""
+    assert_statement_budget(method, path, small, large, require_maximum=True)
+    assert_no_statement_growth(method, path, small, large)
+
+
 @pytest.mark.asyncio
 async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> None:
     """GET /api/v2/reading-lists must stay set-based across list counts."""
