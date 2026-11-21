@@ -1,9 +1,9 @@
-utc: 2026-11-21T11:54:50Z
-uptime: 1360.54s load: 0.00 0.02 0.04
+utc: 2026-11-21T11:55:07Z
+uptime: 1376.93s load: 0.00 0.02 0.03
 processes: 193
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700        1149       12024          51        2885       14551
+Mem:           15700        1148       12025          51        2885       14552
 Swap:              0           0           0
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
@@ -27,7 +27,7 @@ Filesystem            Size  Used Avail Use% Mounted on
 16148 systemd
 --- top cpu (name only)
  1.0 provjobd2012142
- 0.6 Runner.Worker
+ 0.5 Runner.Worker
  0.5 opencode.exe
  0.1 Runner.Listener
  0.1 systemd
