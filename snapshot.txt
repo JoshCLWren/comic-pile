@@ -1,39 +1,39 @@
-utc: 2026-11-21T14:21:58Z
-uptime: 764.23s load: 0.15 0.24 0.16
-processes: 169
+utc: 2026-11-21T14:22:14Z
+uptime: 780.57s load: 0.11 0.23 0.16
+processes: 172
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15982        1311       12046          51        2990       14670
+Mem:           15982        1334       12022          51        2990       14647
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   60G   86G  41% /
 /dev/root       145G   60G   86G  41% /
 --- top rss (KiB, name only)
-337312 opencode.exe
+344040 opencode.exe
 227068 Runner.Worker
-140376 provjobd2804144
-117148 Runner.Listener
-90120 opencode
+140384 provjobd2804144
+117140 Runner.Listener
+90092 opencode
 81944 dockerd
 56548 php-fpm8.5
 46568 containerd
-45076 ExtHandler
+45116 ExtHandler
 36996 Daemon
-33628 opencode-pty
+33944 opencode-pty
 30308 networkd-dispat
 21364 php-fpm8.5
 21364 php-fpm8.5
-18000 systemd-journal
+19004 git-remote-http
 --- top cpu (name only)
- 4.9 opencode.exe
- 2.1 provjobd2804144
+ 4.6 opencode.exe
+ 2.0 provjobd2804144
+ 1.7 git-remote-http
  1.2 Runner.Worker
  0.3 opencode
  0.3 hv_kvp_daemon
- 0.3 systemd
+ 0.2 systemd
  0.2 Runner.Listener
- 0.1 ExtHandler
 --- kernel oom/kill
 --- shutdown/session signals
 2026-11-21T14:09:25+00:00 runnervm0hi8g hosted-compute-agent[2170]: {"level":"INFO","ts":1795270165.8868303,"logger":"hosted-compute-agent","msg":"Reading metadata to detect shutdown tag..."}
