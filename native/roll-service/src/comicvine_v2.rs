@@ -3180,6 +3180,36 @@ mod tests {
     }
 
     #[test]
+    fn roster_primary_image_falls_back_to_thumb_url() {
+        // #5624: the roster import stores primary_image without a top-level
+        // image object, so a thumb-only provider image must still be kept for
+        // the thread/queue cover projection to find.
+        let normalized = normalize_roster_issue(&json!({
+            "id": 400029319, "name": "Detective Comics #5", "issue_number": "5",
+            "cover_date": "1937-07-01", "store_date": null,
+            "image": {"original_url": "", "super_url": "", "medium_url": "",
+                      "small_url": "", "thumb_url": "https://cv.example/detective5.jpg"},
+            "volume": {"id": 9, "name": "Detective Comics"},
+            "person_credits": [], "character_credits": [], "team_credits": [],
+            "story_arc_credits": []
+        }));
+        assert_eq!(
+            normalized["primary_image"],
+            json!("https://cv.example/detective5.jpg")
+        );
+        // A larger size still wins over the thumb when both exist.
+        let with_super = normalize_roster_issue(&json!({
+            "id": 400029319,
+            "image": {"super_url": "https://cv.example/super.jpg",
+                      "thumb_url": "https://cv.example/detective5.jpg"}
+        }));
+        assert_eq!(
+            with_super["primary_image"],
+            json!("https://cv.example/super.jpg")
+        );
+    }
+
+    #[test]
     fn search_queries_are_form_encoded() {
         assert_eq!(encode_query(" saga the&x=1 "), "+saga+the%26x%3D1+");
         assert_eq!(encode_query("ü"), "%C3%BC");
