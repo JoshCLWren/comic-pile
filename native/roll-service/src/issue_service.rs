@@ -1334,15 +1334,17 @@ mod tests {
                      (40, 1, 'Cbl control run', 'Comic', 'active', 1, NULL,
                       'in_progress', NULL, 3, false, NULL, false),
                      (50, 1, 'Finished run', 'Comic', 'completed', 0, NULL,
-                      'completed', NULL, 0, false, NULL, false);
+                      'completed', NULL, 0, false, NULL, false),
+                     (60, 1, 'Thumb cover run', 'Comic', 'excluded', 2, NULL,
+                      'in_progress', NULL, 0, false, NULL, false);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, position, read_at, created_at)
                  VALUES
                      (101, 10, '1', 'unread', 1, NULL, now()),
                      (102, 10, '2', 'unread', 2, NULL, now()),
-                     (103, 10, '3', 'unread', 11, NULL, now()),
-                     (104, 10, '4', 'unread', 12, NULL, now()),
                      (110, 10, '10', 'unread', 10, NULL, now()),
+                     (103, 60, '3', 'unread', 1, NULL, now()),
+                     (104, 60, '4', 'unread', 2, NULL, now()),
                      (201, 20, '1', 'unread', 1, NULL, now()),
                      (301, 30, '1', 'unread', 1, NULL, now()),
                      (401, 40, '1', 'unread', 1, NULL, now()),
