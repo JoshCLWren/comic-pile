@@ -635,6 +635,7 @@ async fn adoption_commit_creates_plan_with_valid_fingerprint() {
         "{status} {body}"
     );
     assert!(body["id"].as_i64().unwrap() > 0, "{body}");
+    assert_eq!(body["name"], "Mister Miracle 1989", "{body}");
     assert!(body["lanes"].is_array(), "{body}");
     assert!(body["nodes"].is_array(), "{body}");
     assert!(body["reused_positions"].is_array(), "{body}");
