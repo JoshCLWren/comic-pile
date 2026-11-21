@@ -235,8 +235,7 @@ async fn seed_confirmed_metadata(ctx: &Ctx, issue_id: i32, external_id: &str, me
         .await
         .unwrap()
         .query_one(
-            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
-             created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \n             created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
             &[&external_id, &metadata],
         )
         .await
@@ -248,8 +247,7 @@ async fn seed_confirmed_metadata(ctx: &Ctx, issue_id: i32, external_id: &str, me
         .await
         .unwrap()
         .execute(
-            "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
-             created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
+            "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \n             created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
             &[&issue_id, &identity],
         )
         .await
