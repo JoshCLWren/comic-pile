@@ -139,10 +139,7 @@ async fn call_json(ctx: &Ctx, method: &str, path: &str, json_body: Value) -> (St
         .headers_mut()
         .insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
     *request.body_mut() = Body::from(json_body.to_string());
-    let response = router(ctx.state.clone())
-        .oneshot(request)
-        .await
-        .unwrap();
+    let response = router(ctx.state.clone()).oneshot(request).await.unwrap();
     let status = response.status();
     let bytes = to_bytes(response.into_body(), 256 * 1024).await.unwrap();
     let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
