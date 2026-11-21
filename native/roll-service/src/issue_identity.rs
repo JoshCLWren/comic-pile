@@ -2660,6 +2660,14 @@ fn validate_commit_request(
 fn map_commit_error(e: CommitErr) -> (StatusCode, Json<JsonValue>) {
     match e {
         CommitErr::Stale(msg) => adoption_conflict("stale_preview", &msg),
+        CommitErr::ExplicitTargetRequired(plan_id) => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"detail": {
+                "code": "explicit_target_required",
+                "message": format!("This source is already linked to Reading Plan {plan_id}. Use the targeted adoption endpoint to update it explicitly."),
+                "plan_id": plan_id,
+            }})),
+        ),
         CommitErr::Adoption(msg) => adoption_422(&msg),
         CommitErr::NotFound(msg) => (
             StatusCode::NOT_FOUND,
