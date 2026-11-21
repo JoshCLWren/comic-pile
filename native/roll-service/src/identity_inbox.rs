@@ -294,7 +294,7 @@ async fn fetch_item(
                     ex.provider, ex.external_id, ex.external_url, ex.metadata_json::text \
              FROM issue_external_identity_mappings cm \
              JOIN external_identities ex ON ex.id = cm.external_identity_id \
-             WHERE cm.issue_id = $1 AND cm.status IN ('candidate','confirmed','unresolved') \
+             WHERE cm.issue_id = $1 AND cm.status IN ('deferred','candidate','confirmed','unresolved') \
              ORDER BY cm.confidence DESC NULLS LAST",
             &[&issue_id],
         )
@@ -408,7 +408,7 @@ pub async fn list_inbox(
              FROM issue_external_identity_mappings cm \
              JOIN external_identities ex ON ex.id = cm.external_identity_id \
              WHERE cm.issue_id = ANY($1) \
-               AND cm.status IN ('candidate','confirmed','unresolved') \
+               AND cm.status IN ('deferred','candidate','confirmed','unresolved') \
              ORDER BY cm.issue_id, cm.confidence DESC NULLS LAST",
             &[&issue_ids],
         )
@@ -1706,5 +1706,114 @@ mod tests {
         .unwrap()
         .0;
         assert_eq!(list.total, 0);
+    }
+
+    /// Regression for #5623: deferring an inbox item must keep showing its candidate
+    /// evidence. When an item is deferred, the candidates query should still return
+    /// the deferred mapping as a candidate so the UI shows "1 candidate found" instead
+    /// of "No candidates found" with no reason.
+    #[tokio::test]
+    async fn deferred_item_shows_candidate_evidence() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'owner',false,NOW()); \
+             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                 (1,1,'Mutant X','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
+                 (1,1,'#4','unread',0,NOW()); \
+             INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
+                 (1,'comicvine','issue','901096','{}'::json,NOW(),NOW()); \
+             INSERT INTO issue_external_identity_mappings \
+                 (id, issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) VALUES \
+                 (1,1,1,'unresolved','heuristic',0.5,NOW(),NOW(),'{}'::json);",
+        )
+        .await
+        .unwrap();
+        drop(conn);
+
+        // First verify the item shows 1 candidate before deferral
+        let before_defer = list_inbox(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(ListQuery {
+                offset: None,
+                limit: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(before_defer.items.len(), 1);
+        let item_before = &before_defer.items[0];
+        assert_eq!(item_before.status, "unresolved");
+        assert_eq!(
+            item_before.candidates.len(),
+            1,
+            "item should have 1 candidate before deferral"
+        );
+        assert!(
+            !item_before.why_stopped.contains("No candidates found"),
+            "before deferral, collapsed header should not claim no candidates; got {:?}",
+            item_before.why_stopped,
+        );
+
+        // Defer the item
+        let defer_response = defer(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(1),
+        )
+        .await
+        .unwrap();
+        assert!(defer_response.success);
+        assert_eq!(defer_response.message, "Item deferred for later review");
+
+        // Verify the deferred item still shows candidate evidence
+        let after_defer = list_inbox(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(ListQuery {
+                offset: None,
+                limit: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(after_defer.items.len(), 1);
+        let item_after = &after_defer.items[0];
+        assert_eq!(item_after.status, "deferred");
+        // The deferred mapping should still be visible as a candidate
+        assert_eq!(
+            item_after.candidates.len(),
+            1,
+            "deferred item should still show its candidate evidence; got {} candidates",
+            item_after.candidates.len()
+        );
+        assert!(
+            !item_after.why_stopped.contains("No candidates found"),
+            "collapsed header must not claim no candidates when a candidate exists (even if deferred); got {:?}",
+            item_after.why_stopped,
+        );
+        assert_eq!(item_after.why_stopped, "1 candidate found");
+
+        // Also verify get_inbox_item works correctly for deferred items
+        let detail_response = get_inbox_item(State(state), AuthenticatedUser::for_test(1), Path(1))
+            .await
+            .unwrap()
+            .0;
+        assert_eq!(detail_response.items.len(), 1);
+        let detail_item = &detail_response.items[0];
+        assert_eq!(detail_item.status, "deferred");
+        assert_eq!(
+            detail_item.candidates.len(),
+            1,
+            "deferred item detail should show candidate evidence; got {} candidates",
+            detail_item.candidates.len()
+        );
     }
 }
