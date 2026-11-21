@@ -259,6 +259,60 @@ async fn owned_issue_ids(
     Ok(rows.iter().map(|row| row.get(0)).collect())
 }
 
+/// One prepared entry row for the set-based reading-list insert.
+#[derive(Debug)]
+struct EntryInsert {
+    issue_id: i32,
+    position: i32,
+    is_checkpoint: bool,
+    targets_json: String,
+    gate: String,
+    skipped: bool,
+}
+
+/// Insert all prepared entries in one set-based `unnest` statement.
+///
+/// A list may contain hundreds of entries. One `INSERT` per entry makes the
+/// statement count grow with the request, so both write handlers validate all
+/// rows first and persist them with a single statement. That keeps their
+/// measured SQL budget independent of the entry count (`grows_with_data:false`).
+async fn insert_entries(
+    tx: &Transaction<'_>,
+    list_id: i32,
+    entries: &[EntryInsert],
+) -> Result<(), ApiError> {
+    if entries.is_empty() {
+        return Ok(());
+    }
+    let issue_ids: Vec<i32> = entries.iter().map(|entry| entry.issue_id).collect();
+    let positions: Vec<i32> = entries.iter().map(|entry| entry.position).collect();
+    let checkpoints: Vec<bool> = entries.iter().map(|entry| entry.is_checkpoint).collect();
+    let targets: Vec<String> = entries.iter().map(|entry| entry.targets_json.clone()).collect();
+    let gates: Vec<String> = entries.iter().map(|entry| entry.gate.clone()).collect();
+    let skipped: Vec<bool> = entries.iter().map(|entry| entry.skipped).collect();
+    tx.execute(
+        "INSERT INTO custom_cbl_entries
+           (list_id, issue_id, position, created_at, is_checkpoint,
+            checkpoint_target_issue_ids, gate, skipped)
+         SELECT $1::int, e.issue_id, e.position, NOW(), e.is_checkpoint,
+                e.targets::json, e.gate, e.skipped
+         FROM unnest($2::int[], $3::int[], $4::bool[], $5::text[], $6::text[], $7::bool[])
+              AS e(issue_id, position, is_checkpoint, targets, gate, skipped)",
+        &[
+            &list_id,
+            &issue_ids,
+            &positions,
+            &checkpoints,
+            &targets,
+            &gates,
+            &skipped,
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
 async fn load_entries(
     tx: &Transaction<'_>,
     list_id: i32,
@@ -445,6 +499,7 @@ pub async fn create_reading_list(
         .unwrap_or_default()
         .into_iter()
         .collect();
+    let mut inserts = Vec::with_capacity(request.issue_ids.len());
     for (position, issue_id) in request.issue_ids.iter().enumerate() {
         let intent = request
             .entry_intents
@@ -462,30 +517,22 @@ pub async fn create_reading_list(
             .and_then(|targets| targets.get(issue_id))
             .cloned()
             .unwrap_or_default();
-        tx.execute(
-            "INSERT INTO custom_cbl_entries
-               (list_id, issue_id, position, created_at, is_checkpoint,
-                checkpoint_target_issue_ids, gate, skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[
-                &list_id,
-                issue_id,
-                &(position as i32),
-                &checkpoints.contains(issue_id),
-                &serde_json::to_string(&targets).map_err(|e| {
-                    tracing::debug!(
-                        error_kind = crate::error_kind(&e),
-                        "preserved underlying error before mapping"
-                    );
-                    ApiError::Internal("Invalid checkpoint".to_string())
-                })?,
-                &gate,
-                &skipped,
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
+        inserts.push(EntryInsert {
+            issue_id: *issue_id,
+            position: position as i32,
+            is_checkpoint: checkpoints.contains(issue_id),
+            targets_json: serde_json::to_string(&targets).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ApiError::Internal("Invalid checkpoint".to_string())
+            })?,
+            gate: gate.to_string(),
+            skipped,
+        });
     }
+    insert_entries(&tx, list_id, &inserts).await?;
 
     graph_preflight(&tx, user).await?;
     let entries = load_entries(&tx, list_id).await?;
@@ -720,6 +767,7 @@ pub async fn update_reading_list(
     .await
     .map_err(db::query_error)?;
 
+    let mut inserts = Vec::with_capacity(request.issue_ids.len());
     for (position, issue_id) in request.issue_ids.iter().enumerate() {
         let old = old_by_issue.get(issue_id);
         let intent = request
@@ -779,14 +827,16 @@ pub async fn update_reading_list(
             );
             ApiError::Internal("Invalid checkpoint".into())
         })?;
-        tx.execute(
-            "INSERT INTO custom_cbl_entries
-             (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[&list_id, issue_id, &(position as i32), &(!targets.is_empty()),
-              &targets_json, &gate, &skipped],
-        ).await.map_err(db::query_error)?;
+        inserts.push(EntryInsert {
+            issue_id: *issue_id,
+            position: position as i32,
+            is_checkpoint: !targets.is_empty(),
+            targets_json,
+            gate: gate.to_string(),
+            skipped,
+        });
     }
+    insert_entries(&tx, list_id, &inserts).await?;
 
     graph_preflight(&tx, user).await?;
     let entries = load_entries(&tx, list_id).await?;
