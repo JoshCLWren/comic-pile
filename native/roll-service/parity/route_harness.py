@@ -103,6 +103,7 @@ def assert_statement_budget(
         None; an invalid or over-budget measurement raises AssertionError.
     """
     budget = _budget_entry(method, path)["sql_budget"]
+    assert isinstance(budget, dict)
     application_maximum = budget["application_statements"]
     control_maximum = budget["transaction_control_statements"]
     overhead_maximum = budget.get("runtime_overhead_statements", 0)
