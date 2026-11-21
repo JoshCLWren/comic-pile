@@ -282,3 +282,53 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_graph_budget_rejects_extra_and_per_row_queries() -> None:
+    """Prove the checks used above reject an extra query and an N+1 pattern."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        method, path = "GET", "/api/v2/reading-graph"
+
+        # Extra query: inject statements under the isolated route role and show
+        # the same assert_declared_budget used by the route test rejects the
+        # over-budget measurement.
+        _, _, before = await db_counters(engine)
+        assert before is not None, "pg_stat_statements is required"
+        connection = await asyncpg.connect(url)
+        try:
+            for _ in range(20):
+                await connection.execute("SELECT 1")
+        finally:
+            await connection.close()
+        _, _, after = await db_counters(engine)
+        assert after is not None
+        extra_delta = after - before
+        assert extra_delta >= 20, f"injected queries not measured: {extra_delta}"
+        with pytest.raises(AssertionError, match="declared maximum"):
+            assert_declared_budget(method, path, extra_delta)
+
+        # N+1 (per-row) queries: a small and a large row set yield growing
+        # counts, so the small-vs-large growth invariant used by the route test
+        # must reject the large measurement.
+        async def _per_row_queries(count: int) -> int:
+            _, _, start = await db_counters(engine)
+            connection = await asyncpg.connect(url)
+            try:
+                for _ in range(count):
+                    await connection.fetchval("SELECT 1")
+            finally:
+                await connection.close()
+            _, _, end = await db_counters(engine)
+            assert start is not None and end is not None
+            return end - start
+
+        small_n1 = await _per_row_queries(5)
+        large_n1 = await _per_row_queries(200)
+        assert large_n1 > small_n1 + 2, f"expected N+1 growth, got {small_n1} -> {large_n1}"
+        with pytest.raises(AssertionError, match="statement count grew"):
+            assert large_n1 <= small_n1 + 2, f"statement count grew: {small_n1} -> {large_n1}"
+    finally:
+        await engine.dispose()

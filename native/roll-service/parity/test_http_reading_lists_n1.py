@@ -133,6 +133,11 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
         assert body[0]["issue_count"] == 1
         after, nested_after = await _statement_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        nested_small_delta = (
+            (nested_after - nested_before)
+            if nested_before is not None and nested_after is not None
+            else None
+        )
 
         raw = await asyncpg.connect(url)
         try:
@@ -150,10 +155,23 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, list) and len(large_body) == 200
-        _, _, after2 = await db_counters(engine)
+        after2, nested_after2 = await _statement_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        nested_large_delta = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None
+        # Nested trigger/function statements are measured separately from the
+        # top-level application/control statements (track=all required).
+        assert nested_small_delta is not None and nested_large_delta is not None, (
+            "pg_stat_statements.track=all is required to measure nested statements"
+        )
+        assert nested_small_delta == 0 and nested_large_delta == 0, (
+            f"nested statements appeared: {nested_small_delta} -> {nested_large_delta}"
+        )
         assert_declared_budget("GET", "/api/v2/reading-lists", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
@@ -195,6 +213,11 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
         assert isinstance(body.get("entries"), list) and len(body["entries"]) == 5
         after, nested_after = await _statement_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        nested_small_delta = (
+            (nested_after - nested_before)
+            if nested_before is not None and nested_after is not None
+            else None
+        )
 
         raw = await asyncpg.connect(url)
         try:
@@ -215,10 +238,23 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         assert len(large_body.get("entries", [])) == 200
-        _, _, after2 = await db_counters(engine)
+        after2, nested_after2 = await _statement_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        nested_large_delta = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None
+        # Nested trigger/function statements are measured separately from the
+        # top-level application/control statements (track=all required).
+        assert nested_small_delta is not None and nested_large_delta is not None, (
+            "pg_stat_statements.track=all is required to measure nested statements"
+        )
+        assert nested_small_delta == 0 and nested_large_delta == 0, (
+            f"nested statements appeared: {nested_small_delta} -> {nested_large_delta}"
+        )
         assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
@@ -262,6 +298,11 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
         assert all(e.get("availability") in {"available", "later", "blocked", "read", "excluded", "inactive"} for e in entries)
         after, nested_after = await _statement_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        nested_small_delta = (
+            (nested_after - nested_before)
+            if nested_before is not None and nested_after is not None
+            else None
+        )
 
         raw = await asyncpg.connect(url)
         try:
@@ -282,10 +323,23 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
         large_body = large.get("body")
         assert isinstance(large_body, dict)
         assert len(large_body.get("entries", [])) == 200
-        _, _, after2 = await db_counters(engine)
+        after2, nested_after2 = await _statement_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        nested_large_delta = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None
+        # Nested trigger/function statements are measured separately from the
+        # top-level application/control statements (track=all required).
+        assert nested_small_delta is not None and nested_large_delta is not None, (
+            "pg_stat_statements.track=all is required to measure nested statements"
+        )
+        assert nested_small_delta == 0 and nested_large_delta == 0, (
+            f"nested statements appeared: {nested_small_delta} -> {nested_large_delta}"
+        )
         assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}/reader", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
@@ -322,6 +376,11 @@ async def test_delete_reading_list_statements_bounded() -> None:
         assert small.get("body") is None
         after, nested_after = await _statement_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        nested_small_delta = (
+            (nested_after - nested_before)
+            if nested_before is not None and nested_after is not None
+            else None
+        )
 
         large_id = await _seed_one()
         # grow unrelated data
@@ -338,10 +397,23 @@ async def test_delete_reading_list_statements_bounded() -> None:
         before2, nested_before2 = await _statement_counters(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 204, large
-        _, _, after2 = await db_counters(engine)
+        after2, nested_after2 = await _statement_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        nested_large_delta = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None
+        # Nested trigger/function statements are measured separately from the
+        # top-level application/control statements (track=all required).
+        assert nested_small_delta is not None and nested_large_delta is not None, (
+            "pg_stat_statements.track=all is required to measure nested statements"
+        )
+        assert nested_small_delta == 0 and nested_large_delta == 0, (
+            f"nested statements appeared: {nested_small_delta} -> {nested_large_delta}"
+        )
         assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
@@ -383,6 +455,11 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         assert len(small_body.get("entries", [])) == 5
         after, nested_after = await _statement_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        nested_small_delta = (
+            (nested_after - nested_before)
+            if nested_before is not None and nested_after is not None
+            else None
+        )
 
         raw = await asyncpg.connect(url)
         try:
@@ -401,10 +478,23 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         assert large.get("status") == 201, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
-        _, _, after2 = await db_counters(engine)
+        after2, nested_after2 = await _statement_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        nested_large_delta = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None
+        # Nested trigger/function statements are measured separately from the
+        # top-level application/control statements (track=all required).
+        assert nested_small_delta is not None and nested_large_delta is not None, (
+            "pg_stat_statements.track=all is required to measure nested statements"
+        )
+        assert nested_small_delta == 0 and nested_large_delta == 0, (
+            f"nested statements appeared: {nested_small_delta} -> {nested_large_delta}"
+        )
         assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta)
     finally:
         await engine.dispose()
@@ -445,6 +535,11 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         assert small_body.get("issue_count") == 5
         after, nested_after = await _statement_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        nested_small_delta = (
+            (nested_after - nested_before)
+            if nested_before is not None and nested_after is not None
+            else None
+        )
 
         raw = await asyncpg.connect(url)
         try:
@@ -465,10 +560,23 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
-        _, _, after2 = await db_counters(engine)
+        after2, nested_after2 = await _statement_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        nested_large_delta = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None
+        # Nested trigger/function statements are measured separately from the
+        # top-level application/control statements (track=all required).
+        assert nested_small_delta is not None and nested_large_delta is not None, (
+            "pg_stat_statements.track=all is required to measure nested statements"
+        )
+        assert nested_small_delta == 0 and nested_large_delta == 0, (
+            f"nested statements appeared: {nested_small_delta} -> {nested_large_delta}"
+        )
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
     finally:
         await engine.dispose()
