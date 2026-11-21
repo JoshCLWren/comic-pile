@@ -193,6 +193,94 @@ async def _role_statement_count(connection: AsyncConnection, *, toplevel: bool) 
         return None
 
 
+async def db_statement_breakdown(engine: AsyncEngine) -> StatementBreakdown | None:
+    """Return isolated-role SQL counts split by execution responsibility.
+
+    The administrative snapshot requires ``pg_stat_statements.track=all`` so a
+    top-only configuration cannot silently omit trigger/function statements.
+    Checkout probes and transaction controls are excluded from the application
+    count and reported independently alongside nested statements.
+    """
+    admin_url = os.environ.get("RUST_ROLL_TEST_DATABASE_URL")
+    if admin_url is None:
+        return None
+    admin_engine = create_async_engine(admin_url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        async with admin_engine.connect() as admin:
+            try:
+                setting = await admin.execute(text("SHOW pg_stat_statements.track"))
+                if setting.scalar_one() != "all":
+                    return None
+                row = await admin.execute(
+                    text(
+                        """
+                        WITH role_statements AS (
+                            SELECT s.calls,
+                                   s.toplevel,
+                                   lower(regexp_replace(
+                                       btrim(s.query), '[[:space:]]+', ' ', 'g'
+                                   )) AS normalized_query
+                            FROM pg_stat_statements s
+                            JOIN pg_roles r ON r.oid = s.userid
+                            WHERE r.rolname = 'roll_test_dml'
+                              AND s.dbid = (
+                                  SELECT oid FROM pg_database
+                                  WHERE datname = current_database()
+                              )
+                        ), classified AS (
+                            SELECT calls,
+                                   toplevel,
+                                   normalized_query = 'select 1' AS is_runtime_overhead,
+                                   (
+                                       normalized_query IN (
+                                           'begin', 'commit', 'rollback', 'abort', 'end'
+                                       )
+                                       OR normalized_query LIKE 'begin %'
+                                       OR normalized_query LIKE 'start transaction %'
+                                       OR normalized_query LIKE 'commit %'
+                                       OR normalized_query LIKE 'rollback %'
+                                       OR normalized_query LIKE 'abort %'
+                                       OR normalized_query LIKE 'end %'
+                                       OR normalized_query LIKE 'set local %'
+                                       OR normalized_query LIKE 'set transaction %'
+                                       OR normalized_query LIKE 'savepoint %'
+                                       OR normalized_query LIKE 'release savepoint %'
+                                       OR normalized_query LIKE 'prepare transaction %'
+                                   ) AS is_transaction_control
+                            FROM role_statements
+                        )
+                        SELECT
+                            COALESCE(SUM(calls) FILTER (
+                                WHERE toplevel
+                                  AND NOT is_runtime_overhead
+                                  AND NOT is_transaction_control
+                            ), 0) AS application,
+                            COALESCE(SUM(calls) FILTER (
+                                WHERE toplevel AND is_transaction_control
+                            ), 0) AS transaction_control,
+                            COALESCE(SUM(calls) FILTER (
+                                WHERE toplevel AND is_runtime_overhead
+                            ), 0) AS runtime_overhead,
+                            COALESCE(SUM(calls) FILTER (
+                                WHERE NOT toplevel
+                            ), 0) AS nested
+                        FROM classified
+                        """
+                    )
+                )
+            except DBAPIError:
+                return None
+            values = row.one()
+            return StatementBreakdown(
+                application=int(values[0]),
+                transaction_control=int(values[1]),
+                runtime_overhead=int(values[2]),
+                nested=int(values[3]),
+            )
+    finally:
+        await admin_engine.dispose()
+
+
 async def db_counters(engine: AsyncEngine) -> tuple[int, int, int | None]:
     """Return cumulative (xacts, blocks, statements) Postgres counters.
 
