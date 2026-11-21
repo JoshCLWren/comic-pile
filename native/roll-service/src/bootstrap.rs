@@ -1375,6 +1375,30 @@ mod cover_source_tests {
     }
 
     #[test]
+    fn thumb_url_is_last_resort_when_no_larger_image_is_present() {
+        // A mapped ComicVine issue whose provider entry only carries a thumbnail
+        // must still resolve a cover (owner product rule 2026-11-07: a mapped
+        // comic guarantees a cover image). Regression for #5624 / MQA-THREAD-004.
+        let thumb = "https://example.com/thumb.jpg";
+        assert_eq!(
+            extract_cover_source(&json!({"image": {"thumb_url": thumb}})),
+            Some(thumb)
+        );
+        let metadata = json!({"image": {
+            "original_url": "", "super_url": " ", "medium_url": null,
+            "small_url": "", "thumb_url": thumb
+        }});
+        assert_eq!(extract_cover_source(&metadata), Some(thumb));
+        let metadata = json!({"image": {
+            "small_url": "https://example.com/small.jpg", "thumb_url": thumb
+        }});
+        assert_eq!(
+            extract_cover_source(&metadata),
+            Some("https://example.com/small.jpg")
+        );
+    }
+
+    #[test]
     fn empty_and_non_string_direct_fields_do_not_hide_stored_covers() {
         for value in [json!(null), json!(""), json!("  "), json!(23), json!({})] {
             let metadata = json!({"image_url": value, "primary_image": " https://example.com/primary.jpg ",
