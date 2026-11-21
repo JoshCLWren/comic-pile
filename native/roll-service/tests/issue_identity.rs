@@ -1332,10 +1332,7 @@ async fn adoption_commit_non_targeted_recommit_requires_explicit_target() {
         )
         .await
         .unwrap();
-    let original_snapshot = (
-        curated.get::<_, Value>(0),
-        curated.get::<_, String>(1),
-    );
+    let original_snapshot = (curated.get::<_, Value>(0), curated.get::<_, String>(1));
     drop(conn);
 
     let (status2, body2) = post_json(
