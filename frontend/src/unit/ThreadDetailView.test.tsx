@@ -357,6 +357,15 @@ it('refreshes the Next issue title on tab visibility and focus after another-tab
   fireEvent.focus(window)
   expect(await screen.findByText('Superman #1 is available next.')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Open Superman issue #1' })).toHaveTextContent('Superman #1')
+
+  // The canonical boundary is available, so the legacy blocking batch is
+  // disabled; a focus refetch must not run its queryFn with a null thread id.
+  const blockingCalls = vi.mocked(dependenciesApi.getBatchBlockingInfo).mock.calls
+  expect(
+    blockingCalls.every(([threadIds]) =>
+      threadIds.every((threadId) => Number.isInteger(threadId) && threadId > 0),
+    ),
+  ).toBe(true)
   fetchCards.mockRestore()
 })
 

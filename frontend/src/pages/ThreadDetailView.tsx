@@ -261,10 +261,15 @@ export default function ThreadDetailView() {
   useEffect(() => {
     function onViewFocus() {
       if (document.visibilityState !== 'visible') return
-      void refetch()
-      void refetchBoundaries()
-      void refetchLegacyBlockingInfo()
-      void refetchIssueCards()
+      // `refetch()` still runs a disabled query's queryFn, so refresh only the
+      // sources this view actually renders. Otherwise the canonical deployment
+      // would POST a null thread id to the legacy blocking batch on every focus.
+      if (threadId != null) {
+        void refetch()
+        void refetchBoundaries()
+      }
+      if (canonicalBoundaryUnavailable) void refetchLegacyBlockingInfo()
+      if (nextBoundaryIssueId != null || (issuesExpanded && !issuesError)) void refetchIssueCards()
     }
     document.addEventListener('visibilitychange', onViewFocus)
     window.addEventListener('focus', onViewFocus)
@@ -272,7 +277,17 @@ export default function ThreadDetailView() {
       document.removeEventListener('visibilitychange', onViewFocus)
       window.removeEventListener('focus', onViewFocus)
     }
-  }, [refetch, refetchBoundaries, refetchLegacyBlockingInfo, refetchIssueCards])
+  }, [
+    threadId,
+    canonicalBoundaryUnavailable,
+    nextBoundaryIssueId,
+    issuesExpanded,
+    issuesError,
+    refetch,
+    refetchBoundaries,
+    refetchLegacyBlockingInfo,
+    refetchIssueCards,
+  ])
 
   // Deep-link arrival (#3626): jump straight to the exact canonical issue named
   // by `?issue=<issue_id>`, focus it so keyboard and assistive-technology users
