@@ -1368,14 +1368,18 @@ mod tests {
                          '{"primary_image":"https://comicvine.example/covers/issue2.jpg"}'::json,
                          now(), now()),
                         (52, 'comicvine', 'issue', '4000-44',
-                         '{"primary_image":null,"raw_provider_payload":{"image":{"small_url":"","thumb_url":"https://comicvine.example/covers/dependent.jpg"}}}'::json,
+                         '{"image":{"super_url":"https://comicvine.example/covers/dependent.jpg"}}'::json,
+                         now(), now()),
+                        (53, 'comicvine', 'issue', '4000-45',
+                         '{"primary_image":null,"raw_provider_payload":{"image":{"small_url":"","thumb_url":"https://comicvine.example/covers/thumbnail.jpg"}}}'::json,
                          now(), now());
                  INSERT INTO issue_external_identity_mappings
                      (id, issue_id, external_identity_id, status, evidence_json,
                       created_at, updated_at)
                  VALUES (500, 110, 50, 'confirmed', '{}'::json, now(), now()),
                         (501, 102, 51, 'confirmed', '{}'::json, now(), now()),
-                        (502, 301, 52, 'confirmed', '{}'::json, now(), now());"#)
+                        (502, 301, 52, 'confirmed', '{}'::json, now(), now()),
+                        (503, 401, 53, 'confirmed', '{}'::json, now(), now());"#)
             .await
             .expect("seed canonical schema");
         let user = AuthenticatedUser::for_test(1);
