@@ -171,6 +171,7 @@ pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
             ]
             .iter()
             .filter_map(|key| image.get(*key).and_then(Value::as_str))
+            .map(str::trim)
             .find(|value| !value.is_empty())
         });
     json!({
