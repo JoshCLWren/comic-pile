@@ -464,6 +464,7 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         assert small_nested == 0, f"unexpected nested statements: {small_nested}"
         assert large_nested == 0, f"unexpected nested statements: {large_nested}"
         assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta)
+        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
 
@@ -537,5 +538,24 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         assert small_nested == 0, f"unexpected nested statements: {small_nested}"
         assert large_nested == 0, f"unexpected nested statements: {large_nested}"
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_lists_budget_rejects_extra_query() -> None:
+    """A deliberately added extra query must be rejected by the declared budget."""
+    with pytest.raises(AssertionError, match="issued .* statements; declared maximum is"):
+        assert_declared_budget("GET", "/api/v2/reading-lists", 999)
+
+
+@pytest.mark.asyncio
+async def test_reading_lists_budget_rejects_n1_growth() -> None:
+    """A deliberately introduced N+1 growth must fail the route growth check."""
+    small_delta = 4
+    large_delta = small_delta + 50
+    with pytest.raises(AssertionError):
+        assert large_delta <= small_delta + 2, (
+            f"statement count grew: {small_delta} -> {large_delta}"
+        )
