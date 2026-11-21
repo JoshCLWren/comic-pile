@@ -49,7 +49,9 @@ Unclassified historical rows and `origin=converted` generated/plan-compiled
 edges are inactive audit data; they cannot override today's canonical Reading
 Lists. The Rust owner-scoped loader and the shared cycle validator both exclude
 them before cycle evaluation, so an unrelated legacy cycle cannot veto a canonical
-Reading List write. A genuinely intended independent historical restriction must
+Reading List write. A genuine reader-authored cycle still rejects the write
+atomically and returns the structured named cycle path used by the editor's
+remediation links. A genuinely intended independent historical restriction must
 be explicitly authorized as a reader-owned prerequisite. No provenance classification
 is required to ignore outdated generated restrictions.
 

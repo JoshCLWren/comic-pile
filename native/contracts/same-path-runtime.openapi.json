@@ -7858,8 +7858,8 @@
           "401": {
             "description": "Not authenticated"
           },
-          "409": {
-            "description": "Projected reading graph would cycle; nothing was changed"
+          "422": {
+            "description": "Reading constraint cycle; nothing was changed"
           },
           "503": {
             "description": "Database temporarily unavailable"

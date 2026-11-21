@@ -285,19 +285,16 @@ pub(crate) fn custom_cbl_cycle_conflict(
                     })
                 })
                 .collect::<Vec<_>>();
-            let detail = if message.is_empty() {
-                json!({
-                    "code": "reading_list_cycle",
-                    "message": format!("Reading constraint cycle: {human_path}. Nothing was changed."),
-                    "path": path,
-                })
+            let message = if human_path.is_empty() {
+                message
             } else {
-                json!({
-                    "code": "reading_list_cycle",
-                    "message": message,
-                    "path": path,
-                })
+                format!("Reading constraint cycle: {human_path}. Nothing was changed.")
             };
+            let detail = json!({
+                "code": "reading_list_cycle",
+                "message": message,
+                "path": path,
+            });
             ApiError::structured(StatusCode::UNPROCESSABLE_ENTITY, detail)
         }
         ValidationError::InvalidSnapshot { message } => ApiError::Unprocessable(message),
@@ -963,6 +960,10 @@ mod tests {
         assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
         let detail = error.structured_detail().expect("structured cycle detail");
         assert_eq!(detail["code"], "reading_list_cycle");
+        assert_eq!(
+            detail["message"],
+            "Reading constraint cycle: B.P.R.D. #130 --[list order]--> B.P.R.D. #142. Nothing was changed."
+        );
         let path = detail["path"].as_array().expect("cycle edge path");
         assert_eq!(path.len(), 1);
         assert_eq!(path[0]["source_issue_id"], 11);

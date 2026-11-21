@@ -15945,8 +15945,8 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Projected reading graph would cycle; nothing was changed */
-            409: {
+            /** @description Reading constraint cycle; nothing was changed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

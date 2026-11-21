@@ -173,7 +173,7 @@ pub fn get_reading_list_documentation() {}
         (status = 201, description = "Created Reading List", body = ReadingList),
         (status = 400, description = "Invalid list metadata or membership"),
         (status = 401, description = "Not authenticated"),
-        (status = 409, description = "Projected reading graph would cycle; nothing was changed"),
+        (status = 422, description = "Reading constraint cycle; nothing was changed"),
         (status = 503, description = "Database temporarily unavailable")
     ),
     security(("HTTPBearer" = []))
@@ -522,8 +522,12 @@ async fn graph_preflight(
         .iter()
         .map(|list| (list.list_id, list.name.clone()))
         .collect();
+    // The canonical authoring UI can only offer named remediation when the
+    // cycle is returned as the established structured `reading_list_cycle`
+    // payload. Keep the same contract for create and update so a genuine
+    // reader-authored cycle remains atomic without becoming a dead end.
     ValidatedReadingInputs::new(inputs.clone(), &names)
-        .map_err(|error| crate::reading_graph::cycle_conflict(error, &inputs))?;
+        .map_err(|error| crate::reading_graph::custom_cbl_cycle_conflict(error, &inputs))?;
     Ok(inputs)
 }
 
