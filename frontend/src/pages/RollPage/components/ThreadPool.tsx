@@ -45,6 +45,7 @@ export function ThreadPool({
   onUnsnooze,
   onToggleSnoozed,
   onShuffle,
+  onResetDice,
   unsnoozeIsPending,
   shuffleIsPending,
   eligibleThreadIds,
