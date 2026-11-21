@@ -12,7 +12,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-graph-n1-secret"
 BINARY = str(cargo_example_path("http_reading_graph"))
@@ -87,6 +93,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
             "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
+        nested_before = await db_nested_statements(engine)
         _, _, before = await db_counters(engine)
         small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
@@ -96,7 +103,13 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert small_body.get("cycles") == []
         assert isinstance(small_body.get("affected_lists"), list)
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested = (
+            (nested_after - nested_before)
+            if nested_before is not None and nested_after is not None
+            else None
+        )
 
         raw = await asyncpg.connect(url)
         try:
@@ -106,6 +119,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         finally:
             await raw.close()
 
+        nested_before2 = await db_nested_statements(engine)
         _, _, before2 = await db_counters(engine)
         large_response, _, _, _ = await run_rust_example(BINARY, env)
         assert large_response.get("status") == 200, large_response
@@ -115,9 +129,18 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert large_body.get("cycles") == []
         assert large_body.get("unresolved_reference_count") == 0
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
+        assert small_nested is not None and large_nested is not None, "pg_stat_statements nested is required"
+        assert small_nested == 0, f"unexpected nested statements: {small_nested}"
+        assert large_nested == 0, f"unexpected nested statements: {large_nested}"
         assert_declared_budget("GET", "/api/v2/reading-graph", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
@@ -199,8 +222,9 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert small_body.get("status_before") == "cycle"
         assert small_body.get("status_after") == "ok"
         graph = small_body.get("graph")
-        assert isinstance(graph, dict) and graph.get("status") == "cycle"
-        assert any(r.get("action") == "delete_list" and r.get("list_id") == list_id for r in graph.get("repairs", []))
+        assert isinstance(graph, dict) and graph.get("status") == "ok"
+        assert graph.get("cycles") == []
+        assert graph.get("repairs") == []
         _, _, after = await db_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
 
@@ -219,8 +243,10 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert isinstance(large_body, dict)
         assert large_body.get("applied") is False
         assert large_body.get("status_before") == "cycle"
+        assert large_body.get("status_after") == "ok"
         large_graph = large_body.get("graph")
-        assert isinstance(large_graph, dict) and large_graph.get("status") == "cycle"
+        assert isinstance(large_graph, dict) and large_graph.get("status") == "ok"
+        assert large_graph.get("cycles") == []
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 

@@ -12,7 +12,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-lists-n1-secret"
 BINARY = str(cargo_example_path("http_reading_lists"))
