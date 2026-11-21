@@ -352,19 +352,34 @@ def test_cycle_search_passes_residual_dead_end() -> None:
 
 
 @pytest.mark.parametrize("origin", ["reader", "converted"])
-def test_cycle_edge_preserves_structured_prerequisite_provenance(
-    origin: Literal["reader", "converted"],
-) -> None:
-    """Clients receive typed provenance without parsing the human edge label."""
+def test_cycle_edge_preserves_structured_prerequisite_provenance_reader() -> None:
+    """Clients receive typed provenance for reader-origin prerequisites in cycle errors."""
     state = snapshot(
         (ReadingList(1, "strict", (ReadingListEntry(2), ReadingListEntry(1))),),
-        (ReadingPrerequisite(7, 1, 2, origin, ("reviewed evidence",)),),
+        (ReadingPrerequisite(7, 1, 2, "reader", ("reviewed evidence",)),),
     )
     with pytest.raises(ReadingCycleError) as error:
         validate_reading_constraints(state)
     edge = next(edge for edge in error.value.edges if edge.prerequisite_origin is not None)
-    assert edge.prerequisite_origin == origin
+    assert edge.prerequisite_origin == "reader"
     assert edge.provenance == ("reviewed evidence",)
+
+
+def test_cycle_edge_no_cycle_with_converted_origin() -> None:
+    """Converted-origin prerequisites do not participate in cycle validation per A1.
+
+    Per owner-approved scope correction, historical origin=converted or
+    legacy-generated dependency edges must not enter the canonical Option E
+    evaluator or its cycle validator. A converted prerequisite alone must not
+    produce a ReadingCycleError.
+    """
+    state = snapshot(
+        (ReadingList(1, "strict", (ReadingListEntry(2), ReadingListEntry(1))),),
+        (ReadingPrerequisite(7, 1, 2, "converted", ("reviewed evidence",)),),
+    )
+    # Converted prerequisites are excluded from cycle validation;
+    # the graph must remain acyclic.
+    assert validate_reading_constraints(state) == (1, 2)
 
 
 # --- Overlap-aware cycle validation tests (Issue #4017) ---
