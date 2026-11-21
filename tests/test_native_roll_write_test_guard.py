@@ -162,47 +162,108 @@ def _test_module(module: str) -> str:
     return source[source.index(marker):]
 
 
+def _mounted_route(module: str, handler: str, method: str, route_path: str) -> bool:
+    """Return whether the exact method/path mounts this handler, including chained routes."""
+    route = re.search(
+        rf'\.route\(\s*"{re.escape(route_path)}"\s*,(?P<body>.*?)(?=\.route\(|\Z)',
+        _lib_source(),
+        flags=re.DOTALL,
+    )
+    if route is None:
+        return False
+    qualified_handler = rf"(?:[a-z_0-9]+::)*{re.escape(handler)}"
+    return re.search(
+        rf"(?<![A-Za-z0-9_]){method.lower()}\(\s*{qualified_handler}\s*\)",
+        route.group("body"),
+        flags=re.DOTALL,
+    ) is not None
+
+
+def _rust_function(source: str, name: str) -> str:
+    """Return one top-level Rust helper, excluding later unrelated functions."""
+    match = re.search(
+        rf"(?ms)^(?:async\s+)?fn\s+{re.escape(name)}\b.*?^}}",
+        source,
+    )
+    return match.group(0) if match else ""
+
+
+def _section_uses_method(section: str, source: str, method: str) -> bool:
+    """Recognize a direct HTTP method or a file-local request-builder helper."""
+    if f'"{method}"' in section or f"Method::{method}" in section:
+        return True
+    for helper in set(re.findall(r"(?<![A-Za-z0-9_])([a-z_][a-z0-9_]*)\s*\(", section)):
+        helper_source = _rust_function(source, helper)
+        if f'"{method}"' in helper_source or f"Method::{method}" in helper_source:
+            return True
+    return False
+
+
+def _section_uses_route(section: str, route_path: str) -> bool:
+    """Match a route with concrete or named path parameters, including base aliases."""
+    aliases = {
+        name: value
+        for name, value in re.findall(
+            r'let\s+([a-z_][a-z0-9_]*)\s*=\s*format!\("([^"]+)"\)',
+            section,
+        )
+    }
+    expanded = section
+    for name, value in aliases.items():
+        expanded = expanded.replace("{" + name + "}", value)
+    parameter = r"(?:\{[A-Za-z0-9_]*\}|[0-9]+)"
+    pattern = re.sub(r"\\{[A-Za-z0-9_]+\\}", parameter, re.escape(route_path))
+    return re.search(pattern, expanded) is not None
+
+
 def _integration_tests_write_path(module: str, handler: str) -> bool:
     """Require exact-route, database-backed HTTP integration test evidence.
 
-    The test must send the matching method/path through the production router.
-    This fails closed if its route, named test, or database proof disappears.
+    The named test must send the matching method/path through the production
+    router and assert a successful response. Missing or unrelated evidence fails
+    closed instead of re-creating a broad baseline exemption.
     """
     evidence = INTEGRATION_WRITE_TESTS.get((module, handler))
     if evidence is None:
         return False
-    test_name, method, route_path = evidence
-    path = REPOSITORY_ROOT / "native" / "roll-service" / "tests" / f"{module}.rs"
-    if not path.is_file():
+    if len(evidence) == 3:
+        test_name, method, route_path = evidence
+        test_file = module
+    else:
+        test_name, test_file, method, route_path = evidence
+    path = REPOSITORY_ROOT / "native" / "roll-service" / "tests" / f"{test_file}.rs"
+    if not path.is_file() or not _mounted_route(module, handler, method, route_path):
         return False
     source = path.read_text(encoding="utf-8")
-    route_pattern = (
-        rf'\.route\(\s*"{re.escape(route_path)}"\s*,\s*'
-        rf'{method.lower()}\(\s*{re.escape(module)}::{re.escape(handler)}\s*\)'
-    )
-    if re.search(route_pattern, _lib_source(), flags=re.DOTALL) is None:
+    if not any(marker in source for marker in DB_TEST_MARKERS):
         return False
     if not all(
         marker in source
         for marker in (
-            "test_support::database_url",
             "test_support::reset_for_test",
-            "router(state.clone()).oneshot(request)",
+            "router(",
+            ".oneshot(",
         )
     ):
         return False
-    for section in re.split(r"(?m)^#\[tokio::test\]\s*$", source)[1:]:
-        if re.match(rf"\s*async fn {re.escape(test_name)}\(\)", section):
-            return all(
-                required in section
-                for required in (
-                    "mutation(",
-                    f'"{method}"',
-                    f'"{route_path}"',
-                    "StatusCode::OK",
-                )
-            )
-    return False
+    starts = list(
+        re.finditer(
+            r"(?m)^#\[tokio::test(?:\([^\]]*\))?\]\s*"
+            rf"\n\s*async fn\s+{re.escape(test_name)}\(\)",
+            source,
+        )
+    )
+    if len(starts) != 1:
+        return False
+    all_tests = list(re.finditer(r"(?m)^#\[tokio::test(?:\([^\]]*\))?\]", source))
+    start = starts[0].start()
+    end = next((match.start() for match in all_tests if match.start() > start), len(source))
+    section = source[start:end]
+    return (
+        _section_uses_method(section, source, method)
+        and _section_uses_route(section, route_path)
+        and re.search(r"StatusCode::(?:OK|CREATED|NO_CONTENT)", section) is not None
+    )
 
 
 def _tests_write_path(module: str, handler: str) -> bool:
