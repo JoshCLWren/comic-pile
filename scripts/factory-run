@@ -1,85 +1,345 @@
 #!/usr/bin/env bash
-# Send one user-selected provider/model to the normal Rotisserie scheduler.
-# No issue numbers, special worker IDs, local credentials or lease bypasses.
+# Interactive operator console for existing Rotisserie factory integrations.
+# Model names are discovered, not pinned; execution is validated by trusted CI.
 set -Eeuo pipefail
+
+REPO="${FACTORY_REPO:-JoshCLWren/comic-pile}"
+PROVIDER=""
+MODEL=""
+TARGET=""
+FORCE_SLOT=false
+SLOT_INDEX=""
+WAIT_FOR_RESULT=true
+CHOSEN=0
+interactive=false
+[[ -t 0 && -t 1 ]] && interactive=true
 
 usage() {
   cat <<'HELP'
 Usage:
-  bash scripts/factory-run [PROVIDER [MODEL]]
+  bash scripts/factory-run
+  bash scripts/factory-run [PROVIDER [MODEL]] [--force-slot] [--slot N] [--target issue:N|pr:N]
   bash scripts/factory-run --providers
+  bash scripts/factory-run --models PROVIDER
 
-Examples:
-  bash scripts/factory-run opencode-go opencode-go/hy4-flash-free
-  bash scripts/factory-run opencode-go auto
-  bash scripts/factory-run nvidia nvidia/moonshotai/kimi-k3.1-pro
+Options:
+  --force-slot       Offer a real registered slot even when advisory health is cooling.
+                     Never steal a lease or bypass quotas, task blockers, CI or review.
+  --slot N           Use the one-based provider slot N, implies --force-slot.
+  --target TYPE:N    Choose an existing issue or PR instead of selecting the next task.
+  --no-wait          Submit and print the Actions URL without waiting for the result.
+  --providers        List supported factory integration names.
+  --models PROVIDER  List catalog-advertised models without starting work.
 
-When omitted, PROVIDER and MODEL are prompted interactively.
-The provider must be an existing factory integration. Go uses the historical
-opencode-free source and your GitHub Actions OIDC service account.
-MODEL=auto selects an eligible model on the chosen provider.
-An exact model never silently falls back to another provider or model.
+Running without arguments opens menus for provider, model, work and slot mode.
+The list is informational: the trusted runner verifies live model price,
+capabilities, credentials and cooldown before performing work. An exact
+selection never silently switches providers/models.
 
-GitHub accepts workflow_dispatch before the scheduler chooses a real issue/PR.
-A dispatch can return "deferred" if no eligible work, lease or capacity exists.
+Example:
+  bash scripts/factory-run opencode-go opencode-go/hy4-flash-free --force-slot
 HELP
 }
 
-case "${1:-}" in
-  -h|--help) usage; exit 0 ;;
-  --providers)
-    cat <<'SOURCES'
-Common provider IDs (Rotisserie remains the authoritative registry):
-  opencode-go             (existing opencode-free worker lane)
-  openrouter-free
-  kilo-auto
-  nvidia
-  z-ai
-  ollama-cloud
-  vercel-ai-gateway
-  mistral
-  orcarouter
-  pollinations
-  gemini-free
-  groq-free
-  aion-free
-  cohere-eval
-  typhoon-free
-  cloudflare-workers-ai
+providers=(
+  opencode-go openrouter-free kilo-auto nvidia z-ai ollama-cloud
+  vercel-ai-gateway mistral orcarouter pollinations gemini-free
+  groq-free aion-free cohere-eval typhoon-free cloudflare-workers-ai
   omniroute-free
+)
 
-To select any integrated provider, pass its ID directly; --providers is
-informational only and does not limit or pin the runtime catalog.
-SOURCES
-    exit 0
-    ;;
-esac
+print_providers() {
+  printf 'Factory integrations (current CLI list; server validates registry):\n'
+  printf '  %s\n' "${providers[@]}"
+}
 
-if (( $# > 2 )); then
-  usage >&2
+prefix_for_provider() {
+  case "$1" in
+    opencode-go) echo opencode-go ;;
+    openrouter-free) echo openrouter ;;
+    kilo-auto) echo kilo ;;
+    vercel-ai-gateway) echo vercel ;;
+    gemini-free) echo google ;;
+    groq-free) echo groq ;;
+    aion-free) echo aion ;;
+    cohere-eval) echo cohere ;;
+    typhoon-free) echo typhoon ;;
+    ollama-cloud) echo ollama ;;
+    *) echo "$1" ;;
+  esac
+}
+
+# The OpenCode catalog describes what the local CLI knows, not a guarantee of
+# a usable/free account. The trusted worker checks live credentials and prices.
+read_catalog_models() {
+  local provider="$1" prefix candidate
+  prefix="$(prefix_for_provider "$provider")"
+  model_choices=()
+  if ! command -v opencode >/dev/null 2>&1; then
+    return 0
+  fi
+  local catalog
+  catalog="$(opencode models --standalone 2>/dev/null || true)"
+  while IFS= read -r candidate; do
+    candidate="${candidate%%[[:space:]]*}"
+    [[ "$candidate" == "$prefix/"* ]] || continue
+    if [[ "$provider" == openrouter-free && "$candidate" != *:free ]]; then
+      continue
+    fi
+    model_choices+=("$candidate")
+  done <<< "$catalog"
+  if (( ${#model_choices[@]} )); then
+    mapfile -t model_choices < <(printf '%s\n' "${model_choices[@]}" | sort -u | head -n 60)
+  fi
+}
+
+choose_index() {
+  local heading="$1" value index reply
+  shift
+  local options=("$@")
+  (( ${#options[@]} > 0 )) || { echo "No choices for $heading" >&2; return 1; }
+  printf '\n%s\n' "$heading"
+  for index in "${!options[@]}"; do
+    printf '  %2d) %s\n' "$((index + 1))" "${options[index]}"
+  done
+  while true; do
+    read -r -p "Choose [1-${#options[@]}]: " reply || return 1
+    if [[ "$reply" =~ ^[0-9]+$ ]] && (( reply >= 1 && reply <= ${#options[@]} )); then
+      CHOSEN=$((reply - 1))
+      return 0
+    fi
+    echo 'Enter a number from the menu.' >&2
+  done
+}
+
+manual_target() {
+  read -r -p 'Target (issue:123 or pr:123): ' TARGET
+  [[ "$TARGET" =~ ^(issue|pr):[1-9][0-9]*$ ]] || {
+    echo 'Invalid target. Enter issue:N or pr:N.' >&2
+    return 2
+  }
+}
+
+pick_work() {
+  choose_index 'What should this worker do?' \
+    'Pick the next eligible real issue/PR' \
+    'Browse open issues (eligibility checked at dispatch)' \
+    'Browse open pull requests (eligibility checked at dispatch)' \
+    'Enter an issue or PR number'
+  case "$CHOSEN" in
+    0) TARGET='' ;;
+    1|2)
+      local type cmd raw
+      if [[ "$CHOSEN" == 1 ]]; then
+        type=issue
+        cmd=(gh issue list --repo "$REPO" --state open --limit 40 --json number,title)
+      else
+        type=pr
+        cmd=(gh pr list --repo "$REPO" --state open --limit 40 --json number,title)
+      fi
+      if ! raw="$("${cmd[@]}" 2>/dev/null)"; then
+        echo 'Unable to list tasks, enter one manually.' >&2
+        manual_target
+        return
+      fi
+      local tasks=()
+      mapfile -t tasks < <(printf '%s' "$raw" | python3 -c '
+import json,sys
+try:
+    rows=json.load(sys.stdin)
+    for row in rows:
+        print(str(row["number"])+" | "+str(row["title"]).replace("\n"," ")[:84])
+except (ValueError,KeyError,TypeError): pass
+')
+      if (( ${#tasks[@]} == 0 )); then
+        echo 'No tasks returned, enter one manually.' >&2
+        manual_target
+        return
+      fi
+      tasks+=('Enter a different issue or PR number')
+      choose_index "Open $type choices (not pre-authorized):" "${tasks[@]}"
+      if (( CHOSEN == ${#tasks[@]} - 1 )); then
+        manual_target
+      else
+        local selected="${tasks[CHOSEN]}"
+        TARGET="$type:${selected%% *}"
+      fi
+      ;;
+    3) manual_target ;;
+  esac
+}
+
+parse_args() {
+  while (( $# )); do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --providers) print_providers; exit 0 ;;
+      --models)
+        (( $# >= 2 )) || { echo '--models needs a provider' >&2; exit 2; }
+        read_catalog_models "$2"
+        if (( ${#model_choices[@]} )); then
+          printf '%s\n' "${model_choices[@]}"
+        else
+          echo "No local OpenCode catalog models discovered for $2." >&2
+          exit 1
+        fi
+        exit 0
+        ;;
+      --force-slot) FORCE_SLOT=true; shift ;;
+      --slot)
+        (( $# >= 2 )) || { echo '--slot requires an index' >&2; exit 2; }
+        FORCE_SLOT=true
+        SLOT_INDEX="$2"
+        shift 2
+        ;;
+      --target)
+        (( $# >= 2 )) || { echo '--target requires issue:N or pr:N' >&2; exit 2; }
+        TARGET="$2"
+        shift 2
+        ;;
+      --no-wait) WAIT_FOR_RESULT=false; shift ;;
+      --) shift; break ;;
+      --*) echo "Unknown option: $1" >&2; exit 2 ;;
+      *)
+        if [[ -z "$PROVIDER" ]]; then PROVIDER="$1"
+        elif [[ -z "$MODEL" ]]; then MODEL="$1"
+        else echo "Unexpected argument: $1" >&2; exit 2
+        fi
+        shift
+        ;;
+    esac
+  done
+}
+
+parse_args "$@"
+command -v gh >/dev/null 2>&1 || { echo 'Install and authenticate the GitHub CLI (gh auth login).' >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo 'python3 is required for the menu.' >&2; exit 2; }
+[[ -z "$SLOT_INDEX" || "$SLOT_INDEX" =~ ^[1-9][0-9]*$ ]] || {
+  echo '--slot must be a positive one-based index.' >&2; exit 2;
+}
+[[ -z "$TARGET" || "$TARGET" =~ ^(issue|pr):[1-9][0-9]*$ ]] || {
+  echo '--target must be issue:N or pr:N.' >&2; exit 2;
+}
+
+if [[ -z "$PROVIDER" ]]; then
+  if [[ "$interactive" == true ]]; then
+    choose_index 'Choose a factory provider:' "${providers[@]}"
+    PROVIDER="${providers[CHOSEN]}"
+  else
+    echo 'A provider is required without an interactive terminal.' >&2
+    exit 2
+  fi
+fi
+if [[ "$PROVIDER" == opencode-free ]]; then PROVIDER=opencode-go; fi
+
+if [[ -z "$MODEL" ]]; then
+  if [[ "$interactive" == true ]]; then
+    read_catalog_models "$PROVIDER"
+    choices=('Auto: choose a currently eligible model')
+    if (( ${#model_choices[@]} )); then
+      for candidate in "${model_choices[@]}"; do choices+=("$candidate"); done
+    else
+      echo "No local OpenCode models found for $PROVIDER; exact IDs may still be entered."
+    fi
+    choices+=('Enter an exact runtime model ID')
+    choose_index 'Choose a model (price/capability verified by worker):' "${choices[@]}"
+    if (( CHOSEN == 0 )); then
+      MODEL=auto
+    elif (( CHOSEN == ${#choices[@]} - 1 )); then
+      read -r -p 'Exact provider/model ID: ' MODEL
+    else
+      MODEL="${choices[CHOSEN]}"
+    fi
+  else
+    MODEL=auto
+  fi
+fi
+[[ -n "$MODEL" ]] || { echo 'Model must not be empty.' >&2; exit 2; }
+
+# Explicit command-line arguments choose provider/model, while the interactive
+# console still offers independent task and slot choices.
+if [[ "$interactive" == true && -z "$TARGET" ]]; then
+  pick_work
+fi
+if [[ "$interactive" == true && "$FORCE_SLOT" == false ]]; then
+  choose_index 'How should the worker slot be chosen?' \
+    'Force the first available registered slot (ignores advisory historical health)' \
+    'Force a specific registered slot number' \
+    'Use normal automatic health-ranked scheduling'
+  case "$CHOSEN" in
+    0) FORCE_SLOT=true ;;
+    1)
+      FORCE_SLOT=true
+      read -r -p 'Registered slot number [1-12 unless configured otherwise]: ' SLOT_INDEX
+      [[ "$SLOT_INDEX" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid slot number' >&2; exit 2; }
+      ;;
+    2) FORCE_SLOT=false ;;
+  esac
+fi
+
+printf '\nFactory request:\n  provider: %s\n  model: %s\n  work: %s\n  force registered slot: %s\n' \
+  "$PROVIDER" "$MODEL" "${TARGET:-next eligible real task}" "$FORCE_SLOT"
+[[ -z "$SLOT_INDEX" ]] || printf '  slot number: %s\n' "$SLOT_INDEX"
+if [[ "$interactive" == true ]]; then
+  read -r -p 'Run this selection? [Y/n] ' confirm
+  if [[ "$confirm" =~ ^[Nn] ]]; then echo 'Cancelled.'; exit 0; fi
+fi
+
+args=(workflow run fixed-model-factory-dispatch.yml --repo "$REPO" --ref main
+  -f "provider=$PROVIDER" -f "model=$MODEL" -f mode=smoke -f action=advance
+  -f "force_slot=$FORCE_SLOT")
+[[ -z "$TARGET" ]] || args+=(-f "target=$TARGET")
+[[ -z "$SLOT_INDEX" ]] || args+=(-f "slot_index=$SLOT_INDEX")
+if ! response="$(gh "${args[@]}" 2>&1)"; then
+  printf '%s\n' "$response" >&2
+  exit 1
+fi
+printf '%s\n' "$response"
+run_url="$(printf '%s\n' "$response" | grep -Eo 'https://github.com/[^[:space:]]+/actions/runs/[0-9]+' | tail -n 1 || true)"
+if [[ -z "$run_url" ]]; then
+  echo 'GitHub accepted the request, but no unique run URL was returned. Check Actions; no worker result is verified.' >&2
   exit 2
 fi
-provider="${1:-}"
-model="${2:-}"
-if [[ -z "$provider" ]]; then
-  echo 'Provider? Use --providers to list currently integrated sources.' >&2
-  read -r -p 'Provider: ' provider
+run_id="${run_url##*/}"
+if [[ "$WAIT_FOR_RESULT" == false ]]; then
+  echo "Submitted. Track the actual assignment here: $run_url"
+  exit 0
 fi
-if [[ -z "$model" ]]; then
-  read -r -p 'Runtime model ID (auto = select eligible): ' model
-  model="${model:-auto}"
+echo "Checking dispatcher result: $run_url"
+if ! gh run watch "$run_id" --repo "$REPO" --exit-status; then
+  echo "Dispatch workflow failed; inspect $run_url" >&2
+  exit 1
 fi
-[[ -n "$provider" ]] || { echo 'Provider is required' >&2; exit 2; }
-[[ -n "$model" ]] || { echo 'Model is required' >&2; exit 2; }
-if [[ "$provider" == opencode-free ]]; then
-  provider=opencode-go
+# The Actions run may succeed with a *deferred* assignment. Report that
+# explicitly rather than pretending the model worked.
+logs="$(gh run view "$run_id" --repo "$REPO" --log 2>/dev/null || true)"
+if [[ -z "$logs" ]]; then
+  echo "Workflow ended, but the assignment log is unavailable: $run_url" >&2
+  exit 2
 fi
-
-repo="${FACTORY_REPO:-JoshCLWren/comic-pile}"
-echo "Requesting next eligible work: provider=$provider model=$model"
-gh workflow run fixed-model-factory-dispatch.yml \
-  --repo "$repo" --ref main \
-  -f "provider=$provider" \
-  -f "model=$model" \
-  -f mode=smoke
-echo "GitHub accepted the request. The dispatcher will report dispatched or deferred."
+printf '%s\n' "$logs" | python3 -c '
+import json,sys
+matches=[]
+for line in sys.stdin:
+    start=line.find("{\"status\":")
+    if start < 0:
+        continue
+    try: obj=json.loads(line[start:].strip())
+    except (ValueError,TypeError): continue
+    if isinstance(obj,dict) and obj.get("status") in ("dispatched","deferred"):
+        matches.append(obj)
+if not matches:
+    print("The workflow finished, but no confirmed worker assignment was found.")
+    sys.exit(2)
+obj=matches[-1]
+if obj["status"]=="dispatched":
+    print("DISPATCHED: "+str(obj.get("kind"))+" #"+str(obj.get("number"))+
+          " | worker "+str(obj.get("worker"))+
+          " | model "+str(obj.get("model"))+
+          " | action "+str(obj.get("action")))
+else:
+    print("DEFERRED: "+str(obj.get("reason","No executable assignment")))
+    for detail in obj.get("details",[]):
+        print("  - "+str(detail))
+    sys.exit(3)
+'
