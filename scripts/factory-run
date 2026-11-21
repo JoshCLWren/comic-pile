@@ -28,8 +28,29 @@ HELP
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
   --providers)
-    python3 .github/scripts/factory_worker_slots.py sources |
-      python3 -c 'import json,sys; print("\n".join("opencode-go (existing opencode-free lane)" if x=="opencode-free" else x for x in json.load(sys.stdin)))'
+    cat <<'SOURCES'
+Common provider IDs (Rotisserie remains the authoritative registry):
+  opencode-go             (existing opencode-free worker lane)
+  openrouter-free
+  kilo-auto
+  nvidia
+  z-ai
+  ollama-cloud
+  vercel-ai-gateway
+  mistral
+  orcarouter
+  pollinations
+  gemini-free
+  groq-free
+  aion-free
+  cohere-eval
+  typhoon-free
+  cloudflare-workers-ai
+  omniroute-free
+
+To select any integrated provider, pass its ID directly; --providers is
+informational only and does not limit or pin the runtime catalog.
+SOURCES
     exit 0
     ;;
 esac
