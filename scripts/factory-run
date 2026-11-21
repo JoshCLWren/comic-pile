@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Send one user-selected provider/model to the normal Rotisserie scheduler.
+# No issue numbers, special worker IDs, local credentials or lease bypasses.
+set -Eeuo pipefail
+
+usage() {
+  cat <<'HELP'
+Usage:
+  bash scripts/factory-run [PROVIDER [MODEL]]
+  bash scripts/factory-run --providers
+
+Examples:
+  bash scripts/factory-run opencode-go opencode-go/hy4-flash-free
+  bash scripts/factory-run opencode-go auto
+  bash scripts/factory-run nvidia nvidia/moonshotai/kimi-k3.1-pro
+
+When omitted, PROVIDER and MODEL are prompted interactively.
+The provider must be an existing factory integration. Go uses the historical
+opencode-free source and your GitHub Actions OIDC service account.
+MODEL=auto selects an eligible model on the chosen provider.
+An exact model never silently falls back to another provider or model.
+
+GitHub accepts workflow_dispatch before the scheduler chooses a real issue/PR.
+A dispatch can return "deferred" if no eligible work, lease or capacity exists.
+HELP
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  --providers)
+    python3 .github/scripts/factory_worker_slots.py sources |
+      python3 -c 'import json,sys; print("\\n".join("opencode-go (existing opencode-free lane)" if x=="opencode-free" else x for x in json.load(sys.stdin)))'
+    exit 0
+    ;;
+esac
+
+if (( $# > 2 )); then
+  usage >&2
+  exit 2
+fi
+provider="${1:-}"
+model="${2:-}"
+if [[ -z "$provider" ]]; then
+  echo 'Provider? Use --providers to list currently integrated sources.' >&2
+  read -r -p 'Provider: ' provider
+fi
+if [[ -z "$model" ]]; then
+  read -r -p 'Runtime model ID (auto = select eligible): ' model
+  model="${model:-auto}"
+fi
+[[ -n "$provider" ]] || { echo 'Provider is required' >&2; exit 2; }
+[[ -n "$model" ]] || { echo 'Model is required' >&2; exit 2; }
+if [[ "$provider" == opencode-free ]]; then
+  provider=opencode-go
+fi
+
+repo="${FACTORY_REPO:-JoshCLWren/comic-pile}"
+echo "Requesting next eligible work: provider=$provider model=$model"
+gh workflow run fixed-model-factory-dispatch.yml \
+  --repo "$repo" --ref main \
+  -f "provider=$provider" \
+  -f "model=$model" \
+  -f mode=smoke
+echo "GitHub accepted the request. The dispatcher will report dispatched or deferred."
