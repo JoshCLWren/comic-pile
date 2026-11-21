@@ -626,6 +626,9 @@ async def test_reading_lists_budget_rejects_extra_query_and_n1() -> None:
         n1 = await _measured_with_injected_queries(engine, url, env, 200)
         with pytest.raises(AssertionError):
             assert_declared_budget("GET", "/api/v2/reading-lists", n1)
-        assert n1 > baseline + 2, f"per-row growth not detected: {baseline} -> {n1}"
+        # The same +2 growth threshold used by the small-vs-large route test
+        # must also reject an N+1-style per-row increase.
+        with pytest.raises(AssertionError):
+            assert n1 <= baseline + 2, f"per-row growth not detected: {baseline} -> {n1}"
     finally:
         await engine.dispose()
