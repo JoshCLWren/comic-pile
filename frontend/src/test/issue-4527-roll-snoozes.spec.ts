@@ -99,3 +99,80 @@ for (const count of [1, 25]) {
     }
   })
 }
+
+test('idle snooze exhaustion offers Reset Dice and restores only after confirmation', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  let resets = 0
+  let resetDone = false
+  const thread = {
+    id: 1, title: 'Daily Comic 1', format: 'Comic', tags: [],
+    issues_remaining: 2, queue_position: 1, issue_id: 10,
+    issue_number: '1', next_issue_id: 10, next_issue_number: '1',
+    total_issues: 2, reading_progress: null,
+  }
+  await page.addInitScript(() => {
+    localStorage.setItem('auth_token', 'test-access-token')
+    document.cookie = 'comicpile_roll_snoozes=%5B1%5D; path=/; SameSite=Lax'
+  })
+  await page.route('**/api/**', async route => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    if (path.endsWith('/v2/auth/me')) {
+      return route.fulfill({ json: { id: 1, username: 'reader', email: 'reader@example.test', preferences: { theme: 'classic' } } })
+    }
+    if (path.endsWith('/v2/auth/refresh')) return route.fulfill({ json: { access_token: 'test-access-token' } })
+    if (path.endsWith('/v2/auth/csrf')) return route.fulfill({ json: { csrf_token: 'test-csrf' } })
+    if (path.endsWith('/v2/reading-graph')) {
+      return route.fulfill({ json: {
+        status: 'ok', cycles: [], cyclic_issue_ids: [], affected_lists: [],
+        affected_threads: [], repairs: [], unresolved_reference_count: 0,
+      } })
+    }
+    if (path.endsWith('/roll/reset')) {
+      resets += 1
+      resetDone = true
+      return route.fulfill({ json: { die: 6, replayed: false } })
+    }
+    if (path.endsWith('/roll/die-state')) {
+      return route.fulfill({ json: {
+        die: resetDone ? 6 : 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null,
+      } })
+    }
+    if (path.endsWith('/roll/bootstrap') || path.endsWith('/roll/eligible-issue-ids')) {
+      const cookie = (await request.allHeaders()).cookie ?? ''
+      const snoozed = cookie.includes('comicpile_roll_snoozes=%5B1%5D')
+      const ids = snoozed ? [] : [1]
+      if (path.endsWith('/roll/eligible-issue-ids')) {
+        return route.fulfill({ json: {
+          die: resetDone ? 6 : 20, issue_ids: ids.map(id => id * 10), thread_ids: ids, pool_reason: 'ready',
+        } })
+      }
+      return route.fulfill({ json: {
+        session_id: 1, user_id: 1, current_die: resetDone ? 6 : 20, manual_die: null,
+        pending_thread_id: null, last_rolled_result: null, active_thread: null,
+        session_mode: 'warm', bandwidth: null, pool_reason: 'ready', last_read: null,
+        snoozed_threads: snoozed ? [thread] : [], snoozed_count: snoozed ? 1 : 0,
+        skipped_thread_ids: [], skipped_threads: [],
+        rollable: ids.map(id => ({ thread, issue: { id: id * 10, number: '1' }, routes: [], overflow_routes_count: 0 })),
+      } })
+    }
+    if (path.includes('/issues/cards')) return route.fulfill({ json: { items: [] } })
+    if (path.includes('/tags')) return route.fulfill({ json: { tags: [], direct_tags: [], effective_tags: [] } })
+    return route.fulfill({ json: [] })
+  })
+
+  await page.goto('/')
+  const pool = page.locator('[data-roll-pool]')
+  await expect(page.getByText('Every series is snoozed', { exact: true })).toBeVisible()
+  await expect(pool).toHaveAttribute('aria-label', '0 in play, 0 mapped results')
+  expect(resets).toBe(0)
+  await page.getByRole('button', { name: 'Reset Dice', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Select Die' })).toBeVisible()
+  expect(resets).toBe(0)
+  await page.getByTestId('reset-dice').click()
+  await expect.poll(() => resets).toBe(1)
+  await expect(pool).toHaveAttribute('aria-label', '1 in play, 1 mapped result')
+  await expect(pool.getByText('Daily Comic 1', { exact: true })).toBeAttached()
+  await expect(page.locator('#header-die-label')).toHaveText('d6')
+  expect(await page.evaluate(() => document.cookie)).not.toContain('comicpile_roll_snoozes=%5B1%5D')
+})
