@@ -5,10 +5,10 @@ This repository uses git hooks to enforce code quality checks.
 ## Principle: fix what hooks flag
 
 Hooks run static checks (lint/format/types), including the Python hardcoded-ID
-regression guard. Product test suites (backend pytest, Vitest, and the rendered
-UI audit) run in CI rather than git hooks. If a hook blocks you, fix the
-underlying failure; never bypass it with `--no-verify`. Never force-push or push
-to main.
+regression guard. Product test suites (Vitest and the rendered UI audit) run in
+CI rather than git hooks; backend product pytest is retired from required CI
+during the Rust cutover. If a hook blocks you, fix the underlying failure;
+never bypass it with `--no-verify`. Never force-push or push to main.
 
 ## Available Hooks
 
