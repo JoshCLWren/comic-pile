@@ -199,8 +199,8 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert small_body.get("status_before") == "cycle"
         assert small_body.get("status_after") == "ok"
         graph = small_body.get("graph")
-        assert isinstance(graph, dict) and graph.get("status") == "cycle"
-        assert any(r.get("action") == "delete_list" and r.get("list_id") == list_id for r in graph.get("repairs", []))
+        assert isinstance(graph, dict) and graph.get("status") == "ok"
+        assert graph.get("cycles") == []
         _, _, after = await db_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
 
@@ -219,8 +219,10 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert isinstance(large_body, dict)
         assert large_body.get("applied") is False
         assert large_body.get("status_before") == "cycle"
+        assert large_body.get("status_after") == "ok"
         large_graph = large_body.get("graph")
-        assert isinstance(large_graph, dict) and large_graph.get("status") == "cycle"
+        assert isinstance(large_graph, dict) and large_graph.get("status") == "ok"
+        assert large_graph.get("cycles") == []
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
