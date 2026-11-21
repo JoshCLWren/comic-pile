@@ -1,9 +1,9 @@
-utc: 2026-11-21T09:52:26Z
-uptime: 4105.41s load: 0.12 0.16 0.20
+utc: 2026-11-21T09:52:43Z
+uptime: 4121.83s load: 0.08 0.15 0.19
 processes: 177
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1267        4384          74       10750       14715
+Mem:           15983        1272        4380          74       10750       14710
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
@@ -15,7 +15,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 140688 provjobd3432757
 122888 Runner.Listener
 117628 dockerd
-59820 containerd
+59356 containerd
 56176 php-fpm8.5
 49136 ExtHandler
 38420 postgres
@@ -32,7 +32,7 @@ Filesystem      Size  Used Avail Use% Mounted on
  0.4 Runner.Worker
  0.3 redis-server
  0.2 python
- 0.1 docker-proxy
  0.1 hv_kvp_daemon
+ 0.1 docker-proxy
 --- kernel oom/kill
 --- shutdown/session signals
