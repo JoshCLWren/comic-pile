@@ -727,6 +727,22 @@ mod tests {
         assert_eq!(people[0].roles, vec!["writer", "co-plotter"]);
         assert_eq!(people[1].creator_id, None);
     }
+
+    #[test]
+    fn thumbnail_only_stored_provider_metadata_has_an_image() {
+        for metadata in [
+            json!({"image": {"small_url": " ", "thumb_url": "https://cv.example/thumb.jpg"}}),
+            json!({"primary_image": null, "raw_provider_payload": {
+                "image": {"small_url": "", "thumb_url": "https://cv.example/thumb.jpg"}
+            }}),
+        ] {
+            assert_eq!(
+                image(&metadata).as_deref(),
+                Some("https://cv.example/thumb.jpg")
+            );
+        }
+    }
+
     #[test]
     fn queue_is_owner_scoped_and_single_statement() {
         assert!(READ_SQL.contains("JOIN me ON me.user_id=t.user_id"));
