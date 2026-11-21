@@ -202,12 +202,7 @@ async fn seed_confirmed_cover(
     seed_confirmed_cover_entry(ctx, issue_id, external_id, metadata).await;
 }
 
-async fn seed_confirmed_cover_entry(
-    ctx: &Ctx,
-    issue_id: i32,
-    external_id: &str,
-    metadata: Value,
-) {
+async fn seed_confirmed_cover_entry(ctx: &Ctx, issue_id: i32, external_id: &str, metadata: Value) {
     let identity: i32 = ctx
         .state
         .pool
@@ -370,6 +365,30 @@ async fn series_cover_uses_the_issue_card_mapping_preference() {
     assert_eq!(
         thread_cover(&body, "Confidence Wins"),
         Some("https://cv.example/high.jpg".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn series_cover_accepts_provider_thumb_url_fallback() {
+    // A ComicVine-mapped issue whose provider entry carries the cover only in
+    // the thumb_url size field must show that cover on the thread indicator.
+    let ctx = setup("sc-thumb").await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Thumb Fallback Wins", "active", 1).await;
+    let issue = seed_issue(&ctx, thread_id, "1", 1, "unread").await;
+    set_frontier(&ctx, thread_id, Some(issue)).await;
+    seed_confirmed_cover_entry(
+        &ctx,
+        issue,
+        "thumb-only-cover-id",
+        json!({"image": {"thumb_url": "https://cv.example/thumb.jpg"}}),
+    )
+    .await;
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        thread_cover(&body, "Thumb Fallback Wins"),
+        Some("https://cv.example/thumb.jpg".to_owned())
     );
 }
 
