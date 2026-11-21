@@ -2587,6 +2587,7 @@ pub async fn cbl_targeted_adoption_commit(
 
 enum CommitErr {
     Stale(String),
+    ExplicitTargetRequired(i32),
     Adoption(String),
     #[allow(dead_code)]
     NotFound(String),
