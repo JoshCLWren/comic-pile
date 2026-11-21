@@ -222,7 +222,6 @@ async fn card(
                          NULLIF(BTRIM(x.metadata_json#>>'{image,super_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,medium_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,small_url}'), ''),
-                         NULLIF(BTRIM(x.metadata_json#>>'{image,thumb_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json->>'cover_image_url'), '')
                      )
                  ELSE NULL END AS cover_url
@@ -278,7 +277,6 @@ pub(crate) async fn cards(
                          NULLIF(BTRIM(x.metadata_json#>>'{image,super_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,medium_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,small_url}'), ''),
-                         NULLIF(BTRIM(x.metadata_json#>>'{image,thumb_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json->>'cover_image_url'), '')
                      )
                  ELSE NULL END AS cover_url
