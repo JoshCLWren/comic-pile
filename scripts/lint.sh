@@ -131,12 +131,9 @@ should_run_html() {
 
 ANY_CHECKED=0
 PYTHON_SOURCE_PATHS=(
-    alembic
-    app
-    comic_pile
     scripts
     tests
-    tests_e2e
+    .github/scripts
 )
 
 if should_run_python; then
@@ -152,15 +149,6 @@ if should_run_python; then
         python3 -m compileall "${PYTHON_SOURCE_PATHS[@]}" -q
     fi
 
-    echo ""
-    echo "Running CI-parity Python lint and type check..."
-    if ! bash scripts/check-python-ci-lint.sh; then
-        echo ""
-        echo "${RED}ERROR: Python CI lint/typecheck failed.${NC}"
-        echo "${RED}Path-filtered ruff or ty is not a valid CI substitute.${NC}"
-        echo "${RED}Fix the findings and rerun: bash scripts/check-python-ci-lint.sh${NC}"
-        exit 1
-    fi
 
     echo ""
     echo "Checking for type/linter ignores in staged files..."

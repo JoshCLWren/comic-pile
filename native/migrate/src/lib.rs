@@ -125,6 +125,7 @@ fn runner() -> refinery::Runner {
 
 /// Bring the database to the latest migration. See the module docs.
 pub async fn run(client: &mut Client) -> Result<Report, MigrateError> {
+    apply_session_timeouts(client).await?;
     client
         .execute("SELECT pg_advisory_lock($1)", &[&MIGRATE_LOCK])
         .await?;
@@ -144,6 +145,32 @@ pub async fn run(client: &mut Client) -> Result<Report, MigrateError> {
             Ok(report)
         }
     }
+}
+
+/// Apply optional session timeouts for non-blocking migration runs.
+///
+/// `MIGRATE_LOCK_TIMEOUT` bounds waits for locks (including the advisory lock),
+/// and `MIGRATE_STATEMENT_TIMEOUT` bounds statement execution. Missing values
+/// leave the server defaults in effect.
+pub async fn apply_session_timeouts(client: &Client) -> Result<(), MigrateError> {
+    for (name, env_name) in [
+        ("lock_timeout", "MIGRATE_LOCK_TIMEOUT"),
+        ("statement_timeout", "MIGRATE_STATEMENT_TIMEOUT"),
+    ] {
+        let Some(value) = std::env::var(env_name)
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+        else {
+            continue;
+        };
+        client
+            .execute("SELECT set_config($1, $2, false)", &[&name, &value])
+            .await
+            .map_err(|error| {
+                MigrateError(format!("failed to set {name} from {env_name}: {error}"))
+            })?;
+    }
+    Ok(())
 }
 
 async fn run_locked(client: &mut Client) -> Result<Report, MigrateError> {
@@ -206,9 +233,97 @@ async fn run_locked(client: &mut Client) -> Result<Report, MigrateError> {
         .applied
         .extend(outcome.applied_migrations().iter().map(|m| m.version()));
 
+    if report.applied.is_empty() && report.adopted.is_empty() {
+        if let Some(revisions) = alembic_revisions(client).await? {
+            if revisions.as_slice() == [BASELINE_ALEMBIC_HEAD] {
+                // Nothing is pending and the Alembic stamp is already current.
+                // Skip the idempotent repair/stamp writes so a no-op run does not
+                // take schema locks or block live requests.
+                return Ok(report);
+            }
+        }
+    }
+
     ensure_deferred_identity_status(client).await?;
     ensure_alembic_stamp(client).await?;
     Ok(report)
+}
+
+/// Return whether applying migrations would change the database.
+///
+/// This is a best-effort, fail-closed check for deploy automation: it reports
+/// `true` when pending migrations or bookkeeping repairs are required, and
+/// returns an error when the database state cannot be determined safely.
+pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
+    apply_session_timeouts(client).await?;
+    let alembic_state = alembic_state(client).await?;
+    let baseline_recorded = refinery_has_baseline(client).await?;
+
+    match &alembic_state {
+        Some(AlembicState::CurrentHead) | Some(AlembicState::BaselineHead) | None => {}
+        Some(AlembicState::Empty) if baseline_recorded => {}
+        Some(AlembicState::Empty) => {
+            return Err(MigrateError(
+                "alembic_version is empty, expected a supported head; \
+                 run Alembic to a supported head before switching to the Rust runner"
+                    .to_string(),
+            ));
+        }
+        Some(AlembicState::Other(revisions)) => {
+            return Err(MigrateError(format!(
+                "alembic_version is {revisions:?}, expected a supported head; \
+                 run Alembic to a supported head before switching to the Rust runner"
+            )));
+        }
+    }
+
+    if !baseline_recorded {
+        return match alembic_state {
+            Some(AlembicState::CurrentHead) | Some(AlembicState::BaselineHead) | None => Ok(true),
+            Some(AlembicState::Empty) => Err(MigrateError(
+                "alembic_version is empty, expected a supported head; \
+                 run Alembic to a supported head before switching to the Rust runner"
+                    .to_string(),
+            )),
+            Some(AlembicState::Other(_)) => unreachable!("handled above"),
+        };
+    }
+
+    // Validate recorded history exactly as `up` would (refinery aborts on
+    // divergent or unknown applied migrations). Without this, `plan` could
+    // report "no work" for tampered history and the deploy would skip `up`.
+    let embedded = runner().get_migrations().clone();
+    let recorded = runner().get_applied_migrations_async(client).await?;
+    for applied in &recorded {
+        match embedded.iter().find(|m| m.version() == applied.version()) {
+            None => {
+                return Err(MigrateError(format!(
+                    "applied migration V{} ({}) is missing from this binary; \
+                     refusing to plan against unknown history",
+                    applied.version(),
+                    applied.name()
+                )));
+            }
+            Some(known)
+                if known.name() != applied.name() || known.checksum() != applied.checksum() =>
+            {
+                return Err(MigrateError(format!(
+                    "applied migration V{} ({}) is divergent: recorded name/checksum \
+                     differ from the embedded migration",
+                    applied.version(),
+                    applied.name()
+                )));
+            }
+            Some(_) => {}
+        }
+    }
+    let applied: std::collections::BTreeSet<i32> = recorded.iter().map(|m| m.version()).collect();
+    let pending = embedded.iter().any(|m| !applied.contains(&m.version()));
+    if pending {
+        return Ok(true);
+    }
+
+    Ok(alembic_revisions(client).await?.as_deref() != Some(&[BASELINE_ALEMBIC_HEAD.to_string()]))
 }
 
 async fn alembic_state(client: &Client) -> Result<Option<AlembicState>, MigrateError> {

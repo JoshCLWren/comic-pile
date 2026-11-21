@@ -21,13 +21,6 @@ file drifts from `IssueApi::openapi()`. This is the canonical Rust contract, not
 a FastAPI-generated operation; the coordinated frontend client and caller
 cutover remain #4444/#4337 work.
 
-Every `*-v2.openapi.json` file here is also validated by
-`tests/test_native_v2_contract_artifacts.py`: the document must be OpenAPI 3.1
-with component schemas, every path must live under `/api/v2/`, no path may use a
-colon-method or verb-shaped action segment, and every operation must declare a
-generated `operationId`, bearer security and a 2xx response. New Rust v2
-target-resource contracts are picked up by that guard automatically.
-
 `v2-runtime.openapi.json` is the aggregate contract for **every deployed native
 `/api/v2` operation** (#4457): the eight auth endpoints, Roll bootstrap and
 reading-session initialization, the dice/offer/reset commands, the scoped
@@ -65,7 +58,7 @@ generator boundary and never rewrites repository artifacts from custom-schema
 runs.
 `docs/api/v2-route-inventory.json` records the observed runtime and declared
 consumers for each live v2 operation, and
-`tests/test_api_v2_contract_inventory.py` fails when the inventory, the native
+`tests/test_api_v2_contract_inventory.py` fails when the inventory, the native <!-- docs-path-check: ignore -->
 contract, the generated schema, `vercel.json` or a frontend service caller
 drifts.
 

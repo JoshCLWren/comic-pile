@@ -3,7 +3,9 @@
 //! and drops its own scratch database on the server named by
 //! `MIGRATE_TEST_DATABASE_URL`.
 
-use comicpile_migrate::{connect, run, BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD};
+use comicpile_migrate::{
+    connect, needs_work, run, BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD,
+};
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio_postgres::Client;
 
@@ -423,6 +425,53 @@ async fn alembic_baseline_with_stale_deferred_checks_is_repaired_before_stamp() 
         .get(0);
     assert!(thread_check.contains("deferred"), "{thread_check}");
 
+    drop(client);
+    db.drop_database().await;
+}
+
+#[tokio::test]
+async fn plan_refuses_divergent_applied_checksum() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    run(&mut client).await.unwrap();
+    assert!(
+        !needs_work(&mut client).await.unwrap(),
+        "fully migrated db has no work"
+    );
+    client
+        .execute(
+            "UPDATE public.refinery_schema_history SET checksum = 0 WHERE version = 1",
+            &[],
+        )
+        .await
+        .unwrap();
+    let error = needs_work(&mut client).await.unwrap_err();
+    assert!(
+        error.0.contains("divergent"),
+        "expected divergence error, got: {error}"
+    );
+    drop(client);
+    db.drop_database().await;
+}
+
+#[tokio::test]
+async fn plan_refuses_unknown_applied_version() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    run(&mut client).await.unwrap();
+    client
+        .execute(
+            "INSERT INTO public.refinery_schema_history (version, name, applied_on, checksum) \
+             VALUES (999, 'from_a_newer_binary', '2026-11-20T00:00:00Z', '1')",
+            &[],
+        )
+        .await
+        .unwrap();
+    let error = needs_work(&mut client).await.unwrap_err();
+    assert!(
+        error.0.contains("missing from this binary"),
+        "expected unknown-version error, got: {error}"
+    );
     drop(client);
     db.drop_database().await;
 }

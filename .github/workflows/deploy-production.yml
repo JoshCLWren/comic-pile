@@ -168,24 +168,19 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Set up Python
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-        with:
-          python-version: "3.14"
-          enable-cache: true
-
-      - name: Install locked runtime dependencies
-        run: uv sync --locked --no-dev
-
-      - name: Generate Rust-default ingress from existing FastAPI OpenAPI
-        env:
-          ROUTE_PYTHON: .venv/bin/python
+      - name: Generate fragment-derived Rust-default ingress
         run: |
           set -euo pipefail
           node scripts/generate_vercel_routes.mjs
           node scripts/generate_route_burndown.mjs
           node scripts/generate_vercel_routes.mjs --check
           node scripts/generate_route_burndown.mjs --check
+          node scripts/strip_python_build.mjs
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build the Rust migration runner
+        run: cargo build --release --locked -p comicpile-migrate
 
       - name: Get production database connection string
         id: neon
@@ -210,57 +205,23 @@ jobs:
           echo "::add-mask::$uri"
           echo "db_url=$uri" >> "$GITHUB_OUTPUT"
 
-      - name: Check single Alembic head
-        env:
-          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
-        run: |
-          set -euo pipefail
-          heads="$(.venv/bin/alembic heads)"
-          count="$(grep -c '(head)' <<< "$heads")"
-          if [[ "$count" -ne 1 ]]; then
-            echo "ERROR: $count Alembic heads detected - resolve before deploying" >&2
-            printf '%s\n' "$heads"
-            exit 1
-          fi
-          echo "Single head confirmed: $heads"
-
-      - name: Detect pending Alembic revisions
-        id: migrations
-        env:
-          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
-        run: |
-          set -euo pipefail
-          expected="$(.venv/bin/alembic heads | awk 'NR==1 {print $1}')"
-          current="$(.venv/bin/alembic current | awk 'NR==1 {print $1}')"
-          echo "current=$current" >> "$GITHUB_OUTPUT"
-          echo "expected=$expected" >> "$GITHUB_OUTPUT"
-          if [[ -n "$expected" && "$current" == "$expected" ]]; then
-            echo "pending=false" >> "$GITHUB_OUTPUT"
-            echo "No pending migrations (production already at $current)."
-          else
-            echo "pending=true" >> "$GITHUB_OUTPUT"
-            echo "Pending migrations: production=${current:-<none>} application=$expected"
-          fi
-
       - name: Migrate production database before deploy
-        if: steps.migrations.outputs.pending == 'true'
         env:
-          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          MIGRATE_DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          MIGRATE_LOCK_TIMEOUT: 2s
+          MIGRATE_STATEMENT_TIMEOUT: 30s
         run: |
           set -euo pipefail
-          .venv/bin/alembic upgrade head
-
-      - name: Verify production schema at application head
-        env:
-          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
-        run: |
-          set -euo pipefail
-          expected="$(.venv/bin/alembic heads | awk 'NR==1 {print $1}')"
-          current="$(.venv/bin/alembic current | awk 'NR==1 {print $1}')"
-          echo "Production Alembic revision: $current"
-          if [[ -z "$expected" || "$current" != "$expected" ]]; then
-            echo "ERROR: production schema is not at application head (current=$current expected=$expected)" >&2
-            exit 1
+          if ./target/release/comicpile-migrate plan; then
+            echo "No pending migrations; skipping write path."
+          else
+            status=$?
+            if [ "$status" -eq 10 ]; then
+              ./target/release/comicpile-migrate up
+            else
+              echo "Migration check failed (fail closed)." >&2
+              exit "$status"
+            fi
           fi
 
       - name: Require Vercel token

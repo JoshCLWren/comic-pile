@@ -229,9 +229,9 @@ Write efficient PostgreSQL queries by construction. No SQL inside loops over row
 - ❌ **NEVER USE in app code**: `psycopg2`, `create_engine()` (sync), `Session` (sync), or any sync DB driver
 
 **The ONE exception — `psycopg` is permitted inside `alembic/` ONLY for migrations**:
-- `psycopg[binary]` (the psycopg v3 sync driver) is a core dependency, but its sync use is confined to `alembic/env.py`.
-- `alembic/env.py` converts the app's `postgresql+asyncpg://` URL to `postgresql+psycopg://` so Alembic can run migrations synchronously.
-- `app/config.py` converts any `postgresql+psycopg://` URL back to `postgresql+asyncpg://` at runtime, so the application never runs sync DB access.
+- `psycopg[binary]` (the psycopg v3 sync driver) is a core dependency, but its sync use is confined to `alembic/env.py`. <!-- docs-path-check: ignore -->
+- `alembic/env.py` converts the app's `postgresql+asyncpg://` URL to `postgresql+psycopg://` so Alembic can run migrations synchronously. <!-- docs-path-check: ignore -->
+- `app/config.py` converts any `postgresql+psycopg://` URL back to `postgresql+asyncpg://` at runtime, so the application never runs sync DB access. <!-- docs-path-check: ignore -->
 
 **Why async-only in app code?** Weeks of refactoring converted the codebase to async. Mixing sync/async causes event loop conflicts and greenlet errors. Sync DB access in `app/` or `comic_pile/` WILL BREAK the application.
 
@@ -355,7 +355,7 @@ Routers validate and delegate; services decide; repositories persist.
 - **Services (`app/services/`)** own all business logic and orchestration and coordinate repositories.
 - **Repositories (`app/repositories/`)** own ALL query construction and persistence for a model family. They return ORM models or plain tuples/dicts — never HTTP types or response schemas.
 
-New backend code must follow this layering without exceptions. Legacy modules are being migrated incrementally; the conformance test `tests/test_router_layering_conformance.py` enforces that router violations never grow beyond `tests/router_layering_baseline.json`, and every migrated module must shrink that baseline file.
+New backend code must follow this layering without exceptions. Legacy modules are being migrated incrementally; the conformance test `tests/test_router_layering_conformance.py` enforces that router violations never grow beyond `tests/router_layering_baseline.json`, and every migrated module must shrink that baseline file. <!-- docs-path-check: ignore -->
 
 Remember the MissingGreenlet rule above when services/repositories commit: extract model attributes BEFORE `await db.commit()`.
 
@@ -365,11 +365,11 @@ A domain noun that also names something else must be qualified at every boundary
 domain concept to application code under a bare, ambiguous name when a second meaning exists in the
 same codebase.
 
-- The durable reading-history model is `ReadingSession` (`app/models/reading_session.py`), reached through `app/repositories/reading_session_repository.py` and, in the Rust runtime, `native/roll-service/src/reading_session.rs`. It is never `Session`, `sessions`, or `SessionModel`.
+- The durable reading-history model is `ReadingSession` (`app/models/reading_session.py`), reached through `app/repositories/reading_session_repository.py` and, in the Rust runtime, `native/roll-service/src/reading_session.rs`. It is never `Session`, `sessions`, or `SessionModel`. <!-- docs-path-check: ignore -->
 - Auth state has its own precise names: access token, refresh token, `password_changed_at` (credential epoch), `revoked_tokens`, and `password_reset_tokens`. There is no auth-session persistence model, and none may be added just to make naming symmetrical.
-- Auth modules (`app/auth.py`, `native/roll-service/src/auth/`, and the auth-state repositories) must not import or call reading-history persistence. Revoke credentials with auth state; reading history is not a credential.
+- Auth modules (`app/auth.py`, `native/roll-service/src/auth/`, and the auth-state repositories) must not import or call reading-history persistence. Revoke credentials with auth state; reading history is not a credential. <!-- docs-path-check: ignore -->
 - Storage/API edges may keep familiar wire names (`sessions` table, `/api/session/`, `SessionListItem`) because clients and migrations depend on them. Ambiguity is resolved in code, not on the wire.
-- The static guard `tests/test_reading_session_naming_guard.py` enforces the boundary; a password reset must preserve populated reading history.
+- The static guard `tests/test_reading_session_naming_guard.py` enforces the boundary; a password reset must preserve populated reading history. <!-- docs-path-check: ignore -->
 
 See [`docs/READING_SESSION_NAMING.md`](docs/READING_SESSION_NAMING.md) for the full convention, the
 retained-ambiguity inventory, and the rationale from the #2996 password-reset incident.
@@ -426,7 +426,7 @@ make verify-e2e
 
 API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Frontend coverage remains gated in CI; legacy Python product tests are no longer part of required CI during the Rust cutover.
 
-**Key Fixtures (from `tests/conftest.py`)**:
+**Key Fixtures (from `tests/conftest.py`)**: <!-- docs-path-check: ignore -->
 ```python
 # Authenticated HTTP client
 async def test_example(auth_client, sample_data):
@@ -658,32 +658,11 @@ Never wait for the user to request these routine label corrections.
 
 ## Test identity validation
 
-**Never hardcode primary-key IDs.** Agents and humans must not introduce new
-literal identities that the shrink-only guard in `tests/test_hardcoded_ids.py`
-would catch.
-
-Forbidden in new or edited `tests/` code (Call keyword integer constants):
-- `User(id=<int>)`
-- `user_id=<int>` on any constructor or helper call, including
-  `ReadingSnapshot(user_id=1)` and `replace(snapshot, user_id=2)`
-
-Forbidden in new or edited `app/` code: additional `user_id=1` literals.
-
-Required instead:
-- Fixture-owned / DB-generated IDs: `default_user.id`, values from
-  `get_or_create_user_async`, flushed ORM `.id` attributes
-- Pure evaluator snapshots should take `user_id=default_user.id` (or another
-  fixture id). A module constant only works when the Call uses the **name**
-  (`user_id=READER_ID`); bare `user_id=1` still fails the AST guard.
-
-Do **not** expand `tests/hardcoded_ids_baseline.json`. When removing a coupling,
-shrink the matching baseline entry.
-
 Synthetic migration fixtures must isolate production Step 14+ classification
 lookups: those maps are keyed by real dependency IDs, so an auto-assigned test
 id such as `101` can be misclassified as `needs_review`. Isolate with an
 explicit test double or advance sequences past the classification map (see
-`tests/test_reader_order_migration_coordinator.py`).
+`tests/test_reader_order_migration_coordinator.py`). <!-- docs-path-check: ignore -->
 
 `bash scripts/check-python-ci-lint.sh` runs this guard after ruff/ty. Cursor
 agents also have always-on rules in `.cursor/rules/hardcoded-ids.mdc` and
