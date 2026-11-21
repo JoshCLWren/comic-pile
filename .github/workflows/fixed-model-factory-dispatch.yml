@@ -366,6 +366,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           if [[ -n "$TARGET" ]]; then
+            if [[ -n "$REQUESTED_PROVIDER" ]]; then
+              echo "::error::Select either a target or a provider, not both; the targeted controller does not accept a provider pin."
+              exit 1
+            fi
             if ! [[ "$TARGET" =~ ^(issue|pr):([1-9][0-9]*)$ ]]; then
               echo "::error::Select a valid issue or pull request."
               exit 1
