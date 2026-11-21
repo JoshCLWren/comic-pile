@@ -389,12 +389,13 @@
         "application_statements": 7,
         "transaction_control_statements": 2,
         "total_statements": 9,
-        "grows_with_data": true,
-        "basis": "auth 1 + lock 1 + owned-issue check 1 + list insert 1 + graph_preflight 1 + entries load 1 + one entry insert 1 (+2 tx control); grows with entry count",
-        "max_statements": 9,
+        "basis": "measured authenticated create: identity 1 + reader lock 1 + owned-issue check 1 + list insert 1 + set-based unnest entry insert 1 + graph preflight 1 + entries load 1, one write transaction (START/COMMIT) and two checkout probes; fixed across 5 and 200 entries",
+        "grows_with_data": false,
+        "max_statements": 11,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
@@ -404,12 +405,13 @@
         "application_statements": 4,
         "transaction_control_statements": 2,
         "total_statements": 6,
-        "basis": "auth extractor 1 + advisory lock 1 + unlinked check 1 + delete 1 (+2 tx control); set-based",
+        "basis": "measured authenticated delete: identity 1 + reader lock 1 + unlinked check 1 + owned list delete 1, one write transaction (START/COMMIT) and two checkout probes; set-based, fixed for one- and 200-entry target lists",
         "grows_with_data": false,
-        "max_statements": 6,
+        "max_statements": 8,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
@@ -419,12 +421,13 @@
         "application_statements": 3,
         "transaction_control_statements": 0,
         "total_statements": 3,
-        "basis": "auth extractor 1 + list load 1 + entries load 1; set-based",
+        "basis": "measured authenticated list detail: identity 1 + list summary 1 + set-based entries load 1, plus two checkout probes; fixed across 5 and 200 entries",
         "grows_with_data": false,
-        "max_statements": 3,
+        "max_statements": 5,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
@@ -434,12 +437,13 @@
         "application_statements": 11,
         "transaction_control_statements": 2,
         "total_statements": 13,
-        "grows_with_data": true,
-        "basis": "auth 1 + lock 1 + old entries load 1 + owned-issue check 1 + list update 1 + entries delete 1 + one entry insert 1 + graph_preflight 1 + new entries load 1 + list reload 1 (+2 tx control); grows with entry count",
-        "max_statements": 13,
+        "basis": "measured authenticated update: identity 1 + reader lock 1 + owned list 1 + old entries 1 + owned-issue check 1 + list update 1 + entries delete 1 + set-based unnest entry insert 1 + graph preflight 1 + new entries 1 + post-commit timestamp reload 1, one write transaction (START/COMMIT) and three checkout probes; fixed across 5 and 200 entries",
+        "grows_with_data": false,
+        "max_statements": 16,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 3
       }
     },
     {
@@ -449,12 +453,13 @@
         "application_statements": 4,
         "transaction_control_statements": 2,
         "total_statements": 6,
-        "basis": "auth extractor 1 + list load 1 + entries load 1 + Option E snapshot 1 (+2 tx control); set-based",
+        "basis": "measured authenticated reader: identity 1 + list summary 1 + set-based entries load 1 + contained Option E snapshot 1, one read-only transaction (START/ROLLBACK) and three checkout probes; fixed across 5 and 200 entries",
         "grows_with_data": false,
-        "max_statements": 6,
+        "max_statements": 9,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py",
+        "runtime_overhead_statements": 3
       }
     },
     {
