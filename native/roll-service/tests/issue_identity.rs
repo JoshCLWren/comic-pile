@@ -1292,7 +1292,97 @@ async fn adoption_commit_other_users_thread_not_reused() {
 }
 
 #[tokio::test]
-async fn adoption_commit_recommit_is_idempotent() {
+async fn adoption_commit_non_targeted_recommit_requires_explicit_target() {
+    let (state, token, csrf, _guard) = setup().await;
+    let payload = json!({
+        "entry_decisions": {},
+        "series_decisions": [],
+        "series_overrides": [],
+        "content_hash": "h-mm",
+        "revision_sha": "rev-1"
+    });
+
+    let (status1, body1) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        payload.clone(),
+    )
+    .await;
+    assert_eq!(status1, StatusCode::CREATED, "{body1}");
+    let plan_id = body1["id"].as_i64().expect("plan id") as i32;
+
+    // Simulate deliberate curation after the UI's preflight became stale.
+    let conn = state.pool.get().await.unwrap();
+    let mut curated_nodes = body1["nodes"].as_array().unwrap().clone();
+    curated_nodes.reverse();
+    curated_nodes.push(json!({
+        "id": "curated-unrelated",
+        "node_type": "note",
+        "lane_id": "default",
+        "position": 42,
+        "label": "Must survive the rejected general retry"
+    }));
+    let curated = conn
+        .query_one(
+            "UPDATE continuity_plans SET nodes_json = $1 WHERE id = $2
+             RETURNING nodes_json, updated_at::text",
+            &[&Value::Array(curated_nodes), &plan_id],
+        )
+        .await
+        .unwrap();
+    let original_snapshot = (
+        curated.get::<_, Value>(0),
+        curated.get::<_, String>(1),
+    );
+    drop(conn);
+
+    let (status2, body2) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        payload,
+    )
+    .await;
+    assert_eq!(status2, StatusCode::CONFLICT, "{body2}");
+    assert_eq!(
+        body2["detail"]["code"], "explicit_target_required",
+        "{body2}"
+    );
+    assert_eq!(body2["detail"]["plan_id"], plan_id, "{body2}");
+    assert!(
+        body2["detail"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("targeted adoption"),
+        "{body2}"
+    );
+
+    let conn = state.pool.get().await.unwrap();
+    let original_after = conn
+        .query_one(
+            "SELECT nodes_json, updated_at::text FROM continuity_plans WHERE id = $1",
+            &[&plan_id],
+        )
+        .await
+        .unwrap();
+    let original_after_snapshot = (
+        original_after.get::<_, Value>(0),
+        original_after.get::<_, String>(1),
+    );
+    assert_eq!(original_after_snapshot, original_snapshot);
+    let plan_count: i64 = conn
+        .query_one("SELECT COUNT(*)::bigint FROM continuity_plans", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(plan_count, 1, "the rejected retry must not create a plan");
+}
+
+#[tokio::test]
+async fn targeted_adoption_commit_recommit_is_idempotent() {
     let (state, token, csrf, _guard) = setup().await;
     let payload = json!({
         "entry_decisions": {},
@@ -1321,14 +1411,11 @@ async fn adoption_commit_recommit_is_idempotent() {
         &state,
         &token,
         &csrf,
-        "/api/v2/reading-lists/1/adoption-commits",
+        &format!("/api/v2/reading-lists/1/reading-plans/{plan_id}/adoption-commits"),
         payload,
     )
     .await;
-    assert!(
-        status2 == StatusCode::CREATED || status2 == StatusCode::OK,
-        "{status2} {body2}"
-    );
+    assert_eq!(status2, StatusCode::OK, "{body2}");
     assert_eq!(body2["id"], plan_id, "re-commit must target same plan");
     let nodes2 = body2["nodes"].as_array().cloned().unwrap_or_default();
     assert_eq!(
