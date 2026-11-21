@@ -413,8 +413,15 @@ async fn thumb_only_cover_is_shared_by_thread_and_issue_card() {
         .find(|thread| thread["id"] == thread_id)
         .expect("owned thread");
     assert_eq!(thread["series_cover_image_url"], json!(cover));
-    assert_eq!(thread["health"]["confirmed_issue_count"], json!(1));
-    assert_eq!(thread["health"]["needs_mapping_count"], json!(0));
+    assert_eq!(thread["comicvine_mapping"]["status"], json!("fully_mapped"));
+    assert_eq!(
+        thread["comicvine_mapping"]["confirmed_issue_count"],
+        json!(1)
+    );
+    assert_eq!(
+        thread["comicvine_mapping"]["needs_mapping_count"],
+        json!(0)
+    );
 
     let response = router(ctx.state.clone())
         .oneshot(
