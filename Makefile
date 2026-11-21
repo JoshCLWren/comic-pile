@@ -326,7 +326,7 @@ TEST_INGRESS_CONF ?= $(CURDIR)/.docker-test-ingress.conf
 DOCKER_TEST = TEST_INGRESS_CONF="$(TEST_INGRESS_CONF)" docker compose -f docker-compose.test.yml
 docker-test-up:  ## Start Docker test environment (PostgreSQL + Rust API + nginx frontend on :8000)
 	@echo "Starting Docker test environment..."
-	@test -f static/react/index.html || pnpm --filter frontend run build
+	@pnpm --filter frontend run build
 	@node scripts/generate_ui_audit_ingress.mjs vercel.json "$(TEST_INGRESS_CONF)"
 	$(DOCKER_TEST) up -d --build
 	@echo "Waiting for services to be ready..."
