@@ -284,12 +284,14 @@ jobs:
           configure_adapter=false
           case "$source" in
             opencode-free)
+              # An assigned lease must still enter dispatch-time fleet
+              # failover if Go OIDC is unavailable. The dispatcher prevents
+              # new Go claims without a service-account client ID.
+              configured=true
               if [[ "${FACTORY_GO_TOKEN_READY:-}" == true ]]; then
-                configured=true
                 reason='Go-service-account-authenticated'
               else
-                configured=false
-                reason='Go-service-account-oidc-unavailable'
+                reason='Go-service-account-oidc-unavailable-try-fleet'
               fi
               ;;
             openrouter-free|kilo-auto)
