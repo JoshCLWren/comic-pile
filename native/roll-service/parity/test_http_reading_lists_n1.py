@@ -411,6 +411,7 @@ async def test_create_reading_list_statements_respect_budget() -> None:
 
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta)
+        assert large_delta <= small_delta + 9, f"statement growth exceeded budget: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
 
@@ -475,5 +476,6 @@ async def test_update_reading_list_statements_respect_budget() -> None:
 
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+        assert large_delta <= small_delta + 13, f"statement growth exceeded budget: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
