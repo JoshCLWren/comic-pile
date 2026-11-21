@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: JoshCLWren/rotisserie
-          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          ref: main
           path: .rotisserie/runtime
           persist-credentials: false
       - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
@@ -82,6 +82,18 @@ jobs:
           gh_dir="$RUNNER_TEMP/gh_${version}_linux_amd64/bin"
           "$gh_dir/gh" pr checks --help | grep -- '--json' >/dev/null
           echo "$gh_dir" >> "$GITHUB_PATH"
+
+      - name: Meter GitHub CLI requests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          meter_dir="$RUNNER_TEMP/factory-gh-meter"
+          mkdir -p "$meter_dir"
+          echo "FACTORY_REAL_GH=$(command -v gh)" >> "$GITHUB_ENV"
+          cp .github/scripts/factory-gh-meter.sh "$meter_dir/gh"
+          chmod +x "$meter_dir/gh"
+          echo "FACTORY_GH_CALL_LOG=$RUNNER_TEMP/factory-gh-calls.log" >> "$GITHUB_ENV"
+          echo "$meter_dir" >> "$GITHUB_PATH"
 
       - name: Self-test post-merge closure logic
         shell: bash
@@ -357,3 +369,11 @@ jobs:
             fi
             echo "Unable to merge ready PR #${pr}; it will retry on the next drain" >&2
           done
+
+      - name: Report GitHub CLI request usage
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          python3 .github/scripts/factory_gh_usage.py "${FACTORY_GH_CALL_LOG:-/dev/null}" \
+            --label "merge drain" --summary "$GITHUB_STEP_SUMMARY"

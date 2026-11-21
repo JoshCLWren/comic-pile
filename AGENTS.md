@@ -4,7 +4,9 @@ Guidelines for AI agents working in this codebase.
 
 ## Rust-cutover backlog freeze (owner direction, 2026-11-15)
 
-Agents and autonomous factories may work existing issues, PRs and approved objectives, but must **not create GitHub issues or sub-issues or split work into new tickets** without an explicit interactive owner instruction. Record out-of-scope discoveries in the existing issue/PR handoff instead. See [docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md) for the canonical scope and deployment-recovery exception. A failing main CI check is not a new issue.
+Agents and autonomous factories may work existing issues, PRs and approved objectives, but must **not create GitHub issues or sub-issues or split work into new tickets** without an explicit interactive owner instruction. Record out-of-scope discoveries in the existing issue/PR handoff instead. See [docs/AUTONOMOUS_FACTORY_POLICY.md](docs/AUTONOMOUS_FACTORY_POLICY.md) for the canonical scope and deployment-recovery exception. A failing main CI check is not a new issue.
+
+**Factory workers:** before working an assigned issue or PR, read `docs/ISSUE_EXECUTION_PROTOCOL.md`, `docs/AUTONOMOUS_FACTORY_POLICY.md`, `docs/CHATGPT_FACTORY_PROMPT.md` and `docs/FACTORY_GITHUB_VISIBILITY.md`, and follow the product-first factory policy they define.
 
 ## Engineering objective completion
 
@@ -185,7 +187,7 @@ Never skip, disable, or weaken tests; run the relevant tests locally and require
 
 CI is not a debugging tool. Run focused local validation appropriate to the change before pushing whenever the execution environment provides a checkout and required dependencies.
 
-For autonomous factory work, [docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md) is canonical for validation and browser gates. When browser validation is required, Chromium is the maintained required Playwright target. Firefox and WebKit are optional diagnostics for browser-specific investigations and must not delay ordinary issue closure or merges.
+For autonomous factory work, [docs/AUTONOMOUS_FACTORY_POLICY.md](docs/AUTONOMOUS_FACTORY_POLICY.md) is canonical for validation and browser gates. When browser validation is required, Chromium is the maintained required Playwright target. Firefox and WebKit are optional diagnostics for browser-specific investigations and must not delay ordinary issue closure or merges.
 
 Before pushing Python changes from a normal local checkout:
 1. Run `ruff check .` with no path arguments. Path-filtered ruff is not a valid CI substitute.
@@ -637,7 +639,7 @@ before closing the issue.
 ### Factory labels are mandatory agent work
 
 All local agents and scheduled factories must apply the canonical issue and PR label state
-machine in [docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md) automatically. Label reconciliation is part of
+machine in [docs/AUTONOMOUS_FACTORY_POLICY.md](docs/AUTONOMOUS_FACTORY_POLICY.md) automatically. Label reconciliation is part of
 claiming, implementation, review, CI, handoff, blocking, readiness, merge, and closure—not a task
 for Josh.
 

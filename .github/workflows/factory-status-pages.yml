@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: JoshCLWren/rotisserie
-          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          ref: main
           path: .rotisserie/runtime
           persist-credentials: false
       - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
@@ -176,7 +176,7 @@ jobs:
               <main id="status">Loading the live factory dashboard…</main>
               <script>
                 (() => {
-                  const source = 'https://raw.githubusercontent.com/JoshCLWren/comic-pile/factory-status-live/index.html';
+                  const source = 'https://raw.githubusercontent.com/${{ github.repository }}/factory-status-live/index.html';
                   const status = document.querySelector('#status');
                   const load = async () => {
                     try {

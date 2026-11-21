@@ -44,7 +44,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: JoshCLWren/rotisserie
-          ref: af82b3449ba3491dc49a0f4d31c0b7338717b321
+          ref: main
           path: .rotisserie/runtime
           persist-credentials: false
       - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
@@ -90,5 +90,16 @@ jobs:
             echo "PR #${PR_NUMBER} is manual-only; no dispatch"
             exit 0
           fi
-          gh workflow run fixed-model-factory-dispatch.yml \
+          dispatch_with_retry() {
+            local attempt wait
+            for attempt in 1 2 3 4; do
+              "$@" && return 0
+              (( attempt < 4 )) || break
+              wait=$(( 15 * (1 << (attempt - 1)) ))
+              echo "::warning::workflow dispatch failed (attempt ${attempt}/4); retrying in ${wait}s"
+              sleep "$wait"
+            done
+            return 1
+          }
+          dispatch_with_retry gh workflow run fixed-model-factory-dispatch.yml \
             --repo "$GITHUB_REPOSITORY" --ref main -f target="pr:$PR_NUMBER" -f action=advance
