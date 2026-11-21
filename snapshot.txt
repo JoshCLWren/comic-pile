@@ -1,16 +1,16 @@
-utc: 2026-11-21T10:05:18Z
-uptime: 4876.58s load: 0.15 0.13 0.16
-processes: 179
+utc: 2026-11-21T10:05:34Z
+uptime: 4892.97s load: 0.12 0.12 0.15
+processes: 177
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1263        4388          74       10751       14719
+Mem:           15983        1272        4378          74       10751       14710
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   66G   79G  46% /
 /dev/root       145G   66G   79G  46% /
 --- top rss (KiB, name only)
-154080 Runner.Worker
+154092 Runner.Worker
 142924 python
 140692 provjobd3432757
 124312 Runner.Listener
@@ -28,7 +28,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 --- top cpu (name only)
  1.7 provjobd3432757
  1.2 dockerd
- 0.8 containerd
+ 0.7 containerd
  0.4 Runner.Worker
  0.3 redis-server
  0.2 python
