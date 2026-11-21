@@ -718,6 +718,24 @@ mod tests {
         assert_eq!(people[1].creator_id, None);
     }
     #[test]
+    fn issue_image_falls_back_to_a_thumbnail_only_provider_entry() {
+        // MQA-THREAD-004: the search/confirm dialog already renders
+        // `image.thumb_url`, so the issue intelligence panel must not report a
+        // mapped issue as coverless when every larger size is empty.
+        let metadata = json!({"image": {
+            "original_url": null,
+            "super_url": "",
+            "medium_url": " ",
+            "small_url": "",
+            "thumb_url": "https://comicvine.example/covers/thumb.jpg"
+        }});
+        assert_eq!(
+            image(&metadata).as_deref(),
+            Some("https://comicvine.example/covers/thumb.jpg")
+        );
+    }
+
+    #[test]
     fn queue_is_owner_scoped_and_single_statement() {
         assert!(READ_SQL.contains("JOIN me ON me.user_id=t.user_id"));
         assert!(READ_SQL.contains("ON CONFLICT (external_identity_id) DO UPDATE"));

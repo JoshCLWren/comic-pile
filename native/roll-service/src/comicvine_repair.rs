@@ -1263,6 +1263,31 @@ mod tests {
         );
     }
     #[test]
+    fn roster_normalization_keeps_a_thumbnail_only_cover() {
+        // MQA-THREAD-004: catalog commit persists this curated primary_image,
+        // so a roster row whose only provider size is `thumb_url` must still
+        // produce a cover instead of "No cover" after mapping.
+        let result = json!({
+            "id": 4005,
+            "issue_number": "5",
+            "name": "The Case of the Chemical Syndicate",
+            "image": {
+                "original_url": null,
+                "super_url": "",
+                "medium_url": " ",
+                "small_url": "",
+                "thumb_url": "https://comicvine.example/covers/thumb.jpg"
+            },
+            "volume": {"id": 4050, "name": "Detective Comics"}
+        });
+        let metadata = normalize_roster_issue_metadata(&result);
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://comicvine.example/covers/thumb.jpg")
+        );
+    }
+
+    #[test]
     fn provider_timestamp_accepts_rfc3339_and_comicvine_space_format() {
         assert_eq!(
             provider_timestamp(&json!("2020-01-01T00:00:00+00:00")).as_deref(),
