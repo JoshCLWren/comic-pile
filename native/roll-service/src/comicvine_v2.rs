@@ -1929,9 +1929,15 @@ fn normalize_roster_issue(row: &Value) -> Value {
         .get("image")
         .and_then(Value::as_object)
         .and_then(|image| {
-            ["original_url", "super_url", "medium_url", "small_url"]
-                .iter()
-                .find_map(|key| {
+            [
+                "original_url",
+                "super_url",
+                "medium_url",
+                "small_url",
+                "thumb_url",
+            ]
+            .iter()
+            .find_map(|key| {
                     image
                         .get(*key)
                         .and_then(Value::as_str)

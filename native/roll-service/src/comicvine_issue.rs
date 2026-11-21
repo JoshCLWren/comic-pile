@@ -705,6 +705,18 @@ fn issue_intelligence_docs() {}
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn thumb_only_provider_image_is_a_cover() {
+        let metadata = json!({
+            "image": {"thumb_url": " https://comicvine.example/detective-5-thumb.jpg "}
+        });
+        assert_eq!(
+            image(&metadata).as_deref(),
+            Some("https://comicvine.example/detective-5-thumb.jpg")
+        );
+    }
+
     #[test]
     fn creator_merging_preserves_provider_roles_and_anonymous_rows() {
         let metadata = json!({"creator_credits":[
