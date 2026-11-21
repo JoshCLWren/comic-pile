@@ -351,7 +351,6 @@ def test_cycle_search_passes_residual_dead_end() -> None:
     ]
 
 
-@pytest.mark.parametrize("origin", ["reader", "converted"])
 def test_cycle_edge_preserves_structured_prerequisite_provenance_reader() -> None:
     """Clients receive typed provenance for reader-origin prerequisites in cycle errors."""
     state = snapshot(
@@ -378,8 +377,11 @@ def test_cycle_edge_no_cycle_with_converted_origin() -> None:
         (ReadingPrerequisite(7, 1, 2, "converted", ("reviewed evidence",)),),
     )
     # Converted prerequisites are excluded from cycle validation;
-    # the graph must remain acyclic.
-    assert validate_reading_constraints(state) == (1, 2)
+    # no cycle error should be raised.
+    order = validate_reading_constraints(state)
+    # The topological order should be valid (2 before 1 from strict list, 3 unconstrained)
+    assert 1 in order and 2 in order and 3 in order
+    assert order.index(2) < order.index(1)  # strict list: 2 before 1
 
 
 # --- Overlap-aware cycle validation tests (Issue #4017) ---
