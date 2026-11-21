@@ -215,10 +215,16 @@ fn normalized_metadata(
     }
     let image = obj.get("image").and_then(Value::as_object);
     let cover = image.and_then(|v| {
-        ["original_url", "super_url", "medium_url", "small_url"]
-            .iter()
-            .filter_map(|k| v.get(*k).and_then(Value::as_str))
-            .find(|s| !s.is_empty())
+        [
+            "original_url",
+            "super_url",
+            "medium_url",
+            "small_url",
+            "thumb_url",
+        ]
+        .iter()
+        .filter_map(|k| v.get(*k).and_then(Value::as_str))
+        .find(|s| !s.is_empty())
     });
     let person = compact_refs(&result["person_credits"]);
     let present = person.as_array().is_some_and(|v| !v.is_empty());
@@ -1265,6 +1271,26 @@ mod tests {
         incomplete.as_object_mut().unwrap().remove("person_credits");
         assert!(normalized_metadata(&incomplete, 29319).is_err());
     }
+
+    #[test]
+    fn deep_refresh_preserves_thumb_url_only_cover() {
+        // Issue #5624: the repair/refresh persistence path must not null the
+        // primary_image of a confirmed mapping whose only provider cover is
+        // image.thumb_url, or the mapped issue regresses to "No cover".
+        let result = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
+            "cover_date":"1988-03-01", "store_date":"1988-03-24",
+            "image":{"thumb_url":"https://example.com/thumb.jpg"},
+            "volume":{"id": 4001,"name":"Hellblazer"},
+            "person_credits":[{"id":1,"name":"Jamie Delano"}],
+            "character_credits":[], "team_credits":[], "story_arc_credits":[],
+            "date_last_updated":"2020-01-01T00:00:00+00:00"});
+        let (metadata, _, _, _) = normalized_metadata(&result, 29319).unwrap();
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://example.com/thumb.jpg")
+        );
+    }
+
     #[test]
     fn provider_timestamp_accepts_rfc3339_and_comicvine_space_format() {
         assert_eq!(
