@@ -1,17 +1,17 @@
-utc: 2026-11-21T12:20:59Z
-uptime: 2881.41s load: 0.00 0.01 0.00
+utc: 2026-11-21T12:21:21Z
+uptime: 2903.75s load: 0.00 0.01 0.00
 processes: 195
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700        1176       11923          52        2960       14523
+Mem:           15700        1170       11930          52        2960       14530
 Swap:              0           0           0
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
 /dev/mapper/cow-root  145G   56G   89G  39% /
 /dev/mapper/cow-root  145G   56G   89G  39% /
 --- top rss (KiB, name only)
-289944 opencode.exe
-221288 Runner.Worker
+290068 opencode.exe
+221672 Runner.Worker
 138624 provjobd3977665
 121636 Runner.Listener
 89052 opencode
