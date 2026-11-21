@@ -114,6 +114,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "tests_e2e"]
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
