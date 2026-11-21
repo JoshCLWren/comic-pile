@@ -12,7 +12,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-graph-n1-secret"
 BINARY = str(cargo_example_path("http_reading_graph"))
@@ -45,6 +51,49 @@ async def _insert_owned_thread(raw: asyncpg.Connection, owner_id: int, index: in
         )
         issue_ids.append(issue_id)
     return thread_id, issue_ids
+
+
+def _assert_nested_clean(nested_before: int | None, nested_after: int | None, label: str) -> None:
+    """Require nested statements to be measured separately and stay absent.
+
+    ``db_nested_statements`` returns ``None`` unless ``pg_stat_statements.track``
+    is ``all``, so this also rejects a ``track=top`` measurement setup. The
+    reading-graph projection uses only top-level statements; no trigger or
+    function issues nested SQL on these routes.
+    """
+    assert nested_before is not None and nested_after is not None, (
+        "pg_stat_statements.track=all is required to measure nested statements"
+    )
+    assert nested_after - nested_before == 0, (
+        f"{label} recorded nested statements: {nested_before} -> {nested_after}"
+    )
+
+
+async def _seed_cycle(
+    raw: asyncpg.Connection, owner_id: int, issue_ids: list[int], name: str
+) -> int:
+    """Persist a two-issue strict-list cycle for repair fixtures."""
+    list_id = await raw.fetchval(
+        "INSERT INTO custom_cbl_lists (user_id,name,description,mode,created_at,updated_at) "
+        "VALUES ($1,$2,NULL,'strict',NOW(),NOW()) RETURNING id",
+        owner_id,
+        name,
+    )
+    issue_a, issue_b = issue_ids[0], issue_ids[1]
+    await raw.execute(
+        "INSERT INTO custom_cbl_entries (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped) "
+        "VALUES ($1,$2,1,NOW(),false,'[]','none',false), ($1,$3,2,NOW(),false,'[]','none',false)",
+        list_id,
+        issue_b,
+        issue_a,
+    )
+    await raw.execute(
+        "INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,created_at) "
+        "VALUES ($1,$2,'reader','A',NOW())",
+        issue_a,
+        issue_b,
+    )
+    return list_id
 
 
 @pytest.mark.asyncio
@@ -88,6 +137,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
@@ -96,6 +146,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert small_body.get("cycles") == []
         assert isinstance(small_body.get("affected_lists"), list)
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
@@ -107,6 +158,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large_response, _, _, _ = await run_rust_example(BINARY, env)
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
@@ -115,6 +167,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert large_body.get("cycles") == []
         assert large_body.get("unresolved_reference_count") == 0
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
@@ -191,6 +244,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
@@ -202,6 +256,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert isinstance(graph, dict) and graph.get("status") == "cycle"
         assert any(r.get("action") == "delete_list" and r.get("list_id") == list_id for r in graph.get("repairs", []))
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
@@ -213,6 +268,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large_response, _, _, _ = await run_rust_example(BINARY, env)
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
@@ -222,6 +278,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         large_graph = large_body.get("graph")
         assert isinstance(large_graph, dict) and large_graph.get("status") == "cycle"
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
