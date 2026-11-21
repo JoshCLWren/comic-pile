@@ -578,6 +578,7 @@ pub async fn search_issues(
                 let image_url = obj.get("image").and_then(|v| v.as_object()).and_then(|o| {
                     o.get("medium_url")
                         .or_else(|| o.get("small_url"))
+                        .or_else(|| o.get("thumb_url"))
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string())
                 });
