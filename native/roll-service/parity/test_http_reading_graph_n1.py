@@ -12,7 +12,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-graph-n1-secret"
 BINARY = str(cargo_example_path("http_reading_graph"))
@@ -88,6 +94,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
@@ -97,6 +104,11 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert isinstance(small_body.get("affected_lists"), list)
         _, _, after = await db_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        nested_after = await db_nested_statements(engine)
+        small_nested = (
+            nested_after - nested_before if nested_before is not None and nested_after is not None else None
+        )
+        assert small_nested is not None, "nested statements must be measured via db_nested_statements (pg_stat_statements.track=all)"
 
         raw = await asyncpg.connect(url)
         try:
@@ -107,6 +119,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         large_response, _, _, _ = await run_rust_example(BINARY, env)
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
@@ -116,6 +129,11 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert large_body.get("unresolved_reference_count") == 0
         _, _, after2 = await db_counters(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        nested_after = await db_nested_statements(engine)
+        large_nested = (
+            nested_after - nested_before if nested_before is not None and nested_after is not None else None
+        )
+        assert large_nested is not None, "nested statements must be measured via db_nested_statements (pg_stat_statements.track=all)"
 
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
         assert_declared_budget("GET", "/api/v2/reading-graph", small_delta, large_delta)
