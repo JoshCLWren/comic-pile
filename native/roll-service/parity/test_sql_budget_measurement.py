@@ -8,7 +8,7 @@ import asyncpg
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from route_harness import db_counters, db_nested_statements
+from route_harness import assert_declared_budget, db_counters, db_nested_statements
 
 
 @pytest.mark.asyncio
@@ -65,6 +65,20 @@ async def test_nested_service_query_is_measured() -> None:
         await admin.execute("DROP FUNCTION IF EXISTS public.sql_budget_nested_probe()")
         await admin.close()
         await engine.dispose()
+
+
+def test_declared_budget_rejects_measurements_above_maximum() -> None:
+    """A measured route count above ``max_statements`` must be rejected."""
+    # GET /api/v2/reading-graph: auth 1 + one-statement Option E snapshot 1 plus
+    # one cold-pool checkout probe + BEGIN/ROLLBACK 2 = 5 statements; max is 5.
+    with pytest.raises(AssertionError):
+        assert_declared_budget("GET", "/api/v2/reading-graph", 6)
+    # GET /api/v2/reading-lists: auth 1 + list summary 1 + two cold-pool checkout
+    # probes = 4 statements; max is 4.
+    with pytest.raises(AssertionError):
+        assert_declared_budget("GET", "/api/v2/reading-lists", 5)
+    assert_declared_budget("GET", "/api/v2/reading-graph", 5)
+    assert_declared_budget("GET", "/api/v2/reading-lists", 4)
 
 
 @pytest.mark.parametrize("target", ["target", "custom-target", "/tmp/absolute-target"])
