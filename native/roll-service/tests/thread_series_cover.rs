@@ -592,6 +592,7 @@ async fn seed_confirmed_metadata(ctx: &Ctx, issue_id: i32, external_id: &str, me
         )
         .await
     }
+
 }
 
 #[tokio::test]
