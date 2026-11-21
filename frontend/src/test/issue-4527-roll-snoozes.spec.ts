@@ -87,10 +87,15 @@ for (const count of [1, 25]) {
       const pool = page.locator('[data-roll-pool]')
       await expect(pool).toBeVisible()
       await expect(pool.getByText('Daily Comic 1', { exact: true })).toHaveCount(0)
-      await expect(pool.getByText('Daily Comic 21', { exact: true })).toBeAttached()
+      // The d20 window is fixed before snoozes: no face ranked 21+ backfills.
+      await expect(pool.getByText('Daily Comic 21', { exact: true })).toHaveCount(0)
+      await expect(pool.getByText('Daily Comic 20', { exact: true })).toBeAttached()
+      await expect(pool).toHaveAttribute('aria-label', '19 in play, 19 mapped results')
       await page.reload()
       await expect(page.locator('[data-roll-pool]')).toBeVisible()
       await expect(page.locator('[data-roll-pool]').getByText('Daily Comic 1', { exact: true })).toHaveCount(0)
+      await expect(page.locator('[data-roll-pool]').getByText('Daily Comic 21', { exact: true })).toHaveCount(0)
+      await expect(page.locator('[data-roll-pool]')).toHaveAttribute('aria-label', '19 in play, 19 mapped results')
     }
   })
 }
