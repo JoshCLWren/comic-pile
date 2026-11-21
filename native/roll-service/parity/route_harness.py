@@ -59,7 +59,9 @@ def assert_declared_budget(method: str, path: str, *measurements: int | None) ->
     Returns:
         None; invalid measurements raise AssertionError.
     """
-    maximum = _budget_entry(method, path)["sql_budget"]["max_statements"]
+    budget = _budget_entry(method, path)["sql_budget"]
+    assert isinstance(budget, dict)
+    maximum = budget["max_statements"]
     assert isinstance(maximum, int) and maximum >= 0
     for measured in measurements:
         assert measured is not None, "pg_stat_statements must measure every covered route"
