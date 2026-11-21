@@ -13,7 +13,7 @@ WORKDIR /app
 RUN npm install -g pnpm@10.15.0
 
 # Copy workspace and dependency files first for layer caching
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml vercel.json ./
 COPY frontend/package.json frontend/
 
 RUN pnpm install --frozen-lockfile
