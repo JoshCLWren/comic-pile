@@ -498,15 +498,15 @@ async def test_update_reading_list_statements_respect_budget() -> None:
 
         body_large = json.dumps({"name": "Up-large", "mode": "loose", "issue_ids": full_ids[:200]})
         env2 = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_large)
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env2)
+        large, large_statements = await _measure_route(engine, env2)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_entries = large_body.get("entries")
+        assert isinstance(large_entries, list) and len(large_entries) == 200
 
-        assert small_delta is not None and large_delta is not None
-        assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+        _assert_fixed_route_budget(
+            "PUT", "/api/v2/reading-lists/{list_id}", small_statements, large_statements
+        )
     finally:
         await engine.dispose()
