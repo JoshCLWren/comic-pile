@@ -383,7 +383,9 @@ async def test_delete_reading_list_statements_bounded() -> None:
         )
         assert small_nested is not None, "pg_stat_statements.track=all is required for nested counts"
 
-        large_id = await _seed_one()
+        # The large target itself has 200 entries, so a query-per-entry delete
+        # regression cannot hide behind growth of unrelated one-entry lists.
+        large_id = await _seed_one(entry_count=200)
         # grow unrelated data
         raw = await asyncpg.connect(url)
         try:
