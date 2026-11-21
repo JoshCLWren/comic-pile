@@ -54,7 +54,7 @@ on:
       OMNIROUTE_MANAGEMENT_API_KEY:
         required: false
       PR_REBASE_TOKEN:
-        required: true
+        required: false
       FACTORY_READER_APP_ID:
         description: Optional read-only factory App (separate API quota bucket)
         required: false
@@ -129,6 +129,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
           FACTORY_WORKER: ${{ inputs.worker }}
+          FACTORY_NEON_LEASE_REQUIRED: ${{ secrets.NEON_API_KEY != '' }}
         run: |
           set -Eeuo pipefail
           printf '%s' "$FACTORY_ASSIGNMENT" | python3 .github/scripts/factory-work-controller.py validate-assignment --worker "$FACTORY_WORKER" >/dev/null
@@ -170,7 +171,9 @@ jobs:
       # workflow dispatch. Git fetch/push and PR creation use the dedicated
       # PAT so pull_request workflows and initial review use a trusted actor.
       GH_TOKEN: ${{ github.token }}
-      PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
+      # Without a push token, CI on factory pushes comes from the merge
+      # drain's workflow_dispatch recovery.
+      PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN || github.token }}
       # Worker 48 installation token inputs. Empty unless Josh has created the App.
       FACTORY_WORKER_48_APP_ID: ${{ secrets.FACTORY_WORKER_48_APP_ID }}
       FACTORY_WORKER_48_INSTALLATION_ID: ${{ secrets.FACTORY_WORKER_48_INSTALLATION_ID }}
@@ -217,7 +220,7 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-          token: ${{ secrets.PR_REBASE_TOKEN }}
+          token: ${{ secrets.PR_REBASE_TOKEN || github.token }}
       - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
         uses: actions/checkout@v7
         with:
