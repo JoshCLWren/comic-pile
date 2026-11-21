@@ -21,6 +21,12 @@ for (const count of [1, 25]) {
       }
       if (path.endsWith('/v2/auth/refresh')) return route.fulfill({ json: { access_token: 'test-access-token' } })
       if (path.endsWith('/v2/auth/csrf')) return route.fulfill({ json: { csrf_token: 'test-csrf' } })
+      if (path.endsWith('/v2/reading-graph')) {
+        return route.fulfill({ json: {
+          status: 'ok', cycles: [], cyclic_issue_ids: [], affected_lists: [],
+          affected_threads: [], repairs: [], unresolved_reference_count: 0,
+        } })
+      }
       if (path.endsWith('/roll/offer')) {
         if (count === 1) return route.fulfill({ status: 400, json: { detail: exhaustedMessage } })
         // SAFETY: this route receives the real Roll client payload; the assertion below checks its exclusion array.
