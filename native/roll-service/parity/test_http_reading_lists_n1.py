@@ -172,6 +172,9 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("GET", "/api/v2/reading-lists", small_delta, large_delta, small_nested, large_nested)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert large_nested <= small_nested + 2, (
+            f"nested statements grew: {small_nested} -> {large_nested}"
+        )
     finally:
         await engine.dispose()
 
@@ -249,6 +252,9 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}", small_delta, large_delta, small_nested, large_nested)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert large_nested <= small_nested + 2, (
+            f"nested statements grew: {small_nested} -> {large_nested}"
+        )
     finally:
         await engine.dispose()
 
@@ -328,6 +334,9 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}/reader", small_delta, large_delta, small_nested, large_nested)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert large_nested <= small_nested + 2, (
+            f"nested statements grew: {small_nested} -> {large_nested}"
+        )
     finally:
         await engine.dispose()
 
@@ -345,12 +354,17 @@ async def test_delete_reading_list_statements_bounded() -> None:
             await db.commit()
             token = _token(username, jti=f"jti-{uuid4().hex}")
 
-        async def _seed_one() -> int:
+        async def _seed_one(*, entry_count: int = 1) -> int:
             raw = await asyncpg.connect(url)
             try:
                 owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-                _, ids = await _insert_owned_thread(raw, owner_id, int(uuid4().int % 100000))
-                return await _insert_list(raw, owner_id, f"D-{uuid4().hex[:6]}", [ids[0]])
+                issue_ids: list[int] = []
+                for index in range(entry_count):
+                    _, ids = await _insert_owned_thread(
+                        raw, owner_id, int(uuid4().int % 100000) + index
+                    )
+                    issue_ids.append(ids[0])
+                return await _insert_list(raw, owner_id, f"D-{uuid4().hex[:6]}", issue_ids)
             finally:
                 await raw.close()
 
@@ -396,6 +410,9 @@ async def test_delete_reading_list_statements_bounded() -> None:
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", small_delta, large_delta, small_nested, large_nested)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert large_nested <= small_nested + 2, (
+            f"nested statements grew: {small_nested} -> {large_nested}"
+        )
     finally:
         await engine.dispose()
 
@@ -469,7 +486,13 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         assert large_nested is not None, "pg_stat_statements.track=all is required for nested counts"
 
         assert small_delta is not None and large_delta is not None
-        assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta, small_nested, large_nested)
+        assert_declared_budget(
+            "POST", "/api/v2/reading-lists", small_delta, large_delta, small_nested, large_nested
+        )
+        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert large_nested <= small_nested + 2, (
+            f"nested statements grew: {small_nested} -> {large_nested}"
+        )
     finally:
         await engine.dispose()
 
@@ -545,6 +568,12 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         assert large_nested is not None, "pg_stat_statements.track=all is required for nested counts"
 
         assert small_delta is not None and large_delta is not None
-        assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta, small_nested, large_nested)
+        assert_declared_budget(
+            "PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta, small_nested, large_nested
+        )
+        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert large_nested <= small_nested + 2, (
+            f"nested statements grew: {small_nested} -> {large_nested}"
+        )
     finally:
         await engine.dispose()
