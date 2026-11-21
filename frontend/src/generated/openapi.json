@@ -25855,7 +25855,7 @@
             "description": "Predecessor changes must be acknowledged"
           },
           "422": {
-            "description": "Invalid Issue or checkpoint"
+            "description": "Invalid Issue, checkpoint, or reading constraint cycle"
           }
         },
         "security": [

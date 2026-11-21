@@ -16099,7 +16099,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid Issue or checkpoint */
+            /** @description Invalid Issue, checkpoint, or reading constraint cycle */
             422: {
                 headers: {
                     [name: string]: unknown;
