@@ -1363,8 +1363,14 @@ mod cover_source_tests {
     use serde_json::json;
 
     #[test]
-    fn stored_image_sizes_follow_python_fallback_order() {
-        for key in ["original_url", "super_url", "medium_url", "small_url"] {
+    fn stored_image_sizes_include_thumbnail_fallback() {
+        for key in [
+            "original_url",
+            "super_url",
+            "medium_url",
+            "small_url",
+            "thumb_url",
+        ] {
             let mut metadata = json!({"image": {}});
             metadata["image"][key] = json!(" https://example.com/cover.jpg ");
             assert_eq!(
@@ -1380,6 +1386,15 @@ mod cover_source_tests {
         assert_eq!(
             extract_cover_source(&metadata),
             Some("https://example.com/medium.jpg")
+        );
+        // Deep hydration retains provider artwork under raw_provider_payload.
+        // #5624: a null primary_image must not hide a thumbnail-only cover.
+        let normalized = json!({"primary_image": null, "raw_provider_payload": {
+            "image": {"small_url": "", "thumb_url": " https://example.com/thumb.jpg "}
+        }});
+        assert_eq!(
+            extract_cover_source(&normalized),
+            Some("https://example.com/thumb.jpg")
         );
     }
 
