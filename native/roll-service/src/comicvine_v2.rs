@@ -1931,6 +1931,8 @@ fn normalize_roster_issue(row: &Value) -> Value {
         .and_then(|image| {
             // Match the issue card and search/confirm dialog: a provider entry
             // that only carries a thumbnail still has a cover (MQA-THREAD-004).
+            // Values are trimmed like the card projection's BTRIM so a blank
+            // size never wins over the thumbnail.
             [
                 "original_url",
                 "super_url",
@@ -1943,6 +1945,7 @@ fn normalize_roster_issue(row: &Value) -> Value {
                 image
                     .get(*key)
                     .and_then(Value::as_str)
+                    .map(str::trim)
                     .filter(|url| !url.is_empty())
             })
         })

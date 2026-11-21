@@ -217,7 +217,8 @@ fn normalized_metadata(
     let cover = image.and_then(|v| {
         // thumb_url is the provider's last stored size; the search/confirm
         // dialog already falls back to it, so a mapped issue must keep a cover
-        // even when every larger size is empty (MQA-THREAD-004).
+        // even when every larger size is empty (MQA-THREAD-004). Values are
+        // trimmed like the card projection's BTRIM so a blank size never wins.
         [
             "original_url",
             "super_url",
@@ -227,6 +228,7 @@ fn normalized_metadata(
         ]
         .iter()
         .filter_map(|k| v.get(*k).and_then(Value::as_str))
+        .map(str::trim)
         .find(|s| !s.is_empty())
     });
     let person = compact_refs(&result["person_credits"]);
