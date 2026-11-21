@@ -3,6 +3,10 @@ run-name: OpenCode Go free-model inference probe
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/opencode-go-inference-probe.yml'
 
 # Diagnostic only. No repository writes, no factory assignment, no lease mutations.
 permissions:
