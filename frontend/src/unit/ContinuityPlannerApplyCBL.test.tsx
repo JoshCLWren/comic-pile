@@ -108,14 +108,23 @@ describe('ContinuityPlannerPage - Custom CBL apply (#3609)', () => {
 
   beforeEach(() => {
     client = makeQueryClient()
+    // SAFETY: each API method is replaced by a vi.fn() stub configured below and restored in afterEach.
     continuityPlansApi.get = mocks.get as never
+    // SAFETY: each API method is replaced by a vi.fn() stub configured below and restored in afterEach.
     continuityPlansApi.list = mocks.list as never
+    // SAFETY: each API method is replaced by a vi.fn() stub configured below and restored in afterEach.
     continuityPlansApi.update = mocks.update as never
+    // SAFETY: each API method is replaced by a vi.fn() stub configured below and restored in afterEach.
     dependencyGroupsApi.list = mocks.listGroups as never
+    // SAFETY: each API method is replaced by a vi.fn() stub configured below and restored in afterEach.
     issuesApi.list = mocks.listIssues as never
+    // SAFETY: each API method is replaced by a vi.fn() stub configured below and restored in afterEach.
     threadsApi.list = mocks.listThreads as never
+    // SAFETY: each API method is replaced by a vi.fn() stub configured below and restored in afterEach.
     customCBLApi.list = mocks.cblList as never
+    // SAFETY: each API method is replaced by a vi.fn() stub configured below and restored in afterEach.
     customCBLApi.get = mocks.cblGet as never
+    // SAFETY: each API method is replaced by a vi.fn() stub configured below and restored in afterEach.
     customCBLApi.apply = mocks.cblApply as never
     vi.clearAllMocks()
     mocks.list.mockResolvedValue({ plans: [], next_page_token: null })
