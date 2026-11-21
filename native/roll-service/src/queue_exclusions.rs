@@ -541,3 +541,42 @@ pub fn check_excluded_status_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn restore_group_documentation() {}
+
+/// OpenAPI API for queue exclusion and restore operations.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    paths(
+        bulk_exclude_documentation,
+        bulk_restore_documentation,
+        check_excluded_status_documentation,
+        restore_group_documentation,
+    ),
+    components(schemas(
+        QueueExclusionSource,
+        BulkQueueExclusionRequest,
+        BulkQueueExclusionResponse,
+        BulkQueueRestoreRequest,
+        BulkQueueRestoreResponse,
+        ExcludedStatusCheckRequest,
+        ExcludedStatusCheckResponse,
+    )),
+    modifiers(&QueueExclusionsSecurityAddon)
+)]
+pub struct QueueExclusionsApi;
+
+struct QueueExclusionsSecurityAddon;
+
+impl utoipa::Modify for QueueExclusionsSecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "HTTPBearer",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::Http::new(
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    ),
+                ),
+            );
+        }
+    }
+}

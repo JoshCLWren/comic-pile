@@ -373,7 +373,9 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
         .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
         .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())
-        .merge_from(crate::undo_apply::UndoApplyApi::openapi());
+        .merge_from(crate::undo_apply::UndoApplyApi::openapi())
+        .merge_from(crate::queue_exclusions::QueueExclusionsApi::openapi())
+        .merge_from(crate::reading_list::ReadingListsV2Api::openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.
