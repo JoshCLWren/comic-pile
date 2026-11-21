@@ -29,7 +29,7 @@ case "${1:-}" in
   -h|--help) usage; exit 0 ;;
   --providers)
     python3 .github/scripts/factory_worker_slots.py sources |
-      python3 -c 'import json,sys; print("\\n".join("opencode-go (existing opencode-free lane)" if x=="opencode-free" else x for x in json.load(sys.stdin)))'
+      python3 -c 'import json,sys; print("\n".join("opencode-go (existing opencode-free lane)" if x=="opencode-free" else x for x in json.load(sys.stdin)))'
     exit 0
     ;;
 esac
