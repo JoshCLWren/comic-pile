@@ -579,3 +579,53 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         )
     finally:
         await engine.dispose()
+
+
+async def _measured_with_injected_queries(
+    engine: AsyncEngine,
+    url: str,
+    env: dict[str, str],
+    injected: int,
+) -> int:
+    """Measure one route call plus ``injected`` deliberate top-level queries."""
+    before, _ = await _counters(engine)
+    if injected:
+        raw = await asyncpg.connect(url)
+        try:
+            for _ in range(injected):
+                await raw.execute("SELECT 1")
+        finally:
+            await raw.close()
+    response, _, _, _ = await run_rust_example(BINARY, env)
+    assert response.get("status") == 200, response
+    after, _ = await _counters(engine)
+    assert before is not None and after is not None, "pg_stat_statements is required"
+    return after - before
+
+
+@pytest.mark.asyncio
+async def test_reading_lists_budget_rejects_extra_query_and_n1() -> None:
+    """One injected extra query and a per-row query must fail the same budget."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rlln1reject_{uuid4().hex[:12]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.commit()
+            token = _token(username, jti=f"jti-{uuid4().hex}")
+        env = _run_env(token, "GET", "/api/v2/reading-lists")
+        baseline = await _measured_with_injected_queries(engine, url, env, 0)
+        with pytest.raises(AssertionError):
+            assert_declared_budget(
+                "GET",
+                "/api/v2/reading-lists",
+                await _measured_with_injected_queries(engine, url, env, 1),
+            )
+        n1 = await _measured_with_injected_queries(engine, url, env, 200)
+        with pytest.raises(AssertionError):
+            assert_declared_budget("GET", "/api/v2/reading-lists", n1)
+        assert n1 > baseline + 2, f"per-row growth not detected: {baseline} -> {n1}"
+    finally:
+        await engine.dispose()
