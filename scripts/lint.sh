@@ -166,8 +166,8 @@ if should_run_python; then
 
     echo ""
     echo "Running CI-parity Python lint and type check..."
-    ruff check .
-    ty check --error-on-warning
+    run_python_tool ruff check .
+    run_python_tool ty check --error-on-warning
 
     echo ""
     echo "Checking for type/linter ignores in staged files..."
