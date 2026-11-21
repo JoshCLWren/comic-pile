@@ -550,6 +550,19 @@ async fn seed_confirmed_cover_raw(
         .unwrap();
 }
 
+async fn call_json(ctx: &Ctx, method: &str, path: &str, json_body: Value) -> (StatusCode, Value) {
+    let mut request = authed(method, path, &ctx.token, &ctx.csrf);
+    request
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+    *request.body_mut() = Body::from(json_body.to_string());
+    let response = router(ctx.state.clone()).oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 256 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    (status, body)
+}
+
 #[tokio::test]
 async fn series_cover_uses_thumb_url_when_no_larger_image_exists() {
     // MQA-THREAD-004 / #5624: a mapped ComicVine issue whose provider entry
