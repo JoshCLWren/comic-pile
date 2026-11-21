@@ -3,19 +3,10 @@
 from __future__ import annotations
 
 import os
-import sys
 from collections.abc import AsyncIterator
-from pathlib import Path
 
 import asyncpg
 import pytest_asyncio
-
-# CI runs this suite with PYTHONPATH=. (see .github/workflows/rust-roll.yml).
-# Add the repository root here as well so direct `pytest <path>` invocations,
-# including the factory fast checks, can import the `app.models` fixtures.
-_REPO_ROOT = str(Path(__file__).resolve().parents[3])
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
 
 _PARITY_DATABASE_LOCK = 4_535_000_002
 
