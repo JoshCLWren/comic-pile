@@ -769,6 +769,7 @@ pub async fn update_reading_list(
     .await
     .map_err(db::query_error)?;
 
+    let mut batched = Vec::with_capacity(request.issue_ids.len());
     for (position, issue_id) in request.issue_ids.iter().enumerate() {
         let old = old_by_issue.get(issue_id);
         let intent = request
@@ -828,14 +829,16 @@ pub async fn update_reading_list(
             );
             ApiError::Internal("Invalid checkpoint".into())
         })?;
-        tx.execute(
-            "INSERT INTO custom_cbl_entries
-             (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[&list_id, issue_id, &(position as i32), &(!targets.is_empty()),
-              &targets_json, &gate, &skipped],
-        ).await.map_err(db::query_error)?;
+        batched.push(BatchedEntry {
+            issue_id: *issue_id,
+            position: position as i32,
+            is_checkpoint: !targets.is_empty(),
+            targets_json,
+            gate: gate.to_string(),
+            skipped,
+        });
     }
+    insert_entries_batched(&tx, list_id, &batched).await?;
 
     graph_preflight(&tx, user).await?;
     let entries = load_entries(&tx, list_id).await?;
