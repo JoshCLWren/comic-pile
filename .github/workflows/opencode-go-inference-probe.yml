@@ -109,10 +109,12 @@ jobs:
               )
             ' events.jsonl > /dev/null; then
               echo "PASS: live $selected inference returned the expected text"
-              echo "## OpenCode Go inference verified" >> "$GITHUB_STEP_SUMMARY"
-              echo "- OIDC service-account token exchange: passed" >> "$GITHUB_STEP_SUMMARY"
-              echo "- Authenticated Go free-model catalog: passed" >> "$GITHUB_STEP_SUMMARY"
-              echo "- Exact provider/model inference: \`$selected\` passed" >> "$GITHUB_STEP_SUMMARY"
+              {
+                echo "## OpenCode Go inference verified"
+                echo "- OIDC service-account token exchange: passed"
+                echo "- Authenticated Go free-model catalog: passed"
+                echo "- Exact provider/model inference: \`$selected\` passed"
+              } >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             echo '::error::OpenCode returned no matching text response for the exact Go model'
