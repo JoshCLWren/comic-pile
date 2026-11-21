@@ -330,34 +330,31 @@ async def test_delete_reading_list_statements_bounded() -> None:
 
         small_id = await _seed_one()
         env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{small_id}")
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small, small_statements = await _measure_route(engine, env)
         assert small.get("status") == 204, small
         assert small.get("body") is None
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
 
-        large_id = await _seed_one()
-        # grow unrelated data
+        # The large target itself contains many entries. Growing only unrelated
+        # lists would miss a query-per-entry deletion regression.
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            for i in range(20, 120):
+            long_issue_ids: list[int] = []
+            for i in range(5, 200):
                 _, ids = await _insert_owned_thread(raw, owner_id, i)
-                await _insert_list(raw, owner_id, f"X-{i}", [ids[0]])
+                long_issue_ids.append(ids[0])
+            large_id = await _insert_list(raw, owner_id, "Long delete", long_issue_ids)
         finally:
             await raw.close()
 
         env2 = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
-        _, _, before2 = await db_counters(engine)
-        large, _, _, _ = await run_rust_example(BINARY, env2)
+        large, large_statements = await _measure_route(engine, env2)
         assert large.get("status") == 204, large
-        _, _, after2 = await db_counters(engine)
-        large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        assert large.get("body") is None
 
-        assert small_delta is not None and large_delta is not None
-        assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
-        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        _assert_fixed_route_budget(
+            "DELETE", "/api/v2/reading-lists/{list_id}", small_statements, large_statements
+        )
     finally:
         await engine.dispose()
 
