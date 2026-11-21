@@ -162,10 +162,17 @@ pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
         .get("image")
         .and_then(Value::as_object)
         .and_then(|image| {
-            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
-                .iter()
-                .filter_map(|key| image.get(*key).and_then(Value::as_str))
-                .find(|value| !value.is_empty())
+            [
+                "original_url",
+                "super_url",
+                "medium_url",
+                "small_url",
+                "thumb_url",
+            ]
+            .iter()
+            .filter_map(|key| image.get(*key).and_then(Value::as_str))
+            .map(str::trim)
+            .find(|value| !value.is_empty())
         });
     json!({
         "name": result.get("name"),
@@ -209,10 +216,21 @@ fn normalized_metadata(
     }
     let image = obj.get("image").and_then(Value::as_object);
     let cover = image.and_then(|v| {
-        ["original_url", "super_url", "medium_url", "small_url"]
-            .iter()
-            .filter_map(|k| v.get(*k).and_then(Value::as_str))
-            .find(|s| !s.is_empty())
+        // thumb_url is the provider's last stored size; the search/confirm
+        // dialog already falls back to it, so a mapped issue must keep a cover
+        // even when every larger size is empty (MQA-THREAD-004). Values are
+        // trimmed like the card projection's BTRIM so a blank size never wins.
+        [
+            "original_url",
+            "super_url",
+            "medium_url",
+            "small_url",
+            "thumb_url",
+        ]
+        .iter()
+        .filter_map(|k| v.get(*k).and_then(Value::as_str))
+        .map(str::trim)
+        .find(|s| !s.is_empty())
     });
     let person = compact_refs(&result["person_credits"]);
     let present = person.as_array().is_some_and(|v| !v.is_empty());
@@ -1224,6 +1242,25 @@ mod tests {
         let mut incomplete = result;
         incomplete.as_object_mut().unwrap().remove("person_credits");
         assert!(normalized_metadata(&incomplete, 29319).is_err());
+    }
+    #[test]
+    fn thumbnail_only_provider_image_is_kept_as_primary_image() {
+        // MQA-THREAD-004: a deep refresh must not drop the cover when the
+        // provider only supplies `thumb_url`; the card projection falls back to
+        // primary_image for confirmed mappings.
+        let result = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
+            "cover_date":"1988-03-01", "store_date":"1988-03-24",
+            "image":{"original_url":null,"super_url":"","medium_url":" ",
+                     "small_url":"","thumb_url":"https://comicvine.example/thumb.jpg"},
+            "volume":{"id": 4001,"name":"Hellblazer"},
+            "person_credits":[{"id":1,"name":"Jamie Delano","api_detail_url":"https://example"}],
+            "character_credits":[], "team_credits":[], "story_arc_credits":[],
+            "date_last_updated":"2020-01-01T00:00:00+00:00"});
+        let (metadata, _, _, _) = normalized_metadata(&result, 29319).unwrap();
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://comicvine.example/thumb.jpg")
+        );
     }
     #[test]
     fn provider_timestamp_accepts_rfc3339_and_comicvine_space_format() {

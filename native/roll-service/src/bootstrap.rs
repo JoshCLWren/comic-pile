@@ -259,10 +259,16 @@ fn extract_cover_source(metadata: &Value) -> Option<&str> {
         .find_map(nonempty)
         .or_else(|| {
             let image = metadata.get("image")?;
-            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
-                .iter()
-                .filter_map(|key| image.get(key))
-                .find_map(nonempty)
+            [
+                "original_url",
+                "super_url",
+                "medium_url",
+                "small_url",
+                "thumb_url",
+            ]
+            .iter()
+            .filter_map(|key| image.get(key))
+            .find_map(nonempty)
         })
 }
 
@@ -1349,7 +1355,13 @@ mod cover_source_tests {
 
     #[test]
     fn stored_image_sizes_follow_python_fallback_order() {
-        for key in ["original_url", "super_url", "medium_url", "small_url"] {
+        for key in [
+            "original_url",
+            "super_url",
+            "medium_url",
+            "small_url",
+            "thumb_url",
+        ] {
             let mut metadata = json!({"image": {}});
             metadata["image"][key] = json!(" https://example.com/cover.jpg ");
             assert_eq!(
@@ -1365,6 +1377,24 @@ mod cover_source_tests {
         assert_eq!(
             extract_cover_source(&metadata),
             Some("https://example.com/medium.jpg")
+        );
+    }
+
+    #[test]
+    fn thumbnail_only_provider_entry_still_yields_a_cover() {
+        // MQA-THREAD-004: the search/confirm dialog renders `thumb_url`, so a
+        // confirmed mapping whose larger sizes are empty must not become
+        // "No cover" on Roll.
+        let metadata = json!({"image": {
+            "original_url": null,
+            "super_url": "",
+            "medium_url": " ",
+            "small_url": "",
+            "thumb_url": "https://comicvine.example/covers/thumb.jpg"
+        }});
+        assert_eq!(
+            extract_cover_source(&metadata),
+            Some("https://comicvine.example/covers/thumb.jpg")
         );
     }
 
