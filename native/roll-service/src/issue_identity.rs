@@ -2837,7 +2837,7 @@ async fn do_cbl_adoption_commit(
             prow.get::<_, String>(6),
         )
     } else {
-        // Try existing adopted plan by source path
+        // A general commit may create a plan, but only an explicit target may update one.
         let existing = find_existing_adopted_plan_tx(&tx, user_id, &source_path)
             .await
             .map_err(|e| {
@@ -2848,43 +2848,44 @@ async fn do_cbl_adoption_commit(
                 }
             })?;
         if let Some(pid) = existing {
-            let prow = tx.run_query_one("SELECT id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&pid, &user_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("load existing plan: {e}")) })?;
-            (
-                prow.get::<_, i32>(0),
-                false,
-                prow.get::<_, String>(1),
-                prow.get::<_, String>(2),
-                serde_json::from_str::<JsonValue>(&prow.get::<_, String>(3))
-                    .unwrap_or(serde_json::json!([])),
-                serde_json::from_str::<JsonValue>(&prow.get::<_, String>(4))
-                    .unwrap_or(serde_json::json!([])),
-                prow.get::<_, String>(5),
-                prow.get::<_, String>(6),
-            )
-        } else {
-            let name = if list_name.is_empty() {
-                format!("CBL adoption for {source_path}")
-            } else {
-                list_name.clone()
-            };
-            let lanes = serde_json::json!([{"id":"default","name":"Default","order":0}]);
-            let prow = tx.run_query_one(
-                "INSERT INTO continuity_plans (user_id,name,ordering_mode,lanes_json,nodes_json,created_at,updated_at) VALUES ($1,$2,'informational',$3::jsonb,'[]'::jsonb,NOW(),NOW()) RETURNING id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text",
-                &[&user_id,&name,&tokio_postgres::types::Json(&lanes)]
-            ).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("insert plan: {e}")) })?;
-            (
-                prow.get::<_, i32>(0),
-                true,
-                prow.get::<_, String>(1),
-                prow.get::<_, String>(2),
-                serde_json::from_str::<JsonValue>(&prow.get::<_, String>(3))
-                    .unwrap_or(serde_json::json!([])),
-                serde_json::from_str::<JsonValue>(&prow.get::<_, String>(4))
-                    .unwrap_or(serde_json::json!([])),
-                prow.get::<_, String>(5),
-                prow.get::<_, String>(6),
-            )
+            return Err(CommitErr::ExplicitTargetRequired(pid));
         }
+
+        let name = if list_name.is_empty() {
+            format!("CBL adoption for {source_path}")
+        } else {
+            list_name.clone()
+        };
+        let lanes = serde_json::json!([{"id":"default","name":"Default","order":0}]);
+        let prow = tx.run_query_one(
+            "WITH allocated AS (
+                 SELECT nextval('continuity_plans_id_seq') AS id
+             ), named AS (
+                 SELECT id, CASE
+                     WHEN EXISTS (SELECT 1 FROM continuity_plans WHERE user_id=$1 AND name=$2)
+                     THEN $2 || ' (CBL #' || id::text || ')'
+                     ELSE $2
+                 END AS name
+                 FROM allocated
+             )
+             INSERT INTO continuity_plans (id,user_id,name,ordering_mode,lanes_json,nodes_json,created_at,updated_at)
+             SELECT id,$1,name,'informational',$3::jsonb,'[]'::jsonb,NOW(),NOW()
+             FROM named
+             RETURNING id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text",
+            &[&user_id,&name,&tokio_postgres::types::Json(&lanes)]
+        ).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("insert plan: {e}")) })?;
+        (
+            prow.get::<_, i32>(0),
+            true,
+            prow.get::<_, String>(1),
+            prow.get::<_, String>(2),
+            serde_json::from_str::<JsonValue>(&prow.get::<_, String>(3))
+                .unwrap_or(serde_json::json!([])),
+            serde_json::from_str::<JsonValue>(&prow.get::<_, String>(4))
+                .unwrap_or(serde_json::json!([])),
+            prow.get::<_, String>(5),
+            prow.get::<_, String>(6),
+        )
     };
 
     // Merge nodes (preserves key semantics and propagates DB outages as 503).
