@@ -435,6 +435,8 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         assert small_delta is not None and large_delta is not None
         assert small_nested is not None and large_nested is not None, "pg_stat_statements.track=all is required for nested statements"
         assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta, small_nested, large_nested)
+        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert large_nested <= small_nested + 2, f"nested statement count grew: {small_nested} -> {large_nested}"
     finally:
         await engine.dispose()
 
@@ -506,6 +508,8 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         assert small_delta is not None and large_delta is not None
         assert small_nested is not None and large_nested is not None, "pg_stat_statements.track=all is required for nested statements"
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta, small_nested, large_nested)
+        assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
+        assert large_nested <= small_nested + 2, f"nested statement count grew: {small_nested} -> {large_nested}"
     finally:
         await engine.dispose()
 
