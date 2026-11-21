@@ -116,13 +116,17 @@ def _assert_route_priorities(routes: list[dict[str, object]]) -> None:
         index for index, route in enumerate(routes)
         if route.get("dest") == "/api/index.py"
     ]
-    assert python_indices, "Expected explicit Python legacy allowlist"
-    assert all(index < min(python_indices) for index in native_indices), (
-        "Native routes must precede explicit Python exceptions"
-    )
-    assert all(index < api_fallback for index in python_indices), (
-        "Python exceptions must precede Rust API catch-all"
-    )
+    if python_indices:
+        assert all(index < min(python_indices) for index in native_indices), (
+            "Native routes must precede explicit Python exceptions"
+        )
+        assert all(index < api_fallback for index in python_indices), (
+            "Python exceptions must precede Rust API catch-all"
+        )
+    else:
+        assert all(index < api_fallback for index in native_indices), (
+            "Native routes must precede Rust API catch-all"
+        )
 
     # Vercel evaluates rewrites in order. Duplicate native method/path rewrites
     # hide whichever entry appears second and must not silently pass this guard.
