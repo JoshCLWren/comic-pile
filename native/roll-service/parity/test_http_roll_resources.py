@@ -255,12 +255,15 @@ async def test_scoped_roll_resources_match_the_canonical_schema() -> None:
         )
         assert snoozed["status"] == 200, snoozed
         assert snoozed["eligible_statements"] == 1, snoozed
-        # Browser snoozes leave the queue before the die bound, exactly as the
-        # offer does, so the pool backfills from beyond the snoozed window.
+        # The top-die window is chosen before this browser's snoozes are
+        # removed, exactly as the offer does, so the pool only shrinks: a
+        # snoozed face is never backfilled from a rank below the die
+        # (MQA-ROLL-014). With d4 and the first two threads snoozed, two
+        # faces of the original window remain.
         assert snoozed["body"] == {
             "die": 4,
-            "issue_ids": owner_issue_ids[2:6],
-            "thread_ids": owner_thread_ids[2:6],
+            "issue_ids": owner_issue_ids[2:4],
+            "thread_ids": owner_thread_ids[2:4],
             "pool_reason": "ready",
         }
 
