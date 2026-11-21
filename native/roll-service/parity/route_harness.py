@@ -230,21 +230,32 @@ def format_measurement(measurement: RouteMeasurement) -> str:
     )
 
 
-async def measure_route(
+async def measure_route_response(
     binary: str,
     env: dict[str, str],
     engine: AsyncEngine,
     route: str,
     fixture: str,
-) -> RouteMeasurement:
-    """Measure one invocation: snapshot counters, run, snapshot, print, return."""
+) -> tuple[dict[str, object], RouteMeasurement]:
+    """Measure any HTTP response, including list and no-content payloads.
+
+    Args:
+        binary: Rust example executable to invoke.
+        env: Environment containing the request and isolated database settings.
+        engine: Route database engine used for counter snapshots.
+        route: Canonical method and path label for the measurement record.
+        fixture: Small/large fixture label for the measurement record.
+
+    Returns:
+        The raw runner response and its top-level/nested SQL measurements.
+    """
     xacts_before, blocks_before, statements_before = await db_counters(engine)
     nested_before = await db_nested_statements(engine)
     result, raw, wall, cpu = await run_rust_example(binary, env)
     xacts_after, blocks_after, statements_after = await db_counters(engine)
     nested_after = await db_nested_statements(engine)
-    body = result.get("body")
-    assert isinstance(body, dict)
+    response_body = result.get("body")
+    body = response_body if isinstance(response_body, dict) else {}
     measurement = RouteMeasurement(
         route=route,
         fixture=fixture,
@@ -268,6 +279,19 @@ async def measure_route(
         body=body,
     )
     print(format_measurement(measurement), flush=True)
+    return result, measurement
+
+
+async def measure_route(
+    binary: str,
+    env: dict[str, str],
+    engine: AsyncEngine,
+    route: str,
+    fixture: str,
+) -> RouteMeasurement:
+    """Measure one object-bodied invocation and return its counters."""
+    result, measurement = await measure_route_response(binary, env, engine, route, fixture)
+    assert isinstance(result.get("body"), dict)
     return measurement
 
 
