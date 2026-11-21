@@ -289,16 +289,36 @@ pub async fn needs_work(client: &mut Client) -> Result<bool, MigrateError> {
         };
     }
 
-    let applied: std::collections::BTreeSet<i32> = runner()
-        .get_applied_migrations_async(client)
-        .await?
-        .iter()
-        .map(|m| m.version())
-        .collect();
-    let pending = runner()
-        .get_migrations()
-        .iter()
-        .any(|m| !applied.contains(&m.version()));
+    // Validate recorded history exactly as `up` would (refinery aborts on
+    // divergent or unknown applied migrations). Without this, `plan` could
+    // report "no work" for tampered history and the deploy would skip `up`.
+    let embedded = runner().get_migrations().clone();
+    let recorded = runner().get_applied_migrations_async(client).await?;
+    for applied in &recorded {
+        match embedded.iter().find(|m| m.version() == applied.version()) {
+            None => {
+                return Err(MigrateError(format!(
+                    "applied migration V{} ({}) is missing from this binary; \
+                     refusing to plan against unknown history",
+                    applied.version(),
+                    applied.name()
+                )));
+            }
+            Some(known)
+                if known.name() != applied.name() || known.checksum() != applied.checksum() =>
+            {
+                return Err(MigrateError(format!(
+                    "applied migration V{} ({}) is divergent: recorded name/checksum \
+                     differ from the embedded migration",
+                    applied.version(),
+                    applied.name()
+                )));
+            }
+            Some(_) => {}
+        }
+    }
+    let applied: std::collections::BTreeSet<i32> = recorded.iter().map(|m| m.version()).collect();
+    let pending = embedded.iter().any(|m| !applied.contains(&m.version()));
     if pending {
         return Ok(true);
     }

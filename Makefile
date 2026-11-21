@@ -322,9 +322,13 @@ dev-frontend:  ## Run frontend dev server only (pnpm --filter frontend run dev)
 	fi
 
 # Docker test environment for API and TypeScript Playwright tests
-docker-test-up:  ## Start Docker test environment (PostgreSQL + API)
+TEST_INGRESS_CONF ?= $(CURDIR)/.docker-test-ingress.conf
+DOCKER_TEST = TEST_INGRESS_CONF="$(TEST_INGRESS_CONF)" docker compose -f docker-compose.test.yml
+docker-test-up:  ## Start Docker test environment (PostgreSQL + Rust API + nginx frontend on :8000)
 	@echo "Starting Docker test environment..."
-	docker compose -f docker-compose.test.yml up -d --build
+	@test -f static/react/index.html || pnpm --filter frontend run build
+	@node scripts/generate_ui_audit_ingress.mjs vercel.json "$(TEST_INGRESS_CONF)"
+	$(DOCKER_TEST) up -d --build
 	@echo "Waiting for services to be ready..."
 	@(for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45; do \
 		if curl -f http://localhost:8000/health 2>/dev/null >/dev/null; then \
@@ -339,14 +343,14 @@ docker-test-up:  ## Start Docker test environment (PostgreSQL + API)
 
 docker-test-down:  ## Stop Docker test environment
 	@echo "Stopping Docker test environment..."
-	docker compose -f docker-compose.test.yml down -v
+	$(DOCKER_TEST) down -v
 
 docker-test-logs:  ## Show Docker test environment logs
-	docker compose -f docker-compose.test.yml logs -f postgres-test
+	$(DOCKER_TEST) logs -f postgres-test
 
 docker-test-health:  ## Check Docker test environment health
 	@echo "Checking Docker test environment..."
-	@docker compose -f docker-compose.test.yml ps
+	@$(DOCKER_TEST) ps
 
 # TypeScript Playwright browser tests with Docker
 test-e2e-browser-docker:  ## Run TypeScript Playwright tests with Docker (starts and stops Docker)
