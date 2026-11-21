@@ -11,7 +11,7 @@ from factory_ci_scope import factory_only
 
 class FactoryScopeTests(unittest.TestCase):
     """Verify fast path accepts only factory-infrastructure changes."""
-    def test_factory_only_changes(self):
+    def test_factory_only_changes(self) -> None:
         """Whitelisted factory code and workflow paths qualify."""
         self.assertTrue(factory_only([
             ".github/workflows/fixed-model-factory-dispatch.yml",
@@ -22,7 +22,7 @@ class FactoryScopeTests(unittest.TestCase):
         self.assertTrue(factory_only([".github/workflows/factory-issue-wakeup.yml"]))
         self.assertTrue(factory_only([".github/actions/factory-state-cache/action.yml"]))
 
-    def test_mixed_changes_must_run_full_ci(self):
+    def test_mixed_changes_must_run_full_ci(self) -> None:
         """Application, deployment and policy paths force full CI."""
         for path in (
             "frontend/src/App.tsx", "crates/comicpile/src/lib.rs",
@@ -36,7 +36,7 @@ class FactoryScopeTests(unittest.TestCase):
                 self.assertFalse(factory_only([".github/scripts/factory_opencode_go.py", path]))
 
 
-    def test_git_rename_from_frontend_to_factory_cannot_use_fast_path(self):
+    def test_git_rename_from_frontend_to_factory_cannot_use_fast_path(self) -> None:
         """Git move detection must expose both ends of a cross-scope rename."""
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -61,7 +61,7 @@ class FactoryScopeTests(unittest.TestCase):
             self.assertEqual(sorted(names), ["docs/factory/App.tsx", "frontend/src/App.tsx"])
             self.assertFalse(factory_only(names))
 
-    def test_empty_and_unsafe(self):
+    def test_empty_and_unsafe(self) -> None:
         """No-diff and directory traversal cases cannot bypass full CI."""
         self.assertFalse(factory_only([]))
         self.assertFalse(factory_only(["../.github/scripts/factory_a.py"]))
