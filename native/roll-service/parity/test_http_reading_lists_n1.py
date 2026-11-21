@@ -310,7 +310,6 @@ async def test_delete_reading_list_statements_bounded() -> None:
         _, _, after = await db_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
 
-        large_id = await _seed_one()
         # Grow unrelated data and a second target list with many entries so the
         # fixed delete budget is exercised by deleting a long list.
         raw = await asyncpg.connect(url)
