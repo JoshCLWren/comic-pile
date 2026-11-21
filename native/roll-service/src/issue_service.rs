@@ -1365,7 +1365,12 @@ mod tests {
                       created_at, updated_at)
                  VALUES (500, 110, 50, 'confirmed', '{}'::json, now(), now()),
                         (501, 102, 51, 'confirmed', '{}'::json, now(), now()),
-                        (502, 301, 52, 'confirmed', '{}'::json, now(), now());"#)
+                        (502, 301, 52, 'confirmed', '{}'::json, now(), now()),
+                        (503, 402, 53, 'confirmed', '{}'::json, now(), now());"#)
+                        (53, 'comicvine', 'issue', '4000-45',
+                         '{"image":{"original_url":null,"super_url":"","medium_url":" ",
+                           "small_url":"","thumb_url":"https://comicvine.example/covers/thumb-only.jpg"}}'::json,
+                          now(), now());
             .await
             .expect("seed canonical schema");
         let user = AuthenticatedUser::for_test(1);

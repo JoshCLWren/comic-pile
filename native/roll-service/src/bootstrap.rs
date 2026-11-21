@@ -1349,7 +1349,13 @@ mod cover_source_tests {
 
     #[test]
     fn stored_image_sizes_follow_python_fallback_order() {
-        for key in ["original_url", "super_url", "medium_url", "small_url"] {
+        for key in [
+            "original_url",
+            "super_url",
+            "medium_url",
+            "small_url",
+            "thumb_url",
+        ] {
             let mut metadata = json!({"image": {}});
             metadata["image"][key] = json!(" https://example.com/cover.jpg ");
             assert_eq!(
@@ -1383,7 +1389,25 @@ mod cover_source_tests {
             "image": {"super_url": "https://example.com/super.jpg"}})),
             Some("https://example.com/super.jpg")
         );
-        for metadata in [
+    }
+    #[test]
+    fn thumbnail_only_provider_entry_still_yields_a_cover() {
+        // MQA-THREAD-004: the search/confirm dialog renders `thumb_url`, so a
+        // confirmed mapping whose larger sizes are empty must not become
+        // "No cover" on Roll.
+        let metadata = json!({"image": {
+            "original_url": null,
+            "super_url": "",
+            "medium_url": " ",
+            "small_url": "",
+            "thumb_url": "https://comicvine.example/covers/thumb.jpg"
+        }});
+        assert_eq!(
+            extract_cover_source(&metadata),
+            Some("https://comicvine.example/covers/thumb.jpg")
+        );
+    }
+    for metadata in [
             json!(null),
             json!({}),
             json!({"image": "bad"}),
