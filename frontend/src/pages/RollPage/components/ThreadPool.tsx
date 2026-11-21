@@ -24,6 +24,7 @@ interface ThreadPoolProps {
   onUnsnooze: (threadId: number) => void
   onToggleSnoozed: () => void
   onShuffle: () => void
+  onResetDice?: () => void
   unsnoozeIsPending: boolean
   shuffleIsPending: boolean
   eligibleThreadIds?: number[] | null
