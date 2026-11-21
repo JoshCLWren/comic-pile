@@ -365,6 +365,84 @@ async fn series_cover_uses_the_issue_card_mapping_preference() {
 }
 
 #[tokio::test]
+async fn thumb_only_cover_is_shared_by_thread_and_issue_card() {
+    let ctx = setup("sc-thumb-only").await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Detective Comics", "active", 1).await;
+    let issue = seed_issue(&ctx, thread_id, "5", 1, "unread").await;
+    set_frontier(&ctx, thread_id, Some(issue)).await;
+    let cover = "https://comicvine.example/detective-5-thumb.jpg";
+    let metadata = json!({
+        "issue_number": "5",
+        "volume": {"name": "Detective Comics"},
+        "image": {"thumb_url": cover}
+    });
+    let client = ctx.state.pool.get().await.unwrap();
+    client
+        .execute(
+            "UPDATE threads SET total_issues = 1 WHERE id = $1",
+            &[&thread_id],
+        )
+        .await
+        .unwrap();
+    let identity: i32 = client
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
+             created_at, updated_at) VALUES ('comicvine', 'issue', '4000-5', $1, NOW(), NOW()) \
+             RETURNING id",
+            &[&metadata],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    client
+        .execute(
+            "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
+             created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
+            &[&issue, &identity],
+        )
+        .await
+        .unwrap();
+    drop(client);
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let thread = body["threads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|thread| thread["id"] == thread_id)
+        .expect("owned thread");
+    assert_eq!(thread["series_cover_image_url"], json!(cover));
+    assert_eq!(thread["health"]["confirmed_issue_count"], json!(1));
+    assert_eq!(thread["health"]["needs_mapping_count"], json!(0));
+
+    let response = router(ctx.state.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v2/issues/cards")
+                .header(header::AUTHORIZATION, format!("Bearer {}", ctx.token))
+                .header("x-csrf-token", &ctx.csrf)
+                .header(header::COOKIE, format!("csrf_token={}", ctx.csrf))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({"issue_ids": [issue]}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let card = &body["items"][0];
+    assert_eq!(card["issue_id"], json!(issue));
+    assert_eq!(card["has_confirmed_identity"], json!(true));
+    assert_eq!(card["mapping_state"], json!("confirmed"));
+    assert_eq!(card["comicvine_issue_id"], json!("4000-5"));
+    assert_eq!(card["cover_image_url"], json!(cover));
+}
+
+#[tokio::test]
 async fn series_cover_null_when_no_confirmed_cover() {
     let ctx = setup("series-cover-null").await;
     let thread_id = seed_thread(&ctx, ctx.user_id, "No Cover", "active", 1).await;
