@@ -1424,6 +1424,24 @@ mod tests {
     }
 
     #[test]
+    fn roster_normalization_uses_thumb_url_as_last_cover_fallback() {
+        let raw = json!({
+            "name": "Detective Comics #5",
+            "issue_number": "5",
+            "image": {"thumb_url": "https://comicvine.example/thumb.jpg"}
+        });
+        let normalized = normalize_roster_issue_metadata(&raw);
+        assert_eq!(
+            normalized["primary_image"].as_str(),
+            Some("https://comicvine.example/thumb.jpg")
+        );
+        assert_eq!(
+            normalized["raw_provider_payload"]["image"]["thumb_url"].as_str(),
+            Some("https://comicvine.example/thumb.jpg")
+        );
+    }
+
+    #[test]
     fn backoff_does_not_retry_exhausted_jobs_without_cooldown() {
         assert!(CLAIM.contains("FOR UPDATE SKIP LOCKED"));
         // Failed jobs are durable but must retry after their cooldown without
