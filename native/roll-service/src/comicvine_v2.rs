@@ -3161,10 +3161,7 @@ mod tests {
                       "small_url": "", "thumb_url": "https://cv.example/thumb.jpg"},
             "volume": {"id": 4050, "name": "Detective Comics"}
         }));
-        assert_eq!(
-            metadata["primary_image"],
-            "https://cv.example/thumb.jpg"
-        );
+        assert_eq!(metadata["primary_image"], "https://cv.example/thumb.jpg");
     }
 
     #[test]

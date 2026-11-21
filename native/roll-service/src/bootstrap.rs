@@ -1409,6 +1409,27 @@ mod cover_source_tests {
     }
 
     #[test]
+    fn thumbnail_only_and_raw_provider_covers_are_not_lost() {
+        assert_eq!(
+            extract_cover_source(&json!({
+                "image": {"original_url": "", "super_url": "", "medium_url": "",
+                          "small_url": "", "thumb_url": "https://example.com/thumb.jpg"}
+            })),
+            Some("https://example.com/thumb.jpg")
+        );
+        assert_eq!(
+            extract_cover_source(&json!({
+                "primary_image": null,
+                "raw_provider_payload": {"image": {
+                    "original_url": "", "super_url": "", "medium_url": "",
+                    "small_url": "", "thumb_url": "https://example.com/raw-thumb.jpg"
+                }}
+            })),
+            Some("https://example.com/raw-thumb.jpg")
+        );
+    }
+
+    #[test]
     fn first_nonempty_source_wins_even_before_url_validation() {
         let metadata = json!({"image_url": " invalid-source ",
             "primary_image": "https://example.com/primary.jpg",
