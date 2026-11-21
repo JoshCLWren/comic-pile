@@ -287,7 +287,10 @@ async fn insert_entries(
     let issue_ids: Vec<i32> = entries.iter().map(|entry| entry.issue_id).collect();
     let positions: Vec<i32> = entries.iter().map(|entry| entry.position).collect();
     let checkpoints: Vec<bool> = entries.iter().map(|entry| entry.is_checkpoint).collect();
-    let targets: Vec<String> = entries.iter().map(|entry| entry.targets_json.clone()).collect();
+    let targets: Vec<String> = entries
+        .iter()
+        .map(|entry| entry.targets_json.clone())
+        .collect();
     let gates: Vec<String> = entries.iter().map(|entry| entry.gate.clone()).collect();
     let skipped: Vec<bool> = entries.iter().map(|entry| entry.skipped).collect();
     tx.execute(
