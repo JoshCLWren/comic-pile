@@ -196,6 +196,7 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}")
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
         body = small.get("body")
@@ -226,13 +227,20 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         assert len(large_body.get("entries", [])) == 200
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None
         assert small_nested is not None and large_nested is not None, "nested pg_stat_statements is required"
