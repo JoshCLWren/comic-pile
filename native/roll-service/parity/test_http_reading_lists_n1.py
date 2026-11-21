@@ -458,17 +458,31 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         finally:
             await raw.close()
 
-        body_small = json.dumps({"name": "Up-small", "mode": "loose", "issue_ids": issue_ids_small})
+        body_small = json.dumps(
+            {
+                "name": "Up-small",
+                "mode": "loose",
+                "issue_ids": issue_ids_small,
+                "checkpoint_issue_ids": [issue_ids_small[1]],
+                "checkpoint_targets": {str(issue_ids_small[1]): [issue_ids_small[2]]},
+                "entry_intents": {
+                    str(issue_ids_small[0]): {"gate": "none", "skipped": True},
+                    str(issue_ids_small[1]): {"gate": "none", "skipped": False},
+                },
+            }
+        )
         env = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_small)
-        _, _, before = await db_counters(engine)
-        small, _, _, _ = await run_rust_example(BINARY, env)
+        small, small_statements = await _measure_route(engine, env)
         assert small.get("status") == 200, small
         small_body = small.get("body")
         assert isinstance(small_body, dict)
         assert small_body.get("name") == "Up-small"
         assert small_body.get("issue_count") == 5
-        _, _, after = await db_counters(engine)
-        small_delta = (after - before) if before is not None and after is not None else None
+        small_entries = small_body.get("entries")
+        assert isinstance(small_entries, list) and len(small_entries) == 5
+        assert small_entries[0]["skipped"] is True
+        assert small_entries[1]["is_checkpoint"] is True
+        assert small_entries[1]["checkpoint_target_issue_ids"] == [issue_ids_small[2]]
 
         raw = await asyncpg.connect(url)
         try:
