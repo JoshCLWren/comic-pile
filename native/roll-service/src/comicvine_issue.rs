@@ -407,9 +407,15 @@ fn image(metadata: &Value) -> Option<String> {
     as_string(&metadata["image_url"])
         .or_else(|| as_string(&metadata["primary_image"]))
         .or_else(|| {
-            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
-                .iter()
-                .find_map(|key| as_string(&metadata["image"][*key]))
+            [
+                "original_url",
+                "super_url",
+                "medium_url",
+                "small_url",
+                "thumb_url",
+            ]
+            .iter()
+            .find_map(|key| as_string(&metadata["image"][*key]))
         })
 }
 
@@ -711,6 +717,24 @@ mod tests {
         assert_eq!(people[0].roles, vec!["writer", "co-plotter"]);
         assert_eq!(people[1].creator_id, None);
     }
+
+    #[test]
+    fn image_falls_back_to_thumb_url_when_larger_sizes_are_absent() {
+        let thumb_only = json!({"image": {"thumb_url": "https://comicvine.example/thumb.jpg"}});
+        assert_eq!(
+            image(&thumb_only).as_deref(),
+            Some("https://comicvine.example/thumb.jpg")
+        );
+        let empty_small = json!({"image": {
+            "small_url": "  ",
+            "thumb_url": "https://comicvine.example/thumb.jpg"
+        }});
+        assert_eq!(
+            image(&empty_small).as_deref(),
+            Some("https://comicvine.example/thumb.jpg")
+        );
+    }
+
     #[test]
     fn queue_is_owner_scoped_and_single_statement() {
         assert!(READ_SQL.contains("JOIN me ON me.user_id=t.user_id"));
