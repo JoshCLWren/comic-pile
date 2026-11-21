@@ -1,16 +1,16 @@
-utc: 2026-11-21T11:51:21Z
-uptime: 1103.96s load: 0.00 0.01 0.04
+utc: 2026-11-21T11:51:38Z
+uptime: 1120.58s load: 0.00 0.01 0.04
 processes: 195
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700        1147       11956          51        2955       14552
+Mem:           15700        1145       11958          51        2955       14555
 Swap:              0           0           0
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
 /dev/mapper/cow-root  145G   56G   89G  39% /
 /dev/mapper/cow-root  145G   56G   89G  39% /
 --- top rss (KiB, name only)
-286412 opencode.exe
+285368 opencode.exe
 207468 Runner.Worker
 137852 provjobd3977665
 116616 Runner.Listener
@@ -22,9 +22,9 @@ Filesystem            Size  Used Avail Use% Mounted on
 30024 networkd-dispat
 21412 php-fpm8.5
 21412 php-fpm8.5
-17752 systemd-journal
+17768 systemd-journal
+16316 hosted-compute-
 16120 systemd
-15880 hosted-compute-
 --- top cpu (name only)
  0.6 provjobd3977665
  0.6 Runner.Worker
