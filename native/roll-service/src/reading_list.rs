@@ -445,7 +445,14 @@ pub async fn create_reading_list(
         .unwrap_or_default()
         .into_iter()
         .collect();
-    for (position, issue_id) in request.issue_ids.iter().enumerate() {
+    let issues: Vec<i32> = request.issue_ids.iter().copied().collect();
+    let mut batch_issue_ids: Vec<i32> = Vec::with_capacity(issues.len());
+    let mut batch_positions: Vec<i32> = Vec::with_capacity(issues.len());
+    let mut batch_is_checkpoints: Vec<String> = Vec::with_capacity(issues.len());
+    let mut batch_targets: Vec<String> = Vec::with_capacity(issues.len());
+    let mut batch_gates: Vec<String> = Vec::with_capacity(issues.len());
+    let mut batch_skippeds: Vec<String> = Vec::with_capacity(issues.len());
+    for (position, issue_id) in issues.iter().enumerate() {
         let intent = request
             .entry_intents
             .as_ref()
@@ -462,25 +469,37 @@ pub async fn create_reading_list(
             .and_then(|targets| targets.get(issue_id))
             .cloned()
             .unwrap_or_default();
+        let targets_json = serde_json::to_string(&targets).map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ApiError::Internal("Invalid checkpoint".to_string())
+        })?;
+        batch_issue_ids.push(*issue_id);
+        batch_positions.push((position as i32) + 1);
+        batch_is_checkpoints.push(checkpoints.contains(issue_id).to_string());
+        batch_targets.push(targets_json);
+        batch_gates.push(gate.to_string());
+        batch_skippeds.push(skipped.to_string());
+    }
+    if !batch_issue_ids.is_empty() {
         tx.execute(
             "INSERT INTO custom_cbl_entries
                (list_id, issue_id, position, created_at, is_checkpoint,
                 checkpoint_target_issue_ids, gate, skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
+             SELECT $1, t.issue_id, t.position, NOW(), t.is_checkpoint::bool,
+                    t.checkpoint_target_issue_ids::json, t.gate, t.skipped::bool
+             FROM unnest($2::int[], $3::int[], $4::text[], $5::text[], $6::text[], $7::text[])
+                    AS t(issue_id, position, is_checkpoint, checkpoint_target_issue_ids, gate, skipped)",
             &[
                 &list_id,
-                issue_id,
-                &(position as i32),
-                &checkpoints.contains(issue_id),
-                &serde_json::to_string(&targets).map_err(|e| {
-                    tracing::debug!(
-                        error_kind = crate::error_kind(&e),
-                        "preserved underlying error before mapping"
-                    );
-                    ApiError::Internal("Invalid checkpoint".to_string())
-                })?,
-                &gate,
-                &skipped,
+                &batch_issue_ids,
+                &batch_positions,
+                &batch_is_checkpoints,
+                &batch_targets,
+                &batch_gates,
+                &batch_skippeds,
             ],
         )
         .await
