@@ -54,7 +54,7 @@ jobs:
             exit 0
           fi
           git fetch --no-tags origin "$BASE_SHA" "$HEAD_SHA"
-          git diff --name-only -z "$BASE_SHA" "$HEAD_SHA" > "$changed"
+          git diff --no-renames --name-only -z "$BASE_SHA" "$HEAD_SHA" > "$changed"
           # Classification policy MUST come from the trusted base, not the PR.
           # Otherwise a PR could modify this script to report itself as fast.
           trusted="$RUNNER_TEMP/trusted-factory-ci-scope.py"
