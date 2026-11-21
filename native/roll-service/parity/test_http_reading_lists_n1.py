@@ -12,7 +12,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-lists-n1-secret"
 BINARY = str(cargo_example_path("http_reading_lists"))
@@ -310,12 +316,16 @@ async def test_delete_reading_list_statements_bounded() -> None:
         _, _, after = await db_counters(engine)
         small_delta = (after - before) if before is not None and after is not None else None
 
-        large_id = await _seed_one()
-        # grow unrelated data
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-            for i in range(20, 120):
+            large_issue_ids = []
+            for i in range(20, 220):
+                _, ids = await _insert_owned_thread(raw, owner_id, i)
+                large_issue_ids.append(ids[0])
+            large_id = await _insert_list(raw, owner_id, "DeleteLarge", large_issue_ids)
+            # grow unrelated data
+            for i in range(220, 320):
                 _, ids = await _insert_owned_thread(raw, owner_id, i)
                 await _insert_list(raw, owner_id, f"X-{i}", [ids[0]])
         finally:
@@ -323,10 +333,17 @@ async def test_delete_reading_list_statements_bounded() -> None:
 
         env2 = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 204, large
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested = (
+            (nested_after2 - nested_before2)
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
