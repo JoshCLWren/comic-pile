@@ -343,7 +343,7 @@
         "total_statements": 4,
         "basis": "auth 1 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1",
         "grows_with_data": false,
-        "max_statements": 6,
+        "max_statements": 4,
         "proof_reference": "native/roll-service/src/reading_graph.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_graph_n1.py"
@@ -373,8 +373,7 @@
         "total_statements": 2,
         "basis": "auth extractor 1 + list summary query 1; set-based",
         "grows_with_data": false,
-        "max_statements": 6,
-        "runtime_overhead_statements": 2,
+        "max_statements": 2,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
@@ -389,8 +388,7 @@
         "total_statements": 9,
         "grows_with_data": true,
         "basis": "auth 1 + lock 1 + owned-issue check 1 + list insert 1 + graph_preflight 1 + entries load 1 + one entry insert 1 (+2 tx control); grows with entry count",
-        "max_statements": 209,
-        "runtime_overhead_statements": 2,
+        "max_statements": 9,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
@@ -435,8 +433,7 @@
         "total_statements": 13,
         "grows_with_data": true,
         "basis": "auth 1 + lock 1 + old entries load 1 + owned-issue check 1 + list update 1 + entries delete 1 + one entry insert 1 + graph_preflight 1 + new entries load 1 + list reload 1 (+2 tx control); grows with entry count",
-        "max_statements": 213,
-        "runtime_overhead_statements": 2,
+        "max_statements": 13,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
