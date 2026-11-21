@@ -408,7 +408,8 @@ async def test_reading_graph_repairs_confirmed_statements_respect_budget() -> No
                 )
                 await raw.execute(
                     "INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,created_at) "
-                    "VALUES ($1,$2,'reader','A',NOW())",
+                    "VALUES ($1,$2,'reader','A',NOW()) "
+                    "ON CONFLICT (source_issue_id, target_issue_id) DO NOTHING",
                     a, b,
                 )
                 return cid
