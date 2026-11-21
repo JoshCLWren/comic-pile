@@ -223,6 +223,11 @@ async fn card(
                          NULLIF(BTRIM(x.metadata_json#>>'{image,medium_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,small_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,thumb_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,original_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,super_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,medium_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,small_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,thumb_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json->>'cover_image_url'), '')
                      )
                  ELSE NULL END AS cover_url
@@ -279,6 +284,11 @@ pub(crate) async fn cards(
                          NULLIF(BTRIM(x.metadata_json#>>'{image,medium_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,small_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json#>>'{image,thumb_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,original_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,super_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,medium_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,small_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,thumb_url}'), ''),
                          NULLIF(BTRIM(x.metadata_json->>'cover_image_url'), '')
                      )
                  ELSE NULL END AS cover_url
