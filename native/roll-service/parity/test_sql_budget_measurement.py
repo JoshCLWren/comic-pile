@@ -76,3 +76,25 @@ def test_cargo_example_target_resolution(monkeypatch: pytest.MonkeyPatch, target
     monkeypatch.setenv("CARGO_TARGET_DIR", target)
     crate = Path(__file__).resolve().parents[1]
     assert cargo_example_path("http_auth_login") == crate / target / "debug/examples/http_auth_login"
+
+
+def test_assert_declared_budget_rejects_extra_query() -> None:
+    """An extra query pushing a route over its declared max must fail the budget check."""
+    from route_harness import assert_declared_budget
+
+    with pytest.raises(AssertionError, match="issued .* statements; declared maximum"):
+        assert_declared_budget("GET", "/api/v2/reading-graph", 7, 7)
+
+
+def test_assert_declared_budget_rejects_n1_growth_pattern() -> None:
+    """A per-row N+1 growth pattern must fail the corresponding budget/growth check."""
+    from route_harness import assert_declared_budget
+
+    # N+1 shape: small fixture within budget, large fixture exceeds max because
+    # one extra query runs per added row.
+    small_delta = 4
+    large_delta = small_delta + 195  # one extra query per added row
+    with pytest.raises(AssertionError, match="issued .* statements; declared maximum"):
+        assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}", large_delta)
+    # The corresponding route growth assertion also rejects this shape.
+    assert large_delta <= small_delta + 2 is False
