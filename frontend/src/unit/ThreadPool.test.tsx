@@ -241,7 +241,7 @@ describe('ThreadPool Component', () => {
       onResetDice: () => { resetRequests += 1 },
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset Dice', exact: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Dice' }))
 
     expect(resetRequests).toBe(1)
     expect(screen.getByText(/Every series is snoozed/i)).toBeInTheDocument()

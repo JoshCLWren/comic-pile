@@ -319,7 +319,7 @@ it('opens Reset Dice confirmation from an idle snooze-exhausted pool', async () 
 
   expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
   expect(resetDiceMutateSpy).not.toHaveBeenCalled()
-  await user.click(screen.getByRole('button', { name: 'Reset Dice', exact: true }))
+  await user.click(screen.getByRole('button', { name: 'Reset Dice' }))
   expect(screen.getByRole('dialog', { name: 'Select Die' })).toBeInTheDocument()
   expect(resetDiceMutateSpy).not.toHaveBeenCalled()
 
