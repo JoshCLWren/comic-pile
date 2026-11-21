@@ -36,6 +36,20 @@ BLOCK_BYTES = 8192
 SQL_BUDGET_SOURCES = Path(__file__).resolve().parents[3] / "docs/api/sql-budget-sources.json"
 
 
+def _declared_sql_budget(method: str, path: str) -> dict[str, object]:
+    """Return one source-backed SQL budget or fail for an ambiguous route."""
+    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
+    matching = [
+        entry
+        for entry in document["operations"]
+        if entry["method"] == method and entry["path"] == path
+    ]
+    assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
+    budget = matching[0]["sql_budget"]
+    assert isinstance(budget, dict)
+    return budget
+
+
 def assert_declared_budget(method: str, path: str, *measurements: int | None) -> None:
     """Fail when a measured native route exceeds its declared source budget.
 
@@ -47,20 +61,36 @@ def assert_declared_budget(method: str, path: str, *measurements: int | None) ->
     Returns:
         None; invalid measurements raise AssertionError.
     """
-    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
-    matching = [
-        entry
-        for entry in document["operations"]
-        if entry["method"] == method and entry["path"] == path
-    ]
-    assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
-    maximum = matching[0]["sql_budget"]["max_statements"]
+    maximum = _declared_sql_budget(method, path)["max_statements"]
     assert isinstance(maximum, int) and maximum >= 0
     for measured in measurements:
         assert measured is not None, "pg_stat_statements must measure every covered route"
         assert measured <= maximum, (
             f"{method} {path} issued {measured} statements; declared maximum is {maximum}"
         )
+
+
+def assert_declared_fixed_growth(
+    method: str,
+    path: str,
+    small: int | None,
+    large: int | None,
+) -> None:
+    """Enforce a route's source-declared fixed statement-count contract.
+
+    Args:
+        method: HTTP method of the declared operation.
+        path: Route path of the declared operation.
+        small: Top-level statement count for the small fixture.
+        large: Top-level statement count for the large fixture.
+
+    Returns:
+        None; a growing or data-dependent route raises AssertionError.
+    """
+    budget = _declared_sql_budget(method, path)
+    assert budget["grows_with_data"] is False, f"{method} {path} must declare fixed growth"
+    assert small is not None and large is not None, "pg_stat_statements is required"
+    assert large <= small + 2, f"statement count grew: {small} -> {large}"
 
 
 @dataclass(frozen=True)
