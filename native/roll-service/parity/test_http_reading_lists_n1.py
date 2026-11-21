@@ -461,6 +461,9 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         _assert_nested_clean(nested_before, nested_after, "reading-list small")
         _assert_nested_clean(nested_before2, nested_after2, "reading-list large")
         assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta)
+        assert large_delta <= small_delta + 2, (
+            f"create statement count grew with entries: {small_delta} -> {large_delta}"
+        )
     finally:
         await engine.dispose()
 
@@ -531,5 +534,75 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         _assert_nested_clean(nested_before, nested_after, "reading-list small")
         _assert_nested_clean(nested_before2, nested_after2, "reading-list large")
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+        assert large_delta <= small_delta + 2, (
+            f"update statement count grew with entries: {small_delta} -> {large_delta}"
+        )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reading_list_budget_rejects_extra_and_per_row_queries() -> None:
+    """An injected extra query and a per-row N+1 must fail the route's own checks."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        username = f"rlrj1_{uuid4().hex[:12]}"
+        raw = await asyncpg.connect(url)
+        try:
+            owner_id = await raw.fetchval(
+                "INSERT INTO users (username) VALUES ($1) RETURNING id", username
+            )
+            for index in range(5):
+                _, ids = await _insert_owned_thread(raw, owner_id, index)
+                await _insert_list(raw, owner_id, f"L-{index}", [ids[0]])
+        finally:
+            await raw.close()
+        env = _run_env(_token(username, jti=f"jti-{uuid4().hex}"), "GET", "/api/v2/reading-lists")
+
+        _, _, before = await db_counters(engine)
+        baseline_response, _, _, _ = await run_rust_example(BINARY, env)
+        _, _, after = await db_counters(engine)
+        assert baseline_response.get("status") == 200
+        assert before is not None and after is not None
+        baseline = after - before
+        assert_declared_budget("GET", "/api/v2/reading-lists", baseline)
+
+        extra_env = {**env, "RUST_ROLL_TEST_EXTRA_STATEMENTS": "1"}
+        _, _, extra_before = await db_counters(engine)
+        extra_response, _, _, _ = await run_rust_example(BINARY, extra_env)
+        _, _, extra_after = await db_counters(engine)
+        assert extra_response.get("status") == 200
+        assert extra_before is not None and extra_after is not None
+        one_extra = extra_after - extra_before
+        assert one_extra == baseline + 1, f"injection did not add one query: {baseline} -> {one_extra}"
+        with pytest.raises(AssertionError):
+            assert_declared_budget("GET", "/api/v2/reading-lists", one_extra)
+
+        raw = await asyncpg.connect(url)
+        try:
+            for index in range(5, 200):
+                _, ids = await _insert_owned_thread(raw, owner_id, index)
+                await _insert_list(raw, owner_id, f"L-{index}", [ids[0]])
+        finally:
+            await raw.close()
+        _, _, large_before = await db_counters(engine)
+        large_response, _, _, _ = await run_rust_example(BINARY, env)
+        _, _, large_after = await db_counters(engine)
+        assert large_response.get("status") == 200
+        assert large_before is not None and large_after is not None
+        large = large_after - large_before
+        assert large == baseline, f"real route grew with lists: {baseline} -> {large}"
+
+        n1_env = {**env, "RUST_ROLL_TEST_EXTRA_STATEMENTS": "200"}
+        _, _, n1_before = await db_counters(engine)
+        n1_response, _, _, _ = await run_rust_example(BINARY, n1_env)
+        _, _, n1_after = await db_counters(engine)
+        assert n1_response.get("status") == 200
+        assert n1_before is not None and n1_after is not None
+        per_row = n1_after - n1_before
+        assert per_row == large + 200, f"per-row injection failed: {large} -> {per_row}"
+        with pytest.raises(AssertionError):
+            assert per_row <= baseline + 2
     finally:
         await engine.dispose()
