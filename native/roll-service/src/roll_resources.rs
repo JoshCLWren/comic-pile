@@ -825,7 +825,8 @@ mod tests {
         );
         assert_eq!(ints(&eligible, "issue_ids"), vec![200, 300, 400, 500, 600]);
 
-        // Browser snoozes still leave the queue before the die bound.
+        // Browser snoozes are applied after the die bound, so the pool only
+        // shrinks: nothing below the top-`die` window backfills the gap.
         let (status, snoozed) = fixture
             .get("/api/v2/roll/eligible-issue-ids?snoozed=20", Some(&token))
             .await;
