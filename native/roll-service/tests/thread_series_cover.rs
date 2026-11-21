@@ -227,6 +227,35 @@ async fn seed_confirmed_cover(
         .unwrap();
 }
 
+async fn seed_confirmed_metadata(ctx: &Ctx, issue_id: i32, external_id: &str, metadata: Value) {
+    let identity: i32 = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
+             created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
+            &[&external_id, &metadata],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
+             created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
+            &[&issue_id, &identity],
+        )
+        .await
+        .unwrap();
+}
+
 fn thread_cover(body: &Value, title: &str) -> Option<String> {
     let threads = body["threads"].as_array()?;
     threads
