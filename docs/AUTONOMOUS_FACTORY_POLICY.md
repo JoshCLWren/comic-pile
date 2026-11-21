@@ -141,7 +141,7 @@ targeted local verification, exact-head CI repair, actual independent review,
 gated merge, authorized deployment and real production acceptance. A PR or
 scheduled-review handoff alone is not ordinary completion. When an eligible
 local independent reviewer can run, start it rather than waiting for scheduled
-pickup; use the executable ACP review path (Rotisserie docs).
+pickup; use [the executable ACP review path](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/LOCAL_FACTORY_REVIEW.md).
 
 Implementation and CI-repair workers are contributors and cannot independently
 approve their resulting head. Record actual reviewer identity, confirmed ACP
@@ -153,7 +153,7 @@ model-selection metadata and final reports/verdicts, never full logs/transcripts
 The coordinator checks all existing merge and production authorization gates;
 this workflow grants no additional authority. Remote PR/backlog intake thresholds
 do not apply to local sessions. Detailed Codex routing lives in
-`.agents/skills/crouton-factory-codex/SKILL.md`. <!-- docs-path-check: ignore -->
+[.agents/skills/crouton-factory-codex/SKILL.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/crouton-factory-codex/SKILL.md).
 
 Factory ownership is a connection-pool lock around the next action, not a permanent assignment to the model or worker that first touched the issue or PR.
 
@@ -191,7 +191,7 @@ Factory ownership is a connection-pool lock around the next action, not a perman
 ## Runtime provider discovery and ephemeral models
 
 Worker/lease capacity is derived from the provider integration registry by
-`factory_worker_slots.py`, never from manually approved model IDs. The <!-- docs-path-check: ignore -->
+[factory_worker_slots.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/factory_worker_slots.py), never from manually approved model IDs. The
 dispatcher verifies credential availability, provider capacity, current
 ownership and runtime health before assignment. A new published model can
 be used without a roster-update PR. Current catalogs give **candidates**;
@@ -319,7 +319,7 @@ while inspecting PR content, and a missing parser fails closed with an actionabl
 
 ### Owner-enabled factory-only immediate merge exception
 
-The Factory-only Fast Merge (Rotisserie docs) lane is an explicit
+The Factory-only Fast Merge lane is an explicit
 owner-authorized exception to the ordinary gated review and CI-wait process.
 For trusted, unowned, non-draft PRs changing **only** the controller's
 factory infrastructure allowlist, immediately attempt a SHA-pinned squash
@@ -589,7 +589,7 @@ Only autonomous Factory implementation PRs should participate. Exclude Dependabo
 
 ### Implementation
 
-The `stale_pr_decay.py` module in `.github/scripts/` provides: <!-- docs-path-check: ignore -->
+The [stale_pr_decay.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/stale_pr_decay.py) module in `.github/scripts/` provides:
 - `get_staleness_baseline()` — builds the rolling population baseline
 - `is_stale_attempt()` — checks if a PR age exceeds the threshold
 - `process_stale_prs()` — evaluates aged PRs and reports them without closing or resetting them
@@ -857,5 +857,5 @@ Old-run reconciliation preserves resumed owners, stages and ordinary commits.
 Publication never certifies checks, approval or successful delivery. Failed
 checks preserve code and remain failed. Normal product CI/review/merge gates
 remain intact; the existing factory-only fast lane is unchanged. See
-persisted work handoff (Rotisserie docs) for trusted execution, branch
+[persisted work handoff](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/FACTORY_CHECKPOINTS.md) for trusted execution, branch
 identity, cancellation reconciliation and retention.
