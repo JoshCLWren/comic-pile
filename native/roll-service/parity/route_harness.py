@@ -143,6 +143,7 @@ def assert_no_statement_growth(
 ) -> None:
     """Fail when any fixed-budget statement component grows with data size."""
     budget = _budget_entry(method, path)["sql_budget"]
+    assert isinstance(budget, dict)
     assert budget["grows_with_data"] is False, f"{method} {path} must have a fixed SQL budget"
     for component in ("application", "transaction_control", "runtime_overhead", "nested"):
         small_count = getattr(small, component)
