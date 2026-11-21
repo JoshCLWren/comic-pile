@@ -1297,6 +1297,50 @@ pub async fn check_thread_memberships(
     }))
 }
 
+/// Documentation-only operations for reading-list v2 membership checks.
+
+/// Documentation-only operation for reading-list membership check.
+#[utoipa::path(
+    post,
+    path = "/api/v2/reading-lists/memberships:check",
+    tag = "reading-lists",
+    request_body = ReadingListMembershipCheckRequest,
+    responses(
+        (status = 200, description = "Membership check completed", body = ReadingListMembershipCheckResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Invalid request body")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn check_thread_memberships_documentation() {}
+
+/// OpenAPI API for reading-list membership checks.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    paths(check_thread_memberships_documentation),
+    components(schemas(ReadingListMembershipCheckRequest, ReadingListMembershipCheckResponse)),
+    modifiers(&ReadingListsSecurityAddon)
+)]
+pub struct ReadingListsV2Api;
+
+struct ReadingListsSecurityAddon;
+
+impl utoipa::Modify for ReadingListsSecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "HTTPBearer",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::Http::new(
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    ),
+                ),
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

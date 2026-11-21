@@ -474,3 +474,70 @@ pub async fn restore_group(
         restored_thread_ids,
     }))
 }
+
+/// Documentation-only operations for queue exclusion v2 resources.
+/// Generated from the handlers above using utoipa to produce the OpenAPI contract.
+
+/// Documentation-only operation for bulk queue exclusion.
+#[utoipa::path(
+    post,
+    path = "/api/v2/queue-exclusions",
+    tag = "queue-exclusions",
+    request_body = BulkQueueExclusionRequest,
+    responses(
+        (status = 200, description = "Bulk queue exclusion completed", body = BulkQueueExclusionResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Invalid request body")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn bulk_exclude_documentation() {}
+
+/// Documentation-only operation for bulk queue exclusion restore.
+#[utoipa::path(
+    post,
+    path = "/api/v2/queue-exclusions/restore",
+    tag = "queue-exclusions",
+    request_body = BulkQueueRestoreRequest,
+    responses(
+        (status = 200, description = "Bulk queue exclusion restore completed", body = BulkQueueRestoreResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Invalid request body")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn bulk_restore_documentation() {}
+
+/// Documentation-only operation for excluded status check.
+#[utoipa::path(
+    post,
+    path = "/api/v2/queue-exclusions/status:check",
+    tag = "queue-exclusions",
+    request_body = ExcludedStatusCheckRequest,
+    responses(
+        (status = 200, description = "Excluded status check completed", body = ExcludedStatusCheckResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Invalid request body")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn check_excluded_status_documentation() {}
+
+/// Documentation-only operation for queue exclusion group restore.
+#[utoipa::path(
+    post,
+    path = "/api/v2/queue-exclusion-groups/{group_id}/restore",
+    tag = "queue-exclusions",
+    params(("group_id" = i32, Path, description = "Queue exclusion group identifier")),
+    responses(
+        (status = 200, description = "Queue exclusion group restore completed", body = BulkQueueRestoreResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Queue exclusion group not found")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn restore_group_documentation() {}
