@@ -519,10 +519,7 @@ fn search_result(value: &Value) -> Option<ComicVineSeriesResult> {
         start_year: coerce_provider_int(object.get("start_year")),
         issue_count: coerce_provider_int(object.get("count_of_issues")),
         site_detail_url: python_str(object.get("site_detail_url")),
-        image_url: object
-            .get("image")
-            .and_then(Value::as_object)
-            .and_then(|image| first_truthy(image, "medium_url", "small_url")),
+        image_url: provider_image_url(object.get("image")),
     })
 }
 
