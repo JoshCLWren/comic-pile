@@ -298,25 +298,35 @@ async def test_delete_reading_list_statements_bounded() -> None:
             await db.commit()
             token = _token(username, jti=f"jti-{uuid4().hex}")
 
-        async def _seed_one() -> int:
+        async def _seed_one(entry_count: int) -> int:
             raw = await asyncpg.connect(url)
             try:
                 owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-                _, ids = await _insert_owned_thread(raw, owner_id, int(uuid4().int % 100000))
-                return await _insert_list(raw, owner_id, f"D-{uuid4().hex[:6]}", [ids[0]])
+                issue_ids: list[int] = []
+                for i in range(entry_count):
+                    _, ids = await _insert_owned_thread(raw, owner_id, int(uuid4().int % 1000000) + i)
+                    issue_ids.append(ids[0])
+                return await _insert_list(raw, owner_id, f"D-{uuid4().hex[:6]}", issue_ids)
             finally:
                 await raw.close()
 
-        small_id = await _seed_one()
+        small_id = await _seed_one(1)
         env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{small_id}")
+        nested_before = await db_nested_statements(engine)
         _, _, before = await db_counters(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 204, small
         assert small.get("body") is None
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested = (
+            nested_after - nested_before
+            if nested_before is not None and nested_after is not None
+            else None
+        )
 
-        large_id = await _seed_one()
+        large_id = await _seed_one(200)
         # grow unrelated data
         raw = await asyncpg.connect(url)
         try:
@@ -328,13 +338,25 @@ async def test_delete_reading_list_statements_bounded() -> None:
             await raw.close()
 
         env2 = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
+        nested_before2 = await db_nested_statements(engine)
         _, _, before2 = await db_counters(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 204, large
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested = (
+            nested_after2 - nested_before2
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
 
         assert small_delta is not None and large_delta is not None
+        assert small_nested is not None and large_nested is not None, (
+            "pg_stat_statements track=all is required to measure nested statements separately"
+        )
+        assert small_nested == 0, f"unexpected nested statements: {small_nested}"
+        assert large_nested == 0, f"unexpected nested statements: {large_nested}"
         assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
