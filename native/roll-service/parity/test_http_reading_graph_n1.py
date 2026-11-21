@@ -171,6 +171,8 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
+        _assert_nested_clean(nested_before, nested_after, "graph small")
+        _assert_nested_clean(nested_before2, nested_after2, "graph large")
         assert_declared_budget("GET", "/api/v2/reading-graph", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
@@ -252,9 +254,14 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert small_body.get("applied") is False
         assert small_body.get("status_before") == "cycle"
         assert small_body.get("status_after") == "ok"
+        assert small_body.get("removed") == "Reading List deleted"
+        # Both repair modes return the post-repair graph, even for a preview.
         graph = small_body.get("graph")
-        assert isinstance(graph, dict) and graph.get("status") == "cycle"
-        assert any(r.get("action") == "delete_list" and r.get("list_id") == list_id for r in graph.get("repairs", []))
+        assert isinstance(graph, dict)
+        assert graph.get("status") == "ok"
+        assert graph.get("cycles") == []
+        assert graph.get("repairs") == []
+        _assert_nested_clean(nested_before, nested_after, "repairs preview small")
         _, _, after = await db_counters(engine)
         nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
@@ -276,12 +283,14 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert large_body.get("applied") is False
         assert large_body.get("status_before") == "cycle"
         large_graph = large_body.get("graph")
-        assert isinstance(large_graph, dict) and large_graph.get("status") == "cycle"
+        assert isinstance(large_graph, dict) and large_graph.get("status") == "ok"
+        assert large_body.get("status_after") == "ok"
         _, _, after2 = await db_counters(engine)
         nested_after2 = await db_nested_statements(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
+        _assert_nested_clean(nested_before2, nested_after2, "repairs preview large")
         assert_declared_budget("POST", "/api/v2/reading-graph/repairs", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
