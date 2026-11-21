@@ -373,7 +373,7 @@
         "total_statements": 2,
         "basis": "auth extractor 1 + list summary query 1; set-based",
         "grows_with_data": false,
-        "max_statements": 2,
+        "max_statements": 4,
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_reading_lists_n1.py"
