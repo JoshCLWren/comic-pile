@@ -106,7 +106,9 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         small_delta = (after - before) if before is not None and after is not None else None
         nested_after = await db_nested_statements(engine)
         small_nested_delta = (
-            (nested_after - nested_before) if nested_before is not None and nested_after is not None else None
+            nested_after - nested_before
+            if nested_before is not None and nested_after is not None
+            else None
         )
         # The authenticated Option E snapshot must not nest statements in
         # triggers or functions; nested statements are tracked separately.
@@ -133,7 +135,9 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
         nested_after2 = await db_nested_statements(engine)
         large_nested_delta = (
-            (nested_after2 - nested_before2) if nested_before2 is not None and nested_after2 is not None else None
+            nested_after2 - nested_before2
+            if nested_before2 is not None and nested_after2 is not None
+            else None
         )
         assert large_nested_delta == 0, "reading-graph snapshot must not run nested statements"
 
