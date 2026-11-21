@@ -454,7 +454,7 @@ export default function CblBrowserPage() {
       Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
     if (!hasLocalChoices) return previewQuery.data
     return applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
-  }, [seriesDecisions, entryDecisions])
+  }, [previewQuery.data, seriesDecisions, entryDecisions])
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
   const seriesGroups = useMemo(() => (preview ? buildCblSeriesGroups(preview) : []), [preview])
