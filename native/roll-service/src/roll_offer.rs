@@ -832,12 +832,13 @@ mod tests {
     }
 
     #[test]
-    fn bounded_pool_backfills_after_snoozing() {
+    fn snoozes_never_backfill_below_the_die_window() {
         let candidates: Vec<_> = (1..=4).map(frontier).collect();
         let excluded = HashSet::from([2, 3]);
         let pool = offer_frontiers(&candidates, &excluded, 2);
-        // Snoozes leave the eligible queue before taking the d2 window.
-        assert_eq!(ids(&pool), vec![1, 4]);
+        // The d2 window is chosen first; snoozed faces are not replaced by
+        // deeper-ranked candidates.
+        assert_eq!(ids(&pool), vec![1]);
 
         let excluded = HashSet::from([3]);
         let pool = offer_frontiers(&candidates, &excluded, 4);
