@@ -311,13 +311,16 @@ async def test_delete_reading_list_statements_bounded() -> None:
         small_delta = (after - before) if before is not None and after is not None else None
 
         large_id = await _seed_one()
-        # grow unrelated data
+        # Grow a second target list to many entries so the delete path is
+        # exercised against a long list, not only single-entry lists.
         raw = await asyncpg.connect(url)
         try:
             owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            long_issue_ids: list[int] = []
             for i in range(20, 120):
                 _, ids = await _insert_owned_thread(raw, owner_id, i)
-                await _insert_list(raw, owner_id, f"X-{i}", [ids[0]])
+                long_issue_ids.extend(ids)
+            large_id = await _insert_list(raw, owner_id, f"Long-{uuid4().hex[:6]}", long_issue_ids[:200])
         finally:
             await raw.close()
 
@@ -392,7 +395,8 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None
-        assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta)
+        assert_declared_budget("POST", "/api/v2/reading-lists", small_delta)
+        assert large_delta > small_delta, f"statement count grew with entry count: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
 
@@ -456,6 +460,7 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None
-        assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
+        assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta)
+        assert large_delta > small_delta, f"statement count grew with entry count: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
