@@ -8,7 +8,9 @@ from factory_ci_scope import factory_only
 
 
 class FactoryScopeTests(unittest.TestCase):
+    """Verify fast path accepts only factory-infrastructure changes."""
     def test_factory_only_changes(self):
+        """Whitelisted factory code and workflow paths qualify."""
         self.assertTrue(factory_only([
             ".github/workflows/fixed-model-factory-dispatch.yml",
             ".github/workflows/free-model-factory-entry.yml",
@@ -19,6 +21,7 @@ class FactoryScopeTests(unittest.TestCase):
         self.assertTrue(factory_only([".github/actions/factory-state-cache/action.yml"]))
 
     def test_mixed_changes_must_run_full_ci(self):
+        """Application, deployment and policy paths force full CI."""
         for path in (
             "frontend/src/App.tsx", "crates/comicpile/src/lib.rs",
             "migrations/0001.sql", "Cargo.lock", "Dockerfile.ci",
@@ -31,6 +34,7 @@ class FactoryScopeTests(unittest.TestCase):
                 self.assertFalse(factory_only([".github/scripts/factory_opencode_go.py", path]))
 
     def test_empty_and_unsafe(self):
+        """No-diff and directory traversal cases cannot bypass full CI."""
         self.assertFalse(factory_only([]))
         self.assertFalse(factory_only(["../.github/scripts/factory_a.py"]))
         self.assertFalse(factory_only(["/.github/scripts/factory_a.py"]))
