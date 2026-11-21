@@ -30,7 +30,7 @@ RUN echo "Build timestamp: ${BUILD_TIMESTAMP:-$(date -u +%s)}" && pnpm --filter 
 # ============================
 # Rust build stage
 # ============================
-FROM rust:1-trixie-slim AS rust-builder
+FROM rust:1.99.1-slim-trixie AS rust-builder
 
 WORKDIR /app
 

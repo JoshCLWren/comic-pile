@@ -94,6 +94,16 @@ fn public_production_binding_requires_verified_tls_transport() {
     assert!(Config::from_lookup(|key| values.get(key).cloned()).is_ok());
 }
 
+#[test]
+fn public_test_binding_accepts_a_disposable_local_database() {
+    let mut values = values();
+    values.insert("RUST_ROLL_ENV", "test".into());
+    values.insert("RUST_ROLL_BIND", "0.0.0.0:8000".into());
+    let config = Config::from_lookup(|key| values.get(key).cloned()).unwrap();
+    assert_eq!(config.environment, Environment::Test);
+    assert_eq!(config.bind.port(), 8000);
+}
+
 #[tokio::test]
 async fn health_and_error_envelopes_work_without_database_checkout() {
     let state = Arc::new(test_support::test_app_state(config()));

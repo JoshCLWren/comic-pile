@@ -4,7 +4,7 @@
 //! `MIGRATE_TEST_DATABASE_URL`.
 
 use comicpile_migrate::{
-    BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD, connect, needs_work, run,
+    connect, needs_work, run, BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD,
 };
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio_postgres::Client;
