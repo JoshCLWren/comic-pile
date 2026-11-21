@@ -1929,14 +1929,25 @@ fn normalize_roster_issue(row: &Value) -> Value {
         .get("image")
         .and_then(Value::as_object)
         .and_then(|image| {
-            ["original_url", "super_url", "medium_url", "small_url"]
-                .iter()
-                .find_map(|key| {
-                    image
-                        .get(*key)
-                        .and_then(Value::as_str)
-                        .filter(|url| !url.is_empty())
-                })
+            // Match the issue card and search/confirm dialog: a provider entry
+            // that only carries a thumbnail still has a cover (MQA-THREAD-004).
+            // Values are trimmed like the card projection's BTRIM so a blank
+            // size never wins over the thumbnail.
+            [
+                "original_url",
+                "super_url",
+                "medium_url",
+                "small_url",
+                "thumb_url",
+            ]
+            .iter()
+            .find_map(|key| {
+                image
+                    .get(*key)
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|url| !url.is_empty())
+            })
         })
         .map(|url| Value::String(url.to_owned()))
         .unwrap_or(Value::Null);
@@ -3140,7 +3151,28 @@ mod tests {
         );
         assert_eq!(issue_candidate(&json!({"id": "99"})), None);
     }
-
+    #[test]
+    fn roster_issue_normalization_keeps_a_thumbnail_only_cover() {
+        // MQA-THREAD-004: series import stores the curated primary_image from
+        // the roster row; a row whose larger sizes are empty must still keep
+        // the provider thumbnail instead of becoming "No cover".
+        let metadata = normalize_roster_issue(&json!({
+            "id": 4005,
+            "issue_number": "5",
+            "image": {
+                "original_url": null,
+                "super_url": "",
+                "medium_url": " ",
+                "small_url": "",
+                "thumb_url": "https://comicvine.example/thumb.jpg"
+            },
+            "volume": {"id": 4050, "name": "Detective Comics"}
+        }));
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://comicvine.example/thumb.jpg")
+        );
+    }
     #[test]
     fn roster_pages_are_validated_like_python() {
         assert!(matches!(
