@@ -98,7 +98,7 @@ def _image(metadata: dict[str, object]) -> str | None:
         return direct
     image = metadata.get("image")
     if isinstance(image, dict):
-        for key in ("original_url", "super_url", "medium_url", "small_url"):
+        for key in ("original_url", "super_url", "medium_url", "small_url", "thumb_url"):
             candidate = _string(image.get(key))
             if candidate:
                 return candidate

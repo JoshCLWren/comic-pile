@@ -212,7 +212,7 @@ def normalize_issue(result: dict[str, object]) -> dict[str, object]:
     image = result.get("image") if isinstance(result.get("image"), dict) else None
     primary_image = None
     if isinstance(image, dict):
-        for key in ("original_url", "super_url", "medium_url", "small_url"):
+        for key in ("original_url", "super_url", "medium_url", "small_url", "thumb_url"):
             candidate = image.get(key)
             if isinstance(candidate, str) and candidate:
                 primary_image = candidate
@@ -245,7 +245,7 @@ def normalize_volume(result: dict[str, object]) -> dict[str, object]:
     image = result.get("image") if isinstance(result.get("image"), dict) else None
     primary_image = None
     if isinstance(image, dict):
-        for key in ("original_url", "super_url", "medium_url", "small_url"):
+        for key in ("original_url", "super_url", "medium_url", "small_url", "thumb_url"):
             candidate = image.get(key)
             if isinstance(candidate, str) and candidate:
                 primary_image = candidate
