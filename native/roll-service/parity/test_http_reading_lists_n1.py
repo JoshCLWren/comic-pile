@@ -297,25 +297,21 @@ async def test_delete_reading_list_statements_bounded() -> None:
             try:
                 owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
                 thread_id, issue_ids = await _insert_owned_thread(raw, owner_id, int(uuid4().int % 100000))
-                # Insert additional issues if entry_count > 1
-                for entry_pos in range(2, entry_count + 1):
-                    await raw.execute(
-                        "INSERT INTO issues (thread_id,issue_number,position,status,created_at) "
-                        "VALUES ($1,$2,$3,'unread',NOW()) RETURNING id",
-                        thread_id,
-                        str(entry_pos),
-                        entry_pos,
-                    )
-                all_issue_ids = [issue_ids[0]] + [
-                    await raw.fetchval(
-                        "INSERT INTO issues (thread_id,issue_number,position,status,created_at) "
-                        "VALUES ($1,$2,$3,'unread',NOW()) RETURNING id",
-                        thread_id,
-                        str(entry_pos),
-                        entry_pos,
-                    )
-                    for entry_pos in range(2, entry_count + 1)
-                ]
+                # _insert_owned_thread always inserts 2 issues (positions 1, 2).
+                # If entry_count <= 2, use those; otherwise insert additional issues.
+                if entry_count <= 2:
+                    all_issue_ids = issue_ids[:entry_count]
+                else:
+                    all_issue_ids = list(issue_ids)  # start with the 2 from _insert_owned_thread
+                    for add_pos in range(3, entry_count + 1):
+                        new_id = await raw.fetchval(
+                            "INSERT INTO issues (thread_id,issue_number,position,status,created_at) "
+                            "VALUES ($1,$2,$3,'unread',NOW()) RETURNING id",
+                            thread_id,
+                            str(add_pos),
+                            add_pos,
+                        )
+                        all_issue_ids.append(new_id)
                 list_id = await _insert_list(raw, owner_id, f"List-{uuid4().hex[:6]}", all_issue_ids)
                 return list_id
             finally:
