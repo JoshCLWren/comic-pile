@@ -1938,11 +1938,11 @@ fn normalize_roster_issue(row: &Value) -> Value {
             ]
             .iter()
             .find_map(|key| {
-                    image
-                        .get(*key)
-                        .and_then(Value::as_str)
-                        .filter(|url| !url.is_empty())
-                })
+                image
+                    .get(*key)
+                    .and_then(Value::as_str)
+                    .filter(|url| !url.is_empty())
+            })
         })
         .map(|url| Value::String(url.to_owned()))
         .unwrap_or(Value::Null);
