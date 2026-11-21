@@ -261,7 +261,6 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert graph.get("status") == "ok"
         assert graph.get("cycles") == []
         assert graph.get("repairs") == []
-        _assert_nested_clean(nested_before, nested_after, "repairs preview small")
         _, _, after = await db_counters(engine)
         nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
@@ -290,6 +289,7 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
+        _assert_nested_clean(nested_before, nested_after, "repairs preview small")
         _assert_nested_clean(nested_before2, nested_after2, "repairs preview large")
         assert_declared_budget("POST", "/api/v2/reading-graph/repairs", small_delta, large_delta)
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
@@ -356,15 +356,14 @@ async def test_reading_graph_repairs_confirmed_statements_within_budget() -> Non
                     list_id,
                     owner_id,
                 )
-                dependency_exists = await raw.fetchval(
-                    "SELECT EXISTS(SELECT 1 FROM dependencies d JOIN issues i ON i.id=d.source_issue_id "
-                    "JOIN threads t ON t.id=i.thread_id WHERE t.user_id=$1)",
-                    owner_id,
+                entry_exists = await raw.fetchval(
+                    "SELECT EXISTS(SELECT 1 FROM custom_cbl_entries WHERE list_id=$1)",
+                    list_id,
                 )
             finally:
                 await raw.close()
             assert list_exists is False, f"{label}: repaired list still persisted"
-            assert dependency_exists is False, f"{label}: repaired dependency still persisted"
+            assert entry_exists is False, f"{label}: repaired list entries still persisted"
 
             assert before is not None and after is not None, "pg_stat_statements is required"
             _assert_nested_clean(nested_before, nested_after, f"repairs confirmed {label}")
