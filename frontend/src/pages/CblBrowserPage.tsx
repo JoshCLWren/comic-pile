@@ -722,10 +722,6 @@ export default function CblBrowserPage() {
   }
 
   const summary = preview?.summary
-  // Compute needsAttentionCount from the server summary, but adjust for local
-  // customization choices (entryDecisions/seriesDecisions). When the reader
-  // skips/unchecks entries under Customize, the count should decrease and the
-  // Add button should become enabled for the remaining adoptable entries.
   const needsAttentionCount =
     (summary?.unresolved_count ?? 0) + (summary?.awaiting_opt_in_count ?? 0)
   const commitBlockedReason = isPreviewing
