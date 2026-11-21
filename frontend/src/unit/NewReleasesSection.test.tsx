@@ -151,6 +151,44 @@ const unmappedCandidate = {
   followed: false,
 }
 
+// #3953: ComicVine sometimes returns only a numeric volume id with no human
+// name. The UI must show the plan thread name instead of the bare number.
+const bareNumericIdCandidate = {
+  ...confirmedCandidate,
+  thread_id: 15,
+  thread_title: 'Ultimate Invasion',
+  external_identity_id: 601,
+  provider_volume_id: '151520',
+  provider_title: null,
+  provider_publisher: 'Marvel',
+  provider_start_year: 2023,
+  provider_issue_count: 4,
+}
+
+const numericTitleCandidate = {
+  ...bareNumericIdCandidate,
+  thread_id: 16,
+  thread_title: 'Ultimate Universe',
+  external_identity_id: 602,
+  provider_volume_id: '154417',
+  provider_title: '154417',
+}
+
+const singleIssueCandidate = {
+  ...confirmedCandidate,
+  thread_id: 17,
+  provider_title: 'Free Comic Book Day 2024: Ultimate Universe/Spider-Man',
+  provider_issue_count: 1,
+}
+
+const singleIssueSource = {
+  ...enabledSource,
+  source_id: 906,
+  thread_id: 9,
+  provider_title: 'Ultimate Universe: One Year In',
+  provider_issue_count: 1,
+}
+
 describe('NewReleasesSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -319,13 +357,14 @@ describe('NewReleasesSection', () => {
     expect(alert).toHaveTextContent('Could not update this volume.')
   })
 
-  it('falls back to provider_volume_id when provider_title is empty', () => {
+  it('uses a readable labelled fallback when a followed source has no title', () => {
     render(
       <NewReleasesSection planId={12} sources={[sourceWithoutTitle]} candidates={[]} />,
       { wrapper: createWrapper() },
     )
-    expect(screen.getByText('4000-77')).toBeInTheDocument()
+    expect(screen.getByText('ComicVine volume 4000-77')).toBeInTheDocument()
     expect(screen.queryByText(/X-Men/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^4000-77$/)).not.toBeInTheDocument()
   })
 
   it('shows Never synced for invalid last_synced_at', () => {
@@ -351,5 +390,84 @@ describe('NewReleasesSection', () => {
     )
     expect(screen.getByText('Minimal Title')).toBeInTheDocument()
     expect(screen.queryByText(/·/)).not.toBeInTheDocument()
+  })
+
+  it('shows the plan thread name instead of a bare ComicVine id on a candidate', () => {
+    render(
+      <NewReleasesSection planId={12} sources={[]} candidates={[bareNumericIdCandidate]} />,
+      { wrapper: createWrapper() },
+    )
+    expect(
+      screen.getByText('Ultimate Invasion · ComicVine volume · Marvel · 2023 · 4 issues'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/^151520$/)).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Follow Ultimate Invasion · ComicVine volume' }),
+    ).toBeInTheDocument()
+  })
+
+  it('treats a bare numeric provider title as an unknown volume name', () => {
+    render(
+      <NewReleasesSection planId={12} sources={[]} candidates={[numericTitleCandidate]} />,
+      { wrapper: createWrapper() },
+    )
+    expect(
+      screen.getByText('Ultimate Universe · ComicVine volume · Marvel · 2023 · 4 issues'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/^154417$/)).not.toBeInTheDocument()
+  })
+
+  it('shows the publisher on followed rows', () => {
+    render(<NewReleasesSection planId={12} sources={[enabledSource]} candidates={[]} />, {
+      wrapper: createWrapper(),
+    })
+    expect(screen.getByText('X-Men · Marvel · 1963 · 12 issues')).toBeInTheDocument()
+  })
+
+  it('pluralizes the issue count correctly on candidate rows', () => {
+    render(
+      <NewReleasesSection
+        planId={12}
+        sources={[]}
+        candidates={[confirmedCandidate, singleIssueCandidate]}
+      />,
+      { wrapper: createWrapper() },
+    )
+    expect(
+      screen.getByText('Ultimate Spider-Man (2024) · Marvel · 2024 · 8 issues'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Free Comic Book Day 2024: Ultimate Universe/Spider-Man · Marvel · 2024 · 1 issue',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/1 issues/)).not.toBeInTheDocument()
+  })
+
+  it('pluralizes the issue count correctly on followed rows', () => {
+    render(
+      <NewReleasesSection
+        planId={12}
+        sources={[enabledSource, singleIssueSource]}
+        candidates={[]}
+      />,
+      { wrapper: createWrapper() },
+    )
+    expect(screen.getByText('X-Men · Marvel · 1963 · 12 issues')).toBeInTheDocument()
+    expect(
+      screen.getByText('Ultimate Universe: One Year In · Marvel · 1963 · 1 issue'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/1 issues/)).not.toBeInTheDocument()
+  })
+
+  it('renders the followed sync status at a readable size and contrast', () => {
+    render(<NewReleasesSection planId={12} sources={[enabledSource]} candidates={[]} />, {
+      wrapper: createWrapper(),
+    })
+    const syncLine = screen.getByText(/Last sync:/)
+    expect(syncLine.className).toContain('text-xs')
+    expect(syncLine.className).toContain('text-[var(--theme-text-muted)]')
+    expect(syncLine.className).not.toContain('text-[11px]')
+    expect(syncLine.className).not.toContain('text-[var(--theme-text-dim)]')
   })
 })

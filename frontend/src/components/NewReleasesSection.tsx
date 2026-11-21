@@ -40,34 +40,86 @@ function formatLastSync(lastSyncedAt: string | null): string {
   return date.toLocaleString()
 }
 
+/** Label used when ComicVine has no human-readable name for a volume. */
+const UNKNOWN_VOLUME_LABEL = 'ComicVine volume'
+
+/**
+ * Report whether a provider value is only a bare numeric id such as "151520".
+ *
+ * @param value - Provider-supplied title or volume id.
+ * @returns True when the value is only digits.
+ */
+function isBareNumericId(value: string): boolean {
+  return /^\d+$/.test(value.trim())
+}
+
+/**
+ * Build a human-readable volume title, never exposing a bare provider id.
+ *
+ * When ComicVine has no usable human name, identify the volume by its plan
+ * thread name plus a readable label. If no thread name is available, fall back
+ * to the labelled provider id. A bare numeric id is never used as a title.
+ *
+ * @param providerTitle - ComicVine's human name, when present.
+ * @param providerVolumeId - ComicVine volume id, used only in a labelled fallback.
+ * @param threadTitle - Plan thread name, used to identify an unnamed volume.
+ * @returns A readable title.
+ */
+function volumeTitle(
+  providerTitle: string | null | undefined,
+  providerVolumeId?: string | null,
+  threadTitle?: string | null,
+): string {
+  const title = providerTitle?.trim()
+  if (title && !isBareNumericId(title)) return title
+  const thread = threadTitle?.trim()
+  if (thread) return `${thread} · ${UNKNOWN_VOLUME_LABEL}`
+  const id = providerVolumeId?.trim()
+  return id ? `${UNKNOWN_VOLUME_LABEL} ${id}` : UNKNOWN_VOLUME_LABEL
+}
+
+/**
+ * Format an issue count with correct singular/plural grammar.
+ *
+ * @param count - Number of issues in the volume.
+ * @returns A count such as "1 issue" or "23 issues".
+ */
+function formatIssueCount(count: number): string {
+  return `${count} ${count === 1 ? 'issue' : 'issues'}`
+}
+
+/**
+ * Build the full label for a followed volume: title plus provider metadata.
+ *
+ * @param source - Followed release source to describe.
+ * @returns A readable label with publisher, year and issue count when known.
+ */
 function volumeLabel(source: ReadingPlanReleaseSourceStatus): string {
-  const title = source.provider_title?.trim() || source.provider_volume_id
+  const title = volumeTitle(source.provider_title, source.provider_volume_id)
   const meta = [
     source.provider_publisher,
     source.provider_start_year != null ? `${source.provider_start_year}` : null,
-    source.provider_issue_count != null
-      ? `${source.provider_issue_count} issues`
-      : null,
+    source.provider_issue_count != null ? formatIssueCount(source.provider_issue_count) : null,
   ].filter((part): part is string => Boolean(part))
   return meta.length ? `${title} · ${meta.join(' · ')}` : title
 }
 
-function candidateTitle(candidate: ReadingPlanReleaseCandidate): string {
-  return (
-    candidate.provider_title?.trim() ||
-    candidate.provider_volume_id?.trim() ||
-    'Unnamed volume'
-  )
-}
-
+/**
+ * Build the full label for a release candidate: title plus provider metadata.
+ *
+ * @param candidate - Release candidate to describe.
+ * @returns A readable label with publisher, year and issue count when known.
+ */
 function candidateLabel(candidate: ReadingPlanReleaseCandidate): string {
-  const title = candidateTitle(candidate)
+  const title = volumeTitle(
+    candidate.provider_title,
+    candidate.provider_volume_id,
+    candidate.thread_title,
+  )
   const meta = [
     candidate.provider_publisher,
     candidate.provider_start_year != null ? `${candidate.provider_start_year}` : null,
-    candidate.provider_issue_count != null
-      ? `${candidate.provider_issue_count} issues`
-      : null,
+    candidate.provider_issue_count != null ? formatIssueCount(candidate.provider_issue_count) : null,
   ].filter((part): part is string => Boolean(part))
   return meta.length ? `${title} · ${meta.join(' · ')}` : title
 }
@@ -134,7 +186,7 @@ export function NewReleasesSection({
       {sources.length > 0 && (
         <ul className="mt-3 space-y-2">
           {sources.map((source) => {
-            const title = source.provider_title?.trim() || source.provider_volume_id
+            const title = volumeTitle(source.provider_title, source.provider_volume_id)
             const action = source.enabled ? 'Stop following' : 'Follow'
             return (
               <li
@@ -149,7 +201,7 @@ export function NewReleasesSection({
                   <p className="truncate text-xs text-[var(--theme-text-muted)]">
                     Target thread #{source.thread_id}
                   </p>
-                  <p className="mt-1 text-[11px] text-[var(--theme-text-dim)]">
+                  <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
                     Last sync: {formatLastSync(source.last_synced_at)}
                   </p>
                 </div>
@@ -185,7 +237,11 @@ export function NewReleasesSection({
           </h3>
           <ul className="mt-2 space-y-2">
             {followable.map((candidate) => {
-              const title = candidateTitle(candidate)
+              const title = volumeTitle(
+                candidate.provider_title,
+                candidate.provider_volume_id,
+                candidate.thread_title,
+              )
               return (
                 <li
                   key={`${candidate.thread_id}-${candidate.external_identity_id}`}
