@@ -129,7 +129,6 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert small_nested_delta is not None and large_nested_delta is not None, "nested statements must be measured"
         assert large_nested_delta <= small_nested_delta + 2, f"nested statement count grew: {small_nested_delta} -> {large_nested_delta}"
     finally:
-        await engine.dispose().
         await engine.dispose()
 
 
