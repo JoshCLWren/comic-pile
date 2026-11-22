@@ -143,6 +143,7 @@ function QueueBudgetProbe() {
     !boundaries.isPending &&
     (boundaries.isError ||
       boundaries.data == null ||
+      boundaries.data.evaluator === 'unavailable' ||
       threadIds.some(
         (id) =>
           boundaries.data?.threads[id] == null ||
