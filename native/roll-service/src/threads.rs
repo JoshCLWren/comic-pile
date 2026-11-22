@@ -504,6 +504,14 @@ pub async fn get_thread_detail(
     let computed_position: Option<i32> = row.get(17);
     let stored_position: i32 = row.get(4);
     let queue_position = computed_position.unwrap_or(stored_position);
+    // Position and visibility must use the same Option E answer as Queue. A
+    // stale stored flag must not make a strictly blocked frontier look readable
+    // when the reader opens its Thread Detail.
+    let is_blocked = if option_e {
+        !candidates.contains(&thread_id)
+    } else {
+        row.get(10)
+    };
 
     Ok(Json(ThreadDetailResponse {
         id: row.get(0),
