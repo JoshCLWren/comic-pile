@@ -252,6 +252,38 @@ fn preauthenticated_statement() -> &'static str {
     })
 }
 
+/// The audit widens only its own diagnostic CTE. The execution statement above
+/// continues to select `origin='reader'` exclusively.
+fn diagnostic_statement() -> &'static str {
+    static SQL: OnceLock<String> = OnceLock::new();
+    SQL.get_or_init(|| {
+        let ctes = SNAPSHOT_CTES.replace(
+            r#"reader_prerequisites AS (
+    SELECT d.id, d.source_issue_id, d.target_issue_id, d.origin, d.note,
+           d.classification, d.provenance
+    FROM dependencies d
+    WHERE d.origin = 'reader'
+      AND (EXISTS (SELECT 1 FROM owned_issues i WHERE i.id = d.source_issue_id)
+        OR EXISTS (SELECT 1 FROM owned_issues i WHERE i.id = d.target_issue_id))
+)"#,
+            r#"diagnostic_prerequisites AS (
+    SELECT d.id, d.source_issue_id, d.target_issue_id, d.origin, d.note,
+           d.classification, d.provenance
+    FROM dependencies d
+    WHERE EXISTS (SELECT 1 FROM owned_issues i WHERE i.id = d.source_issue_id)
+       OR EXISTS (SELECT 1 FROM owned_issues i WHERE i.id = d.target_issue_id)
+)"#,
+        );
+        let projection = SNAPSHOT_PROJECTION.replace(
+            "FROM reader_prerequisites p",
+            "FROM diagnostic_prerequisites p",
+        );
+        format!(
+            "WITH me AS (SELECT $1::int AS user_id),\n{ctes},\n{projection}\nSELECT value::text FROM snapshot"
+        )
+    })
+}
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct SnapshotRows {
     threads: Vec<ThreadRow>,
