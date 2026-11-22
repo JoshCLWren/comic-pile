@@ -1183,6 +1183,11 @@
             },
             "type": "array"
           },
+          "catalog_total": {
+            "description": "Total active source lists in the whole shared catalog, independent of search and folder.",
+            "format": "int64",
+            "type": "integer"
+          },
           "folder": {
             "type": "string"
           },
@@ -1223,6 +1228,7 @@
             "type": "string"
           },
           "total": {
+            "description": "Total source lists matching the applied folder/search scope.",
             "format": "int64",
             "type": "integer"
           },
@@ -1240,6 +1246,7 @@
           "page",
           "page_size",
           "total",
+          "catalog_total",
           "total_pages",
           "has_next",
           "has_previous"
@@ -16624,6 +16631,14 @@
           "active_count": {
             "format": "int32",
             "type": "integer"
+          },
+          "filtered_count": {
+            "description": "Total active Queue rows matching the applied search, independent of the bounded page.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "next_page_token": {
             "type": [
