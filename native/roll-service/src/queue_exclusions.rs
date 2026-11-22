@@ -474,3 +474,71 @@ pub async fn restore_group(
         restored_thread_ids,
     }))
 }
+
+/// Documentation-only operation for bulk exclusion of container series.
+#[utoipa::path(
+    post,
+    path = "/api/v2/queue-exclusions",
+    tag = "queue-exclusions",
+    request_body = BulkQueueExclusionRequest,
+    responses(
+        (status = 200, description = "Excluded thread IDs and provenance group", body = BulkQueueExclusionResponse),
+        (status = 400, description = "Invalid thread IDs or container source"),
+        (status = 401, description = "Not authenticated"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn bulk_exclude_documentation() {}
+
+/// Documentation-only operation for scoped excluded-status checks.
+#[utoipa::path(
+    post,
+    path = "/api/v2/queue-exclusions/status:check",
+    tag = "queue-exclusions",
+    request_body = ExcludedStatusCheckRequest,
+    responses(
+        (status = 200, description = "Requested threads by excluded/active status", body = ExcludedStatusCheckResponse),
+        (status = 400, description = "Invalid thread IDs"),
+        (status = 401, description = "Not authenticated"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn check_excluded_status_documentation() {}
+
+/// Documentation-only operation for bulk restore of explicit threads.
+#[utoipa::path(
+    post,
+    path = "/api/v2/queue-exclusions/restore",
+    tag = "queue-exclusions",
+    request_body = BulkQueueRestoreRequest,
+    responses(
+        (status = 200, description = "Restored thread IDs", body = BulkQueueRestoreResponse),
+        (status = 400, description = "Invalid thread IDs"),
+        (status = 401, description = "Not authenticated"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn bulk_restore_documentation() {}
+
+/// Documentation-only operation for restoring a whole exclusion group.
+#[utoipa::path(
+    post,
+    path = "/api/v2/queue-exclusion-groups/{group_id}/restore",
+    tag = "queue-exclusions",
+    params(("group_id" = i32, Path, description = "Owned queue exclusion group identifier")),
+    responses(
+        (status = 200, description = "Restored thread IDs", body = BulkQueueRestoreResponse),
+        (status = 400, description = "Invalid group ID"),
+        (status = 401, description = "Not authenticated"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn restore_group_documentation() {}

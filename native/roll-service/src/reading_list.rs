@@ -1297,6 +1297,23 @@ pub async fn check_thread_memberships(
     }))
 }
 
+/// Documentation-only operation for the batched reading-list membership check.
+#[utoipa::path(
+    post,
+    path = "/api/v2/reading-lists/memberships:check",
+    tag = "reading-lists",
+    request_body = ReadingListMembershipCheckRequest,
+    responses(
+        (status = 200, description = "Requested threads present in another owned list", body = ReadingListMembershipCheckResponse),
+        (status = 400, description = "Invalid thread IDs"),
+        (status = 401, description = "Not authenticated"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn check_thread_memberships_documentation() {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
