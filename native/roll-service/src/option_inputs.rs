@@ -944,41 +944,46 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_categories_track_unread_outside_list() {
-        // Verify that list_entry kind is categorized as UnreadOutsideList
-        use crate::option_inputs::UnresolvedReference;
-        use crate::reading_graph::UnresolvedCategory;
-        let ref_ = UnresolvedReference {
-            kind: "list_entry",
-            object_id: 42,
-        };
-        let category = crate::reading_graph::categorize_unresolved(&ref_.kind);
-        assert_eq!(category, UnresolvedCategory::UnreadOutsideList);
-    }
+    fn diagnostic_snapshot_preserves_legacy_evidence_without_execution_authority() {
+        let snapshot: SnapshotRows = serde_json::from_value(serde_json::json!({
+            "threads": [
+                {"id": 1, "status": "active", "title": "Source",
+                 "next_unread_issue_id": 10, "is_blocked": false, "queue_position": 1},
+                {"id": 2, "status": "active", "title": "Target",
+                 "next_unread_issue_id": 20, "is_blocked": false, "queue_position": 2}
+            ],
+            "issues": [
+                {"id": 10, "thread_id": 1, "position": 1, "status": "unread",
+                 "issue_number": "1"},
+                {"id": 20, "thread_id": 2, "position": 1, "status": "unread",
+                 "issue_number": "1"}
+            ],
+            "lists": [], "entries": [],
+            "prerequisites": [
+                {"id": 90, "source_issue_id": 10, "target_issue_id": 20,
+                 "origin": null, "note": "Named crossover", "classification": null,
+                 "provenance": null},
+                {"id": 91, "source_issue_id": 999, "target_issue_id": 20,
+                 "origin": "converted", "note": "historical", "classification": "D",
+                 "provenance": "unknown"}
+            ],
+            "evidence": [], "overlaps": [], "exclusions": [], "issue_volumes": []
+        }))
+        .unwrap();
+        let diagnostics = assemble_graph_diagnostics(snapshot).unwrap();
+        assert_eq!(diagnostics.stored_prerequisites.len(), 2);
+        assert_eq!(diagnostics.stored_prerequisites[0].origin, None);
+        assert_eq!(
+            diagnostics.stored_prerequisites[0].note.as_deref(),
+            Some("Named crossover")
+        );
+        assert!(diagnostics.inputs.prerequisites.is_empty());
+        assert!(diagnostics.inputs.unresolved.is_empty());
 
-    #[test]
-    fn unresolved_categories_track_reading_plan_vs_list() {
-        // Verify that prerequisite kind is categorized as ReadingPlanVsList
-        use crate::option_inputs::UnresolvedReference;
-        use crate::reading_graph::UnresolvedCategory;
-        let ref_ = UnresolvedReference {
-            kind: "prerequisite",
-            object_id: 42,
-        };
-        let category = crate::reading_graph::categorize_unresolved(&ref_.kind);
-        assert_eq!(category, UnresolvedCategory::ReadingPlanVsList);
-    }
-
-    #[test]
-    fn unresolved_categories_default_to_jli_converted() {
-        // Verify that unknown kind defaults to JliConverted
-        use crate::option_inputs::UnresolvedReference;
-        use crate::reading_graph::UnresolvedCategory;
-        let ref_ = UnresolvedReference {
-            kind: "unknown_kind",
-            object_id: 42,
-        };
-        let category = crate::reading_graph::categorize_unresolved(&ref_.kind);
-        assert_eq!(category, UnresolvedCategory::JliConverted);
+        let diagnostic_sql = diagnostic_statement();
+        assert!(diagnostic_sql.contains("diagnostic_prerequisites AS"));
+        assert!(!diagnostic_sql.contains("WHERE d.origin = 'reader'"));
+        assert!(!preauthenticated_statement().contains("diagnostic_prerequisites AS"));
+        assert!(preauthenticated_statement().contains("WHERE d.origin = 'reader'"));
     }
 }
