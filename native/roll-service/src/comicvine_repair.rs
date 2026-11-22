@@ -14,7 +14,10 @@ use bytes::Bytes;
 use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
 use tokio_postgres::Transaction;
 
 const HOST: &str = "comicvine.gamespot.com";
@@ -46,22 +49,20 @@ const NEEDS_DEEP_FETCH_SQL: &str =
        'date_last_updated'], false))";
 /// Set-based, idempotent hydration enqueue. One statement for the whole
 /// batch, with no per-issue SQL and no provider call (#5592 AC1).
-const ENQUEUE_BATCH_SQL: &str = concat!(
-    r#"
-INSERT INTO comicvine_metadata_refresh_requests
-  (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at)
-SELECT e.id, 'pending', 0, now(), now(), now()
-FROM external_identities e
-WHERE e.id = ANY($1::int[])
-  AND e.provider = 'comicvine' AND e.entity_type = 'issue'
-  AND "#,
-    NEEDS_DEEP_FETCH_SQL,
-    r#"
-  AND NOT EXISTS (SELECT 1 FROM comicvine_metadata_refresh_requests r
-                  WHERE r.external_identity_id = e.id)
-ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING
-"#
-);
+static ENQUEUE_BATCH_SQL: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "INSERT INTO comicvine_metadata_refresh_requests \
+           (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
+         SELECT e.id, 'pending', 0, now(), now(), now() \
+         FROM external_identities e \
+         WHERE e.id = ANY($1::int[]) \
+           AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+           AND {NEEDS_DEEP_FETCH_SQL} \
+           AND NOT EXISTS (SELECT 1 FROM comicvine_metadata_refresh_requests r \
+                           WHERE r.external_identity_id = e.id) \
+         ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING"
+    )
+});
 const CLAIM: &str = r#"
 WITH candidate AS (
   SELECT id FROM comicvine_metadata_refresh_requests
@@ -740,7 +741,7 @@ pub(crate) async fn enqueue_hydration_batch(
         return Ok(0);
     }
     let count = tx
-        .execute(ENQUEUE_BATCH_SQL, &[&identity_ids])
+        .execute(&*ENQUEUE_BATCH_SQL, &[&identity_ids])
         .await
         .map_err(db::query_error)?;
     Ok(usize::try_from(count).unwrap_or(usize::MAX))

@@ -2451,9 +2451,9 @@ pub async fn import_series(
             identity_ids.insert(row.get(0), row.get(1));
         }
     }
+    let mut link_issue_ids = Vec::with_capacity(links.len());
+    let mut link_identity_ids = Vec::with_capacity(links.len());
     if !links.is_empty() {
-        let mut link_issue_ids = Vec::with_capacity(links.len());
-        let mut link_identity_ids = Vec::with_capacity(links.len());
         for (sim, cv_text) in &links {
             if let (Some(issue_id), Some(identity_id)) = (all[*sim].id, identity_ids.get(cv_text)) {
                 link_issue_ids.push(issue_id);
