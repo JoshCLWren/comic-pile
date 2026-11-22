@@ -1248,7 +1248,7 @@ async fn seed_orphaned_adopted_plan(state: &Arc<AppState>, user_id: i32, plan_id
             "position": 0
         }]
     }]);
-    let nodes_text = nodes.to_string();
+    let nodes_json = tokio_postgres::types::Json(&nodes);
     let conn = state.pool.get().await.unwrap();
     conn.execute(
         "INSERT INTO continuity_plans
@@ -1257,7 +1257,7 @@ async fn seed_orphaned_adopted_plan(state: &Arc<AppState>, user_id: i32, plan_id
            ($1, $2, 'Mister Miracle 1989', 'informational',
             '[{\"id\":\"default\",\"name\":\"Default\",\"order\":0}]'::jsonb,
             $3::jsonb, NOW(), NOW())",
-        &[&plan_id, &user_id, &nodes_text],
+        &[&plan_id, &user_id, &nodes_json],
     )
     .await
     .unwrap();
