@@ -3060,6 +3060,58 @@ async fn series_import_commits_hydration_requests_without_opening_roll() {
         .unwrap()
         .get(0);
     assert_eq!(credits[0]["name"], "Jamie Delano");
+
+    // The Roll issue-intelligence read is the UI surface: once the worker has
+    // persisted a deep fetch, it shows the creators and a complete status.
+    let issue_id: i32 = conn
+        .query_one(
+            "SELECT i.id FROM issues i \
+             JOIN issue_external_identity_mappings m ON m.issue_id = i.id \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE e.external_id = '91002' AND m.status = 'confirmed'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "UPDATE external_identities SET metadata_json = \
+           '{\"creator_credits\":[{\"id\":7,\"name\":\"Jamie Delano\"}],\
+             \"deep_metadata_refreshed_at\":\"2026-11-22T00:00:00+00:00\",\
+             \"raw_provider_payload\":{\"id\":91002,\"name\":\"Issue Two\",\
+               \"issue_number\":\"2\",\"cover_date\":null,\"store_date\":null,\
+               \"image\":{},\"volume\":{},\
+               \"person_credits\":[{\"id\":7,\"name\":\"Jamie Delano\"}],\
+               \"character_credits\":[],\"team_credits\":[],\"story_arc_credits\":[],\
+               \"date_last_updated\":\"2026-11-22 00:00:00\"}}'::json \
+         WHERE external_id = '91002'",
+        &[],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "UPDATE comicvine_metadata_refresh_requests r SET state = 'completed', \
+           completed_at = now(), next_attempt_at = now() \
+         FROM external_identities e WHERE e.id = r.external_identity_id \
+           AND e.external_id = '91002'",
+        &[],
+    )
+    .await
+    .unwrap();
+    let (status, intel) = send(
+        &state,
+        call(
+            "GET",
+            &format!("/api/v2/issues/{issue_id}/comicvine"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{intel:?}");
+    assert_eq!(intel["creators"][0]["name"], "Jamie Delano");
+    assert_eq!(intel["metadata_status"], "complete");
 }
 
 #[tokio::test]
