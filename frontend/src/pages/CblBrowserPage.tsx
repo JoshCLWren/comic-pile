@@ -765,10 +765,7 @@ export default function CblBrowserPage() {
   const lastShown = browsePage
     ? (browsePage.page - 1) * browsePage.page_size + browsePage.items.length
     : 0
-  // Direct sources plus recursive folder counts = stable catalog total (#4171).
-  const catalogTotal = browsePage
-    ? browsePage.total + browsePage.folders.reduce((sum, folder) => sum + folder.total_list_count, 0)
-    : 0
+  const catalogTotal = browsePage ? catalogSourceCount(browsePage.folders, browsePage.total) : 0
 
   const openConfirm = () => {
     if (!selectedSource || !preview || commitBlocked) return
@@ -1234,22 +1231,11 @@ export default function CblBrowserPage() {
             </p>
           )}
 
-          {browseStale && (
-            <p role="status" className="text-sm text-[var(--theme-text-muted)]">
-              {submittedQuery ? `Searching every shared CBL for “${submittedQuery}”…` : 'Loading the shared CBL catalog…'}
-            </p>
-          )}
+          {browseStale && <p role="status" className="text-sm text-[var(--theme-text-muted)]">{submittedQuery ? `Searching every shared CBL for “${submittedQuery}”…` : 'Loading the shared CBL catalog…'}</p>}
 
           {browsePage && !catalogError && !browseStale && (
             <div className="space-y-4" data-testid="cbl-browse-results">
-              {browsePage.scope === 'folder' && !folder && catalogTotal > 0 && (
-                <p role="status" data-testid="cbl-catalog-total" className="text-xs text-[var(--theme-text-muted)]">
-                  {sourceCountLabel(catalogTotal)} in the shared CBL catalog
-                  {browsePage.folders.length > 0
-                    ? ` across ${browsePage.folders.length} ${browsePage.folders.length === 1 ? 'folder' : 'folders'}`
-                    : ''}
-                </p>
-              )}
+              {browsePage.scope === 'folder' && !folder && catalogTotal > 0 && <p role="status" data-testid="cbl-catalog-total" className="text-xs text-[var(--theme-text-muted)]">{catalogTotalLabel(catalogTotal, browsePage.folders.length)}</p>}
 
               {browsePage.scope === 'folder' && (
                 <nav aria-label="CBL folder path" className="flex flex-wrap items-center gap-1 text-xs">
