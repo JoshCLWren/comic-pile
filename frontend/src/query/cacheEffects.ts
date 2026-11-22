@@ -581,6 +581,9 @@ export async function applyCommittedReadingPlan(
     queryKey: queryKeys.readingPlans.reader(plan.id),
   })
   await invalidateAfterQueueMovement(client)
+  // Other open tabs hold their own plan-list cache; announce the committed
+  // write so they reconcile without a manual reload (#5686, Greptile G1).
+  notifyReadingPlansChanged()
 }
 
 /**

@@ -72,6 +72,7 @@ class FakeBroadcastChannel {
     for (const channel of FakeBroadcastChannel.channels) {
       if (channel === this || channel.name !== this.name) continue
       for (const listener of [...channel.listeners]) {
+        // SAFETY: the fake mirrors the browser API by delivering the posted payload as event.data.
         listener({ data } as MessageEvent<unknown>)
       }
     }
@@ -141,7 +142,13 @@ it('refreshes the plans list when the tab regains focus (#5686)', async () => {
 it('announces a committed plan delete to other tabs (#5686)', async () => {
   mockDelete.mockResolvedValue(undefined)
   const changes: string[] = []
-  const unsubscribe = subscribeToCrossTabChanges((change) => changes.push(change.type))
+  const observer = new BroadcastChannel('comic-pile-data')
+  observer.addEventListener('message', (event: MessageEvent<unknown>) => {
+    const data = event.data
+    if (data && typeof data === 'object' && 'type' in data) {
+      changes.push(String((data as { type: unknown }).type))
+    }
+  })
   const { result } = renderHook(() => useDeleteReadingPlan())
 
   await act(async () => {
@@ -149,7 +156,7 @@ it('announces a committed plan delete to other tabs (#5686)', async () => {
   })
 
   expect(changes).toEqual(['reading-plans-changed'])
-  unsubscribe()
+  observer.close()
 })
 
 it('announces a committed plan save to other tabs (#5686)', async () => {
@@ -162,7 +169,13 @@ it('announces a committed plan save to other tabs (#5686)', async () => {
     nodes: [],
   })
   const changes: string[] = []
-  const unsubscribe = subscribeToCrossTabChanges((change) => changes.push(change.type))
+  const observer = new BroadcastChannel('comic-pile-data')
+  observer.addEventListener('message', (event: MessageEvent<unknown>) => {
+    const data = event.data
+    if (data && typeof data === 'object' && 'type' in data) {
+      changes.push(String((data as { type: unknown }).type))
+    }
+  })
   const { result } = renderHook(() => useSaveReadingPlan(1))
 
   await act(async () => {
@@ -170,5 +183,5 @@ it('announces a committed plan save to other tabs (#5686)', async () => {
   })
 
   expect(changes).toEqual(['reading-plans-changed'])
-  unsubscribe()
+  observer.close()
 })
