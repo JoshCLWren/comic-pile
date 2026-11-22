@@ -119,8 +119,8 @@ async fn alembic_managed_at_baseline(client: &Client) {
         .unwrap();
 }
 
-/// Simulate an Alembic-managed database at the current head: both migration
-/// schemas are present.
+/// Simulate an Alembic-managed database at the current head: both schema
+/// migrations are present, while later data repairs remain pending.
 async fn alembic_managed_at_head(client: &Client) {
     alembic_managed_at_baseline(client).await;
     client
@@ -142,7 +142,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![1, 2], vec![]));
+    assert_eq!((report.applied, report.adopted), (vec![1, 2, 3], vec![]));
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
@@ -156,7 +156,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(recorded, 2);
+    assert_eq!(recorded, 3);
 
     let threads: bool = client
         .query_one("SELECT to_regclass('public.threads') IS NOT NULL", &[])
@@ -182,7 +182,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
 }
 
 #[tokio::test]
-async fn alembic_database_at_head_is_adopted_without_rerunning() {
+async fn alembic_schema_at_head_is_adopted_and_data_repairs_run() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     alembic_managed_at_head(&client).await;
@@ -199,7 +199,7 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![], vec![1, 2]));
+    assert_eq!((report.applied, report.adopted), (vec![3], vec![1, 2]));
 
     let recorded: bool = client
         .query_one(
@@ -231,7 +231,7 @@ async fn alembic_database_at_baseline_head_adopts_baseline_and_runs_pending() {
     alembic_managed_at_baseline(&client).await;
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![2], vec![1]));
+    assert_eq!((report.applied, report.adopted), (vec![2, 3], vec![1]));
 
     let queue_groups: bool = client
         .query_one(
@@ -243,7 +243,7 @@ async fn alembic_database_at_baseline_head_adopts_baseline_and_runs_pending() {
         .get(0);
     assert!(
         queue_groups,
-        "the pending V2 migration must run after adoption"
+        "the pending V2 schema migration must run after adoption"
     );
 
     let stamp: String = client
@@ -388,7 +388,7 @@ async fn alembic_baseline_with_stale_deferred_checks_is_repaired_before_stamp() 
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![2], vec![1]));
+    assert_eq!((report.applied, report.adopted), (vec![2, 3], vec![1]));
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
