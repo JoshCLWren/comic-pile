@@ -602,13 +602,11 @@ impl Drop for Pending {
         }
     }
 }
-/// Read all Option E constraints in one SQL statement inside a bounded, repeatable-read, read-only transaction.
-/// Diagnostics contain owned entry/dependency IDs only, never foreign titles or metadata.
-/// Diagnostic-only: preserves unresolved IDs for comparison, never for execution.
-pub async fn load_option_diagnostics(
+async fn load_pooled(
     state: &AppState,
     user: AuthenticatedUser,
-) -> Result<OptionInputs, ApiError> {
+    include_historical_evidence: bool,
+) -> Result<GraphDiagnostics, ApiError> {
     let started = Instant::now();
     let mut pending = Pending(Some(db::checkout(state).await?));
     let result = tokio::time::timeout(state.request_timeout, async {
@@ -623,9 +621,25 @@ pub async fn load_option_diagnostics(
             .start()
             .await
             .map_err(db::query_error)?;
-        let inputs = load_transaction(&tx, user).await?;
+        let diagnostics = if include_historical_evidence {
+            let row = tx
+                .query_one(diagnostic_statement(), &[&user.id()])
+                .await
+                .map_err(db::query_error)?;
+            let encoded: String = row.try_get(0).map_err(db::query_error)?;
+            let snapshot: SnapshotRows = serde_json::from_str(&encoded).map_err(|error| {
+                tracing::error!(%error, "Invalid Option E diagnostic response");
+                ApiError::Internal("Invalid reading snapshot".to_string())
+            })?;
+            assemble_graph_diagnostics(snapshot)?
+        } else {
+            GraphDiagnostics {
+                inputs: load_transaction(&tx, user).await?,
+                stored_prerequisites: vec![],
+            }
+        };
         tx.rollback().await.map_err(db::query_error)?;
-        Ok::<_, ApiError>(inputs)
+        Ok::<_, ApiError>(diagnostics)
     })
     .await;
     match result {
@@ -637,17 +651,36 @@ pub async fn load_option_diagnostics(
             Err(ApiError::DatabaseUnavailable)
         }
         Ok(Err(error)) => Err(error),
-        Ok(Ok(inputs)) => {
+        Ok(Ok(diagnostics)) => {
             drop(pending.0.take());
             tracing::info!(
                 query_count = 1,
                 elapsed_us = started.elapsed().as_micros() as u64,
-                unresolved_count = inputs.unresolved.len(),
+                unresolved_count = diagnostics.inputs.unresolved.len(),
+                historical_evidence = include_historical_evidence,
                 "Option E inputs loaded"
             );
-            Ok(inputs)
+            Ok(diagnostics)
         }
     }
+}
+
+/// Read execution constraints in one bounded, repeatable-read, read-only transaction.
+/// Historical dependencies are not loaded by this path.
+pub async fn load_option_diagnostics(
+    state: &AppState,
+    user: AuthenticatedUser,
+) -> Result<OptionInputs, ApiError> {
+    Ok(load_pooled(state, user, false).await?.inputs)
+}
+
+/// Read the graph and exact historical evidence in one owner-scoped snapshot.
+/// The returned legacy rows are diagnostic data, never execution inputs.
+pub(crate) async fn load_graph_diagnostics(
+    state: &AppState,
+    user: AuthenticatedUser,
+) -> Result<GraphDiagnostics, ApiError> {
+    load_pooled(state, user, true).await
 }
 /// Validate loaded inputs, failing closed on missing or foreign constraint endpoints.
 pub(crate) fn validated(
