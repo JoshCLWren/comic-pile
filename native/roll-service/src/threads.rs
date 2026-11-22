@@ -524,7 +524,7 @@ pub async fn get_thread_detail(
         last_activity_at: row.get(7),
         notes: row.get(8),
         is_test: row.get(9),
-        is_blocked: row.get(10),
+        is_blocked,
         blocking_reasons: Vec::new(),
         created_at: row.get(11),
         total_issues: row.get(12),
