@@ -349,9 +349,9 @@ pub async fn offer(
     if candidates.is_empty() {
         if let Some(problem) = validated.graph_problem() {
             return Err(ApiError::Conflict(format!(
-                    "No healthy series remain while a reading constraint cycle exists. {} Open Reading Graph to repair.",
-                    problem.summary()
-                )));
+                "No healthy series remain while a reading constraint cycle exists. {} Open Reading Graph to repair.",
+                problem.summary()
+            )));
         }
     }
 

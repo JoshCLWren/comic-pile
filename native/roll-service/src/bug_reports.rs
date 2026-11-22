@@ -68,10 +68,8 @@ const MAX_GITHUB_BODY: usize = 100_000;
 const WINDOW_SECONDS: i64 = 3_600;
 
 const CLAIM_SQL: &str = "INSERT INTO github_issue_submission_limits (user_id, last_submitted_at) VALUES ($1, NULL) ON CONFLICT (user_id) DO UPDATE SET last_submitted_at = github_issue_submission_limits.last_submitted_at WHERE github_issue_submission_limits.last_submitted_at IS NULL OR github_issue_submission_limits.last_submitted_at <= to_timestamp($2) RETURNING user_id";
-const FETCH_LIMIT_SQL: &str =
-    "SELECT extract(epoch from last_submitted_at)::double precision FROM github_issue_submission_limits WHERE user_id = $1";
-const RECORD_SQL: &str =
-    "UPDATE github_issue_submission_limits SET last_submitted_at = to_timestamp($2) WHERE user_id = $1";
+const FETCH_LIMIT_SQL: &str = "SELECT extract(epoch from last_submitted_at)::double precision FROM github_issue_submission_limits WHERE user_id = $1";
+const RECORD_SQL: &str = "UPDATE github_issue_submission_limits SET last_submitted_at = to_timestamp($2) WHERE user_id = $1";
 const USER_SQL: &str = "SELECT username, is_admin FROM users WHERE id = $1";
 
 /// Report kind, mirroring Python `ReportType = Literal["bug", "feature"]`.

@@ -370,7 +370,7 @@ pub async fn get_recommendation_explanation(
             return Err(ApiError::NotFound(format!(
                 "Event {} not found",
                 path.event_id
-            )))
+            )));
         }
     };
     let session_user_id: i32 = row.try_get(3).map_err(db::query_error)?;

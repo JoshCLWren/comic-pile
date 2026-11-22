@@ -60,8 +60,7 @@ const LIST_SQL: &str = "SELECT o.id, o.name, o.description, COUNT(i.id)::bigint 
 
 const OWNED_ORDER_SQL: &str = "SELECT id FROM reading_orders WHERE id = $1 AND user_id = $2";
 const OWNED_THREAD_SQL: &str = "SELECT id FROM threads WHERE id = $1 AND user_id = $2";
-const ORDER_ITEMS_SQL: &str =
-    "SELECT id, thread_id, position FROM reading_order_items WHERE reading_order_id = $1 ORDER BY position";
+const ORDER_ITEMS_SQL: &str = "SELECT id, thread_id, position FROM reading_order_items WHERE reading_order_id = $1 ORDER BY position";
 const COUNT_SQL: &str =
     "SELECT COUNT(*)::bigint FROM reading_order_items WHERE reading_order_id = $1";
 const INSERT_ITEM_SQL: &str =

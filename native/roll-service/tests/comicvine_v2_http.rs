@@ -604,14 +604,20 @@ async fn resolve_classifies_input_and_resolves_issue_links() {
         (
             "https%3A%2F%2Fexample.com%2Fissue%2F4000-1",
             "search",
-            Some("That doesn't look like a ComicVine issue or volume URL. Paste a comicvine.gamespot.com link or search by title instead."),
+            Some(
+                "That doesn't look like a ComicVine issue or volume URL. Paste a comicvine.gamespot.com link or search by title instead.",
+            ),
         ),
         ("batman", "search", None),
         ("%20%20", "search", None),
     ] {
         let (status, body) = send(
             &state,
-            get(&format!("/api/v2/comicvine/resolve?input={input}"), &token, &csrf),
+            get(
+                &format!("/api/v2/comicvine/resolve?input={input}"),
+                &token,
+                &csrf,
+            ),
         )
         .await;
         assert_eq!(status, StatusCode::OK, "{input}: {body:?}");

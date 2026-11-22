@@ -80,7 +80,7 @@ fn resolve_quiz_answers(answers: &BTreeMap<String, String>) -> Result<(String, S
                 _ => {
                     return Err(format!(
                         "Unknown answer '{answer_id}' for question '{question_id}'"
-                    ))
+                    ));
                 }
             },
             "pick" => match answer_id.as_str() {
@@ -91,7 +91,7 @@ fn resolve_quiz_answers(answers: &BTreeMap<String, String>) -> Result<(String, S
                 _ => {
                     return Err(format!(
                         "Unknown answer '{answer_id}' for question '{question_id}'"
-                    ))
+                    ));
                 }
             },
             _ => return Err(format!("Unknown quiz question: '{question_id}'")),
@@ -143,7 +143,7 @@ pub async fn set_reading_mode(
             _ => {
                 return Err(unprocessable(
                     "Provide either quiz answers or both bandwidth and intent".to_string(),
-                ))
+                ));
             }
         },
     };

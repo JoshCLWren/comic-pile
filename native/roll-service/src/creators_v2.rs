@@ -57,8 +57,7 @@ const TREND_MIN_DELTA: f64 = 0.5;
 const RATING_BUCKETS: [f64; 10] = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0];
 
 const INSUFFICIENT_SERIES_MESSAGE: &str = "Not enough rated issues in a single series yet. A series needs at least 3 rated issues before it is compared as strongest or weakest.";
-const INCOMPLETE_METADATA_SERIES_MESSAGE: &str =
-    "Series with enough rated issues are not compared yet because creator metadata is still incomplete.";
+const INCOMPLETE_METADATA_SERIES_MESSAGE: &str = "Series with enough rated issues are not compared yet because creator metadata is still incomplete.";
 const NON_HEADLINE_SERIES_MESSAGE: &str = "Series with enough rated issues are not compared yet because some of those ratings come from credits that do not count toward your average.";
 
 fn bad_request(msg: impl Into<String>) -> ApiError {
@@ -2917,13 +2916,55 @@ fn build_discoveries(library: &CreatorLibrary) -> CreatorDiscoveryResponse {
 
     CreatorDiscoveryResponse {
         views: vec![
-            discovery_view("consistently_loved", "Most consistently loved", "High personal average with at least 5 rated issues and a standard deviation of 0.5 or less.", 5, consistently_loved),
-            discovery_view("polarizing", "Most polarizing", "At least 5 rated issues with a spread of 2.0 or more between the lowest and highest rating.", 5, polarizing),
-            discovery_view("most_read", "Most read", "Creators with the largest rated sample in your library.", 1, most_read),
-            discovery_view("highest_top_rating_rate", "Highest top-rating rate", "At least 5 rated issues with 60% or more at the top of your scale.", 5, top_rate),
-            discovery_view("great_average_small_sample", "Great average, small sample", "An average of 4.0 or more from 4 rated issues or fewer — promising, but not yet proven.", 1, small_sample),
-            discovery_view("loved_with_unread", "Loved creators with unread work", "An average of 4.0 or more with unread issues still in your pile.", 1, loved_unread),
-            discovery_view("moved_over_time", "Warmed to / cooled on", "At least 6 dated ratings where the recent half averages 0.5 or more away from the earlier half.", 6, trend),
+            discovery_view(
+                "consistently_loved",
+                "Most consistently loved",
+                "High personal average with at least 5 rated issues and a standard deviation of 0.5 or less.",
+                5,
+                consistently_loved,
+            ),
+            discovery_view(
+                "polarizing",
+                "Most polarizing",
+                "At least 5 rated issues with a spread of 2.0 or more between the lowest and highest rating.",
+                5,
+                polarizing,
+            ),
+            discovery_view(
+                "most_read",
+                "Most read",
+                "Creators with the largest rated sample in your library.",
+                1,
+                most_read,
+            ),
+            discovery_view(
+                "highest_top_rating_rate",
+                "Highest top-rating rate",
+                "At least 5 rated issues with 60% or more at the top of your scale.",
+                5,
+                top_rate,
+            ),
+            discovery_view(
+                "great_average_small_sample",
+                "Great average, small sample",
+                "An average of 4.0 or more from 4 rated issues or fewer — promising, but not yet proven.",
+                1,
+                small_sample,
+            ),
+            discovery_view(
+                "loved_with_unread",
+                "Loved creators with unread work",
+                "An average of 4.0 or more with unread issues still in your pile.",
+                1,
+                loved_unread,
+            ),
+            discovery_view(
+                "moved_over_time",
+                "Warmed to / cooled on",
+                "At least 6 dated ratings where the recent half averages 0.5 or more away from the earlier half.",
+                6,
+                trend,
+            ),
         ],
         coverage: CreatorDiscoveryCoverage {
             rated_issues_total: rated_ids.len() as i64,
@@ -3458,7 +3499,8 @@ fn build_drilldown(
                 let second = library.ratings[&sorted[middle]];
                 format!(
                     "middle observations (#{} and #{}) = {first}★ and {second}★, average = {median_value}★",
-                    middle, middle + 1
+                    middle,
+                    middle + 1
                 )
             };
             let median_ids: HashSet<i64> = if count % 2 == 1 {
@@ -3841,9 +3883,17 @@ fn build_drilldown(
             let average = (!role_ratings.is_empty()).then(|| points / role_ratings.len() as f64);
             let calculation = CreatorMetricCalculation {
                 formula: if let Some(average) = average {
-                    format!("{role}\n{} credited issues\n{} with effective ratings\n{points} rating points ÷ {} = {average:.2}★", role_issues.len(), role_ratings.len(), role_ratings.len())
+                    format!(
+                        "{role}\n{} credited issues\n{} with effective ratings\n{points} rating points ÷ {} = {average:.2}★",
+                        role_issues.len(),
+                        role_ratings.len(),
+                        role_ratings.len()
+                    )
                 } else {
-                    format!("{role}\n{} credited issues\n0 with effective ratings\nNo rating data available", role_issues.len())
+                    format!(
+                        "{role}\n{} credited issues\n0 with effective ratings\nNo rating data available",
+                        role_issues.len()
+                    )
                 },
                 numerator: if role_ratings.is_empty() {
                     "No rated issues".to_string()
@@ -3923,9 +3973,17 @@ fn build_drilldown(
                 .unwrap_or_else(|| "Unknown Series".to_string());
             let calculation = CreatorMetricCalculation {
                 formula: if let Some(average) = average {
-                    format!("{title}\n{} attributed issues\n{} with effective ratings\n{points} rating points ÷ {} = {average:.2}★", series_issues.len(), series_ratings.len(), series_ratings.len())
+                    format!(
+                        "{title}\n{} attributed issues\n{} with effective ratings\n{points} rating points ÷ {} = {average:.2}★",
+                        series_issues.len(),
+                        series_ratings.len(),
+                        series_ratings.len()
+                    )
                 } else {
-                    format!("{title}\n{} attributed issues\n0 with effective ratings\nNo rating data available", series_issues.len())
+                    format!(
+                        "{title}\n{} attributed issues\n0 with effective ratings\nNo rating data available",
+                        series_issues.len()
+                    )
                 },
                 numerator: if series_ratings.is_empty() {
                     "No rated issues".to_string()

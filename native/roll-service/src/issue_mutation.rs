@@ -559,9 +559,9 @@ pub async fn delete_issue(
     if !references.is_empty() {
         tx.rollback().await.map_err(db::query_error)?;
         return Err(ApiError::Conflict(format!(
-                "Issue {issue_number} is referenced by {}. Remove those references first; nothing was changed.",
-                references.join(", ")
-            )));
+            "Issue {issue_number} is referenced by {}. Remove those references first; nothing was changed.",
+            references.join(", ")
+        )));
     }
 
     tx.execute("DELETE FROM issues WHERE id=$1", &[&issue_id])

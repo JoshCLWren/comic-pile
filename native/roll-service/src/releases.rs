@@ -1413,9 +1413,15 @@ async fn find_minimal_by_source(
 ) -> Result<Vec<MinimalRelease>, ApiError> {
     let conn = db::checkout(state).await?;
     let sql = match (source_pr_number, source_merge_sha) {
-        (Some(_), Some(_)) => "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND (source_pr_number = $2 OR source_merge_sha = $3)",
-        (Some(_), None) => "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_pr_number = $2",
-        (None, Some(_)) => "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_merge_sha = $2",
+        (Some(_), Some(_)) => {
+            "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND (source_pr_number = $2 OR source_merge_sha = $3)"
+        }
+        (Some(_), None) => {
+            "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_pr_number = $2"
+        }
+        (None, Some(_)) => {
+            "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_merge_sha = $2"
+        }
         (None, None) => return Ok(Vec::new()),
     };
     let rows = match (source_pr_number, source_merge_sha) {
@@ -1444,9 +1450,15 @@ async fn find_full_by_source(
 ) -> Result<Vec<FullRelease>, ApiError> {
     let conn = db::checkout(state).await?;
     let sql = match (source_pr_number, source_merge_sha) {
-        (Some(_), Some(_)) => "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND (source_pr_number = $2 OR source_merge_sha = $3)",
-        (Some(_), None) => "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_pr_number = $2",
-        (None, Some(_)) => "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_merge_sha = $2",
+        (Some(_), Some(_)) => {
+            "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND (source_pr_number = $2 OR source_merge_sha = $3)"
+        }
+        (Some(_), None) => {
+            "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_pr_number = $2"
+        }
+        (None, Some(_)) => {
+            "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_merge_sha = $2"
+        }
         (None, None) => return Ok(Vec::new()),
     };
     let rows = match (source_pr_number, source_merge_sha) {
@@ -1581,13 +1593,24 @@ async fn upsert_once(
         .await
         .map_err(db::query_error)?;
     // Identity lookup inside the transaction window.
-    let lookup_sql = match (payload.source_pr_number, payload.source_merge_sha.as_deref()) {
-        (Some(_), Some(_)) => "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND (source_pr_number = $2 OR source_merge_sha = $3)",
-        (Some(_), None) => "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_pr_number = $2",
-        (None, Some(_)) => "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_merge_sha = $2",
-        (None, None) => return Err(unprocessable(
-            "source_pr_number or source_merge_sha is required",
-        )),
+    let lookup_sql = match (
+        payload.source_pr_number,
+        payload.source_merge_sha.as_deref(),
+    ) {
+        (Some(_), Some(_)) => {
+            "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND (source_pr_number = $2 OR source_merge_sha = $3)"
+        }
+        (Some(_), None) => {
+            "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_pr_number = $2"
+        }
+        (None, Some(_)) => {
+            "SELECT id, source_repository, source_pr_number, source_merge_sha, merged_at::text AS merged_at, released_at::text AS released_at, category, title, summary, body, visibility, status, sort_order, provenance_json::text AS provenance_json, created_at::text AS created_at, updated_at::text AS updated_at FROM releases WHERE source_repository = $1 AND source_merge_sha = $2"
+        }
+        (None, None) => {
+            return Err(unprocessable(
+                "source_pr_number or source_merge_sha is required",
+            ));
+        }
     };
     let found: Vec<Row> = match (
         payload.source_pr_number,

@@ -112,7 +112,7 @@ impl Config {
             _ => {
                 return Err(ConfigError(
                     "RUST_ROLL_ENV must be development or production",
-                ))
+                ));
             }
         };
         let bind = get("RUST_ROLL_BIND")

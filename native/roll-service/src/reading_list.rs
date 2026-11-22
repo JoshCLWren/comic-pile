@@ -650,8 +650,8 @@ pub(crate) async fn ensure_list_unlinked(
         let plan_id: i32 = row.get(0);
         let plan_name: String = row.get(1);
         return Err(ApiError::Conflict(format!(
-                "Reading List is authoritative for Reading Plan \"{plan_name}\" (#{plan_id}). Relink that plan before deleting the list; nothing was changed."
-            )));
+            "Reading List is authoritative for Reading Plan \"{plan_name}\" (#{plan_id}). Relink that plan before deleting the list; nothing was changed."
+        )));
     }
     Ok(())
 }

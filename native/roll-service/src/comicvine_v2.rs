@@ -1234,7 +1234,7 @@ pub async fn search_series(
         _ => {
             return Ok(Json(ComicVineSeriesSearchResponse::empty(
                 query.q, offset, limit,
-            )))
+            )));
         }
     };
     let extra = format!(

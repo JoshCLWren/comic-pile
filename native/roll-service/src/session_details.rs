@@ -78,7 +78,11 @@ macro_rules! session_events_filter {
         "(session_id = $1 OR (session_id IS NULL AND user_id = $2 AND type IN ('rate','snooze','unsnooze') AND EXISTS (SELECT 1 FROM sessions s WHERE s.id = $1 AND events.timestamp >= s.started_at AND ((s.ended_at IS NOT NULL AND events.timestamp <= s.ended_at) OR (s.ended_at IS NULL AND events.timestamp < COALESCE((SELECT MIN(s2.started_at) FROM sessions s2 WHERE s2.user_id = s.user_id AND s2.id <> s.id AND s2.started_at > s.started_at), 'infinity'::timestamptz))))))"
     };
 }
-const EVENTS_SQL: &str = concat!("SELECT id, type, to_char(timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), thread_id, selected_thread_id, issue_number, context::text, die, result, selection_method, rating, issues_read, queue_move, die_after, (session_id IS NULL) FROM events WHERE ", session_events_filter!(), " ORDER BY timestamp DESC, id DESC");
+const EVENTS_SQL: &str = concat!(
+    "SELECT id, type, to_char(timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), thread_id, selected_thread_id, issue_number, context::text, die, result, selection_method, rating, issues_read, queue_move, die_after, (session_id IS NULL) FROM events WHERE ",
+    session_events_filter!(),
+    " ORDER BY timestamp DESC, id DESC"
+);
 const SNAPSHOT_TITLES_SQL: &str = "SELECT thread_states::text FROM snapshots WHERE session_id = $1 ORDER BY created_at DESC, id DESC";
 const CURRENT_DIE_SQL: &str = "SELECT die_after, context::text FROM events WHERE (user_id = $1 OR session_id = $2) AND type IN ('rate','snooze','undo','reset_dice','manual_die') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1";
 

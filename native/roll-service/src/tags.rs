@@ -371,7 +371,7 @@ async fn validate_target_conn(
         _ => {
             return Err(bad_request(&format!(
                 "Unsupported target type '{target_type}'. Supported types: Issue, Thread, ContinuityPlan"
-            )))
+            )));
         }
     }
     Ok(())
@@ -443,7 +443,7 @@ async fn validate_target_tx(
         _ => {
             return Err(bad_request(&format!(
                 "Unsupported target type '{target_type}'. Supported types: Issue, Thread, ContinuityPlan"
-            )))
+            )));
         }
     }
     Ok(())

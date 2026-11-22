@@ -1403,7 +1403,7 @@ async fn compile_plan_rules(
                     return Err(domain_conflict(serde_json::json!({
                         "code": "invalid_convergence_gate",
                         "node_id": node.id,
-                    })))
+                    })));
                 }
             };
             let target_node = nodes_by_id.get(target_id).ok_or_else(|| {
