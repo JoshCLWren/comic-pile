@@ -942,41 +942,40 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_categories_track_unread_outside_list() {
-        // Verify that list_entry kind is categorized as UnreadOutsideList
-        use crate::option_inputs::UnresolvedReference;
-        use crate::reading_graph::UnresolvedCategory;
-        let ref_ = UnresolvedReference {
-            kind: "list_entry",
-            object_id: 42,
-        };
-        let category = crate::reading_graph::categorize_unresolved(ref_.kind);
-        assert_eq!(category, UnresolvedCategory::UnreadOutsideList);
+    fn frontier_diagnostics_statement_reports_both_columns() {
+        let sql = frontier_diagnostics_statement();
+        assert!(sql.contains("legacy_dependency_rows"));
+        assert!(sql.contains("origin IS DISTINCT FROM 'reader'"));
+        assert!(sql.contains("jsonb_agg"));
     }
 
     #[test]
-    fn unresolved_categories_track_reading_plan_vs_list() {
-        // Verify that prerequisite kind is categorized as ReadingPlanVsList
-        use crate::option_inputs::UnresolvedReference;
-        use crate::reading_graph::UnresolvedCategory;
-        let ref_ = UnresolvedReference {
-            kind: "prerequisite",
-            object_id: 42,
-        };
-        let category = crate::reading_graph::categorize_unresolved(ref_.kind);
-        assert_eq!(category, UnresolvedCategory::ReadingPlanVsList);
-    }
-
-    #[test]
-    fn unresolved_categories_default_to_jli_converted() {
-        // Verify that unknown kind defaults to JliConverted
-        use crate::option_inputs::UnresolvedReference;
-        use crate::reading_graph::UnresolvedCategory;
-        let ref_ = UnresolvedReference {
-            kind: "unknown_kind",
-            object_id: 42,
-        };
-        let category = crate::reading_graph::categorize_unresolved(ref_.kind);
-        assert_eq!(category, UnresolvedCategory::JliConverted);
+    fn legacy_dependency_rows_decode_from_the_diagnostics_projection() {
+        let rows: Vec<LegacyDependencyRow> = serde_json::from_value(serde_json::json!([
+            {
+                "id": 1860,
+                "source_issue_id": 101875,
+                "target_issue_id": 2029,
+                "origin": null,
+                "classification": null,
+                "provenance": null,
+                "note": null,
+                "source_owned": false
+            },
+            {
+                "id": 1861,
+                "source_issue_id": 2102,
+                "target_issue_id": 2029,
+                "origin": "converted",
+                "classification": "C",
+                "provenance": "generation evidence",
+                "note": "cbl-order:legacy-materialization",
+                "source_owned": true
+            }
+        ]))
+        .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(!rows[0].source_owned);
+        assert_eq!(rows[1].classification.as_deref(), Some("C"));
     }
 }

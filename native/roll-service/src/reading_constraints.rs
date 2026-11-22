@@ -1218,7 +1218,7 @@ impl ValidatedReadingInputs {
                     .collect();
                 Some(FrontierBlockers {
                     thread_id: stored.thread_id,
-                    issue_id,
+                    issue_id: *issue_id,
                     queue_position: stored.queue_position,
                     unsatisfied,
                 })
