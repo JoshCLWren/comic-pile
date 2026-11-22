@@ -31,6 +31,7 @@ and mutation-refresh behavior are covered by the specs listed per row.
 | `/history` | Cold load | 1 session-list page | 1 (required) | — | #4501 budget preserved |
 | `/sessions/:id` | Cold load | details + snapshots | 2 (required) | — | #4501 budget preserved |
 | Auth shell | Mount | prefs + identity-inbox badge | 1 each (required) | — | #4501 |
+| Auth shell | Logout/login after unavailable discovery | capability cache did not exist | capability and private rows cleared; next account sends one new canonical discovery | session-owned query cache must not cross accounts | #5656 `useReadingBoundaries.request-budget` + `session-cache-isolation` |
 
 ## Creator / discovery / crossovers / CBL
 
