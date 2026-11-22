@@ -612,29 +612,41 @@ fn failure_transition(error: &ProviderFailure, attempt: i32) -> (&'static str, i
 }
 
 fn has_complete_provider_payload(metadata: &Value) -> bool {
-    metadata["raw_provider_payload"]
-        .as_object()
-        .is_some_and(|raw| FIELDS.split(',').all(|key| raw.contains_key(key)))
+    let Some(raw) = metadata.get("raw_provider_payload").and_then(|v| v.as_object()) else {
+        return false;
+    };
+    FIELDS.split(',').all(|key| raw.contains_key(key))
 }
 
 fn cached_has_credits(metadata: &Value) -> bool {
-    let creator = metadata["creator_credits"]
-        .as_array()
+    let creator = metadata
+        .get("creator_credits")
+        .and_then(|v| v.as_array())
         .is_some_and(|v| !v.is_empty());
-    let raw = metadata["raw_provider_payload"]["person_credits"]
-        .as_array()
+    let raw = metadata
+        .get("raw_provider_payload")
+        .and_then(|v| v.get("person_credits"))
+        .and_then(|v| v.as_array())
         .is_some_and(|v| !v.is_empty());
     creator || raw
 }
 
 fn provider_newer_than_deep_fetch(metadata: &Value) -> bool {
-    let deep = metadata["deep_metadata_refreshed_at"]
-        .as_str()
+    let deep = metadata
+        .get("deep_metadata_refreshed_at")
+        .and_then(|v| v.as_str())
         .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok());
     let Some(deep) = deep else {
         return false;
     };
-    provider_timestamp(&metadata["raw_provider_payload"]["date_last_updated"])
+    let Some(last_updated) = metadata
+        .get("raw_provider_payload")
+        .and_then(|v| v.get("date_last_updated"))
+        .and_then(|v| v.as_str())
+    else {
+        return false;
+    };
+    provider_timestamp(&last_updated)
         .and_then(|v| chrono::DateTime::parse_from_rfc3339(&v).ok())
         .is_some_and(|provider| provider > deep)
 }
