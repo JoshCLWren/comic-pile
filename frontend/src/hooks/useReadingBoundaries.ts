@@ -12,15 +12,18 @@ export function useReadingBoundaries(threadIds: number[], enabled = true) {
   return useQuery({
     queryKey: queryKeys.dependencies.readingBoundaries(ids),
     queryFn: async () => {
-      const evaluator = client.getQueryData<'enabled' | 'unavailable'>(
+      const evaluatorState = client.getQueryState<'enabled' | 'unavailable'>(
         queryKeys.dependencies.readingBoundaryEvaluator(),
       )
-      // Once any batch identifies the deployment-wide evaluator as unavailable,
-      // another canonical request cannot add information. The empty projection
-      // drives the same legacy fallback as the server's per-thread unavailable
-      // rows, while avoiding that repeated batch on other views and refetches.
-      if (evaluator === 'unavailable') {
-        return { threads: {}, evaluator }
+      // Reuse a fresh unavailable discovery across route keys and refetches.
+      // The empty projection drives the same legacy fallback as the server's
+      // per-thread unavailable rows. Expire the shortcut with the normal query
+      // freshness window so a later deployment can enable the evaluator without
+      // requiring a reload or an auth transition.
+      const discoveryIsFresh = evaluatorState != null &&
+        Date.now() - evaluatorState.dataUpdatedAt < EVALUATOR_CAPABILITY_TTL_MS
+      if (evaluatorState?.data === 'unavailable' && discoveryIsFresh) {
+        return { threads: {}, evaluator: evaluatorState.data }
       }
       const response = await readingBoundariesApi.batch(ids)
       recordReadingBoundaryEvaluator(client, response.evaluator)
