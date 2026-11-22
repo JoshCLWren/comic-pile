@@ -1957,14 +1957,15 @@ mod tests {
         // reading-plan sync and the shared create-issues handler) seats new
         // numbers through this one ordering routine.
         let high_run: Vec<String> = (7..=24).map(|n| n.to_string()).collect();
-        let expected: Vec<String> = (1..=24).map(|n| n.to_string()).collect();
+        let mut seated: Vec<String> = strings(&["1", "2"]);
+        seated.extend(high_run.iter().cloned());
 
         // First adoption: the missing #1 and #2 must be seated in front of the
         // existing run, regardless of the CBL roster order.
         let ascending = natural_issue_order(&high_run, &strings(&["1", "2"]));
         let descending = natural_issue_order(&high_run, &strings(&["2", "1"]));
-        assert_eq!(ascending, Some(expected.clone()));
-        assert_eq!(descending, Some(expected.clone()));
+        assert_eq!(ascending, Some(seated.clone()));
+        assert_eq!(descending, Some(seated));
 
         // Re-adoption after the historical append bug: the stored order is
         // #7-#24, then #2-#6, then #1. A subsequent natural pass reseats every
