@@ -107,8 +107,10 @@ export default function ReadingPlanAddMaterial({
       entry_decisions: entryDecisions,
     }),
     onSuccess: async (committed) => {
-      await applyCommittedReadingPlan(queryClient, committed)
+      // The response already contains the authoritative committed plan. Let the
+      // editor adopt it before waiting for unrelated dependent-query refreshes.
       onCommitted?.(committed)
+      await applyCommittedReadingPlan(queryClient, committed)
     },
     onError: (commitError) => {
       if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
