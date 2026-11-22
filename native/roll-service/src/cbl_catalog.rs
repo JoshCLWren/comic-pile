@@ -79,7 +79,10 @@ pub struct CBLCatalogBrowseResponse {
     #[schema(value_type = i64)]
     pub page: serde_json::Number,
     pub page_size: i64,
+    /// Total source lists matching the applied folder/search scope.
     pub total: i64,
+    /// Total active source lists in the whole shared catalog, independent of search and folder.
+    pub catalog_total: i64,
     pub total_pages: i64,
     pub has_next: bool,
     pub has_previous: bool,
