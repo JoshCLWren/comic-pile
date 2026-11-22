@@ -1964,6 +1964,7 @@ mod tests {
         )
         .await
         .expect("resumed batch");
+        println!("SECOND REPORT: {second:?}");
         assert_eq!(second.enqueued, 1, "hydrated identity is never enqueued");
         assert_eq!(second.scanned, 2);
         assert_eq!(second.already_present, 1);
