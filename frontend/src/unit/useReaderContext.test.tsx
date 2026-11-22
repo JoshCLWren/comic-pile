@@ -9,7 +9,7 @@ import type { ReaderContextResponse } from '../types'
 const original_readerContextApi = { ...readerContextApi }
 const mock_readerContextApi = { get: vi.fn() }
 
-const mockedGet = vi.mocked(readerContextApi.get)
+const mockedGet = (mock_readerContextApi.get as any)
 
 function createWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })

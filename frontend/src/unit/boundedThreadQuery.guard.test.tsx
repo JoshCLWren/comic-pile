@@ -11,7 +11,7 @@ import type { ThreadListItem } from '../types'
 const original_threadsApi = { ...threadsApi }
 const mock_threadsApi = { list: vi.fn() }
 
-const mockedThreadsApi = vi.mocked(threadsApi)
+const mockedThreadsApi = (mock_threadsApi as any)
 
 function createWrapper() {
   const client = new QueryClient({

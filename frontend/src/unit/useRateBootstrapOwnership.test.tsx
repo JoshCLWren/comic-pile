@@ -20,8 +20,8 @@ const mock_protectedRollMutationApi = { rate: vi.fn(), snooze: vi.fn(), bootstra
 const original_rollBootstrapApi = { ...rollBootstrapApi }
 const mock_rollBootstrapApi = { get: vi.fn() }
 
-const mockedRate = vi.mocked(protectedRollMutationApi.rate)
-const mockedBootstrapGet = vi.mocked(rollBootstrapApi.get)
+const mockedRate = (mock_protectedRollMutationApi.rate as any)
+const mockedBootstrapGet = (mock_rollBootstrapApi.get as any)
 
 const thread: Thread = {
   id: 1,

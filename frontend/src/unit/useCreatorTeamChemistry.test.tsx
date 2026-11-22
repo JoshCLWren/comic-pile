@@ -9,7 +9,7 @@ import type { CreatorTeamChemistryResponse } from '../types/index'
 const original_creatorTeamChemistryApi = { ...creatorTeamChemistryApi }
 const mock_creatorTeamChemistryApi = { getChemistry: vi.fn() }
 
-const mockedGetChemistry = vi.mocked(creatorTeamChemistryApi.getChemistry)
+const mockedGetChemistry = (mock_creatorTeamChemistryApi.getChemistry as any)
 
 function makeResponse(): CreatorTeamChemistryResponse {
   return {

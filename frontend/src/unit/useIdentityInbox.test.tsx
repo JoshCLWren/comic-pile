@@ -18,7 +18,7 @@ import { queryKeys } from '../query/queryKeys'
 const original_identityInboxApi = { ...identityInboxApi }
 const mock_identityInboxApi = { list: vi.fn(), confirm: vi.fn(), reject: vi.fn(), defer: vi.fn(), skip: vi.fn() }
 
-const mockedInboxApi = vi.mocked(identityInboxApi)
+const mockedInboxApi = (mock_identityInboxApi as any)
 
 function createWrapper(path = '/queue') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })

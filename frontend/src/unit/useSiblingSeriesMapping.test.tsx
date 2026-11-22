@@ -11,7 +11,7 @@ import { seriesMappingApi } from '../services/api-series-mapping'
 const original_seriesMappingApi = { ...seriesMappingApi }
 const mock_seriesMappingApi = { preview: vi.fn(), commit: vi.fn() }
 
-const mockedSeriesMappingApi = vi.mocked(seriesMappingApi)
+const mockedSeriesMappingApi = (mock_seriesMappingApi as any)
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })

@@ -14,9 +14,9 @@ const mock_readerContextApi = { get: vi.fn() }
 const original_readingBoundariesApi = { ...readingBoundariesApi }
 const mock_readingBoundariesApi = { batch: vi.fn() }
 
-const getBoundaries = vi.mocked(readingBoundariesApi.batch)
+const getBoundaries = (mock_readingBoundariesApi.batch as any)
 
-const getReaderContext = vi.mocked(readerContextApi.get)
+const getReaderContext = (mock_readerContextApi.get as any)
 
 const ACTIVE_THREAD: RatingThread = {
   id: 1,

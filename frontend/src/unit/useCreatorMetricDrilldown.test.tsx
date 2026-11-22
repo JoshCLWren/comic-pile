@@ -21,10 +21,10 @@ import type {
 const original_creatorMetricDrilldownApi = { ...creatorMetricDrilldownApi }
 const mock_creatorMetricDrilldownApi = { getMetricDrilldown: vi.fn(), getRatingDistributionDrilldown: vi.fn(), getRoleDrilldown: vi.fn(), getSeriesDrilldown: vi.fn() }
 
-const mockedGetMetric = vi.mocked(creatorMetricDrilldownApi.getMetricDrilldown)
-const mockedGetDistribution = vi.mocked(creatorMetricDrilldownApi.getRatingDistributionDrilldown)
-const mockedGetRole = vi.mocked(creatorMetricDrilldownApi.getRoleDrilldown)
-const mockedGetSeries = vi.mocked(creatorMetricDrilldownApi.getSeriesDrilldown)
+const mockedGetMetric = (mock_creatorMetricDrilldownApi.getMetricDrilldown as any)
+const mockedGetDistribution = (mock_creatorMetricDrilldownApi.getRatingDistributionDrilldown as any)
+const mockedGetRole = (mock_creatorMetricDrilldownApi.getRoleDrilldown as any)
+const mockedGetSeries = (mock_creatorMetricDrilldownApi.getSeriesDrilldown as any)
 
 function makeResponse(): CreatorMetricDrilldown {
   return {
