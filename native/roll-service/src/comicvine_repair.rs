@@ -1514,6 +1514,96 @@ mod tests {
         assert_eq!(request_state, "completed");
     }
 
+    #[tokio::test]
+    async fn transient_failure_retries_and_empty_credits_settle_no_credits() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "-1 hour", None).await;
+        let fake = state
+            .outbound
+            .as_any()
+            .downcast_ref::<crate::outbound::RecordingFakeOutbound>()
+            .expect("test state uses the recording fake outbound client");
+        fake.push_error(crate::outbound::OutboundError::Send(
+            "transient transport failure".to_owned(),
+        ));
+
+        let first = claim(&state).await.expect("claim").expect("pending job");
+        assert_eq!(
+            process(&state, &first, Some("TESTKEY123"))
+                .await
+                .expect("transient failure"),
+            "deferred"
+        );
+        let connection = db::checkout(&state).await.expect("verify connection");
+        let row = connection
+            .query_one(
+                "SELECT state, attempts, last_error, lease_expires_at IS NULL, \
+                 next_attempt_at > now() FROM comicvine_metadata_refresh_requests WHERE id = $1",
+                &[&first.id],
+            )
+            .await
+            .expect("deferred request");
+        assert_eq!(row.get::<_, String>(0), "deferred");
+        assert_eq!(row.get::<_, i32>(1), 1);
+        assert_eq!(row.get::<_, Option<String>>(2).as_deref(), Some("provider_unavailable"));
+        assert!(row.get::<_, bool>(3));
+        assert!(row.get::<_, bool>(4));
+
+        // Advance past the durable cooldown without sleeping, then return a
+        // valid singular payload whose empty credits are a successful,
+        // distinct terminal outcome rather than another provider failure.
+        connection
+            .execute(
+                "UPDATE comicvine_metadata_refresh_requests \
+                 SET next_attempt_at = now() - interval '1 second' WHERE id = $1",
+                &[&first.id],
+            )
+            .await
+            .expect("expire retry cooldown");
+        let issue = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
+            "cover_date":"1988-03-01", "store_date":"1988-03-24", "image":{},
+            "volume":{"id": 4001,"name":"Hellblazer"},
+            "person_credits":[], "character_credits":[], "team_credits":[],
+            "story_arc_credits":[], "date_last_updated":"2020-01-01T00:00:00+00:00"});
+        fake.push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            bytes::Bytes::from(json!({"status_code": 1.0, "results": issue}).to_string()),
+        );
+        let retry = claim(&state).await.expect("retry claim").expect("due retry");
+        assert_eq!(retry.attempt, 2);
+        assert_eq!(
+            process(&state, &retry, Some("TESTKEY123"))
+                .await
+                .expect("empty-credit success"),
+            "no_credits"
+        );
+
+        let row = connection
+            .query_one(
+                "SELECT r.state, r.attempts, r.last_error, r.completed_at IS NOT NULL, \
+                 e.metadata_json::jsonb->'creator_credits', \
+                 e.metadata_json::jsonb->>'deep_metadata_refreshed_at' \
+                 FROM comicvine_metadata_refresh_requests r \
+                 JOIN external_identities e ON e.id = r.external_identity_id \
+                 WHERE r.id = $1",
+                &[&retry.id],
+            )
+            .await
+            .expect("no-credit result");
+        assert_eq!(row.get::<_, String>(0), "no_credits");
+        assert_eq!(row.get::<_, i32>(1), 2);
+        assert_eq!(row.get::<_, Option<String>>(2), None);
+        assert!(row.get::<_, bool>(3));
+        assert_eq!(row.get::<_, Value>(4), json!([]));
+        assert!(row.get::<_, Option<String>>(5).is_some());
+        assert_eq!(fake.calls().len(), 2);
+    }
+
     #[test]
     fn provider_timestamp_accepts_rfc3339_and_comicvine_space_format() {
         assert_eq!(
