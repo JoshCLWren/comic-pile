@@ -365,6 +365,30 @@ pub async fn create_issues(
                 insert_issue(&tx, thread_id, number, anchor_position + offset as i32 + 1).await?,
             );
         }
+    } else if let Some(order) = mixed_natural_order {
+        let target: BTreeMap<&str, i32> = order
+            .iter()
+            .enumerate()
+            .map(|(index, number)| (number.as_str(), index as i32 + 1))
+            .collect();
+        let positions: Vec<(i32, i32)> = existing
+            .iter()
+            .filter_map(|(id, number, position)| {
+                target
+                    .get(number.as_str())
+                    .filter(|wanted| **wanted != *position)
+                    .map(|wanted| (*id, *wanted))
+            })
+            .collect();
+        reseat_positions(&tx, thread_id, &positions).await?;
+        let mut creations: Vec<(&String, i32)> = new_numbers
+            .iter()
+            .map(|number| (number, target[number.as_str()]))
+            .collect();
+        creations.sort_by_key(|(_, position)| *position);
+        for (number, position) in creations {
+            created.push(insert_issue(&tx, thread_id, number, position).await?);
+        }
     } else if append {
         let next = existing
             .iter()
