@@ -71,7 +71,7 @@ async def _insert_list(raw: asyncpg.Connection, owner_id: int, name: str, issue_
     return list_id
 
 
-async def _seed_list_owner(engine, url: str, prefix: str) -> tuple[dict[str, str], str]:
+async def _seed_list_owner(engine, prefix: str) -> tuple[dict[str, str], str]:
     """Create one isolated owner and return a GET reading-lists runner environment."""
     username = f"{prefix}_{uuid4().hex[:12]}"
     async with AsyncSession(engine, expire_on_commit=False) as db:
@@ -369,12 +369,16 @@ async def test_delete_reading_list_statements_bounded() -> None:
             await db.commit()
             token = _token(username, jti=f"jti-{uuid4().hex}")
 
-        async def _seed_one() -> int:
+        async def _seed_one(entry_count: int = 1) -> int:
             raw = await asyncpg.connect(url)
             try:
                 owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
-                _, ids = await _insert_owned_thread(raw, owner_id, int(uuid4().int % 100000))
-                return await _insert_list(raw, owner_id, f"D-{uuid4().hex[:6]}", [ids[0]])
+                base_index = int(uuid4().int % 100000)
+                issue_ids: list[int] = []
+                for offset in range(entry_count):
+                    _, ids = await _insert_owned_thread(raw, owner_id, base_index + offset)
+                    issue_ids.append(ids[0])
+                return await _insert_list(raw, owner_id, f"D-{uuid4().hex[:6]}", issue_ids)
             finally:
                 await raw.close()
 
@@ -397,7 +401,9 @@ async def test_delete_reading_list_statements_bounded() -> None:
         )
         small_delta = (after - before) if before is not None and after is not None else None
 
-        large_id = await _seed_one()
+        # The large target itself holds 200 entries, so a query-per-entry
+        # deletion regression would exceed the fixed delete budget.
+        large_id = await _seed_one(200)
         # grow unrelated data
         raw = await asyncpg.connect(url)
         try:
@@ -521,7 +527,7 @@ async def test_deliberate_extra_query_fails_route_budget() -> None:
     engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
         # One real GET consumes the full declared budget for this set-based route.
-        env_small, _token_value = await _seed_list_owner(engine, url, "budget_extra")
+        env_small, _token_value = await _seed_list_owner(engine, "budget_extra")
         _, _, before = await db_counters(engine)
         response, _, _, _ = await run_rust_example(BINARY, env_small)
         assert response.get("status") == 200
