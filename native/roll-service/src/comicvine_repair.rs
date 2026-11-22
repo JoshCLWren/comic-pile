@@ -979,7 +979,18 @@ pub async fn backfill(
     Query(query): Query<BackfillQuery>,
 ) -> Result<Json<BackfillReport>, ApiError> {
     let secret = std::env::var("CRON_SECRET").ok();
-    authorize(&headers, secret.as_deref())?;
+    backfill_authorized(&state, &headers, secret.as_deref(), query).await
+}
+
+/// Handler body with the expected secret injected for deterministic route and
+/// accounting regressions without mutating process-global cron configuration.
+async fn backfill_authorized(
+    state: &AppState,
+    headers: &HeaderMap,
+    expected: Option<&str>,
+    query: BackfillQuery,
+) -> Result<Json<BackfillReport>, ApiError> {
+    authorize(headers, expected)?;
     let limit = query.limit.clamp(1, 2000);
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
