@@ -86,6 +86,7 @@ describe('CblBrowserPage catalog', () => {
       pageSize: 50,
     })
     expect(screen.getByText('Ultimate Universe')).toBeInTheDocument()
+    expect(screen.getByTestId('cbl-result-count')).toHaveTextContent('1 of 1 source lists')
     expect(screen.getByText(/JoshCLWren\/CBL-ReadingLists/)).toBeInTheDocument()
     // #3939: the raw .cbl path stays out of the default search row.
     expect(screen.queryByText('Ultimate.cbl')).not.toBeInTheDocument()
