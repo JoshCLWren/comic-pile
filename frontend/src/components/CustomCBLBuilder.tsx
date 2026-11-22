@@ -437,7 +437,7 @@ export default function CustomCBLBuilder({
   const progressIndex = getReadingListProgressIndex(entries)
   const progressIssue = entries[progressIndex]
   const nextUnreadIssueId = entries.find((entry) => !entry.skipped && entry.status === 'unread')?.issue_id
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Scroll to the progress issue if we have a ref and the IDs match
     if (pendingProgressRevealRef.current !== entries[progressIndex]?.issue_id) return
     if (!currentIssueRef.current) return
