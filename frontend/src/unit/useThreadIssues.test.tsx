@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import type { InfiniteData } from '@tanstack/react-query'
-import { beforeEach, expect, it, vi, describe } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi, describe } from 'vitest'
 import { cast } from '../utils/cast'
 import {
   flattenIssuePages,
@@ -23,25 +23,19 @@ import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { applyIssueReadSnapshotToCache } from '../query/cacheEffects'
 
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    list: vi.fn(),
-    create: vi.fn(),
-    markRead: vi.fn(),
-    markUnread: vi.fn(),
-    delete: vi.fn(),
-    reorder: vi.fn(),
-  },
-}))
-
-vi.mock('../services/api-dependencies', () => ({
-  issueDependenciesApi: {
-    listForThread: vi.fn(),
-  },
-}))
-
-const mockedIssuesApi = vi.mocked(issuesApi)
-const mockedDepsApi = vi.mocked(issueDependenciesApi)
+const originalIssuesApi = { ...issuesApi }
+const originalDepsApi = { ...issueDependenciesApi }
+const mockedIssuesApi = {
+  list: vi.fn(),
+  create: vi.fn(),
+  markRead: vi.fn(),
+  markUnread: vi.fn(),
+  delete: vi.fn(),
+  reorder: vi.fn(),
+}
+const mockedDepsApi = {
+  listForThread: vi.fn(),
+}
 
 function makeIssue(overrides: Partial<Issue> & { id: number; issue_number: string }): Issue {
   return {
@@ -62,8 +56,15 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  Object.assign(issuesApi, mockedIssuesApi)
+  Object.assign(issueDependenciesApi, mockedDepsApi)
   queryClient.clear()
   mockedIssuesApi.list.mockReset()
+})
+
+afterEach(() => {
+  Object.assign(issuesApi, originalIssuesApi)
+  Object.assign(issueDependenciesApi, originalDepsApi)
 })
 
 describe('flattenIssuePages and getIssueTotalCount', () => {

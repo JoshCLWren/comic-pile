@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import {
   useSessionDetails,
@@ -11,15 +11,12 @@ import { sessionApi } from '../services/api-sessions'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { queryKeys } from '../query/queryKeys'
 
-vi.mock('../services/api-sessions', () => ({
-  sessionApi: {
-    list: vi.fn(),
-    getDetails: vi.fn(),
-    getSnapshots: vi.fn(),
-  },
-}))
-
-const mockedSessionApi = vi.mocked(sessionApi)
+const originalSessionApi = { ...sessionApi }
+const mockedSessionApi = {
+  list: vi.fn(),
+  getDetails: vi.fn(),
+  getSnapshots: vi.fn(),
+}
 
 function renderWithProvider<T>(hook: () => T): { result: { current: T } } {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -45,12 +42,17 @@ function renderWithClient<T>(hook: () => T) {
 }
 
 beforeEach(() => {
+  Object.assign(sessionApi, mockedSessionApi)
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.list.mockResolvedValue({ sessions: [{ id: 2 }], next_page_token: null } as never)
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getDetails.mockResolvedValue({ session_id: 3 } as never)
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getSnapshots.mockResolvedValue({ snapshots: [] } as never)
+})
+
+afterEach(() => {
+  Object.assign(sessionApi, originalSessionApi)
 })
 
 it('loads first page of sessions', async () => {

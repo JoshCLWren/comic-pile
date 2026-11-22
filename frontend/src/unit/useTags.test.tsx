@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   useAssignTag,
@@ -19,26 +19,23 @@ import { tagsApi } from '../services/api-tags'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 
-vi.mock('../services/api-tags', () => ({
-  tagsApi: {
-    list: vi.fn(),
-    get: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-    usage: vi.fn(),
-    assign: vi.fn(),
-    unassign: vi.fn(),
-    bulkAssign: vi.fn(),
-    bulkUnassign: vi.fn(),
-    effectiveForIssue: vi.fn(),
-    effectiveForThread: vi.fn(),
-    effectiveForPlan: vi.fn(),
-    threadIssuesEffective: vi.fn(),
-  },
-}))
-
-const mockedTagsApi = vi.mocked(tagsApi)
+const originalTagsApi = { ...tagsApi }
+const mockedTagsApi = {
+  list: vi.fn(),
+  get: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  usage: vi.fn(),
+  assign: vi.fn(),
+  unassign: vi.fn(),
+  bulkAssign: vi.fn(),
+  bulkUnassign: vi.fn(),
+  effectiveForIssue: vi.fn(),
+  effectiveForThread: vi.fn(),
+  effectiveForPlan: vi.fn(),
+  threadIssuesEffective: vi.fn(),
+}
 
 function tag(id: number, scope: 'global' | 'private' = 'private') {
   return {
@@ -65,6 +62,11 @@ function assignment(tagId: number) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  Object.assign(tagsApi, mockedTagsApi)
+})
+
+afterEach(() => {
+  Object.assign(tagsApi, originalTagsApi)
 })
 
 describe('useTags', () => {

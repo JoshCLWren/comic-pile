@@ -16,19 +16,16 @@ import { threadsApi } from '../services/api-threads'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 
-vi.mock('../services/api-threads', () => ({
-  threadsApi: {
-    list: vi.fn(),
-    get: vi.fn(),
-    listStale: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-    reactivate: vi.fn(),
-  },
-}))
-
-const mockedThreadsApi = vi.mocked(threadsApi)
+const originalThreadsApi = { ...threadsApi }
+const mockedThreadsApi = {
+  list: vi.fn(),
+  get: vi.fn(),
+  listStale: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  reactivate: vi.fn(),
+}
 
 function createWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -38,10 +35,12 @@ function createWrapper() {
 }
 
 afterEach(() => {
+  Object.assign(threadsApi, originalThreadsApi)
   vi.restoreAllMocks()
 })
 
 beforeEach(() => {
+  Object.assign(threadsApi, mockedThreadsApi)
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedThreadsApi.list.mockResolvedValue({ threads: [{ id: 1 }], next_page_token: null } as never)
   // SAFETY: mock payload supplies only the fields this test asserts
