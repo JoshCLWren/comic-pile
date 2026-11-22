@@ -1021,6 +1021,18 @@
             },
             "title": "Threads",
             "type": "array"
+          },
+          "filtered_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filtered Count",
+            "description": "Total active Queue rows matching the applied search, independent of the bounded page."
           }
         },
         "required": [
