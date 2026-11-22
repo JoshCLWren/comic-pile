@@ -79,6 +79,14 @@ function QueueControlsInner({
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [])
+  const resultCountText = countError
+    ? 'Series count unavailable.'
+    : countPending
+      ? 'Updating series count…'
+      : filteredCount != null && activeCount != null
+        ? `${filteredCount} of ${activeCount} series`
+        : 'Series count unavailable.'
+
   return (
     <header className="space-y-3 md:space-y-4 px-2">
       <div className="flex flex-wrap justify-between items-start gap-2 md:gap-4">
