@@ -1359,11 +1359,14 @@ export default function CblBrowserPage() {
                 </p>
               )}
 
-              {browsePage.items.length === 0 && browsePage.total > 0 && (
-                <p className="text-sm text-[var(--theme-text-muted)]">
-                  No sources on page {browsePage.page} of {Math.max(browsePage.total_pages, 1)}.
-                </p>
-              )}
+              {settledBrowsePage &&
+                settledBrowsePage.items.length === 0 &&
+                settledBrowsePage.total > 0 && (
+                  <p className="text-sm text-[var(--theme-text-muted)]">
+                    No sources on page {settledBrowsePage.page} of{' '}
+                    {Math.max(settledBrowsePage.total_pages, 1)}.
+                  </p>
+                )}
 
               {browsePage.total > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
