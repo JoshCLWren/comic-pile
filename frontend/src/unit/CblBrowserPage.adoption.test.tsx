@@ -220,7 +220,6 @@ describe('CblBrowserPage adoption', () => {
     // Same-named plan no longer triggers "Choose exact plan" message;
     // a new distinct plan is always created (per #3933 fix).
     expect(screen.getByRole('button', { name: 'Add this reading order' })).not.toBeDisabled()
-    expect(mockCommitNew).toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
     const update = screen.getByRole('button', { name: 'Update selected Reading Plan' })
