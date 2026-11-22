@@ -1206,6 +1206,15 @@ export default function CblBrowserPage() {
         </div>
       ) : (
         <>
+          <p
+            role="status"
+            aria-live="polite"
+            className="min-h-4 text-xs text-[var(--theme-text-muted)]"
+            data-testid="cbl-result-count"
+          >
+            {resultCountText}
+          </p>
+
           {submittedQuery && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--theme-text-muted)]">
               <span>Searching every shared CBL for “{submittedQuery}”.</span>
