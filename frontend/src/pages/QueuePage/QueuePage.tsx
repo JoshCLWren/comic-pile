@@ -86,7 +86,9 @@ export default function QueuePage() {
   // Placeholder rows/counts belong to the previous search key. Keep the count
   // honest until the current search's first page settles.
   const countPending = !isError && (isPlaceholderData || (isFetching && filteredCount === null))
-  const countError = isError || (!countPending && filteredCount === null && threads !== null)
+  const countError = isError
+    ? !(!isPlaceholderData && filteredCount !== null)
+    : !countPending && filteredCount === null && threads !== null
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()

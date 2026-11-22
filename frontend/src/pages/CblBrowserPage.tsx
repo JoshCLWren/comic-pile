@@ -763,24 +763,13 @@ export default function CblBrowserPage() {
   const lastShown = browsePage
     ? (browsePage.page - 1) * browsePage.page_size + browsePage.items.length
     : 0
-  // Placeholder rows may remain visible during a key transition, but their
-  // metadata belongs to the previous submitted search/page and must not be
-  // presented as the current result count.
   const settledBrowsePage = browseQuery.isPlaceholderData ? null : browsePage
-  const resultCountPending =
-    !catalogError &&
-    (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
-  const resultCountText = catalogError
+  const resultCountPending = !catalogError && (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
+  const resultCountText = catalogError || (!resultCountPending && !settledBrowsePage)
     ? 'Source list count unavailable.'
     : resultCountPending
       ? 'Updating source list count…'
-      : settledBrowsePage
-        ? `${settledBrowsePage.total} of ${
-            settledBrowsePage.scope === 'search'
-              ? settledBrowsePage.catalog_total
-              : settledBrowsePage.total
-          } source lists`
-        : 'Source list count unavailable.'
+      : `${settledBrowsePage!.total} of ${settledBrowsePage!.scope === 'search' ? settledBrowsePage!.catalog_total : settledBrowsePage!.total} source lists`
 
   const openConfirm = () => {
     if (!selectedSource || !preview || commitBlocked) return
