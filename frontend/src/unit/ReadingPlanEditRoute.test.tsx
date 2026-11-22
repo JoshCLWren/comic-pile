@@ -115,12 +115,7 @@ describe('ReadingPlanEditRoute', () => {
   })
 
   it('does not unlock the editor for a relinked plan from a stale authoring link', () => {
-    // SAFETY: The route reads only isError, isPending, and data here.
-    vi.mocked(useReadingPlanReader).mockReturnValue({
-      isError: true,
-      isPending: false,
-      data: undefined,
-    } as ReturnType<typeof useReadingPlanReader>)
+    getReader.mockRejectedValue(new Error('reader unavailable'))
     // SAFETY: The route reads only isPending and data.status here.
     vi.mocked(useReadingPlanRecoveryPreview).mockReturnValue({
       isPending: false,
@@ -132,12 +127,7 @@ describe('ReadingPlanEditRoute', () => {
   })
 
   it('does not unlock the editor for an ambiguous authority from a stale authoring link', () => {
-    // SAFETY: The route reads only isError, isPending, and data here.
-    vi.mocked(useReadingPlanReader).mockReturnValue({
-      isError: true,
-      isPending: false,
-      data: undefined,
-    } as ReturnType<typeof useReadingPlanReader>)
+    getReader.mockRejectedValue(new Error('reader unavailable'))
     // SAFETY: The route reads only isPending and data.status here.
     vi.mocked(useReadingPlanRecoveryPreview).mockReturnValue({
       isPending: false,
