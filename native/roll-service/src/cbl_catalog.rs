@@ -545,7 +545,12 @@ async fn browse_items(
                 &[&pattern, &page_size, &offset],
             )
             .await?;
-        Ok((rows.iter().map(map_item).collect(), total, effective_page))
+        Ok((
+            rows.iter().map(map_item).collect(),
+            total,
+            catalog_total,
+            effective_page,
+        ))
     } else {
         let (folder_like, prefix_len): (Option<String>, i32) = if folder.is_empty() {
             (None, 0)
@@ -600,7 +605,12 @@ async fn browse_items(
                 &[&folder_like, &prefix_len, &page_size, &offset],
             )
             .await?;
-        Ok((rows.iter().map(map_item).collect(), total, effective_page))
+        Ok((
+            rows.iter().map(map_item).collect(),
+            total,
+            catalog_total,
+            effective_page,
+        ))
     }
 }
 
