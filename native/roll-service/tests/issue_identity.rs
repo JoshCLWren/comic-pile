@@ -644,6 +644,69 @@ async fn adoption_commit_creates_plan_with_valid_fingerprint() {
 }
 
 #[tokio::test]
+async fn adoption_commit_does_not_create_crossover_event_label_issue_3517() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+
+    let conn = state.pool.get().await.unwrap();
+    let before: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM dependency_groups WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+
+    let after: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM dependency_groups WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        after, before,
+        "CBL adoption commit must not create crossover event labels (issue #3517): {body}"
+    );
+
+    let named: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM dependency_groups WHERE user_id = $1 AND name = $2",
+            &[&user_id, &"Mister Miracle 1989"],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        named, 0,
+        "CBL adoption must not create a dependency group named after the source list (issue #3517)"
+    );
+}
+
+#[tokio::test]
 async fn adoption_plan_reports_title_number_ambiguity_statuses() {
     let (state, token, csrf, _guard) = setup().await;
 
