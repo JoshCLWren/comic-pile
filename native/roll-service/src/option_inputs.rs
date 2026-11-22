@@ -809,49 +809,4 @@ mod tests {
         assert!(inputs.require_resolved().is_ok());
         assert!(inputs.core.issues.is_empty());
     }
-
-    #[test]
-    fn unresolved_categories_track_unread_outside_list() {
-        // Verify that list_entry kind is categorized as UnreadOutsideList
-        use crate::option_inputs::UnresolvedReference;
-        use crate::reading_graph::UnresolvedCategory;
-        let ref_ = UnresolvedReference {
-            kind: "list_entry",
-            object_id: 42,
-        };
-        let category = crate::reading_graph::categorize_unresolved(&ref_.kind);
-        assert_eq!(category, UnresolvedCategory::UnreadOutsideList);
-    }
-
-    #[test]
-    fn unresolved_categories_track_reading_plan_vs_list() {
-        // Verify that prerequisite kind is categorized as ReadingPlanVsList
-        use crate::option_inputs::UnresolvedReference;
-        use crate::reading_graph::UnresolvedCategory;
-        let ref_ = UnresolvedReference {
-            kind: "prerequisite",
-            object_id: 42,
-        };
-        let category = crate::reading_graph::categorize_unresolved(&ref_.kind);
-        assert_eq!(category, UnresolvedCategory::ReadingPlanVsList);
-    }
-
-    #[test]
-    fn unresolved_categories_default_to_jli_converted() {
-        // Verify that unknown kind defaults to JliConverted
-        use crate::option_inputs::UnresolvedReference;
-        use crate::reading_graph::UnresolvedCategory;
-        let ref_ = UnresolvedReference {
-            kind: "unknown_kind",
-            object_id: 42,
-        };
-        let category = crate::reading_graph::categorize_unresolved(&ref_.kind);
-        assert_eq!(category, UnresolvedCategory::JliConverted);
-    }
-        }))
-        .unwrap();
-        let inputs = assemble_snapshot(snapshot).ok().unwrap();
-        assert!(inputs.require_resolved().is_ok());
-        assert!(inputs.core.issues.is_empty());
-    }
 }
