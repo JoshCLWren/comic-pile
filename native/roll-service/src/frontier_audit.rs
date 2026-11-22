@@ -561,13 +561,14 @@ mod tests {
 
     #[test]
     fn findings_are_bounded_and_omissions_counted() {
-        // One gap per frontier: 45 independent threads, each an active queued
-        // Thread whose frontier receives one inert legacy edge.
+        // One gap per frontier: 45 extra independent threads plus the fixture
+        // chain's UXM frontier, so 46 findings collapse to the 40 reported.
+        let extra_threads = 45usize;
         let mut inputs = fixture_inputs();
         let mut legacy = vec![legacy_edge()];
-        for offset in 0..MAX_REPORTED_FINDINGS + 4 {
-            let thread_id = 1000 + offset;
-            let source_id = 4000 + offset * 2;
+        for offset in 0..extra_threads {
+            let thread_id = 1000 + i32::try_from(offset).unwrap_or(i32::MAX);
+            let source_id = 4000 + i32::try_from(offset * 2).unwrap_or(i32::MAX);
             let target_id = source_id + 1;
             inputs.core.threads.push(ReadingThread {
                 id: thread_id,
@@ -592,11 +593,11 @@ mod tests {
                 thread_id,
                 next_issue_id: Some(source_id),
                 is_blocked: false,
-                queue_position: 3 + offset as i32,
+                queue_position: i32::try_from(3 + offset).unwrap_or(i32::MAX),
             });
             legacy.push(LegacyDependencyRow {
                 id: 3000 + i32::try_from(offset).unwrap_or(i32::MAX),
-                source_issue_id: source_id,
+                source_issue_id: target_id,
                 target_issue_id: source_id,
                 origin: None,
                 classification: None,
@@ -605,11 +606,14 @@ mod tests {
                 source_owned: true,
             });
         }
-        let validated = validated(inputs);
-        let report = audit_frontiers(&inputs_ref_placeholder(), &validated_ref_placeholder(), &legacy);
+        let validated = validated(inputs.clone());
+        let report = audit_frontiers(&inputs, &validated, &legacy);
+        let expected_gaps = MAX_REPORTED_FINDINGS + 6;
         assert_eq!(report.findings.len(), MAX_REPORTED_FINDINGS);
-        assert_eq!(report.findings_omitted, 5);
-        assert_eq!(report.inert_evidence_rows, MAX_REPORTED_FINDINGS + 5);
+        assert_eq!(report.findings_omitted, 6);
+        assert_eq!(report.inert_evidence_rows, expected_gaps);
+        assert_eq!(report.unprotected_frontiers, expected_gaps);
+        assert_eq!(report.frontiers_examined, expected_gaps + 1);
     }
 
     #[test]
