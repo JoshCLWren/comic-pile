@@ -996,14 +996,11 @@ mod tests {
             "results": deep_provider_result(issue_id, date_last_updated),
         })
         .to_string();
-        state
-            .recording_fake()
-            .expect("recording provider")
-            .push_ok(
-                StatusCode::OK,
-                HeaderMap::new(),
-                Bytes::from(body),
-            );
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(body),
+        );
     }
 
     /// #4516 legacy oracle: `_provider_timestamp` returned a naive datetime
@@ -1075,10 +1072,7 @@ mod tests {
         assert!(row.get::<_, bool>(4));
         drop(Object::take(connection));
 
-        let calls = state
-            .recording_fake()
-            .expect("recording provider")
-            .calls();
+        let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].host, HOST);
         assert!(calls[0].path.starts_with("/api/issue/4000-29319/"));
@@ -1184,10 +1178,7 @@ mod tests {
         );
         drop(Object::take(connection));
 
-        let calls = state
-            .recording_fake()
-            .expect("recording provider")
-            .calls();
+        let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1, "cross-owner ids must not be fetched");
         assert!(calls[0].path.starts_with("/api/issue/4000-29319/"));
     }
