@@ -230,6 +230,34 @@ fn preauthenticated_statement() -> &'static str {
     })
 }
 
+/// The snapshot statement plus the inert legacy/converted dependency evidence
+/// for the read-only frontier audit (#4198), in one statement over the same
+/// owner-scoped CTEs. The rows never enter the evaluator: the Option E
+/// snapshot keeps loading only `origin='reader'` prerequisites, so converted
+/// and legacy edges stay inert (#2366, #3676).
+fn frontier_diagnostics_statement() -> &'static str {
+    static SQL: OnceLock<String> = OnceLock::new();
+    SQL.get_or_init(|| {
+        format!(
+            "WITH me AS (SELECT $1::int AS user_id),\n{SNAPSHOT_CTES},\n{SNAPSHOT_PROJECTION},\n\
+             legacy_dependency_rows AS (\n\
+             \x20 SELECT d.id, d.source_issue_id, d.target_issue_id, d.origin,\n\
+             \x20        d.classification, d.provenance, d.note,\n\
+             \x20        (si.id IS NOT NULL) AS source_owned\n\
+             \x20 FROM dependencies d\n\
+             \x20 JOIN owned_issues ti ON ti.id = d.target_issue_id AND ti.status = 'unread'\n\
+             \x20 LEFT JOIN owned_issues si ON si.id = d.source_issue_id\n\
+             \x20 WHERE d.origin IS DISTINCT FROM 'reader'\n\
+             \x20   AND (si.id IS NULL OR si.status <> 'read')\n\
+             )\n\
+             SELECT snapshot.value::text,\n\
+                    COALESCE((SELECT jsonb_agg(to_jsonb(x) ORDER BY x.id)\n\
+                              FROM legacy_dependency_rows x), '[]'::jsonb)::text\n\
+             FROM snapshot"
+        )
+    })
+}
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct SnapshotRows {
     threads: Vec<ThreadRow>,
@@ -348,6 +376,35 @@ async fn load_transaction(
         ApiError::Internal("Invalid reading snapshot".to_string())
     })?;
     assemble_snapshot(snapshot)
+}
+
+/// Assemble the owner snapshot plus the inert legacy evidence rows in one
+/// decoded response. Diagnostic-only: the legacy rows are audit evidence,
+/// never execution input.
+async fn load_frontier_diagnostics_transaction(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+) -> Result<OptionDiagnostics, ApiError> {
+    let row = tx
+        .query_one(frontier_diagnostics_statement(), &[&user.id()])
+        .await
+        .map_err(db::query_error)?;
+    let encoded: String = row.try_get(0).map_err(db::query_error)?;
+    let snapshot: SnapshotRows = serde_json::from_str(&encoded).map_err(|error| {
+        tracing::error!(%error, "Invalid Option E snapshot response");
+        ApiError::Internal("Invalid reading snapshot".to_string())
+    })?;
+    let inputs = assemble_snapshot(snapshot)?;
+    let legacy_encoded: String = row.try_get(1).map_err(db::query_error)?;
+    let legacy_dependencies: Vec<LegacyDependencyRow> =
+        serde_json::from_str(&legacy_encoded).map_err(|error| {
+            tracing::error!(%error, "Invalid legacy dependency diagnostics response");
+            ApiError::Internal("Invalid reading snapshot".to_string())
+        })?;
+    Ok(OptionDiagnostics {
+        inputs,
+        legacy_dependencies,
+    })
 }
 
 /// Assemble the validated Option E inputs from one decoded snapshot.
@@ -613,6 +670,56 @@ pub(crate) fn validated_contained(
             }
         }
     })
+}
+
+/// Read the Option E constraints plus the inert legacy dependency evidence in
+/// one SQL statement inside a bounded, repeatable-read, read-only transaction.
+/// Diagnostic-only: the legacy rows feed the read-only frontier audit (#4198)
+/// and never the evaluator; converted and legacy edges stay inert.
+pub async fn load_frontier_diagnostics(
+    state: &AppState,
+    user: AuthenticatedUser,
+) -> Result<OptionDiagnostics, ApiError> {
+    let started = Instant::now();
+    let mut pending = Pending(Some(db::checkout(state).await?));
+    let result = tokio::time::timeout(state.request_timeout, async {
+        #[allow(clippy::unwrap_used)]
+        let tx = pending
+            .0
+            .as_mut()
+            .unwrap()
+            .build_transaction()
+            .isolation_level(IsolationLevel::RepeatableRead)
+            .read_only(true)
+            .start()
+            .await
+            .map_err(db::query_error)?;
+        let diagnostics = load_frontier_diagnostics_transaction(&tx, user).await?;
+        tx.rollback().await.map_err(db::query_error)?;
+        Ok::<_, ApiError>(diagnostics)
+    })
+    .await;
+    match result {
+        Err(e) => {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            Err(ApiError::DatabaseUnavailable)
+        }
+        Ok(Err(error)) => Err(error),
+        Ok(Ok(diagnostics)) => {
+            drop(pending.0.take());
+            tracing::info!(
+                query_count = 1,
+                elapsed_us = started.elapsed().as_micros() as u64,
+                unresolved_count = diagnostics.inputs.unresolved.len(),
+                legacy_dependency_rows = diagnostics.legacy_dependencies.len(),
+                "Option E frontier diagnostics loaded"
+            );
+            Ok(diagnostics)
+        }
+    }
 }
 
 /// Load execution inputs, failing closed on missing or foreign constraint endpoints.

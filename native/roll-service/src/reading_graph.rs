@@ -80,19 +80,6 @@ pub struct ReadingGraphRepairOption {
     pub prerequisite_id: Option<i32>,
 }
 
-/// Categorization of an unresolved reference for issue #4198 closure.
-/// These track the three completeness blockers documented in
-/// PRODUCTION_READING_GRAPH_REPLAY.md: unread issues outside strict-list
-/// coverage, Reading List vs Reading Plan differences, and converted
-/// historical relationships (including JLI) that can contradict newer strict lists.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema, PartialOrd, Ord)]
-#[allow(dead_code)]
-pub enum UnresolvedCategory {
-    UnreadOutsideList,
-    ReadingPlanVsList,
-    JliConverted,
-}
-
 /// Complete graph state. `status` is `ok`, `cycle`, or `invalid`.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ReadingGraphResponse {
