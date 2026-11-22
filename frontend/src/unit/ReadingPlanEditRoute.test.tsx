@@ -2,38 +2,24 @@ import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanEditRoute from '../pages/ReadingPlanEditRoute'
-import { useReadingPlanReader, useReadingPlanRecoveryPreview } from '../hooks/useReadingPlans'
 import { continuityPlansApi, type ReadingPlanReaderView } from '../services/api-continuity-plans'
+import {
+  readingPlanRecoveryApi,
+  type PlanRecoveryPreview,
+} from '../services/api-reading-plan-recovery'
 import { cast } from '../utils/cast'
 
-vi.mock('../services/api-continuity-plans', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
-    '../services/api-continuity-plans',
-  )
-  return {
-    ...actual,
-    continuityPlansApi: {
-      ...actual.continuityPlansApi,
-      getReader: vi.fn(),
-    },
-  }
-})
+const originalContinuityPlansApi = { ...continuityPlansApi }
+const originalReadingPlanRecoveryApi = { ...readingPlanRecoveryApi }
+const getReader = vi.fn<typeof continuityPlansApi.getReader>()
+const getRecoveryPreview = vi.fn<typeof readingPlanRecoveryApi.preview>()
 
-// For error-state assertions, supply a settled query state directly. A rejected
-// mocked API promise can produce an unhandled rejection in the shared test
-// harness, even after React Query has rendered its error state.
-vi.mock('../hooks/useReadingPlans', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../hooks/useReadingPlans')>()
-  return {
-    ...actual,
-    useReadingPlanReader: vi.fn(actual.useReadingPlanReader),
-    useReadingPlanRecoveryPreview: vi.fn(actual.useReadingPlanRecoveryPreview),
-  }
+afterEach(() => {
+  Object.assign(continuityPlansApi, originalContinuityPlansApi)
+  Object.assign(readingPlanRecoveryApi, originalReadingPlanRecoveryApi)
 })
-
-const getReader = vi.mocked(continuityPlansApi.getReader)
 
 function ListEditor() {
   const { id } = useParams()
