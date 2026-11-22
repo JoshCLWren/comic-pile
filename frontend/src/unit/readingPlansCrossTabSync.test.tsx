@@ -115,9 +115,12 @@ it('refreshes the plans list when another tab renames a plan (#5686)', async () 
   expect(await screen.findByText('QA-F-Order')).toBeInTheDocument()
 
   // Another tab commits the rename and announces it. No reload, timer, or
-  // staleTime expiry is part of this reproduction.
+  // staleTime expiry is part of this reproduction. Post with a different
+  // senderId so the subscriber treats it as cross-tab, not a same-tab echo.
   await act(async () => {
-    notifyReadingPlansChanged()
+    const otherTab = new BroadcastChannel('comic-pile-data')
+    otherTab.postMessage({ type: 'reading-plans-changed', senderId: 'other-tab' })
+    otherTab.close()
     await Promise.resolve()
   })
 
