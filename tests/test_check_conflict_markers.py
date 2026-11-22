@@ -63,7 +63,7 @@ def test_incident_8292506_lockfile_markers_fail_with_file_and_line(tmp_path: Pat
     assert any("frontend/pnpm-lock.yaml:13:" in r and "end marker" in r for r in rendered)
     # second block
     assert any("frontend/pnpm-lock.yaml:17:" in r and "start marker" in r for r in rendered)
-    assert any("frontend/pnpm-lock.yaml:23:" in r and "end marker" in r for r in rendered)
+    assert any("frontend/pnpm-lock.yaml:25:" in r and "end marker" in r for r in rendered)
     assert all("frontend/pnpm-lock.yaml" in r for r in rendered)
 
 
