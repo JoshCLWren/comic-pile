@@ -3044,8 +3044,32 @@ async fn import_series_enqueues_durable_metadata_refresh_requests() {
         count, 2,
         "reimport must not create duplicate refresh requests"
     );
-
-    let _ = user_id;
+    let preserved = conn
+        .query_one(
+            "SELECT t.queue_position, t.last_rating, i.status, i.read_at::text, \
+                    e.metadata_json::text, m.status, \
+                    (SELECT count(*) FROM events \
+                     WHERE thread_id = t.id AND type = 'issues_created'), \
+                    (SELECT count(*) FROM events \
+                     WHERE thread_id = t.id AND type = 'rate' AND rating = 4.5) \
+             FROM threads t \
+             JOIN issues i ON i.id = $2 \
+             JOIN issue_external_identity_mappings m ON m.issue_id = i.id \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE t.id = $1 AND m.status = 'confirmed'",
+            &[&thread_id, &first_issue_id],
+        )
+        .await
+        .unwrap();
+    assert_eq!(preserved.get::<_, i32>(0), 9);
+    assert_eq!(preserved.get::<_, Option<f64>>(1), Some(4.5));
+    assert_eq!(preserved.get::<_, String>(2), "read");
+    assert!(preserved.get::<_, String>(3).starts_with("2026-11-01 00:00:00"));
+    let metadata: Value = serde_json::from_str(preserved.get(4)).unwrap();
+    assert_eq!(metadata["creator_credits"][0]["name"], "Existing Creator");
+    assert_eq!(preserved.get::<_, String>(5), "confirmed");
+    assert_eq!(preserved.get::<_, i64>(6), 2, "no new import history");
+    assert_eq!(preserved.get::<_, i64>(7), 1, "rating history is retained");
 }
 
 /// #5592: exercise the complete production read path used by Roll after a
