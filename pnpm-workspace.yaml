@@ -1,4 +1,2 @@
 packages:
-  - frontend
-
-storeDir: /tmp/opencode/pnpm-store
+  - 'frontend'
