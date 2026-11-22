@@ -389,7 +389,11 @@ export interface SessionDetails {
   events: SessionEvent[];
 }
 
-export type ThreadListResponse = components['schemas']['QueueThreadListResponse']
+// The native Queue collection adds its filtered total to the legacy optimized
+// row shape. Keep that field optional because the completed/excluded aliases do
+// not emit it, and leave the frozen Python schema unchanged.
+export type ThreadListResponse = components['schemas']['QueueThreadListResponse'] &
+  Pick<components['schemas']['ThreadListResponse'], 'filtered_count'>
 
 export interface SessionListResponse {
   sessions: SessionSummary[];
