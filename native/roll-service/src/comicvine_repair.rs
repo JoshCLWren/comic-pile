@@ -1980,9 +1980,9 @@ mod tests {
         let mut identity_ids = Vec::new();
         // Three roster-only identities and one hydrated identity.
         for (index, metadata) in [
-            "{}".to_owned(),
-            "{}".to_owned(),
-            "{}".to_owned(),
+            json!({}),
+            json!({}),
+            json!({}),
             json!({
                 "creator_credits": [{"id":1,"name":"Creator"}],
                 "deep_metadata_refreshed_at": "2026-11-22T00:00:00+00:00",
@@ -1991,8 +1991,7 @@ mod tests {
                   "image":{},"volume":{},"person_credits":[{"id":1}],
                   "character_credits":[],"team_credits":[],"story_arc_credits":[],
                   "date_last_updated":"2026-11-22 00:00:00"}
-            })
-            .to_string(),
+            }),
         ]
         .into_iter()
         .enumerate()
