@@ -141,7 +141,8 @@ function IssueRow({ issue, sourceNames, card, blockerCards }: {
         </p>
         <p className="truncate text-sm text-[var(--theme-text-muted)]">
           {issue.thread_title}
-          {isAvailable ? ' · Next unread issue #' : ' · Issue #'}
+          {isAvailable ? ' · Next unread issue ' : ' · Issue '}
+          {/^(annual|special|one[\s-]?shot)/i.test(issue.issue_number) ? '' : '#'}
           {issue.issue_number}
           {issue.is_checkpoint ? ' · Checkpoint' : ''}
         </p>

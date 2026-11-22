@@ -208,14 +208,20 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
         return trimmed.to_string();
     }
 
-    // Normalize "annual 1", "annual #1", "special 1" etc. to title case.
+    // Normalize "annual 1", "annual #1", "special 1" etc. Extract just the issue number
+    // so UI can render "Issue #<number>" consistently (avoids "Issue #Annual 1").
     let collapsed = candidate.split_whitespace().collect::<Vec<_>>().join(" ");
     let lower = collapsed.to_lowercase();
     for prefix in ["annual", "special", "one-shot", "one shot"] {
+        let rest = if lower == prefix {
+            ""
+        } else {
+            lower.strip_prefix(prefix).unwrap_or("")
+        };
         if lower == prefix {
-            return capitalize_first(&collapsed);
+            // No number found; return the canonical label
+            return capitalize_first(prefix);
         }
-        let rest = lower.strip_prefix(prefix).unwrap_or("");
         if !rest.is_empty() {
             let rest_trimmed = rest
                 .trim_start_matches(|c: char| c == ' ' || c == '#' || c == '-' || c == ':')
@@ -225,7 +231,7 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
                     .chars()
                     .all(|c| c.is_ascii_digit() || c == '.' || c.is_ascii_alphabetic())
             {
-                return format!("{} {}", capitalize_first(prefix), rest_trimmed);
+                return rest_trimmed.to_string();
             }
         }
     }
