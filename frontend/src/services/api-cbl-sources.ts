@@ -42,7 +42,10 @@ export interface CBLCatalogBrowsePage {
   items: CBLCatalogListItem[]
   page: number
   page_size: number
+  /** Full match total for the applied folder/search scope, not this page's size. */
   total: number
+  /** Whole active shared-catalog total used as the denominator for searches. */
+  catalog_total: number
   total_pages: number
   has_next: boolean
   has_previous: boolean
