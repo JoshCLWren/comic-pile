@@ -74,6 +74,7 @@ export function useContinuityPlannerEditor({
   const [selectedGroupId, setSelectedGroupId] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [cblCommitPending, setCblCommitPending] = useState(false)
+const [cblApplyPending, setCblApplyPending] = useState(false)
   const [isProjectionOpen, setIsProjectionOpen] = useState(false)
   const [laneSeq, setLaneSeq] = useState(0)
   const [editingGateNodeId, setEditingGateNodeId] = useState<string | null>(null)
@@ -387,6 +388,19 @@ export function useContinuityPlannerEditor({
     setSaveError(null)
   }
 
+  const applyCustomCBL = async (cblId: number) => {
+    setCblApplyPending(true)
+    try {
+      const committed = await customCBLApi.apply(cblId, planId!)
+      acceptCommittedPlan(committed)
+    } catch (error) {
+      // TODO: handle error appropriately
+      setSaveError('Failed to apply custom CBL')
+    } finally {
+      setCblApplyPending(false)
+    }
+  }
+
   const cancel = () => {
     setName(savedName || DEFAULT_PLAN_NAME)
     setLanes(
@@ -451,6 +465,7 @@ export function useContinuityPlannerEditor({
     setSelectedIssue,
     setSelectedGroupId,
     setCblCommitPending,
+    setCblApplyPending,
     setIsProjectionOpen,
     setEditingGateNodeId,
     // orchestration actions
@@ -469,6 +484,7 @@ export function useContinuityPlannerEditor({
     save,
     cancel,
     acceptCommittedPlan,
+    applyCustomCBL,
   }
 }
 
