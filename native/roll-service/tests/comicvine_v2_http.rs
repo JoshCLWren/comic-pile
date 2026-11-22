@@ -2978,7 +2978,7 @@ async fn import_series_enqueues_durable_metadata_refresh_requests() {
         .expect("first imported issue") as i32;
     conn.execute(
         "UPDATE external_identities \
-         SET metadata_json = (metadata_json::jsonb || ($2::text)::jsonb)::json \
+         SET metadata_json = (metadata_json::jsonb || ($1::text)::jsonb)::json \
          WHERE provider = 'comicvine' AND entity_type = 'issue' AND external_id = '91001'",
         &[
             &json!({"creator_credits": [{"id": 88, "name": "Existing Creator", "role": "writer"}]})
