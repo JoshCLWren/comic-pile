@@ -1852,6 +1852,9 @@ mod tests {
 
     #[tokio::test]
     async fn backfill_is_bounded_resumable_and_dry_runnable() {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::TRACE)
+            .try_init();
         let Some(state) = crate::test_support::test_state(2).await else {
             return;
         };
