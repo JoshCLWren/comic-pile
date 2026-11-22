@@ -15,11 +15,4 @@ export function getReadingListProgressIndex(entries: readonly ProgressEntry[]): 
   return Math.max(0, entries.length - 1)
 }
 
-/**
- * Returns the issue_id of the progress entry (the entry the editor should land on).
- * This is the first unread non-skipped entry, or the last entry if all are read/complete.
- */
-export function getProgressIssueId(entries: readonly CustomCBLEntry[]): number | null {
-  const progressIndex = getReadingListProgressIndex(entries)
-  return entries[progressIndex]?.issue_id ?? null
-}
+
