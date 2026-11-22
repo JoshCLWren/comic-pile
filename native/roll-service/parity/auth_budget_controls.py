@@ -19,7 +19,8 @@ import pytest
 from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from route_harness import assert_declared_budget, db_counters
+import route_harness
+from route_harness import db_counters
 
 #: Far-future expiry so a measurement never depends on wall-clock drift.
 FIXTURE_TOKEN_EXPIRY = 4_102_444_800
@@ -132,7 +133,7 @@ async def extra_query_fails_budget(
     """
     injected = await _injected_statements(engine, url, 1)
     with pytest.raises(AssertionError, match="declared maximum"):
-        assert_declared_budget(method, path, measured + injected)
+        route_harness.assert_declared_budget(method, path, measured + injected)
 
 
 async def per_row_queries_fail_budget(
@@ -160,4 +161,4 @@ async def per_row_queries_fail_budget(
     """
     injected = await _injected_statements(engine, url, rows)
     with pytest.raises(AssertionError, match="declared maximum"):
-        assert_declared_budget(method, path, measured + injected)
+        route_harness.assert_declared_budget(method, path, measured + injected)
