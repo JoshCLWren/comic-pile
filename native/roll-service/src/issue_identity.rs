@@ -18,7 +18,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::instrument;
 
-use crate::{auth::AuthenticatedUser, db::checkout, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser, db::checkout, thread_issues::natural_issue_order, ApiError, AppState,
+};
 
 // Public projection constants mirror `app.services.cbl_source_public` and the
 // existing native `cbl_catalog` module. The local mirror path must never reach
@@ -2708,6 +2710,31 @@ fn tx_db_error(error: tokio_postgres::Error, context: &str) -> ApiError {
     }
 }
 
+/// Pick a Reading Plan name that cannot collide with one the reader already
+/// owns.
+///
+/// Untargeted CBL adoption creates a brand-new plan. When the source name was
+/// already in use, emitting a second indistinguishable plan (or letting a
+/// caller treat the existing one as the implicit target) is what destroyed a
+/// curated plan in #3933. Return the source name when it is free; otherwise
+/// append ` (2)`, ` (3)`, ... until the name is distinct for this reader.
+fn unique_adoption_plan_name(
+    base_name: &str,
+    existing_names: &std::collections::HashSet<String>,
+) -> String {
+    if !existing_names.contains(base_name) {
+        return base_name.to_string();
+    }
+    for suffix in 2..u32::MAX {
+        let candidate = format!("{base_name} ({suffix})");
+        if !existing_names.contains(&candidate) {
+            return candidate;
+        }
+    }
+    // Unreachable in practice: the candidate space grows with the plan count.
+    format!("{base_name} (dedupe exhausted)")
+}
+
 async fn do_cbl_adoption_commit(
     state: &Arc<AppState>,
     user_id: i32,
@@ -2802,6 +2829,22 @@ async fn do_cbl_adoption_commit(
         })?;
     let planned = calculate_adoption_plan_entries(&report_entries, &series_bool, &entry_bool); // series_overrides handled in merge below
 
+    // A deleted Reading List leaves recovery provenance on its Plan. Reusing
+    // that orphaned Plan would report a successful adoption and then route the
+    // reader to the same 409 recovery screen (#3933). Preserve it as history
+    // and create a fresh Plan instead, including when it was explicitly chosen
+    // by the collision UI before its orphaned state was known.
+    let orphaned_plan_ids = orphaned_plan_ids_tx(&tx, user_id).await.map_err(|e| {
+        if e.is_database_unavailable() {
+            CommitErr::Db(e)
+        } else {
+            CommitErr::Unexpected(e.to_string())
+        }
+    })?;
+    let requested_target_plan_id = target_plan_id;
+    let update_target_plan_id = target_plan_id.filter(|pid| !orphaned_plan_ids.contains(pid));
+    let force_new_plan = requested_target_plan_id.is_some() && update_target_plan_id.is_none();
+
     // Determine/create plan
     let (
         plan_id,
@@ -2812,7 +2855,7 @@ async fn do_cbl_adoption_commit(
         mut nodes_json,
         _created_at,
         _updated_at,
-    ) = if let Some(pid) = target_plan_id {
+    ) = if let Some(pid) = update_target_plan_id {
         let prow = tx.run_query_opt("SELECT id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&pid, &user_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(e.to_string()) })?
             .ok_or_else(|| CommitErr::Adoption("Reading Plan not found".to_string()))?;
         (
@@ -2828,16 +2871,22 @@ async fn do_cbl_adoption_commit(
             prow.get::<_, String>(6),
         )
     } else {
-        // Try existing adopted plan by source path
-        let existing = find_existing_adopted_plan_tx(&tx, user_id, &source_path)
-            .await
-            .map_err(|e| {
-                if e.is_database_unavailable() {
-                    CommitErr::Db(e)
-                } else {
-                    CommitErr::Unexpected(e.to_string())
-                }
-            })?;
+        // Try an existing usable adopted plan by source path. An explicitly
+        // selected orphan must produce a fresh Plan rather than silently
+        // redirecting the write to a different existing Plan.
+        let existing = if force_new_plan {
+            None
+        } else {
+            find_existing_adopted_plan_tx(&tx, user_id, &source_path, &orphaned_plan_ids)
+                .await
+                .map_err(|e| {
+                    if e.is_database_unavailable() {
+                        CommitErr::Db(e)
+                    } else {
+                        CommitErr::Unexpected(e.to_string())
+                    }
+                })?
+        };
         if let Some(pid) = existing {
             let prow = tx.run_query_one("SELECT id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&pid, &user_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("load existing plan: {e}")) })?;
             (
@@ -2853,11 +2902,32 @@ async fn do_cbl_adoption_commit(
                 prow.get::<_, String>(6),
             )
         } else {
-            let name = if list_name.is_empty() {
+            let base_name = if list_name.is_empty() {
                 format!("CBL adoption for {source_path}")
             } else {
                 list_name.clone()
             };
+            // #3933: an untargeted adoption must never produce a second
+            // indistinguishable plan with a name the reader already uses. A
+            // distinct name keeps the existing curated plan addressable and
+            // makes any later update an explicit, targeted choice.
+            let existing_names: std::collections::HashSet<String> = tx
+                .run_query(
+                    "SELECT name FROM continuity_plans WHERE user_id=$1",
+                    &[&user_id],
+                )
+                .await
+                .map_err(|e| {
+                    if crate::db::is_transport_failure(&e) {
+                        CommitErr::Db(ApiError::database_unavailable())
+                    } else {
+                        CommitErr::Unexpected(format!("existing plan names: {e}"))
+                    }
+                })?
+                .into_iter()
+                .map(|row: tokio_postgres::Row| row.get::<_, String>(0))
+                .collect();
+            let name = unique_adoption_plan_name(&base_name, &existing_names);
             let lanes = serde_json::json!([{"id":"default","name":"Default","order":0}]);
             let prow = tx.run_query_one(
                 "INSERT INTO continuity_plans (user_id,name,ordering_mode,lanes_json,nodes_json,created_at,updated_at) VALUES ($1,$2,'informational',$3::jsonb,'[]'::jsonb,NOW(),NOW()) RETURNING id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text",
@@ -2884,7 +2954,7 @@ async fn do_cbl_adoption_commit(
         planned: &planned,
         source_path: &source_path,
         series_overrides: &override_bool,
-        preserve_existing_order: target_plan_id.is_some(),
+        preserve_existing_order: update_target_plan_id.is_some(),
     };
     let merge = merge_adoption_nodes_tx(&mut tx, &mut nodes_json, &merge_ctx).await?;
     tx.run_execute(
@@ -2908,7 +2978,7 @@ async fn do_cbl_adoption_commit(
         }
     })?;
 
-    let status = if target_plan_id.is_some() {
+    let status = if requested_target_plan_id.is_some() {
         StatusCode::OK
     } else {
         StatusCode::CREATED
@@ -3507,10 +3577,42 @@ async fn resolve_canonical_for_entry<E: DbExec>(
     ))
 }
 
+/// Return Plans whose former authoritative Reading List no longer exists.
+/// This is the same ownership and provenance boundary as the Plan reader: a
+/// live owned List keeps the Plan usable, while retained `custom-cbl:` history
+/// with no live List requires explicit recovery.
+async fn orphaned_plan_ids_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+) -> Result<std::collections::HashSet<i32>, ApiError> {
+    let rows = tx
+        .run_query(
+            "SELECT p.id FROM continuity_plans p
+             WHERE p.user_id=$1
+               AND EXISTS (
+                   SELECT 1 FROM reading_plan_sources s
+                   WHERE s.plan_id=p.id
+                     AND (s.raw_source_path LIKE 'custom-cbl:%'
+                          OR s.custom_cbl_list_id IS NOT NULL)
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM reading_plan_sources s
+                   JOIN custom_cbl_lists l
+                     ON l.id=s.custom_cbl_list_id AND l.user_id=$1
+                   WHERE s.plan_id=p.id
+               )",
+            &[&user_id],
+        )
+        .await
+        .map_err(|e| tx_db_error(e, ""))?;
+    Ok(rows.into_iter().map(|row| row.get(0)).collect())
+}
+
 async fn find_existing_adopted_plan_tx(
     tx: &tokio_postgres::Transaction<'_>,
     user_id: i32,
     source_path: &str,
+    orphaned_plan_ids: &std::collections::HashSet<i32>,
 ) -> Result<Option<i32>, ApiError> {
     let rows = tx
         .run_query(
@@ -3521,6 +3623,9 @@ async fn find_existing_adopted_plan_tx(
         .map_err(|e| tx_db_error(e, ""))?;
     for row in rows {
         let pid: i32 = row.get(0);
+        if orphaned_plan_ids.contains(&pid) {
+            continue;
+        }
         let nodes_text: String = row.get(1);
         if let Ok(nodes) = serde_json::from_str::<Vec<JsonValue>>(&nodes_text) {
             for node in nodes {
@@ -3819,59 +3924,6 @@ fn tx_to_commit_err(error: tokio_postgres::Error, context: &str) -> MaterializeE
     } else {
         MaterializeErr::Unexpected(format!("{context}: {error}"))
     }
-}
-
-fn parse_ordinary_issue_number(issue_number: &str) -> Option<i64> {
-    if issue_number.is_empty() || issue_number.starts_with('0') {
-        return None;
-    }
-    if !issue_number.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    issue_number.parse::<i64>().ok().filter(|n| *n > 0)
-}
-
-fn natural_issue_order(existing: &[String], new_numbers: &[String]) -> Option<Vec<String>> {
-    let mut incoming: Vec<(i64, String)> = Vec::new();
-    for issue_number in new_numbers {
-        let value = parse_ordinary_issue_number(issue_number)?;
-        incoming.push((value, issue_number.clone()));
-    }
-    let existing_numbered: Vec<(i64, String)> = existing
-        .iter()
-        .filter_map(|n| parse_ordinary_issue_number(n).map(|v| (v, n.clone())))
-        .collect();
-    if existing_numbered.len() == existing.len() {
-        let mut merged = existing_numbered;
-        merged.extend(incoming);
-        merged.sort_by_key(|(n, _)| *n);
-        return Some(merged.into_iter().map(|(_, s)| s).collect());
-    }
-    if existing_numbered.is_empty() {
-        return None;
-    }
-    let numbers: Vec<i64> = existing_numbered.iter().map(|(n, _)| *n).collect();
-    if numbers.windows(2).any(|w| w[0] > w[1]) {
-        return None;
-    }
-    let mut result: Vec<String> = existing.to_vec();
-    incoming.sort_by_key(|(n, _)| *n);
-    for (number, label) in incoming {
-        let mut inserted = false;
-        for idx in 0..result.len() {
-            if let Some(existing_number) = parse_ordinary_issue_number(&result[idx]) {
-                if existing_number > number {
-                    result.insert(idx, label.clone());
-                    inserted = true;
-                    break;
-                }
-            }
-        }
-        if !inserted {
-            result.push(label);
-        }
-    }
-    Some(result)
 }
 
 async fn insert_issue_natural_order_tx(

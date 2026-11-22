@@ -1,5 +1,8 @@
 name: Factory CLI Contract
 
+# scripts/factory-run is a thin wrapper over `rotisserie factory`, whose own
+# behavior is tested in Rotisserie. This proves the wrapper forwards every
+# argument exactly, maps the old listing flags, and pins a real commit.
 on:
   pull_request:
     paths:
@@ -23,40 +26,42 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Check CLI syntax and both JSON key orders
+      - name: Wrapper syntax and pinned Rotisserie commit
         run: |
           set -Eeuo pipefail
           bash -n scripts/factory-run
-          bash scripts/factory-run --self-test
-          bash scripts/factory-run --providers | grep -q 'opencode-go'
-      - name: Verify provider/model/slot/target arguments without dispatching
+          grep -Eq '^ROTISSERIE_REF="[0-9a-f]{40}"$' scripts/factory-run
+      - name: Wrapper forwards arguments exactly to rotisserie factory
         shell: bash
         run: |
           set -Eeuo pipefail
-          mkdir -p "$RUNNER_TEMP/bin"
-          cat > "$RUNNER_TEMP/bin/gh" <<'GH'
+          stub="$RUNNER_TEMP/rotisserie"
+          cat > "$stub" <<'STUB'
           #!/usr/bin/env bash
           printf '%s\n' "$@" > "$FACTORY_CLI_ARGS"
-          printf 'https://github.com/JoshCLWren/comic-pile/actions/runs/123456\n'
-          GH
-          chmod +x "$RUNNER_TEMP/bin/gh"
-          export FACTORY_CLI_ARGS="$RUNNER_TEMP/gh-args"
-          export PATH="$RUNNER_TEMP/bin:$PATH"
-          bash scripts/factory-run opencode-go opencode-go/hy4-flash-free \
-            --force-slot --slot 2 --target issue:5123 --no-wait
-          grep -qx 'provider=opencode-go' "$FACTORY_CLI_ARGS"
-          grep -qx 'model=opencode-go/hy4-flash-free' "$FACTORY_CLI_ARGS"
-          grep -qx 'force_slot=true' "$FACTORY_CLI_ARGS"
-          grep -qx 'slot_index=2' "$FACTORY_CLI_ARGS"
-          grep -qx 'target=issue:5123' "$FACTORY_CLI_ARGS"
-          # With both provider and model explicitly selected, even a TTY must
-          # execute without asking the work/slot/confirmation menus again.
-          # An empty stdin makes any unexpected prompt fail fast.
-          rm -f "$FACTORY_CLI_ARGS"
-          timeout 15 script -q -e -c 'bash scripts/factory-run opencode-go opencode-go/hy4-flash-free --force-slot --no-wait' /dev/null > "$RUNNER_TEMP/terminal-output" < /dev/null
-          test -s "$FACTORY_CLI_ARGS"
-          if grep -Eq 'Choose \\[|Run this selection\\?' "$RUNNER_TEMP/terminal-output"; then
-            echo "Explicit CLI selections unexpectedly prompted for more input" >&2
-            exit 1
-          fi
-          grep -qx 'force_slot=true' "$FACTORY_CLI_ARGS"
+          exit "${STUB_EXIT:-0}"
+          STUB
+          chmod +x "$stub"
+          export ROTISSERIE_BIN="$stub" FACTORY_CLI_ARGS="$RUNNER_TEMP/args"
+          base='factory --repo JoshCLWren/comic-pile'
+
+          expect() {
+            local expected="$1"
+            shift
+            bash scripts/factory-run "$@"
+            # shellcheck disable=SC2086 # split the expected words on purpose
+            diff <(printf '%s\n' $expected) "$FACTORY_CLI_ARGS"
+          }
+          expect "$base run opencode-go opencode-go/hy4-flash-free --force-slot" \
+            opencode-go opencode-go/hy4-flash-free --force-slot
+          expect "$base run opencode-go opencode-go/hy4-flash-free --force-slot --slot 2 --target issue:5123 --no-wait" \
+            opencode-go opencode-go/hy4-flash-free --force-slot --slot 2 --target issue:5123 --no-wait
+          expect "$base providers" --providers
+          expect "$base models opencode-go" --models opencode-go
+          expect "$base run"
+          FACTORY_REPO=acme/widgets expect 'factory --repo acme/widgets run nvidia auto' nvidia auto
+
+          # The console's exit code reaches the caller unchanged.
+          status=0
+          STUB_EXIT=3 bash scripts/factory-run opencode-go auto || status=$?
+          test "$status" = 3
