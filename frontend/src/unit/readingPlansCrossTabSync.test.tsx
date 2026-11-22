@@ -8,6 +8,7 @@ import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { notifyReadingPlansChanged, subscribeToCrossTabChanges } from '../query/crossTabDataSync'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
+import { isObject } from '../utils/runtimeChecks'
 
 vi.mock('../services/api-continuity-plans', async () => {
   const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
@@ -150,7 +151,7 @@ it('announces a committed plan delete to other tabs (#5686)', async () => {
   const observer = new BroadcastChannel('comic-pile-data')
   observer.addEventListener('message', (event: MessageEvent<unknown>) => {
     const data = event.data
-    if (data && typeof data === 'object' && 'type' in data) {
+    if (isObject(data) && 'type' in data) {
       // SAFETY: the 'in' guard above confirms the broadcast payload carries a type field.
       changes.push(String((data as { type: unknown }).type))
     }
@@ -178,7 +179,7 @@ it('announces a committed plan save to other tabs (#5686)', async () => {
   const observer = new BroadcastChannel('comic-pile-data')
   observer.addEventListener('message', (event: MessageEvent<unknown>) => {
     const data = event.data
-    if (data && typeof data === 'object' && 'type' in data) {
+    if (isObject(data) && 'type' in data) {
       // SAFETY: the 'in' guard above confirms the broadcast payload carries a type field.
       changes.push(String((data as { type: unknown }).type))
     }
@@ -211,7 +212,7 @@ it('announces a committed plan adoption to other tabs (#5686 G1)', async () => {
   const observer = new BroadcastChannel('comic-pile-data')
   observer.addEventListener('message', (event: MessageEvent<unknown>) => {
     const data = event.data
-    if (data && typeof data === 'object' && 'type' in data) {
+    if (isObject(data) && 'type' in data) {
       // SAFETY: the 'in' guard above confirms the broadcast payload carries a type field.
       changes.push(String((data as { type: unknown }).type))
     }
