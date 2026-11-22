@@ -85,7 +85,7 @@ pub struct ReadingGraphRepairOption {
 /// PRODUCTION_READING_GRAPH_REPLAY.md: unread issues outside strict-list
 /// coverage, Reading List vs Reading Plan differences, and converted
 /// historical relationships (including JLI) that can contradict newer strict lists.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, PartialOrd, Ord)]
 #[allow(dead_code)]
 pub enum UnresolvedCategory {
     UnreadOutsideList,
@@ -599,6 +599,11 @@ fn repair_is_offered(
 }
 
 fn invalid_response(inputs: &OptionInputs) -> ReadingGraphResponse {
+    let mut breakdown = BTreeMap::new();
+    for ref_ in &inputs.unresolved {
+        let category = categorize_unresolved(&ref_.kind);
+        *breakdown.entry(category).or_insert(0) += 1;
+    }
     ReadingGraphResponse {
         status: "invalid".to_string(),
         cycles: vec![],
@@ -606,15 +611,8 @@ fn invalid_response(inputs: &OptionInputs) -> ReadingGraphResponse {
         affected_lists: vec![],
         affected_threads: vec![],
         repairs: vec![],
-        unresolved_reference_counts: {
-            let mut m = BTreeMap::new();
-            for ref_ in &inputs.unresolved {
-                let * = ref_.kind; // categorize based on kind string
-                m.entry(UnresolvedCategory::UnreadOutsideList)
-                    .or_insert(0);
-            }
-            m
-        },
+        unresolved_reference_count: inputs.unresolved.len(),
+        unresolved_reference_breakdown: breakdown,
     }
 }
 
