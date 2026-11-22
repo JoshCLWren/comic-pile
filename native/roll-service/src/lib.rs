@@ -1005,6 +1005,34 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/identity-inbox/{mapping_id}/skips",
             post(identity_inbox::skip),
         )
+        .route(
+            "/api/v1/identity-inbox",
+            get(identity_inbox::list_inbox),
+        )
+        .route(
+            "/api/v1/identity-inbox/search/issues",
+            get(identity_inbox::search_issues),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}",
+            get(identity_inbox::get_inbox_item),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/confirm",
+            post(identity_inbox::confirm),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/defer",
+            post(identity_inbox::defer),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/reject",
+            post(identity_inbox::reject),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/skip",
+            post(identity_inbox::skip),
+        )
         // Issue Identity / CBL Adoption family (#4843).
         .route(
             "/api/v1/issue-identity/cbl-sources",
