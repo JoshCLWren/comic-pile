@@ -96,6 +96,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # Operator settings (rotisserie factory settings) reach every factory script.
+  FACTORY_REPO_VARS: >-
+    {"FACTORY_SLOTS_PER_PROVIDER": "${{ vars.FACTORY_SLOTS_PER_PROVIDER }}", "FACTORY_PR_WIP_LIMIT": "${{ vars.FACTORY_PR_WIP_LIMIT }}", "FACTORY_REVIEW_BACKLOG_LIMIT": "${{ vars.FACTORY_REVIEW_BACKLOG_LIMIT }}", "FACTORY_OMNIROUTE_FREE_ENTRY_CAP": "${{ vars.FACTORY_OMNIROUTE_FREE_ENTRY_CAP }}", "FACTORY_NO_DIFF_RETRY_LIMIT": "${{ vars.FACTORY_NO_DIFF_RETRY_LIMIT }}", "FACTORY_NO_DIFF_RETRY_RESET_SECONDS": "${{ vars.FACTORY_NO_DIFF_RETRY_RESET_SECONDS }}", "FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS": "${{ vars.FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS }}", "FACTORY_FIXED_LEASE_TTL_SECONDS": "${{ vars.FACTORY_FIXED_LEASE_TTL_SECONDS }}", "FACTORY_LOCAL_LEASE_TTL_SECONDS": "${{ vars.FACTORY_LOCAL_LEASE_TTL_SECONDS }}", "FACTORY_PRIORITY_ORDER": "${{ vars.FACTORY_PRIORITY_ORDER }}"}
   FACTORY_BUDGET_SECONDS: '6000'
   KILO_VERSION: '7.4.22'
   KILO_LINUX_X64_BASELINE_SHA256: 'bf817ad53bc95b16abe92e7a2389cc9f509c62c3510c23ecc58e151a4455cb41'
@@ -217,7 +220,7 @@ jobs:
       FACTORY_READER_APP_ID: ${{ secrets.FACTORY_READER_APP_ID }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      # Only the Console OIDC service-account client identifier is configured.
+      # GitHub OIDC is exchanged inside this job, never a static API key.
       OPENCODE_GO_CLIENT_ID: ${{ secrets.OPENCODE_GO_CLIENT_ID }}
       Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}
       OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
@@ -314,9 +317,8 @@ jobs:
           configure_adapter=false
           case "$source" in
             opencode-free)
-              # An assigned lease must still enter dispatch-time fleet
-              # failover if Go OIDC is unavailable. The dispatcher prevents
-              # new Go claims without a service-account client ID.
+              # Keep already-leased work eligible for fleet fallback when
+              # authentication fails. The dispatcher gates new Go claims.
               configured=true
               if [[ "${FACTORY_GO_TOKEN_READY:-}" == true ]]; then
                 reason='Go-service-account-authenticated'
@@ -505,7 +507,7 @@ jobs:
                 --worker "$WORKER" --rotation "${GITHUB_RUN_NUMBER:-0}" \
                 --exclusions-file "$exclusions_file" --catalog-output "$catalog" \
                 "${required_model_args[@]}")" \
-                || fleet_fallback 'Go OIDC key or free model catalog unavailable'
+                || fleet_fallback 'Go key or free catalog unavailable'
               ;;
             openrouter-free|vercel-ai-gateway)
               selection="$(python3 .github/scripts/factory_published_model_catalog.py \
@@ -553,8 +555,8 @@ jobs:
               echo "Factory $WORKER prefers proven $(jq -r '.model' <<< "$selection") on $SOURCE"
             fi
           fi
-          # One OpenCode lane only; prefer authenticated Go zero-price models
-          # before other providers, without bypassing Neon model cooldowns.
+          # Prefer authenticated Go free models across the existing fleet.
+          # No extra OpenCode route, worker identity, or provider-wide ban.
           if [[ "$REQUESTED_MODEL" == auto && "$REQUESTED_PROVIDER" == auto && -n "${OPENCODE_API_KEY:-}" ]] &&
              jq -e 'index("opencode-free") != null' "$RUNNER_TEMP/factory-fleet-sources.json" >/dev/null; then
             go_args=(--worker "$WORKER" --rotation "${GITHUB_RUN_NUMBER:-0}"
@@ -658,7 +660,7 @@ jobs:
           mv "$temp_config.merged" "$HOME/.config/opencode/opencode.json"
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
-      - name: Use selected model for OpenCode defaults and subagents
+      - name: Use the selected model for OpenCode defaults and subagents
         if: steps.lane.outputs.configured == 'true'
         shell: bash
         env:
