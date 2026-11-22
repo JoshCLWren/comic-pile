@@ -94,7 +94,7 @@ export default function QueuePage() {
   // unsettled, and a failed first page says so instead of inventing numbers;
   // a next-page-only failure leaves the settled first-page counts valid.
   const countSettled =
-    !isPlaceholderData && filteredCount !== null && activeCount !== null
+    !isPlaceholderData && filteredCount != null && activeCount != null
   const resultCountText =
     isError && !isFetchNextPageError
       ? 'Series count unavailable.'
