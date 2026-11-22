@@ -1125,7 +1125,7 @@ mod tests {
     }
 
     fn crossover_audit_fixture() -> (OptionInputs, Vec<StoredPrerequisite>) {
-        let thread = |id, title| ReadingThread {
+        let thread = |id, title: &str| ReadingThread {
             id,
             status: "active".into(),
             title: title.into(),

@@ -284,7 +284,7 @@ fn diagnostic_statement() -> &'static str {
     })
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct SnapshotRows {
     threads: Vec<ThreadRow>,
     issues: Vec<IssueRow>,
@@ -327,7 +327,7 @@ struct EntryRow {
     gate: String,
     skipped: bool,
 }
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct PrerequisiteRow {
     id: i32,
     source_issue_id: i32,
