@@ -1994,12 +1994,10 @@ mod tests {
             &json!({}),
         )
         .await;
-        let fresh_metadata = normalized_metadata(
-            &deep_provider_result(30004, "2026-11-01 17:33:53"),
-            30004,
-        )
-        .expect("fresh metadata")
-        .0;
+        let fresh_metadata =
+            normalized_metadata(&deep_provider_result(30004, "2026-11-01 17:33:53"), 30004)
+                .expect("fresh metadata")
+                .0;
         let fresh = seed_confirmed_identity_for_thread(
             &connection,
             thread_id,
@@ -2047,7 +2045,10 @@ mod tests {
         assert_eq!(dry.already_queued_or_fresh, 2, "active and fresh rows");
         assert_eq!(dry.next_after_id, None);
         let unchanged: i64 = connection
-            .query_one("SELECT count(*) FROM comicvine_metadata_refresh_requests", &[])
+            .query_one(
+                "SELECT count(*) FROM comicvine_metadata_refresh_requests",
+                &[],
+            )
             .await
             .expect("dry-run ledger")
             .get(0);
@@ -2149,7 +2150,10 @@ mod tests {
             .expect("preserved thread");
         assert_eq!(thread.get::<_, i32>(0), 7);
         assert_eq!(thread.get::<_, Option<f64>>(1), Some(4.5));
-        assert_eq!(thread.get::<_, Option<String>>(2).as_deref(), Some("in_progress"));
+        assert_eq!(
+            thread.get::<_, Option<String>>(2).as_deref(),
+            Some("in_progress")
+        );
         let reading = connection
             .query_one(
                 "SELECT \
@@ -2307,7 +2311,10 @@ mod tests {
             .expect("deferred request");
         assert_eq!(row.get::<_, String>(0), "deferred");
         assert_eq!(row.get::<_, i32>(1), 1);
-        assert_eq!(row.get::<_, Option<String>>(2).as_deref(), Some("provider_unavailable"));
+        assert_eq!(
+            row.get::<_, Option<String>>(2).as_deref(),
+            Some("provider_unavailable")
+        );
         assert!(row.get::<_, bool>(3));
 
         let cooled = drain_for_test(&state).await;
@@ -2351,7 +2358,14 @@ mod tests {
             .expect("single durable request")
             .get(0);
         assert_eq!(count, 1);
-        assert_eq!(state.recording_fake().expect("recording provider").calls().len(), 2);
+        assert_eq!(
+            state
+                .recording_fake()
+                .expect("recording provider")
+                .calls()
+                .len(),
+            2
+        );
     }
 
     /// #5592: a sparse/empty fresh roster must not overwrite previously hydrated credits.

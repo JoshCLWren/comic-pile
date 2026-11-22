@@ -2980,7 +2980,10 @@ async fn import_series_enqueues_durable_metadata_refresh_requests() {
         "UPDATE external_identities \
          SET metadata_json = (metadata_json::jsonb || ($2::text)::jsonb)::json \
          WHERE provider = 'comicvine' AND entity_type = 'issue' AND external_id = '91001'",
-        &[&json!({"creator_credits": [{"id": 88, "name": "Existing Creator", "role": "writer"}]}).to_string()],
+        &[
+            &json!({"creator_credits": [{"id": 88, "name": "Existing Creator", "role": "writer"}]})
+                .to_string(),
+        ],
     )
     .await
     .unwrap();
@@ -3064,7 +3067,9 @@ async fn import_series_enqueues_durable_metadata_refresh_requests() {
     assert_eq!(preserved.get::<_, i32>(0), 9);
     assert_eq!(preserved.get::<_, Option<f64>>(1), Some(4.5));
     assert_eq!(preserved.get::<_, String>(2), "read");
-    assert!(preserved.get::<_, String>(3).starts_with("2026-11-01 00:00:00"));
+    assert!(preserved
+        .get::<_, String>(3)
+        .starts_with("2026-11-01 00:00:00"));
     let metadata: Value = serde_json::from_str(preserved.get(4)).unwrap();
     assert_eq!(metadata["creator_credits"][0]["name"], "Existing Creator");
     assert_eq!(preserved.get::<_, String>(5), "confirmed");
@@ -3156,7 +3161,10 @@ async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
         .iter()
         .filter(|call| call.path.starts_with("/api/issue/4000-92001/"))
         .count();
-    assert_eq!(singular_calls, 1, "the durable worker fetched the issue once");
+    assert_eq!(
+        singular_calls, 1,
+        "the durable worker fetched the issue once"
+    );
 }
 
 #[tokio::test]
