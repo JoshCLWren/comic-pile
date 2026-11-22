@@ -38,7 +38,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: factory-status-pages
+  group: factory-status-pages-${{ github.event_name == 'push' && 'push' || 'refresh' }}
   cancel-in-progress: false
 
 jobs:
@@ -71,6 +71,9 @@ jobs:
   publish-live-dashboard:
     needs: freshness
     if: needs.freshness.outputs.stale == 'true'
+    concurrency:
+      group: factory-status-pages-snapshot
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
