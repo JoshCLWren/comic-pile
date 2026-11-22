@@ -160,12 +160,8 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
     let lower_series = series_title.trim().to_lowercase();
 
     if !lower_series.is_empty() && lower_candidate.starts_with(&lower_series) {
-        let prefix_chars = lower_series.chars().count();
-        candidate = candidate
-            .chars()
-            .skip(prefix_chars)
-            .collect::<String>()
-            .trim_start_matches([' ', '-', ':', '#'])
+        candidate = candidate[series_title.trim().len()..]
+            .trim_start_matches(|c: char| c == ' ' || c == '-' || c == ':' || c == '#')
             .trim()
             .to_string();
     } else if !lower_series.is_empty() {
@@ -202,7 +198,7 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
             candidate = orig_chars[i..]
                 .iter()
                 .collect::<String>()
-                .trim_start_matches([' ', '-', ':', '#'])
+                .trim_start_matches(|c: char| c == ' ' || c == '-' || c == ':' || c == '#')
                 .trim()
                 .to_string();
         }
@@ -212,28 +208,24 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
         return trimmed.to_string();
     }
 
-    // Normalize "annual 1", "annual #1", "special 1" etc. Extract just the issue number
-    // so UI can render "Issue #<number>" consistently (avoids "Issue #Annual 1").
+    // Normalize "annual 1", "annual #1", "special 1" etc. to title case.
     let collapsed = candidate.split_whitespace().collect::<Vec<_>>().join(" ");
     let lower = collapsed.to_lowercase();
     for prefix in ["annual", "special", "one-shot", "one shot"] {
-        let rest = if lower == prefix {
-            ""
-        } else {
-            lower.strip_prefix(prefix).unwrap_or("")
-        };
         if lower == prefix {
-            // No number found; return the canonical label
-            return capitalize_first(prefix);
+            return capitalize_first(&collapsed);
         }
+        let rest = lower.strip_prefix(prefix).unwrap_or("");
         if !rest.is_empty() {
-            let rest_trimmed = rest.trim_start_matches([' ', '#', '-', ':']).trim();
+            let rest_trimmed = rest
+                .trim_start_matches(|c: char| c == ' ' || c == '#' || c == '-' || c == ':')
+                .trim();
             if !rest_trimmed.is_empty()
                 && rest_trimmed
                     .chars()
                     .all(|c| c.is_ascii_digit() || c == '.' || c.is_ascii_alphabetic())
             {
-                return rest_trimmed.to_string();
+                return format!("{} {}", capitalize_first(prefix), rest_trimmed);
             }
         }
     }
@@ -662,7 +654,7 @@ mod tests {
     fn normalizes_raw_cbl_annual_label_embedded_as_issue_number() {
         assert_eq!(
             normalize_issue_number_display("Alpha flight annual 1", "Alpha Flight"),
-            "1"
+            "Annual 1"
         );
     }
 
@@ -671,7 +663,7 @@ mod tests {
         assert_eq!(normalize_issue_number_display("1", "Alpha Flight"), "1");
         assert_eq!(
             normalize_issue_number_display("Annual 2", "Alpha Flight Annual"),
-            "2"
+            "Annual 2"
         );
     }
 
