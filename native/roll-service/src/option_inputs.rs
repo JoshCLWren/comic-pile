@@ -52,6 +52,19 @@ pub struct UnresolvedReference {
     pub kind: &'static str,
     pub object_id: i32,
 }
+
+/// The three unresolved categories tracked for issue #4198 closure.
+/// These correspond to the "outstanding completeness blockers" documented in
+/// PRODUCTION_READING_GRAPH_REPLAY.md: unread issues outside strict-list
+/// coverage, Reading List vs Reading Plan differences, and converted
+/// historical relationships (including JLI) that can contradict newer strict lists.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum UnresolvedCategory {
+    UnreadOutsideList,
+    ReadingPlanVsList,
+    JliConverted,
+}
 #[derive(Debug, Clone, Serialize)]
 pub struct OptionInputs {
     pub core: CoreReadingInputs,
