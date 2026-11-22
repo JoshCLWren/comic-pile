@@ -838,7 +838,7 @@ async fn hydrate_catalog_commit_with_key(
             let Some(comicvine_id) = issue_id(&external_id) else {
                 continue;
             };
-            let Ok(provider_data) = provider_issue(&state.outbound, comicvine_id, &api_key).await
+            let Ok(provider_data) = provider_issue(&state.outbound, comicvine_id, api_key).await
             else {
                 continue;
             };
