@@ -449,7 +449,7 @@ afterEach(() => {
 })
 
 describe('core route request budgets', () => {
-  it('authenticated shell cold-loads preferences and inbox status exactly once each', async () => {
+  it('authenticated shell loads preferences and inbox once, then reuses them across remounts', async () => {
     installAdapterRecorder()
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v2/users/me/preferences') return { theme: 'classic', user_id: 1 }
