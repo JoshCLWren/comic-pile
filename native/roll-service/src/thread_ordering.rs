@@ -326,7 +326,7 @@ async fn option_e_explanations(
     user: AuthenticatedUser,
     thread_ids: &[i32],
 ) -> Result<Vec<(i32, BlockingExplanation)>, ApiError> {
-    let validated = option_inputs::load_option_inputs(state, user).await?;
+    let validated = option_inputs::load_option_inputs_contained(state, user).await?;
     let evaluated = reading_eligibility::evaluate(&validated)?;
     let inputs = validated.inputs();
     let thread_titles: HashMap<i32, &str> = inputs
