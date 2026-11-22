@@ -20,6 +20,7 @@ use crate::{
     auth::AuthenticatedUser,
     db,
     outbound::{OutboundHttp, OutboundRequest},
+    thread_issues::natural_issue_order,
     ApiError, AppState,
 };
 use axum::{
@@ -288,69 +289,6 @@ async fn load_release_exclusions(
         }
     }
     Ok(out)
-}
-
-#[allow(dead_code)]
-fn parse_ordinary_issue_number(issue_number: &str) -> Option<i64> {
-    if issue_number.is_empty() {
-        return None;
-    }
-    let bytes = issue_number.as_bytes();
-    if bytes[0] == b'0' {
-        return None;
-    }
-    if !bytes.iter().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    issue_number.parse::<i64>().ok().filter(|n| *n > 0)
-}
-
-#[allow(dead_code)]
-fn natural_issue_order(existing: &[String], new_numbers: &[String]) -> Option<Vec<String>> {
-    let mut incoming: Vec<(i64, String)> = Vec::new();
-    for issue_number in new_numbers {
-        let value = parse_ordinary_issue_number(issue_number)?;
-        incoming.push((value, issue_number.clone()));
-    }
-
-    let existing_numbered: Vec<(i64, String)> = existing
-        .iter()
-        .filter_map(|n| parse_ordinary_issue_number(n).map(|v| (v, n.clone())))
-        .collect();
-
-    if existing_numbered.len() == existing.len() {
-        let mut merged = existing_numbered;
-        merged.extend(incoming);
-        merged.sort_by_key(|(n, _)| *n);
-        return Some(merged.into_iter().map(|(_, s)| s).collect());
-    }
-
-    if existing_numbered.is_empty() {
-        return None;
-    }
-    let numbers: Vec<i64> = existing_numbered.iter().map(|(n, _)| *n).collect();
-    if numbers.windows(2).any(|w| w[0] > w[1]) {
-        return None;
-    }
-
-    let mut result: Vec<String> = existing.to_vec();
-    incoming.sort_by_key(|(n, _)| *n);
-    for (number, label) in incoming {
-        let mut inserted = false;
-        for idx in 0..result.len() {
-            if let Some(existing_number) = parse_ordinary_issue_number(&result[idx]) {
-                if existing_number > number {
-                    result.insert(idx, label.clone());
-                    inserted = true;
-                    break;
-                }
-            }
-        }
-        if !inserted {
-            result.push(label);
-        }
-    }
-    Some(result)
 }
 
 fn issue_identity(row: &Value) -> Option<String> {
