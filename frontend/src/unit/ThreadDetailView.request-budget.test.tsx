@@ -12,7 +12,7 @@
  * - canonical available: 6 reads before, 5 after (catalog removed)
  * - Option-E off (`unavailable`): 7 reads before, 6 after (catalog removed)
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'

@@ -93,6 +93,36 @@ describe('reading boundary evaluator request budget', () => {
     })
   })
 
+  it('rediscovers the evaluator after an auth-session cache clear', async () => {
+    const client = createAppQueryClient()
+    const { calls, client: httpClient } = createRequestRecorder((call) => {
+      if (call.url === '/v2/reading-boundaries') {
+        const threads = Object.fromEntries(requestedThreadIds(call).map((id) => [id, {
+          thread_id: id,
+          state: 'unavailable',
+          summary: 'The canonical evaluator is unavailable.',
+          next: null,
+          blockers: [],
+        }]))
+        return { threads, evaluator: 'unavailable' }
+      }
+      return {}
+    })
+    setDefaultHttpClient(httpClient)
+    const wrapper = wrapperFor(client)
+
+    const previousAccount = renderHook(() => useReadingBoundaries([7]), { wrapper })
+    await waitFor(() => expect(previousAccount.result.current.data?.evaluator).toBe('unavailable'))
+    previousAccount.unmount()
+
+    clearSessionCache(client)
+
+    const nextAccount = renderHook(() => useReadingBoundaries([8]), { wrapper })
+    await waitFor(() => expect(nextAccount.result.current.data?.evaluator).toBe('unavailable'))
+    expect(requestCounts(calls)).toEqual({ 'POST /v2/reading-boundaries': 2 })
+    expect(calls.map(requestedThreadIds)).toEqual([[7], [8]])
+  })
+
   it('keeps fetching canonical explanations for each key while the evaluator is enabled', async () => {
     const client = createAppQueryClient()
     const { calls, client: httpClient } = createRequestRecorder((call) => {
