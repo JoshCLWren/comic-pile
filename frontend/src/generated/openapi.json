@@ -10897,6 +10897,17 @@
             "title": "Active Count",
             "type": "integer"
           },
+          "filtered_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filtered Count"
+          },
           "next_page_token": {
             "anyOf": [
               {
