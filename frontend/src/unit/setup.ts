@@ -27,42 +27,6 @@ beforeEach(() => {
   resetQueryRetryBudget()
 })
 
-await injectModuleDoubles(await import('@testing-library/react'), async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@testing-library/react')>()
-  const makeWrapper = (innerWrapper?: (props: { children: ReactNode }) => ReactElement) => {
-    return ({ children }: { children: ReactNode }) =>
-      createElement(
-        QueryClientProvider,
-        { client: queryClient },
-        innerWrapper ? createElement(innerWrapper, null, children) : children,
-      )
-  }
-
-  return {
-    ...actual,
-    render: (
-      ui: Parameters<typeof actual.render>[0],
-      options?: Record<string, string | ((props: { children: ReactNode }) => ReactElement) | undefined>,
-    ) => {
-      // SAFETY: the wrapper prop is supplied by this file's wrapper factory, never by a caller
-      const wrapper = options?.wrapper as
-        | ((props: { children: ReactNode }) => ReactElement)
-        | undefined
-      return actual.render(ui, { ...options, wrapper: makeWrapper(wrapper) })
-    },
-    renderHook: (
-      callback: Parameters<typeof actual.renderHook>[0],
-      options?: Record<string, string | ((props: { children: ReactNode }) => ReactElement) | undefined>,
-    ) => {
-      // SAFETY: the wrapper prop is supplied by this file's wrapper factory, never by a caller
-      const wrapper = options?.wrapper as
-        | ((props: { children: ReactNode }) => ReactElement)
-        | undefined
-      return actual.renderHook(callback, { ...options, wrapper: makeWrapper(wrapper) })
-    },
-  }
-})
-
 // Ensure globals exist before user-event and other libraries access them
 if (typeof global.window === 'undefined') {
   // SAFETY: test setup runs in Node; we assign a minimal window for jsdom compatibility
