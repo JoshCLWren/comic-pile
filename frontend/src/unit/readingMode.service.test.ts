@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import api from '../services/api'
 import {
@@ -11,16 +11,21 @@ import {
   suggestReadingMode,
 } from '../services/readingMode'
 
-vi.mock('../services/api', () => ({
-  default: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-  },
-}))
+const originalGet = api.get
+const originalPost = api.post
+const originalPut = api.put
 
 beforeEach(() => {
   vi.clearAllMocks()
+  api.get = vi.fn() as typeof api.get
+  api.post = vi.fn() as typeof api.post
+  api.put = vi.fn() as typeof api.put
+})
+
+afterEach(() => {
+  api.get = originalGet
+  api.post = originalPost
+  api.put = originalPut
 })
 
 describe('readingMode service', () => {

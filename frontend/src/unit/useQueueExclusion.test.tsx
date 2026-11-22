@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useExcludedThreads,
   useRestoreThread,
@@ -15,21 +15,14 @@ import type { Thread } from '../types'
 // SAFETY: each double stands in for one threadsApi method with that method's
 // own argument list and resolved value, so the module double matches the real
 // service surface these hooks consume.
+const originalListExcluded = realThreadsApi.listExcluded
+const originalRestore = realThreadsApi.restore
+const originalRestoreGroup = realThreadsApi.restoreExclusionGroup
+const originalExclude = realThreadsApi.exclude
 const mockListExcluded = vi.fn<typeof realThreadsApi.listExcluded>()
 const mockRestore = vi.fn<RestoreThreadApi['restore']>()
 const mockRestoreGroup = vi.fn<RestoreThreadApi['restoreExclusionGroup']>()
 const mockExclude = vi.fn<typeof realThreadsApi.exclude>()
-
-vi.mock('../services/api-threads', () => ({
-  threadsApi: {
-    listExcluded: (...args: Parameters<typeof realThreadsApi.listExcluded>) =>
-      mockListExcluded(...args),
-    restore: (...args: Parameters<RestoreThreadApi['restore']>) => mockRestore(...args),
-    restoreExclusionGroup: (...args: Parameters<RestoreThreadApi['restoreExclusionGroup']>) =>
-      mockRestoreGroup(...args),
-    exclude: (...args: Parameters<typeof realThreadsApi.exclude>) => mockExclude(...args),
-  },
-}))
 
 const invalidate = vi.fn<QueueInvalidateFn>()
 const restoreApi: RestoreThreadApi = {
@@ -68,6 +61,10 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  realThreadsApi.listExcluded = mockListExcluded as typeof realThreadsApi.listExcluded
+  realThreadsApi.restore = mockRestore as typeof realThreadsApi.restore
+  realThreadsApi.restoreExclusionGroup = mockRestoreGroup as typeof realThreadsApi.restoreExclusionGroup
+  realThreadsApi.exclude = mockExclude as typeof realThreadsApi.exclude
   mockListExcluded.mockResolvedValue({
     active_count: 1,
     threads: [makeThread()],
@@ -76,6 +73,13 @@ beforeEach(() => {
   mockRestore.mockResolvedValue(makeThread())
   mockExclude.mockResolvedValue(makeThread())
   invalidate.mockResolvedValue()
+})
+
+afterEach(() => {
+  realThreadsApi.listExcluded = originalListExcluded
+  realThreadsApi.restore = originalRestore
+  realThreadsApi.restoreExclusionGroup = originalRestoreGroup
+  realThreadsApi.exclude = originalExclude
 })
 
 describe('useExcludedThreads', () => {
