@@ -1,39 +1,41 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import ReadingModeQuiz from '../components/ReadingModeQuiz'
 import type { ReadingModeState } from '../types'
+import * as readingMode from '../services/readingMode'
 
-vi.mock('../services/readingMode', () => ({
-  getQuizQuestions: () => [
-    {
-      id: 'brainpower',
-      prompt: 'How much brain do you have right now?',
-      answers: [
-        { id: 'easy', label: 'Easy', bandwidth: 'light' },
-        { id: 'normal', label: 'Normal', bandwidth: 'balanced' },
-        { id: 'substantial', label: 'Give me something substantial', bandwidth: 'deep' },
-      ],
-    },
-    {
-      id: 'pick',
-      prompt: 'What kind of pick sounds good?',
-      answers: [
-        { id: 'momentum', label: 'Keep something going', intent: 'momentum' },
-        { id: 'familiar', label: 'Something familiar', intent: 'familiar' },
-        { id: 'explore', label: 'Something different', intent: 'explore' },
-        { id: 'random', label: "Don't overthink it", intent: 'random' },
-      ],
-    },
-  ],
-  setReadingModeFromQuiz: vi.fn(),
-}))
-
-import { setReadingModeFromQuiz } from '../services/readingMode'
+const QUIZ_QUESTIONS = [
+  {
+    id: 'brainpower',
+    prompt: 'How much brain do you have right now?',
+    answers: [
+      { id: 'easy', label: 'Easy', bandwidth: 'light' },
+      { id: 'normal', label: 'Normal', bandwidth: 'balanced' },
+      { id: 'substantial', label: 'Give me something substantial', bandwidth: 'deep' },
+    ],
+  },
+  {
+    id: 'pick',
+    prompt: 'What kind of pick sounds good?',
+    answers: [
+      { id: 'momentum', label: 'Keep something going', intent: 'momentum' },
+      { id: 'familiar', label: 'Something familiar', intent: 'familiar' },
+      { id: 'explore', label: 'Something different', intent: 'explore' },
+      { id: 'random', label: "Don't overthink it", intent: 'random' },
+    ],
+  },
+]
 
 beforeEach(() => {
-  vi.resetAllMocks()
+  vi.restoreAllMocks()
+  vi.spyOn(readingMode, 'getQuizQuestions').mockReturnValue(QUIZ_QUESTIONS as never)
+  vi.spyOn(readingMode, 'setReadingModeFromQuiz').mockResolvedValue(undefined as never)
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 function Harness({ onComplete }: { onComplete?: (s: ReadingModeState) => void }) {
@@ -56,7 +58,7 @@ it('completes the two-question flow and records source quiz', async () => {
     source: 'quiz',
     suggested: false,
   }
-  vi.mocked(setReadingModeFromQuiz).mockResolvedValue(resolved)
+  vi.mocked(readingMode.setReadingModeFromQuiz).mockResolvedValue(resolved)
 
   render(<Harness onComplete={onComplete} />)
 
@@ -70,8 +72,8 @@ it('completes the two-question flow and records source quiz', async () => {
   await user.click(screen.getByTestId('quiz-answer-pick-explore'))
   await user.click(screen.getByTestId('reading-mode-quiz-next'))
 
-  await waitFor(() => expect(setReadingModeFromQuiz).toHaveBeenCalledTimes(1))
-  expect(setReadingModeFromQuiz).toHaveBeenCalledWith({
+  await waitFor(() => expect(readingMode.setReadingModeFromQuiz).toHaveBeenCalledTimes(1))
+  expect(readingMode.setReadingModeFromQuiz).toHaveBeenCalledWith({
     brainpower: 'substantial',
     pick: 'explore',
   })
@@ -86,7 +88,7 @@ it('cannot advance without selecting an answer', async () => {
   const next = screen.getByTestId('reading-mode-quiz-next') as HTMLButtonElement
   expect(next.disabled).toBe(true)
   await user.click(next)
-  expect(setReadingModeFromQuiz).not.toHaveBeenCalled()
+  expect(readingMode.setReadingModeFromQuiz).not.toHaveBeenCalled()
   // Still on question 1
   expect(screen.getByText('How much brain do you have right now?')).toBeInTheDocument()
 })
@@ -100,7 +102,7 @@ it('cancel on the first question closes without submitting', async () => {
 
   await user.click(screen.getByTestId('reading-mode-quiz-back'))
   expect(onClose).toHaveBeenCalled()
-  expect(setReadingModeFromQuiz).not.toHaveBeenCalled()
+  expect(readingMode.setReadingModeFromQuiz).not.toHaveBeenCalled()
 })
 
 it('back returns to the previous question', async () => {
