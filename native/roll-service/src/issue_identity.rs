@@ -2708,6 +2708,31 @@ fn tx_db_error(error: tokio_postgres::Error, context: &str) -> ApiError {
     }
 }
 
+/// Pick a Reading Plan name that cannot collide with one the reader already
+/// owns.
+///
+/// Untargeted CBL adoption creates a brand-new plan. When the source name was
+/// already in use, emitting a second indistinguishable plan (or letting a
+/// caller treat the existing one as the implicit target) is what destroyed a
+/// curated plan in #3933. Return the source name when it is free; otherwise
+/// append ` (2)`, ` (3)`, ... until the name is distinct for this reader.
+fn unique_adoption_plan_name(
+    base_name: &str,
+    existing_names: &std::collections::HashSet<String>,
+) -> String {
+    if !existing_names.contains(base_name) {
+        return base_name.to_string();
+    }
+    for suffix in 2..u32::MAX {
+        let candidate = format!("{base_name} ({suffix})");
+        if !existing_names.contains(&candidate) {
+            return candidate;
+        }
+    }
+    // Unreachable in practice: the candidate space grows with the plan count.
+    format!("{base_name} (dedupe exhausted)")
+}
+
 async fn do_cbl_adoption_commit(
     state: &Arc<AppState>,
     user_id: i32,
@@ -2853,11 +2878,32 @@ async fn do_cbl_adoption_commit(
                 prow.get::<_, String>(6),
             )
         } else {
-            let name = if list_name.is_empty() {
+            let base_name = if list_name.is_empty() {
                 format!("CBL adoption for {source_path}")
             } else {
                 list_name.clone()
             };
+            // #3933: an untargeted adoption must never produce a second
+            // indistinguishable plan with a name the reader already uses. A
+            // distinct name keeps the existing curated plan addressable and
+            // makes any later update an explicit, targeted choice.
+            let existing_names: std::collections::HashSet<String> = tx
+                .run_query(
+                    "SELECT name FROM continuity_plans WHERE user_id=$1",
+                    &[&user_id],
+                )
+                .await
+                .map_err(|e| {
+                    if crate::db::is_transport_failure(&e) {
+                        CommitErr::Db(ApiError::database_unavailable())
+                    } else {
+                        CommitErr::Unexpected(format!("existing plan names: {e}"))
+                    }
+                })?
+                .into_iter()
+                .map(|row: tokio_postgres::Row| row.get::<_, String>(0))
+                .collect();
+            let name = unique_adoption_plan_name(&base_name, &existing_names);
             let lanes = serde_json::json!([{"id":"default","name":"Default","order":0}]);
             let prow = tx.run_query_one(
                 "INSERT INTO continuity_plans (user_id,name,ordering_mode,lanes_json,nodes_json,created_at,updated_at) VALUES ($1,$2,'informational',$3::jsonb,'[]'::jsonb,NOW(),NOW()) RETURNING id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text",

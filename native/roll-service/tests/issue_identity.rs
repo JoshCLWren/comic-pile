@@ -1123,6 +1123,118 @@ async fn adoption_commit_recommit_is_idempotent() {
     );
 }
 
+/// MQA-CBL-003 / #3933: an untargeted "Add this reading order" must never
+/// silently replace (or create an indistinguishable duplicate of) a plan the
+/// reader already owns. The adopted content goes into a distinct, suffixed plan
+/// and the pre-existing curated plan keeps its id and its nodes.
+#[tokio::test]
+async fn adoption_commit_dedupes_existing_plan_name_instead_of_replacing_it() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        r#"
+        INSERT INTO continuity_plans
+          (id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
+        VALUES
+          (950, $1, 'Mister Miracle 1989', 'informational',
+           '[{"id":"default","name":"Default","order":0}]'::jsonb,
+           '[{"id":"curated-original","node_type":"issue","ref_id":999999,"lane_id":"default","position":0,"label":"Curated original"}]'::jsonb,
+           NOW(), NOW())
+        "#,
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{status} {body}");
+    assert_ne!(
+        body["id"].as_i64(),
+        Some(950),
+        "adoption must create a distinct plan, not overwrite the existing one: {body}"
+    );
+    assert_eq!(
+        body["name"], "Mister Miracle 1989 (2)",
+        "a same-named existing plan must be disambiguated: {body}"
+    );
+
+    let conn = state.pool.get().await.unwrap();
+    let row = conn
+        .query_one(
+            "SELECT name, nodes_json::text FROM continuity_plans WHERE id=950",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(row.get::<_, String>(0), "Mister Miracle 1989");
+    let nodes: Value = serde_json::from_str(&row.get::<_, String>(1)).unwrap();
+    assert_eq!(
+        nodes[0]["label"], "Curated original",
+        "the existing curated plan content must survive untouched: {nodes}"
+    );
+}
+
+#[tokio::test]
+async fn adoption_commit_uses_next_suffix_when_dedupe_variants_exist() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        r#"
+        INSERT INTO continuity_plans
+          (id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
+        VALUES
+          (951, $1, 'Mister Miracle 1989', 'informational', '[]'::jsonb, '[]'::jsonb, NOW(), NOW()),
+          (952, $1, 'Mister Miracle 1989 (2)', 'informational', '[]'::jsonb, '[]'::jsonb, NOW(), NOW())
+        "#,
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{status} {body}");
+    assert_eq!(
+        body["name"], "Mister Miracle 1989 (3)",
+        "every taken name variant must be skipped: {body}"
+    );
+}
+
 #[tokio::test]
 async fn adoption_commit_inactive_list_returns_422() {
     let (state, token, csrf, _guard) = setup().await;
