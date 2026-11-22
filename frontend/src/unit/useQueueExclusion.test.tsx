@@ -61,9 +61,13 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: test replaces API methods with vi.fn mocks preserving typed signatures.
   realThreadsApi.listExcluded = mockListExcluded as typeof realThreadsApi.listExcluded
+  // SAFETY: test replaces API methods with vi.fn mocks preserving typed signatures.
   realThreadsApi.restore = mockRestore as typeof realThreadsApi.restore
+  // SAFETY: test replaces API methods with vi.fn mocks preserving typed signatures.
   realThreadsApi.restoreExclusionGroup = mockRestoreGroup as typeof realThreadsApi.restoreExclusionGroup
+  // SAFETY: test replaces API methods with vi.fn mocks preserving typed signatures.
   realThreadsApi.exclude = mockExclude as typeof realThreadsApi.exclude
   mockListExcluded.mockResolvedValue({
     active_count: 1,

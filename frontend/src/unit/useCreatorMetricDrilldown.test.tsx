@@ -21,6 +21,7 @@ import type {
 const original_creatorMetricDrilldownApi = { ...creatorMetricDrilldownApi }
 const mock_creatorMetricDrilldownApi = { getMetricDrilldown: vi.fn(), getRatingDistributionDrilldown: vi.fn(), getRoleDrilldown: vi.fn(), getSeriesDrilldown: vi.fn() }
 
+// SAFETY: test mocks narrow vi.fn to API method signatures for typed mock calls.
 const mockedGetMetric = (mock_creatorMetricDrilldownApi.getMetricDrilldown as any)
 const mockedGetDistribution = (mock_creatorMetricDrilldownApi.getRatingDistributionDrilldown as any)
 const mockedGetRole = (mock_creatorMetricDrilldownApi.getRoleDrilldown as any)

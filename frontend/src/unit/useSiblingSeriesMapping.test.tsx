@@ -11,6 +11,7 @@ import { seriesMappingApi } from '../services/api-series-mapping'
 const original_seriesMappingApi = { ...seriesMappingApi }
 const mock_seriesMappingApi = { preview: vi.fn(), commit: vi.fn() }
 
+// SAFETY: test mock narrows the API object for typed mock access.
 const mockedSeriesMappingApi = (mock_seriesMappingApi as any)
 
 function wrapper({ children }: { children: ReactNode }) {
