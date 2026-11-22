@@ -160,7 +160,11 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
     let lower_series = series_title.trim().to_lowercase();
 
     if !lower_series.is_empty() && lower_candidate.starts_with(&lower_series) {
-        candidate = candidate[series_title.trim().len()..]
+        let prefix_chars = lower_series.chars().count();
+        candidate = candidate
+            .chars()
+            .skip(prefix_chars)
+            .collect::<String>()
             .trim_start_matches([' ', '-', ':', '#'])
             .trim()
             .to_string();
