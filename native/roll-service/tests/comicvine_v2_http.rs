@@ -2971,6 +2971,40 @@ async fn import_series_enqueues_durable_metadata_refresh_requests() {
     let external_ids: Vec<String> = rows.iter().map(|r| r.get(2)).collect();
     assert_eq!(external_ids, vec!["91001".to_owned(), "91002".to_owned()]);
 
+    // Seed user state and hydrated credits before the retry. Roster metadata
+    // must never erase any of it, and the retry must not add history events.
+    let first_issue_id = body["issue_results"][0]["issue_id"]
+        .as_i64()
+        .expect("first imported issue") as i32;
+    conn.execute(
+        "UPDATE external_identities \
+         SET metadata_json = (metadata_json::jsonb || $2::jsonb)::json \
+         WHERE provider = 'comicvine' AND entity_type = 'issue' AND external_id = '91001'",
+        &[&json!({"creator_credits": [{"id": 88, "name": "Existing Creator", "role": "writer"}]}).to_string()],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "UPDATE issues SET status = 'read', read_at = TIMESTAMPTZ '2026-11-01 00:00:00+00' \
+         WHERE id = $1",
+        &[&first_issue_id],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "UPDATE threads SET queue_position = 9, last_rating = 4.5 WHERE id = $1",
+        &[&thread_id],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "INSERT INTO events (type, thread_id, issue_id, user_id, rating) \
+         VALUES ('rate', $1, $2, $3, 4.5)",
+        &[&thread_id, &first_issue_id, &user_id],
+    )
+    .await
+    .unwrap();
+
     // Retry import: no duplicate refresh requests, existing rows preserved.
     fake(&state).clear();
     provider_ok(
