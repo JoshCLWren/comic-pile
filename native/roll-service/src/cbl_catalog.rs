@@ -751,6 +751,7 @@ pub async fn browse_cbl_source_catalog(
             page: page_number,
             page_size,
             total,
+            catalog_total,
             total_pages,
             has_next: effective_page < i128::from(total_pages),
             has_previous: effective_page > 1,
