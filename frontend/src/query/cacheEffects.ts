@@ -11,6 +11,7 @@ import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
 import { isTransientQueryFailure } from './outageRetryBudget'
+import { notifyReadingPlansChanged } from './crossTabDataSync'
 
 /**
  * Centralized cache effects for all React Query mutations in ComicPile.

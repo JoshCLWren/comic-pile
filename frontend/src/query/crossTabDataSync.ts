@@ -14,12 +14,19 @@ import { isObject, isString } from '../utils/runtimeChecks'
  */
 const DATA_SYNC_CHANNEL = 'comic-pile-data'
 
-export type CrossTabDataChange = { readonly type: 'reading-plans-changed' }
+/** Identifies this tab so a subscriber never reacts to its own broadcast. */
+const TAB_ID: string =
+  globalThis.crypto?.randomUUID?.() ?? `tab-${Math.random().toString(36).slice(2)}`
+
+export type CrossTabDataChange = {
+  readonly type: 'reading-plans-changed'
+  readonly senderId: string
+}
 
 const CROSS_TAB_CHANGE_TYPES: readonly string[] = ['reading-plans-changed']
 
 function isCrossTabDataChange(value: unknown): value is CrossTabDataChange {
-  if (!isObject(value) || !isString(value.type)) return false
+  if (!isObject(value) || !isString(value.type) || !isString(value.senderId)) return false
   return CROSS_TAB_CHANGE_TYPES.includes(value.type)
 }
 
@@ -36,16 +43,20 @@ function openDataChannel(): BroadcastChannel | null {
 /**
  * Announce a committed change to every other tab in this browser.
  *
- * A posted message is never delivered back to the posting tab, so the local
- * mutation path remains the single refresh for the tab that made the change.
+ * The payload carries this tab's sender ID so a subscriber in the same tab can
+ * ignore it. That guards against double-refresh when the writing tab holds its
+ * own subscriber (BroadcastChannel only excludes the posting channel object, not
+ * other channel objects in the same tab).
  *
- * @param change - The validated change payload to publish.
+ * @param change - The change payload to publish; `senderId` is added here.
  */
-export function broadcastCrossTabChange(change: CrossTabDataChange): void {
+export function broadcastCrossTabChange(
+  change: Omit<CrossTabDataChange, 'senderId'>,
+): void {
   const channel = openDataChannel()
   if (!channel) return
   try {
-    channel.postMessage(change)
+    channel.postMessage({ ...change, senderId: TAB_ID })
   } catch {
     // Best-effort delivery: the writing tab already refreshed its own cache.
   } finally {
@@ -61,6 +72,9 @@ export function notifyReadingPlansChanged(): void {
 /**
  * Listen for committed data changes made by other tabs.
  *
+ * Messages published by this same tab are ignored so the writing tab's local
+ * mutation path remains the single refresh for its own write.
+ *
  * @param listener - Receives each validated change payload.
  * @returns Cleanup that removes the listener and closes the channel.
  */
@@ -70,7 +84,9 @@ export function subscribeToCrossTabChanges(
   const channel = openDataChannel()
   if (!channel) return () => {}
   const onMessage = (event: MessageEvent<unknown>): void => {
-    if (isCrossTabDataChange(event.data)) listener(event.data)
+    if (isCrossTabDataChange(event.data) && event.data.senderId !== TAB_ID) {
+      listener(event.data)
+    }
   }
   channel.addEventListener('message', onMessage)
   return () => {
