@@ -2869,16 +2869,22 @@ async fn do_cbl_adoption_commit(
             prow.get::<_, String>(6),
         )
     } else {
-        // Try existing adopted plan by source path
-        let existing = find_existing_adopted_plan_tx(&tx, user_id, &source_path)
-            .await
-            .map_err(|e| {
-                if e.is_database_unavailable() {
-                    CommitErr::Db(e)
-                } else {
-                    CommitErr::Unexpected(e.to_string())
-                }
-            })?;
+        // Try an existing usable adopted plan by source path. An explicitly
+        // selected orphan must produce a fresh Plan rather than silently
+        // redirecting the write to a different existing Plan.
+        let existing = if force_new_plan {
+            None
+        } else {
+            find_existing_adopted_plan_tx(&tx, user_id, &source_path, &orphaned_plan_ids)
+                .await
+                .map_err(|e| {
+                    if e.is_database_unavailable() {
+                        CommitErr::Db(e)
+                    } else {
+                        CommitErr::Unexpected(e.to_string())
+                    }
+                })?
+        };
         if let Some(pid) = existing {
             let prow = tx.run_query_one("SELECT id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&pid, &user_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("load existing plan: {e}")) })?;
             (
