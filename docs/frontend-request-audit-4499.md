@@ -7,7 +7,7 @@ overlays, tabs, and the shared authenticated shell. The CI inventory guard
 `App.tsx` and the audited route table diverge, or when any inventoried route
 does not name an existing request-budget spec.
 
-Child delivery: #4501 authenticated core (PR #4508), #4502 creator/discovery
+Child delivery: #4501 authenticated core (PR #4508, #5656), #4502 creator/discovery
 (PR #4511, #4609), #4503 reading/continuity/identity (PR #4506), #4504
 public/auxiliary + CI guard (PR #4509, #4619). PR #4500 (deferred eager team
 chemistry) is one narrow fix, not completion of this parent.
