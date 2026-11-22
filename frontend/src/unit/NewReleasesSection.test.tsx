@@ -116,9 +116,11 @@ const unmappedCandidate = {
 
 describe('NewReleasesSection', () => {
   beforeEach(() => {
+    Object.assign(continuityPlansApi, {
+      updateReleaseSourceEnabled: mockUpdate,
+      createReleaseSource: mockCreate,
+    })
     vi.clearAllMocks()
-    mocks.enableError = null
-    mocks.followError = null
     mockUpdate.mockResolvedValue({ ...enabledSource, enabled: false })
     mockCreate.mockResolvedValue({ id: 1, plan_id: 12 })
   })
