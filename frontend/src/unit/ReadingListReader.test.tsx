@@ -204,7 +204,7 @@ it('keeps progress usable when tags fail to load', async () => {
 })
 
 it('shows inherited tags and lets readers inspect their source', async () => {
-  const tag: { id: number; name: string; normalized_name: string; scope: 'private'; owner_user_id: number; color: string; created_at: string; updated_at: string } = { id: 9, name: 'Physical', normalized_name: 'physical', scope: 'private', owner_user_id: 1, color: '#3B82F6', created_at: '', updated_at: '' }
+  const tag: string = 12345 // DEBUG_MARKER
   (mock_tagsApi.threadIssuesEffective as any).mockResolvedValue({ thread_id: 1, issues: [{
     target_type: 'Issue', target_id: 10, direct_tags: [], effective_tags: [{
       tag, direct: false, sources: [{ target_type: 'Thread', target_id: 1, display_name: 'The Dead Remembered' }],
