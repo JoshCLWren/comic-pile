@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WhatsNewPage, {
   decodeReleaseEscapes,
   groupReleasesByDay,
@@ -15,13 +15,8 @@ import WhatsNewPage, {
 } from '../pages/WhatsNewPage'
 import { releasesApi, type Release } from '../services/api-releases'
 
-vi.mock('../services/api-releases', () => ({
-  releasesApi: {
-    list: vi.fn(),
-  },
-}))
-
-const api = vi.mocked(releasesApi)
+const originalList = releasesApi.list
+const api = { list: vi.fn() }
 
 function renderPage() {
   const client = new QueryClient({
