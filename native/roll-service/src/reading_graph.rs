@@ -1125,7 +1125,7 @@ mod tests {
     }
 
     fn crossover_audit_fixture() -> (OptionInputs, Vec<StoredPrerequisite>) {
-        let thread = |id, title, next_unread_issue_id, queue_position| ReadingThread {
+        let thread = |id, title| ReadingThread {
             id,
             status: "active".into(),
             title: title.into(),
@@ -1157,9 +1157,9 @@ mod tests {
         let inputs = OptionInputs {
             core: CoreReadingInputs {
                 threads: vec![
-                    thread(1, "Uncanny X-Men", 361, 1),
-                    thread(2, "X-Men", 80, 2),
-                    thread(3, "Unrelated series", 1, 3),
+                    thread(1, "Uncanny X-Men"),
+                    thread(2, "X-Men"),
+                    thread(3, "Unrelated series"),
                 ],
                 issues: vec![
                     issue(360, 1, 1, "read", "360"),
@@ -1176,11 +1176,18 @@ mod tests {
                     list_id: 20,
                     mode: "loose".into(),
                     name: "X-Men source placements".into(),
-                    entries: vec![ReadingEntry {
-                        issue_id: 80,
-                        gate: "none".into(),
-                        skipped: false,
-                    }],
+                    entries: vec![
+                        ReadingEntry {
+                            issue_id: 80,
+                            gate: "none".into(),
+                            skipped: false,
+                        },
+                        ReadingEntry {
+                            issue_id: 875,
+                            gate: "none".into(),
+                            skipped: false,
+                        },
+                    ],
                     overlap_decisions: vec![],
                 },
                 ReadingList {
