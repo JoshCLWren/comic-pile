@@ -8,7 +8,7 @@
 
 use crate::{
     auth::AuthenticatedUser, db, option_inputs, reading_constraints::ValidatedReadingInputs,
-    ApiError, AppState,
+    thread_issues::natural_issue_order, ApiError, AppState,
 };
 use axum::{
     extract::{Path, State},
@@ -364,25 +364,40 @@ pub async fn create_issues(
             created.push(insert_issue(&tx, thread_id, number, next + offset as i32 + 1).await?);
         }
     } else {
-        let mut merged = existing.clone();
-        for number in &new_numbers {
-            merged.push((0, number.clone(), 0));
-        }
-        merged.sort_by(|left, right| {
-            let left_value = ordinary(&left.1).unwrap_or(i64::MAX);
-            let right_value = ordinary(&right.1).unwrap_or(i64::MAX);
-            (left_value, &left.1).cmp(&(right_value, &right.1))
-        });
-        let mut positions = vec![];
-        for (next_position, (id, _number, _)) in (1..).zip(merged.iter()) {
-            if *id != 0 {
-                positions.push((*id, next_position));
+        let existing_labels: Vec<String> =
+            existing.iter().map(|(_, number, _)| number.clone()).collect();
+        if let Some(order) = natural_issue_order(&existing_labels, &new_numbers) {
+            let target: BTreeMap<&str, i32> = order
+                .iter()
+                .enumerate()
+                .map(|(index, number)| (number.as_str(), index as i32 + 1))
+                .collect();
+            let mut positions = vec![];
+            for (id, number, position) in &existing {
+                if let Some(&wanted) = target.get(number.as_str()) {
+                    if wanted != *position {
+                        positions.push((*id, wanted));
+                    }
+                }
             }
-        }
-        reseat_positions(&tx, thread_id, &positions).await?;
-        for (position, (id, number, _)) in (1..).zip(merged.iter()) {
-            if *id == 0 {
-                created.push(insert_issue(&tx, thread_id, number, position).await?);
+            reseat_positions(&tx, thread_id, &positions).await?;
+            let mut created_rows = vec![];
+            for number in &new_numbers {
+                let position = target[number.as_str()];
+                created_rows.push(insert_issue(&tx, thread_id, number, position).await?);
+            }
+            created_rows.sort_by_key(|issue| issue.position);
+            created = created_rows;
+        } else {
+            let next = existing
+                .iter()
+                .map(|(_, _, position)| *position)
+                .max()
+                .unwrap_or(0);
+            for (offset, number) in new_numbers.iter().enumerate() {
+                created.push(
+                    insert_issue(&tx, thread_id, number, next + offset as i32 + 1).await?,
+                );
             }
         }
     }
