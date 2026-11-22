@@ -1,7 +1,8 @@
 import { vi } from 'vitest'
 import { cast } from '../utils/cast'
+import { isFunction } from '../utils/runtimeChecks'
 
-type InjectableFunction = (...args: never[]) => unknown
+type InjectableFunction = (...args: never[]) => void
 type InjectableFunctionTable = Record<string, InjectableFunction>
 type ModuleDoubleFactory = () => object | Promise<object>
 
