@@ -1425,6 +1425,7 @@ async fn query_page(
     Ok((
         payload.auth,
         payload.active_count,
+        payload.filtered_count,
         payload.list_names,
         payload.rows,
     ))
