@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Compatibility entry point. The factory operator console lives in Rotisserie:
+#   rotisserie factory --help            (docs: rotisserie docs/factory-console.md)
+#
+#   bash scripts/factory-run opencode-go opencode-go/hy4-flash-free --force-slot
+# runs exactly
+#   rotisserie factory --repo JoshCLWren/comic-pile run opencode-go opencode-go/hy4-flash-free --force-slot
+#
+# Which Rotisserie runs, in order:
+#   1. $ROTISSERIE_BIN, if set (for example a local checkout's .venv/bin/rotisserie);
+#   2. the commit pinned below, through uvx (cached after the first run);
+#   3. a `rotisserie` already on PATH.
+set -Eeuo pipefail
+
+# Pinned Rotisserie commit with `rotisserie factory`. Update with the console.
+ROTISSERIE_REF="3cd4433fe10ffe0f6d8a747bacd2eb756ffa5285"
+ROTISSERIE_SOURCE="git+ssh://git@github.com/JoshCLWren/rotisserie.git@${ROTISSERIE_REF}"
+REPO="${FACTORY_REPO:-JoshCLWren/comic-pile}"
+
+if [[ -n "${ROTISSERIE_BIN:-}" ]]; then
+  rotisserie=("$ROTISSERIE_BIN")
+elif command -v uvx >/dev/null 2>&1; then
+  rotisserie=(uvx --quiet --from "$ROTISSERIE_SOURCE" rotisserie)
+elif command -v rotisserie >/dev/null 2>&1; then
+  rotisserie=(rotisserie)
+else
+  cat >&2 <<'HELP'
+The factory console is part of Rotisserie. Install one of:
+  uv (recommended):  https://docs.astral.sh/uv/  then rerun this script
+  Rotisserie:        uv tool install "git+ssh://git@github.com/JoshCLWren/rotisserie.git"
+HELP
+  exit 2
+fi
+
+# Earlier listing flags map onto Rotisserie subcommands; everything else is `run`.
+case "${1:-}" in
+  --providers) exec "${rotisserie[@]}" factory --repo "$REPO" providers ;;
+  --models)
+    [[ $# -ge 2 ]] || { echo '--models needs a provider' >&2; exit 2; }
+    exec "${rotisserie[@]}" factory --repo "$REPO" models "$2"
+    ;;
+  -h|--help) exec "${rotisserie[@]}" factory --repo "$REPO" run --help ;;
+esac
+exec "${rotisserie[@]}" factory --repo "$REPO" run "$@"

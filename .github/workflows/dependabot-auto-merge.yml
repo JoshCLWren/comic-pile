@@ -50,7 +50,7 @@ jobs:
           # The trusted helper is idempotent and avoids queued manual deploys.
           dispatch_deploy_after_merges() {
             if (( ${#merged_prs[@]} > 0 )); then
-              source .github/scripts/factory-dispatch-production-deploy.sh
+              source .github/scripts/dispatch-production-deploy.sh
               factory_dispatch_production_deploy "Dependabot CI auto-merged PR(s): ${merged_prs[*]}"
             else
               echo "No matching Dependabot head auto-merged by this CI completion"

@@ -179,22 +179,11 @@ fn manual_creator_id(name: &str) -> i64 {
     let mut hasher = Sha256::new();
     hasher.update(name.as_bytes());
     let digest = hasher.finalize();
-    // take first 16 hex chars worth? Python does int(hexdigest, 16) % MANUAL_CREATOR_ID_BASE
-    // we need big int mod; easier to use the lower 64 bits carefully
-    let mut val: u128 = 0;
-    for b in digest.iter().take(16) {
-        // 128 bits
-        val = (val << 8) | (*b as u128);
-    }
-    // but Python uses full 256-bit hex digest mod base; to be safe, use u64 chunks?
-    // Actually: int(hexdigest, 16) is a big int; % MANUAL_CREATOR_ID_BASE (10^9) can be computed
-    // by processing hex in chunks. Easier: use decimal string approach via big integer logic is not in std.
-    // Alternative: compute mod stepwise over the digest bytes.
     let mut acc: u64 = 0;
     let base = MANUAL_CREATOR_ID_BASE as u64;
-    // process full 32 bytes as a big-endian number mod base
-    let hex = format!("{digest:x}");
-    // hex is 64 chars
+    // process full 32-byte SHA-256 digest as a big-endian number mod base,
+    // byte-identical to Python's int(hexdigest, 16) % MANUAL_CREATOR_ID_BASE.
+    let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
     for ch in hex.chars() {
         let Some(digit) = ch.to_digit(16) else {
             continue;

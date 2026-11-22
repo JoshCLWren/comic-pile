@@ -79,6 +79,27 @@ pub struct SessionBootstrap {
 fn corrupt() -> ApiError {
     ApiError::Internal("Invalid reading session state".to_string())
 }
+
+/// Decode one SQLAlchemy `JSON` thread-id column that was selected as `::text`.
+///
+/// `sessions.snoozed_thread_ids` and `sessions.skipped_thread_ids` are `json`
+/// columns, not PostgreSQL `integer[]`, so tokio-postgres cannot read them
+/// straight into `Vec<i32>`; a direct `try_get` is a client-side type mismatch
+/// that fails every reader. SQL `NULL` stays `None`, a stored JSON `null`
+/// decodes to `None`, and a JSON array decodes to its ids.
+pub(crate) fn decode_thread_ids(raw: Option<String>) -> Result<Option<Vec<i32>>, ApiError> {
+    match raw {
+        None => Ok(None),
+        Some(text) => serde_json::from_str::<Option<Vec<i32>>>(&text).map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            corrupt()
+        }),
+    }
+}
+
 fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {
     let json = row.try_get::<_, &str>(0).map_err(session_error)?;
     decode_session_json(json)
@@ -873,6 +894,23 @@ mod tests {
     use super::*;
     use axum::http::StatusCode;
     use serde_json::json;
+
+    #[test]
+    fn thread_id_json_columns_decode_text_null_and_arrays() {
+        // SQL NULL stays absent, stored JSON `null` stays absent, and an array
+        // decodes to its ids. These columns are `json`, so they are always read
+        // as text (#4850).
+        assert_eq!(decode_thread_ids(None).unwrap(), None);
+        assert_eq!(decode_thread_ids(Some("null".into())).unwrap(), None);
+        assert_eq!(decode_thread_ids(Some("[]".into())).unwrap(), Some(vec![]));
+        assert_eq!(
+            decode_thread_ids(Some("[5,6]".into())).unwrap(),
+            Some(vec![5, 6])
+        );
+        // A non-JSON payload fails closed instead of fabricating a session.
+        assert!(decode_thread_ids(Some("not-json".into())).is_err());
+    }
+
     #[test]
     fn timezone_validation_and_manual_ladder() {
         assert_eq!(

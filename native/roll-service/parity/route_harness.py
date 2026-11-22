@@ -269,9 +269,6 @@ async def db_statement_breakdown(engine: AsyncEngine) -> StatementBreakdown | No
     try:
         async with admin_engine.connect() as admin:
             try:
-                setting = await admin.execute(text("SHOW pg_stat_statements.track"))
-                if setting.scalar_one() != "all":
-                    return None
                 row = await admin.execute(
                     text(
                         """

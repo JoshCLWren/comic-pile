@@ -1,0 +1,67 @@
+name: Factory CLI Contract
+
+# scripts/factory-run is a thin wrapper over `rotisserie factory`, whose own
+# behavior is tested in Rotisserie. This proves the wrapper forwards every
+# argument exactly, maps the old listing flags, and pins a real commit.
+on:
+  pull_request:
+    paths:
+      - 'scripts/factory-run'
+      - '.github/workflows/factory-cli-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/factory-run'
+      - '.github/workflows/factory-cli-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cli-contract:
+    name: Factory CLI behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Wrapper syntax and pinned Rotisserie commit
+        run: |
+          set -Eeuo pipefail
+          bash -n scripts/factory-run
+          grep -Eq '^ROTISSERIE_REF="[0-9a-f]{40}"$' scripts/factory-run
+      - name: Wrapper forwards arguments exactly to rotisserie factory
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          stub="$RUNNER_TEMP/rotisserie"
+          cat > "$stub" <<'STUB'
+          #!/usr/bin/env bash
+          printf '%s\n' "$@" > "$FACTORY_CLI_ARGS"
+          exit "${STUB_EXIT:-0}"
+          STUB
+          chmod +x "$stub"
+          export ROTISSERIE_BIN="$stub" FACTORY_CLI_ARGS="$RUNNER_TEMP/args"
+          base='factory --repo JoshCLWren/comic-pile'
+
+          expect() {
+            local expected="$1"
+            shift
+            bash scripts/factory-run "$@"
+            # shellcheck disable=SC2086 # split the expected words on purpose
+            diff <(printf '%s\n' $expected) "$FACTORY_CLI_ARGS"
+          }
+          expect "$base run opencode-go opencode-go/hy4-flash-free --force-slot" \
+            opencode-go opencode-go/hy4-flash-free --force-slot
+          expect "$base run opencode-go opencode-go/hy4-flash-free --force-slot --slot 2 --target issue:5123 --no-wait" \
+            opencode-go opencode-go/hy4-flash-free --force-slot --slot 2 --target issue:5123 --no-wait
+          expect "$base providers" --providers
+          expect "$base models opencode-go" --models opencode-go
+          expect "$base run"
+          FACTORY_REPO=acme/widgets expect 'factory --repo acme/widgets run nvidia auto' nvidia auto
+
+          # The console's exit code reaches the caller unchanged.
+          status=0
+          STUB_EXIT=3 bash scripts/factory-run opencode-go auto || status=$?
+          test "$status" = 3

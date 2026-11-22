@@ -8,7 +8,7 @@ Comic Pile supports **issue-level dependencies** that enable creating linear rea
 
 ## 1. Thread and Issue Model Structure
 
-### Thread Model (`app/models/thread.py`)
+### Thread Model (`app/models/thread.py`) <!-- docs-path-check: ignore -->
 
 **Key Fields:**
 - `id`: Unique identifier
@@ -29,7 +29,7 @@ Comic Pile supports **issue-level dependencies** that enable creating linear rea
 - `dependencies_out`: Dependencies where this thread blocks others
 - `dependencies_in`: Dependencies where this thread is blocked by others
 
-### Issue Model (`app/models/issue.py`)
+### Issue Model (`app/models/issue.py`) <!-- docs-path-check: ignore -->
 
 **Key Fields:**
 ```python
@@ -98,7 +98,7 @@ Issues:
 
 ## 3. Dependency System
 
-### Dependency Model (`app/models/dependency.py`)
+### Dependency Model (`app/models/dependency.py`) <!-- docs-path-check: ignore -->
 
 **Structure:**
 ```python
@@ -403,29 +403,13 @@ await dependenciesApi.createDependency({
 })
 ```
 
-### IssueList Component (`frontend/src/components/IssueList.tsx`)
+### Thread issue list (`frontend/src/pages/ThreadDetailView.tsx`)
 
-**Features:**
-- Lists all issues in a thread
-- Filter by: All | Unread | Read
-- Toggle status with click (unread ↔ read)
-- Shows "Next" badge on thread.next_unread_issue_id
-- Progress bar and percentage
-- Read date for completed issues
-
-**UI Display:**
-```
-Issues                          [All ▼]
-┌─────────────────────────────────┐
-│ 🟢 #361                         │
-│ 🟢 #362                      Next│
-│ ✅ #363         Jan 15, 2024    │
-│ ✅ #364         Jan 16, 2024    │
-└─────────────────────────────────┘
-
-Read 2 of 50 (4%)
-████░░░░░░░░░░░░░░░░░░░░░░░░░░░
-```
+The former standalone `frontend/src/components/IssueList.tsx` was removed on <!-- docs-path-check: ignore -->
+2026-11-18: it had no live callers and its row actions were superseded by the
+shared exact-issue card family (`ComicIssueCard` / `CompactIssueCardTrigger`,
+see `docs/ISSUE_CARD_MOUNT_INVENTORY.md`). The Thread detail view renders the
+same actions per row through the shared component instead.
 
 ### API Service (`frontend/src/services/api-issues.ts`)
 
@@ -640,7 +624,7 @@ The DependencyBuilder component visualizes the chain:
 
 ## 7. Key Implementation Details
 
-### Thread Blocking Logic (`comic_pile/dependencies.py`)
+### Thread Blocking Logic (`comic_pile/dependencies.py`) <!-- docs-path-check: ignore -->
 
 **Issue-Level Blocking Algorithm:**
 ```python
@@ -679,7 +663,7 @@ After reading UX-M #362:
 Result: X-Men is unblocked
 ```
 
-### Roll Pool Filtering (`comic_pile/queue.py`)
+### Roll Pool Filtering (`comic_pile/queue.py`) <!-- docs-path-check: ignore -->
 
 The dice roll system automatically excludes blocked threads:
 
@@ -741,7 +725,7 @@ GET /api/v1/threads/5/issues
 
 **Option 2: Add Dedicated Endpoint (Recommended)**
 
-Add to `app/api/issue.py`:
+Add to `app/api/issue.py`: <!-- docs-path-check: ignore -->
 
 ```python
 @router.get("/threads/{thread_id}/issues/by-number/{issue_number}", response_model=IssueResponse)

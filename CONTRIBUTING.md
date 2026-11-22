@@ -103,7 +103,7 @@ Contributors edit only `docs/api/route-fragments/*.json` source fragments
 `<!-- route-burndown -->` section, or `docs/api/route-fragments/vercel-rewrites.json` in a PR.
 Those files are bot-owned and are regenerated post-merge by
 `.github/workflows/regenerate-routes.yml` (runs
-`python3 scripts/generate_route_burndown.py` then
+`node scripts/generate_route_burndown.mjs` then
 `node scripts/generate_vercel_routes.mjs`). The `route-fragment-guard`
 workflow fails PRs that include generated files. `vercel.json` stays on
 `main` for Vercel deploy (do not gitignore it); the previous `main` copy
@@ -123,11 +123,11 @@ React components live in `frontend/src/` with JSX syntax. Style with Tailwind CS
 ### Database Migrations
 
 ```bash
-# Create a new migration
-alembic revision --autogenerate -m "description"
+# Create a new migration: append native/migrate/migrations/V<n>__description.sql
+# (Alembic is frozen; never edit an applied migration)
 
-# Run migrations
-make migrate  # or: alembic upgrade head
+# Run migrations (refinery runner, comicpile-migrate)
+make migrate  # or: cargo run --locked -p comicpile-migrate -- up
 ```
 
 ## Code quality standards

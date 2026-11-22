@@ -1,0 +1,465 @@
+{
+  "cases": [
+    {
+      "actor": "owner",
+      "body": {
+        "anchor_after_thread_id": "$b",
+        "anchor_before_thread_id": "$a",
+        "comicvine_issue_id": 555,
+        "issue_number": "7",
+        "reading_order_id": "$order",
+        "title": "  Annual Special "
+      },
+      "name": "anchored_between_neighbours",
+      "response": {
+        "external_identity_id": "<external_identity_id>",
+        "issue_id": "<issue_id>",
+        "position": 2,
+        "reading_order_id": "$order",
+        "thread_id": "<thread_id>",
+        "total_items": 3
+      },
+      "status": 201,
+      "stored": {
+        "at_tail": true,
+        "issue_number": "7",
+        "issue_status": "unread",
+        "issues_remaining": 1,
+        "order_threads": [
+          "$a",
+          "$new",
+          "$b"
+        ],
+        "position": 1,
+        "status": "active",
+        "title": "Annual Special",
+        "total_issues": 1
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": 555,
+        "title": "Again"
+      },
+      "name": "duplicate_physical_issue",
+      "response": {
+        "detail": {
+          "code": "duplicate_physical_issue",
+          "comicvine_issue_id": 555,
+          "existing_issue_id": "<existing_issue_id>",
+          "message": "ComicVine issue 555 already exists as issue <existing_issue_id>"
+        }
+      },
+      "status": 409,
+      "stored": null
+    },
+    {
+      "actor": "other",
+      "body": {
+        "comicvine_issue_id": 555,
+        "title": "Theirs"
+      },
+      "name": "other_reader_same_issue",
+      "response": {
+        "external_identity_id": "<external_identity_id>",
+        "issue_id": "<issue_id>",
+        "position": null,
+        "reading_order_id": null,
+        "thread_id": "<thread_id>",
+        "total_items": null
+      },
+      "status": 201,
+      "stored": {
+        "at_tail": true,
+        "issue_number": "1",
+        "issue_status": "unread",
+        "issues_remaining": 1,
+        "order_threads": [
+          "$a",
+          "<other>",
+          "$b"
+        ],
+        "position": 1,
+        "status": "active",
+        "title": "Theirs",
+        "total_issues": 1
+      }
+    },
+    {
+      "actor": "other",
+      "body": {
+        "comicvine_issue_id": 556,
+        "reading_order_id": "$order",
+        "title": "X"
+      },
+      "name": "foreign_reading_order",
+      "response": {
+        "detail": "Reading order <reading_order_id> not found"
+      },
+      "status": 404,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": 557,
+        "title": "   "
+      },
+      "name": "default_issue_number_blank_title",
+      "response": {
+        "external_identity_id": "<external_identity_id>",
+        "issue_id": "<issue_id>",
+        "position": null,
+        "reading_order_id": null,
+        "thread_id": "<thread_id>",
+        "total_items": null
+      },
+      "status": 201,
+      "stored": {
+        "at_tail": true,
+        "issue_number": "1",
+        "issue_status": "unread",
+        "issues_remaining": 1,
+        "order_threads": [
+          "$a",
+          "<other>",
+          "$b"
+        ],
+        "position": 1,
+        "status": "active",
+        "title": "",
+        "total_issues": 1
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": 558,
+        "issue_number": "",
+        "title": "Empty number"
+      },
+      "name": "empty_issue_number",
+      "response": {
+        "external_identity_id": "<external_identity_id>",
+        "issue_id": "<issue_id>",
+        "position": null,
+        "reading_order_id": null,
+        "thread_id": "<thread_id>",
+        "total_items": null
+      },
+      "status": 201,
+      "stored": {
+        "at_tail": true,
+        "issue_number": "1",
+        "issue_status": "unread",
+        "issues_remaining": 1,
+        "order_threads": [
+          "$a",
+          "<other>",
+          "$b"
+        ],
+        "position": 1,
+        "status": "active",
+        "title": "Empty number",
+        "total_issues": 1
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "anchor_after_thread_id": "$b",
+        "comicvine_issue_id": 559,
+        "reading_order_id": "$order",
+        "title": "Before B"
+      },
+      "name": "only_after_anchor",
+      "response": {
+        "external_identity_id": "<external_identity_id>",
+        "issue_id": "<issue_id>",
+        "position": 3,
+        "reading_order_id": "$order",
+        "thread_id": "<thread_id>",
+        "total_items": 4
+      },
+      "status": 201,
+      "stored": {
+        "at_tail": true,
+        "issue_number": "1",
+        "issue_status": "unread",
+        "issues_remaining": 1,
+        "order_threads": [
+          "$a",
+          "<other>",
+          "$new",
+          "$b"
+        ],
+        "position": 1,
+        "status": "active",
+        "title": "Before B",
+        "total_issues": 1
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "anchor_before_thread_id": 999999,
+        "comicvine_issue_id": 560,
+        "reading_order_id": "$order",
+        "title": "Tail"
+      },
+      "name": "no_usable_anchor_appends",
+      "response": {
+        "external_identity_id": "<external_identity_id>",
+        "issue_id": "<issue_id>",
+        "position": 5,
+        "reading_order_id": "$order",
+        "thread_id": "<thread_id>",
+        "total_items": 5
+      },
+      "status": 201,
+      "stored": {
+        "at_tail": true,
+        "issue_number": "1",
+        "issue_status": "unread",
+        "issues_remaining": 1,
+        "order_threads": [
+          "$a",
+          "<other>",
+          "<other>",
+          "$b",
+          "$new"
+        ],
+        "position": 1,
+        "status": "active",
+        "title": "Tail",
+        "total_issues": 1
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": "561",
+        "title": "Lax"
+      },
+      "name": "lax_string_id",
+      "response": {
+        "external_identity_id": "<external_identity_id>",
+        "issue_id": "<issue_id>",
+        "position": null,
+        "reading_order_id": null,
+        "thread_id": "<thread_id>",
+        "total_items": null
+      },
+      "status": 201,
+      "stored": {
+        "at_tail": true,
+        "issue_number": "1",
+        "issue_status": "unread",
+        "issues_remaining": 1,
+        "order_threads": [
+          "$a",
+          "<other>",
+          "<other>",
+          "$b",
+          "<other>"
+        ],
+        "position": 1,
+        "status": "active",
+        "title": "Lax",
+        "total_issues": 1
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": 562.0,
+        "title": "Lax float"
+      },
+      "name": "lax_float_id",
+      "response": {
+        "external_identity_id": "<external_identity_id>",
+        "issue_id": "<issue_id>",
+        "position": null,
+        "reading_order_id": null,
+        "thread_id": "<thread_id>",
+        "total_items": null
+      },
+      "status": 201,
+      "stored": {
+        "at_tail": true,
+        "issue_number": "1",
+        "issue_status": "unread",
+        "issues_remaining": 1,
+        "order_threads": [
+          "$a",
+          "<other>",
+          "<other>",
+          "$b",
+          "<other>"
+        ],
+        "position": 1,
+        "status": "active",
+        "title": "Lax float",
+        "total_issues": 1
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {},
+      "name": "missing_fields",
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": 1,
+        "title": ""
+      },
+      "name": "empty_title",
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": 1,
+        "title": "ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt"
+      },
+      "name": "long_title",
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": 0,
+        "title": "x"
+      },
+      "name": "zero_id",
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": "abc",
+        "title": "x"
+      },
+      "name": "text_id",
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": 5.5,
+        "title": "x"
+      },
+      "name": "fractional_id",
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": 1,
+        "issue_number": "999999999999999999999999999999999999999999999999999",
+        "title": "x"
+      },
+      "name": "long_issue_number",
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": 1,
+        "reading_order_id": 0,
+        "title": "x"
+      },
+      "name": "zero_reading_order",
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "anchor_before_thread_id": -1,
+        "comicvine_issue_id": 1,
+        "title": "x"
+      },
+      "name": "negative_anchor",
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_issue_id": 1,
+        "title": 5
+      },
+      "name": "numeric_title",
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "anon",
+      "body": {
+        "comicvine_issue_id": 1,
+        "title": "x"
+      },
+      "name": "unauthenticated",
+      "response": {
+        "detail": "Not authenticated"
+      },
+      "status": 401,
+      "stored": null
+    },
+    {
+      "actor": "nocsrf",
+      "body": {
+        "comicvine_issue_id": 1,
+        "title": "x"
+      },
+      "name": "missing_csrf",
+      "response": {
+        "detail": "CSRF token missing or invalid"
+      },
+      "status": 403,
+      "stored": null
+    }
+  ],
+  "source": "Captured from the frozen Python handler app/api/comicvine_resolution.py::api_import_issue (httpx ASGI client, disposable local Postgres) before its retirement (#4835)."
+}

@@ -13,9 +13,9 @@ The app currently works in production for core flows, but the deploy architectur
 Severity: High
 
 Evidence:
-- `app/main.py` - `_serve_spa_index_response()`
-- `app/main.py` - `serve_root()`
-- `app/main.py` - `serve_react_spa()`
+- `app/main.py` - `_serve_spa_index_response()` <!-- docs-path-check: ignore -->
+- `app/main.py` - `serve_root()` <!-- docs-path-check: ignore -->
+- `app/main.py` - `serve_react_spa()` <!-- docs-path-check: ignore -->
 
 Details:
 - `_serve_spa_index_response()` serves fallback inline HTML when `static/react/index.html` is missing.
@@ -36,7 +36,7 @@ Recommendation:
 Severity: High
 
 Evidence:
-- `app/main.py` - static mount block in `create_app()`
+- `app/main.py` - static mount block in `create_app()` <!-- docs-path-check: ignore -->
 
 Details:
 - Static mounts for `/static` and `/assets` are only mounted if directories exist.
@@ -80,7 +80,7 @@ Evidence:
 
 Details:
 - Multiple runtime/default configs still use `postgresql+psycopg://` despite project policy requiring asyncpg-only for application runtime.
-- `app/config.py` converts URLs, which prevents immediate breakage but hides inconsistency.
+- `app/config.py` converts URLs, which prevents immediate breakage but hides inconsistency. <!-- docs-path-check: ignore -->
 
 Risk:
 - Confusing operator behavior.
@@ -115,7 +115,7 @@ Recommendation:
 Severity: Low
 
 Evidence:
-- `frontend/vite.config.js` - build `outDir`
+- `frontend/vite.config.ts` - build `outDir`
 - `AGENTS.md` - Playwright build guidance
 
 Details:
@@ -197,7 +197,7 @@ Recommendation:
 - CI Playwright job explicitly builds frontend before browser tests:
   - `.github/workflows/ci.yml` - Playwright job build step
 - Production smoke coverage catches chunk load failures in key routes:
-  - `frontend/src/test/smoke.spec.ts` - chunk failure response listener
+  - `frontend/src/test/smoke.spec.ts` - chunk failure response listener <!-- docs-path-check: ignore -->
 - Dockerfile already separates build and runtime stages:
   - `Dockerfile` - `python-builder` and runtime stages
 - Runtime container already runs as non-root user:

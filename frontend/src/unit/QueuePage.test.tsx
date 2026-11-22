@@ -17,7 +17,8 @@ import {
   useQueueThreads,
   useShuffleQueue,
 } from '../hooks/useQueue'
-import { useSession } from '../hooks/useSession'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useCompletedThreads } from '../hooks/useCompletedThreads'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { useSnooze } from '../hooks/useSnooze'
@@ -30,6 +31,13 @@ import type { ThreadListItem } from '../types'
 import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 
+vi.mock('../hooks/useCompletedThreads', () => ({
+  useCompletedThreads: vi.fn(() => ({
+    threads: [], hasNextPage: false, isLoadingMore: false, isError: false,
+    loadMore: vi.fn(), retry: vi.fn(),
+  })),
+}))
+
 vi.mock('../hooks/useThread', () => ({
   useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useCreateThread: vi.fn(),
@@ -41,6 +49,7 @@ vi.mock('../hooks/useThread', () => ({
 vi.mock('../hooks/useQueue', () => ({
   useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
   useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
+  useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToPosition: vi.fn(),
@@ -48,8 +57,8 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useSession', () => ({
-  useSession: vi.fn(),
+vi.mock('../hooks/useRollBootstrap', () => ({
+  useRollBootstrap: vi.fn(),
 }))
 
 vi.mock('../hooks/useSnooze', () => ({
@@ -111,6 +120,7 @@ vi.mock('../contexts/useToast', () => ({
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
+const mockedUseCompletedThreads = vi.mocked(useCompletedThreads)
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseCreateThread = vi.mocked(useCreateThread) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
@@ -128,7 +138,7 @@ const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseSession = vi.mocked(useSession) as any
+const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
@@ -145,6 +155,18 @@ const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
 const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
+  // Completed rows come from the independent Rust collection, never the active Queue response.
+  // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
+  mockedUseCompletedThreads.mockReturnValue({
+    // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
+    threads: [{ id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 }],
+    hasNextPage: false,
+    isLoadingMore: false,
+    isError: false,
+    loadMore: vi.fn(),
+    retry: vi.fn(),
+  // SAFETY: The mock intentionally substitutes a partial, owner-scoped completed collection.
+  } as never)
   mockedUseQueueThreads.mockReturnValue({
     data: [
       { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
@@ -161,7 +183,7 @@ beforeEach(() => {
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseSession.mockReturnValue({
+  mockedUseRollBootstrap.mockReturnValue({
     data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
     refetch: vi.fn(),
   })
@@ -324,7 +346,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   })
 
   it('uses native reroll when the pending comic Snooze action is clicked', async () => {
-    mockedUseSession.mockReturnValue({
+    mockedUseRollBootstrap.mockReturnValue({
       data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [], pending_thread_id: 1 },
       refetch: vi.fn(),
     })
@@ -347,7 +369,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   })
 
   it('explains why Snooze is unavailable for a series the reader did not roll (#3260)', async () => {
-    mockedUseSession.mockReturnValue({
+    mockedUseRollBootstrap.mockReturnValue({
       data: {
         snoozed_threads: [],
         skipped_thread_ids: [],
@@ -377,7 +399,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   })
 
   it('removes thread from snooze cookie when Unsnooze action is clicked', async () => {
-    mockedUseSession.mockReturnValue({
+    mockedUseRollBootstrap.mockReturnValue({
       data: {
         snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
         skipped_thread_ids: [],
@@ -407,7 +429,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   it('does not run a second session fetch after the snooze action', async () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
-    mockedUseSession.mockReturnValue({
+    mockedUseRollBootstrap.mockReturnValue({
       data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [], pending_thread_id: 1 },
       refetch: mockRefetchSession,
     })
@@ -443,7 +465,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   it('does not run a second session fetch after the unsnooze action', async () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
-    mockedUseSession.mockReturnValue({
+    mockedUseRollBootstrap.mockReturnValue({
       data: {
         snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
         skipped_thread_ids: [],
@@ -515,6 +537,14 @@ describe('Keyboard Accessibility', () => {
         loadMore: vi.fn(),
       }
     })
+    // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
+  mockedUseCompletedThreads.mockReturnValue({
+      // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
+      threads: [{ id: 3, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }],
+      hasNextPage: false, isLoadingMore: false, isError: false,
+      loadMore: vi.fn(), retry: vi.fn(),
+    // SAFETY: The mock intentionally substitutes a partial, owner-scoped completed collection.
+    } as never)
     render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     expect(screen.getByText('Done')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Title' }))
@@ -573,6 +603,14 @@ describe('Keyboard Accessibility', () => {
   ], isLoading: false, refetch })
   const update = vi.fn().mockResolvedValue({})
   mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
+  // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
+  mockedUseCompletedThreads.mockReturnValue({
+    // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
+    threads: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }],
+    hasNextPage: false, isLoadingMore: false, isError: false,
+    loadMore: vi.fn(), retry: vi.fn(),
+  // SAFETY: The mock intentionally substitutes a partial, owner-scoped completed collection.
+  } as never)
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const menu = screen.getAllByRole('button', { name: /series actions/i })[0]
   await user.click(menu)
@@ -1103,7 +1141,15 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   const user = userEvent.setup()
   const reactivate = vi.fn().mockResolvedValue({})
   mockedUseReactivateThread.mockReturnValue({ mutate: reactivate, isPending: false })
-  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }], isPending: false, refetch: vi.fn() })
+  // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
+  mockedUseCompletedThreads.mockReturnValue({
+    // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
+    threads: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }],
+    hasNextPage: false, isLoadingMore: false, isError: false,
+    loadMore: vi.fn(), retry: vi.fn(),
+  // SAFETY: The mock intentionally substitutes a partial, owner-scoped completed collection.
+  } as never)
+  mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0])
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')

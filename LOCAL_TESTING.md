@@ -59,16 +59,7 @@ async def test_my_feature(auth_api_client_async: AsyncClient, async_db: AsyncSes
 
 ## Key Fixtures
 
-### E2E Fixtures (`tests_e2e/conftest.py`)
-
-| Fixture | Scope | Description |
-|---------|-------|-------------|
-| `async_db` | function | Async DB session with transaction rollback |
-| `auth_api_client_async` | function | Authenticated API client (ASGI transport) |
-| `test_server_url` | session | Live HTTP server on free port with seeded data |
-| `browser_page` | function | Playwright page with localStorage cleared |
-
-### Unit Test Fixtures (`tests/conftest.py`)
+### Unit Test Fixtures (`tests/conftest.py`) <!-- docs-path-check: ignore -->
 
 | Fixture | Scope | Description |
 |---------|-------|-------------|
@@ -118,7 +109,7 @@ threads = result.scalars().all()
 
 **Test isolation issues?**
 - E2E tests use transaction rollback - data doesn't persist
-- Use `seed_dev_db.py` for persistent data across test runs
+- Use `seed_dev_db.py` for persistent data across test runs <!-- docs-path-check: ignore -->
 
 **Port conflicts?**
 - E2E tests auto-find free ports

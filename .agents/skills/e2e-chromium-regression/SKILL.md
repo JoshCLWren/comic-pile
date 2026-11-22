@@ -35,22 +35,28 @@ the whole session.
    ```
 
 3. Backend — **`TEST_ENVIRONMENT=true` is mandatory**. The rate-limit gate
-   (`app/middleware/rate_limit.py`) only disables throttling in test mode; without it,
+   (`app/middleware/rate_limit.py`) only disables throttling in test mode; without it, <!-- docs-path-check: ignore -->
    fixture-speed traffic 429s the entire run. Never pass `REDIS_URL` (Redis is unused).
    Keep the log path slot-unique too — `/tmp/backend.log` is machine-global:
 
    ```bash
    export E2E_BACKEND_PORT="$((9000+N))"
    export BASE_URL="http://127.0.0.1:${E2E_BACKEND_PORT}"
+   # Pin BOTH Python URL fields to this session's slot database. In test mode
+   # Python prefers TEST_DATABASE_URL over DATABASE_URL, and the tracked
+   # .env.test otherwise forces :5437 regardless of your slot (issue #5119).
+   export E2E_TEST_DB_URL="postgresql+asyncpg://postgres:postgres@localhost:$((5437+N))/comic_pile_test"
    SECRET_KEY=test-secret-key-for-testing-only TEST_ENVIRONMENT=true AUTO_BACKUP_ENABLED=false \
-     DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:$((5437+N))/comic_pile_test \
+     DATABASE_URL="${E2E_TEST_DB_URL}" TEST_DATABASE_URL="${E2E_TEST_DB_URL}" \
      nohup .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port "${E2E_BACKEND_PORT}" \
      > "/tmp/backend-${E2E_BACKEND_PORT}.log" 2>&1 &
    curl -fsS "${BASE_URL}/health"
    ```
 
    All Playwright configs read `BASE_URL` (fallback `http://127.0.0.1:9000`), so the export
-   is what steers the suite to this session's backend.
+   is what steers the suite to this session's backend. When you also run the native v2
+   ingress locally, set `RUST_ROLL_DATABASE_URL` to that same slot database so the two
+   runtimes share fixtures; the CI workflow pins all three URLs for you.
 
    uvicorn has no `--reload`: after any backend edit or rebase, kill the old process and
    restart it, or you are testing stale code.
@@ -105,10 +111,10 @@ didn't) before an assertion.
 
 ## Changing the lane itself
 
-- Inventory edits: keep `tests/test_e2e_behavior_inventory.py` green; every covered behavior
+- Inventory edits: keep `tests/test_e2e_behavior_inventory.py` green; every covered behavior <!-- docs-path-check: ignore -->
   needs real spec mappings or it is skipped silently — check `selection.json`'s
   `unmapped_specs` and `skipped_behaviors`.
-- Selector/config/workflow edits: `tests/test_e2e_regression_select.py`, validate the workflow
+- Selector/config/workflow edits: `tests/test_e2e_regression_select.py`, validate the workflow <!-- docs-path-check: ignore -->
   YAML, and verify the step-summary failure walker against a real `results.json` (it must walk
   `suites[].specs[].tests[]`, not `suite.tests`).
 - After any such change, re-run `--list` for every scope plus one real `p0` run end-to-end.

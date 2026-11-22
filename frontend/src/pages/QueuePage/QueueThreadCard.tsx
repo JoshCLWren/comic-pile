@@ -14,6 +14,7 @@ import QueueThreadActions from './QueueThreadActions'
 import QueueMappingHealthIndicator from './QueueMappingHealthIndicator'
 import QueueMapSeriesDialog from '../../components/QueueMapSeriesDialog'
 import QueueNextIssueCard from './QueueNextIssueCard'
+import { ComicIssueCover } from '../../components/ComicIssueCard'
 
 interface QueueThreadCardProps {
   thread: ThreadListItem
@@ -209,6 +210,14 @@ export default function QueueThreadCard({
             #{thread.queue_position ?? index + 1}
           </span>
         </div>
+        <ComicIssueCover
+          coverImageUrl={thread.series_cover_image_url ?? null}
+          threadTitle={thread.title}
+          issueNumber=""
+          variant="compact"
+          testId="queue-thread-series-cover"
+          placeholderTestId="queue-thread-series-cover-placeholder"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <button

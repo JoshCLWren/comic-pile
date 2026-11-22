@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RollRecoveryCard } from '../pages/RollPage/components/RollRecoveryCard'
 import type { RollRecoveryInfo } from '../types/rollBootstrap'
+import { issueCardsApi } from '../services/issueCardsApi'
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 const recovery: RollRecoveryInfo = {
   original_thread_id: 10,
@@ -47,7 +49,7 @@ describe('RollRecoveryCard mobile', () => {
     expect(screen.getByText('Alternate readable prerequisite #3')).toBeVisible()
     expect(screen.getByText('Recommended first')).toBeVisible()
 
-    const readNowButtons = screen.getAllByRole('button')
+    const readNowButtons = screen.getAllByRole('button', { name: /Read now/ })
     expect(readNowButtons).toHaveLength(2)
     fireEvent.click(readNowButtons[0])
     expect(onReadNow).toHaveBeenCalledWith(recovery.readable_prerequisites[0])
@@ -65,7 +67,7 @@ describe('RollRecoveryCard mobile', () => {
     const onReadNow = vi.fn()
     render(<RollRecoveryCard recovery={recovery} onReadNow={onReadNow} />)
 
-    const readNowRows = screen.getAllByRole('button')
+    const readNowRows = screen.getAllByRole('button', { name: /Read now/ })
     expect(readNowRows).toHaveLength(2)
     for (const row of readNowRows) {
       expect(row).toHaveClass('flex-col')

@@ -34,7 +34,7 @@ it('lists reading orders through the shared API client', async () => {
     reading_orders: [{ id: 1, name: 'Alpha', description: null, total_items: 0 }],
   })
 
-  expect(client.get).toHaveBeenCalledWith('/v1/reading-orders/')
+  expect(client.get).toHaveBeenCalledWith('/v2/reading-orders/')
 })
 
 it('previews a projection with the plan id and selected reading order', async () => {
@@ -54,7 +54,7 @@ it('confirms a projection with the plan id and selected reading order', async ()
   await expect(readingOrdersApi.confirmProjection(9, 3)).resolves.toMatchObject({ plan_id: 9, added_count: 2 })
 
   expect(client.post).toHaveBeenCalledWith(
-    '/v1/continuity-plans/9/reading-orders/project',
+    '/v2/continuity-plans/9/reading-orders/project',
     { reading_order_id: 3 },
   )
 })
@@ -72,7 +72,7 @@ it('inserts an item at a position within a reading order', async () => {
 
   expect(result).toEqual(response)
   expect(client.post).toHaveBeenCalledWith(
-    '/v1/reading-orders/1/items',
+    '/v2/reading-orders/1/items',
     { thread_id: 7, position: 3 },
   )
 })
@@ -99,7 +99,7 @@ it('adopts a legacy reading order into a canonical plan with all optional overri
 
   expect(result).toEqual(plan)
   expect(client.post).toHaveBeenCalledWith(
-    '/v1/continuity-plans/from-reading-order',
+    '/v2/continuity-plans/from-reading-order',
     {
       reading_order_id: 5,
       plan_name: 'Custom Plan',
@@ -126,7 +126,7 @@ it('adopts a reading order using schema defaults when optional fields are omitte
 
   expect(result).toEqual(plan)
   expect(client.post).toHaveBeenCalledWith(
-    '/v1/continuity-plans/from-reading-order',
+    '/v2/continuity-plans/from-reading-order',
     {
       reading_order_id: 9,
       plan_name: null,

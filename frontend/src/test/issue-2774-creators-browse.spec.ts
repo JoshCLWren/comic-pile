@@ -8,7 +8,7 @@
  * 2. The default view renders personal name, average, rating count, and compact
  *    roles from the bounded #2775 discovery contract.
  * 3. Name search and alphabetical/most-rated/personal-average ordering are
- *    server-side requests against `/api/v1/creators`, never client-side work.
+ *    server-side requests against `/api/v2/creators`, never client-side work.
  * 4. Load more appends a later page without dropping or duplicating rows.
  * 5. Two distinct canonical creators sharing a display name stay separate rows
  *    with separate detail links, and a row opens the existing creator detail
@@ -85,7 +85,7 @@ async function installCreatorsList(
 ) {
   const requests: URLSearchParams[] = []
   await page.route(
-    (url) => url.pathname === '/api/v1/creators',
+    (url) => url.pathname === '/api/v2/creators',
     async (route: Route) => {
       const params = new URL(route.request().url()).searchParams
       requests.push(params)
@@ -97,7 +97,7 @@ async function installCreatorsList(
 
 async function installCreatorsDetail(page: Page) {
   await page.route(
-    (url) => url.pathname.startsWith('/api/v1/creators/'),
+    (url) => url.pathname.startsWith('/api/v2/creators/'),
     (route) =>
       route.fulfill({
         json: {

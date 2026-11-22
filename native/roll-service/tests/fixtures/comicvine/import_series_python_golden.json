@@ -1,0 +1,1088 @@
+{
+  "cases": [
+    {
+      "actor": "owner",
+      "body": {
+        "already_read_count": 1,
+        "comicvine_volume_id": 4242
+      },
+      "key": true,
+      "name": "creates_thread_marks_first_read",
+      "provider": {
+        "roster": [
+          {
+            "id": 424201,
+            "issue_number": "1",
+            "name": "Issue 1",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-424201/",
+            "volume": {
+              "id": 4242,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 424202,
+            "issue_number": "2",
+            "name": "Issue 2",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-424202/",
+            "volume": {
+              "id": 4242,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 424203,
+            "issue_number": "3",
+            "name": "Issue 3",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-424203/",
+            "volume": {
+              "id": 4242,
+              "name": "Volume"
+            }
+          }
+        ],
+        "volume": {
+          "results": {
+            "id": 4242,
+            "name": "The Series"
+          }
+        }
+      },
+      "response": {
+        "comicvine_volume_id": 4242,
+        "issue_results": [
+          {
+            "comicvine_issue_id": 424201,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "1",
+            "outcome": "created"
+          },
+          {
+            "comicvine_issue_id": 424202,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "2",
+            "outcome": "created"
+          },
+          {
+            "comicvine_issue_id": 424203,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "3",
+            "outcome": "created"
+          }
+        ],
+        "issues_adopted": 3,
+        "issues_conflict": 0,
+        "issues_skipped": 0,
+        "position": null,
+        "reading_order_id": null,
+        "series_name": "The Series",
+        "thread_created": true,
+        "thread_id": "<thread_id>",
+        "total_issues_in_series": 3,
+        "total_items": null
+      },
+      "status": 201,
+      "stored": {
+        "created_events": 3,
+        "issues": [
+          "1|1|read",
+          "2|2|unread",
+          "3|3|unread"
+        ],
+        "issues_remaining": 2,
+        "next_unread_position": 2,
+        "order_threads": [
+          "$a",
+          "$b"
+        ],
+        "reading_progress": "in_progress",
+        "series_mappings": 1,
+        "status": "active",
+        "title": "The Series",
+        "total_issues": 3
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": 4242
+      },
+      "key": true,
+      "name": "retry_reuses_thread_and_adopts_new_issue",
+      "provider": {
+        "roster": [
+          {
+            "id": 424201,
+            "issue_number": "1",
+            "name": "Issue 1",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-424201/",
+            "volume": {
+              "id": 4242,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 424202,
+            "issue_number": "2",
+            "name": "Issue 2",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-424202/",
+            "volume": {
+              "id": 4242,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 424203,
+            "issue_number": "3",
+            "name": "Issue 3",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-424203/",
+            "volume": {
+              "id": 4242,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 424204,
+            "issue_number": "4",
+            "name": "Issue 4",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-424204/",
+            "volume": {
+              "id": 4242,
+              "name": "Volume"
+            }
+          }
+        ],
+        "volume": {
+          "results": {
+            "id": 4242,
+            "name": "The Series"
+          }
+        }
+      },
+      "response": {
+        "comicvine_volume_id": 4242,
+        "issue_results": [
+          {
+            "comicvine_issue_id": 424201,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "1",
+            "outcome": "reused"
+          },
+          {
+            "comicvine_issue_id": 424202,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "2",
+            "outcome": "reused"
+          },
+          {
+            "comicvine_issue_id": 424203,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "3",
+            "outcome": "reused"
+          },
+          {
+            "comicvine_issue_id": 424204,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "4",
+            "outcome": "created"
+          }
+        ],
+        "issues_adopted": 1,
+        "issues_conflict": 0,
+        "issues_skipped": 3,
+        "position": null,
+        "reading_order_id": null,
+        "series_name": "The Series",
+        "thread_created": false,
+        "thread_id": "<thread_id>",
+        "total_issues_in_series": 4,
+        "total_items": null
+      },
+      "status": 201,
+      "stored": {
+        "created_events": 4,
+        "issues": [
+          "1|1|read",
+          "2|2|unread",
+          "3|3|unread",
+          "4|4|unread"
+        ],
+        "issues_remaining": 3,
+        "next_unread_position": 2,
+        "order_threads": [
+          "$a",
+          "$b"
+        ],
+        "reading_progress": "in_progress",
+        "series_mappings": 1,
+        "status": "active",
+        "title": "The Series",
+        "total_issues": 4
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "already_read_count": 2,
+        "comicvine_volume_id": 77
+      },
+      "key": true,
+      "name": "irregular_numbers_natural_order",
+      "provider": {
+        "roster": [
+          {
+            "id": 7701,
+            "issue_number": "10",
+            "name": "Issue 10",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-7701/",
+            "volume": {
+              "id": 77,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 7702,
+            "issue_number": "2",
+            "name": "Issue 2",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-7702/",
+            "volume": {
+              "id": 77,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 7703,
+            "issue_number": "1.5",
+            "name": "Issue 1.5",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-7703/",
+            "volume": {
+              "id": 77,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 7704,
+            "issue_number": "Annual 1",
+            "name": "Issue Annual 1",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-7704/",
+            "volume": {
+              "id": 77,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 7705,
+            "issue_number": null,
+            "name": "Issue None",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-7705/",
+            "volume": {
+              "id": 77,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 7706,
+            "issue_number": "1",
+            "name": "Issue 1",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-7706/",
+            "volume": {
+              "id": 77,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 7707,
+            "issue_number": "2",
+            "name": "Issue 2",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-7707/",
+            "volume": {
+              "id": 77,
+              "name": "Volume"
+            }
+          }
+        ],
+        "volume": {
+          "results": {
+            "id": 77,
+            "name": "  Irregular  "
+          }
+        }
+      },
+      "response": {
+        "comicvine_volume_id": 77,
+        "issue_results": [
+          {
+            "comicvine_issue_id": 7701,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "10",
+            "outcome": "created"
+          },
+          {
+            "comicvine_issue_id": 7702,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "2",
+            "outcome": "created"
+          },
+          {
+            "comicvine_issue_id": 7703,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "1.5",
+            "outcome": "created"
+          },
+          {
+            "comicvine_issue_id": 7704,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "Annual 1",
+            "outcome": "created"
+          },
+          {
+            "comicvine_issue_id": 7705,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "5",
+            "outcome": "created"
+          },
+          {
+            "comicvine_issue_id": 7706,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "1",
+            "outcome": "created"
+          },
+          {
+            "comicvine_issue_id": 7707,
+            "conflict_detail": "issue already has a confirmed comicvine identity",
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "2",
+            "outcome": "conflict"
+          }
+        ],
+        "issues_adopted": 6,
+        "issues_conflict": 1,
+        "issues_skipped": 0,
+        "position": null,
+        "reading_order_id": null,
+        "series_name": "  Irregular  ",
+        "thread_created": true,
+        "thread_id": "<thread_id>",
+        "total_issues_in_series": 7,
+        "total_items": null
+      },
+      "status": 201,
+      "stored": {
+        "created_events": 6,
+        "issues": [
+          "1|1|read",
+          "2|2|read",
+          "5|3|unread",
+          "10|4|unread",
+          "1.5|5|unread",
+          "Annual 1|6|unread"
+        ],
+        "issues_remaining": 4,
+        "next_unread_position": 3,
+        "order_threads": [
+          "$a",
+          "$b"
+        ],
+        "reading_progress": "in_progress",
+        "series_mappings": 1,
+        "status": "active",
+        "title": "Irregular",
+        "total_issues": 6
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": 51
+      },
+      "key": true,
+      "name": "conflict_with_issue_confirmed_elsewhere",
+      "provider": {
+        "roster": [
+          {
+            "id": 424201,
+            "issue_number": "1",
+            "name": "Issue 1",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-424201/",
+            "volume": {
+              "id": 51,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 5102,
+            "issue_number": "2",
+            "name": "Issue 2",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-5102/",
+            "volume": {
+              "id": 51,
+              "name": "Volume"
+            }
+          }
+        ],
+        "volume": {
+          "results": {
+            "id": 51,
+            "name": "Second"
+          }
+        }
+      },
+      "response": {
+        "comicvine_volume_id": 51,
+        "issue_results": [
+          {
+            "comicvine_issue_id": 424201,
+            "conflict_detail": "ComicVine issue 424201 is already confirmed on issue <issue_id> of thread <thread_id>",
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "1",
+            "outcome": "conflict"
+          },
+          {
+            "comicvine_issue_id": 5102,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "2",
+            "outcome": "created"
+          }
+        ],
+        "issues_adopted": 1,
+        "issues_conflict": 1,
+        "issues_skipped": 0,
+        "position": null,
+        "reading_order_id": null,
+        "series_name": "Second",
+        "thread_created": true,
+        "thread_id": "<thread_id>",
+        "total_issues_in_series": 2,
+        "total_items": null
+      },
+      "status": 201,
+      "stored": {
+        "created_events": 1,
+        "issues": [
+          "2|1|unread"
+        ],
+        "issues_remaining": 1,
+        "next_unread_position": 1,
+        "order_threads": [
+          "$a",
+          "$b"
+        ],
+        "reading_progress": "not_started",
+        "series_mappings": 1,
+        "status": "active",
+        "title": "Second",
+        "total_issues": 1
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "anchor_before_thread_id": "$a",
+        "comicvine_volume_id": 61,
+        "reading_order_id": "$order"
+      },
+      "key": true,
+      "name": "into_reading_order",
+      "provider": {
+        "roster": [
+          {
+            "id": 6101,
+            "issue_number": "1",
+            "name": "Issue 1",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-6101/",
+            "volume": {
+              "id": 61,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 6102,
+            "issue_number": "2",
+            "name": "Issue 2",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-6102/",
+            "volume": {
+              "id": 61,
+              "name": "Volume"
+            }
+          }
+        ],
+        "volume": {
+          "results": {
+            "id": 61,
+            "name": "Ordered"
+          }
+        }
+      },
+      "response": {
+        "comicvine_volume_id": 61,
+        "issue_results": [
+          {
+            "comicvine_issue_id": 6101,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "1",
+            "outcome": "created"
+          },
+          {
+            "comicvine_issue_id": 6102,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "2",
+            "outcome": "created"
+          }
+        ],
+        "issues_adopted": 2,
+        "issues_conflict": 0,
+        "issues_skipped": 0,
+        "position": 2,
+        "reading_order_id": "$order",
+        "series_name": "Ordered",
+        "thread_created": true,
+        "thread_id": "<thread_id>",
+        "total_issues_in_series": 2,
+        "total_items": 3
+      },
+      "status": 201,
+      "stored": {
+        "created_events": 2,
+        "issues": [
+          "1|1|unread",
+          "2|2|unread"
+        ],
+        "issues_remaining": 2,
+        "next_unread_position": 1,
+        "order_threads": [
+          "$a",
+          "$new",
+          "$b"
+        ],
+        "reading_progress": "not_started",
+        "series_mappings": 1,
+        "status": "active",
+        "title": "Ordered",
+        "total_issues": 2
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "anchor_after_thread_id": "$a",
+        "comicvine_volume_id": 61,
+        "reading_order_id": "$order"
+      },
+      "key": true,
+      "name": "into_reading_order_retry_does_not_overcount",
+      "provider": {
+        "roster": [
+          {
+            "id": 6101,
+            "issue_number": "1",
+            "name": "Issue 1",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-6101/",
+            "volume": {
+              "id": 61,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 6102,
+            "issue_number": "2",
+            "name": "Issue 2",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-6102/",
+            "volume": {
+              "id": 61,
+              "name": "Volume"
+            }
+          }
+        ],
+        "volume": {
+          "results": {
+            "id": 61,
+            "name": "Ordered"
+          }
+        }
+      },
+      "response": {
+        "comicvine_volume_id": 61,
+        "issue_results": [
+          {
+            "comicvine_issue_id": 6101,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "1",
+            "outcome": "reused"
+          },
+          {
+            "comicvine_issue_id": 6102,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "2",
+            "outcome": "reused"
+          }
+        ],
+        "issues_adopted": 0,
+        "issues_conflict": 0,
+        "issues_skipped": 2,
+        "position": 1,
+        "reading_order_id": "$order",
+        "series_name": "Ordered",
+        "thread_created": false,
+        "thread_id": "<thread_id>",
+        "total_issues_in_series": 2,
+        "total_items": 4
+      },
+      "status": 201,
+      "stored": {
+        "created_events": 2,
+        "issues": [
+          "1|1|unread",
+          "2|2|unread"
+        ],
+        "issues_remaining": 2,
+        "next_unread_position": 1,
+        "order_threads": [
+          "$new",
+          "$new",
+          "$a",
+          "$b"
+        ],
+        "reading_progress": "not_started",
+        "series_mappings": 1,
+        "status": "active",
+        "title": "Ordered",
+        "total_issues": 2
+      }
+    },
+    {
+      "actor": "other",
+      "body": {
+        "comicvine_volume_id": 62,
+        "reading_order_id": "$order"
+      },
+      "key": true,
+      "name": "foreign_reading_order",
+      "provider": {
+        "roster": [
+          {
+            "id": 6201,
+            "issue_number": "1",
+            "name": "Issue 1",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-6201/",
+            "volume": {
+              "id": 62,
+              "name": "Volume"
+            }
+          }
+        ],
+        "volume": {
+          "results": {
+            "id": 62,
+            "name": "Theirs"
+          }
+        }
+      },
+      "response": {
+        "detail": "Reading order <reading_order_id> not found"
+      },
+      "status": 404,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "already_read_count": 3,
+        "comicvine_volume_id": 63
+      },
+      "key": true,
+      "name": "already_read_count_beyond_roster",
+      "provider": {
+        "roster": [
+          {
+            "id": 6301,
+            "issue_number": "1",
+            "name": "Issue 1",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-6301/",
+            "volume": {
+              "id": 63,
+              "name": "Volume"
+            }
+          },
+          {
+            "id": 6302,
+            "issue_number": "2",
+            "name": "Issue 2",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-6302/",
+            "volume": {
+              "id": 63,
+              "name": "Volume"
+            }
+          }
+        ],
+        "volume": {
+          "results": {
+            "id": 63,
+            "name": "Short"
+          }
+        }
+      },
+      "response": {
+        "detail": {
+          "code": "invalid_already_read_count",
+          "message": "already_read_count cannot exceed the series issue count (2)"
+        }
+      },
+      "status": 400,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": 64
+      },
+      "key": true,
+      "name": "empty_roster",
+      "provider": {
+        "roster": [],
+        "volume": {
+          "results": {
+            "id": 64,
+            "name": "Empty"
+          }
+        }
+      },
+      "response": {
+        "detail": {
+          "code": "no_issues",
+          "message": "ComicVine series has no issues"
+        }
+      },
+      "status": 400,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": 65
+      },
+      "key": true,
+      "name": "volume_without_name",
+      "provider": {
+        "volume": {
+          "results": {
+            "id": 65,
+            "name": "  "
+          }
+        }
+      },
+      "response": {
+        "detail": {
+          "code": "provider_failure",
+          "message": "ComicVine series has no name"
+        }
+      },
+      "status": 502,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": 66
+      },
+      "key": true,
+      "name": "volume_results_not_object",
+      "provider": {
+        "volume": {
+          "results": []
+        }
+      },
+      "response": {
+        "detail": {
+          "code": "provider_failure",
+          "message": "ComicVine series response did not contain valid data"
+        }
+      },
+      "status": 502,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": 67
+      },
+      "key": true,
+      "name": "volume_fetch_fails",
+      "provider": {
+        "volume": "error"
+      },
+      "response": {
+        "detail": {
+          "code": "provider_failure",
+          "message": "Failed to fetch ComicVine series: ComicVineError"
+        }
+      },
+      "status": 502,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": 68
+      },
+      "key": true,
+      "name": "roster_fetch_fails",
+      "provider": {
+        "roster": "error",
+        "volume": {
+          "results": {
+            "id": 68,
+            "name": "No roster"
+          }
+        }
+      },
+      "response": {
+        "detail": {
+          "code": "provider_failure",
+          "message": "Failed to fetch series issues: ComicVineError"
+        }
+      },
+      "status": 502,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": 69
+      },
+      "key": false,
+      "name": "provider_not_configured",
+      "provider": null,
+      "response": {
+        "detail": {
+          "code": "provider_unavailable",
+          "message": "ComicVine is not configured on this server"
+        }
+      },
+      "status": 503,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": "70"
+      },
+      "key": true,
+      "name": "lax_string_volume_id",
+      "provider": {
+        "roster": [
+          {
+            "id": 7001,
+            "issue_number": "1",
+            "name": "Issue 1",
+            "site_detail_url": "https://comicvine.gamespot.com/issue/4000-7001/",
+            "volume": {
+              "id": 70,
+              "name": "Volume"
+            }
+          }
+        ],
+        "volume": {
+          "results": {
+            "id": 70,
+            "name": "Lax"
+          }
+        }
+      },
+      "response": {
+        "comicvine_volume_id": 70,
+        "issue_results": [
+          {
+            "comicvine_issue_id": 7001,
+            "conflict_detail": null,
+            "hydration": "not_attempted",
+            "issue_id": "<issue_id>",
+            "issue_number": "1",
+            "outcome": "created"
+          }
+        ],
+        "issues_adopted": 1,
+        "issues_conflict": 0,
+        "issues_skipped": 0,
+        "position": null,
+        "reading_order_id": null,
+        "series_name": "Lax",
+        "thread_created": true,
+        "thread_id": "<thread_id>",
+        "total_issues_in_series": 1,
+        "total_items": null
+      },
+      "status": 201,
+      "stored": {
+        "created_events": 1,
+        "issues": [
+          "1|1|unread"
+        ],
+        "issues_remaining": 1,
+        "next_unread_position": 1,
+        "order_threads": [
+          "<other>",
+          "<other>",
+          "$a",
+          "$b"
+        ],
+        "reading_progress": "not_started",
+        "series_mappings": 1,
+        "status": "active",
+        "title": "Lax",
+        "total_issues": 1
+      }
+    },
+    {
+      "actor": "owner",
+      "body": {},
+      "key": true,
+      "name": "missing_volume_id",
+      "provider": null,
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": 0
+      },
+      "key": true,
+      "name": "zero_volume_id",
+      "provider": null,
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": "x"
+      },
+      "key": true,
+      "name": "text_volume_id",
+      "provider": null,
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "already_read_count": -1,
+        "comicvine_volume_id": 1
+      },
+      "key": true,
+      "name": "negative_already_read",
+      "provider": null,
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "comicvine_volume_id": 1,
+        "reading_order_id": 0
+      },
+      "key": true,
+      "name": "zero_reading_order",
+      "provider": null,
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "owner",
+      "body": {
+        "anchor_before_thread_id": 1.5,
+        "comicvine_volume_id": 1
+      },
+      "key": true,
+      "name": "fractional_anchor",
+      "provider": null,
+      "response": {
+        "detail": "Validation failed"
+      },
+      "status": 422,
+      "stored": null
+    },
+    {
+      "actor": "anon",
+      "body": {
+        "comicvine_volume_id": 1
+      },
+      "key": true,
+      "name": "unauthenticated",
+      "provider": null,
+      "response": {
+        "detail": "Not authenticated"
+      },
+      "status": 401,
+      "stored": null
+    },
+    {
+      "actor": "nocsrf",
+      "body": {
+        "comicvine_volume_id": 1
+      },
+      "key": true,
+      "name": "missing_csrf",
+      "provider": null,
+      "response": {
+        "detail": "CSRF token missing or invalid"
+      },
+      "status": 403,
+      "stored": null
+    }
+  ],
+  "source": "Captured from the frozen Python handler app/api/comicvine_resolution.py::api_import_series (httpx ASGI client, production error handlers, fake ComicVineClient returning the case provider payloads, disposable local Postgres) before its retirement (#4835)."
+}

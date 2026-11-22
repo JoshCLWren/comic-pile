@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import PositionMenu from '../components/PositionMenu'
 import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
-import { PositionMenuProvider } from '../contexts/PositionMenuContext'
+import { PositionMenuProvider } from '../contexts/PositionMenuProvider'
 
 function render(ui: React.ReactElement) {
   return baseRender(<PositionMenuProvider>{ui}</PositionMenuProvider>)

@@ -17,7 +17,7 @@ import {
   useQueueThreads,
   useShuffleQueue,
 } from '../hooks/useQueue'
-import { useSession } from '../hooks/useSession'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { useSnooze } from '../hooks/useSnooze'
@@ -26,6 +26,13 @@ import { issueDependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import type { IssueListResponse, ThreadListItem } from '../types'
+
+vi.mock('../hooks/useCompletedThreads', () => ({
+  useCompletedThreads: vi.fn(() => ({
+    threads: [], hasNextPage: false, isLoadingMore: false, isError: false,
+    loadMore: vi.fn(), retry: vi.fn(),
+  })),
+}))
 
 vi.mock('../hooks/useThread', () => ({
   useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
@@ -38,6 +45,7 @@ vi.mock('../hooks/useThread', () => ({
 vi.mock('../hooks/useQueue', () => ({
   useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
   useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
+  useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToPosition: vi.fn(),
@@ -45,8 +53,8 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useSession', () => ({
-  useSession: vi.fn(),
+vi.mock('../hooks/useRollBootstrap', () => ({
+  useRollBootstrap: vi.fn(),
 }))
 
 vi.mock('../hooks/useSnooze', () => ({
@@ -122,7 +130,7 @@ const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseSession = vi.mocked(useSession) as any
+const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
@@ -214,7 +222,7 @@ beforeEach(() => {
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseSession.mockReturnValue({
+  mockedUseRollBootstrap.mockReturnValue({
     data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
     refetch: vi.fn(),
   })

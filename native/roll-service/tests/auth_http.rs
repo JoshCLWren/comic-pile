@@ -9,7 +9,9 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{auth::BackgroundTasks, config::Config, router, AppState};
+use comicpile_roll_service::{
+    auth::BackgroundTasks, config::Config, router, test_support, AppState,
+};
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
@@ -31,18 +33,15 @@ async fn database() -> (Arc<AppState>, tokio::sync::MutexGuard<'static, ()>) {
 }
 
 fn state(url: &str) -> Arc<AppState> {
-    Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.into()),
-                "RUST_ROLL_JWT_SECRET" => Some(SECRET.into()),
-                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.into()),
+            "RUST_ROLL_JWT_SECRET" => Some(SECRET.into()),
+            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            _ => None,
+        })
         .unwrap(),
-    )
+    ))
 }
 
 fn post(path: &str, body: Value) -> Request<Body> {

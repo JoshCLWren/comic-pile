@@ -4,8 +4,8 @@
 //! Preserves the Python `app/api/reading_orders.py` wire contract at the same
 //! HTTP methods and exact paths:
 //!
-//! * `GET /api/v1/reading-orders/`
-//! * `POST /api/v1/reading-orders/{reading_order_id}/items`
+//! * `GET /api/v2/reading-orders/`
+//! * `POST /api/v2/reading-orders/{reading_order_id}/items`
 //!
 //! Only the implementation moves from Python FastAPI to the native Roll
 //! binary. No frontend URL changes; Python handlers remain mounted until
@@ -102,7 +102,7 @@ fn unprocessable(detail: impl Into<String>) -> ApiError {
     ApiError::Unprocessable(detail.into())
 }
 
-/// Serve `GET /api/v1/reading-orders/`.
+/// Serve `GET /api/v2/reading-orders/`.
 pub async fn list_reading_orders(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -161,7 +161,7 @@ fn apply_insert(items: &mut [ItemRow], thread_id: i32, target_pos: i32) {
     }
 }
 
-/// Serve `POST /api/v1/reading-orders/{reading_order_id}/items`.
+/// Serve `POST /api/v2/reading-orders/{reading_order_id}/items`.
 pub async fn insert_reading_order_item(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -271,7 +271,7 @@ async fn insert_item_inner(
 /// Documentation-only operation for the list handler.
 #[utoipa::path(
     get,
-    path = "/api/v1/reading-orders/",
+    path = "/api/v2/reading-orders/",
     tag = "reading-orders",
     operation_id = "reading_orders_list",
     responses(
@@ -287,7 +287,7 @@ pub fn list_reading_orders_documentation() {}
 /// Documentation-only operation for the insert handler.
 #[utoipa::path(
     post,
-    path = "/api/v1/reading-orders/{reading_order_id}/items",
+    path = "/api/v2/reading-orders/{reading_order_id}/items",
     tag = "reading-orders",
     operation_id = "reading_orders_insert_item",
     request_body = InsertReadingOrderItemRequest,

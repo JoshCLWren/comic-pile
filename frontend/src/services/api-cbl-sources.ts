@@ -359,7 +359,7 @@ export function createCblSourcesApi(client: HttpClient) {
       choices: CBLAdoptionPlanChoices,
     ) =>
       client.post<CBLAdoptionCommitResult>(
-        `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
+        `/v2/reading-lists/${listId}/reading-plans/${planId}/adoption-commits`,
         commitPayload(preview, choices),
       ),
     /**
@@ -373,7 +373,7 @@ export function createCblSourcesApi(client: HttpClient) {
       choices: CBLAdoptionPlanChoices,
     ) =>
       client.post<CBLAdoptionCommitResult>(
-        `/v1/cbl/${listId}/adoption-commit`,
+        `/v2/reading-lists/${listId}/adoption-commits`,
         commitPayload(preview, choices),
         { timeout: 60_000 },
       ),

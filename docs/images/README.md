@@ -5,7 +5,7 @@
 The README hero: a screenshot of the Comic Pile **Roll** page.
 
 - **Source data:** the deterministic local demo library created by `make setup`
-  (`scripts/seed_dev_db.py`): the `testuser` account with the Superman, Batman, Wonder Woman,
+  (`scripts/seed_dev_db.py`): the `testuser` account with the Superman, Batman, Wonder Woman, <!-- docs-path-check: ignore -->
   The Flash, and Aquaman series. No production library, personal collection, or real cover art
   was photographed.
 - **Capture date:** 2026-10-23.

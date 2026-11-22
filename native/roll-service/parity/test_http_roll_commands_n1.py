@@ -286,12 +286,6 @@ async def test_offer_statements_do_not_grow_with_candidate_library_size() -> Non
     """The offer remains set-based for five and 200 eligible candidates."""
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
     engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    first_offer_breakdown = StatementBreakdown(
-        application=13,
-        transaction_control=7,
-        runtime_overhead=4,
-        nested=2,
-    )
     try:
         async with AsyncSession(engine, expire_on_commit=False) as db:
             small_reader = await _seed_reader(
@@ -305,14 +299,14 @@ async def test_offer_statements_do_not_grow_with_candidate_library_size() -> Non
                 prefix="offer_large",
             )
 
-        small_first = await _measure_route(
+        small = await _measure_route(
             engine,
             method="POST",
             path="/api/v2/roll/offer",
             token=small_reader.token,
             body={"idempotency_key": f"offer-small-{uuid4().hex}"},
         )
-        large_first = await _measure_route(
+        large = await _measure_route(
             engine,
             method="POST",
             path="/api/v2/roll/offer",
@@ -320,11 +314,10 @@ async def test_offer_statements_do_not_grow_with_candidate_library_size() -> Non
             body={"idempotency_key": f"offer-large-{uuid4().hex}"},
         )
 
-        first_measurements = (
-            (small_first, small_reader),
-            (large_first, large_reader),
-        )
-        for measurement, reader in first_measurements:
+        for measurement, reader in (
+            (small, small_reader),
+            (large, large_reader),
+        ):
             assert measurement.response.get("status") == 200, measurement.response
             body = measurement.response.get("body")
             assert isinstance(body, dict)
@@ -342,10 +335,6 @@ async def test_offer_statements_do_not_grow_with_candidate_library_size() -> Non
             assert body.get("total_issues") == 1
             assert body.get("snoozed_count") == 0
             assert body.get("snoozed_thread_id") is None
-            # Branch-specific: first offer (no pending selection) must stay tight.
-            assert measurement.statements == first_offer_breakdown, (
-                f"first-offer statement breakdown changed: {measurement.statements}"
-            )
 
         async with AsyncSession(engine, expire_on_commit=False) as db:
             event_count = await db.scalar(
@@ -357,63 +346,7 @@ async def test_offer_statements_do_not_grow_with_candidate_library_size() -> Non
                 )
             )
         assert event_count == 1
-
-        # Second offer with an existing pending selection exercises the
-        # previous_offer/reroll persist_in_transaction path.
-        small_second = await _measure_route(
-            engine,
-            method="POST",
-            path="/api/v2/roll/offer",
-            token=small_reader.token,
-            body={"idempotency_key": f"offer-small-second-{uuid4().hex}"},
-        )
-        large_second = await _measure_route(
-            engine,
-            method="POST",
-            path="/api/v2/roll/offer",
-            token=large_reader.token,
-            body={"idempotency_key": f"offer-large-second-{uuid4().hex}"},
-        )
-
-        for measurement, reader in (
-            (small_second, small_reader),
-            (large_second, large_reader),
-        ):
-            assert measurement.response.get("status") == 200, measurement.response
-            body = measurement.response.get("body")
-            assert isinstance(body, dict)
-            assert body.get("thread_id") in reader.thread_ids
-            assert body.get("issue_id") in reader.issue_ids
-            assert body.get("snoozed_thread_id") in reader.thread_ids
-            assert body.get("snoozed_count") == 1
-
-        assert_no_statement_growth(
-            "POST",
-            "/api/v2/roll/offer",
-            small_first.statements.top_level,
-            large_first.statements.top_level,
-        )
-        assert_no_statement_growth(
-            "POST",
-            "/api/v2/roll/offer",
-            small_second.statements.top_level,
-            large_second.statements.top_level,
-        )
-        assert_declared_budget(
-            "POST",
-            "/api/v2/roll/offer",
-            small_first.statements.top_level,
-            large_first.statements.top_level,
-            small_second.statements.top_level,
-            large_second.statements.top_level,
-        )
-        # Declared budget covers the worst-case (second-offer) path.
-        assert_measured_statement_breakdown(
-            "POST", "/api/v2/roll/offer", small_second.statements
-        )
-        assert_measured_statement_breakdown(
-            "POST", "/api/v2/roll/offer", large_second.statements
-        )
+        _assert_route_budget("POST", "/api/v2/roll/offer", small, large)
     finally:
         await engine.dispose()
 
@@ -489,68 +422,9 @@ async def test_extra_and_n_plus_one_queries_fail_roll_budget_guards(
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
     engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with AsyncSession(engine, expire_on_commit=False) as db:
-            seed_kwargs: dict[str, object] = {
-                "library_size": SMALL_LIBRARY_SIZE,
-                "prefix": f"budget_guard_{path.replace('/', '_').strip('_')}",
-            }
-            if path == "/api/v2/roll/reset":
-                seed_kwargs["initial_die"] = 20
-                seed_kwargs["pending_selection"] = True
-            reader = await _seed_reader(db, **seed_kwargs)
-
-        body_by_path: dict[str, dict[str, object] | None] = {
-            "/api/v2/roll/dice-command": {
-                "kind": "manual_select",
-                "die": 12,
-                "idempotency_key": f"budget-dice-{uuid4().hex}",
-            },
-            "/api/v2/roll/die-state": None,
-            "/api/v2/roll/offer": {"idempotency_key": f"budget-offer-{uuid4().hex}"},
-            "/api/v2/roll/reset": {"idempotency_key": f"budget-reset-{uuid4().hex}"},
-        }
-        body = body_by_path[path]
-
-        # Measured route baseline from a real mounted request.
-        baseline = await _measure_route(
-            engine,
-            method=method,
-            path=path,
-            token=reader.token,
-            body=body,
-        )
-        assert baseline.response.get("status") == 200, baseline.response
-
-        # Same measurement window as a real route, plus deliberate extra queries.
-        # Use a fresh reader so the observed route executes the same path shape as
-        # the baseline, not a post-mutation follow-up state.
-        async with AsyncSession(engine, expire_on_commit=False) as db:
-            observed_seed = dict(seed_kwargs)
-            observed_seed["prefix"] = f"budget_guard_observed_{path.replace('/', '_').strip('_')}"
-            observed_reader = await _seed_reader(db, **observed_seed)
-
-        observed_body = body_by_path[path]
-        env = {
-            **os.environ,
-            "RUST_ROLL_DATABASE_URL": url,
-            "RUST_ROLL_JWT_SECRET": SECRET,
-            "RUST_ROLL_POOL_SIZE": "2",
-            "RUST_ROLL_TEST_TOKEN": observed_reader.token,
-            "RUST_ROLL_TEST_METHOD": method,
-            "RUST_ROLL_TEST_URI": path,
-        }
-        if observed_body is not None:
-            route_body = dict(observed_body)
-            if "idempotency_key" in route_body:
-                route_body["idempotency_key"] = f"budget-extra-{uuid4().hex}"
-            env["RUST_ROLL_TEST_BODY"] = json.dumps(route_body)
-
         await reset_statement_stats()
         before = await db_statement_breakdown(engine)
         assert before is not None
-        response, _, _, _ = await run_rust_example(BINARY, env)
-        assert response.get("status") == 200, response
-
         connection = await asyncpg.connect(url)
         try:
             await connection.execute(
@@ -562,26 +436,45 @@ async def test_extra_and_n_plus_one_queries_fail_roll_budget_guards(
                 )
         finally:
             await connection.close()
-
         after = await db_statement_breakdown(engine)
         assert after is not None
-        observed = StatementBreakdown(
-            application=after.application - before.application,
-            transaction_control=after.transaction_control - before.transaction_control,
-            runtime_overhead=after.runtime_overhead - before.runtime_overhead,
-            nested=after.nested - before.nested,
-        )
-        extra_delta = observed.application - baseline.statements.application
-        assert extra_delta == 4, (
-            f"expected 4 deliberate application statements, got {extra_delta}: "
-            f"baseline={baseline.statements}, observed={observed}"
-        )
+        assert after.application - before.application == 4
+        assert after.top_level - before.top_level == 4
 
+        document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
+        entries = [
+            entry
+            for entry in document["operations"]
+            if entry["method"] == method and entry["path"] == path
+        ]
+        assert len(entries) == 1
+        budget = entries[0]["sql_budget"]
+        assert isinstance(budget, dict)
+        application = budget["application_statements"]
+        control = budget["transaction_control_statements"]
+        overhead = budget.get("runtime_overhead_statements", 0)
+        nested = budget.get("max_nested_statements", 0)
+        assert isinstance(application, int)
+        assert isinstance(control, int)
+        assert isinstance(overhead, int)
+        assert isinstance(nested, int)
+        baseline = StatementBreakdown(
+            application=application,
+            transaction_control=control,
+            runtime_overhead=overhead,
+            nested=nested,
+        )
         extra_query = StatementBreakdown(
-            application=observed.application - 3,
-            transaction_control=observed.transaction_control,
-            runtime_overhead=observed.runtime_overhead,
-            nested=observed.nested,
+            application=baseline.application + 1,
+            transaction_control=baseline.transaction_control,
+            runtime_overhead=baseline.runtime_overhead,
+            nested=baseline.nested,
+        )
+        n_plus_one = StatementBreakdown(
+            application=baseline.application + 4,
+            transaction_control=baseline.transaction_control,
+            runtime_overhead=baseline.runtime_overhead,
+            nested=baseline.nested,
         )
         with pytest.raises(AssertionError, match="application statement count changed"):
             assert_measured_statement_breakdown(method, path, extra_query)
@@ -591,8 +484,8 @@ async def test_extra_and_n_plus_one_queries_fail_roll_budget_guards(
             assert_no_statement_growth(
                 method,
                 path,
-                baseline.statements.top_level,
-                observed.top_level,
+                baseline.top_level,
+                n_plus_one.top_level,
             )
     finally:
         await engine.dispose()

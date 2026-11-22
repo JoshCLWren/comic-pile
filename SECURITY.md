@@ -52,8 +52,8 @@ Internet → Vercel edge (TLS termination) → FastAPI API function → Neon Pos
 
 **Security Features:**
 - TLS termination handled by the Vercel platform
-- Security headers applied by application middleware (`app/middleware/security_headers.py`)
-- Rate limiting enforced at the application layer (`app/middleware/rate_limit.py`)
+- Security headers applied by application middleware (`app/middleware/security_headers.py`) <!-- docs-path-check: ignore -->
+- Rate limiting enforced at the application layer (`app/middleware/rate_limit.py`) <!-- docs-path-check: ignore -->
 - Database reachable only through the configured Neon connection URL
 
 ### SSL/TLS Configuration
@@ -66,7 +66,7 @@ HSTS via `SecurityHeadersMiddleware`
 ### Security Headers
 
 The FastAPI application sets security headers through `SecurityHeadersMiddleware`
-(`app/middleware/security_headers.py`):
+(`app/middleware/security_headers.py`): <!-- docs-path-check: ignore -->
 
 ```http
 Content-Security-Policy: default-src 'self'; ...
@@ -90,7 +90,7 @@ Permissions-Policy: camera=(), microphone=(), geolocation=()
 ### Rate Limiting
 
 API endpoints are rate-limited in the application using slowapi
-(`app/middleware/rate_limit.py`, registered in `app/main.py`):
+(`app/middleware/rate_limit.py`, registered in `app/main.py`): <!-- docs-path-check: ignore -->
 
 **Configuration:**
 - Limits are applied per endpoint via the shared limiter

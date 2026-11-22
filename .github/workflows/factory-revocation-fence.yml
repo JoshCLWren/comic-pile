@@ -4,6 +4,11 @@ on:
   pull_request_target:
     types: [opened, reopened, ready_for_review]
 
+env:
+  # Operator settings (rotisserie factory settings) reach every factory script.
+  FACTORY_REPO_VARS: >-
+    {"FACTORY_SLOTS_PER_PROVIDER": "${{ vars.FACTORY_SLOTS_PER_PROVIDER }}", "FACTORY_PR_WIP_LIMIT": "${{ vars.FACTORY_PR_WIP_LIMIT }}", "FACTORY_REVIEW_BACKLOG_LIMIT": "${{ vars.FACTORY_REVIEW_BACKLOG_LIMIT }}", "FACTORY_OMNIROUTE_FREE_ENTRY_CAP": "${{ vars.FACTORY_OMNIROUTE_FREE_ENTRY_CAP }}", "FACTORY_NO_DIFF_RETRY_LIMIT": "${{ vars.FACTORY_NO_DIFF_RETRY_LIMIT }}", "FACTORY_NO_DIFF_RETRY_RESET_SECONDS": "${{ vars.FACTORY_NO_DIFF_RETRY_RESET_SECONDS }}", "FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS": "${{ vars.FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS }}", "FACTORY_FIXED_LEASE_TTL_SECONDS": "${{ vars.FACTORY_FIXED_LEASE_TTL_SECONDS }}", "FACTORY_LOCAL_LEASE_TTL_SECONDS": "${{ vars.FACTORY_LOCAL_LEASE_TTL_SECONDS }}", "FACTORY_PRIORITY_ORDER": "${{ vars.FACTORY_PRIORITY_ORDER }}"}
+
 permissions:
   contents: read
   issues: write
@@ -22,6 +27,15 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: main
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Reject PRs without durable factory provenance
         shell: bash
@@ -33,6 +47,13 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -Eeuo pipefail
+
+          # Noncanonical maintenance branches are not worker claims. Even a
+          # GitHub API outage must not revoke their normal PRs.
+          if [[ ! "$HEAD_REF" =~ ^factory/[0-9]+-[0-9]+- ]]; then
+            echo "Noncanonical maintenance branch: no worker provenance required."
+            exit 0
+          fi
 
           comments="$RUNNER_TEMP/factory-pr-comments.json"
           decision="$RUNNER_TEMP/factory-fence-decision.json"

@@ -19,6 +19,7 @@
       "path": "/api/bug-reports/",
       "dest": "/api/native_roll.rs",
       "src": "^/api/bug\\-reports/$",
+      "owning_issue": 4852,
       "exclude_from_inventory": true
     },
     {
@@ -27,6 +28,7 @@
       "path": "/api/v1/bug-reports/",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/bug\\-reports/$",
+      "owning_issue": 4852,
       "exclude_from_inventory": true
     }
   ]

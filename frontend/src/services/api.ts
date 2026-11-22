@@ -404,7 +404,11 @@ function createResponseErrorInterceptor(client: ApiClient) {
 
     const status = error.response?.status
     if (status !== 503) {
-      console.error('API Error:', errorForDiagnosticLog(error))
+      console.error(
+        'API Error:',
+        getRequestPathname(error.config?.url ?? ''),
+        errorForDiagnosticLog(error),
+      )
     }
     return Promise.reject(error)
   }

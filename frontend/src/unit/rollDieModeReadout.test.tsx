@@ -24,6 +24,7 @@ const rollApi: RollApi = {
   override: vi.fn(),
   dismissPending: vi.fn(),
   reroll: vi.fn(),
+  unsnooze: vi.fn(),
   setDie,
   reset: vi.fn().mockResolvedValue({ die: 6, replayed: false }),
 }

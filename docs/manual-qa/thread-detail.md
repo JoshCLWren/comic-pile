@@ -45,3 +45,15 @@
 **Expected:** Saving never treats unloaded existing issues as deletions. Only expressly staged and confirmed changes are written; the full set of unseen issues and their read/rating/mapping history survive. If the system cannot safely reconcile the full issue set, it refuses Save with an actionable error and leaves all persisted state unchanged. Adding an Annual cannot truncate the series or silently replace its existing issues.
 
 **Tracking:** High-severity QA data-loss regression [#3764](https://github.com/JoshCLWren/comic-pile/issues/3764). A historically closed ticket is not evidence that partial-load saves currently pass this scenario.
+
+## MQA-THREAD-007: Manual read and rate are never vetoed by eligibility
+
+**Test:** On a blocked or out-of-pool QA issue, use Mark Read and rating from the issue card.
+
+**Expected:** The owned issue can be read and rated; Option E decides automatic eligibility only. Source: #4405 and #4708.
+
+## MQA-THREAD-SYNC: Thread "Next issue" line follows a rename promptly
+
+**Test:** Open a thread detail in one tab and rename the series there (then rename it back). Also rename it from a second tab and return to the first. Check both the immediate same-tab result and the subsequent cross-tab automatic refresh.
+
+**Expected:** Same-tab successful edits update the Next issue title promptly. Cross-tab changes may take a **short automatic refresh delay after tab focus**; a synchronous update on focus is **not** required. The updated canonical title appears without a manual reload and does not remain stale for a prolonged polling interval (e.g. 15-30 seconds). Failed mutations do not falsely update the displayed title. Owner decision 2026-11-20; [#5616](https://github.com/JoshCLWren/comic-pile/issues/5616), [PR #5620](https://github.com/JoshCLWren/comic-pile/pull/5620). Related MQA-QUEUE-010 and MQA-PLAN-SYNC.

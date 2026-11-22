@@ -182,7 +182,7 @@ async function createThreadsForUser(
     const maxAttempts = 7;
 
     while (!success && attempts < maxAttempts) {
-      const response = await request.post('/api/threads/', {
+      const response = await request.post('/api/v1/threads/', {
         headers,
         data: {
           title: `Test Thread ${i + 1}`,
@@ -261,15 +261,20 @@ async function createThreadsForUser(
 }
 
 function isExpectedAnonymousAuthProbe(message: string): boolean {
+  // Console logs print the request pathname (e.g. `/v2/auth/me`) while
+  // requestfailed entries print the full URL (`.../api/v2/auth/me`), so strip
+  // the optional `/api` mount prefix from the message and probe paths before matching.
   const anonymousProbePaths = [
-    'api/v2/auth/me',
-    'api/v2/auth/refresh',
-    'api/sessions/current',
-    'api/threads/',
-    'api/v1/dependencies/blocked',
+    '/v2/auth/me',
+    '/v2/auth/refresh',
+    '/threads/',
+    '/v2/dependencies/blocked',
   ];
-  return anonymousProbePaths.some((path) => message.includes(path))
-    && (message.includes('401') || message.includes('due to access control checks'));
+  const normalizedMessage = message.replace(/\/api(?=\/)/g, '');
+  const normalizedProbePaths = anonymousProbePaths.map((path) => path.replace(/\/api(?=\/)/g, ''));
+  return normalizedProbePaths.some(
+    (path) => normalizedMessage.includes(path) || normalizedMessage.includes(path.replace(/^\//, '')),
+  ) && (message.includes('401') || message.includes('due to access control checks'));
 }
 
 function isExpectedBrowserNoise(message: string): boolean {

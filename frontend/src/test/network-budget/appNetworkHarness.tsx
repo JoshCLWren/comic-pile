@@ -1,5 +1,5 @@
 import { StrictMode, type ReactNode } from 'react'
-import { act, render, waitFor } from '@testing-library/react'
+import { act, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AppRoutes, AuthProvider } from '../../App'
@@ -7,6 +7,7 @@ import { BugReportRestoreProvider } from '../../contexts/BugReportRestoreContext
 import { NavCollapseProvider } from '../../contexts/NavCollapseContext'
 import { ToastProvider } from '../../contexts/ToastProvider'
 import api from '../../services/api'
+import { routeModules } from '../../routes/routeModules'
 import {
   installNetworkLedger,
   type HandlerMap,
@@ -17,6 +18,24 @@ import {
   type RecordedRequest,
 } from './requestLedger'
 import { AuthStatusProbe, LocationProbe, NavigationBridge } from './appNetworkProbes'
+
+/*
+ * Deterministic lazy-route resolution. Every route chunk is imported once at
+ * module load (before any test body runs), so `React.lazy` inside a test only
+ * awaits an already-resolved module promise. No test depends on how long a cold
+ * Vite transform takes under machine load, and nothing here is a timeout.
+ */
+await Promise.all(Object.values(routeModules).map(load => load()))
+
+/** Hard stop for a runaway re-render loop; a failure guard, never a wait. */
+const MAX_FLUSHES = 500
+
+/** One event-loop turn: the macrotask boundary drains every pending microtask. */
+async function flush(): Promise<void> {
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+}
 
 /** Account shape returned by `GET /api/v2/auth/me`. */
 export interface HarnessUser {
@@ -51,8 +70,14 @@ export interface RenderedApp {
   navigate: (path: string) => Promise<void>
   /** Run a UI action and label every request it produces. */
   perform: <T>(label: string, action: () => Promise<T> | T) => Promise<T>
-  /** Wait until no new requests have appeared for one settled turn. */
+  /**
+   * Drain the app to a fixed point: flush event-loop turns until one full turn
+   * changes nothing observable (requests, in-flight count, auth status, route,
+   * rendered text). Completion is a state property, not elapsed time.
+   */
   settle: () => Promise<void>
+  /** Flush turns until an explicit observable `condition` holds, then settle. */
+  settleUntil: (condition: () => boolean, description: string) => Promise<void>
   /** Canonical request rows for one recorded window. */
   rows: (requests?: RecordedRequest[]) => string[]
   /** Router pathname + search currently rendered. */
@@ -105,9 +130,9 @@ export function defaultHandlers(auth: AuthMode, user: HarnessUser): HandlerMap {
     'GET /api/v2/auth/me': () => (auth === 'authenticated' ? { data: user } : unauthenticated()),
     'GET /api/v2/auth/csrf': () => ({ data: { csrf_token: 'harness-csrf' } }),
     'POST /api/v2/auth/refresh': () => (auth === 'authenticated' ? { data: { access_token: 'harness-token', refresh_token: 'harness-refresh' } } : unauthenticated()),
-    'GET /api/v1/users/me/preferences': () => ({ data: { theme: 'classic', user_id: user.id } }),
-    'GET /api/v1/identity-inbox': () => ({ data: { items: [], total: 0, offset: 0, limit: 1 } }),
-    'GET /api/v1/releases/': () => ({ data: { releases: [], total: 0 } }),
+    'GET /api/v2/users/me/preferences': () => ({ data: { theme: 'classic', user_id: user.id } }),
+    'GET /api/v2/identity-inbox': () => ({ data: { items: [], total: 0, offset: 0, limit: 1 } }),
+    'GET /api/v2/releases': () => ({ data: { releases: [], total: 0 } }),
     'GET /api/v2/demo-roll': () => ({ data: DEMO_ROLL }),
     'POST /api/v2/reading-sessions': () => ({ data: { session_id: 1, created: false } }),
   }
@@ -185,30 +210,41 @@ export function renderAppAtRoute(path: string, options: RenderAppOptions = {}): 
 
   render(options.strictMode ? <StrictMode>{tree}</StrictMode> : tree)
 
+  const fingerprint = (): string =>
+    [
+      ledger.requests().length,
+      ledger.pending(),
+      authStatus,
+      currentLocation,
+      document.body.textContent ?? '',
+    ].join('\u0000')
+
+  const isQuiet = (): boolean =>
+    authStatus !== 'checking' &&
+    !document.body.textContent?.includes('Loading page...') &&
+    ledger.pending() === 0
+
   const settle = async (): Promise<void> => {
-    await waitFor(() => {
-      if (authStatus === 'checking') {
-        throw new Error('auth bootstrap still checking')
-      }
-      if (document.body.textContent?.includes('Loading page...')) {
-        throw new Error('lazy route chunk still loading')
-      }
-    })
-    let stableTurns = 0
-    let previousCount = -1
-    for (let turn = 0; turn < 40 && stableTurns < 5; turn += 1) {
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 0))
-      })
-      const count = ledger.requests().length
-      stableTurns = count === previousCount ? stableTurns + 1 : 0
-      previousCount = count
+    let previous = fingerprint()
+    for (let turn = 0; turn < MAX_FLUSHES; turn += 1) {
+      await flush()
+      const current = fingerprint()
+      if (current === previous && isQuiet()) return
+      previous = current
     }
-    await waitFor(() => {
-      if (ledger.pending() !== 0) {
-        throw new Error(`network still pending: ${ledger.pending()}`)
-      }
-    })
+    throw new Error(
+      `app did not reach a fixed point in ${MAX_FLUSHES} flushes (auth=${authStatus}, pending=${ledger.pending()})`,
+    )
+  }
+
+  const settleUntil = async (condition: () => boolean, description: string): Promise<void> => {
+    for (let turn = 0; turn < MAX_FLUSHES && !condition(); turn += 1) {
+      await flush()
+    }
+    if (!condition()) {
+      throw new Error(`condition never held: ${description}`)
+    }
+    await settle()
   }
 
   return {
@@ -232,6 +268,7 @@ export function renderAppAtRoute(path: string, options: RenderAppOptions = {}): 
       return result!
     },
     settle,
+    settleUntil,
     rows: requests => {
       const counts: Record<string, number> = {}
       for (const request of requests ?? ledger.requests()) {

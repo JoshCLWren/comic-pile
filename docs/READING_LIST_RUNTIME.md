@@ -47,9 +47,11 @@ surface instead of an unknown classification. This does not reclassify existing
 rows.
 Unclassified historical rows and `origin=converted` generated/plan-compiled
 edges are inactive audit data; they cannot override today's canonical Reading
-Lists. A genuinely intended independent historical restriction must be explicitly
-authorized as a reader-owned prerequisite. No provenance classification is required
-to ignore outdated generated restrictions.
+Lists. The Rust owner-scoped loader and the shared cycle validator both exclude
+them before cycle evaluation, so an unrelated legacy cycle cannot veto a canonical
+Reading List write. A genuinely intended independent historical restriction must
+be explicitly authorized as a reader-owned prerequisite. No provenance classification
+is required to ignore outdated generated restrictions.
 
 Roll/skip, manual selection, both bootstrap versions, stale picks, safe queue
 repositioning and Queue pagination consume that result. Durable snooze evidence
@@ -85,7 +87,7 @@ cycle rejects and rolls back the write instead of poisoning future runtime reads
 
 ## Validation and rollback
 
-`tests/test_option_e_runtime.py` exercises real PostgreSQL and API paths for
+`tests/test_option_e_runtime.py` exercises real PostgreSQL and API paths for <!-- docs-path-check: ignore -->
 strict/loose behavior, stale flags/pointers, exclusions, session filters,
 prerequisite provenance, snapshot sharing/invalidation, app-wide activation with reader isolation,
 empty Queues, cursor mode boundaries, identity fan-out, durable snooze/recovery,
@@ -126,12 +128,13 @@ current editor targets. **V2 has no `historical` response field, and never runs
 the legacy dependency query.** Only `origin=reader` prerequisites are loaded
 by the canonical eligibility evaluator.
 
-The original `/api/v1/reading-boundaries` endpoints remain isolated for
-compatibility with clients expecting the historic `historical` field. They
-never activate old edges, and their optional historical lookup is constrained
-to the requested owned series rather than the entire collection. V1 is
-deprecated for the app's live Roll/Queue traffic. Historical data is retained
-in storage without being loaded by the canonical UI.
+The original `/api/v1/reading-boundaries` endpoints have been retired with the
+Python API (Part of #5431). They existed only for clients expecting the historic
+`historical` field; their optional historical lookup was constrained to the
+requested owned series rather than the entire collection. The v2 endpoints above
+are the only reading-boundary HTTP operations now. Historical associations stay
+in storage but are no longer exposed by an HTTP operation or loaded by the
+canonical UI.
 
 The custom CBL editor's **Read this list** control opens this current-list reader.
 Available issues can be marked read directly, and read issues can be marked unread.

@@ -36,7 +36,7 @@ The `scripts/restore_postgres.sh` script:
 1. Parses `DATABASE_URL` from `.env` file
 2. Lists available backups when run without arguments
 3. Verifies backup file integrity with `gzip -t`
-4. Prompts for confirmation before restoring
+4. Refuses any non-local database host (loopback/localhost only, no override), then prompts for confirmation before restoring
 5. Restores database using `gunzip` and `psql`
 6. Verifies database contents after restore
 
@@ -448,7 +448,7 @@ head -50 db_export.json
 
 ### Export Specific Tables
 
-Edit `scripts/export_db.py` to only export specific tables:
+Edit `scripts/export_db.py` to only export specific tables: <!-- docs-path-check: ignore -->
 
 ```python
 # Only export threads
@@ -466,7 +466,7 @@ python -m scripts.import_db
 
 ### Merge Instead of Wipe
 
-For non-destructive merges, edit `scripts/import_db.py` to check for existing records:
+For non-destructive merges, edit `scripts/import_db.py` to check for existing records: <!-- docs-path-check: ignore -->
 
 ```python
 existing = db.query(Thread).filter_by(id=thread_data["id"]).first()

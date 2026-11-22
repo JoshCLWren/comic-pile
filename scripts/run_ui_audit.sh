@@ -45,6 +45,9 @@ command -v curl >/dev/null 2>&1 || {
 
 cd "$ROOT_DIR"
 mkdir -p "$AUDIT_EVIDENCE_DIR"
+# Docker must not create the bind-mount target as root: the frontend build
+# writes here after the audit stack starts.
+mkdir -p "$ROOT_DIR/static/react"
 export UI_AUDIT_INGRESS_CONF="$AUDIT_INGRESS_CONF"
 node scripts/generate_ui_audit_ingress.mjs vercel.json "$AUDIT_INGRESS_CONF"
 : > "$AUDIT_RUNNER_LOG"
