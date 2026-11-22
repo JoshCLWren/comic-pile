@@ -229,7 +229,6 @@ describe('CblBrowserPage adoption', () => {
     await user.click(screen.getByRole('button', { name: 'Add reading order' }))
     expect(mockCommitNew).toHaveBeenCalled()
     expect(screen.queryByRole('heading', { name: 'Update this Reading Plan?' })).not.toBeInTheDocument()
-    expect(mockCommitNew).not.toHaveBeenCalled()
   })
 
   it('requires confirmation before updating a plan already linked to the source', async () => {
