@@ -235,6 +235,34 @@ async fn seed_strict_wait(state: &Arc<AppState>, owner: i32) -> (i32, i32, i32) 
     (waiting, waiting_frontier, list)
 }
 
+/// Legacy execution must not leak canonical eligibility into a batch whose
+/// deployment-level evaluator signal tells the client to use stored blocking.
+#[tokio::test]
+async fn option_e_off_marks_every_boundary_unavailable() {
+    let Some((state, _db)) = database(false).await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "boundary-legacy-reader").await;
+    let (thread, _, _) = seed_strict_wait(&state, owner).await;
+
+    let (status, body) = send(
+        &state,
+        (&token, &csrf),
+        "POST",
+        "/api/v2/reading-boundaries",
+        Some(json!({"thread_ids": [thread]})),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["evaluator"], "unavailable", "{body}");
+    let explanation = &body["threads"][thread.to_string()];
+    assert_eq!(explanation["state"], "unavailable", "{body}");
+    assert_eq!(explanation["summary"], "Option E is not active for JLI.");
+    assert_eq!(explanation["next"], Value::Null, "{body}");
+    assert_eq!(explanation["blockers"], json!([]), "{body}");
+}
+
 /// A concurrent reading-list mutation committed while the boundaries request
 /// is in flight must not split labels and eligibility across two snapshots.
 #[tokio::test]
