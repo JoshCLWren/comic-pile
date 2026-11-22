@@ -1411,16 +1411,17 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
     .await;
     assert_eq!(status, StatusCode::OK, "{unsnooze:?}");
     assert_eq!(unsnooze["restored"], false);
-    let session_state: (Option<i32>, Option<String>) = conn
+    let session_row = conn
         .query_one(
             "SELECT pending_thread_id, snoozed_thread_ids::text FROM sessions WHERE user_id=$1",
             &[&user_id],
         )
         .await
-        .unwrap()
-        .into();
-    assert_eq!(session_state.0, Some(dead_thread));
-    assert_eq!(session_state.1.as_deref(), Some("[]"));
+        .unwrap();
+    let pending_thread: Option<i32> = session_row.get(0);
+    let snoozed_threads: Option<String> = session_row.get(1);
+    assert_eq!(pending_thread, Some(dead_thread));
+    assert_eq!(snoozed_threads.as_deref(), Some("[]"));
     let unsnooze_events: i64 = conn
         .query_one(
             "SELECT count(*) FROM events WHERE user_id=$1 AND type='unsnooze'",
