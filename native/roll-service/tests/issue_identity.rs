@@ -1235,11 +1235,7 @@ async fn adoption_commit_uses_next_suffix_when_dedupe_variants_exist() {
     );
 }
 
-async fn seed_orphaned_adopted_plan(
-    state: &Arc<AppState>,
-    user_id: i32,
-    plan_id: i32,
-) -> Value {
+async fn seed_orphaned_adopted_plan(state: &Arc<AppState>, user_id: i32, plan_id: i32) -> Value {
     let nodes = json!([{
         "id": "curated-original",
         "node_type": "issue",
@@ -1277,10 +1273,7 @@ async fn seed_orphaned_adopted_plan(
     nodes
 }
 
-async fn assert_plan_nodes(
-    state: &Arc<AppState>,
-    plan_id: i32,
-) -> Value {
+async fn assert_plan_nodes(state: &Arc<AppState>, plan_id: i32) -> Value {
     let conn = state.pool.get().await.unwrap();
     let nodes_text: String = conn
         .query_one(
