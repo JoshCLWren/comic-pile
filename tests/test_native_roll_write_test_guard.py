@@ -287,12 +287,19 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
     )
 
     now_tested = sorted(
-        module
-        for module, handler in mounted
-        if _tests_write_path(module, handler) and module in baseline
+        {
+            module
+            for module in baseline
+            if module in {m for m, _h in mounted}
+            and all(
+                (m, h) in READ_ONLY_POST_HANDLERS or _tests_write_path(m, h)
+                for m, h in mounted
+                if m == module
+            )
+        }
     )
     assert now_tested == [], (
-        "These modules now have a write-path test; remove them from "
+        "All mounted handlers in these modules now have write-path tests; remove them from "
         f"{BASELINE.name}: {now_tested}"
     )
 
