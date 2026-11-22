@@ -14,5 +14,3 @@ export function getReadingListProgressIndex(entries: readonly ProgressEntry[]): 
   if (nextUnreadIndex >= 0) return nextUnreadIndex
   return Math.max(0, entries.length - 1)
 }
-
-
