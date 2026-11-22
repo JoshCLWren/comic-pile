@@ -62,7 +62,9 @@ describe('CblBrowserPage adoption', () => {
       ).toBeInTheDocument()
     })
     expect(screen.queryByText('abcdef12')).not.toBeInTheDocument()
-    expect(screen.getByText('Source details')).toBeInTheDocument()
+    // Both the source detail header and the adoption preview keep provenance
+    // inside collapsed disclosures (#4171).
+    expect(screen.getAllByText('Source details')).toHaveLength(2)
   })
 
   it('uses singular grammar for one entry that needs attention', async () => {
