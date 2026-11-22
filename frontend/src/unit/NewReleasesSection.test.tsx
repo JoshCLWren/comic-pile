@@ -265,23 +265,23 @@ describe('NewReleasesSection', () => {
     expect(repairLink).toHaveAttribute('href', '/queue')
   })
 
-  it('shows a visible error when following a candidate fails', () => {
-    mocks.followError = new Error('Could not follow this volume.')
+  it('shows a visible error when following a candidate fails', async () => {
+    mockCreate.mockRejectedValueOnce(new Error('Could not follow this volume.'))
     render(
       <NewReleasesSection planId={12} sources={[]} candidates={[confirmedCandidate]} />,
       { wrapper: createWrapper() },
     )
-    const alert = screen.getByRole('alert')
-    expect(alert).toHaveTextContent('Could not follow this volume.')
+    screen.getByRole('button', { name: 'Follow Ultimate Spider-Man (2024)' }).click()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not follow this volume.')
   })
 
-  it('shows a visible error when toggling a followed source fails', () => {
-    mocks.enableError = new Error('Could not update this volume.')
+  it('shows a visible error when toggling a followed source fails', async () => {
+    mockUpdate.mockRejectedValueOnce(new Error('Could not update this volume.'))
     render(<NewReleasesSection planId={12} sources={[enabledSource]} candidates={[]} />, {
       wrapper: createWrapper(),
     })
-    const alert = screen.getByRole('alert')
-    expect(alert).toHaveTextContent('Could not update this volume.')
+    screen.getByRole('button', { name: 'Stop following X-Men' }).click()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not update this volume.')
   })
 
   it('falls back to provider_volume_id when provider_title is empty', () => {
