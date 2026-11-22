@@ -176,6 +176,12 @@ export function useQueueThreads(
   // that window as unsettled instead of restating the old key's numbers
   // (#3614).
   const isPlaceholderData = query.isPlaceholderData
+  // The append alone, so a consumer can read the Queue cursor to completion
+  // without being confused by the combined "anything is loading" flag
+  // (issue #3922).
+  const isLoadingMore = query.isNextPageLoading
+  const isError = query.isError
+  const nextPageToken = query.nextPageToken
   // Reader-facing `N of M series` state for the applied search (#3614). The
   // first page's `filtered_count` is the authoritative match total for the
   // applied search and `active_count` the pre-filter denominator, so both must
@@ -189,12 +195,6 @@ export function useQueueThreads(
       : !isPlaceholderData && filteredCount != null && activeCount != null
         ? `${filteredCount} of ${activeCount} series`
         : 'Updating series count…'
-  // The append alone, so a consumer can read the Queue cursor to completion
-  // without being confused by the combined "anything is loading" flag
-  // (issue #3922).
-  const isLoadingMore = query.isNextPageLoading
-  const isError = query.isError
-  const nextPageToken = query.nextPageToken
 
   const refetch = useCallback(async (): Promise<void> => {
     await query.refetch()
