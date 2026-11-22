@@ -23,19 +23,19 @@
 use axum::http::StatusCode;
 
 use crate::{
-    auth::VerifiedAccessClaims, db, option_inputs, reading_eligibility, ApiError, AppState,
+    ApiError, AppState, auth::VerifiedAccessClaims, db, option_inputs, reading_eligibility,
 };
 use axum::{
-    extract::{Query, State},
     Json,
+    extract::{Query, State},
 };
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
     Arc,
+    atomic::{AtomicU64, Ordering},
 };
 use unicode_casefold::UnicodeCaseFold;
 
@@ -1706,10 +1706,12 @@ mod tests {
         assert_eq!(metadata.volume.as_deref(), Some("Uncanny X-Men"));
         assert_eq!(metadata.publisher.as_deref(), Some("Marvel"));
         assert!(series_metadata(&[], "X-Men").is_none());
-        assert!(series_metadata(&documents, "Uncanny X-Men")
-            .expect("metadata")
-            .volume
-            .is_none());
+        assert!(
+            series_metadata(&documents, "Uncanny X-Men")
+                .expect("metadata")
+                .volume
+                .is_none()
+        );
     }
 
     #[test]
