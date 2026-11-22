@@ -45,8 +45,14 @@ import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } fro
 import { isObject, isString } from '../utils/runtimeChecks'
 import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
 
-const FALLBACK_SOURCE_TITLE = 'CBL source' // used when title/path missing
-const PAGE_SIZE = 50 // API caps at 100; 50 keeps folders+sources above fold
+/** Shown when a source list declares neither a readable title nor a usable path. */
+const FALLBACK_SOURCE_TITLE = 'CBL source'
+
+/**
+ * One catalog page. The API caps pages at 100; 50 keeps a folder's folders and
+ * sources above the fold on a phone without hiding the total result count.
+ */
+const PAGE_SIZE = 50
 
 interface CatalogErrorState {
   message: string
@@ -757,14 +763,23 @@ export default function CblBrowserPage() {
   const lastShown = browsePage
     ? (browsePage.page - 1) * browsePage.page_size + browsePage.items.length
     : 0
+  // Placeholder rows may remain visible during a key transition, but their
+  // metadata belongs to the previous submitted search/page and must not be
+  // presented as the current result count.
   const settledBrowsePage = browseQuery.isPlaceholderData ? null : browsePage
-  const resultCountPending = !catalogError && (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
+  const resultCountPending =
+    !catalogError &&
+    (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
   const resultCountText = catalogError
     ? 'Source list count unavailable.'
     : resultCountPending
       ? 'Updating source list count…'
       : settledBrowsePage
-        ? `${settledBrowsePage.total} of ${settledBrowsePage.scope === 'search' ? settledBrowsePage.catalog_total : settledBrowsePage.total} source lists`
+        ? `${settledBrowsePage.total} of ${
+            settledBrowsePage.scope === 'search'
+              ? settledBrowsePage.catalog_total
+              : settledBrowsePage.total
+          } source lists`
         : 'Source list count unavailable.'
 
   const openConfirm = () => {
@@ -1178,7 +1193,11 @@ export default function CblBrowserPage() {
                     )
                   })}
                 </ul>
-                <p className="text-xs text-[var(--theme-text-dim)]">Every issue starts checked. Uncheck a volume to leave all of its issues out, or show its issues to change them one at a time; a partly selected volume shows the mixed state. Comics stay in ComicPile.</p>
+                <p className="text-xs text-[var(--theme-text-dim)]">
+                  Every issue starts checked. Uncheck a volume to leave all of its issues out, or
+                  show its issues to change them one at a time; a partly selected volume shows the
+                  mixed state. Comics stay in ComicPile.
+                </p>
               </section>
             </div>
           )}
@@ -1187,12 +1206,26 @@ export default function CblBrowserPage() {
         </div>
       ) : (
         <>
-          <p role="status" aria-live="polite" className="min-h-4 text-xs text-[var(--theme-text-muted)]" data-testid="cbl-result-count">{resultCountText}</p>
+          <p
+            role="status"
+            aria-live="polite"
+            className="min-h-4 text-xs text-[var(--theme-text-muted)]"
+            data-testid="cbl-result-count"
+          >
+            {resultCountText}
+          </p>
 
           {submittedQuery && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--theme-text-muted)]">
               <span>Searching every shared CBL for “{submittedQuery}”.</span>
-              <button type="button" onClick={clearSearch} disabled={isCommitting} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50">Clear search</button>
+              <button
+                type="button"
+                onClick={clearSearch}
+                disabled={isCommitting}
+                className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+              >
+                Clear search
+              </button>
             </div>
           )}
 

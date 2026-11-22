@@ -5,12 +5,6 @@ const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
   activeCount: number
-  /** Active series matching the currently applied search; null when unavailable. */
-  filteredCount?: number | null
-  /** True while search/count data for the applied query is still settling. */
-  isCountPending?: boolean
-  /** True when the queue count cannot be trusted because the query failed. */
-  isCountError?: boolean
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
@@ -40,9 +34,6 @@ interface QueueControlsProps {
  */
 function QueueControlsInner({
   activeCount,
-  filteredCount = null,
-  isCountPending = false,
-  isCountError = false,
   shuffleDisabled,
   shufflePending,
   onShuffle,
@@ -87,18 +78,6 @@ function QueueControlsInner({
           </h1>
           <p className="text-base font-semibold text-stone-500">
             Your upcoming comics
-          </p>
-          <p
-            role="status"
-            aria-live="polite"
-            className="mt-1 min-h-4 text-xs text-[var(--theme-text-muted)]"
-            data-testid="queue-result-count"
-          >
-            {isCountError
-              ? 'Series count unavailable'
-              : isCountPending || filteredCount === null
-                ? 'Updating series count…'
-                : `${filteredCount} of ${activeCount} series`}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1.5 md:gap-2 shrink-0">
