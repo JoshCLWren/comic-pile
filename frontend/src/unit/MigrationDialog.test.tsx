@@ -1,16 +1,24 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import axios from 'axios'
 import MigrationDialog from '../components/MigrationDialog'
 import { migrationApi } from '../services/api-migration'
 
-vi.mock('../services/api-migration', () => ({ migrationApi: { migrateThread: vi.fn() } }))
+const originalMigrateThread = migrationApi.migrateThread
+const migrateThreadMock = vi.fn()
 
 const thread = { id: 7, title: 'Saga' }
 
 describe('MigrationDialog', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    migrationApi.migrateThread = migrateThreadMock as typeof migrationApi.migrateThread
+  })
+
+  afterEach(() => {
+    migrationApi.migrateThread = originalMigrateThread
+  })
 
   it('validates migration values and previews boundary states', async () => {
     const user = userEvent.setup()

@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
 import { undoApi } from '../services/api-undo'
 
@@ -10,21 +10,24 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
-vi.mock('../services/api-undo', () => ({
-  undoApi: {
-    listSnapshots: vi.fn(),
-    undo: vi.fn(),
-  },
-}))
-
-const mockedUndoApi = vi.mocked(undoApi)
+const originalListSnapshots = undoApi.listSnapshots
+const originalUndo = undoApi.undo
+const mockedUndoApi = { listSnapshots: vi.fn(), undo: vi.fn() }
 
 beforeEach(() => {
+  vi.clearAllMocks()
+  undoApi.listSnapshots = mockedUndoApi.listSnapshots as typeof undoApi.listSnapshots
+  undoApi.undo = mockedUndoApi.undo as typeof undoApi.undo
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedUndoApi.listSnapshots.mockResolvedValue([{ id: 1 }] as never)
   // SAFETY: the endpoint returns no body, so the mock resolves to undefined
   mockedUndoApi.undo.mockResolvedValue(undefined as never)
   mockedUndoApi.undo.mockClear()
+})
+
+afterEach(() => {
+  undoApi.listSnapshots = originalListSnapshots
+  undoApi.undo = originalUndo
 })
 
 it('loads undo snapshots', async () => {
