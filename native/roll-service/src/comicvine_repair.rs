@@ -162,10 +162,16 @@ pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
         .get("image")
         .and_then(Value::as_object)
         .and_then(|image| {
-            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
-                .iter()
-                .filter_map(|key| image.get(*key).and_then(Value::as_str))
-                .find(|value| !value.is_empty())
+            [
+                "original_url",
+                "super_url",
+                "medium_url",
+                "small_url",
+                "thumb_url",
+            ]
+            .iter()
+            .filter_map(|key| image.get(*key).and_then(Value::as_str))
+            .find(|value| !value.is_empty())
         });
     json!({
         "name": result.get("name"),
@@ -612,7 +618,10 @@ fn failure_transition(error: &ProviderFailure, attempt: i32) -> (&'static str, i
 }
 
 fn has_complete_provider_payload(metadata: &Value) -> bool {
-    let Some(raw) = metadata.get("raw_provider_payload").and_then(|v| v.as_object()) else {
+    let Some(raw) = metadata
+        .get("raw_provider_payload")
+        .and_then(|v| v.as_object())
+    else {
         return false;
     };
     FIELDS.split(',').all(|key| raw.contains_key(key))
