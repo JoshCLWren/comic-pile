@@ -1,23 +1,18 @@
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CreatorMetricDrilldownModal } from '../components/CreatorMetricDrilldownModal'
 import { queryKeys } from '../query/queryKeys'
 import { creatorMetricDrilldownApi } from '../services/creatorMetricDrilldownApi'
 import type { CreatorMetricDrilldown } from '../types/index'
 
-vi.mock('../services/creatorMetricDrilldownApi', () => ({
-  creatorMetricDrilldownApi: {
-    getMetricDrilldown: vi.fn(),
-    getRatingDistributionDrilldown: vi.fn(),
-    getRoleDrilldown: vi.fn(),
-    getSeriesDrilldown: vi.fn(),
-  },
-}))
-
-const mockedGetMetricDrilldown = vi.mocked(creatorMetricDrilldownApi.getMetricDrilldown)
+const originalGetMetricDrilldown = creatorMetricDrilldownApi.getMetricDrilldown
+const originalGetRatingDistributionDrilldown = creatorMetricDrilldownApi.getRatingDistributionDrilldown
+const originalGetRoleDrilldown = creatorMetricDrilldownApi.getRoleDrilldown
+const originalGetSeriesDrilldown = creatorMetricDrilldownApi.getSeriesDrilldown
+const mockedGetMetricDrilldown = vi.fn()
 
 const DRILLDOWN: CreatorMetricDrilldown = {
   metric_type: 'average-rating',
@@ -86,9 +81,20 @@ function renderModal(drilldown: CreatorMetricDrilldown | undefined) {
 describe('CreatorMetricDrilldownModal', () => {
   beforeEach(() => {
     mockedGetMetricDrilldown.mockReset()
+    creatorMetricDrilldownApi.getMetricDrilldown = mockedGetMetricDrilldown as typeof creatorMetricDrilldownApi.getMetricDrilldown
+    creatorMetricDrilldownApi.getRatingDistributionDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getRatingDistributionDrilldown
+    creatorMetricDrilldownApi.getRoleDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getRoleDrilldown
+    creatorMetricDrilldownApi.getSeriesDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getSeriesDrilldown
     // By default a fetch never settles, so the loading test is deterministic and
     // no test depends on jsdom's real network behavior.
     mockedGetMetricDrilldown.mockImplementation(() => new Promise<CreatorMetricDrilldown>(() => {}))
+  })
+
+  afterEach(() => {
+    creatorMetricDrilldownApi.getMetricDrilldown = originalGetMetricDrilldown
+    creatorMetricDrilldownApi.getRatingDistributionDrilldown = originalGetRatingDistributionDrilldown
+    creatorMetricDrilldownApi.getRoleDrilldown = originalGetRoleDrilldown
+    creatorMetricDrilldownApi.getSeriesDrilldown = originalGetSeriesDrilldown
   })
 
   it('renders the calculation with supporting and excluded issues', () => {

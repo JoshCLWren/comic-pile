@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -7,12 +7,8 @@ import { readingGraphProblemApi } from '../services/api-reading-graph'
 import { issueCardsApi } from '../services/issueCardsApi'
 vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
-vi.mock('../services/api-reading-graph', () => ({
-  readingGraphProblemApi: {
-    getGraph: vi.fn(),
-    repair: vi.fn(),
-  },
-}))
+const originalGetGraph = readingGraphProblemApi.getGraph
+const originalRepair = readingGraphProblemApi.repair
 
 const graphWithCycle = {
   status: 'cycle' as const,
@@ -81,6 +77,13 @@ function renderCard() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  readingGraphProblemApi.getGraph = vi.fn() as typeof readingGraphProblemApi.getGraph
+  readingGraphProblemApi.repair = vi.fn() as typeof readingGraphProblemApi.repair
+})
+
+afterEach(() => {
+  readingGraphProblemApi.getGraph = originalGetGraph
+  readingGraphProblemApi.repair = originalRepair
 })
 
 describe('ReadingGraphProblemCard', () => {

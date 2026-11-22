@@ -1,27 +1,14 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ContinuityPlansIndexPage from '../pages/ContinuityPlansIndexPage'
 import { continuityPlansApi } from '../services/api-continuity-plans'
-import { cast } from '../utils/cast'
 
-vi.mock('../services/api-continuity-plans', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
-    '../services/api-continuity-plans',
-  )
-  return {
-    ...actual,
-    continuityPlansApi: {
-      ...actual.continuityPlansApi,
-      list: vi.fn(),
-      delete: vi.fn(),
-    },
-  }
-})
-
-const mockList = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
-const mockDelete = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.delete)
+const originalList = continuityPlansApi.list
+const originalDelete = continuityPlansApi.delete
+const mockList = vi.fn()
+const mockDelete = vi.fn()
 const plan = {
   id: 1,
   name: 'My Plan',
@@ -35,6 +22,13 @@ const plan = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  continuityPlansApi.list = mockList as typeof continuityPlansApi.list
+  continuityPlansApi.delete = mockDelete as typeof continuityPlansApi.delete
+})
+
+afterEach(() => {
+  continuityPlansApi.list = originalList
+  continuityPlansApi.delete = originalDelete
 })
 
 describe('ContinuityPlansIndexPage', () => {
