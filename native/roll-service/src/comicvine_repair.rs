@@ -992,7 +992,7 @@ async fn backfill_authorized(
 ) -> Result<Json<BackfillReport>, ApiError> {
     authorize(headers, expected)?;
     let limit = query.limit.clamp(1, 2000);
-    let mut connection = db::checkout(&state).await?;
+    let mut connection = db::checkout(state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     let rows = tx
         .query(
