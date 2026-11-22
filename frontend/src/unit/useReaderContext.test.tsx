@@ -7,9 +7,9 @@ import { readerContextApi } from '../services/api-reader-context'
 import type { ReaderContextResponse } from '../types'
 
 const original_readerContextApi = { ...readerContextApi }
-const mock_readerContextApi = { get: vi.fn() }
+const mock_readerContextApi = { get: vi.fn<typeof readerContextApi.get>() }
 
-const mockedGet = (mock_readerContextApi.get as any)
+const mockedGet = mock_readerContextApi.get
 
 function createWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })

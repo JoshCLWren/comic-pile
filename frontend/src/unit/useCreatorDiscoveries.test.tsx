@@ -7,9 +7,11 @@ import { creatorDiscoveryApi } from '../services/creatorDiscoveryApi'
 import type { CreatorDiscoveryResponse } from '../types/index'
 
 const original_creatorDiscoveryApi = { ...creatorDiscoveryApi }
-const mock_creatorDiscoveryApi = { getDiscoveries: vi.fn() }
+const mock_creatorDiscoveryApi = {
+  getDiscoveries: vi.fn<typeof creatorDiscoveryApi.getDiscoveries>(),
+}
 
-const mockedGetDiscoveries = (mock_creatorDiscoveryApi.getDiscoveries as any)
+const mockedGetDiscoveries = mock_creatorDiscoveryApi.getDiscoveries
 
 function makeResponse(): CreatorDiscoveryResponse {
   return {

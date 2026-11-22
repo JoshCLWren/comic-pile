@@ -7,9 +7,11 @@ import { creatorComparisonApi } from '../services/creatorComparisonApi'
 import type { CreatorComparisonResponse } from '../types/index'
 
 const original_creatorComparisonApi = { ...creatorComparisonApi }
-const mock_creatorComparisonApi = { getComparison: vi.fn() }
+const mock_creatorComparisonApi = {
+  getComparison: vi.fn<typeof creatorComparisonApi.getComparison>(),
+}
 
-const mockedGetComparison = (mock_creatorComparisonApi.getComparison as any)
+const mockedGetComparison = mock_creatorComparisonApi.getComparison
 
 const COMPLETE_COVERAGE = {
   rated_issues_total: 4,

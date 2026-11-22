@@ -7,9 +7,11 @@ import { creatorTeamChemistryApi } from '../services/creatorTeamChemistryApi'
 import type { CreatorTeamChemistryResponse } from '../types/index'
 
 const original_creatorTeamChemistryApi = { ...creatorTeamChemistryApi }
-const mock_creatorTeamChemistryApi = { getChemistry: vi.fn() }
+const mock_creatorTeamChemistryApi = {
+  getChemistry: vi.fn<typeof creatorTeamChemistryApi.getChemistry>(),
+}
 
-const mockedGetChemistry = (mock_creatorTeamChemistryApi.getChemistry as any)
+const mockedGetChemistry = mock_creatorTeamChemistryApi.getChemistry
 
 function makeResponse(): CreatorTeamChemistryResponse {
   return {

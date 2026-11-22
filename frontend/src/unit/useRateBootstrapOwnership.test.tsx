@@ -15,13 +15,17 @@ import type { RollBootstrapResponse } from '../types/rollBootstrap'
 // observer. The existing useRate.test.tsx mocks it and can only assert the
 // option was passed, not that a second GET was actually avoided.
 const original_protectedRollMutationApi = { ...protectedRollMutationApi }
-const mock_protectedRollMutationApi = { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() }
+const mock_protectedRollMutationApi = {
+  rate: vi.fn<typeof protectedRollMutationApi.rate>(),
+  snooze: vi.fn<typeof protectedRollMutationApi.snooze>(),
+  bootstrap: vi.fn<typeof protectedRollMutationApi.bootstrap>(),
+}
 
 const original_rollBootstrapApi = { ...rollBootstrapApi }
-const mock_rollBootstrapApi = { get: vi.fn() }
+const mock_rollBootstrapApi = { get: vi.fn<typeof rollBootstrapApi.get>() }
 
-const mockedRate = (mock_protectedRollMutationApi.rate as any)
-const mockedBootstrapGet = (mock_rollBootstrapApi.get as any)
+const mockedRate = mock_protectedRollMutationApi.rate
+const mockedBootstrapGet = mock_rollBootstrapApi.get
 
 const thread: Thread = {
   id: 1,
