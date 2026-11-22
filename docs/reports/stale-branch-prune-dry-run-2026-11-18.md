@@ -1,0 +1,632 @@
+# Branch prune dry-run report
+
+- Generated: 2026-11-19T04:16:04.679020+00:00
+- Remote: `origin`
+- Age threshold: 14 days
+- Eligible for deletion: 74
+- Skipped/protected: 547
+
+## Eligible branches
+- `backup/4595-g11a-publish-work-ed7951ee7` — merged, age=14.64d, issue=n/a; eligible: merged for 14.6 days
+- `backup/local-4604-rate-rebase-36f9e20b7` — abandoned, age=14.1d, issue=n/a; eligible: abandoned for 14.1 days
+- `factory/11-4353-nvidia` — merged, age=14.3d, issue=4353; eligible: merged for 14.3 days
+- `factory/11-4427-nvidia` — merged, age=17.53d, issue=4427; eligible: merged for 17.5 days
+- `factory/4342-rust-threads-list` — abandoned, age=17.22d, issue=4342; eligible: abandoned for 17.2 days
+- `factory/45-2723-opencode-free` — abandoned, age=18.42d, issue=2723; eligible: abandoned for 18.4 days
+- `factory/46-4399-kilo-auto` — merged, age=17.53d, issue=4399; eligible: merged for 17.5 days
+- `factory/46-4453-kilo-auto` — merged, age=17.54d, issue=4453; eligible: merged for 17.5 days
+- `factory/48-4515-mistral` — abandoned, age=16.92d, issue=4515; eligible: abandoned for 16.9 days
+- `factory/51-4335-catalog-free` — abandoned, age=19.62d, issue=4335; eligible: abandoned for 19.6 days
+- `factory/51-4347-catalog-free` — merged, age=17.55d, issue=4347; eligible: merged for 17.6 days
+- `factory/51-4355-catalog-free` — merged, age=18.12d, issue=4355; eligible: merged for 18.1 days
+- `factory/53-4097-catalog-free` — abandoned, age=17.27d, issue=4097; eligible: abandoned for 17.3 days
+- `factory/53-4331-catalog-free` — abandoned, age=19.16d, issue=4331; eligible: abandoned for 19.2 days
+- `factory/53-4336-catalog-free` — abandoned, age=19.17d, issue=4336; eligible: abandoned for 19.2 days
+- `factory/54-2407-z-ai` — abandoned, age=16.5d, issue=2407; eligible: abandoned for 16.5 days
+- `factory/54-4126-z-ai` — merged, age=17.32d, issue=4126; eligible: merged for 17.3 days
+- `factory/54-4279-z-ai` — abandoned, age=15.94d, issue=4279; eligible: abandoned for 15.9 days
+- `factory/54-4339-z-ai` — abandoned, age=19.84d, issue=4339; eligible: abandoned for 19.8 days
+- `factory/54-4341-z-ai` — abandoned, age=14.0d, issue=4341; eligible: abandoned for 14.0 days
+- `factory/54-4345-z-ai` — merged, age=16.2d, issue=4345; eligible: merged for 16.2 days
+- `factory/54-4352-z-ai` — abandoned, age=14.0d, issue=4352; eligible: abandoned for 14.0 days
+- `factory/54-4443-z-ai` — merged, age=17.39d, issue=4443; eligible: merged for 17.4 days
+- `factory/54-4446-z-ai` — abandoned, age=18.05d, issue=4446; eligible: abandoned for 18.0 days
+- `factory/54-4458-z-ai` — merged, age=17.36d, issue=4458; eligible: merged for 17.4 days
+- `factory/54-4459-z-ai` — merged, age=17.24d, issue=4459; eligible: merged for 17.2 days
+- `factory/54-4502-z-ai` — abandoned, age=15.0d, issue=4502; eligible: abandoned for 15.0 days
+- `factory/54-4516-z-ai` — abandoned, age=16.43d, issue=4516; eligible: abandoned for 16.4 days
+- `factory/58-4299-opencode-free` — abandoned, age=19.09d, issue=4299; eligible: abandoned for 19.1 days
+- `factory/58-4335-opencode-free` — abandoned, age=18.35d, issue=4335; eligible: abandoned for 18.4 days
+- `factory/58-4337-opencode-free` — abandoned, age=18.32d, issue=4337; eligible: abandoned for 18.3 days
+- `factory/82-4283-z-ai` — merged, age=17.53d, issue=4283; eligible: merged for 17.5 days
+- `factory/82-4336-z-ai` — merged, age=14.18d, issue=4336; eligible: merged for 14.2 days
+- `factory/82-4427-z-ai` — abandoned, age=18.29d, issue=4427; eligible: abandoned for 18.3 days
+- `factory/82-4614-z-ai` — merged, age=14.77d, issue=4614; eligible: merged for 14.8 days
+- `factory/83-4447-opencode-free` — abandoned, age=18.24d, issue=4447; eligible: abandoned for 18.2 days
+- `factory/86-4125-nvidia` — abandoned, age=16.64d, issue=4125; eligible: abandoned for 16.6 days
+- `factory/86-4204-nvidia` — abandoned, age=18.91d, issue=4204; eligible: abandoned for 18.9 days
+- `factory/86-4273-nvidia` — abandoned, age=18.53d, issue=4273; eligible: abandoned for 18.5 days
+- `factory/86-4337-nvidia` — merged, age=14.02d, issue=4337; eligible: merged for 14.0 days
+- `factory/86-4338-nvidia` — abandoned, age=18.93d, issue=4338; eligible: abandoned for 18.9 days
+- `factory/86-4446-nvidia` — abandoned, age=16.67d, issue=4446; eligible: abandoned for 16.7 days
+- `factory/86-4504-nvidia` — merged, age=15.12d, issue=4504; eligible: merged for 15.1 days
+- `factory/89-4269-opencode-free` — abandoned, age=19.34d, issue=4269; eligible: abandoned for 19.3 days
+- `factory/89-4331-opencode-free` — merged, age=18.56d, issue=4331; eligible: merged for 18.6 days
+- `factory/crouton-alpha-opencode-20261104` — merged, age=14.47d, issue=n/a; eligible: merged for 14.5 days
+- `factory/deploy-integrity` — merged, age=18.48d, issue=n/a; eligible: merged for 18.5 days
+- `factory/model-retirement` — abandoned, age=16.04d, issue=n/a; eligible: abandoned for 16.0 days
+- `factory/native-snooze-backoff` — merged, age=18.36d, issue=n/a; eligible: merged for 18.4 days
+- `factory/offer-json-bind-fix` — merged, age=18.47d, issue=n/a; eligible: merged for 18.5 days
+- `factory/openrouter-crouton-alpha-20261104` — abandoned, age=14.13d, issue=n/a; eligible: abandoned for 14.1 days
+- `factory/pending-session-repair` — merged, age=18.46d, issue=n/a; eligible: merged for 18.5 days
+- `factory/retire-unusable-free-workers-20261103` — abandoned, age=14.99d, issue=n/a; eligible: abandoned for 15.0 days
+- `factory/roll-pool-option-e` — abandoned, age=18.35d, issue=n/a; eligible: abandoned for 18.3 days
+- `factory/roll-reset` — merged, age=18.41d, issue=n/a; eligible: merged for 18.4 days
+- `factory/rust-write-test-guard` — merged, age=18.44d, issue=n/a; eligible: merged for 18.4 days
+- `local/4458-queue-measurement` — abandoned, age=17.22d, issue=4458; eligible: abandoned for 17.2 days
+- `local/4504-network-budget` — abandoned, age=17.06d, issue=4504; eligible: abandoned for 17.1 days
+- `local/4527-roll-snooze` — abandoned, age=16.6d, issue=4527; eligible: abandoned for 16.6 days
+- `local/4549-auth-v2-callers` — abandoned, age=15.67d, issue=4549; eligible: abandoned for 15.7 days
+- `local/4563-reader-fix` — abandoned, age=15.97d, issue=4563; eligible: abandoned for 16.0 days
+- `local/4567-factory-review-visibility` — abandoned, age=16.14d, issue=4567; eligible: abandoned for 16.1 days
+- `local/acp-3802` — abandoned, age=16.01d, issue=3802; eligible: abandoned for 16.0 days
+- `local/acp-4276` — abandoned, age=16.07d, issue=4276; eligible: abandoned for 16.1 days
+- `local/acp-4348` — abandoned, age=15.89d, issue=4348; eligible: abandoned for 15.9 days
+- `local/acp-4457` — abandoned, age=16.15d, issue=4457; eligible: abandoned for 16.2 days
+- `local/acp-4460` — merged, age=16.34d, issue=4460; eligible: merged for 16.3 days
+- `local/acp-4475` — abandoned, age=16.04d, issue=4475; eligible: abandoned for 16.0 days
+- `local/acp-4483` — merged, age=16.35d, issue=4483; eligible: merged for 16.4 days
+- `local/acp-4535` — merged, age=16.32d, issue=4535; eligible: merged for 16.3 days
+- `local/acp-4535-live-500` — abandoned, age=16.1d, issue=4535; eligible: abandoned for 16.1 days
+- `local/acp-4599` — abandoned, age=15.72d, issue=4599; eligible: abandoned for 15.7 days
+- `local/faker-version-pin` — abandoned, age=16.02d, issue=n/a; eligible: abandoned for 16.0 days
+- `local/rust-test-schema-fixture` — abandoned, age=16.05d, issue=n/a; eligible: abandoned for 16.0 days
+
+## Skipped branches
+- `factory/102-4833-catalog-free` — not merged, age=6.09d, open_pr=false, issue=4833; younger than 14 days
+- `factory/11-4108-nvidia` — not merged, age=13.03d, open_pr=false, issue=4108; younger than 14 days
+- `factory/11-4445-nvidia` — not merged, age=13.52d, open_pr=false, issue=4445; younger than 14 days
+- `factory/11-4578-nvidia` — not merged, age=13.51d, open_pr=false, issue=4578; younger than 14 days
+- `factory/11-4846-nvidia` — not merged, age=6.42d, open_pr=false, issue=4846; younger than 14 days
+- `factory/111-5113-opencode-free` — not merged, age=4.06d, open_pr=false, issue=5113; unable to verify lease state: unable to fetch issue #5113: gh: This issue was deleted (HTTP 410); younger than 14 days
+- `factory/113-4988-opencode-free` — not merged, age=4.35d, open_pr=false, issue=4988; younger than 14 days
+- `factory/113-5116-opencode-free` — not merged, age=4.31d, open_pr=false, issue=5116; unable to verify lease state: unable to fetch issue #5116: gh: This issue was deleted (HTTP 410); younger than 14 days
+- `factory/21-4100-nvidia` — merged, age=12.92d, open_pr=false, issue=4100; younger than 14 days
+- `factory/21-4352-nvidia` — not merged, age=12.19d, open_pr=false, issue=4352; younger than 14 days
+- `factory/41-4578-opencode-free` — not merged, age=10.95d, open_pr=false, issue=4578; younger than 14 days
+- `factory/41-4838-opencode-free` — not merged, age=8.01d, open_pr=false, issue=4838; younger than 14 days
+- `factory/41-4931-opencode-free` — not merged, age=8.64d, open_pr=false, issue=4931; unable to verify lease state: unable to fetch issue #4931: gh: This issue was deleted (HTTP 410); younger than 14 days
+- `factory/41-5113-opencode-free` — not merged, age=4.31d, open_pr=false, issue=5113; unable to verify lease state: unable to fetch issue #5113: gh: This issue was deleted (HTTP 410); younger than 14 days
+- `factory/42-4699-opencode-free` — merged, age=11.86d, open_pr=false, issue=4699; younger than 14 days
+- `factory/42-4841-opencode-free` — not merged, age=8.84d, open_pr=false, issue=4841; younger than 14 days
+- `factory/45-3507-opencode-free` — not merged, age=11.7d, open_pr=false, issue=3507; younger than 14 days
+- `factory/45-4746-opencode-free` — merged, age=9.73d, open_pr=false, issue=4746; younger than 14 days
+- `factory/45-4842-opencode-free` — not merged, age=7.17d, open_pr=false, issue=4842; cannot verify numbered lease expiry on issue:4842; younger than 14 days
+- `factory/45-4850-opencode-free` — not merged, age=4.06d, open_pr=false, issue=4850; younger than 14 days
+- `factory/45-4851-opencode-free` — not merged, age=8.0d, open_pr=false, issue=4851; younger than 14 days
+- `factory/45-4931-opencode-free` — not merged, age=8.85d, open_pr=false, issue=4931; unable to verify lease state: unable to fetch issue #4931: gh: This issue was deleted (HTTP 410); younger than 14 days
+- `factory/46-4350-kilo-auto` — merged, age=13.93d, open_pr=false, issue=4350; younger than 14 days
+- `factory/46-4357-kilo-auto` — merged, age=13.54d, open_pr=false, issue=4357; younger than 14 days
+- `factory/46-4444-kilo-auto` — not merged, age=11.43d, open_pr=false, issue=4444; younger than 14 days
+- `factory/46-4445-kilo-auto` — not merged, age=11.59d, open_pr=false, issue=4445; younger than 14 days
+- `factory/46-4513-kilo-auto` — not merged, age=16.82d, open_pr=false, issue=4513; unable to verify lease state: unable to fetch issue #4513: Get "https://api.github.com/repos/JoshCLWren/comic-pile/issues/4513": net/http: TLS handshake timeout
+- `factory/46-4516-kilo-auto` — not merged, age=11.91d, open_pr=false, issue=4516; younger than 14 days
+- `factory/46-4522-kilo-auto` — not merged, age=16.96d, open_pr=false, issue=4522; unable to verify lease state: unable to fetch issue #4522: gh: This issue was deleted (HTTP 410)
+- `factory/46-4589-kilo-auto` — not merged, age=11.74d, open_pr=false, issue=4589; younger than 14 days
+- `factory/46-4737-kilo-auto` — not merged, age=9.53d, open_pr=false, issue=4737; younger than 14 days
+- `factory/46-4839-kilo-auto` — not merged, age=7.62d, open_pr=false, issue=4839; younger than 14 days
+- `factory/46-4846-kilo-auto` — not merged, age=4.99d, open_pr=false, issue=4846; younger than 14 days
+- `factory/46-4927-kilo-auto` — not merged, age=9.02d, open_pr=false, issue=4927; unable to verify lease state: unable to fetch issue #4927: gh: This issue was deleted (HTTP 410); younger than 14 days
+- `factory/4855-demo-roll-prune` — merged, age=5.11d, open_pr=false, issue=4855; younger than 14 days
+- `factory/4980-fast-merge` — not merged, age=7.06d, open_pr=false, issue=4980; younger than 14 days
+- `factory/4982-skip-invalid-ollama-prs` — not merged, age=7.06d, open_pr=false, issue=4982; younger than 14 days
+- `factory/51-4735-catalog-free` — not merged, age=8.89d, open_pr=false, issue=4735; younger than 14 days
+- `factory/53-4842-catalog-free` — not merged, age=5.83d, open_pr=false, issue=4842; cannot verify numbered lease expiry on issue:4842; younger than 14 days
+- `factory/53-4848-catalog-free` — not merged, age=5.96d, open_pr=false, issue=4848; cannot verify numbered lease expiry on issue:4848; younger than 14 days
+- `factory/53-4916-catalog-free` — merged, age=8.98d, open_pr=false, issue=4916; younger than 14 days
+- `factory/54-4336-z-ai` — not merged, age=13.75d, open_pr=false, issue=4336; younger than 14 days
+- `factory/54-4552-z-ai` — merged, age=13.62d, open_pr=false, issue=4552; younger than 14 days
+- `factory/54-4586-z-ai` — merged, age=12.96d, open_pr=false, issue=4586; younger than 14 days
+- `factory/54-4719-z-ai` — not merged, age=10.41d, open_pr=false, issue=4719; younger than 14 days
+- `factory/54-4822-z-ai` — not merged, age=5.52d, open_pr=false, issue=4822; younger than 14 days
+- `factory/54-4833-z-ai` — not merged, age=5.22d, open_pr=false, issue=4833; younger than 14 days
+- `factory/54-4838-z-ai` — not merged, age=4.98d, open_pr=false, issue=4838; younger than 14 days
+- `factory/54-4842-z-ai` — not merged, age=4.35d, open_pr=false, issue=4842; cannot verify numbered lease expiry on issue:4842; younger than 14 days
+- `factory/60-4843-catalog-free` — not merged, age=6.15d, open_pr=false, issue=4843; active local lease on issue:4843; younger than 14 days
+- `factory/64-4104-catalog-free` — merged, age=12.57d, open_pr=false, issue=4104; younger than 14 days
+- `factory/64-4849-catalog-free` — not merged, age=5.07d, open_pr=false, issue=4849; younger than 14 days
+- `factory/75-4204-opencode-free` — not merged, age=13.35d, open_pr=false, issue=4204; younger than 14 days
+- `factory/75-4444-opencode-free` — not merged, age=11.59d, open_pr=false, issue=4444; younger than 14 days
+- `factory/75-4732-opencode-free` — not merged, age=4.99d, open_pr=false, issue=4732; younger than 14 days
+- `factory/75-4740-opencode-free` — not merged, age=8.93d, open_pr=false, issue=4740; younger than 14 days
+- `factory/75-4833-opencode-free` — not merged, age=8.89d, open_pr=false, issue=4833; younger than 14 days
+- `factory/75-4851-opencode-free` — not merged, age=2.46d, open_pr=false, issue=4851; younger than 14 days
+- `factory/82-4346-z-ai` — not merged, age=13.92d, open_pr=false, issue=4346; younger than 14 days
+- `factory/82-4445-z-ai` — not merged, age=13.23d, open_pr=false, issue=4445; younger than 14 days
+- `factory/82-4822-z-ai` — not merged, age=4.12d, open_pr=false, issue=4822; younger than 14 days
+- `factory/82-4836-z-ai` — merged, age=9.01d, open_pr=false, issue=4836; active numbered lease on issue:4836; younger than 14 days
+- `factory/82-4839-z-ai` — not merged, age=3.93d, open_pr=false, issue=4839; younger than 14 days
+- `factory/86-3802-nvidia` — merged, age=12.19d, open_pr=false, issue=3802; younger than 14 days
+- `factory/86-4400-nvidia` — merged, age=13.57d, open_pr=false, issue=4400; younger than 14 days
+- `factory/86-4456-nvidia` — merged, age=13.87d, open_pr=false, issue=4456; younger than 14 days
+- `factory/86-4457-nvidia` — merged, age=13.81d, open_pr=false, issue=4457; younger than 14 days
+- `factory/86-4691-nvidia` — not merged, age=12.26d, open_pr=false, issue=4691; younger than 14 days
+- `factory/86-4737-nvidia` — merged, age=4.35d, open_pr=false, issue=4737; younger than 14 days
+- `factory/96-4098-catalog-free` — merged, age=12.77d, open_pr=false, issue=4098; younger than 14 days
+- `factory/96-4276-catalog-free` — merged, age=13.94d, open_pr=false, issue=4276; younger than 14 days
+- `factory/96-4346-catalog-free` — not merged, age=10.57d, open_pr=false, issue=4346; younger than 14 days
+- `factory/96-4356-catalog-free` — merged, age=13.65d, open_pr=false, issue=4356; younger than 14 days
+- `factory/96-4450-catalog-free` — merged, age=13.6d, open_pr=false, issue=4450; younger than 14 days
+- `factory/96-4499-catalog-free` — merged, age=13.58d, open_pr=false, issue=4499; younger than 14 days
+- `factory/96-4578-catalog-free` — not merged, age=12.57d, open_pr=false, issue=4578; younger than 14 days
+- `factory/96-4684-catalog-free` — not merged, age=11.15d, open_pr=false, issue=4684; younger than 14 days
+- `factory/96-4735-catalog-free` — not merged, age=9.64d, open_pr=false, issue=4735; younger than 14 days
+- `factory/96-4740-catalog-free` — not merged, age=10.37d, open_pr=false, issue=4740; younger than 14 days
+- `factory/96-4766-catalog-free` — merged, age=8.98d, open_pr=false, issue=4766; younger than 14 days
+- `factory/97-4458-z-ai` — not merged, age=10.66d, open_pr=false, issue=4458; younger than 14 days
+- `factory/97-4732-z-ai` — not merged, age=9.86d, open_pr=false, issue=4732; younger than 14 days
+- `factory/97-4833-z-ai` — not merged, age=7.59d, open_pr=false, issue=4833; younger than 14 days
+- `factory/97-4843-z-ai` — not merged, age=3.16d, open_pr=false, issue=4843; active local lease on issue:4843; younger than 14 days
+- `factory/97-5115-z-ai` — not merged, age=4.31d, open_pr=false, issue=5115; unable to verify lease state: unable to fetch issue #5115: gh: This issue was deleted (HTTP 410); younger than 14 days
+- `factory/98-4833-kilo-auto` — not merged, age=4.05d, open_pr=false, issue=4833; younger than 14 days
+- `factory/98-4842-kilo-auto` — not merged, age=4.0d, open_pr=false, issue=4842; cannot verify numbered lease expiry on issue:4842; younger than 14 days
+- `factory/98-4853-kilo-auto` — not merged, age=2.22d, open_pr=false, issue=4853; younger than 14 days
+- `factory/98-4924-kilo-auto` — not merged, age=8.98d, open_pr=false, issue=4924; unable to verify lease state: unable to fetch issue #4924: gh: This issue was deleted (HTTP 410); younger than 14 days
+- `factory/98-4931-kilo-auto` — not merged, age=8.93d, open_pr=false, issue=4931; unable to verify lease state: unable to fetch issue #4931: gh: This issue was deleted (HTTP 410); younger than 14 days
+- `factory/account-budget-quota-correctness-20261116` — merged, age=2.49d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/add-non-opencode-free-sources` — not merged, age=5.11d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/add-six-free-api-providers-20261115` — not merged, age=3.56d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/approve-held-ci-all-factory-prs` — not merged, age=1.34d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/attribute-smoke-timeouts-20261114` — not merged, age=4.56d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/automatic-work-checkpoints-20261115` — not merged, age=3.58d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/avoid-duplicate-neon-refresh-20261114` — not merged, age=4.34d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/canonical-opencode-provider-model-ids-1115` — not merged, age=3.4d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/canonical-provider-registry-1115` — not merged, age=3.39d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/canonical-source-timestamp-20261114` — not merged, age=4.54d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/catalog-derived-roster-20261115` — not merged, age=3.36d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/catalog-slot-manifest-20261115` — not merged, age=2.56d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/ci-aware-dispatch-20261115` — not merged, age=3.47d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/cleanup-on-state-code-push` — not merged, age=3.13d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/coalesce-quota-wakeups-20261116` — not merged, age=2.52d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/compact-candidate-health-nov16` — not merged, age=3.1d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/compact-neon-cache-expiry-20261115` — not merged, age=4.04d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/consistent-outcomes-and-exponential-retry-20261114` — not merged, age=4.17d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/dashboard-file-payload-20261115` — not merged, age=3.44d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/dashboard-runlocal-discovery` — not merged, age=3.05d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/defer-recovery-rate-limit-20261116` — not merged, age=2.52d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/dispatch-idle-early-stop` — not merged, age=1.59d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/dispatch-skip-leased-workers` — not merged, age=1.35d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/dispatcher-read-cache` — not merged, age=1.59d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/dynamic-model-failover-20261116` — not merged, age=2.37d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/expand-free-opencode-fleet-20261113` — not merged, age=5.13d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/expand-free-provider-catalog-20261115` — not merged, age=3.58d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/expire-legacy-projection-tombstones-20261114` — not merged, age=4.42d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/failover-operational-fixes-20261116` — not merged, age=2.27d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/failover-runtime-hardening-20261116` — not merged, age=2.31d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/failover-staging-closure` — not merged, age=1.4d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fast-merge-allow-dashboard` — not merged, age=2.07d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fast-merge-exact-head-python-gate-20261117` — not merged, age=1.43d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fcm-probe-sambanova-status-20261116` — not merged, age=2.58d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fibonacci-focused-regression-20261115` — not merged, age=3.48d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fibonacci-retry-credential-gate-20261115` — not merged, age=3.49d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fibonacci-test-addopts-20261115` — not merged, age=3.47d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fibonacci-test-isolation-20261115` — not merged, age=3.48d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/finalize-attempt-marker-from-primary-collector-20261114` — not merged, age=4.16d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-5070-check-ingest-neon` — not merged, age=4.58d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-5071-preserve-target-fields` — not merged, age=4.57d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-5071-reconciliation-normalization` — not merged, age=4.58d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-account-scope-contract-20261117` — not merged, age=1.51d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-classifier-duplicate-tail-after-5093-20261114` — not merged, age=4.47d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-dispatch-reconcile-test-order-20261114` — not merged, age=4.46d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-false-provider-5xx-classification-20261114` — not merged, age=4.47d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-fast-merge-ty-narrowing-20261113` — not merged, age=5.07d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-jev-worker-cli-20261117` — not merged, age=1.47d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-kilo-provider-catalog` — not merged, age=1.63d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-live-retention-repo-validator` — not merged, age=3.13d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-main-ci-controller-test-fixtures` — not merged, age=4.53d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-main-ci-neon-ingestion-import` — not merged, age=4.53d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-post-merge-main-ci-20261115` — not merged, age=3.43d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-pr-history-gh-cli-and-prune-scheduling` — not merged, age=4.01d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-projection-test-unused-import-20261114` — not merged, age=4.42d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-projection-transient-gh-read-20261113` — not merged, age=5.07d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-relaxed-admission-regression-fixtures-20261114` — not merged, age=4.42d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-retired-check-prune-regex` — not merged, age=3.13d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-retired-coderabbit-ruff-1115` — not merged, age=3.36d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-review-verdict-loop-5299` — not merged, age=1.63d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-structured-telemetry-false-throttle-20261114` — not merged, age=4.48d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-targeted-cutover-state-20261117` — not merged, age=1.47d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-targeted-dispatch-credentials-20261117` — not merged, age=1.47d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fix-trusted-projection-upsert-coalesce-20261114` — not merged, age=4.41d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fleet-operations-site-20261116` — not merged, age=2.52d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/fleet-wide-failover-20261116` — not merged, age=2.32d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/freeze-automatic-issue-splits-20261115` — not merged, age=3.96d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/gh-shim-recursion-fix` — not merged, age=1.41d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/i5380-undo-rating-restores-die` — not merged, age=0.24d, open_pr=false, issue=5380; younger than 14 days
+- `factory/ignore-truncated-agent-json-20261114` — not merged, age=4.48d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/iss4822-history-activity` — not merged, age=1.3d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/lean-neon-caching-20261115` — not merged, age=3.44d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/local-4734-required-rust-db-tests` — not merged, age=11.12d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/local-4736-alembic-lock-timeout` — not merged, age=11.12d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/local-5172-gpt-6.1-sol-checkpoint-handoff` — not merged, age=3.54d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/local-5172-gpt-6.1-sol-recovery-state` — not merged, age=3.54d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/local-5183-gpt-6.1-sol-persisted-work` — not merged, age=3.52d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/local-health-command-20261117` — not merged, age=1.46d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/migration-lane-bounded-candidates` — not merged, age=3.04d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/migration-lane-quota-deferral-20261116` — not merged, age=2.51d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/model-backoff-reset-20261117` — not merged, age=1.51d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/model-failover-durability-20261116` — not merged, age=2.37d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/model-failover-lint-20261116` — not merged, age=2.37d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/model-fibonacci-cross-worker-20261115` — not merged, age=3.48d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/model-retirement-43624964004` — not merged, age=4.42d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/model-retirement-43749324085` — not merged, age=3.39d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-advisory-list-readthrough-20261114` — not merged, age=4.55d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-ansi-model-outcome-20261114` — not merged, age=4.53d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-claim-safe-cleanup-20261114` — not merged, age=4.56d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-event-target-projections` — not merged, age=5.99d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-exponential-backoff-20261114` — not merged, age=4.17d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-first-model-selection-20261114` — not merged, age=4.51d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-model-selection-test-repair-20261114` — not merged, age=4.5d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-operational-state-20261114` — not merged, age=4.63d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-operational-state-ci-repair-20261114` — not merged, age=4.63d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-read-first-global-fast` — not merged, age=4.61d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-read-first-label-repair-fast` — not merged, age=4.61d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-record-intermediate-model-failures-20261114` — not merged, age=4.5d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-registry-id-first-20261114` — not merged, age=4.51d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-terminal-offline-compat-20261114` — not merged, age=4.63d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-transactional-worker-ledger` — not merged, age=6.0d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-trusted-model-attribution-20261114` — not merged, age=4.52d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/neon-worker-cooldown-fixture-20261114` — not merged, age=4.17d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/no-main-health-issues-20261115` — not merged, age=3.97d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/no-prose-throttle-on-clean-exit` — not merged, age=1.59d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/observer-delivery-attestation-parity-20261114` — not merged, age=4.17d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/ollama-long-timeout-transport-metrics-20261114` — not merged, age=4.06d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/openrouter-free-quota-isolation-20261116` — not merged, age=2.46d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/optional-registry-comments-20261116` — not merged, age=2.16d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/policy-v28-chatgpt-prompt` — not merged, age=1.62d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/pollinations-live-catalog-20261116` — not merged, age=2.55d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/pr-targeted-retry-history` — not merged, age=3.0d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/prefer-proven-models-20261116` — not merged, age=2.23d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/preserve-pr-reconciliation-state-20261114` — not merged, age=4.54d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/provider-eligibility-optional-outcome-20261116` — not merged, age=2.53d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/provider-quota-eligibility-regression-20261116` — not merged, age=2.54d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/provider-streak-separate-from-capacity-20261114` — not merged, age=4.17d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/prune-obsolete-events-and-silent-refresh` — not merged, age=3.15d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/quota-sampler-cache-hits` — not merged, age=1.58d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/rate-limit-resilient-release-persist` — not merged, age=1.62d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/read-token-offload` — not merged, age=1.6d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/reconcile-once-per-dispatch-batch-20261114` — not merged, age=4.47d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/registry-driven-provider-resolution-1115` — not merged, age=3.39d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/registry-recovery-neon-first` — not merged, age=3.05d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/registry-visibility-contract-tests` — not merged, age=2.15d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/relax-neon-discovery-ttls-20261114` — not merged, age=4.33d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/remove-coderabbit-hooks-1115` — not merged, age=3.36d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/repair-dynamic-worker-outcomes-20261116` — not merged, age=2.54d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/repair-lint-typecheck-main-20261117` — not merged, age=1.44d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/repair-projection-ttl-and-small-fleet-admission-20261114` — not merged, age=4.42d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/repair-quota-exception-ruff-20261116` — not merged, age=2.51d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/repair-stale-factory-contract-tests-20261116` — not merged, age=2.25d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/replace-check-projection-with-event-wakeups` — not merged, age=3.16d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/require-explicit-http-codes-20261114` — not merged, age=4.46d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/reset-health-history-cutoff-20261117` — not merged, age=1.5d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/restore-coderabbit-review-requests-20261116` — not merged, age=2.25d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/retain-free-429-quota-policy-20261114` — not merged, age=4.46d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/retire-1093-registry` — not merged, age=2.07d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/retire-account-dead-sources` — not merged, age=1.35d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/retire-coderabbit-20261115` — merged, age=3.37d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/retire-registry-comment-full-scans` — not merged, age=3.04d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/retired-check-projection-bounded-cleanup` — not merged, age=3.14d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/ruff-registry-fix-1115` — not merged, age=3.37d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/sampler-resilient` — not merged, age=1.57d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/scope-lifecycle-retention-for-new-events` — not merged, age=3.14d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/scoped-obsolete-cleanup-followup` — not merged, age=3.15d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/skip-non-chat-catalog-models` — not merged, age=1.59d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/stageless-pr-assignment-loop-20261116` — not merged, age=2.25d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/status-merge-evidence-20261117` — not merged, age=1.45d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/status-priority-and-failure-evidence-20261117` — not merged, age=1.44d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/stop-checkpoint-api-ci-storms` — not merged, age=1.6d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/stop-dispatcher-main-issue-creation-20261115` — not merged, age=3.94d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/target-quota-deferred-not-failed` — not merged, age=3.14d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/targeted-pr-dispatch-read-budget-20261117` — not merged, age=1.47d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/trusted-agent-timeout-attribution-20261114` — not merged, age=4.54d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/trusted-registry-marker-locators` — not merged, age=3.14d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/trusted-runtime-smoke-outcome-20261114` — not merged, age=4.55d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/update-all-relaxed-limit-and-release-fixtures-20261114` — not merged, age=4.41d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/vm-death-sampler` — not merged, age=1.42d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/work-as-smoke-no-extra-inference-20261114` — not merged, age=4.1d, open_pr=false, issue=n/a; younger than 14 days
+- `factory/work-checkpoints/43723491529` — not merged, age=1.54d, open_pr=false, issue=n/a; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/43724007060` — not merged, age=3.58d, open_pr=false, issue=n/a; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/43724877464` — not merged, age=1.59d, open_pr=false, issue=n/a; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/43726466965` — not merged, age=3.53d, open_pr=false, issue=n/a; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/43726652274` — not merged, age=3.55d, open_pr=false, issue=n/a; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/43727682756` — not merged, age=3.55d, open_pr=false, issue=n/a; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/43728603701` — not merged, age=3.54d, open_pr=false, issue=n/a; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-3554/flint-40b-free/44194381577` — not merged, age=1.0d, open_pr=true, issue=3554; open PR exists; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-3554/moonshotai-kimi-k3-1-pro/44253193575` — not merged, age=0.88d, open_pr=false, issue=3554; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-3554/moonshotai-kimi-k3-1-pro/44309695600` — not merged, age=0.6d, open_pr=false, issue=3554; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-3554/nemotron-3-5-super-vl-free/44220548634` — not merged, age=1.08d, open_pr=false, issue=3554; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-3554/nvidia-nemotron-3-5-bolt-e4b/44362622066` — not merged, age=0.43d, open_pr=false, issue=3554; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-3554/nvidia-nemotron-3-5-super-vl-free/44218765917` — not merged, age=1.1d, open_pr=false, issue=3554; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-3554/nvidia-nemotron-3-ultra-550b-a55b/44274825264` — not merged, age=0.78d, open_pr=false, issue=3554; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-3554/particle-ai-particle-1-free/44243875284` — not merged, age=0.95d, open_pr=false, issue=3554; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4346/mistralai-mistral-large-4-1t-a52b/44247042651` — not merged, age=0.19d, open_pr=false, issue=4346; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4346/nvidia-nemotron-3-5-super-vl-120b-a12b/44259741078` — not merged, age=0.86d, open_pr=false, issue=4346; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4445/inkling-2-small-free/44238644598` — not merged, age=0.02d, open_pr=true, issue=4445; open PR exists; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4445/mistralai-mistral-large-4-1t-a52b/44269096521` — not merged, age=0.79d, open_pr=false, issue=4445; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4445/moonshotai-kimi-k3-1-pro/44256290552` — not merged, age=0.82d, open_pr=false, issue=4445; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4445/nvidia-nemotron-3-5-super-vl-120b-a12b/44249841663` — not merged, age=0.91d, open_pr=false, issue=4445; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4445/nvidia-nemotron-3-ultra-550b-a55b/44243910959` — not merged, age=0.92d, open_pr=false, issue=4445; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4445/nvidia-nemotron-3-ultra-550b-a55b/44253888388` — not merged, age=0.89d, open_pr=false, issue=4445; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4445/stepfun-ai-step-5-preview/44279963917` — not merged, age=0.74d, open_pr=false, issue=4445; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4589/nvidia-nemotron-3-5-lightning-30b-a3b/44000139723` — not merged, age=1.47d, open_pr=false, issue=4589; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4589/nvidia-nemotron-3-ultra-550b-a55b/44274377450` — not merged, age=0.0d, open_pr=true, issue=4589; open PR exists; checked out in live local worktree; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4737/beam-free/43742763406` — not merged, age=3.43d, open_pr=false, issue=4737; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4822/beam-free/43742922543` — not merged, age=1.57d, open_pr=false, issue=4822; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4822/hy4-flash-free/44178453724` — not merged, age=1.06d, open_pr=false, issue=4822; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4822/nvidia-nemotron-3-ultra-550b-a55b/44013939744` — not merged, age=2.0d, open_pr=false, issue=4822; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4822/poolside-laguna-xs-2-1/43999916080` — not merged, age=1.56d, open_pr=false, issue=4822; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4832/meta-muse-glimmer-30b/44242119390` — not merged, age=0.04d, open_pr=true, issue=4832; open PR exists; checked out in live local worktree; active local lease on issue:4832; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4832/nemotron-3-5-lightning-free/43742979165` — not merged, age=3.2d, open_pr=false, issue=4832; active local lease on issue:4832; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4832/nvidia-nemotron-3-5-lightning-free/44278763781` — not merged, age=0.76d, open_pr=false, issue=4832; active local lease on issue:4832; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4833/poolside-laguna-xs-2-1/43743006548` — not merged, age=1.5d, open_pr=false, issue=4833; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/cohere-north-mini-code-free/43796080787` — not merged, age=3.05d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/flint-40b-free/44179957821` — not merged, age=1.27d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/google-gemma-4-31b-it/44442914541` — not merged, age=0.08d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/hy4-flash-free/44165377872` — not merged, age=0.94d, open_pr=true, issue=4835; open PR exists; checked out in live local worktree; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/hy4-flash-free/44176720260` — not merged, age=1.29d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/mistralai-mistral-large-4-1t-a52b/44272447513` — not merged, age=0.74d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/mistralai-mistral-large-4-1t-a52b/44336200993` — not merged, age=0.51d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/mistralai-mistral-large-4-1t-a52b/44435024448` — not merged, age=0.11d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/moonshotai-kimi-k3-1-pro/44247989850` — not merged, age=0.87d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/moonshotai-kimi-k3-1-pro/44308069208` — not merged, age=0.58d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/moonshotai-kimi-k3-1-pro/44373401729` — not merged, age=0.35d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/nvidia-nemotron-3-5-lightning-30b-a3b/43794862743` — not merged, age=2.59d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/nvidia-nemotron-3-5-lightning-30b-a3b/44184137349` — not merged, age=1.26d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/nvidia-nemotron-3-5-super-vl-120b-a12b/44404142321` — not merged, age=0.27d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/nvidia-nemotron-3-ultra-550b-a55b/44288154566` — not merged, age=0.73d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4835/nvidia-nemotron-3-ultra-550b-a55b/44327800033` — not merged, age=0.55d, open_pr=false, issue=4835; active local lease on issue:4835; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4836/beam-free/44452707057` — not merged, age=0.01d, open_pr=false, issue=4836; active numbered lease on issue:4836; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4836/flint-40b-free/44194318144` — not merged, age=1.22d, open_pr=false, issue=4836; active numbered lease on issue:4836; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4836/hy4-flash-free/44169629306` — not merged, age=0.52d, open_pr=false, issue=4836; active numbered lease on issue:4836; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4836/hy4-flash-free/44200239360` — not merged, age=1.19d, open_pr=false, issue=4836; active numbered lease on issue:4836; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4836/hy4-flash-free/44226447092` — not merged, age=1.05d, open_pr=false, issue=4836; active numbered lease on issue:4836; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4836/mistralai-mistral-large-4-1t-a52b/44435320149` — not merged, age=0.09d, open_pr=false, issue=4836; active numbered lease on issue:4836; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4836/nemotron-3-5-super-vl-free/44215669670` — not merged, age=1.11d, open_pr=false, issue=4836; active numbered lease on issue:4836; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4836/nemotron-3-5-super-vl-free/44220061863` — not merged, age=1.06d, open_pr=false, issue=4836; active numbered lease on issue:4836; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4836/nvidia-nemotron-3-5-bolt-e4b/44434220077` — not merged, age=0.13d, open_pr=false, issue=4836; active numbered lease on issue:4836; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4836/stepfun-ai-step-5-preview/44202648788` — not merged, age=1.12d, open_pr=false, issue=4836; active numbered lease on issue:4836; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4838/nvidia-nemotron-3-ultra-550b-a55b/43956076031` — not merged, age=2.29d, open_pr=false, issue=4838; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4838/particle-ai-particle-1-free/43987561770` — not merged, age=2.15d, open_pr=false, issue=4838; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4838/poolside-laguna-xs-2-1/43789278374` — not merged, age=1.15d, open_pr=false, issue=4838; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4839/nvidia-nemotron-3-5-bolt-e4b/43956597603` — not merged, age=2.29d, open_pr=false, issue=4839; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4839/nvidia-nemotron-3-5-super-vl-120b-a12b/44028050655` — not merged, age=1.91d, open_pr=false, issue=4839; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4839/nvidia-nemotron-3-ultra-550b-a55b/43999955050` — not merged, age=1.25d, open_pr=false, issue=4839; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/beam-free/44442149621` — not merged, age=0.08d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/flint-40b-free/44194349868` — not merged, age=0.02d, open_pr=true, issue=4841; open PR exists; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/kilo-auto-free/44289126577` — not merged, age=0.72d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/longcat-2-5-free/44202689457` — not merged, age=1.18d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/minimaxai-minimax-m3-1-flash/44393066775` — not merged, age=0.3d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/mistralai-mistral-large-4-1t-a52b/44266629392` — not merged, age=0.81d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/mistralai-mistral-large-4-1t-a52b/44298712806` — not merged, age=0.66d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/mistralai-mistral-large-4-1t-a52b/44336271035` — not merged, age=0.5d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/mistralai-mistral-large-4-1t-a52b/44434149705` — not merged, age=0.12d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/moonshotai-kimi-k3-1-pro/44257038899` — not merged, age=0.83d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/moonshotai-kimi-k3-1-pro/44310587492` — not merged, age=0.57d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/moonshotai-kimi-k3-1-pro/44373462524` — not merged, age=0.36d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/nemotron-3-5-super-vl-free/44202689457` — not merged, age=1.15d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/nemotron-3-5-super-vl-free/44213167443` — not merged, age=1.1d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/nemotron-3-5-super-vl-free/44219828123` — not merged, age=1.07d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/nvidia-nemotron-3-5-super-vl-120b-a12b/44255331503` — not merged, age=0.88d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/nvidia-nemotron-3-5-super-vl-120b-a12b/44390964516` — not merged, age=0.32d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/nvidia-nemotron-3-5-super-vl-120b-a12b/44439531476` — not merged, age=0.09d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4841/nvidia-nemotron-3-ultra-550b-a55b/44289126577` — not merged, age=0.69d, open_pr=false, issue=4841; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4842/hy4-flash-free/44155261469` — not merged, age=0.04d, open_pr=true, issue=4842; open PR exists; cannot verify numbered lease expiry on issue:4842; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4842/hy4-flash-free/44169393124` — not merged, age=1.31d, open_pr=false, issue=4842; cannot verify numbered lease expiry on issue:4842; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4842/mistralai-mistral-large-4-1t-a52b/44435053487` — not merged, age=0.08d, open_pr=false, issue=4842; cannot verify numbered lease expiry on issue:4842; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4842/nvidia-nemotron-3-5-lightning-30b-a3b/44184288034` — not merged, age=1.26d, open_pr=false, issue=4842; cannot verify numbered lease expiry on issue:4842; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4842/nvidia-nemotron-3-5-super-vl-120b-a12b/44404196078` — not merged, age=0.26d, open_pr=false, issue=4842; cannot verify numbered lease expiry on issue:4842; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4842/nvidia-nemotron-3-5-super-vl-120b-a12b/44452732126` — not merged, age=0.0d, open_pr=false, issue=4842; cannot verify numbered lease expiry on issue:4842; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4843/beam-free/44070156371` — not merged, age=1.72d, open_pr=false, issue=4843; active local lease on issue:4843; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4843/big-pickle/43754663522` — not merged, age=3.34d, open_pr=false, issue=4843; active local lease on issue:4843; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4843/kilo-auto-free/43739393530` — not merged, age=3.44d, open_pr=false, issue=4843; active local lease on issue:4843; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4843/nemotron-3-5-lightning-free/43742954802` — not merged, age=3.43d, open_pr=false, issue=4843; active local lease on issue:4843; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4843/nvidia-nemotron-3-ultra-550b-a55b-free/44000060172` — not merged, age=0.68d, open_pr=false, issue=4843; active local lease on issue:4843; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4844/kilo-auto-free/43794478410` — not merged, age=1.08d, open_pr=false, issue=4844; active local lease on issue:4844; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4844/kilo-auto-free/43831400106` — not merged, age=2.81d, open_pr=false, issue=4844; active local lease on issue:4844; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4848/meta-muse-glimmer-30b/44392031995` — not merged, age=0.31d, open_pr=false, issue=4848; cannot verify numbered lease expiry on issue:4848; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4848/mistralai-mistral-large-4-1t-a52b/44434275826` — not merged, age=0.08d, open_pr=false, issue=4848; cannot verify numbered lease expiry on issue:4848; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4848/nvidia-nemotron-3-5-super-vl-120b-a12b/44396045894` — not merged, age=0.3d, open_pr=false, issue=4848; cannot verify numbered lease expiry on issue:4848; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4848/thinkingmachines-inkling-2-small-free/44304580375` — not merged, age=0.65d, open_pr=false, issue=4848; cannot verify numbered lease expiry on issue:4848; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4848/thinkingmachines-inkling-2-small-free/44368597896` — not merged, age=0.41d, open_pr=false, issue=4848; cannot verify numbered lease expiry on issue:4848; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4850/baidu-ernie-5-5-flash-preview-free/43794694978` — not merged, age=1.19d, open_pr=false, issue=4850; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4851/glm-4-5-flash/43748723817` — not merged, age=3.38d, open_pr=false, issue=4851; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4851/google-gemma-4-31b-it/43743686843` — not merged, age=3.43d, open_pr=false, issue=4851; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4851/kilo-auto-free/43731597883` — not merged, age=3.5d, open_pr=false, issue=4851; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4851/kilo-auto-free/43740383613` — not merged, age=3.44d, open_pr=false, issue=4851; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4851/kilo-auto-free/43805540933` — not merged, age=2.98d, open_pr=false, issue=4851; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4851/nemotron-3-5-lightning-free/43836241348` — not merged, age=2.8d, open_pr=false, issue=4851; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4851/poolside-laguna-xs-2-1/43831304069` — not merged, age=2.82d, open_pr=false, issue=4851; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4852/hy4-flash-free/44150370880` — merged, age=0.1d, open_pr=false, issue=4852; active numbered lease on issue:4852; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4852/mistralai-mistral-large-4-1t-a52b/43945335529` — not merged, age=2.33d, open_pr=false, issue=4852; active numbered lease on issue:4852; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4852/mistralai-mistral-large-4-1t-a52b/44434303440` — not merged, age=0.1d, open_pr=false, issue=4852; active numbered lease on issue:4852; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4852/moonshotai-kimi-k3-1-pro/44442182336` — not merged, age=0.06d, open_pr=false, issue=4852; active numbered lease on issue:4852; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4853/hy4-flash-free/44224727998` — not merged, age=0.95d, open_pr=false, issue=4853; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4853/iceman-free/43881883165` — not merged, age=2.59d, open_pr=false, issue=4853; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4853/mistralai-mistral-large-4-1t-a52b/44381829892` — not merged, age=0.34d, open_pr=false, issue=4853; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4853/moonshotai-kimi-k3-1-pro/44363841141` — not merged, age=0.38d, open_pr=false, issue=4853; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4853/stepfun-ai-step-5-preview/43944787263` — not merged, age=2.3d, open_pr=false, issue=4853; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-4853/thinkingmachines-inkling-2-small-free/44322210277` — not merged, age=0.58d, open_pr=false, issue=4853; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5146/iceman-free/43763067461` — not merged, age=3.29d, open_pr=false, issue=5146; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5146/kilo-auto-free/43742789783` — not merged, age=3.14d, open_pr=false, issue=5146; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5146/kilo-auto-free/43748629221` — not merged, age=3.39d, open_pr=false, issue=5146; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5146/novita-ling-3-1-flash/43779063091` — not merged, age=3.16d, open_pr=false, issue=5146; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5147/stepfun-ai-step-5-preview/43754933620` — not merged, age=3.21d, open_pr=false, issue=5147; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5148/big-pickle/43748582623` — not merged, age=3.38d, open_pr=false, issue=5148; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5148/kilo-auto-free/43729839119` — not merged, age=3.28d, open_pr=false, issue=5148; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5148/kilo-auto-free/43734333742` — not merged, age=3.5d, open_pr=false, issue=5148; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5148/kilo-auto-free/43739363095` — not merged, age=3.46d, open_pr=false, issue=5148; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5151/minimax-m3-1-flash-free/43782361051` — not merged, age=3.13d, open_pr=false, issue=5151; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5151/minimaxai-minimax-m3-1-flash/43742896210` — not merged, age=3.13d, open_pr=false, issue=5151; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5170/thinkingmachines-inkling-2-small-free/44150413001` — not merged, age=1.07d, open_pr=false, issue=5170; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5171/liquid-lfm-3-1-7b-free/44011338939` — not merged, age=2.02d, open_pr=false, issue=5171; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-5171/recursive-flint-v1-0-free/44008897157` — not merged, age=2.04d, open_pr=false, issue=5171; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/work-checkpoints/issue-unknown-pr-5210/poolside-laguna-xs-2-1/43871991355` — not merged, age=2.63d, open_pr=false, issue=n/a; checkpoint branch requires explicit incorporated-retirement proof; younger than 14 days
+- `factory/zero-executable-roster-is-idle` — not merged, age=3.01d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/cicache` — not merged, age=0.48d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/dbguard` — not merged, age=0.18d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/dbtestgate` — not merged, age=0.2d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/deadpy` — not merged, age=0.05d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/fakeclients` — not merged, age=0.4d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/flaky-rpdetail-5413` — not merged, age=0.67d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/greprules` — not merged, age=0.48d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/guard-required` — not merged, age=0.49d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/i4576` — not merged, age=0.01d, open_pr=true, issue=4576; open PR exists; checked out in live local worktree; active local lease on issue:4576; younger than 14 days
+- `local-factory/i4724` — not merged, age=0.02d, open_pr=true, issue=4724; open PR exists; checked out in live local worktree; active local lease on issue:4724; younger than 14 days
+- `local-factory/i4749` — not merged, age=0.02d, open_pr=true, issue=4749; open PR exists; checked out in live local worktree; active local lease on issue:4749; younger than 14 days
+- `local-factory/i4751` — not merged, age=0.04d, open_pr=false, issue=4751; checked out in live local worktree; younger than 14 days
+- `local-factory/i5378-defer` — not merged, age=0.49d, open_pr=false, issue=5378; younger than 14 days
+- `local-factory/i5379-cbl-cycle-graph` — not merged, age=0.54d, open_pr=false, issue=5379; younger than 14 days
+- `local-factory/i5382-identity-inbox` — not merged, age=0.51d, open_pr=false, issue=5382; younger than 14 days
+- `local-factory/i5394-reconnect` — not merged, age=0.57d, open_pr=false, issue=5394; younger than 14 days
+- `local-factory/i5433b` — not merged, age=0.16d, open_pr=false, issue=5433; active local lease on issue:5433; younger than 14 days
+- `local-factory/i5435b` — not merged, age=0.08d, open_pr=true, issue=5435; open PR exists; checked out in live local worktree; active local lease on issue:5435; younger than 14 days
+- `local-factory/i5437` — not merged, age=0.24d, open_pr=false, issue=5437; active local lease on issue:5437; younger than 14 days
+- `local-factory/i5449` — not merged, age=0.25d, open_pr=false, issue=5449; younger than 14 days
+- `local-factory/i5461` — not merged, age=0.06d, open_pr=false, issue=5461; checked out in live local worktree; younger than 14 days
+- `local-factory/i5462b` — not merged, age=0.15d, open_pr=false, issue=5462; younger than 14 days
+- `local-factory/i5484` — not merged, age=0.06d, open_pr=false, issue=5484; checked out in live local worktree; younger than 14 days
+- `local-factory/i5485` — not merged, age=0.02d, open_pr=false, issue=5485; checked out in live local worktree; younger than 14 days
+- `local-factory/issue-4740-stop-python-cold-starts` — not merged, age=1.32d, open_pr=false, issue=4740; younger than 14 days
+- `local-factory/issue-5276-release-sync-cron` — not merged, age=1.19d, open_pr=false, issue=5276; younger than 14 days
+- `local-factory/issues-rust-c` — not merged, age=0.5d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/local-lease-ttl` — not merged, age=0.73d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/m4843` — not merged, age=0.44d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/m4848b` — not merged, age=0.53d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/py5431s` — not merged, age=0.48d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/pyrm4832d` — not merged, age=0.02d, open_pr=true, issue=n/a; open PR exists; checked out in live local worktree; younger than 14 days
+- `local-factory/pyrm4838b` — not merged, age=0.27d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/pyrm4843` — not merged, age=0.22d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/pyrm4844` — not merged, age=0.06d, open_pr=false, issue=n/a; checked out in live local worktree; younger than 14 days
+- `local-factory/pyrmcre` — not merged, age=0.24d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/pyrmdead` — not merged, age=0.01d, open_pr=true, issue=n/a; open PR exists; checked out in live local worktree; younger than 14 days
+- `local-factory/pyrmdead-coverage` — not merged, age=0.51d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/python-removal-a` — not merged, age=0.98d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/python-removal-c` — not merged, age=0.96d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/python-removal-d` — not merged, age=0.17d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/qadocs` — not merged, age=0.21d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/qadocs2` — not merged, age=0.2d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/reconciler-keep-local-ready` — not merged, age=0.73d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/redesign-network-budget-tests` — merged, age=0.98d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/ret4343` — not merged, age=0.53d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/rust-migrations` — not merged, age=0.46d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/s4725` — not merged, age=0.03d, open_pr=false, issue=n/a; checked out in live local worktree; younger than 14 days
+- `local-factory/s4744` — not merged, age=0.0d, open_pr=true, issue=n/a; open PR exists; checked out in live local worktree; younger than 14 days
+- `local-factory/s4747` — not merged, age=0.01d, open_pr=true, issue=n/a; open PR exists; checked out in live local worktree; younger than 14 days
+- `local-factory/s4750` — not merged, age=0.05d, open_pr=false, issue=n/a; checked out in live local worktree; younger than 14 days
+- `local-factory/s5431mig` — not merged, age=0.0d, open_pr=true, issue=n/a; open PR exists; checked out in live local worktree; younger than 14 days
+- `local-factory/s5486` — not merged, age=0.05d, open_pr=false, issue=n/a; checked out in live local worktree; younger than 14 days
+- `local-factory/s5486b` — not merged, age=0.03d, open_pr=false, issue=n/a; checked out in live local worktree; younger than 14 days
+- `local-factory/scope-factory-tests` — not merged, age=1.03d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/session-detail-5387` — not merged, age=0.15d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/taste-discoveries-parity` — not merged, age=0.58d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/threads-rust-a` — not merged, age=0.52d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/threads-rust-b` — not merged, age=0.95d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/threads-rust-d` — not merged, age=0.35d, open_pr=false, issue=n/a; younger than 14 days
+- `local-factory/vercelslim` — not merged, age=0.22d, open_pr=false, issue=n/a; younger than 14 days
+- `local/4336-retire-v1-roll-mutation` — merged, age=13.55d, open_pr=false, issue=4336; younger than 14 days
+- `local/4339-4351-retire-skip` — merged, age=13.59d, open_pr=false, issue=4339; younger than 14 days
+- `local/4346-retire-v1-reader` — not merged, age=11.15d, open_pr=false, issue=4346; younger than 14 days
+- `local/4347-budget-hardening` — not merged, age=10.54d, open_pr=false, issue=4347; younger than 14 days
+- `local/4347-g4-budget` — not merged, age=10.56d, open_pr=false, issue=4347; younger than 14 days
+- `local/4347-g5-concurrency` — not merged, age=10.54d, open_pr=false, issue=4347; younger than 14 days
+- `local/4347-g6-probe` — not merged, age=10.56d, open_pr=false, issue=4347; younger than 14 days
+- `local/4352-contract-after` — not merged, age=10.48d, open_pr=false, issue=4352; younger than 14 days
+- `local/4352-derive-die` — not merged, age=10.53d, open_pr=false, issue=4352; younger than 14 days
+- `local/4352-rolled-derive` — not merged, age=10.51d, open_pr=false, issue=4352; younger than 14 days
+- `local/4445-native-verification` — merged, age=13.6d, open_pr=false, issue=4445; younger than 14 days
+- `local/4549-legacy-auth-cleanup` — not merged, age=11.49d, open_pr=false, issue=4549; younger than 14 days
+- `local/4599-part-of-links` — merged, age=13.9d, open_pr=false, issue=4599; younger than 14 days
+- `local/4625-guard-fix` — not merged, age=11.44d, open_pr=false, issue=4625; younger than 14 days
+- `local/4732-pool-recovery` — merged, age=11.1d, open_pr=false, issue=4732; younger than 14 days
+- `local/4733-keep-rollback-production` — merged, age=11.13d, open_pr=false, issue=4733; younger than 14 days
+- `local/4737-harness` — not merged, age=10.5d, open_pr=false, issue=4737; younger than 14 days
+- `local/4737-roll-resources-budget` — not merged, age=5.05d, open_pr=false, issue=4737; younger than 14 days
+- `local/4738-retire-oracle` — not merged, age=10.56d, open_pr=false, issue=4738; younger than 14 days
+- `local/4740-rust-health-ingress` — not merged, age=11.01d, open_pr=false, issue=4740; younger than 14 days
+- `local/4741-go-workspace` — not merged, age=3.54d, open_pr=false, issue=4741; younger than 14 days
+- `local/4742-panic-layer` — merged, age=9.62d, open_pr=false, issue=4742; younger than 14 days
+- `local/4767-bcrypt-blocking` — merged, age=11.1d, open_pr=false, issue=4767; younger than 14 days
+- `local/4818-local-delivery` — not merged, age=10.5d, open_pr=false, issue=4818; younger than 14 days
+- `local/4851-reading-orders-sync-rust` — merged, age=4.94d, open_pr=false, issue=4851; younger than 14 days
+- `local/4854-metrics-runtime-proof` — not merged, age=3.56d, open_pr=false, issue=4854; younger than 14 days
+- `local/4854-metrics-rust-cutover` — merged, age=4.53d, open_pr=false, issue=4854; younger than 14 days
+- `local/5058-rust-auth-rate-limit-test-env` — merged, age=4.66d, open_pr=false, issue=5058; younger than 14 days
+- `local/5105-hermetic-roster-tests` — not merged, age=4.41d, open_pr=false, issue=5105; younger than 14 days
+- `local/5146-continuity-sql-budgets` — not merged, age=3.34d, open_pr=false, issue=5146; younger than 14 days
+- `local/5285-ping-rust` — not merged, age=2.1d, open_pr=false, issue=5285; younger than 14 days
+- `local/acpdiagb` — not merged, age=1.3d, open_pr=false, issue=n/a; younger than 14 days
+- `local/actions-native-factory` — not merged, age=3.25d, open_pr=false, issue=n/a; younger than 14 days
+- `local/adopter-typecheck-fix` — not merged, age=4.41d, open_pr=false, issue=n/a; younger than 14 days
+- `local/cbl-exact-issue-card-parity-20261107` — not merged, age=11.01d, open_pr=false, issue=n/a; younger than 14 days
+- `local/expand-free-9` — not merged, age=10.0d, open_pr=false, issue=n/a; younger than 14 days
+- `local/factory-assignment-inputs` — not merged, age=3.24d, open_pr=false, issue=n/a; younger than 14 days
+- `local/factory-completion-events` — not merged, age=3.23d, open_pr=false, issue=n/a; younger than 14 days
+- `local/factory-measurement-ingress` — not merged, age=3.21d, open_pr=false, issue=n/a; younger than 14 days
+- `local/factory-query-measurements` — not merged, age=3.22d, open_pr=false, issue=n/a; younger than 14 days
+- `local/factory-run-discovery` — not merged, age=3.16d, open_pr=false, issue=n/a; younger than 14 days
+- `local/finish-route-fragments` — not merged, age=10.0d, open_pr=false, issue=n/a; younger than 14 days
+- `local/fix-4958-factory-part-of-acceptance` — merged, age=8.2d, open_pr=false, issue=4958; younger than 14 days
+- `local/fix-4960-three-digit-factory-owners` — not merged, age=7.19d, open_pr=false, issue=4960; younger than 14 days
+- `local/fix-4974-repair-fast-check-retry` — merged, age=7.62d, open_pr=false, issue=4974; younger than 14 days
+- `local/fix-5198-thread-issues-validation` — not merged, age=1.44d, open_pr=false, issue=5198; younger than 14 days
+- `local/fix-creators-clippy` — not merged, age=10.14d, open_pr=false, issue=n/a; younger than 14 days
+- `local/fix-flaky-reader-order-101` — not merged, age=10.43d, open_pr=false, issue=n/a; younger than 14 days
+- `local/fix-review-curl` — merged, age=10.22d, open_pr=false, issue=n/a; younger than 14 days
+- `local/flake-ingress2-schema-collision` — not merged, age=1.19d, open_pr=false, issue=n/a; younger than 14 days
+- `local/free-capacity-1` — not merged, age=11.09d, open_pr=false, issue=n/a; younger than 14 days
+- `local/free-capacity-2` — not merged, age=11.01d, open_pr=false, issue=n/a; younger than 14 days
+- `local/free-capacity-3` — not merged, age=11.08d, open_pr=false, issue=n/a; younger than 14 days
+- `local/free-capacity-4` — not merged, age=10.97d, open_pr=false, issue=n/a; younger than 14 days
+- `local/free-capacity-6` — not merged, age=10.96d, open_pr=false, issue=n/a; younger than 14 days
+- `local/free-capacity-7` — not merged, age=10.95d, open_pr=false, issue=n/a; younger than 14 days
+- `local/free-capacity-8` — not merged, age=9.17d, open_pr=false, issue=n/a; younger than 14 days
+- `local/free-capacity-9` — not merged, age=11.02d, open_pr=false, issue=n/a; younger than 14 days
+- `local/issue-5119-shared-test-db` — not merged, age=1.31d, open_pr=false, issue=5119; younger than 14 days
+- `local/issue-5121-runtime-identity` — not merged, age=1.3d, open_pr=false, issue=5121; younger than 14 days
+- `local/issue-card-roll-featured-parity-20261107` — not merged, age=9.18d, open_pr=false, issue=n/a; younger than 14 days
+- `local/kill-shared-routes` — merged, age=9.12d, open_pr=false, issue=n/a; younger than 14 days
+- `local/mainpytest-fix` — not merged, age=1.1d, open_pr=false, issue=n/a; younger than 14 days
+- `local/mainpytest2-fix` — not merged, age=1.08d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-bug-reports-free` — not merged, age=10.04d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-catalog` — not merged, age=7.99d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-comicvine` — not merged, age=9.99d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-completed-threads` — merged, age=8.97d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-continuity-rules` — not merged, age=10.08d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-creators` — not merged, age=10.17d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-custom-cbl` — not merged, age=8.08d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-demo` — not merged, age=8.68d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-dependencies` — merged, age=9.59d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-dependencies-next` — not merged, age=9.97d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-dependencies-next2` — not merged, age=8.64d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-issues` — not merged, age=10.15d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-releases-free` — not merged, age=10.02d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-sessions` — merged, age=9.12d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-sessions-next` — not merged, age=9.98d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-tags` — merged, age=9.05d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-taste` — not merged, age=10.06d, open_pr=false, issue=n/a; younger than 14 days
+- `local/migrate-threads-real` — not merged, age=10.03d, open_pr=false, issue=n/a; younger than 14 days
+- `local/ollama-v1-endpoint` — merged, age=10.12d, open_pr=false, issue=n/a; younger than 14 days
+- `local/pin-reviewer-77` — merged, age=10.16d, open_pr=false, issue=n/a; younger than 14 days
+- `local/plan-blocker-issue-card-parity-20261107` — not merged, age=11.08d, open_pr=false, issue=n/a; younger than 14 days
+- `local/provider-retry` — merged, age=10.19d, open_pr=false, issue=n/a; younger than 14 days
+- `local/prune-admin-debug` — not merged, age=10.11d, open_pr=false, issue=n/a; younger than 14 days
+- `local/prune-catalog-leftovers` — not merged, age=10.39d, open_pr=false, issue=n/a; younger than 14 days
+- `local/prune-queue-threads` — not merged, age=10.36d, open_pr=false, issue=n/a; younger than 14 days
+- `local/prune-zero-browser-routes` — not merged, age=10.43d, open_pr=false, issue=n/a; younger than 14 days
+- `local/queue-exact-issue-actions-20261107` — not merged, age=10.96d, open_pr=false, issue=n/a; younger than 14 days
+- `local/remove-deploy-freeze` — not merged, age=10.19d, open_pr=false, issue=n/a; younger than 14 days
+- `local/retire-shadowed-python` — not merged, age=3.91d, open_pr=false, issue=n/a; younger than 14 days
+- `local/retry-review-gh` — merged, age=10.21d, open_pr=false, issue=n/a; younger than 14 days
+- `local/review-context` — merged, age=10.09d, open_pr=false, issue=n/a; younger than 14 days
+- `local/roster-python-retirement-tests` — merged, age=4.37d, open_pr=false, issue=n/a; younger than 14 days
+- `local/route-fragments` — not merged, age=10.09d, open_pr=false, issue=n/a; younger than 14 days
+- `local/trusted-local-review` — merged, age=10.24d, open_pr=false, issue=n/a; younger than 14 days

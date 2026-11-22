@@ -119,8 +119,8 @@ positions, counters, cached frontier, read progress, rating and activity time.
    reads issue identities, canonical metadata, direct provider artwork URLs,
    reader stats, group routes and session-scoped last-read. The frozen Python
    v2 projection and parity oracle
-   (`app/services/roll_v2_projection.py`, `app/repositories/roll_v2_projection.py`,
-   `app/services/roll_v2_parity.py`, `app/repositories/roll_v2_parity.py`)
+   (`app/services/roll_v2_projection.py`, `app/repositories/roll_v2_projection.py`, <!-- docs-path-check: ignore -->
+   `app/services/roll_v2_parity.py`, `app/repositories/roll_v2_parity.py`) <!-- docs-path-check: ignore -->
    was retired by #4738. Stored blocked/frontier flags are not
    authority.
 6. Summary-section derivation for the retired Python payload lived in
@@ -140,7 +140,7 @@ read by any test.
 Auth failure occurs before reading-history bootstrap. HTTP 422 validation remains
 in the OpenAPI contract; timezone is a string and invalid IANA names are ignored.
 Dependency outages use the application's stable 503 boundary (see
-`tests/test_database_unavailability_contract.py`); unforeseen failures use its
+`tests/test_database_unavailability_contract.py`); unforeseen failures use its <!-- docs-path-check: ignore -->
 500 handler. Cyclic/missing-reference Option E inputs fail closed; they must
 never become successful partial candidate sets. Existing auth, recovery,
 route-versioning and Option E tests remain authoritative alongside

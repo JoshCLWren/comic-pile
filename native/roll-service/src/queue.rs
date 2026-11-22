@@ -288,21 +288,6 @@ fn not_found(thread_id: i32) -> ApiError {
     ApiError::NotFound(format!("Thread {thread_id} not found"))
 }
 
-pub(crate) fn option_e_enabled() -> bool {
-    let enabled = std::env::var("OPTION_E_ENABLED")
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "t" | "yes" | "y" | "on"
-            )
-        })
-        .unwrap_or(false);
-    enabled
-        && std::env::var("OPTION_E_APPROVED_PREVIEW")
-            .map(|value| !value.trim().is_empty())
-            .unwrap_or(false)
-}
-
 /// Return the eligible-thread authority used by the read path.
 ///
 /// Production defaults to the stored `threads.is_blocked` flag, matching the
@@ -318,7 +303,7 @@ async fn eligible_thread_ids(
     state: &AppState,
     user: AuthenticatedUser,
 ) -> Result<Option<std::collections::HashSet<i32>>, ApiError> {
-    if !option_e_enabled() {
+    if !state.option_e {
         return Ok(None);
     }
     let validated = crate::option_inputs::load_option_inputs_contained(state, user).await?;
@@ -544,7 +529,7 @@ async fn reposition(
     // Evaluate Option E grouping on the already-locked write transaction. This
     // keeps the grouping consistent with the serialized move and avoids a second
     // pool checkout while this request holds its write connection.
-    let eligible = if option_e_enabled() {
+    let eligible = if state.option_e {
         let validated =
             crate::option_inputs::load_validated_contained_in_transaction(&transaction, user)
                 .await?;
@@ -929,10 +914,32 @@ mod tests {
         pool_size: usize,
         connection_recovery: bool,
     ) -> Arc<AppState> {
+        state_with_option_e_values(url, pool_size, connection_recovery, None, None)
+    }
+
+    /// Build a state whose Option E setting is effective-enabled.
+    ///
+    /// The setting is injected through the config lookup; no test mutates the
+    /// process environment, so tests stay deterministic under parallel runs.
+    async fn state_with_option_e(pool_size: usize) -> Arc<AppState> {
+        let url = test_database_url().await;
+        state_with_option_e_values(&url, pool_size, true, Some("true"), Some("queue-unit-test"))
+    }
+
+    /// Build a state from raw `OPTION_E_*` values, exercising the real parser.
+    fn state_with_option_e_values(
+        url: &str,
+        pool_size: usize,
+        connection_recovery: bool,
+        enabled: Option<&str>,
+        approval: Option<&str>,
+    ) -> Arc<AppState> {
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some(url.to_string()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
             "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
+            "OPTION_E_ENABLED" => enabled.map(str::to_string),
+            "OPTION_E_APPROVED_PREVIEW" => approval.map(str::to_string),
             _ => None,
         })
         .expect("queue test config");
@@ -1026,36 +1033,6 @@ mod tests {
         rows.iter().map(|row| row.get(0)).collect()
     }
 
-    /// Enable Option E grouping for one serialized test, then restore the env.
-    ///
-    /// The handler reads the activation switch per request, so the guard has to
-    /// restore it even on failure. Every DB-backed test here holds `DB_LOCK`, so
-    /// no other test observes the temporary value.
-    struct OptionEEnv(Option<std::ffi::OsString>, Option<std::ffi::OsString>);
-
-    impl OptionEEnv {
-        fn enable() -> Self {
-            let enabled = std::env::var_os("OPTION_E_ENABLED");
-            let approval = std::env::var_os("OPTION_E_APPROVED_PREVIEW");
-            std::env::set_var("OPTION_E_ENABLED", "true");
-            std::env::set_var("OPTION_E_APPROVED_PREVIEW", "queue-unit-test");
-            Self(enabled, approval)
-        }
-    }
-
-    impl Drop for OptionEEnv {
-        fn drop(&mut self) {
-            match self.0.take() {
-                Some(value) => std::env::set_var("OPTION_E_ENABLED", value),
-                None => std::env::remove_var("OPTION_E_ENABLED"),
-            }
-            match self.1.take() {
-                Some(value) => std::env::set_var("OPTION_E_APPROVED_PREVIEW", value),
-                None => std::env::remove_var("OPTION_E_APPROVED_PREVIEW"),
-            }
-        }
-    }
-
     /// Seed one active Option E thread and, optionally, its unread issue.
     async fn seed_option_e_thread(
         db: &AppState,
@@ -1137,14 +1114,19 @@ mod tests {
         let url = format!(
             "{base}{separator}options=-csearch_path%3Dqueue_unit_test%2Cpublic%20-c%20log_min_duration_statement%3D0"
         );
-        let config = Config::from_lookup(|name| match name {
-            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-            "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
-            "RUST_ROLL_POOL_SIZE" => Some("4".into()),
-            _ => None,
-        })
-        .expect("measurement config");
-        let state = Arc::new(AppState::new(config).expect("measurement state"));
+        let measurement_state = |option_e: bool| {
+            let config = Config::from_lookup(|name| match name {
+                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+                "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
+                "RUST_ROLL_POOL_SIZE" => Some("4".into()),
+                "OPTION_E_ENABLED" if option_e => Some("true".into()),
+                "OPTION_E_APPROVED_PREVIEW" if option_e => Some("measurement".into()),
+                _ => None,
+            })
+            .expect("measurement config");
+            Arc::new(AppState::new(config).expect("measurement state"))
+        };
+        let state = measurement_state(false);
         reset(&state).await;
         let connection = db::checkout(&state)
             .await
@@ -1161,11 +1143,7 @@ mod tests {
 
         let user = AuthenticatedUser::for_test(7);
         for (mode, enabled) in [("legacy", false), ("option_e", true)] {
-            if enabled {
-                std::env::set_var("OPTION_E_ENABLED", "true");
-            } else {
-                std::env::remove_var("OPTION_E_ENABLED");
-            }
+            let state = measurement_state(enabled);
             // Warm the pool so the timed requests show steady-state reuse.
             let _ = get_queue_entry(State(state.clone()), user, Path(150))
                 .await
@@ -1241,7 +1219,6 @@ mod tests {
                 unix_micros()
             );
         }
-        std::env::remove_var("OPTION_E_ENABLED");
     }
 
     #[tokio::test]
@@ -1687,9 +1664,8 @@ mod tests {
     #[tokio::test]
     async fn option_e_grouping_authority_is_shared_by_get_and_patch() {
         let _guard = DB_LOCK.lock().await;
-        let state = state().await;
+        let state = state_with_option_e(2).await;
         reset(&state).await;
-        let _option_e = OptionEEnv::enable();
         let user = AuthenticatedUser::for_test(7);
         // 1: stored readable, but no unread issue -> evaluated blocked.
         seed_option_e_thread(&state, 7, 1, 1, false, None).await;
@@ -1776,6 +1752,48 @@ mod tests {
                 expected,
                 "option e GET ordinal after move for thread {thread_id}"
             );
+        }
+    }
+
+    /// Every env combination resolves through the one shared accessor: only an
+    /// enabled switch plus a non-blank approval changes ordering authority, all
+    /// other combinations keep the stored legacy grouping with identical results.
+    #[tokio::test]
+    async fn option_e_setting_combinations_select_one_grouping_authority() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state().await;
+        reset(&state).await;
+        let url = test_database_url().await;
+        let user = AuthenticatedUser::for_test(7);
+        seed_option_e_thread(&state, 7, 1, 1, false, None).await;
+        seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
+        seed_option_e_thread(&state, 7, 3, 3, true, Some(30)).await;
+
+        // Stored: 1,2 readable then 3 blocked. Evaluated: 2,3 readable then 1.
+        let legacy = [(1, 1), (2, 2), (3, 3)];
+        let evaluated = [(1, 3), (2, 1), (3, 2)];
+        type Case<'a> = (Option<&'a str>, Option<&'a str>, [(i32, i32); 3]);
+        let cases: [Case<'_>; 7] = [
+            (None, None, legacy),
+            (Some("true"), None, legacy),
+            (Some("true"), Some("   "), legacy),
+            (None, Some("ref"), legacy),
+            (Some("false"), Some("ref"), legacy),
+            (Some("TRUE"), Some("ref"), evaluated),
+            (Some("1"), Some("ref"), evaluated),
+        ];
+        for (enabled, approval, expected) in cases {
+            // The real startup parser resolves the injected values; no env mutation.
+            let case_state = state_with_option_e_values(&url, 2, true, enabled, approval);
+            for (thread_id, position) in expected {
+                let entry = get_queue_entry(State(case_state.clone()), user, Path(thread_id))
+                    .await
+                    .expect("queue entry");
+                assert_eq!(
+                    entry.0.position, position,
+                    "enabled={enabled:?} approval={approval:?} thread {thread_id}"
+                );
+            }
         }
     }
 
@@ -1982,7 +2000,8 @@ mod tests {
         );
     }
 
-    /// #4535: a reposition must not need a second pooled connection.
+    /// Nested pooled checkout removed during the #4535 investigation (root cause
+    /// unproven): a reposition must not need a second pooled connection.
     ///
     /// Production runs Option E with a bounded pool. The reposition handler used
     /// to keep its write transaction's connection checked out and then ask for a
@@ -1998,9 +2017,8 @@ mod tests {
     #[tokio::test]
     async fn option_e_reposition_needs_only_one_pooled_connection_at_a_time() {
         let _guard = DB_LOCK.lock().await;
-        let state = state_with_pool_size(1).await;
+        let state = state_with_option_e(1).await;
         reset(&state).await;
-        let _option_e = OptionEEnv::enable();
         let user = AuthenticatedUser::for_test(7);
         seed_option_e_thread(&state, 7, 1, 1, false, Some(10)).await;
         seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
@@ -2067,9 +2085,8 @@ mod tests {
     #[tokio::test]
     async fn concurrent_option_e_repositions_serialize_without_extra_pool_slots() {
         let _guard = DB_LOCK.lock().await;
-        let state = state_with_pool_size(2).await;
+        let state = state_with_option_e(2).await;
         reset(&state).await;
-        let _option_e = OptionEEnv::enable();
         let user = AuthenticatedUser::for_test(7);
         seed_option_e_thread(&state, 7, 1, 1, false, Some(10)).await;
         seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
@@ -2102,7 +2119,7 @@ mod tests {
     }
 
     /// A pooled connection can die between two requests without being flagged
-    /// closed first (platform freeze, idle reset, half-open socket). #4535: that
+    /// closed first (platform freeze, idle reset, half-open socket). #4572: that
     /// transport state must never lose a reader's move or turn into an opaque
     /// internal error for a request that has written nothing yet.
     #[tokio::test]
@@ -2283,7 +2300,7 @@ mod tests {
         }
     }
 
-    /// Frozen-connection regression for the reposition retry (#4535, #4578).
+    /// Frozen-connection regression for the reposition retry (#4572, #4578, #4732).
     ///
     /// `pg_terminate_backend` cannot prove the queue retry: it closes the
     /// socket cleanly, the pool hands out a fresh connection before the
@@ -2351,7 +2368,7 @@ mod tests {
         proxy.abort();
     }
 
-    /// Canonical-schema coverage for the reposition path (#4535).
+    /// Canonical-schema coverage for the reposition path (#4578).
     ///
     /// Every test in this module runs the canonical Alembic schema, so this
     /// one adds scale rather than environment: a production-sized queue of
@@ -2399,9 +2416,9 @@ mod tests {
         // Option E phase: eligibility evaluated inside the locked transaction,
         // still against the canonical NOT NULL/trigger/deferred-key shape.
         {
-            let _option_e = OptionEEnv::enable();
+            let option_e_state = state_with_option_e(2).await;
             let clamped = update_queue_entry(
-                State(state.clone()),
+                State(option_e_state.clone()),
                 user,
                 Path(4),
                 Json(QueueEntryPatch { position: 2 }),

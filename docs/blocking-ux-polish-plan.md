@@ -8,7 +8,7 @@
 
 ## 1. Replace `alert()` with inline blocked-thread modal
 
-**File:** `frontend/src/pages/QueuePage.tsx`  
+**File:** `frontend/src/pages/QueuePage/QueuePage.tsx`  
 **Current behavior:** When you tap "Read Now" on a blocked thread from the action sheet, a native browser `alert()` fires with the blocking reasons.  
 **Target behavior:** Show a styled modal (reuse existing `<Modal>`) with:
 - Thread title
@@ -22,7 +22,7 @@
 
 ## 2. Show blocked threads on RollPage in a collapsible section
 
-**File:** `frontend/src/pages/RollPage.tsx`  
+**File:** `frontend/src/pages/RollPage/index.tsx`  
 **Current behavior:** Blocked threads are silently filtered out of `activeThreads` (line 298). They're invisible — no indication anything is missing.  
 **Target behavior:** Add a collapsible "Blocked (N)" section below the roll pool, matching the existing "Snoozed (N)" pattern:
 
@@ -83,7 +83,7 @@ Roll Pool (d4)
 
 ## 5. Show "N threads blocked" summary on RollPage
 
-**File:** `frontend/src/pages/RollPage.tsx`  
+**File:** `frontend/src/pages/RollPage/index.tsx`  
 **Current behavior:** No indication that threads are missing from the pool.  
 **Target behavior:** Absorbed into item #2 — the collapsible "Blocked (N)" section serves this purpose. No separate indicator needed.
 

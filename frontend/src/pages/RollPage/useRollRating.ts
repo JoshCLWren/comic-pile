@@ -3,6 +3,8 @@ import { useConnectedThreads, useReadingOrdersForThread } from '../../hooks/useR
 import { getApiErrorDetail } from '../../utils/apiError'
 import type { RatePayload, Thread } from '../../types'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
+import { queryClient } from '../../query/queryClient'
+import { queryKeys } from '../../query/queryKeys'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import type { PostRateReference } from './components/PostRateCopyPrompt'
@@ -313,9 +315,17 @@ export function useRollRating({
     }
   }
 
-  async function handleRefreshThread() {
+  async function handleRefreshThread(options?: { forceRefresh?: boolean }) {
     try {
-      const latest = await refetchBootstrap()
+      // Prefer the bootstrap cache after mapping/cache-effect invalidations have
+      // already refreshed active roll observers, so this apply path does not
+      // issue a duplicate network fetch (#5264). Correction saves that mutate
+      // server state outside those helpers must force a fresh bootstrap read.
+      const forceRefresh = options?.forceRefresh === true
+      const cached = forceRefresh
+        ? undefined
+        : queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap())
+      const latest = cached ?? (await refetchBootstrap())
       const refreshedThread = latest?.active_thread
 
       if (activeRatingThread && refreshedThread?.id === activeRatingThread.id) {

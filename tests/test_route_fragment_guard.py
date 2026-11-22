@@ -141,20 +141,47 @@ def test_regenerate_workflow_triggers_on_fragment_push() -> None:
     assert permissions.get("contents") == "write"
 
 
-def test_guard_workflow_runs_on_pull_request() -> None:
-    """The fragment-only guard gates every pull request."""
-    workflow_path = ROOT / ".github" / "workflows" / "route-fragment-guard.yml"
-    assert workflow_path.exists()
-    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+def _ci_workflow() -> dict:
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
     assert isinstance(workflow, dict)
-    # PyYAML parses the YAML 1.1 `on` key as boolean True.
+    return workflow
+
+
+def test_guard_is_a_job_in_ci_for_every_pull_request() -> None:
+    """The guard runs inside ci.yml on every PR event, never path-filtered."""
+    workflow = _ci_workflow()
     on = workflow.get("on", workflow.get(True))
-    if isinstance(on, dict):
-        assert "pull_request" in on
-    elif isinstance(on, list):
-        assert "pull_request" in on
-    else:
-        pytest.fail("guard workflow must trigger on pull_request")
+    assert isinstance(on, dict)
+    assert "pull_request" in on
+    assert not (on["pull_request"] or {}).get("paths")
+    assert not (on["pull_request"] or {}).get("paths-ignore")
+    assert not (on["pull_request"] or {}).get("types")
+    job = workflow["jobs"]["route-fragment-guard"]
+    assert "if" not in job
+    assert "needs" not in job
+    text = "\n".join(str(step.get("run", "")) for step in job["steps"])
+    assert "scripts/check_route_fragment_guard.py" in text
+    assert "--allow-generated" in text
+    conditions = "\n".join(str(step.get("if", "")) for step in job["steps"])
+    assert all("pull_request" in str(step.get("if", "")) for step in job["steps"][:])
+    assert "automation/route-regeneration/" in conditions
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in conditions
+
+
+def test_guard_is_required_by_ci_summary() -> None:
+    """Removing the guard from CI Summary must fail this test."""
+    summary = _ci_workflow()["jobs"]["check-all-jobs"]
+    assert summary["name"] == "CI Summary"
+    assert "route-fragment-guard" in summary["needs"]
+    script = "\n".join(str(step.get("run", "")) for step in summary["steps"])
+    assert 'needs.route-fragment-guard.result }}" != "success"' in script
+
+
+def test_standalone_guard_workflow_is_gone() -> None:
+    """The guard lives in ci.yml only; no duplicate non-required workflow."""
+    assert not (ROOT / ".github" / "workflows" / "route-fragment-guard.yml").exists()
 
 
 @pytest.mark.parametrize(
@@ -245,7 +272,7 @@ def test_ci_summary_gates_regeneration_proof() -> None:
     proof = next(step for step in steps if step.get("name", "").startswith("Prove regeneration PR"))
     assert "--allow-generated" in proof["run"]
     assert "generate_vercel_routes.mjs --check" in proof["run"]
-    assert "generate_route_burndown.py --check" in proof["run"]
+    assert "generate_route_burndown.mjs --check" in proof["run"]
     assert "rust-ingress" in ci["jobs"]["check-all-jobs"]["needs"]
 
 

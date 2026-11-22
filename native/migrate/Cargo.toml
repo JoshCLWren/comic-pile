@@ -1,0 +1,21 @@
+[package]
+name = "comicpile-migrate"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+publish = false
+
+# Member of the root Cargo workspace (single canonical root Cargo.lock).
+# The CI/deploy-time binary resolves through the same locked graph as the
+# Vercel ingress and roll-service; it declares no standalone `[workspace]`.
+
+[dependencies]
+native-tls = "0.2"
+postgres-native-tls = "0.5"
+refinery = { version = "0.10.0", features = ["tokio-postgres"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio-postgres = "0.7"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

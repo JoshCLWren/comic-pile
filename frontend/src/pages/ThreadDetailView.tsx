@@ -192,11 +192,20 @@ export default function ThreadDetailView() {
   const issuesError = issuesQuery.isError
   const issuesLoaded = issuesQuery.pages.length > 0
   const nextPageToken = issuesQuery.nextPageToken
-  // The currently loaded issue pages share a single bounded metadata batch.
-  // Expanding a thread never starts one cover/rating request per row.
-  const issueCardsQuery = useIssueCards(issues.map((issue) => issue.id), {
-    enabled: issuesExpanded && !issuesError,
-  })
+  // The Next Issue panel is visible before ISSUES expands. Its canonical
+  // issue ID comes from the Rust reading-boundary projection, so fetch that
+  // one card even while the list is collapsed. Once expanded, combine it with
+  // visible issue IDs in the existing bounded batch, never one call per row.
+  const nextBoundaryIssueId = threadId == null
+    ? null
+    : boundaryQuery.data?.threads[threadId]?.next?.issue.issue_id ?? null
+  const visibleCardIds = issuesExpanded && !issuesError ? issues.map((issue) => issue.id) : []
+  const issueCardsQuery = useIssueCards(
+    nextBoundaryIssueId == null ? visibleCardIds : [nextBoundaryIssueId, ...visibleCardIds],
+    // The Next issue line renders the series title from these cards, so
+    // they refresh on focus like the boundary query (#5486).
+    { enabled: nextBoundaryIssueId != null || (issuesExpanded && !issuesError), refetchOnWindowFocus: 'always' },
+  )
   const cardsByIssue = indexIssueCards(issueCardsQuery.data)
 
   useEffect(() => {
@@ -241,6 +250,47 @@ export default function ThreadDetailView() {
       }
     }
   }, [threadId, requestedIssueId, location.key, hasIssueParam])
+
+  // A rename in another tab must be reconciled as soon as this view regains
+  // focus. TanStack Query v5's focus manager only listens for
+  // `visibilitychange`, so regaining a still-visible window (a `focus` with no
+  // visibility change) would otherwise wait out the 30s staleTime. Listen for
+  // both events and refresh only the sources this view renders; when the
+  // visibilitychange path already started a fetch, TanStack joins it instead
+  // of issuing a duplicate request.
+  const refetchBoundaries = boundaryQuery.refetch
+  const refetchLegacyBlockingInfo = legacyBlockingInfo.refetch
+  const refetchIssueCards = issueCardsQuery.refetch
+  useEffect(() => {
+    function onViewFocus() {
+      if (document.visibilityState !== 'visible') return
+      // `refetch()` still runs a disabled query's queryFn, so refresh only the
+      // sources this view actually renders. Otherwise the canonical deployment
+      // would POST a null thread id to the legacy blocking batch on every focus.
+      if (threadId != null) {
+        void refetch()
+        void refetchBoundaries()
+      }
+      if (canonicalBoundaryUnavailable) void refetchLegacyBlockingInfo()
+      if (nextBoundaryIssueId != null || (issuesExpanded && !issuesError)) void refetchIssueCards()
+    }
+    document.addEventListener('visibilitychange', onViewFocus)
+    window.addEventListener('focus', onViewFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onViewFocus)
+      window.removeEventListener('focus', onViewFocus)
+    }
+  }, [
+    threadId,
+    canonicalBoundaryUnavailable,
+    nextBoundaryIssueId,
+    issuesExpanded,
+    issuesError,
+    refetch,
+    refetchBoundaries,
+    refetchLegacyBlockingInfo,
+    refetchIssueCards,
+  ])
 
   // Deep-link arrival (#3626): jump straight to the exact canonical issue named
   // by `?issue=<issue_id>`, focus it so keyboard and assistive-technology users
@@ -483,6 +533,7 @@ export default function ThreadDetailView() {
             explanation={boundaryQuery.data?.threads[thread.id]}
             isPending={boundaryQuery.isPending}
             isError={boundaryQuery.isError}
+            cardsByIssue={cardsByIssue}
             onRetry={() => { void boundaryQuery.refetch() }}
             fallback={
               legacyBlockingInfo.isError ? (

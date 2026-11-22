@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -71,7 +71,6 @@ beforeEach(() => {
 
 describe('CblSourceDetailPanel', () => {
   it('pages beyond 2,000 positions with bounded 200-position requests', async () => {
-    const user = userEvent.setup()
     mocks.detail.mockImplementation(
       (_listId: number, params: { offset: number; limit: number }) =>
         Promise.resolve(pageAt(params.offset)),
@@ -89,7 +88,7 @@ describe('CblSourceDetailPanel', () => {
     // Eleven pages of at most 200 positions each crosses the 2,000-position
     // boundary without ever asking the API for an unbounded page.
     for (let offset = PAGE_SIZE; offset <= 2000; offset += PAGE_SIZE) {
-      await user.click(screen.getByRole('button', { name: /Show more positions/ }))
+      fireEvent.click(screen.getByRole('button', { name: /Show more positions/ }))
       await waitFor(() => {
         expect(mocks.detail).toHaveBeenLastCalledWith(7, { offset, limit: PAGE_SIZE })
       })

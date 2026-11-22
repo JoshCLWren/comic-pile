@@ -6,13 +6,9 @@
  * peers to share height, radius, typography, and interaction behavior, and
  * requires secondary supporting actions to use ordinary lower-emphasis styling.
  *
- * The rating action group is rendered by two components — `DecisionCard` on the
- * live Roll screen and the separately tested `RatingActionPanel` — and the two
- * drifted apart. That drift is how `Cancel roll` ended up as the only peer with
- * a transparent background and an accent-muted label inside an otherwise
- * uniform row, so it read as a differently colored and visibly squeezed action
- * instead of a peer. Naming each treatment once keeps the peers identical rather
- * than merely similar, and makes the hierarchy reviewable from a single place.
+ * The rating action group on the live Roll screen is rendered by `DecisionCard`.
+ * Naming each treatment once keeps the peer actions identical rather than
+ * merely similar, and makes the hierarchy reviewable from a single place.
  *
  * These are Tailwind class lists, not a component library: the repository has no
  * button primitive yet, and the grammar only asks that repeated presentation pay

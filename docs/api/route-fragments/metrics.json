@@ -2,7 +2,7 @@
   "family": "metrics",
   "owned_path_patterns": [
     "^/api/metrics$",
-    "^/api/v1/metrics$"
+    "^/api/v2/analytics/metrics$"
   ],
   "defaults": {
     "owning_issue": 4854,
@@ -25,23 +25,16 @@
         "basis": "In-process startup metrics; native ingress serves response without PostgreSQL",
         "max_statements": 0,
         "grows_with_data": false
-      }
+      },
+      "exclude_from_inventory": true
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/metrics",
+      "path": "/api/v2/analytics/metrics",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/metrics$",
-      "db_free": true,
-      "sql_budget": {
-        "application_statements": 0,
-        "transaction_control_statements": 0,
-        "total_statements": 0,
-        "basis": "In-process startup metrics; native ingress serves response without PostgreSQL",
-        "max_statements": 0,
-        "grows_with_data": false
-      }
+      "exclude_from_inventory": true,
+      "comment": "Retired by #5437 after #5446 removed the Analytics page. The Rust handler is gone and the operation is excluded from the inventory. The ingress rewrite is kept (as for other excluded native operations) so requests reach the native catch-all and get a 404 rather than a Python fallback."
     }
   ]
 }

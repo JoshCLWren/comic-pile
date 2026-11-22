@@ -20,7 +20,6 @@ const {
   queueApi,
   rollApi,
   sessionApi,
-  tasksApi,
   threadsApi,
   undoApi,
 } = createApiServiceSet(client)
@@ -131,7 +130,7 @@ it('calls dependency endpoints with expected paths', async () => {
   await dependenciesApi.createDependency({ sourceId: 1, targetId: 2 })
   await dependenciesApi.deleteDependency(7)
 
-  expect(get).toHaveBeenCalledWith('/v1/dependencies/blocked')
+  expect(get).toHaveBeenCalledWith('/v2/dependencies/blocked')
   expect(get).toHaveBeenCalledWith('/v1/threads/11/dependencies')
   expect(post).toHaveBeenCalledWith('/v1/threads/12:getBlockingInfo')
   expect(post).toHaveBeenCalledWith('/v2/dependencies/', {
@@ -159,17 +158,13 @@ it('calls every remaining API resource endpoint', async () => {
   await rollApi.setDie(6)
   await sessionApi.list({ status: 'complete' }, 'page')
   await sessionApi.get(1)
-  await sessionApi.getCurrent()
   await sessionApi.getDetails('2')
   await sessionApi.getSnapshots(2)
-  await sessionApi.restoreSessionStart(2)
   await undoApi.undo(1, 'snap')
   await undoApi.listSnapshots(1)
   await dependenciesApi.getIssueDependencies(2)
   await dependenciesApi.getConnectedThreads(1)
   await dependenciesApi.updateDependency(3, null)
-  await tasksApi.getMetrics()
-  expect(get).toHaveBeenCalledWith('/v2/analytics/metrics')
   await migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
   await bugReportsApi.create({ title: 'Bug', description: 'Description', diagnostics: {} })
   await preferencesApi.get()
@@ -177,31 +172,32 @@ it('calls every remaining API resource endpoint', async () => {
   await authApi.forgotPassword({ email: 'reader@example.com' })
   await authApi.resetPassword({ token: 'single-use', new_password: 'hunter2-hunter2' })
   expect(post).toHaveBeenCalledWith('/v1/bug-reports/', { title: 'Bug', description: 'Description', diagnostics: {} })
-  expect(get).toHaveBeenCalledWith('/v1/users/me/preferences', undefined)
-  expect(patch).toHaveBeenCalledWith('/v1/users/me/preferences', { theme: 'ink-gold' })
+  expect(get).toHaveBeenCalledWith('/v2/users/me/preferences', undefined)
+  expect(patch).toHaveBeenCalledWith('/v2/users/me/preferences', { theme: 'ink-gold' })
   expect(post).toHaveBeenCalledWith('/v2/auth/forgot-password', { email: 'reader@example.com' })
   expect(post).toHaveBeenCalledWith('/v2/auth/reset-password', { token: 'single-use', new_password: 'hunter2-hunter2' })
 })
 
 
-it('uses canonical v1 paths for session and undo resources', async () => {
+it('uses migrated v2 session detail/snapshot paths and v2 undo paths', async () => {
   await sessionApi.list()
   await sessionApi.get(7)
-  await sessionApi.getCurrent()
   await sessionApi.getDetails(7)
   await sessionApi.getSnapshots(7)
-  await sessionApi.restoreSessionStart(7)
   await undoApi.undo(7, 3)
   await undoApi.listSnapshots(7)
 
   expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
   expect(get).toHaveBeenCalledWith('/v1/sessions/7')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/current/')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7/details')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7/snapshots')
-  expect(post).toHaveBeenCalledWith('/v1/sessions/7/restore-session-start')
-  expect(post).toHaveBeenCalledWith('/v1/undo/7/undo/3')
-  expect(get).toHaveBeenCalledWith('/v1/undo/7/snapshots')
+  expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/details')
+  expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/snapshots')
+  expect(post).toHaveBeenCalledWith('/v2/undo/7/snapshots/3/restore')
+  expect(get).toHaveBeenCalledWith('/v2/undo/7/snapshots')
+})
+
+it('keeps the retired session lifecycle methods off the session service (#4343)', () => {
+  expect(sessionApi).not.toHaveProperty('getCurrent')
+  expect(sessionApi).not.toHaveProperty('restoreSessionStart')
 })
 
 it('adds auth and csrf headers to mutating requests', async () => {
@@ -409,8 +405,8 @@ it('builds bounded creator detail requests with canonical encoded keys', async (
   await creatorsApi.getDetail('creator:9', { limit: 50, offset: 25 })
   await creatorsApi.getDetail('creator:10', { offset: 0 })
 
-  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A7', { params: {}, skipAuthRedirect: true })
-  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A8', { params: { limit: 50 }, skipAuthRedirect: true })
-  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A9', { params: { limit: 50, offset: 25 }, skipAuthRedirect: true })
-  expect(get).toHaveBeenCalledWith('/v1/creators/creator%3A10', { params: {}, skipAuthRedirect: true })
+  expect(get).toHaveBeenCalledWith('/v2/creators/creator%3A7', { params: {}, skipAuthRedirect: true })
+  expect(get).toHaveBeenCalledWith('/v2/creators/creator%3A8', { params: { limit: 50 }, skipAuthRedirect: true })
+  expect(get).toHaveBeenCalledWith('/v2/creators/creator%3A9', { params: { limit: 50, offset: 25 }, skipAuthRedirect: true })
+  expect(get).toHaveBeenCalledWith('/v2/creators/creator%3A10', { params: {}, skipAuthRedirect: true })
 })

@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test } from 'vitest'
-import { waitFor } from '@testing-library/react'
 import { setAccessToken } from '../../services/api'
 import { renderAppAtRoute } from './appNetworkHarness'
 import {
@@ -39,19 +38,17 @@ describe('auxiliary route network budgets', () => {
 
     expect(app.currentPath()).toBe('/glossary')
     expect(app.rows()).toEqual([...auxBudget('/help')])
-    expect(app.rows().some(row => row.includes('/api/v1/releases/'))).toBe(false)
+    expect(app.rows().some(row => row.includes('/api/v2/releases'))).toBe(false)
   })
 
   test.each(['/whats-new', '/glossary'])('%s redirects a guest to /login without page reads', async path => {
     const app = renderAppAtRoute(path, { auth: 'guest' })
     await app.settle()
 
-    // Auth bootstrap and the route guard can settle on adjacent React turns.
-    // Observe the real redirect rather than assuming request-idleness means
-    // the router has already committed the navigation.
-    await waitFor(() => expect(app.currentPath()).toBe('/login'))
+    // Wait on the observable redirect itself, not on request idleness.
+    await app.settleUntil(() => app.currentPath() === '/login', 'guest redirected to /login')
     expect(app.rows()).toEqual([...GUEST_AUTH_PROBE])
-    expect(app.rows().some(row => row.includes('/api/v1/releases/'))).toBe(false)
+    expect(app.rows().some(row => row.includes('/api/v2/releases'))).toBe(false)
   })
 
   test('StrictMode does not duplicate auxiliary requests', async () => {
@@ -68,7 +65,7 @@ describe('auxiliary route network budgets', () => {
 
     await app.navigate('/whats-new')
     const toWhatsNew = app.rows(app.ledger.since(first))
-    expect(toWhatsNew).toEqual(['GET /api/v1/releases/?limit=20&offset=0 x1'])
+    expect(toWhatsNew).toEqual(['GET /api/v2/releases?limit=20&offset=0 x1'])
 
     const second = app.ledger.mark()
     await app.navigate('/glossary')
@@ -98,10 +95,10 @@ describe('auxiliary route network budgets', () => {
     expect(app.currentPath()).toBe('/')
     const ownRows = app.rows().filter(row => !isPeerRollRow(row))
     expect(ownRows).toEqual([
-      'GET /api/v1/identity-inbox?limit=1&offset=0 x1',
-      'GET /api/v1/users/me/preferences x1',
       'GET /api/v2/auth/csrf x1',
       'GET /api/v2/auth/me x1',
+      'GET /api/v2/identity-inbox?limit=1&offset=0 x1',
+      'GET /api/v2/users/me/preferences x1',
     ])
   })
 })

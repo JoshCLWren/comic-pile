@@ -10,6 +10,8 @@ import {
 } from '../hooks/rollMutationReconciliation'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import { issueCardsApi } from '../services/issueCardsApi'
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 vi.mock('../hooks/useDependencyGroups', () => ({
   useDependencyGroups: vi.fn(),

@@ -400,12 +400,11 @@ impl AuthService {
 }
 
 fn encode_token(claims: &Claims, secret: &[u8]) -> AuthResult<String> {
-    encode(
-        &Header::new(ALGORITHM),
-        claims,
-        &EncodingKey::from_secret(secret),
-    )
-    .map_err(|error| {
+    let key = EncodingKey::from_secret(secret).map_err(|error| {
+        tracing::error!("token signing key initialization failed: {error}");
+        AuthError::InternalError
+    })?;
+    encode(&Header::new(ALGORITHM), claims, &key).map_err(|error| {
         tracing::error!("token encoding failed: {error}");
         AuthError::InternalError
     })
@@ -422,7 +421,15 @@ pub fn decode_claims(
     validation.validate_exp = false;
     validation.validate_nbf = false;
     validation.validate_aud = false;
-    let claims = decode::<Claims>(token, &DecodingKey::from_secret(secret), &validation)
+    validation.leeway = 0;
+    let key = DecodingKey::from_secret(secret).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        AuthError::InvalidToken
+    })?;
+    let claims = decode::<Claims>(token, &key, &validation)
         .map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),

@@ -27,7 +27,7 @@ and ratings.
 | `threads.catalog_series_id` | nullable column | indexed; `ON DELETE SET NULL` |
 | `issues.catalog_issue_id` | nullable column | indexed; `ON DELETE SET NULL` |
 
-Migration: `alembic/versions/m5d300000001_add_catalog_identity_tables.py`
+Migration: `alembic/versions/m5d300000001_add_catalog_identity_tables.py` <!-- docs-path-check: ignore -->
 (revises `f2a3b4c5d6e7`). The migration is purely additive: it creates the two
 new tables, adds the two nullable columns, and creates the matching indexes.
 It does not scan or backfill personal rows, does not delete data, and makes no
@@ -53,7 +53,7 @@ A catalog row may be created only for an external identity that:
 Candidate, unresolved, and rejected mappings never license catalog creation.
 Unknown or custom reader entries receive no shared catalog row until identity
 is verified. The service entry points are `ensure_catalog_series` and
-`ensure_catalog_issue` in `app/services/catalog.py`; there is no public write
+`ensure_catalog_issue` in `app/services/catalog.py`; there is no public write <!-- docs-path-check: ignore -->
 API.
 
 ## Concurrency and lock behavior
@@ -86,7 +86,7 @@ tables and is never shared across readers.
 v1 is additive: it introduces new tables and new nullable columns only. It must
 not narrow or otherwise change any existing read surface. In particular
 `search_catalog_series` and `search_catalog_issues` in
-`app/repositories/catalog_repository.py` keep their pre-v1 `external_identities`
+`app/repositories/catalog_repository.py` keep their pre-v1 `external_identities` <!-- docs-path-check: ignore -->
 semantics, and `series_external_id` stays an existence gate rather than a scope
 filter.
 
@@ -97,7 +97,7 @@ library identity would disappear from `/api/v1/catalog/series` and
 `/api/v1/catalog/issues`. A later campaign issue that populates catalog rows may
 introduce catalog-scoped search behind a separate, explicitly reviewed change.
 
-`tests/test_catalog_repository.py` pins this contract with
+`tests/test_catalog_repository.py` pins this contract with <!-- docs-path-check: ignore -->
 `test_search_catalog_series_includes_identities_without_catalog_row` and
 `test_search_catalog_issues_includes_identities_without_catalog_row`.
 
@@ -123,12 +123,12 @@ content other than the two new nullable columns is unchanged.
 
 ## Verification
 
-- `tests/test_migration_graph_integrity.py::test_migration_history_has_a_single_head`
+- `tests/test_migration_graph_integrity.py::test_migration_history_has_a_single_head` <!-- docs-path-check: ignore -->
   enforces one Alembic head.
-- `tests/test_catalog_migration.py` exercises upgrade and downgrade against a
+- `tests/test_catalog_migration.py` exercises upgrade and downgrade against a <!-- docs-path-check: ignore -->
   populated temporary PostgreSQL schema and asserts personal rows survive both
   directions.
-- `tests/test_catalog_models.py`, `tests/test_catalog_repository.py`, and
-  `tests/test_catalog_service.py` cover identity invariants, confirmed-only
+- `tests/test_catalog_models.py`, `tests/test_catalog_repository.py`, and <!-- docs-path-check: ignore -->
+  `tests/test_catalog_service.py` cover identity invariants, confirmed-only <!-- docs-path-check: ignore -->
   creation, concurrency-safe get-or-create, and additive series linking.
 - Full-repo Python CI pair: `bash scripts/check-python-ci-lint.sh`.

@@ -1,8 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { ComicIssueCover } from '../../../components/ComicIssueCard'
 
 export interface ManualPickerSearchOption {
   id: number
   label: string
+  threadTitle?: string
+  coverImageUrl?: string | null
 }
 
 export interface ManualPickerSearchProps {
@@ -192,6 +195,7 @@ export function ManualPickerSearch({
                 key={option.id}
                 id={`${listboxId}-option-${option.id}`}
                 role="option"
+                aria-label={option.label}
                 aria-selected={index === highlighted}
                 className={`cursor-pointer px-3 py-2 text-sm ${
                   index === highlighted
@@ -201,7 +205,17 @@ export function ManualPickerSearch({
                 onMouseEnter={() => setHighlighted(index)}
                 onClick={() => commit(option.id)}
               >
-                <span className="block font-bold">{option.label}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <ComicIssueCover
+                    coverImageUrl={option.coverImageUrl ?? null}
+                    threadTitle={option.threadTitle ?? option.label}
+                    issueNumber=""
+                    variant="compact"
+                    imageClassName="h-full w-full object-cover"
+                    altText=""
+                  />
+                  <span className="min-w-0 block font-bold">{option.label}</span>
+                </div>
                 {group === 'snoozed' && (
                   <span className="block text-[10px] uppercase tracking-wider text-[var(--theme-text-dim)]">Snoozed</span>
                 )}

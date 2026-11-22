@@ -11,7 +11,7 @@ const spies = vi.hoisted(() => ({
   setDie: vi.fn().mockResolvedValue({}),
   roll: vi.fn().mockResolvedValue({}), dismissPending: vi.fn().mockResolvedValue({}),
   override: vi.fn().mockResolvedValue({}), snooze: vi.fn().mockResolvedValue({}),
-  unsnooze: vi.fn().mockResolvedValue({}), moveFront: vi.fn().mockResolvedValue({}),
+  unsnooze: vi.fn().mockResolvedValue({}), unsnoozeNative: vi.fn().mockResolvedValue({}), moveFront: vi.fn().mockResolvedValue({}),
   moveBack: vi.fn().mockResolvedValue({}), shuffle: vi.fn().mockResolvedValue({}),
   rate: vi.fn().mockResolvedValue({}),
   setPending: vi.fn().mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 }),
@@ -76,13 +76,14 @@ vi.mock('../hooks/useRollResources', () => ({
 }))
 vi.mock('../hooks/useThread', () => ({ useStaleThreads: () => ({ data: staleData, refetch: spies.refetch }) }))
 vi.mock('../hooks/useRoll', () => ({
+  useUnsnooze: () => ({ mutate: spies.unsnoozeNative, isPending: false }),
   useSetDie: () => ({ mutate: spies.setDie, isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: spies.roll, isPending: false }), useDismissPending: () => ({ mutate: spies.dismissPending, isPending: false }),
   useOverrideRoll: () => ({ mutate: spies.override, isPending: false }),
 }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: () => ({ mutate: spies.snooze, isPending: false }), useUnsnooze: () => ({ mutate: spies.unsnooze, isPending: false }) }))
-vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }), useActiveSeriesCount: () => null }))
+vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }), useActiveSeriesCount: () => null, useRestoreExclusionGroup: () => ({ mutate: vi.fn(), isPending: false, isError: false }) }))
 vi.mock('../hooks', () => ({ useRate: () => ({ mutate: spies.rate, isPending: false }) }))
 vi.mock('../services/api-taste', () => ({
   tasteApi: {
@@ -606,12 +607,13 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'update low rating' }))
   })
 
-  it('unsnoozes without calling the retired server mutation', async () => {
+  it('unsnoozes through the native v2 mutation, never the retired v1 mutation', async () => {
     render(<RollPage />)
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'unsnooze' }))
-    // Roll unsnooze is client-only after #4349; the retired server mutation
-    // must never be called and the page must stay interactive.
+    // The native v2 unsnooze (#4589) is called once; the retired v1 server
+    // mutation must never be called and the page must stay interactive.
+    await waitFor(() => expect(spies.unsnoozeNative).toHaveBeenCalledTimes(1))
     expect(spies.unsnooze).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'unsnooze' })).toBeInTheDocument()
   })

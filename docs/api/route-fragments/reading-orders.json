@@ -1,11 +1,11 @@
 {
   "family": "reading-orders",
   "owned_path_patterns": [
-    "^/api/v1/reading-orders(?:/.*)?$"
+    "^/api/v2/reading-orders(?:/.*)?$"
   ],
   "defaults": {
-    "runtime": "python-fastapi",
-    "status": "transitional",
+    "runtime": "native-rust",
+    "status": "target",
     "owning_issue": null,
     "consumers": [
       "frontend/src/services/api-reading-orders.ts"
@@ -13,22 +13,20 @@
   },
   "operations": [
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/reading-orders/",
+      "path": "/api/v2/reading-orders/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading-orders/$",
-      "owning_issue": 4851,
-      "exclude_from_inventory": true
+      "src": "^/api/v2/reading-orders/$",
+      "owning_issue": 4851
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/reading-orders/{reading_order_id}/items",
+      "path": "/api/v2/reading-orders/{reading_order_id}/items",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading-orders/[0-9]+/items$",
-      "owning_issue": 4851,
-      "exclude_from_inventory": true
+      "src": "^/api/v2/reading-orders/[0-9]+/items$",
+      "owning_issue": 4851
     }
   ]
 }

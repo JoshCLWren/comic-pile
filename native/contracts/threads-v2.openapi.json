@@ -196,6 +196,32 @@
           }
         }
       },
+      "QueueExclusionGroupRef": {
+        "type": "object",
+        "description": "Bulk exclusion provenance attached to an excluded queue thread (#5435).",
+        "required": [
+          "id",
+          "source_kind",
+          "source_id",
+          "source_name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_kind": {
+            "type": "string"
+          },
+          "source_name": {
+            "type": "string"
+          }
+        }
+      },
       "QueueSeriesMetadata": {
         "type": "object",
         "description": "Confirmed provider series metadata for one queue row.",
@@ -247,10 +273,10 @@
           "comicvine_mapping": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ComicVineMappingHealth"
               },
               {
-                "$ref": "#/components/schemas/ComicVineMappingHealth"
+                "type": "null"
               }
             ]
           },
@@ -290,17 +316,35 @@
               "null"
             ]
           },
+          "queue_exclusion_group": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/QueueExclusionGroupRef",
+                "description": "Present when this excluded thread was removed as part of a bulk action."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "queue_position": {
             "type": "integer",
             "format": "int32"
           },
+          "series_cover_image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Derived series cover: the exact provider CDN URL of the thread's next\nunread confirmed issue, falling back to the first confirmed issue with a\ncover. Null when the series has no confirmed issue cover."
+          },
           "series_metadata": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/QueueSeriesMetadata"
               },
               {
-                "$ref": "#/components/schemas/QueueSeriesMetadata"
+                "type": "null"
               }
             ]
           },

@@ -46,6 +46,7 @@ vi.mock('../hooks/useRollResources', () => ({
 }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
+  useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: vi.fn(),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: vi.fn(),
@@ -58,6 +59,7 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToBack: vi.fn(),
   useShuffleQueue: vi.fn(),
   useActiveSeriesCount: () => null,
+  useRestoreExclusionGroup: vi.fn(),
 }))
 vi.mock('../hooks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks')>()
