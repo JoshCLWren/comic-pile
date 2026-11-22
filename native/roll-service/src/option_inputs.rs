@@ -310,6 +310,30 @@ struct IssueVolumeRow {
     external_id: String,
 }
 
+/// One inert legacy/converted dependency row that points at an owned unread
+/// issue from a source that is not read (or is foreign). Loaded for the
+/// read-only frontier audit only (#4198): these rows never enter the Option E
+/// evaluator, which keeps converted and legacy edges inert (#2366, #3676).
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct LegacyDependencyRow {
+    pub id: i32,
+    pub source_issue_id: i32,
+    pub target_issue_id: i32,
+    pub origin: Option<String>,
+    pub classification: Option<String>,
+    pub provenance: Option<String>,
+    pub note: Option<String>,
+    pub source_owned: bool,
+}
+
+/// Read-only owner diagnostics plus the inert legacy dependency evidence the
+/// Option E snapshot deliberately ignores.
+#[derive(Debug)]
+pub(crate) struct OptionDiagnostics {
+    pub inputs: OptionInputs,
+    pub legacy_dependencies: Vec<LegacyDependencyRow>,
+}
+
 async fn load_transaction(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
