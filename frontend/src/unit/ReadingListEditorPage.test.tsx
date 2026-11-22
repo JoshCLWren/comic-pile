@@ -43,7 +43,7 @@ describe('ReadingListEditorPage', () => {
     renderAt('/reading-lists/12')
 
     expect(screen.getByRole('heading', { name: 'Edit Reading List' })).toBeInTheDocument()
-    expect(await screen.findByLabelText('List name')).toHaveValue(existingList.name)
+    expect(await screen.findByLabelText('Name')).toHaveValue(existingList.name)
     expect(getList).toHaveBeenCalledWith(12)
   })
 
@@ -56,7 +56,7 @@ describe('ReadingListEditorPage', () => {
     renderAt(path)
 
     expect(screen.getByRole('alert')).toHaveTextContent('Reading List not found.')
-    expect(screen.queryByLabelText('List name')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
     expect(getList).not.toHaveBeenCalled()
   })
 })
