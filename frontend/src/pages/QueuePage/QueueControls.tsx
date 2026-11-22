@@ -5,6 +5,12 @@ const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
   activeCount: number
+  /** Filtered match total for the current applied search; null when unknown. */
+  filteredCount: number | null
+  /** True while the authoritative count for the current applied search is still loading. */
+  countPending?: boolean
+  /** True when loading/error prevents a reliable count for the current applied search. */
+  countError?: boolean
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
@@ -34,6 +40,9 @@ interface QueueControlsProps {
  */
 function QueueControlsInner({
   activeCount,
+  filteredCount,
+  countPending = false,
+  countError = false,
   shuffleDisabled,
   shufflePending,
   onShuffle,
@@ -69,6 +78,14 @@ function QueueControlsInner({
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [])
+  const resultCountText = countError
+    ? 'Series count unavailable.'
+    : countPending
+      ? 'Updating series count…'
+      : filteredCount != null
+        ? `${filteredCount} of ${activeCount} series`
+        : 'Series count unavailable.'
+
   return (
     <header className="space-y-3 md:space-y-4 px-2">
       <div className="flex flex-wrap justify-between items-start gap-2 md:gap-4">
@@ -198,6 +215,14 @@ function QueueControlsInner({
           )}
         </div>
       </div>
+      <p
+        role="status"
+        aria-live="polite"
+        className="min-h-4 text-xs text-[var(--theme-text-muted)]"
+        data-testid="queue-result-count"
+      >
+        {resultCountText}
+      </p>
       <span className="sr-only" data-testid="queue-active-count">{activeCount}</span>
     </header>
   )
