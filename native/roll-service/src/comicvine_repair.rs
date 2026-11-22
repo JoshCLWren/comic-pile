@@ -1438,6 +1438,65 @@ mod tests {
         incomplete.as_object_mut().unwrap().remove("person_credits");
         assert!(normalized_metadata(&incomplete, 29319).is_err());
     }
+    #[tokio::test]
+    async fn float_status_singular_fetch_completes_and_persists_credits() {
+        // Production returned `status_code: 1.0` on the working singular
+        // fetch while the worker recorded `provider_unavailable`. The worker
+        // must now accept that payload, persist the creators and settle the
+        // durable request as completed (#5592 AC2/AC4).
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await; // external id 4000-29319
+        seed_request(&state, identity_id, "pending", 0, "-1 hour", None).await;
+
+        let mut payload = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
+            "cover_date":"1988-03-01", "store_date":"1988-03-24", "image":{},
+            "volume":{"id": 4001,"name":"Hellblazer"},
+            "person_credits":[{"id":1,"name":"Jamie Delano","api_detail_url":"https://example"}],
+            "character_credits":[], "team_credits":[], "story_arc_credits":[],
+            "date_last_updated":"2020-01-01T00:00:00+00:00"});
+        payload["status_code"] = json!(1.0);
+        let fake = state
+            .outbound
+            .as_any()
+            .downcast_ref::<crate::outbound::RecordingFakeOutbound>()
+            .expect("test state uses the recording fake outbound client");
+        fake.push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            bytes::Bytes::from(payload.to_string()),
+        );
+
+        let job = claim(&state).await.expect("claim").expect("pending job");
+        let outcome = process(&state, &job, Some("TESTKEY123"))
+            .await
+            .expect("process");
+        assert_eq!(outcome, "completed");
+
+        let connection = db::checkout(&state).await.expect("verify connection");
+        let credits: serde_json::Value = connection
+            .query_one(
+                "SELECT metadata_json::jsonb->'creator_credits' \
+                 FROM external_identities WHERE id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("credits")
+            .get(0);
+        assert_eq!(credits[0]["name"], "Jamie Delano");
+        let request_state: String = connection
+            .query_one(
+                "SELECT state FROM comicvine_metadata_refresh_requests WHERE id = $1",
+                &[&job.id],
+            )
+            .await
+            .expect("request state")
+            .get(0);
+        assert_eq!(request_state, "completed");
+    }
+
     #[test]
     fn provider_timestamp_accepts_rfc3339_and_comicvine_space_format() {
         assert_eq!(
