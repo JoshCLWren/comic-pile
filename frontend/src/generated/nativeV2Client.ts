@@ -68,6 +68,18 @@ export interface BulkAssignTagRequest {
 
 export type BulkAssignTagResponse = components['schemas']['BulkAssignResponse']
 
+export interface BulkExcludeRequest {
+  body: components['schemas']['BulkQueueExclusionRequest']
+}
+
+export type BulkExcludeResponse = components['schemas']['BulkQueueExclusionResponse']
+
+export interface BulkRestoreRequest {
+  body: components['schemas']['BulkQueueRestoreRequest']
+}
+
+export type BulkRestoreResponse = components['schemas']['BulkQueueRestoreResponse']
+
 export interface BulkUnassignTagRequest {
   path: {
     tag_id: number
@@ -95,6 +107,18 @@ export interface CblTargetedAdoptionCommitRequest {
 }
 
 export type CblTargetedAdoptionCommitResponse = components['schemas']['CblAdoptionCommitResponseWire']
+
+export interface CheckExcludedStatusRequest {
+  body: components['schemas']['ExcludedStatusCheckRequest']
+}
+
+export type CheckExcludedStatusResponse = components['schemas']['ExcludedStatusCheckResponse']
+
+export interface CheckThreadMembershipsRequest {
+  body: components['schemas']['ReadingListMembershipCheckRequest']
+}
+
+export type CheckThreadMembershipsResponse = components['schemas']['ReadingListMembershipCheckResponse']
 
 export interface ComicvineSeriesIssuesRequest {
   path: {
@@ -975,6 +999,14 @@ export interface ResolveInputRequest {
 
 export type ResolveInputResponse = components['schemas']['ComicVineResolveResponse']
 
+export interface RestoreGroupRequest {
+  path: {
+    group_id: number
+  }
+}
+
+export type RestoreGroupResponse = components['schemas']['BulkQueueRestoreResponse']
+
 export interface RevertCorrectionRequest {
   path: {
     issue_id: number
@@ -1184,9 +1216,13 @@ export interface NativeV2Client {
   assignTag(args: AssignTagRequest): Promise<AssignTagResponse>
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
   bulkAssignTag(args: BulkAssignTagRequest): Promise<BulkAssignTagResponse>
+  bulkExclude(args: BulkExcludeRequest): Promise<BulkExcludeResponse>
+  bulkRestore(args: BulkRestoreRequest): Promise<BulkRestoreResponse>
   bulkUnassignTag(args: BulkUnassignTagRequest): Promise<BulkUnassignTagResponse>
   cblAdoptionCommit(args: CblAdoptionCommitRequest): Promise<CblAdoptionCommitResponse>
   cblTargetedAdoptionCommit(args: CblTargetedAdoptionCommitRequest): Promise<CblTargetedAdoptionCommitResponse>
+  checkExcludedStatus(args: CheckExcludedStatusRequest): Promise<CheckExcludedStatusResponse>
+  checkThreadMemberships(args: CheckThreadMembershipsRequest): Promise<CheckThreadMembershipsResponse>
   comicvineSeriesIssues(args: ComicvineSeriesIssuesRequest): Promise<ComicvineSeriesIssuesResponse>
   commit(args: CommitRequest): Promise<CommitResponse>
   compare(args?: CompareRequest): Promise<CompareResponse>
@@ -1310,6 +1346,7 @@ export interface NativeV2Client {
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
   resolveInput(args: ResolveInputRequest): Promise<ResolveInputResponse>
+  restoreGroup(args: RestoreGroupRequest): Promise<RestoreGroupResponse>
   revertCorrection(args: RevertCorrectionRequest): Promise<RevertCorrectionResponse>
   role(args: RoleRequest): Promise<RoleResponse>
   saveOverlapDecision(args: SaveOverlapDecisionRequest): Promise<SaveOverlapDecisionResponse>
@@ -1368,6 +1405,18 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    bulkExclude(args: BulkExcludeRequest) {
+      return client.post<BulkExcludeResponse, BulkExcludeRequest['body']>(
+        "/v2/queue-exclusions",
+        args.body,
+      )
+    },
+    bulkRestore(args: BulkRestoreRequest) {
+      return client.post<BulkRestoreResponse, BulkRestoreRequest['body']>(
+        "/v2/queue-exclusions/restore",
+        args.body,
+      )
+    },
     bulkUnassignTag(args: BulkUnassignTagRequest) {
       return client.post<BulkUnassignTagResponse, BulkUnassignTagRequest['body']>(
         `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/unassignment-batches`,
@@ -1383,6 +1432,18 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     cblTargetedAdoptionCommit(args: CblTargetedAdoptionCommitRequest) {
       return client.post<CblTargetedAdoptionCommitResponse, CblTargetedAdoptionCommitRequest['body']>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/reading-plans/${encodeURIComponent(String(args.path.plan_id))}/adoption-commits`,
+        args.body,
+      )
+    },
+    checkExcludedStatus(args: CheckExcludedStatusRequest) {
+      return client.post<CheckExcludedStatusResponse, CheckExcludedStatusRequest['body']>(
+        "/v2/queue-exclusions/status:check",
+        args.body,
+      )
+    },
+    checkThreadMemberships(args: CheckThreadMembershipsRequest) {
+      return client.post<CheckThreadMembershipsResponse, CheckThreadMembershipsRequest['body']>(
+        "/v2/reading-lists/memberships:check",
         args.body,
       )
     },
@@ -2018,6 +2079,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         "/v2/comicvine/resolve",
         { params: compactQuery(args.query) },
       )
+    },
+    restoreGroup(args: RestoreGroupRequest) {
+      return client.post<RestoreGroupResponse>(`/v2/queue-exclusion-groups/${encodeURIComponent(String(args.path.group_id))}/restore`)
     },
     revertCorrection(args: RevertCorrectionRequest) {
       return client.post<RevertCorrectionResponse, RevertCorrectionRequest['body']>(
