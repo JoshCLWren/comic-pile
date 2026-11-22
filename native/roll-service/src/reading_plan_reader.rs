@@ -351,14 +351,16 @@ pub async fn read(
             .map(|row| {
                 let occurrence: String = row.get(0);
                 let status: String = row.get(6);
+                let thread_title: String = row.get(8);
+                let raw_issue_number: String = row.get(5);
                 PlanReaderIssue {
                     occurrence_id: occurrence.clone(),
                     issue_id: row.get(1),
                     lane_id: row.get(2),
                     display_position: row.get(3),
-                    issue_number: row.get(5),
+                    issue_number: normalize_issue_number_display(&raw_issue_number, &thread_title),
                     thread_id: row.get(7),
-                    thread_title: row.get(8),
+                    thread_title,
                     status: status.clone(),
                     is_checkpoint: row.get(4),
                     availability: if status == "read" { "read" } else { "later" }.to_string(),
@@ -456,7 +458,10 @@ pub async fn read(
                             issue_id,
                             thread_id: dep.thread_id,
                             thread_title: dep.thread_title.clone(),
-                            issue_number: dep.issue_number.clone(),
+                            issue_number: normalize_issue_number_display(
+                                &dep.issue_number,
+                                &dep.thread_title,
+                            ),
                             explanation: dep.label.clone(),
                         })
                     })
@@ -467,7 +472,10 @@ pub async fn read(
             issue_id: entry.issue_id,
             lane_id: "reading-list".to_string(),
             display_position: entry.position,
-            issue_number: entry.issue_number,
+            issue_number: normalize_issue_number_display(
+                &entry.issue_number,
+                &entry.series_name,
+            ),
             thread_id: entry.thread_id,
             thread_title: entry.series_name,
             status: entry.status,
