@@ -80,7 +80,13 @@ describe('navigation collapse behavior (#2285)', () => {
     mocks.readStoredAccessToken.mockReset()
     mocks.getAccessToken.mockReturnValue('test-token')
     mocks.readStoredAccessToken.mockReturnValue(null)
+    mocks.isSessionRefreshRejected.mockReturnValue(false)
     mocks.get.mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+  })
+
+  afterEach(() => {
+    Object.assign(api, originalApiMethods)
+    vi.restoreAllMocks()
   })
 
   it('defaults to the collapsed rail on tablet portrait widths', async () => {

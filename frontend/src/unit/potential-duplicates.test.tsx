@@ -2,42 +2,18 @@ import { useState } from 'react'
 import { render, screen, waitFor, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueueModals } from '../pages/QueuePage/QueueModals'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
 import { threadsApi } from '../services/api-threads'
 import type { PotentialDuplicateMatch, Thread } from '../types'
-import { injectModuleDoubles } from './injectModuleDoubles'
 
-await injectModuleDoubles(await import('../components/Modal'), () => ({
-  default: ({ isOpen, title, children }: { isOpen: boolean; title: string; children: React.ReactNode }) =>
-    isOpen ? <section aria-label={title}>{children}</section> : null,
-}))
-await injectModuleDoubles(await import('../components/PositionSlider'), () => ({ default: () => null }))
-await injectModuleDoubles(await import('../components/DependencyBuilder'), () => ({ default: () => null }))
-await injectModuleDoubles(await import('../components/MigrationDialog'), () => ({ default: () => null }))
-await injectModuleDoubles(await import('../components/AddSeriesFromComicVineDialog'), () => ({ default: () => null }))
-await injectModuleDoubles(await import('../pages/QueuePage/IssueToggleList'), () => ({ IssueToggleList: () => null }))
-await injectModuleDoubles(await import('../pages/QueuePage/FormatSelect'), () => ({
-  FormatSelect: ({
-    id,
-    value,
-    onChange,
-  }: {
-    id: string
-    value: string
-    onChange: (value: string) => void
-  }) => (
-    <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="Comic">Comic</option>
-    </select>
-  ),
-}))
-await injectModuleDoubles(await import('../services/api-threads'), () => ({
-  threadsApi: { checkPotentialDuplicates: vi.fn() },
-}))
+const originalThreadsApi = { ...threadsApi }
+const CHECK = vi.fn<typeof threadsApi.checkPotentialDuplicates>()
 
-const CHECK = vi.mocked(threadsApi.checkPotentialDuplicates)
+afterEach(() => {
+  Object.assign(threadsApi, originalThreadsApi)
+})
 
 const CONFIRMED_MATCH: PotentialDuplicateMatch = {
   thread_id: 42,
