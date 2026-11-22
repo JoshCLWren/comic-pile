@@ -295,8 +295,24 @@ pub(crate) async fn provider_response(
                 .clamp(60, 3600),
         )),
         Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
-        Exchange::Payload(payload) if payload["status_code"].as_i64() == Some(1) => Ok(payload),
-        Exchange::Payload(_) => Err(ProviderFailure::Unavailable),
+        Exchange::Payload(payload) => {
+            let status_code = payload.get("status_code").and_then(Value::as_i64);
+            if status_code == Some(1) {
+                Ok(payload)
+            } else {
+                let error = payload
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown");
+                tracing::warn!(
+                    comicvine_status_code = ?status_code,
+                    comicvine_error = error,
+                    resource,
+                    "comicvine provider returned non-success envelope"
+                );
+                Err(ProviderFailure::Unavailable)
+            }
+        }
     }
 }
 
@@ -346,6 +362,11 @@ pub(crate) async fn provider_exchange(
             });
         }
         if !status.is_success() {
+            tracing::warn!(
+                status = status.as_u16(),
+                resource,
+                "comicvine provider returned non-success status"
+            );
             return Err(ProviderFailure::Unavailable);
         }
         if response
