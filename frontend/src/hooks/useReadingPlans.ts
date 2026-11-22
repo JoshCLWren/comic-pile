@@ -1,5 +1,11 @@
+import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { invalidateReadingPlans, applyCommittedReadingPlanUpdate } from '../query/cacheEffects'
+import {
+  invalidateReadingPlans,
+  invalidateReadingPlansAfterCrossTabChange,
+  applyCommittedReadingPlanUpdate,
+} from '../query/cacheEffects'
+import { notifyReadingPlansChanged, subscribeToCrossTabChanges } from '../query/crossTabDataSync'
 import { queryKeys } from '../query/queryKeys'
 import {
   continuityPlansApi,
@@ -31,6 +37,44 @@ export function useReadingPlans() {
   })
 }
 
+/**
+ * Keep an open plans list in sync with plan writes made in other tabs (#5686).
+ *
+ * Committed plan create/update/delete mutations announce themselves on the
+ * cross-tab data channel, so another tab invalidates the plan queries instead
+ * of waiting out the 30s `staleTime` (or requiring a manual reload).
+ * Re-focusing the tab also refreshes the list, covering browsers without
+ * `BroadcastChannel` and tabs that missed a message while suspended.
+ *
+ * @param refetch - Refetches the rendered plans list.
+ */
+export function useReadingPlansCrossTabSync(refetch: () => void): void {
+  const client = useQueryClient()
+
+  useEffect(
+    () =>
+      subscribeToCrossTabChanges((change) => {
+        if (change.type === 'reading-plans-changed') {
+          void invalidateReadingPlansAfterCrossTabChange(client)
+        }
+      }),
+    [client],
+  )
+
+  useEffect(() => {
+    function onTabFocus(): void {
+      if (document.visibilityState !== 'visible') return
+      refetch()
+    }
+    document.addEventListener('visibilitychange', onTabFocus)
+    window.addEventListener('focus', onTabFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onTabFocus)
+      window.removeEventListener('focus', onTabFocus)
+    }
+  }, [refetch])
+}
+
 export function useReadingPlanReader(
   planId: number | null,
   options?: { refetchOnWindowFocus?: boolean | 'always' },
@@ -49,7 +93,10 @@ export function useDeleteReadingPlan() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: continuityPlansApi.delete,
-    onSuccess: async () => invalidateReadingPlans(client),
+    onSuccess: async () => {
+      await invalidateReadingPlans(client)
+      notifyReadingPlansChanged()
+    },
   })
 }
 
@@ -63,6 +110,7 @@ export function useSaveReadingPlan(planId: number | null, deps: SaveReadingPlanD
         : api.create(payload),
     onSuccess: async (plan) => {
       await applyCommittedReadingPlanUpdate(client, plan)
+      notifyReadingPlansChanged()
     },
   })
 }

@@ -521,6 +521,21 @@ export async function invalidateReadingPlans(client: QueryClient): Promise<void>
 }
 
 /**
+ * Refresh the plan surfaces after another tab committed a plan create,
+ * update, or delete (#5686).
+ *
+ * Scoped to the plan queries this tab left stale: the writing tab already ran
+ * the full eligibility refresh in its own mutation path, and a reader who is
+ * only looking at the plans list must not pay Queue/Roll/session refetches for
+ * a write it did not make.
+ */
+export async function invalidateReadingPlansAfterCrossTabChange(
+  client: QueryClient,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.readingPlans.all })
+}
+
+/**
  * Refresh every surface a release-source follow or toggle rewrites.
  *
  * Both the create (follow) and enable/disable mutations invalidate the same

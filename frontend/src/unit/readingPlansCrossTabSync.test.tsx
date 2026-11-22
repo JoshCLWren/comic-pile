@@ -1,0 +1,174 @@
+import { act, render, renderHook, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { useDeleteReadingPlan, useSaveReadingPlan } from '../hooks/useReadingPlans'
+import ContinuityPlansIndexPage from '../pages/ContinuityPlansIndexPage'
+import { notifyReadingPlansChanged, subscribeToCrossTabChanges } from '../query/crossTabDataSync'
+import { continuityPlansApi } from '../services/api-continuity-plans'
+import { cast } from '../utils/cast'
+
+vi.mock('../services/api-continuity-plans', async () => {
+  const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
+    '../services/api-continuity-plans',
+  )
+  return {
+    ...actual,
+    continuityPlansApi: {
+      ...actual.continuityPlansApi,
+      list: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+  }
+})
+
+const mockList = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
+const mockUpdate = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.update)
+const mockDelete = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.delete)
+
+const plan = {
+  id: 1,
+  name: 'QA-F-Order',
+  ordering_mode: 'informational',
+  lane_count: 1,
+  step_count: 3,
+  // SAFETY: this fixture declares no source paths
+  source_paths: [] as string[],
+  updated_at: '2026-11-22T00:00:00Z',
+}
+
+const planWrite = {
+  name: 'QA-F-Order-TwoTab',
+  ordering_mode: 'informational' as const,
+  lanes: [],
+  nodes: [],
+}
+
+/**
+ * Stand-in for the browser's BroadcastChannel: one instance per tab, messages
+ * delivered to every other instance with the same channel name (never back to
+ * the sender), matching the real API this fix relies on.
+ */
+class FakeBroadcastChannel {
+  static channels = new Set<FakeBroadcastChannel>()
+
+  readonly name: string
+  private readonly listeners = new Set<(event: MessageEvent<unknown>) => void>()
+
+  constructor(name: string) {
+    this.name = name
+    FakeBroadcastChannel.channels.add(this)
+  }
+
+  addEventListener(type: string, listener: (event: MessageEvent<unknown>) => void): void {
+    if (type === 'message') this.listeners.add(listener)
+  }
+
+  removeEventListener(type: string, listener: (event: MessageEvent<unknown>) => void): void {
+    if (type === 'message') this.listeners.delete(listener)
+  }
+
+  postMessage(data: unknown): void {
+    for (const channel of FakeBroadcastChannel.channels) {
+      if (channel === this || channel.name !== this.name) continue
+      for (const listener of [...channel.listeners]) {
+        listener({ data } as MessageEvent<unknown>)
+      }
+    }
+  }
+
+  close(): void {
+    FakeBroadcastChannel.channels.delete(this)
+    this.listeners.clear()
+  }
+
+  static reset(): void {
+    FakeBroadcastChannel.channels.clear()
+  }
+}
+
+function renderPlansIndex() {
+  return render(
+    <MemoryRouter>
+      <ContinuityPlansIndexPage />
+    </MemoryRouter>,
+  )
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  FakeBroadcastChannel.reset()
+  vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel)
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+it('refreshes the plans list when another tab renames a plan (#5686)', async () => {
+  mockList.mockResolvedValueOnce([plan])
+  mockList.mockResolvedValue([{ ...plan, name: 'QA-F-Order-TwoTab' }])
+  renderPlansIndex()
+  expect(await screen.findByText('QA-F-Order')).toBeInTheDocument()
+
+  // Another tab commits the rename and announces it. No reload, timer, or
+  // staleTime expiry is part of this reproduction.
+  await act(async () => {
+    notifyReadingPlansChanged()
+    await Promise.resolve()
+  })
+
+  expect(await screen.findByText('QA-F-Order-TwoTab')).toBeInTheDocument()
+  expect(screen.queryByText('QA-F-Order')).not.toBeInTheDocument()
+  expect(mockList).toHaveBeenCalledTimes(2)
+})
+
+it('refreshes the plans list when the tab regains focus (#5686)', async () => {
+  mockList.mockResolvedValueOnce([plan])
+  mockList.mockResolvedValue([{ ...plan, name: 'QA-F-Order-Focused' }])
+  renderPlansIndex()
+  expect(await screen.findByText('QA-F-Order')).toBeInTheDocument()
+
+  await act(async () => {
+    window.dispatchEvent(new Event('focus'))
+    await Promise.resolve()
+  })
+
+  expect(await screen.findByText('QA-F-Order-Focused')).toBeInTheDocument()
+  expect(mockList).toHaveBeenCalledTimes(2)
+})
+
+it('announces a committed plan delete to other tabs (#5686)', async () => {
+  mockDelete.mockResolvedValue(undefined)
+  const changes: string[] = []
+  const unsubscribe = subscribeToCrossTabChanges((change) => changes.push(change.type))
+  const { result } = renderHook(() => useDeleteReadingPlan())
+
+  await act(async () => {
+    await result.current.mutateAsync(1)
+  })
+
+  expect(changes).toEqual(['reading-plans-changed'])
+  unsubscribe()
+})
+
+it('announces a committed plan save to other tabs (#5686)', async () => {
+  mockUpdate.mockResolvedValue({
+    ...plan,
+    ...planWrite,
+    user_id: 1,
+    created_at: '2026-11-01T00:00:00Z',
+    lanes: [],
+    nodes: [],
+  })
+  const changes: string[] = []
+  const unsubscribe = subscribeToCrossTabChanges((change) => changes.push(change.type))
+  const { result } = renderHook(() => useSaveReadingPlan(1))
+
+  await act(async () => {
+    await result.current.mutateAsync(planWrite)
+  })
+
+  expect(changes).toEqual(['reading-plans-changed'])
+  unsubscribe()
+})
