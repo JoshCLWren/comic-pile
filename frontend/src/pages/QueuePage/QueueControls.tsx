@@ -75,6 +75,12 @@ function QueueControlsInner({
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [])
+  const resultCountText = countError
+    ? 'Series count unavailable.'
+    : countPending || activeCount == null || filteredCount == null
+      ? 'Updating series count…'
+      : `${filteredCount} of ${activeCount} series`
+
   return (
     <header className="space-y-3 md:space-y-4 px-2">
       <div className="flex flex-wrap justify-between items-start gap-2 md:gap-4">
@@ -204,7 +210,15 @@ function QueueControlsInner({
           )}
         </div>
       </div>
-      <span className="sr-only" data-testid="queue-active-count">{activeCount}</span>
+      <p
+        role="status"
+        aria-live="polite"
+        className="min-h-4 text-xs text-[var(--theme-text-muted)]"
+        data-testid="queue-result-count"
+      >
+        {resultCountText}
+      </p>
+      <span className="sr-only" data-testid="queue-active-count">{activeCount ?? ''}</span>
     </header>
   )
 }

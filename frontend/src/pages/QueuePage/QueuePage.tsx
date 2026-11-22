@@ -82,6 +82,8 @@ export default function QueuePage() {
     searchQuery,
   )
   const authoritativeActiveCount = activeCount ?? activeThreads.length
+  const countPending = !isError && (isPending || (isPlaceholderData && isFetching) || activeCount == null || filteredCount == null)
+  const countError = isError
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
