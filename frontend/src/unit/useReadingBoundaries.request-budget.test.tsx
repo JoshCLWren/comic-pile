@@ -97,6 +97,41 @@ describe('reading boundary evaluator request budget', () => {
     })
   })
 
+  it('rediscovers an expired unavailable capability instead of caching it forever', async () => {
+    let now = 1_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const client = createAppQueryClient()
+    const { calls, client: httpClient } = createRequestRecorder((call) => {
+      if (call.url === '/v2/reading-boundaries') {
+        const enabled = requestedThreadIds(call).includes(8)
+        const threads = Object.fromEntries(requestedThreadIds(call).map((id) => [id, {
+          thread_id: id,
+          state: enabled ? 'available' : 'unavailable',
+          summary: enabled ? 'Available now.' : 'The canonical evaluator is unavailable.',
+          next: null,
+          blockers: [],
+        }]))
+        return { threads, evaluator: enabled ? 'enabled' : 'unavailable' }
+      }
+      return {}
+    })
+    setDefaultHttpClient(httpClient)
+    const wrapper = wrapperFor(client)
+
+    const beforeRollout = renderHook(() => useReadingBoundaries([7]), { wrapper })
+    await waitFor(() => expect(beforeRollout.result.current.data?.evaluator).toBe('unavailable'))
+    beforeRollout.unmount()
+
+    now += 30_001
+    const afterRollout = renderHook(() => useReadingBoundaries([8]), { wrapper })
+    await waitFor(() => expect(afterRollout.result.current.isPending).toBe(false))
+
+    expect(afterRollout.result.current.data?.evaluator).toBe('enabled')
+    expect(afterRollout.result.current.data?.threads[8]?.state).toBe('available')
+    expect(requestCounts(calls)).toEqual({ 'POST /v2/reading-boundaries': 2 })
+    expect(calls.map(requestedThreadIds)).toEqual([[7], [8]])
+  })
+
   it('rediscovers the evaluator after an auth-session cache clear', async () => {
     const client = createAppQueryClient()
     const { calls, client: httpClient } = createRequestRecorder((call) => {
