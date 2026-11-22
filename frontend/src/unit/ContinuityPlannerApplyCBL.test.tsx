@@ -164,11 +164,33 @@ describe('ContinuityPlannerPage - Custom CBL apply (#3609)', () => {
     customCBLApi.apply = original.cblApply
   })
 
-  it('refreshes editor baseline and step list after server-side custom CBL apply', async () => {
+  it('adopts applied steps before dependent refreshes and preserves them on a later save', async () => {
+    let signalRefreshStarted!: () => void
+    const refreshStarted = new Promise<void>((resolve) => {
+      signalRefreshStarted = resolve
+    })
+    let releaseRefresh!: () => void
+    const refreshReleased = new Promise<void>((resolve) => {
+      releaseRefresh = resolve
+    })
+    const holdListRefresh = vi.fn(async () => {
+      signalRefreshStarted()
+      await refreshReleased
+      return { plans: [], next_page_token: null }
+    })
+
     render(
       <MemoryRouter initialEntries={['/continuity-plans/12/edit']}>
         <Routes>
-          <Route path="/continuity-plans/:id/edit" element={<ContinuityPlannerPage />} />
+          <Route
+            path="/continuity-plans/:id/edit"
+            element={
+              <>
+                <ContinuityPlannerPage />
+                <ReadingPlanListRefreshBarrier queryFn={holdListRefresh} />
+              </>
+            }
+          />
         </Routes>
       </MemoryRouter>,
       { wrapper: wrapper(client) },
@@ -188,13 +210,45 @@ describe('ContinuityPlannerPage - Custom CBL apply (#3609)', () => {
     await user.click(applyButton)
 
     await waitFor(() => expect(mocks.cblApply).toHaveBeenCalledWith(9, 12))
-    expect(await screen.findByText('Applied to Reading Plan: 3 added.')).toBeVisible()
+    await refreshStarted
 
+    // A slow dependent query must not leave the committed plan out of the editor.
     expect(await screen.findByText(/1 lane · 5 steps/)).toBeVisible()
     const laneMain = screen.getByTestId('lane-main')
     expect(within(laneMain).getByText('Starman #55')).toBeVisible()
     expect(within(laneMain).getByText('All-Star Comics #1')).toBeVisible()
     expect(within(laneMain).getByText('JSA #1')).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Save plan' })).toBeDisabled()
+
+    releaseRefresh()
+    expect(await screen.findByText('Applied to Reading Plan: 3 added.')).toBeVisible()
+    expect(await screen.findByRole('button', { name: 'Save plan' })).toBeDisabled()
+
+    mocks.update.mockResolvedValue({
+      ...committedPlan,
+      name: 'Saved after CBL',
+      updated_at: '2026-10-13T08:00:00Z',
+    })
+    const planName = screen.getByLabelText('Plan name')
+    await user.clear(planName)
+    await user.type(planName, 'Saved after CBL')
+    const saveButton = screen.getByRole('button', { name: 'Save plan' })
+    expect(saveButton).toBeEnabled()
+    await user.click(saveButton)
+
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1))
+    expect(mocks.update).toHaveBeenCalledWith(
+      12,
+      expect.objectContaining({
+        name: 'Saved after CBL',
+        expected_updated_at: committedPlan.updated_at,
+      }),
+    )
+    const payload = mocks.update.mock.calls[0][1]
+    expect(payload.nodes).toHaveLength(5)
+    expect(payload.nodes.map((node: { id: string }) => node.id)).toEqual(
+      committedPlan.nodes.map((node) => node.id),
+    )
+    expect(await screen.findByDisplayValue('Saved after CBL')).toBeVisible()
+    expect(screen.getByText(/1 lane · 5 steps/)).toBeVisible()
   })
 })
