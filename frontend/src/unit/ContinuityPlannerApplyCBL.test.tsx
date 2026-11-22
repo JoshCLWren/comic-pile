@@ -48,11 +48,15 @@ function wrapper(client: QueryClient) {
   }
 }
 
-function ReadingPlanListRefreshBarrier({ queryFn }: { queryFn: () => Promise<unknown> }) {
+function ReadingPlanListRefreshBarrier({
+  queryFn,
+}: {
+  queryFn: () => Promise<ContinuityPlanListItem[]>
+}) {
   useQuery({
     queryKey: queryKeys.readingPlans.list(),
     queryFn,
-    initialData: { plans: [], next_page_token: null },
+    initialData: [],
     staleTime: Infinity,
   })
   return null
