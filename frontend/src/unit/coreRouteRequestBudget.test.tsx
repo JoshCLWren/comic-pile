@@ -457,12 +457,18 @@ describe('core route request budgets', () => {
     })
     setDefaultHttpClient(client)
 
-    render(renderShell())
+    const view = render(renderShell())
 
     await waitFor(() =>
       expect(calls.some((call) => call.url === '/v2/users/me/preferences')).toBe(true),
     )
     await waitFor(() => expect(adapterCalls.length).toBeGreaterThan(0))
+    await drainSettledWork()
+
+    // Route elements remount the shell, but TanStack's fresh cache entries must
+    // prevent another preferences read or inbox probe on warm navigation.
+    view.unmount()
+    render(renderShell())
     await drainSettledWork()
 
     expect(requestCounts(calls)).toEqual({
