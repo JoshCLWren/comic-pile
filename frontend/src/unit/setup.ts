@@ -1,11 +1,8 @@
 import '@testing-library/jest-dom'
 import { beforeEach, vi } from 'vitest'
-import { createElement, type ReactElement, type ReactNode } from 'react'
-import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from '../query/queryClient'
 import { resetQueryRetryBudget } from '../query/outageRetryBudget'
 import { isFunction } from '../utils/runtimeChecks'
-import { injectModuleDoubles } from './injectModuleDoubles'
 
 // Tests run against the same process-wide `queryClient` singleton the app uses
 // (see App.tsx) so cache writes (`setQueryData`/`invalidateQueries`, e.g. roll
