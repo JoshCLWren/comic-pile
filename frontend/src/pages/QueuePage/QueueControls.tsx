@@ -208,7 +208,7 @@ function QueueControlsInner({
         <p
           role="status"
           aria-live="polite"
-          className="min-h-4 self-center text-xs text-[var(--theme-text-muted)]"
+          className="min-h-4 text-xs text-[var(--theme-text-muted)]"
           data-testid="queue-result-count"
         >
           {resultCountText}
