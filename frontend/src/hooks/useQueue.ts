@@ -176,6 +176,19 @@ export function useQueueThreads(
   // that window as unsettled instead of restating the old key's numbers
   // (#3614).
   const isPlaceholderData = query.isPlaceholderData
+  // Reader-facing `N of M series` state for the applied search (#3614). The
+  // first page's `filtered_count` is the authoritative match total for the
+  // applied search and `active_count` the pre-filter denominator, so both must
+  // come from a settled first page. Placeholder rows from the previous key (or
+  // either total missing) keep the count explicitly unsettled, and a failed
+  // first page says so instead of inventing numbers; a next-page-only failure
+  // leaves the settled first-page counts valid.
+  const resultCountText =
+    isError && !query.isFetchNextPageError
+      ? 'Series count unavailable.'
+      : !isPlaceholderData && filteredCount != null && activeCount != null
+        ? `${filteredCount} of ${activeCount} series`
+        : 'Updating series count…'
   // The append alone, so a consumer can read the Queue cursor to completion
   // without being confused by the combined "anything is loading" flag
   // (issue #3922).
@@ -203,6 +216,7 @@ export function useQueueThreads(
     filteredCount,
     isPlaceholderData,
     isFetchNextPageError: query.isFetchNextPageError,
+    resultCountText,
   }
 }
 
