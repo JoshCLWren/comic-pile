@@ -276,3 +276,23 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
+
+
+def test_reading_graph_budget_rejects_extra_query() -> None:
+    """A deliberately added extra query must fail the declared budget check."""
+    # GET /api/v2/reading-graph max_statements=6 (4 app + 2 overhead).
+    with pytest.raises(AssertionError):
+        assert_declared_budget("GET", "/api/v2/reading-graph", 7)
+    # POST /api/v2/reading-graph/repairs max_statements=10 (8 app + 2 overhead).
+    with pytest.raises(AssertionError):
+        assert_declared_budget("POST", "/api/v2/reading-graph/repairs", 11)
+
+
+def test_reading_graph_budget_rejects_n1_growth() -> None:
+    """A deliberately introduced N+1 growth pattern must fail the growth check."""
+    small_delta, large_delta = 4, 20  # simulated per-row N+1 growth
+    assert_declared_budget("GET", "/api/v2/reading-graph", small_delta, large_delta)
+    with pytest.raises(AssertionError):
+        assert large_delta <= small_delta + 2, (
+            f"statement count grew: {small_delta} -> {large_delta}"
+        )

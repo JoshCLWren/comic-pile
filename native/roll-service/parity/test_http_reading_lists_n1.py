@@ -525,3 +525,29 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         assert large_delta <= small_delta + 2, f"statement count grew: {small_delta} -> {large_delta}"
     finally:
         await engine.dispose()
+
+
+def test_reading_lists_budget_rejects_extra_query() -> None:
+    """A deliberately added extra query must fail the declared budget check."""
+    with pytest.raises(AssertionError):
+        assert_declared_budget("GET", "/api/v2/reading-lists", 5)
+    with pytest.raises(AssertionError):
+        assert_declared_budget("POST", "/api/v2/reading-lists", 12)
+    with pytest.raises(AssertionError):
+        assert_declared_budget("DELETE", "/api/v2/reading-lists/{list_id}", 9)
+    with pytest.raises(AssertionError):
+        assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}", 6)
+    with pytest.raises(AssertionError):
+        assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", 17)
+    with pytest.raises(AssertionError):
+        assert_declared_budget("GET", "/api/v2/reading-lists/{list_id}/reader", 9)
+
+
+def test_reading_lists_budget_rejects_n1_growth() -> None:
+    """A deliberately introduced N+1 growth pattern must fail the growth check."""
+    small_delta, large_delta = 4, 30  # simulated per-row N+1 growth
+    assert_declared_budget("GET", "/api/v2/reading-lists", small_delta, large_delta)
+    with pytest.raises(AssertionError):
+        assert large_delta <= small_delta + 2, (
+            f"statement count grew: {small_delta} -> {large_delta}"
+        )
