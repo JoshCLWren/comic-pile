@@ -304,6 +304,9 @@ fn describe_origin(
             "Converted prerequisite".into()
         };
     }
+    if blocker.kind == "reading_cycle" {
+        return "Reading constraint cycle".into();
+    }
     let kind = match blocker.kind.as_str() {
         "strict_order" => "Strict order",
         "hold" => "Hold",
