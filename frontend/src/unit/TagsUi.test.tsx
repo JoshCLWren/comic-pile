@@ -10,6 +10,7 @@ import { tagErrorMessage } from '../components/Tags/tagErrors'
 import { useAdminFlag } from '../components/Tags/useAdminFlag'
 import { tagsApi } from '../services/api-tags'
 import type {
+import { injectModuleDoubles } from './injectModuleDoubles'
   CreateTagResponse,
   EffectiveTagsResponse,
   Tag,
@@ -18,7 +19,7 @@ import type {
 } from '../services/api-tags'
 import { renderHook } from '@testing-library/react'
 
-vi.mock('../services/api-tags', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   // SAFETY: the palette constants and payload types are real; only the transport singleton is doubled
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
@@ -41,7 +42,7 @@ vi.mock('../services/api-tags', async (importOriginal) => {
   }
 })
 
-vi.mock('../components/Tags/useAdminFlag', () => ({
+await injectModuleDoubles(await import('../components/Tags/useAdminFlag'), () => ({
   useAdminFlag: vi.fn(() => false),
 }))
 

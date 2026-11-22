@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from '../query/queryClient'
 import { resetQueryRetryBudget } from '../query/outageRetryBudget'
 import { isFunction } from '../utils/runtimeChecks'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 // Tests run against the same process-wide `queryClient` singleton the app uses
 // (see App.tsx) so cache writes (`setQueryData`/`invalidateQueries`, e.g. roll
@@ -29,7 +30,7 @@ beforeEach(() => {
   resetQueryRetryBudget()
 })
 
-vi.mock('@testing-library/react', async (importOriginal) => {
+await injectModuleDoubles(await import('@testing-library/react'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('@testing-library/react')>()
   const makeWrapper = (innerWrapper?: (props: { children: ReactNode }) => ReactElement) => {
     return ({ children }: { children: ReactNode }) =>
