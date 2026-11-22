@@ -8,7 +8,7 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useThreadBlockingInfo } from '../hooks/useDependencies'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { clearSessionCache } from '../query/cacheEffects'
@@ -39,6 +39,10 @@ function useBoundaryAndLegacyFallback(threadId: number) {
 }
 
 describe('reading boundary evaluator request budget', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('discovers unavailable once, then sends only legacy reads across keys and invalidation', async () => {
     const client = createAppQueryClient()
     const { calls, client: httpClient } = createRequestRecorder((call) => {
