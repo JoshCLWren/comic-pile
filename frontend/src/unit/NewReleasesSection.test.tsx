@@ -2,55 +2,17 @@ import { render, screen, waitFor } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NewReleasesSection } from '../components/NewReleasesSection'
-import { cast } from '../utils/cast'
-import { injectModuleDoubles } from './injectModuleDoubles'
+import { continuityPlansApi } from '../services/api-continuity-plans'
 
-const mocks = vi.hoisted(() => ({
-  updateReleaseSourceEnabled: vi.fn(),
-  createReleaseSource: vi.fn(),
-  // SAFETY: the hoisted mock starts with no mutation error; the assertion widens the never-assigned null so tests can inject an Error before render.
-  enableError: null as Error | null,
-  // SAFETY: the hoisted mock starts with no mutation error; the assertion widens the never-assigned null so tests can inject an Error before render.
-  followError: null as Error | null,
-}))
+const originalContinuityPlansApi = { ...continuityPlansApi }
+const mockUpdate = vi.fn<typeof continuityPlansApi.updateReleaseSourceEnabled>()
+const mockCreate = vi.fn<typeof continuityPlansApi.createReleaseSource>()
 
-await injectModuleDoubles(await import('../services/api-continuity-plans'), async () => {
-  const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
-    '../services/api-continuity-plans',
-  )
-  return {
-    ...actual,
-    continuityPlansApi: {
-      ...actual.continuityPlansApi,
-      updateReleaseSourceEnabled: mocks.updateReleaseSourceEnabled,
-      createReleaseSource: mocks.createReleaseSource,
-    },
-  }
+afterEach(() => {
+  Object.assign(continuityPlansApi, originalContinuityPlansApi)
 })
-
-await injectModuleDoubles(await import('../hooks/useReleaseSources'), async () => {
-  const actual = await vi.importActual<typeof import('../hooks/useReleaseSources')>(
-    '../hooks/useReleaseSources',
-  )
-  return {
-    ...actual,
-    useEnableReleaseSource: () => ({
-      isPending: false,
-      error: mocks.enableError,
-      mutate: mocks.updateReleaseSourceEnabled,
-    }),
-    useCreateReleaseSource: () => ({
-      isPending: false,
-      error: mocks.followError,
-      mutate: mocks.createReleaseSource,
-    }),
-  }
-})
-
-const mockUpdate = cast<ReturnType<typeof vi.fn>>(mocks.updateReleaseSourceEnabled)
-const mockCreate = cast<ReturnType<typeof vi.fn>>(mocks.createReleaseSource)
 
 function createWrapper() {
   const client = new QueryClient({
