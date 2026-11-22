@@ -2150,7 +2150,7 @@ mod tests {
         assert_eq!(thread.get::<_, i32>(0), 7);
         assert_eq!(thread.get::<_, Option<f64>>(1), Some(4.5));
         assert_eq!(thread.get::<_, Option<String>>(2).as_deref(), Some("in_progress"));
-        let reading: (i64, i64, i64) = connection
+        let reading = connection
             .query_one(
                 "SELECT \
                    (SELECT count(*) FROM issues WHERE thread_id = $1 AND status = 'read'), \
@@ -2161,9 +2161,10 @@ mod tests {
                 &[&thread_id],
             )
             .await
-            .expect("preserved reading and mappings")
-            .get(0);
-        assert_eq!(reading, (1, 1, 4));
+            .expect("preserved reading and mappings");
+        assert_eq!(reading.get::<_, i64>(0), 1);
+        assert_eq!(reading.get::<_, i64>(1), 1);
+        assert_eq!(reading.get::<_, i64>(2), 4);
     }
 
     /// #5592: ComicVine 420 is a rate limit (Python parity), not provider_unavailable.
