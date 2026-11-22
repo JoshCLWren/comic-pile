@@ -6880,6 +6880,11 @@ export interface components {
              * @default 0
              */
             active_count: number;
+            /**
+             * Filtered Count
+             * @description Total active threads matching the applied search, independent of page.
+             */
+            filtered_count?: number | null;
             /** Next Page Token */
             next_page_token?: string | null;
             /** Threads */
@@ -8759,6 +8764,8 @@ export interface components {
         ThreadListResponse: {
             /** Format: int32 */
             active_count: number;
+            /** Format: int32 */
+            filtered_count?: number | null;
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
         };
