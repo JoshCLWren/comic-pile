@@ -1,7 +1,7 @@
 import { type PropsWithChildren } from 'react'
 import { render, screen, within, waitFor, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { continuityPlansApi } from '../services/api-continuity-plans'
@@ -10,6 +10,7 @@ import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api-threads'
 import { customCBLApi } from '../services/api-custom-cbl'
 import ContinuityPlannerPage from '../pages/ContinuityPlannerPage'
+import { queryKeys } from '../query/queryKeys'
 
 const mocks = {
   get: vi.fn(),
@@ -45,6 +46,16 @@ function wrapper(client: QueryClient) {
   return function Wrapper({ children }: PropsWithChildren) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>
   }
+}
+
+function ReadingPlanListRefreshBarrier({ queryFn }: { queryFn: () => Promise<unknown> }) {
+  useQuery({
+    queryKey: queryKeys.readingPlans.list(),
+    queryFn,
+    initialData: { plans: [], next_page_token: null },
+    staleTime: Infinity,
+  })
+  return null
 }
 
 const thread = {
