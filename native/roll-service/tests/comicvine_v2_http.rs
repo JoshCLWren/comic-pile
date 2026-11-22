@@ -3097,6 +3097,8 @@ async fn series_import_commits_hydration_requests_without_opening_roll() {
             "date_last_updated": "2026-11-22 00:00:00"
         }}),
     );
+    static CRON_SECRET_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _cron_guard = CRON_SECRET_LOCK.lock().await;
     let previous_cron_secret = std::env::var_os("CRON_SECRET");
     std::env::set_var("CRON_SECRET", "comicvine-test-cron-secret");
     let (status, drain) = send(
@@ -3114,6 +3116,7 @@ async fn series_import_commits_hydration_requests_without_opening_roll() {
     } else {
         std::env::remove_var("CRON_SECRET");
     }
+    drop(_cron_guard);
     assert_eq!(status, StatusCode::OK, "{drain:?}");
     assert_eq!(drain["claimed"], 1);
     assert_eq!(drain["completed"], 1);
