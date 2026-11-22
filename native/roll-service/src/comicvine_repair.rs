@@ -1909,7 +1909,7 @@ mod tests {
                     "INSERT INTO external_identities \
                      (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
                      VALUES ('comicvine','issue',$1,$2::json,now(),now()) RETURNING id",
-                    &[&external_id, &metadata],
+                    &[&external_id, &serde_json::to_value(metadata).unwrap()],
                 )
                 .await
                 .expect("identity")
