@@ -215,6 +215,57 @@ describe('Thread detail request budget', () => {
     expect(calls.some((call) => call.url === '/v2/tags')).toBe(false)
   })
 
+  it('loads each expanded issue cursor once and reuses both pages on warm reopen', async () => {
+    const handler = makeHandler('available')
+    const { calls, client } = createRequestRecorder((call) => {
+      if (call.url === '/v1/threads/42') return { ...THREADS[42], total_issues: 2 }
+      if (call.url === '/v1/threads/42/issues') {
+        const secondPage = call.params?.page_token === 'next'
+        return {
+          issues: [{
+            id: secondPage ? 422 : 421,
+            thread_id: 42,
+            issue_number: secondPage ? '2' : '1',
+            status: 'unread',
+            read_at: null,
+            created_at: '2026-11-01T00:00:00Z',
+          }],
+          total_count: 2,
+          page_size: 100,
+          next_page_token: secondPage ? null : 'next',
+        }
+      }
+      if (call.url === '/v1/threads/42/issues/creators') return { thread_id: 42, issues: [] }
+      if (call.url === '/v2/tags/effective/threads/42/issues') {
+        return { thread_id: 42, issues: [] }
+      }
+      if (call.url === '/v2/issues/cards') return { items: [] }
+      return handler(call)
+    })
+    setDefaultHttpClient(client)
+
+    render(renderThread())
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand' }))
+    await screen.findByRole('group', { name: 'Issue #1 in Saga' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }))
+    await screen.findByRole('group', { name: 'Issue #2 in Saga' })
+
+    const expectedIssueReads = {
+      'GET /v1/threads/42/issues?page_size=100': 1,
+      'GET /v1/threads/42/issues?page_size=100&page_token=next': 1,
+    }
+    const issueReads = () => Object.fromEntries(
+      Object.entries(requestCounts(calls)).filter(([key]) => key.includes('/v1/threads/42/issues?')),
+    )
+    expect(issueReads()).toEqual(expectedIssueReads)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand' }))
+    await screen.findByRole('group', { name: 'Issue #2 in Saga' })
+    expect(issueReads()).toEqual(expectedIssueReads)
+  })
+
   it('reads crossover groups in parallel with the thread detail', async () => {
     const threadResponse = deferred<typeof THREADS[42]>()
     const handler = makeHandler('available')
