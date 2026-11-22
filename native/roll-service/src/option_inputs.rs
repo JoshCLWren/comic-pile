@@ -803,6 +803,12 @@ mod tests {
             "threads": [], "issues": [], "lists": [], "entries": [],
             "prerequisites": [], "evidence": [], "overlaps": [],
             "exclusions": [], "issue_volumes": []
+        }))
+        .unwrap();
+        let inputs = assemble_snapshot(snapshot).ok().unwrap();
+        assert!(inputs.require_resolved().is_ok());
+        assert!(inputs.core.issues.is_empty());
+    }
 
     #[test]
     fn unresolved_categories_track_unread_outside_list() {
