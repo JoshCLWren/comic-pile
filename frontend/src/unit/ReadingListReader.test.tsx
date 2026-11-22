@@ -69,20 +69,15 @@ beforeEach(() => {
   Object.assign(tagsApi, mock_tagsApi)
   Object.assign(issuesApi, mock_issuesApi)
   Object.assign(customCBLApi, mock_customCBLApi)
-  fetchCards.mockReset()
-  patchIssue.mockReset()
+  vi.clearAllMocks()
   moveToFront.mockReset()
-  mock_tagsApi.threadIssuesEffective.mockReset()
-  mock_customCBLApi.getReader.mockReset()
-  mock_issuesApi.markRead.mockReset()
-  mock_issuesApi.markUnread.mockReset()
   moveToFront.mockResolvedValue(undefined)
   fetchCards.mockImplementation(async (ids) => ids.map(cardFor))
   patchIssue.mockImplementation(async (id, input) => receipt(id, input.status ?? 'read'))
-  mock_tagsApi.threadIssuesEffective.mockResolvedValue({ thread_id: 1, issues: [] })
-  mock_customCBLApi.getReader.mockResolvedValue(structuredClone(view))
-  mock_issuesApi.markRead.mockResolvedValue(undefined)
-  mock_issuesApi.markUnread.mockResolvedValue(undefined)
+  (mock_tagsApi.threadIssuesEffective as any).mockResolvedValue({ thread_id: 1, issues: [] })
+  (mock_customCBLApi.getReader as any).mockResolvedValue(structuredClone(view))
+  (mock_issuesApi.markRead as any).mockResolvedValue()
+  (mock_issuesApi.markUnread as any).mockResolvedValue()
 })
 
 afterEach(() => {
@@ -125,7 +120,7 @@ it('leaves the issue unread after a failed write and offers a retry', async () =
 })
 
 it('distinguishes failed loads from an empty or inactive list', async () => {
-  mock_customCBLApi.getReader.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ ...view, execution_mode: 'legacy', entries: [] })
+  (mock_customCBLApi.getReader as any).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ ...view, execution_mode: 'legacy', entries: [] })
   mount()
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load this Reading List')
   await userEvent.click(screen.getByRole('button', { name: 'Retry list' }))
@@ -141,7 +136,7 @@ function entryFixture() {
 
 it('shows read, later, excluded and inactive states with manual reading available', async () => {
   const entry = entryFixture()
-  mock_customCBLApi.getReader.mockResolvedValue({ ...view, mode: 'loose', entries: [
+  (mock_customCBLApi.getReader as any).mockResolvedValue({ ...view, mode: 'loose', entries: [
     { ...entry, availability: 'read', status: 'read' },
     { ...entry, id: 3, issue_id: 30, availability: 'later' },
     { ...entry, id: 4, issue_id: 40, availability: 'excluded' },
@@ -163,7 +158,7 @@ it('shows read, later, excluded and inactive states with manual reading availabl
 })
 
 it('keeps legacy unread members visible while withholding direct availability claims', async () => {
-  mock_customCBLApi.getReader.mockResolvedValue({ ...view, execution_mode: 'legacy', entries: [
+  (mock_customCBLApi.getReader as any).mockResolvedValue({ ...view, execution_mode: 'legacy', entries: [
     { ...entryFixture(), availability: 'legacy' },
   ] })
   mount()
@@ -188,7 +183,7 @@ it('prevents duplicate progress writes while a mutation is pending', async () =>
 })
 
 it('keeps read state after a failed mark-unread action', async () => {
-  mock_customCBLApi.getReader.mockResolvedValue({ ...view, entries: [
+  (mock_customCBLApi.getReader as any).mockResolvedValue({ ...view, entries: [
     { ...entryFixture(), availability: 'read', status: 'read' },
   ] })
   fetchCards.mockResolvedValue([{ ...cardFor(10), status: 'read', rating: 4 }])
@@ -202,7 +197,7 @@ it('keeps read state after a failed mark-unread action', async () => {
 })
 
 it('keeps progress usable when tags fail to load', async () => {
-  mock_tagsApi.threadIssuesEffective.mockRejectedValue(new Error('tags offline'))
+  (mock_tagsApi.threadIssuesEffective as any).mockRejectedValue(new Error('tags offline'))
   mount()
   expect((await screen.findAllByText('Tags unavailable.')).length).toBeGreaterThan(0)
   expect(firstCard().getByRole('button', { name: 'Rate / Mark read' })).toBeEnabled()
@@ -210,7 +205,7 @@ it('keeps progress usable when tags fail to load', async () => {
 
 it('shows inherited tags and lets readers inspect their source', async () => {
   const tag = { id: 9, name: 'Physical', normalized_name: 'physical', scope: 'private' as const, owner_user_id: 1, color: '#3B82F6', created_at: '', updated_at: '' }
-  mock_tagsApi.threadIssuesEffective.mockResolvedValue({ thread_id: 1, issues: [{
+  (mock_tagsApi.threadIssuesEffective as any).mockResolvedValue({ thread_id: 1, issues: [{
     target_type: 'Issue', target_id: 10, direct_tags: [], effective_tags: [{
       tag, direct: false, sources: [{ target_type: 'Thread', target_id: 1, display_name: 'The Dead Remembered' }],
     }],
@@ -266,7 +261,7 @@ it('shows a single bounded card-load failure and restores issue-specific covers 
 })
 
 it('does not guess an issue ID or fetch an issue cover for thread-only prerequisites', async () => {
-  mock_customCBLApi.getReader.mockResolvedValue({
+  (mock_customCBLApi.getReader as any).mockResolvedValue({
     ...view,
     entries: (view.entries ?? []).map((entry) => entry.issue_id !== 20 ? entry : {
       ...entry,
@@ -293,7 +288,7 @@ it('renders a safe empty list when a stale reader response omits entries', async
   // Preserve the generated response type while modeling a stale server
   // payload that omitted `entries`. Do not weaken the runtime boundary.
   const missingEntries = Object.assign({}, view, { entries: undefined })
-  mock_customCBLApi.getReader.mockResolvedValue(missingEntries)
+  (mock_customCBLApi.getReader as any).mockResolvedValue(missingEntries)
   mount()
   expect(await screen.findByText('This Reading List is empty.')).toBeVisible()
   expect(screen.getByText('Julix · Strict order')).toBeVisible()

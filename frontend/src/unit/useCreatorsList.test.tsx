@@ -9,7 +9,6 @@ import type { CreatorListItem, CreatorListResponse } from '../services/api-creat
 const original_creatorsApi = { ...creatorsApi }
 const mock_creatorsApi = { getList: vi.fn() }
 
-// SAFETY: mock payload supplies only the fields this test asserts
 const mockedGetList = (mock_creatorsApi.getList as any)
 
 const COMPLETE_COVERAGE = {

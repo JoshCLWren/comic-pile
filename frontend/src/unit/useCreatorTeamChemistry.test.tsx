@@ -9,7 +9,6 @@ import type { CreatorTeamChemistryResponse } from '../types/index'
 const original_creatorTeamChemistryApi = { ...creatorTeamChemistryApi }
 const mock_creatorTeamChemistryApi = { getChemistry: vi.fn() }
 
-// SAFETY: mock payload supplies only the fields this test asserts
 const mockedGetChemistry = (mock_creatorTeamChemistryApi.getChemistry as any)
 
 function makeResponse(): CreatorTeamChemistryResponse {

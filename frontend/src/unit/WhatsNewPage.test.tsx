@@ -46,7 +46,6 @@ function release(overrides: Partial<Release> = {}): Release {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: mock payload supplies only the fields this test asserts
   releasesApi.list = api.list as typeof releasesApi.list
 })
 

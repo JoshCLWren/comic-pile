@@ -13,7 +13,6 @@ const thread = { id: 7, title: 'Saga' }
 describe('MigrationDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // SAFETY: mock payload supplies only the fields this test asserts
     migrationApi.migrateThread = migrateThreadMock as typeof migrationApi.migrateThread
   })
 

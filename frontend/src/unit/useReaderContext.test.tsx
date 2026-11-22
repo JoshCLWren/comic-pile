@@ -9,7 +9,6 @@ import type { ReaderContextResponse } from '../types'
 const original_readerContextApi = { ...readerContextApi }
 const mock_readerContextApi = { get: vi.fn() }
 
-// SAFETY: mock payload supplies only the fields this test asserts
 const mockedGet = (mock_readerContextApi.get as any)
 
 function createWrapper() {

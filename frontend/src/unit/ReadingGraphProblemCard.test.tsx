@@ -77,9 +77,7 @@ function renderCard() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: mock payload supplies only the fields this test asserts
   readingGraphProblemApi.getGraph = vi.fn() as typeof readingGraphProblemApi.getGraph
-  // SAFETY: mock payload supplies only the fields this test asserts
   readingGraphProblemApi.repair = vi.fn() as typeof readingGraphProblemApi.repair
 })
 

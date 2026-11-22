@@ -61,13 +61,9 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: mock payload supplies only the fields this test asserts
   realThreadsApi.listExcluded = mockListExcluded as typeof realThreadsApi.listExcluded
-  // SAFETY: mock payload supplies only the fields this test asserts
   realThreadsApi.restore = mockRestore as typeof realThreadsApi.restore
-  // SAFETY: mock payload supplies only the fields this test asserts
   realThreadsApi.restoreExclusionGroup = mockRestoreGroup as typeof realThreadsApi.restoreExclusionGroup
-  // SAFETY: mock payload supplies only the fields this test asserts
   realThreadsApi.exclude = mockExclude as typeof realThreadsApi.exclude
   mockListExcluded.mockResolvedValue({
     active_count: 1,

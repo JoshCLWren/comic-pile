@@ -72,9 +72,7 @@ function renderRecovery(onRecovered = vi.fn()) {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  // SAFETY: mock payload supplies only the fields this test asserts
   readingPlanRecoveryApi.preview = previewApi as typeof readingPlanRecoveryApi.preview
-  // SAFETY: mock payload supplies only the fields this test asserts
   readingPlanRecoveryApi.relink = relinkApi as typeof readingPlanRecoveryApi.relink
   previewApi.mockResolvedValue(preview)
   relinkApi.mockResolvedValue({ plan_id: 1000096, list_id: 1000109, status: 'relinked' })

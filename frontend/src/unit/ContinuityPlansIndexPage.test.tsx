@@ -22,9 +22,7 @@ const plan = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: mock payload supplies only the fields this test asserts
   continuityPlansApi.list = mockList as typeof continuityPlansApi.list
-  // SAFETY: mock payload supplies only the fields this test asserts
   continuityPlansApi.delete = mockDelete as typeof continuityPlansApi.delete
 })
 

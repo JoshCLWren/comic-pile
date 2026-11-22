@@ -17,11 +17,8 @@ const originalPut = api.put
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: mock payload supplies only the fields this test asserts
   api.get = vi.fn() as typeof api.get
-  // SAFETY: mock payload supplies only the fields this test asserts
   api.post = vi.fn() as typeof api.post
-  // SAFETY: mock payload supplies only the fields this test asserts
   api.put = vi.fn() as typeof api.put
 })
 

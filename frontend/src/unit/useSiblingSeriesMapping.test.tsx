@@ -11,7 +11,6 @@ import { seriesMappingApi } from '../services/api-series-mapping'
 const original_seriesMappingApi = { ...seriesMappingApi }
 const mock_seriesMappingApi = { preview: vi.fn(), commit: vi.fn() }
 
-// SAFETY: mock payload supplies only the fields this test asserts
 const mockedSeriesMappingApi = (mock_seriesMappingApi as any)
 
 function wrapper({ children }: { children: ReactNode }) {

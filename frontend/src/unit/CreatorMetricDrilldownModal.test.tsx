@@ -81,13 +81,9 @@ function renderModal(drilldown: CreatorMetricDrilldown | undefined) {
 describe('CreatorMetricDrilldownModal', () => {
   beforeEach(() => {
     mockedGetMetricDrilldown.mockReset()
-    // SAFETY: mock payload supplies only the fields this test asserts
     creatorMetricDrilldownApi.getMetricDrilldown = mockedGetMetricDrilldown as typeof creatorMetricDrilldownApi.getMetricDrilldown
-    // SAFETY: mock payload supplies only the fields this test asserts
     creatorMetricDrilldownApi.getRatingDistributionDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getRatingDistributionDrilldown
-    // SAFETY: mock payload supplies only the fields this test asserts
     creatorMetricDrilldownApi.getRoleDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getRoleDrilldown
-    // SAFETY: mock payload supplies only the fields this test asserts
     creatorMetricDrilldownApi.getSeriesDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getSeriesDrilldown
     // By default a fetch never settles, so the loading test is deterministic and
     // no test depends on jsdom's real network behavior.
