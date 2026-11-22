@@ -834,7 +834,8 @@ async fn backfill_authorized(
                        AND e.entity_type = 'issue' AND {NEEDS_DEEP_FETCH_SQL} \
                      ORDER BY e.id LIMIT $2"
                 ),
-                &[&after, &limit],
+                // Postgres infers `LIMIT` as int8; bind an i64 to match it.
+                &[&after, &i64::from(limit)],
             )
             .await
             .map_err(db::query_error)?
@@ -1461,13 +1462,16 @@ mod tests {
         let identity_id = seed_identity(&state).await; // external id 4000-29319
         seed_request(&state, identity_id, "pending", 0, "-1 hour", None).await;
 
-        let mut payload = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
+        let issue = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
             "cover_date":"1988-03-01", "store_date":"1988-03-24", "image":{},
             "volume":{"id": 4001,"name":"Hellblazer"},
             "person_credits":[{"id":1,"name":"Jamie Delano","api_detail_url":"https://example"}],
             "character_credits":[], "team_credits":[], "story_arc_credits":[],
             "date_last_updated":"2020-01-01T00:00:00+00:00"});
-        payload["status_code"] = json!(1.0);
+        // ComicVine carries `status_code` on the response envelope, not on the
+        // issue `results` object. Production returned `status_code: 1.0` there;
+        // the worker must accept that float and complete the singular fetch.
+        let envelope = json!({"status_code": 1.0, "error": "OK", "results": issue});
         let fake = state
             .outbound
             .as_any()
@@ -1476,7 +1480,7 @@ mod tests {
         fake.push_ok(
             StatusCode::OK,
             HeaderMap::new(),
-            bytes::Bytes::from(payload.to_string()),
+            bytes::Bytes::from(envelope.to_string()),
         );
 
         let job = claim(&state).await.expect("claim").expect("pending job");
@@ -1908,7 +1912,7 @@ mod tests {
                 .query_one(
                     "INSERT INTO external_identities \
                      (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
-                     VALUES ('comicvine','issue',$1,$2::json,now(),now()) RETURNING id",
+                     VALUES ('comicvine','issue',$1,($2::text)::json,now(),now()) RETURNING id",
                     &[&external_id, &metadata],
                 )
                 .await
@@ -1962,9 +1966,22 @@ mod tests {
         .await
         .expect("resumed batch");
         assert_eq!(second.enqueued, 1, "hydrated identity is never enqueued");
-        assert_eq!(second.scanned, 2);
-        assert_eq!(second.already_present, 1);
+        // The resume cursor is exclusive (`e.id > after`), and the freshness
+        // predicate excludes the hydrated identity, so only the third
+        // roster-only identity is scanned here.
+        assert_eq!(second.scanned, 1);
+        assert_eq!(second.already_present, 0);
         assert!(second.after_pending > second.before_pending);
+
+        // Re-scanning an earlier range must dedup: every candidate there now
+        // has a ledger row, so nothing is eligible or enqueued again.
+        let rescan = backfill_authorized(&state, &headers, expected, false, 2, 0)
+            .await
+            .expect("dedup rescan");
+        assert_eq!(rescan.scanned, 2);
+        assert_eq!(rescan.already_present, 2);
+        assert_eq!(rescan.eligible, 0);
+        assert_eq!(rescan.enqueued, 0);
 
         let connection = db::checkout(&state).await.expect("final connection");
         let count: i64 = connection
