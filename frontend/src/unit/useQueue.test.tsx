@@ -316,6 +316,54 @@ listThreads.mockImplementation(
     )
     expect(listThreads).toHaveBeenCalledTimes(1)
   })
+
+  it('exposes the first-page filtered_count for the applied search (#3614)', async () => {
+    listThreads.mockResolvedValue({
+      // SAFETY: the stubbed page supplies only the fields the pager reads
+      threads: [{ id: 1, title: 'Alpha One' } as never],
+      next_page_token: null,
+      active_count: 7,
+      filtered_count: 2,
+    })
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads('alpha', 'position', threadsApi), { wrapper })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    expect(result.current.filteredCount).toBe(2)
+    expect(result.current.activeCount).toBe(7)
+    expect(result.current.isPlaceholderData).toBe(false)
+  })
+
+  it('marks a search-key transition as placeholder so counts stay unset (#3614)', async () => {
+    listThreads
+      .mockResolvedValueOnce({
+        // SAFETY: the stubbed page supplies only the fields the pager reads
+        threads: [{ id: 1, title: 'Saga' } as never],
+        next_page_token: null,
+        active_count: 5,
+        filtered_count: 5,
+      })
+      .mockImplementationOnce(() => new Promise(() => {})) // never resolves: search still in flight
+
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(({ search }: { search: string }) => useQueueThreads(search, 'position', threadsApi), {
+      wrapper,
+      initialProps: { search: '' },
+    })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(result.current.filteredCount).toBe(5)
+
+    rerender({ search: 'bat' })
+
+    // The old key's rows and counts stay visible as placeholder data, so a
+    // count surface must treat this window as unsettled, not as the new
+    // query's answer.
+    expect(result.current.isPlaceholderData).toBe(true)
+    expect(result.current.data).toEqual([{ id: 1, title: 'Saga' }])
+  })
 })
 
 it('moves queue position and reconciles only queue-owned read models', async () => {
