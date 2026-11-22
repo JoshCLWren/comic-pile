@@ -114,27 +114,21 @@ describe('ReadingPlanEditRoute', () => {
     expect(screen.queryByText(/Could not determine this Plan/)).not.toBeInTheDocument()
   })
 
-  it('does not unlock the editor for a relinked plan from a stale authoring link', () => {
+  it('does not unlock the editor for a relinked plan from a stale authoring link', async () => {
     getReader.mockRejectedValue(new Error('reader unavailable'))
-    // SAFETY: The route reads only isPending and data.status here.
-    vi.mocked(useReadingPlanRecoveryPreview).mockReturnValue({
-      isPending: false,
-      data: { status: 'linked' },
-    } as ReturnType<typeof useReadingPlanRecoveryPreview>)
+    // SAFETY: The route reads only status from this recovery preview fixture.
+    getRecoveryPreview.mockResolvedValue(cast<PlanRecoveryPreview>({ status: 'linked' }))
     renderEditRoute('29', '?authoring=1')
-    expect(screen.getByText(/Could not determine this Plan/)).toBeInTheDocument()
+    expect(await screen.findByText(/Could not determine this Plan/)).toBeInTheDocument()
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 
-  it('does not unlock the editor for an ambiguous authority from a stale authoring link', () => {
+  it('does not unlock the editor for an ambiguous authority from a stale authoring link', async () => {
     getReader.mockRejectedValue(new Error('reader unavailable'))
-    // SAFETY: The route reads only isPending and data.status here.
-    vi.mocked(useReadingPlanRecoveryPreview).mockReturnValue({
-      isPending: false,
-      data: { status: 'ambiguous' },
-    } as ReturnType<typeof useReadingPlanRecoveryPreview>)
+    // SAFETY: The route reads only status from this recovery preview fixture.
+    getRecoveryPreview.mockResolvedValue(cast<PlanRecoveryPreview>({ status: 'ambiguous' }))
     renderEditRoute('29', '?authoring=1')
-    expect(screen.getByText(/Could not determine this Plan/)).toBeInTheDocument()
+    expect(await screen.findByText(/Could not determine this Plan/)).toBeInTheDocument()
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 
