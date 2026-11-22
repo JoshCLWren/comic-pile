@@ -91,8 +91,11 @@ pub struct ReadingGraphResponse {
     pub repairs: Vec<ReadingGraphRepairOption>,
     /// Total count of unresolved references.
     pub unresolved_reference_count: usize,
-    /// Per-category breakdown of unresolved references for issue #4198 census.
-    pub unresolved_reference_breakdown: BTreeMap<UnresolvedCategory, usize>,
+    /// Read-only frontier audit (#4198): current unread frontiers that Option E
+    /// would offer while inert legacy/converted dependency evidence still
+    /// records possible reader intent. `null` while the graph is invalid or in
+    /// repair previews, which project in-memory states rather than stored data.
+    pub frontier_audit: Option<crate::frontier_audit::FrontierAuditReport>,
 }
 
 /// One validated repair action.
@@ -445,6 +448,7 @@ fn push_repairs(
 fn project(
     inputs: &OptionInputs,
     validated: &crate::reading_constraints::ValidatedReadingInputs,
+    legacy: Option<&[option_inputs::LegacyDependencyRow]>,
 ) -> ReadingGraphResponse {
     let (issues, titles) = issue_lookup(inputs);
     let lists = list_lookup(inputs);
