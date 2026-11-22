@@ -72,7 +72,7 @@ describe('hard refresh session bootstrap', () => {
 
   afterEach(() => {
     Object.assign(api, originalApiMethods)
-    Object.assign(authTransport, originalAuthTransport)
+    vi.restoreAllMocks()
     window.history.replaceState({}, '', '/')
     vi.unstubAllGlobals()
   })

@@ -142,7 +142,6 @@ describe('auth bootstrap retry budget (#4269)', () => {
 
   afterEach(() => {
     Object.assign(api, originalApiMethods)
-    Object.assign(authTransport, originalAuthTransport)
     vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
