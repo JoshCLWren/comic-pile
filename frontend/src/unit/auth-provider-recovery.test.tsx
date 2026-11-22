@@ -72,6 +72,15 @@ async function waitForPreferencesFetch() {
 
 describe('AuthProvider transient recovery', () => {
   beforeEach(() => {
+    Object.assign(api, { get: mocks.get, post: mocks.post, patch: mocks.patch })
+    Object.assign(authTransport, {
+      clearAccessToken: mocks.clearAccessToken,
+      setAccessToken: mocks.setAccessToken,
+      getAccessToken: mocks.getAccessToken,
+      readStoredAccessToken: mocks.readStoredAccessToken,
+      refreshSession: mocks.refreshSession,
+      isSessionRefreshRejected: mocks.isSessionRefreshRejected,
+    })
     auth = null
     mocks.get.mockReset()
     mocks.post.mockReset()
