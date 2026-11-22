@@ -1359,7 +1359,7 @@ async fn query_page(
     page_size: i64,
     cursor: Option<&QueueCursor>,
     status: &str,
-) -> Result<(Option<AuthRow>, i32, Vec<ListName>, Vec<PageRow>), ApiError> {
+) -> Result<(Option<AuthRow>, i32, i32, Vec<ListName>, Vec<PageRow>), ApiError> {
     // Reference both mode parameters unconditionally so the statement keeps a
     // stable bind count whether the Option E preview is active or not.
     let blocked = blocked_order_expr("$7", "$8");
