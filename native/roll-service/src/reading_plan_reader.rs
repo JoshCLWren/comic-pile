@@ -643,3 +643,33 @@ pub async fn read(
 )]
 #[allow(dead_code)]
 pub fn read_documentation() {}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_issue_number_display;
+
+    #[test]
+    fn normalizes_raw_cbl_annual_label_embedded_as_issue_number() {
+        assert_eq!(
+            normalize_issue_number_display("Alpha flight annual 1", "Alpha Flight"),
+            "Annual 1"
+        );
+    }
+
+    #[test]
+    fn preserves_ordinary_issue_numbers() {
+        assert_eq!(normalize_issue_number_display("1", "Alpha Flight"), "1");
+        assert_eq!(
+            normalize_issue_number_display("Annual 2", "Alpha Flight Annual"),
+            "Annual 2"
+        );
+    }
+
+    #[test]
+    fn strips_series_prefix_from_embedded_label() {
+        assert_eq!(
+            normalize_issue_number_display("Alpha Flight Annual 1", "Alpha Flight Annual"),
+            "1"
+        );
+    }
+}
