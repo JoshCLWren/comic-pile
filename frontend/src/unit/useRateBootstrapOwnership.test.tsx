@@ -20,7 +20,9 @@ const mock_protectedRollMutationApi = { rate: vi.fn(), snooze: vi.fn(), bootstra
 const original_rollBootstrapApi = { ...rollBootstrapApi }
 const mock_rollBootstrapApi = { get: vi.fn() }
 
+// SAFETY: mock payload supplies only the fields this test asserts
 const mockedRate = (mock_protectedRollMutationApi.rate as any)
+// SAFETY: mock payload supplies only the fields this test asserts
 const mockedBootstrapGet = (mock_rollBootstrapApi.get as any)
 
 const thread: Thread = {

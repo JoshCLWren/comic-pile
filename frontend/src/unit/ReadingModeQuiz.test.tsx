@@ -30,7 +30,9 @@ const QUIZ_QUESTIONS = [
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  // SAFETY: mock payload supplies only the fields this test asserts
   vi.spyOn(readingMode, 'getQuizQuestions').mockReturnValue(QUIZ_QUESTIONS as never)
+  // SAFETY: mock payload supplies only the fields this test asserts
   vi.spyOn(readingMode, 'setReadingModeFromQuiz').mockResolvedValue(undefined as never)
 })
 

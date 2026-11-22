@@ -14,8 +14,10 @@ const mock_readerContextApi = { get: vi.fn() }
 const original_readingBoundariesApi = { ...readingBoundariesApi }
 const mock_readingBoundariesApi = { batch: vi.fn() }
 
+// SAFETY: mock payload supplies only the fields this test asserts
 const getBoundaries = (mock_readingBoundariesApi.batch as any)
 
+// SAFETY: mock payload supplies only the fields this test asserts
 const getReaderContext = (mock_readerContextApi.get as any)
 
 const ACTIVE_THREAD: RatingThread = {

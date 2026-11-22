@@ -9,6 +9,7 @@ import type { CreatorDiscoveryResponse } from '../types/index'
 const original_creatorDiscoveryApi = { ...creatorDiscoveryApi }
 const mock_creatorDiscoveryApi = { getDiscoveries: vi.fn() }
 
+// SAFETY: mock payload supplies only the fields this test asserts
 const mockedGetDiscoveries = (mock_creatorDiscoveryApi.getDiscoveries as any)
 
 function makeResponse(): CreatorDiscoveryResponse {

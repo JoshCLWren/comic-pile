@@ -9,6 +9,7 @@ import type { CreatorComparisonResponse } from '../types/index'
 const original_creatorComparisonApi = { ...creatorComparisonApi }
 const mock_creatorComparisonApi = { getComparison: vi.fn() }
 
+// SAFETY: mock payload supplies only the fields this test asserts
 const mockedGetComparison = (mock_creatorComparisonApi.getComparison as any)
 
 const COMPLETE_COVERAGE = {

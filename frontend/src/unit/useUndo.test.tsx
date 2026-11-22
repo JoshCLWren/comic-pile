@@ -16,7 +16,9 @@ const mockedUndoApi = { listSnapshots: vi.fn(), undo: vi.fn() }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: mock payload supplies only the fields this test asserts
   undoApi.listSnapshots = mockedUndoApi.listSnapshots as typeof undoApi.listSnapshots
+  // SAFETY: mock payload supplies only the fields this test asserts
   undoApi.undo = mockedUndoApi.undo as typeof undoApi.undo
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedUndoApi.listSnapshots.mockResolvedValue([{ id: 1 }] as never)

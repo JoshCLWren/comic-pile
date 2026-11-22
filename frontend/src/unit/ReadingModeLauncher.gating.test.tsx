@@ -9,18 +9,24 @@ const originalReadingModeQuiz = FEATURES.readingModeQuiz
 describe('ReadingModeLauncher production gating (issue #1945)', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    // SAFETY: mock payload supplies only the fields this test asserts
     vi.spyOn(readingMode, 'getReadingMode').mockResolvedValue(null as never)
+    // SAFETY: mock payload supplies only the fields this test asserts
     vi.spyOn(readingMode, 'dismissReadingModeSuggestion').mockResolvedValue(null as never)
+    // SAFETY: mock payload supplies only the fields this test asserts
     vi.spyOn(readingMode, 'getQuizQuestions').mockReturnValue([] as never)
+    // SAFETY: mock payload supplies only the fields this test asserts
     vi.spyOn(readingMode, 'setReadingModeFromQuiz').mockResolvedValue(null as never)
   })
 
   afterEach(() => {
+    // SAFETY: mock payload supplies only the fields this test asserts
     ;(FEATURES as { readingModeQuiz: boolean }).readingModeQuiz = originalReadingModeQuiz
     vi.restoreAllMocks()
   })
 
   it('renders nothing on the normal production Roll surface when the quiz feature is disabled', () => {
+    // SAFETY: mock payload supplies only the fields this test asserts
     ;(FEATURES as { readingModeQuiz: boolean }).readingModeQuiz = false
 
     const { container } = render(<ReadingModeLauncher />)
@@ -32,6 +38,7 @@ describe('ReadingModeLauncher production gating (issue #1945)', () => {
   })
 
   it('exposes the launcher and quiz entry point only when the feature is explicitly enabled', () => {
+    // SAFETY: mock payload supplies only the fields this test asserts
     ;(FEATURES as { readingModeQuiz: boolean }).readingModeQuiz = true
 
     render(<ReadingModeLauncher />)

@@ -17,6 +17,7 @@ import type { RollBootstrapResponse } from '../types/rollBootstrap'
 const original_rollBootstrapApi = { ...rollBootstrapApi }
 const mock_rollBootstrapApi = { get: vi.fn() }
 
+// SAFETY: mock payload supplies only the fields this test asserts
 const mockedBootstrap = (mock_rollBootstrapApi.get as any)
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={queryClient}>

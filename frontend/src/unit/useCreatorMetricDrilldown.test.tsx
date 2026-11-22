@@ -21,9 +21,13 @@ import type {
 const original_creatorMetricDrilldownApi = { ...creatorMetricDrilldownApi }
 const mock_creatorMetricDrilldownApi = { getMetricDrilldown: vi.fn(), getRatingDistributionDrilldown: vi.fn(), getRoleDrilldown: vi.fn(), getSeriesDrilldown: vi.fn() }
 
+// SAFETY: mock payload supplies only the fields this test asserts
 const mockedGetMetric = (mock_creatorMetricDrilldownApi.getMetricDrilldown as any)
+// SAFETY: mock payload supplies only the fields this test asserts
 const mockedGetDistribution = (mock_creatorMetricDrilldownApi.getRatingDistributionDrilldown as any)
+// SAFETY: mock payload supplies only the fields this test asserts
 const mockedGetRole = (mock_creatorMetricDrilldownApi.getRoleDrilldown as any)
+// SAFETY: mock payload supplies only the fields this test asserts
 const mockedGetSeries = (mock_creatorMetricDrilldownApi.getSeriesDrilldown as any)
 
 function makeResponse(): CreatorMetricDrilldown {
