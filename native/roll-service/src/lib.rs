@@ -601,7 +601,10 @@ async fn runtime_identity(request: Request, next: Next) -> Response {
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::middleware::csrf_middleware;
-    // custom_cbl handlers are referenced as custom_cbl::* in routes.
+    use custom_cbl::{
+        apply_custom_cbl, delete_overlap_decision, export_custom_cbl, get_overlap_decisions,
+        save_overlap_decision, search_custom_cbl_issues,
+    };
     Router::new()
         .route(
             "/health",
@@ -923,27 +926,27 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/reading-lists/issue-candidates",
-            get(custom_cbl::search_custom_cbl_issues),
+            get(search_custom_cbl_issues),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/export",
-            get(custom_cbl::export_custom_cbl),
+            get(export_custom_cbl),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
-            post(custom_cbl::apply_custom_cbl),
+            post(apply_custom_cbl),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/overlap-decisions",
-            get(custom_cbl::get_overlap_decisions),
+            get(get_overlap_decisions),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/overlap-decisions",
-            put(custom_cbl::save_overlap_decision),
+            put(save_overlap_decision),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
-            delete(custom_cbl::delete_overlap_decision),
+            delete(delete_overlap_decision),
         )
         .route(
             "/api/v2/continuity-plans/{plan_id}/reader",
@@ -1003,34 +1006,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/identity-inbox/{mapping_id}/skips",
-            post(identity_inbox::skip),
-        )
-        .route(
-            "/api/v1/identity-inbox",
-            get(identity_inbox::list_inbox),
-        )
-        .route(
-            "/api/v1/identity-inbox/search/issues",
-            get(identity_inbox::search_issues),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}",
-            get(identity_inbox::get_inbox_item),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/confirm",
-            post(identity_inbox::confirm),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/defer",
-            post(identity_inbox::defer),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/reject",
-            post(identity_inbox::reject),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/skip",
             post(identity_inbox::skip),
         )
         // Issue Identity / CBL Adoption family (#4843).
@@ -1158,14 +1133,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/roll/dismiss-pending",
-            post(dismiss_pending::dismiss_pending),
-        )
-        .route(
-            "/api/v1/roll/dismiss-pending",
-            post(dismiss_pending::dismiss_pending),
-        )
-        .route(
-            "/api/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
         .route(

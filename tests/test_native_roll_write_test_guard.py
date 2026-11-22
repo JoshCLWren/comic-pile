@@ -233,23 +233,6 @@ def _baseline_modules() -> dict[str, str]:
     return {str(name): str(reason) for name, reason in modules.items()}
 
 
-def _baseline_handlers() -> dict[tuple[str, str], str]:
-    """Return handler-level exemptions for partially-tested modules.
-
-    Returns:
-        Mapping of (module, handler) to documented reason.
-    """
-    payload = json.loads(BASELINE.read_text(encoding="utf-8"))
-    handlers = payload.get("handlers", {})
-    assert isinstance(handlers, dict)
-    out: dict[tuple[str, str], str] = {}
-    for key, reason in handlers.items():
-        module, _, handler = str(key).rpartition("::")
-        assert module and handler, f"Invalid baseline handler key: {key!r}"
-        out[(module, handler)] = str(reason)
-    return out
-
-
 def _baseline_allowed() -> set[str]:
     """Return the frozen declaration of allowed baseline modules.
 
@@ -281,7 +264,6 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
     """Fail when a mounted mutation lacks a DB-backed write-path test."""
     mounted = _mounted_post_routes()
     baseline = _baseline_modules()
-    baseline_handlers = _baseline_handlers()
 
     assert mounted, "router parse found no write routes; update the guard parser"
 
@@ -291,7 +273,6 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
         if (module, handler) not in READ_ONLY_POST_HANDLERS
         and not _tests_write_path(module, handler)
         and module not in baseline
-        and (module, handler) not in baseline_handlers
     )
     assert missing == [], (
         "Native Rust mutation handlers without a disposable-Postgres write-path "
@@ -305,16 +286,6 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
         f"{stale}"
     )
 
-    stale_handlers = sorted(
-        (module, handler)
-        for module, handler in baseline_handlers
-        if (module, handler) not in mounted
-    )
-    assert stale_handlers == [], (
-        "Baseline handler entries no longer mounted; remove them: "
-        f"{stale_handlers}"
-    )
-
     now_tested = sorted(
         module
         for module, handler in mounted
@@ -323,16 +294,6 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
     assert now_tested == [], (
         "These modules now have a write-path test; remove them from "
         f"{BASELINE.name}: {now_tested}"
-    )
-
-    now_tested_handlers = sorted(
-        (module, handler)
-        for module, handler in baseline_handlers
-        if _tests_write_path(module, handler)
-    )
-    assert now_tested_handlers == [], (
-        "These handlers now have a write-path test; remove them from "
-        f"{BASELINE.name}: {now_tested_handlers}"
     )
 
 

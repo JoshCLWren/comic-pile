@@ -243,31 +243,6 @@ fn app() -> Router {
             "/api/v2/identity-inbox/{mapping_id}/skips",
             post(native_dispatch),
         )
-        .route("/api/v1/identity-inbox", get(native_dispatch))
-        .route(
-            "/api/v1/identity-inbox/search/issues",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/confirm",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/defer",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/reject",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}/skip",
-            post(native_dispatch),
-        )
         .route(
             "/api/v2/maintenance/comicvine-metadata-repairs",
             get(native_dispatch),
@@ -667,8 +642,6 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/roll/dismiss-pending", post(native_dispatch))
-        .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
-        .route("/api/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/roll/override", post(native_dispatch))
         .route(
             "/api/v1/roll/events/{event_id}/recommendation-explanation",
@@ -1330,8 +1303,6 @@ mod tests {
         // registered here too, otherwise it falls through to native_not_found.
         for (method, uri) in [
             ("POST", "/api/v2/roll/override"),
-            ("POST", "/api/v1/roll/dismiss-pending"),
-            ("POST", "/api/roll/dismiss-pending"),
             ("POST", "/api/v2/roll/dismiss-pending"),
             ("POST", "/api/v2/roll/switch-prerequisite"),
             ("GET", "/api/v2/releases"),

@@ -522,10 +522,7 @@ fn search_result(value: &Value) -> Option<ComicVineSeriesResult> {
         image_url: object
             .get("image")
             .and_then(Value::as_object)
-            .and_then(|image| {
-                first_truthy(image, "medium_url", "small_url")
-                    .or_else(|| python_str(image.get("thumb_url")))
-            }),
+            .and_then(|image| first_truthy(image, "medium_url", "small_url")),
     })
 }
 
@@ -1932,20 +1929,14 @@ fn normalize_roster_issue(row: &Value) -> Value {
         .get("image")
         .and_then(Value::as_object)
         .and_then(|image| {
-            [
-                "original_url",
-                "super_url",
-                "medium_url",
-                "small_url",
-                "thumb_url",
-            ]
-            .iter()
-            .find_map(|key| {
-                image
-                    .get(*key)
-                    .and_then(Value::as_str)
-                    .filter(|url| !url.is_empty())
-            })
+            ["original_url", "super_url", "medium_url", "small_url"]
+                .iter()
+                .find_map(|key| {
+                    image
+                        .get(*key)
+                        .and_then(Value::as_str)
+                        .filter(|url| !url.is_empty())
+                })
         })
         .map(|url| Value::String(url.to_owned()))
         .unwrap_or(Value::Null);
