@@ -2922,7 +2922,10 @@ async fn import_series_enqueues_durable_metadata_refresh_requests() {
     set_key(true);
     let conn = state.pool.get().await.unwrap();
 
-    provider_ok(&state, json!({"results": {"id": 5592, "name": "Hydration Test"}}));
+    provider_ok(
+        &state,
+        json!({"results": {"id": 5592, "name": "Hydration Test"}}),
+    );
     provider_ok(
         &state,
         json!({"number_of_total_results": 2, "results": [
@@ -2956,7 +2959,11 @@ async fn import_series_enqueues_durable_metadata_refresh_requests() {
         )
         .await
         .unwrap();
-    assert_eq!(rows.len(), 2, "every imported identity gets a durable request");
+    assert_eq!(
+        rows.len(),
+        2,
+        "every imported identity gets a durable request"
+    );
     for row in &rows {
         assert_eq!(row.get::<_, String>(0), "pending");
         assert_eq!(row.get::<_, i32>(1), 0);
@@ -2966,7 +2973,10 @@ async fn import_series_enqueues_durable_metadata_refresh_requests() {
 
     // Retry import: no duplicate refresh requests, existing rows preserved.
     fake(&state).clear();
-    provider_ok(&state, json!({"results": {"id": 5592, "name": "Hydration Test"}}));
+    provider_ok(
+        &state,
+        json!({"results": {"id": 5592, "name": "Hydration Test"}}),
+    );
     provider_ok(
         &state,
         json!({"number_of_total_results": 2, "results": [
@@ -2996,7 +3006,10 @@ async fn import_series_enqueues_durable_metadata_refresh_requests() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(count, 2, "reimport must not create duplicate refresh requests");
+    assert_eq!(
+        count, 2,
+        "reimport must not create duplicate refresh requests"
+    );
 
     let _ = user_id;
 }
