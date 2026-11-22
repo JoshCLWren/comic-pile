@@ -168,7 +168,7 @@ owned_entries AS (
     JOIN owned_lists l ON l.id = e.list_id
 ),
 reader_prerequisites AS (
-    SELECT d.id, d.source_issue_id, d.target_issue_id,
+    SELECT d.id, d.source_issue_id, d.target_issue_id, d.origin, d.note,
            d.classification, d.provenance
     FROM dependencies d
     WHERE d.origin = 'reader'
