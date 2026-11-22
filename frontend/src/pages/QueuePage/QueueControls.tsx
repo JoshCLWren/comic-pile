@@ -203,6 +203,18 @@ function QueueControlsInner({
             </button>
           )}
         </div>
+        <p
+          role="status"
+          aria-live="polite"
+          className="min-h-4 text-xs text-[var(--theme-text-muted)]"
+          data-testid="queue-result-count"
+        >
+          {countError
+            ? 'Series count unavailable.'
+            : countPending || filteredCount === null
+              ? 'Updating series count…'
+              : `${filteredCount} of ${activeCount} series`}
+        </p>
       </div>
       <span className="sr-only" data-testid="queue-active-count">{activeCount}</span>
     </header>
