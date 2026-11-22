@@ -1,30 +1,50 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingListEditorPage from '../pages/ReadingListEditorPage'
+import { customCBLApi, type CustomCBL } from '../services/api-custom-cbl'
+import { existingList as existingListFixture } from './fixtures/customCblFixture'
 
-vi.mock('../components/CustomCBLBuilder', () => ({
-  default: ({ initialListId }: { initialListId?: number }) => (
-    <div data-testid="mock-cbl-builder" data-list-id={initialListId} />
-  ),
-}))
+const originalCustomCBLApi = { ...customCBLApi }
+const getList = vi.fn<typeof customCBLApi.get>()
+const listLists = vi.fn<typeof customCBLApi.list>()
+const existingList: CustomCBL = { ...existingListFixture, mode: 'loose' }
+const ownedList: CustomCBL = { ...existingList, id: 12, entries: [], issue_count: 0 }
+
+beforeEach(() => {
+  Object.assign(customCBLApi, { get: getList, list: listLists })
+  vi.clearAllMocks()
+  getList.mockResolvedValue(ownedList)
+  listLists.mockResolvedValue([ownedList])
+})
+
+afterEach(() => {
+  Object.assign(customCBLApi, originalCustomCBLApi)
+})
 
 function renderAt(path: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/reading-lists/:id" element={<ReadingListEditorPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/reading-lists/:id" element={<ReadingListEditorPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 
 describe('ReadingListEditorPage', () => {
-  it('opens the owned Reading List in the existing editor', () => {
+  it('opens the owned Reading List in the existing editor', async () => {
     renderAt('/reading-lists/12')
 
     expect(screen.getByRole('heading', { name: 'Edit Reading List' })).toBeInTheDocument()
-    expect(screen.getByTestId('mock-cbl-builder')).toHaveAttribute('data-list-id', '12')
+    expect(await screen.findByLabelText('List name')).toHaveValue(existingList.name)
+    expect(getList).toHaveBeenCalledWith(12)
   })
 
   it.each([
@@ -36,6 +56,7 @@ describe('ReadingListEditorPage', () => {
     renderAt(path)
 
     expect(screen.getByRole('alert')).toHaveTextContent('Reading List not found.')
-    expect(screen.queryByTestId('mock-cbl-builder')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('List name')).not.toBeInTheDocument()
+    expect(getList).not.toHaveBeenCalled()
   })
 })
