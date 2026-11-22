@@ -2913,6 +2913,94 @@ async fn import_series_adopts_roster_and_reuses_on_retry() {
     );
 }
 
+/// #5592: a fresh series import must durably enqueue deep-metadata refresh
+/// work for every confirmed imported issue identity at commit, without opening
+/// Roll. Reimport is idempotent (no duplicate requests).
+#[tokio::test]
+async fn import_series_enqueues_durable_metadata_refresh_requests() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-5592-enq").await;
+    set_key(true);
+    let conn = state.pool.get().await.unwrap();
+
+    provider_ok(&state, json!({"results": {"id": 5592, "name": "Hydration Test"}}));
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 2, "results": [
+            roster_row(91001, "1", 5592), roster_row(91002, "2", 5592)
+        ]}),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 5592})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let thread_id = body["thread_id"].as_i64().unwrap() as i32;
+
+    let rows = conn
+        .query(
+            "SELECT r.state, r.attempts, e.external_id \
+             FROM comicvine_metadata_refresh_requests r \
+             JOIN external_identities e ON e.id = r.external_identity_id \
+             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+             JOIN issues i ON i.id = m.issue_id \
+             WHERE i.thread_id = $1 AND m.status = 'confirmed' \
+             ORDER BY e.external_id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 2, "every imported identity gets a durable request");
+    for row in &rows {
+        assert_eq!(row.get::<_, String>(0), "pending");
+        assert_eq!(row.get::<_, i32>(1), 0);
+    }
+    let external_ids: Vec<String> = rows.iter().map(|r| r.get(2)).collect();
+    assert_eq!(external_ids, vec!["91001".to_owned(), "91002".to_owned()]);
+
+    // Retry import: no duplicate refresh requests, existing rows preserved.
+    fake(&state).clear();
+    provider_ok(&state, json!({"results": {"id": 5592, "name": "Hydration Test"}}));
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 2, "results": [
+            roster_row(91001, "1", 5592), roster_row(91002, "2", 5592)
+        ]}),
+    );
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 5592})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM comicvine_metadata_refresh_requests r \
+             JOIN external_identities e ON e.id = r.external_identity_id \
+             WHERE e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND e.external_id = ANY($1::text[])",
+            &[&vec!["91001".to_owned(), "91002".to_owned()]],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 2, "reimport must not create duplicate refresh requests");
+
+    let _ = user_id;
+}
+
 #[tokio::test]
 async fn import_series_error_contract_and_reading_order() {
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-serr").await;
