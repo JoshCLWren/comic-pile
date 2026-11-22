@@ -498,7 +498,7 @@ async fn browse_items(
     query_text: Option<&str>,
     page: i128,
     page_size: i64,
-) -> Result<(Vec<CBLCatalogListItem>, i64, i128), tokio_postgres::Error> {
+) -> Result<(Vec<CBLCatalogListItem>, i64, i64, i128), tokio_postgres::Error> {
     if let Some(term) = query_text {
         let pattern = format!("%{}%", escape_like(term));
         let count_row = conn
