@@ -78,7 +78,11 @@ function expectNoExportSummary() {
 }
 
 beforeEach(() => {
+  Object.assign(activityApi, { list: listMock })
+  Object.assign(issueCardsApi, { fetchCards })
   listMock.mockReset()
+  fetchCards.mockReset()
+  fetchCards.mockResolvedValue([])
 })
 
 describe('History page contracts', () => {

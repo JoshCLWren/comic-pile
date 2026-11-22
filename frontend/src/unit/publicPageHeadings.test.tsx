@@ -71,40 +71,19 @@ function expectSinglePrimaryH1(): void {
 function renderPublicPage(page: 'landing' | 'login' | 'register' | 'forgot' | 'reset' | 'demo') {
   switch (page) {
     case 'landing':
-      return render(
-        <MemoryRouter>
-          <LandingPage />
-        </MemoryRouter>,
-      )
+      return renderPublicRoute(<LandingPage />, '/')
     case 'login':
-      return render(
-        <MemoryRouter initialEntries={['/login']}>
-          <LoginPage />
-        </MemoryRouter>,
-      )
+      return renderPublicRoute(<LoginPage />, '/login')
     case 'register':
-      return render(
-        <MemoryRouter initialEntries={['/register']}>
-          <RegisterPage />
-        </MemoryRouter>,
-      )
+      return renderPublicRoute(<RegisterPage />, '/register')
     case 'forgot':
-      return render(
-        <MemoryRouter initialEntries={['/forgot-password']}>
-          <ForgotPasswordPage />
-        </MemoryRouter>,
-      )
+      return renderPublicRoute(<ForgotPasswordPage />, '/forgot-password')
     case 'reset':
-      return render(
-        <MemoryRouter initialEntries={['/reset-password']}>
-          <ResetPasswordPage />
-        </MemoryRouter>,
-      )
+      return renderPublicRoute(<ResetPasswordPage />, '/reset-password')
     case 'demo':
-      return render(
-        <MemoryRouter initialEntries={['/demo']}>
-          <DemoRollPage api={{ roll: () => Promise.resolve(seededDemoRoll) }} />
-        </MemoryRouter>,
+      return renderPublicRoute(
+        <DemoRollPage api={{ roll: () => Promise.resolve(seededDemoRoll) }} />,
+        '/demo',
       )
   }
 }
