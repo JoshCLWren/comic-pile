@@ -631,10 +631,22 @@ mod tests {
         assert_eq!(eligible[0].issue_id, 11);
         assert_eq!(eligible[0].thread_id, 1);
 
-        for issue in &mut inputs.core.issues {
-            if [11, 12, 30, 40].contains(&issue.id) {
-                issue.status = "read".into();
-            }
+        // Releasing one earlier entry at a time must never expose King while
+        // any other earlier strict-list entry remains unread.
+        for required_issue_id in [11, 12, 30, 40] {
+            let validated =
+                ValidatedReadingInputs::new(inputs.clone(), &BTreeMap::new()).unwrap();
+            assert!(
+                !evaluate(&validated).unwrap()[&2].eligible,
+                "King became eligible before issue {required_issue_id} was read"
+            );
+            inputs
+                .core
+                .issues
+                .iter_mut()
+                .find(|issue| issue.id == required_issue_id)
+                .unwrap()
+                .status = "read".into();
         }
         let validated = ValidatedReadingInputs::new(inputs, &BTreeMap::new()).unwrap();
         assert!(evaluate(&validated).unwrap()[&2].eligible);
