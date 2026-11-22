@@ -370,8 +370,9 @@ function installAdapterRecorder(): void {
 
 function renderShell(): ReactNode {
   return (
-    <MemoryRouter initialEntries={['/queue']}>
-      <AuthContext.Provider
+    <QueryClientProvider client={routeQueryClient}>
+      <MemoryRouter initialEntries={['/queue']}>
+        <AuthContext.Provider
         value={{
           authState,
           isAuthenticated: true,
@@ -393,8 +394,9 @@ function renderShell(): ReactNode {
             </ToastProvider>
           </BugReportRestoreProvider>
         </NavCollapseProvider>
-      </AuthContext.Provider>
-    </MemoryRouter>
+        </AuthContext.Provider>
+      </MemoryRouter>
+    </QueryClientProvider>
   )
 }
 
