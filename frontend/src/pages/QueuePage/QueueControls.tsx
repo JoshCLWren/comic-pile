@@ -5,6 +5,13 @@ const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
   activeCount: number
+  /**
+   * Reader-facing `N of M series` state for the applied search (#3614): the
+   * settled match count, an explicit updating note during a search transition,
+   * or an unavailable note after a failed load. The page owns the wording so
+   * this control stays presentational.
+   */
+  resultCountText: string
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
@@ -34,6 +41,7 @@ interface QueueControlsProps {
  */
 function QueueControlsInner({
   activeCount,
+  resultCountText,
   shuffleDisabled,
   shufflePending,
   onShuffle,

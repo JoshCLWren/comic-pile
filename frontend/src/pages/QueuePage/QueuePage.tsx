@@ -52,9 +52,12 @@ export default function QueuePage() {
     data: threads,
     isPending,
     isError,
+    isFetchNextPageError,
+    isPlaceholderData,
     nextPageToken,
     loadMore,
     activeCount,
+    filteredCount,
   } = queueLoader
 
   // Series that show the per-row `Map series` repair action (everything except
@@ -82,6 +85,22 @@ export default function QueuePage() {
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
+
+  // `N of M series` for the applied search (#3614). The server's
+  // `filtered_count` is the authoritative match total across the whole active
+  // collection, and `active_count` is the pre-filter denominator, so both come
+  // from the settled first page. While a search transition still shows
+  // placeholder rows (or either total is missing) the count is explicitly
+  // unsettled, and a failed first page says so instead of inventing numbers;
+  // a next-page-only failure leaves the settled first-page counts valid.
+  const countSettled =
+    !isPlaceholderData && filteredCount !== null && activeCount !== null
+  const resultCountText =
+    isError && !isFetchNextPageError
+      ? 'Series count unavailable.'
+      : countSettled
+        ? `${filteredCount} of ${activeCount} series`
+        : 'Updating series count…'
 
   const navigateToRoll = useCallback(
     (_thread: ThreadListItem, response: unknown) => {
@@ -181,6 +200,7 @@ export default function QueuePage() {
       <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
         <QueueControls
           activeCount={authoritativeActiveCount}
+          resultCountText={resultCountText}
           shuffleDisabled={shuffleDisabled}
           shufflePending={shuffleQueueMutation.isPending}
           onShuffle={actions.requestShuffle}

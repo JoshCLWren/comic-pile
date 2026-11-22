@@ -200,6 +200,9 @@ export function useQueueThreads(
     nextPageToken,
     loadMore,
     activeCount,
+    filteredCount,
+    isPlaceholderData,
+    isFetchNextPageError: query.isFetchNextPageError,
   }
 }
 
