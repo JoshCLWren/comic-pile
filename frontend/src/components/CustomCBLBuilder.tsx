@@ -6,7 +6,6 @@ import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import { queryKeys } from '../query/queryKeys'
 import Modal from './Modal'
-import { requestSemanticScroll } from '../scroll/scrollCoordinator'
 import {
   customCBLApi, type CustomCBLEntry, type CustomCBLIssueSearchResult, type CustomCBLWrite,
   type ReadingListEntryIntent, type ReadingListGate, type ReadingListMode, type ReadingListPredecessorChange,
@@ -80,9 +79,7 @@ export default function CustomCBLBuilder({
   const listNavigationRef = useRef<HTMLDivElement>(null)
   const pendingNavigationFocusRef = useRef<number | null>(null)
   const currentIssueRef = useRef<HTMLLIElement>(null)
-  const currentUnreadIssueRef = useRef<HTMLLIElement>(null)
   const pendingProgressRevealRef = useRef<number | null>(null)
-  const pendingUnreadRevealRef = useRef<number | null>(null)
   const [readerOpen, setReaderOpen] = useState(false)
   const [open, setOpen] = useState(initialListId !== undefined)
   const [selectedId, setSelectedId] = useState<number | null>(initialListId ?? null)
@@ -168,10 +165,6 @@ export default function CustomCBLBuilder({
     const progressIndex = getReadingListProgressIndex(list.entries)
     setEntryPage(Math.floor(progressIndex / ENTRY_PAGE_SIZE))
     pendingProgressRevealRef.current = list.entries[progressIndex]?.issue_id ?? null
-    const nextUnreadIssueId = list.entries.find(
-      (entry) => !entry.skipped && entry.status === 'unread',
-    )?.issue_id ?? null
-    pendingUnreadRevealRef.current = nextUnreadIssueId
     setJumpPosition('')
     setExpandedEntryOptions(null)
     setMoveDestinations({})
@@ -444,30 +437,13 @@ export default function CustomCBLBuilder({
   const progressIndex = getReadingListProgressIndex(entries)
   const progressIssue = entries[progressIndex]
   const nextUnreadIssueId = entries.find((entry) => !entry.skipped && entry.status === 'unread')?.issue_id
-  useLayoutEffect(() => {
-    // Scroll to the progress issue if we have a ref and the IDs match
-    if (pendingProgressRevealRef.current !== entries[progressIndex]?.issue_id) return
-    if (!currentIssueRef.current) return
+  useEffect(() => {
+    if (pendingProgressRevealRef.current !== progressIssue?.issue_id || !currentIssueRef.current) return
+    const target = currentIssueRef.current
     pendingProgressRevealRef.current = null
-    requestSemanticScroll(() => {
-      const target = currentIssueRef.current
-      if (!target) return
-      target.scrollIntoView?.({ block: 'center' })
-      target.focus({ preventScroll: true })
-    })
-  }, [entries, currentPage, entrySearch])
-  useLayoutEffect(() => {
-    if (!nextUnreadIssueId) return
-    if (pendingUnreadRevealRef.current !== nextUnreadIssueId) return
-    if (!currentUnreadIssueRef.current) return
-    pendingUnreadRevealRef.current = null
-    requestSemanticScroll(() => {
-      const target = currentUnreadIssueRef.current
-      if (!target) return
-      target.scrollIntoView?.({ block: 'center' })
-      target.focus({ preventScroll: true })
-    })
-  }, [entries, currentPage, entrySearch, nextUnreadIssueId])
+    target.scrollIntoView?.({ block: 'center' })
+    target.focus({ preventScroll: true })
+  }, [entries, currentPage, entrySearch, progressIssue?.issue_id])
   const returnToProgress = () => {
     if (!progressIssue) return
     pendingProgressRevealRef.current = progressIssue.issue_id
@@ -885,12 +861,7 @@ export default function CustomCBLBuilder({
                     index={index}
                     entryCount={entries.length}
                     isNextUnread={entry.issue_id === nextUnreadIssueId}
-                    cardRef={(el) => {
-                      const isProgress = entry.issue_id === progressIssue?.issue_id
-                      const isNextUnread = entry.issue_id === nextUnreadIssueId
-                      if (isProgress || currentIssueRef.current === el) currentIssueRef.current = isProgress ? el : null
-                      if (isNextUnread || currentUnreadIssueRef.current === el) currentUnreadIssueRef.current = isNextUnread ? el : null
-                    }}
+                    cardRef={entry.issue_id === progressIssue?.issue_id ? currentIssueRef : undefined}
                     mode={mode}
                     waitingOn={requirements.get(entry.issue_id) ?? []}
                     nameOf={nameFor}
