@@ -119,13 +119,23 @@ export function CblSourceDetailPanel({
           <p className="text-xs text-[var(--theme-text-muted)]">
             {displayCblRepository(detail?.source_repository ?? '') ?? 'Shared CBL source'} ·{' '}
             {detail?.entries_total ?? 0} positions
-            {detail?.revision_sha ? ` · revision ${detail.revision_sha.slice(0, 8)}` : ''}
           </p>
-          {displayCblSourcePath(detail?.source_path ?? '') && (
-            <p className="text-xs text-[var(--theme-text-dim)]">
-              {displayCblSourcePath(detail?.source_path ?? '')}
-            </p>
-          )}
+          {/*
+           * Provenance stays out of the default view (#4171): the raw `.cbl`
+           * path and revision are reader-noise until the reader opens
+           * "Source details", matching the adoption preview in the browser.
+           */}
+          <details>
+            <summary className="cursor-pointer text-xs font-bold text-[var(--theme-text-muted)]">
+              Source details
+            </summary>
+            <div className="mt-2 space-y-1 text-xs text-[var(--theme-text-dim)]">
+              {displayCblSourcePath(detail?.source_path ?? '') && (
+                <p>{displayCblSourcePath(detail?.source_path ?? '')}</p>
+              )}
+              {detail?.revision_sha && <p>Revision {detail.revision_sha.slice(0, 8)}</p>}
+            </div>
+          </details>
         </div>
         <Link
           to={back.path}
