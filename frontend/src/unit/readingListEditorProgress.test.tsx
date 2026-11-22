@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
+import { beginRouteRestore } from '../scroll/scrollCoordinator'
 import { getReadingListProgressIndex } from '../utils/readingListProgress'
 
 const mocks = vi.hoisted(() => ({
@@ -96,6 +97,26 @@ describe('Reading List editing progress', () => {
     expect(screen.getByText('466 matching issues · Page 16 of 16')).toBeInTheDocument()
     expect(screen.queryByText('Up next')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Go to next unread/ })).not.toBeInTheDocument()
+  })
+
+  it('defers the open reveal until route scroll restoration settles (#4248)', async () => {
+    const original = Element.prototype.scrollIntoView
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, writable: true, value: scrollIntoView })
+    const endRestore = beginRouteRestore()
+    try {
+      renderEditor(entriesWithProgress(83))
+      const next = await screen.findByText('B.P.R.D.: Casualties #1')
+      const card = next.closest('[data-testid="reading-list-entry"]')!
+      expect(card).toHaveAttribute('aria-current', 'step')
+      // While route restoration is settling, the semantic reveal must not race it.
+      expect(scrollIntoView).not.toHaveBeenCalled()
+      endRestore()
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' }))
+    } finally {
+      endRestore()
+      Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, writable: true, value: original })
+    }
   })
 
   it('returns the first unread unskipped index or the final entry', () => {
