@@ -646,7 +646,7 @@ fn provider_newer_than_deep_fetch(metadata: &Value) -> bool {
     else {
         return false;
     };
-    provider_timestamp(&last_updated)
+    provider_timestamp(&serde_json::Value::String(last_updated.to_owned()))
         .and_then(|v| chrono::DateTime::parse_from_rfc3339(&v).ok())
         .is_some_and(|provider| provider > deep)
 }
