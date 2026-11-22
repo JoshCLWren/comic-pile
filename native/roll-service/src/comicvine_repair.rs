@@ -1040,6 +1040,23 @@ async fn backfill_authorized(
         None
     };
 
+    if query.dry_run && !needs_fetch.is_empty() {
+        // Dry-run classifies existing active work without locking or writing.
+        let active_rows = tx
+            .query(
+                "SELECT external_identity_id \
+                 FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = ANY($1::int[]) \
+                   AND state IN ('pending', 'running', 'deferred')",
+                &[&needs_fetch],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let already_active = active_rows.len() as u32;
+        report.already_queued_or_fresh += already_active;
+        report.needs_enqueue = report.needs_enqueue.saturating_sub(already_active);
+    }
+
     if !query.dry_run && !needs_fetch.is_empty() {
         let claimable_rows = tx
             .query(
