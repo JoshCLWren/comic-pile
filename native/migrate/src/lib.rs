@@ -45,8 +45,9 @@ const QUEUE_EXCLUSION_HEAD: &str = "s54350000001";
 /// Current Alembic head: the merge of the deferred repair and queue-exclusion heads.
 pub const BASELINE_ALEMBIC_HEAD: &str = "m54i537800001";
 
-/// Latest refinery migration version embedded in this binary.
-const LATEST_MIGRATION_VERSION: i32 = 2;
+/// Latest schema migration already reflected by the supported Alembic head.
+/// Later data-only migrations must still execute after V1/V2 adoption.
+const ALEMBIC_ADOPTED_MIGRATION_VERSION: i32 = 2;
 
 /// Advisory-lock key serializing concurrent runners.
 const MIGRATE_LOCK: i64 = 5_554_000_001;
