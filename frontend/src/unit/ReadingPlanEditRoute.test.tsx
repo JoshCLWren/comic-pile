@@ -56,9 +56,10 @@ function response(
 }
 
 beforeEach(() => {
+  Object.assign(continuityPlansApi, { getReader })
+  Object.assign(readingPlanRecoveryApi, { preview: getRecoveryPreview })
   getReader.mockReset()
-  vi.mocked(useReadingPlanReader).mockRestore()
-  vi.mocked(useReadingPlanRecoveryPreview).mockRestore()
+  getRecoveryPreview.mockReset()
 })
 
 describe('ReadingPlanEditRoute', () => {
