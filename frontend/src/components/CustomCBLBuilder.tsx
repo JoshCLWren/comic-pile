@@ -17,7 +17,7 @@ import ReadingListEntryCard from './ReadingListEntryCard'
 import { ComicIssueCover } from './ComicIssueCard'
 import ReadingListSeriesSkipControls from './ReadingListSeriesSkipControls'
 import { buildReplacementModel } from '../utils/readingListReplacementModel'
-import { getReadingListProgressIndex } from '../utils/readingListProgress'
+import { getReadingListProgressIndex, getProgressIssueId } from '../utils/readingListProgress'
 import ConfirmDialog from './ConfirmDialog'
 import { computeEntryRequirements, decodeCustomCBLError, describeCyclePath, describePredecessorChange } from '../utils/readingListAuthoring'
 import {
@@ -437,13 +437,16 @@ export default function CustomCBLBuilder({
   const progressIndex = getReadingListProgressIndex(entries)
   const progressIssue = entries[progressIndex]
   const nextUnreadIssueId = entries.find((entry) => !entry.skipped && entry.status === 'unread')?.issue_id
+  const progressIssueId = getProgressIssueId(entries)
   useEffect(() => {
-    if (pendingProgressRevealRef.current !== progressIssue?.issue_id || !currentIssueRef.current) return
+    // Wait until the ref is available before attempting to scroll
+    if (!currentIssueRef.current) return
+    if (pendingProgressRevealRef.current !== progressIssueId) return
     const target = currentIssueRef.current
     pendingProgressRevealRef.current = null
     target.scrollIntoView?.({ block: 'center' })
     target.focus({ preventScroll: true })
-  }, [entries, currentPage, entrySearch, progressIssue?.issue_id])
+  }, [entries, currentPage, entrySearch, progressIssueId])
   const returnToProgress = () => {
     if (!progressIssue) return
     pendingProgressRevealRef.current = progressIssue.issue_id
