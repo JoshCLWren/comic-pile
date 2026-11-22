@@ -1208,6 +1208,22 @@ mod tests {
         );
     }
 
+    async fn drain_for_test(state: &AppState) -> DrainReport {
+        std::env::set_var("COMICVINE_API_KEY", "TESTKEY123");
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer test-secret".parse().unwrap());
+        drain_authorized(state, &headers, Some("test-secret"))
+            .await
+            .expect("authorized drain")
+            .0
+    }
+
+    fn cron_headers() -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer test-secret".parse().unwrap());
+        headers
+    }
+
     /// #4516 legacy oracle: `_provider_timestamp` returned a naive datetime
     /// for ComicVine's `YYYY-MM-DD HH:MM:SS` revision. The retired Python
     /// identity upsert then evaluated
