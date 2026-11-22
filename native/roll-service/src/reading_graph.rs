@@ -1033,4 +1033,169 @@ mod tests {
         assert_eq!(path[0]["origin"], "list order");
         assert_eq!(path[0]["provenance"], serde_json::json!(["Julix"]));
     }
+
+    /// Seed the issue #4198 fixture chain for reader 9101 and an unrelated
+    /// library for reader 9102. The legacy canonical edge (Dependency 1860
+    /// shape: `origin=NULL`) points from unread X-Men #1/2 into the UXM #361
+    /// frontier; a converted row with classification C adds class coverage.
+    async fn frontier_audit_fixture(state: &Arc<AppState>) {
+        let connection = db::checkout(state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (9101, 'frontier-audit-a'), (9102, 'frontier-audit-b');
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position,
+                                      status, total_issues, next_unread_issue_id)
+                 VALUES (9305, 9101, 'Uncanny X-Men', 'series', 1, 1, 'active', 2, 9029),
+                        (9306, 9101, 'X-Men', 'series', 2, 2, 'active', 2, 9201),
+                        (9401, 9102, 'Unrelated Series', 'series', 1, 1, 'active', 2, 9403);
+                 INSERT INTO issues (id, thread_id, issue_number, status, created_at, position) VALUES
+                     (9028, 9305, '360', 'read', NOW(), 1),
+                     (9029, 9305, '361', 'unread', NOW(), 2),
+                     (9201, 9306, '80', 'unread', NOW(), 1),
+                     (9202, 9306, '1/2', 'unread', NOW(), 2),
+                     (9402, 9401, '1', 'read', NOW(), 1),
+                     (9403, 9401, '2', 'unread', NOW(), 2);
+                 INSERT INTO custom_cbl_lists (id, user_id, name, mode, created_at, updated_at)
+                 VALUES (9701, 9101, '90s crossovers', 'loose', NOW(), NOW());
+                 INSERT INTO custom_cbl_entries (id, list_id, issue_id, position, created_at, gate, skipped)
+                 VALUES (9801, 9701, 9029, 1, NOW(), 'none', false);
+                 INSERT INTO dependencies (id, source_issue_id, target_issue_id, origin, created_at)
+                 VALUES (9901, 9202, 9029, NULL, NOW());
+                 INSERT INTO dependencies (id, source_issue_id, target_issue_id, origin,
+                                           classification, provenance, created_at)
+                 VALUES (9902, 9202, 9029, 'converted', 'C', 'generation evidence', NOW());
+                 INSERT INTO dependencies (id, source_issue_id, target_issue_id, origin, created_at)
+                 VALUES (9903, 9402, 9403, NULL, NOW());",
+            )
+            .await
+            .expect("seed frontier audit fixture");
+        drop(connection);
+    }
+
+    async fn dependency_count(state: &Arc<AppState>) -> i64 {
+        let connection = db::checkout(state).await.expect("count connection");
+        connection
+            .query_one("SELECT COUNT(*) FROM dependencies", &[])
+            .await
+            .expect("dependency count")
+            .get(0)
+    }
+
+    #[tokio::test]
+    async fn reading_graph_reports_unprotected_frontier_to_disposable_postgres() {
+        let state = test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let _guard = test_support::reset_for_test(&state).await;
+        frontier_audit_fixture(&state).await;
+        let before = dependency_count(&state).await;
+
+        let Json(response) = reading_graph(
+            State(state.clone()),
+            AuthenticatedUser::for_test(9101),
+            State(state.clone()),
+        )
+        .await
+        .expect("reading graph for reader A");
+        assert_eq!(response.status, "ok");
+        let audit = response.frontier_audit.as_ref().expect("audit present");
+        assert_eq!(audit.frontiers_examined, 2);
+        assert_eq!(audit.findings.len(), 1);
+        let finding = &audit.findings[0];
+        assert_eq!(finding.thread_id, 9305);
+        assert_eq!(finding.frontier_issue_id, 9029);
+        assert_eq!(finding.frontier_issue_number, "361");
+        assert_eq!(finding.list_memberships[0].list_id, 9701);
+        assert_eq!(finding.legacy_evidence.len(), 2);
+        assert_eq!(finding.legacy_evidence[0].dependency_id, 9901);
+        assert_eq!(
+            finding.legacy_evidence[0].evidence_class,
+            "legacy_canonical_unclassified"
+        );
+        assert_eq!(
+            finding.legacy_evidence[0].source_issue_number.as_deref(),
+            Some("1/2")
+        );
+        assert_eq!(finding.legacy_evidence[1].dependency_id, 9902);
+        assert_eq!(
+            finding.legacy_evidence[1].evidence_class,
+            "converted_classification_c"
+        );
+        assert_eq!(audit.actionable_reader_prerequisites, 0);
+
+        // An independent reader's library is untouched: their own legacy edge
+        // targets their frontier, but the audit is owner-scoped per user.
+        let Json(other) = reading_graph(
+            State(state.clone()),
+            AuthenticatedUser::for_test(9102),
+            State(state.clone()),
+        )
+        .await
+        .expect("reading graph for reader B");
+        assert_eq!(other.status, "ok");
+        let other_audit = other.frontier_audit.as_ref().expect("audit present");
+        assert_eq!(other_audit.frontiers_examined, 1);
+        // Reader B's inert edge targets their frontier from a READ source, so
+        // the loader keeps no evidence and the frontier stays unreported.
+        assert_eq!(other_audit.inert_evidence_rows, 0);
+        assert!(other_audit.findings.is_empty());
+
+        // Read-only: the handler must not mutate a single row.
+        assert_eq!(dependency_count(&state).await, before);
+    }
+
+    #[tokio::test]
+    async fn authored_prerequisite_removes_frontier_finding_to_disposable_postgres() {
+        let state = test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let _guard = test_support::reset_for_test(&state).await;
+        frontier_audit_fixture(&state).await;
+
+        // Author the correction explicitly: reader 9101 authors
+        // X-Men #1/2 -> UXM #361 through the Dependency Builder surface.
+        let connection = db::checkout(&state).await.expect("author connection");
+        connection
+            .batch_execute(
+                "INSERT INTO dependencies (id, source_issue_id, target_issue_id, origin,
+                                          classification, provenance, created_at)
+                 VALUES (9904, 9202, 9029, 'reader', 'A',
+                         'Reader-authored through the Dependency Builder', NOW());",
+            )
+            .await
+            .expect("seed authored prerequisite");
+        drop(connection);
+
+        let Json(response) = reading_graph(
+            State(state.clone()),
+            AuthenticatedUser::for_test(9101),
+            State(state.clone()),
+        )
+        .await
+        .expect("reading graph after authoring");
+        let audit = response.frontier_audit.as_ref().expect("audit present");
+        assert!(
+            audit.findings.is_empty(),
+            "the explicitly authored prerequisite protects the frontier"
+        );
+        assert_eq!(audit.actionable_reader_prerequisites, 1);
+        assert_eq!(audit.frontiers_protected, 1);
+
+        // The exact Option E authority blocks #361 and leaves X-Men #80
+        // eligible.
+        let validated = option_inputs::load_option_inputs_contained(
+            &state,
+            AuthenticatedUser::for_test(9101),
+        )
+        .await
+        .expect("validated Option E inputs");
+        let eligible: Vec<i32> = validated
+            .eligible_frontiers()
+            .expect("eligibility")
+            .into_iter()
+            .map(|frontier| frontier.issue_id)
+            .collect();
+        assert!(!eligible.contains(&9029), "UXM #361 must stay blocked");
+        assert!(eligible.contains(&9201), "X-Men #80 must remain eligible");
+    }
 }
