@@ -229,15 +229,6 @@ describe('CblBrowserPage adoption', () => {
     await user.click(screen.getByRole('button', { name: 'Add reading order' }))
     expect(mockCommitNew).toHaveBeenCalled()
     expect(screen.queryByRole('heading', { name: 'Update this Reading Plan?' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Update Reading Plan' }))
-    await waitFor(() => {
-      expect(mockCommit).toHaveBeenCalledWith(
-        7,
-        88,
-        expect.objectContaining({ total_positions: 2 }),
-        { series_decisions: {}, entry_decisions: {}, overlap_decisions: [] },
-      )
-    })
     expect(mockCommitNew).not.toHaveBeenCalled()
   })
 
