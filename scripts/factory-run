@@ -13,7 +13,7 @@
 set -Eeuo pipefail
 
 # Pinned Rotisserie commit with `rotisserie factory`. Update with the console.
-ROTISSERIE_REF="e8440abe7eeba38d07cc320e85763efcc3333914"
+ROTISSERIE_REF="f51947b49e4f638564e4a856aa1c0ce4d7f8f9f0"
 ROTISSERIE_SOURCE="git+ssh://git@github.com/JoshCLWren/rotisserie.git@${ROTISSERIE_REF}"
 REPO="${FACTORY_REPO:-JoshCLWren/comic-pile}"
 
