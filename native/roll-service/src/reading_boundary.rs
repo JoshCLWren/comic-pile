@@ -797,6 +797,32 @@ async fn get_reading_boundary_explanations(
             values
         }
     };
+    let Some(validated) = validated else {
+        // Legacy execution checks ownership above but never evaluates or exposes
+        // canonical eligibility. This is the frozen Python batch behavior and
+        // keeps the deployment-level signal consistent with every row.
+        let mut threads = HashMap::new();
+        for thread_id in thread_ids {
+            let thread = labels
+                .threads
+                .get(&thread_id)
+                .ok_or(ApiError::NotFound(format!("Thread {thread_id} not found")))?;
+            threads.insert(
+                thread_id,
+                ReadingBoundaryExplanationV2 {
+                    thread_id,
+                    state: BoundaryState::Unavailable,
+                    summary: format!("Option E is not active for {}.", thread.title),
+                    next: None,
+                    blockers: vec![],
+                },
+            );
+        }
+        return Ok(ReadingBoundaryBatchResponseV2 {
+            threads,
+            evaluator: BoundaryEvaluator::Unavailable,
+        });
+    };
     let snapshot = build_eligibility_snapshot(&validated, &labels, &requested)?;
 
     let mut threads = HashMap::new();
