@@ -1145,6 +1145,7 @@ fn blocker_origin(gate: &BlockerGate, list_names: &HashMap<i32, &str>) -> String
 struct PagePayload {
     auth: Option<AuthRow>,
     active_count: i32,
+    filtered_count: i32,
     list_names: Vec<ListName>,
     rows: Vec<PageRow>,
 }
