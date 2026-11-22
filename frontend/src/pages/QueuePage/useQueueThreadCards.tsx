@@ -66,6 +66,7 @@ export function useQueueThreadCards({
   const boundaryIsUnavailable =
     !boundaryPending && (boundaryError ||
       boundaryData == null ||
+      boundaryData.evaluator === 'unavailable' ||
       boundaryThreadIds.some(
         (id) => boundaryData.threads[id] == null || boundaryData.threads[id].state === 'unavailable',
       ))

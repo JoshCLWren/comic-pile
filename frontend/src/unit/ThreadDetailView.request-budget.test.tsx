@@ -79,7 +79,7 @@ type BlockingSummary = {
 function boundaryBatch(state: BoundaryState, ids: number[]) {
   const threads: Record<string, { state: BoundaryState }> = {}
   for (const id of ids) threads[id] = { state }
-  return { threads }
+  return { threads, evaluator: state === 'available' ? 'enabled' : 'unavailable' }
 }
 
 function makeHandler(state: BoundaryState): Responder {

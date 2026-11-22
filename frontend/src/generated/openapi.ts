@@ -6191,12 +6191,6 @@ export interface components {
             /** Format: int32 */
             year?: number | null;
         };
-        NativeReadingBoundaryBatchResponseV2: {
-            evaluator: components["schemas"]["BoundaryEvaluator"];
-            threads: {
-                [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
-            };
-        };
         NativeReadingGraphBlocker: {
             explanation: string;
             /** Format: int64 */
@@ -7028,6 +7022,7 @@ export interface components {
             thread_ids: number[];
         };
         ReadingBoundaryBatchResponseV2: {
+            evaluator: components["schemas"]["BoundaryEvaluator"];
             threads: {
                 [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
             };
@@ -15758,7 +15753,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReadingBoundaryBatchResponseV2"];
+                    "application/json": components["schemas"]["ReadingBoundaryBatchResponseV2"];
                 };
             };
             /** @description Not authenticated */
