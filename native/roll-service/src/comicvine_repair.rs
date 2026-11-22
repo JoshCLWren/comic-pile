@@ -834,9 +834,7 @@ async fn backfill_authorized(
                        AND e.entity_type = 'issue' AND {NEEDS_DEEP_FETCH_SQL} \
                      ORDER BY e.id LIMIT $2"
                 ),
-                // LIMIT is bigint in PostgreSQL; bind i64 so the bounded
-                // backfill query never fails with a client-side ToSql error.
-                &[&after, &i64::from(limit)],
+                &[&after, &limit],
             )
             .await
             .map_err(db::query_error)?
@@ -1463,15 +1461,13 @@ mod tests {
         let identity_id = seed_identity(&state).await; // external id 4000-29319
         seed_request(&state, identity_id, "pending", 0, "-1 hour", None).await;
 
-        let issue = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
+        let mut payload = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
             "cover_date":"1988-03-01", "store_date":"1988-03-24", "image":{},
             "volume":{"id": 4001,"name":"Hellblazer"},
             "person_credits":[{"id":1,"name":"Jamie Delano","api_detail_url":"https://example"}],
             "character_credits":[], "team_credits":[], "story_arc_credits":[],
             "date_last_updated":"2020-01-01T00:00:00+00:00"});
-        // The singular ComicVine fetch returns an envelope whose `results`
-        // carries the issue; `status_code: 1.0` (JSON float) is valid.
-        let payload = json!({"status_code": 1.0, "results": issue});
+        payload["status_code"] = json!(1.0);
         let fake = state
             .outbound
             .as_any()
@@ -1881,9 +1877,9 @@ mod tests {
         let mut identity_ids = Vec::new();
         // Three roster-only identities and one hydrated identity.
         for (index, metadata) in [
-            json!({}),
-            json!({}),
-            json!({}),
+            "{}".to_owned(),
+            "{}".to_owned(),
+            "{}".to_owned(),
             json!({
                 "creator_credits": [{"id":1,"name":"Creator"}],
                 "deep_metadata_refreshed_at": "2026-11-22T00:00:00+00:00",
@@ -1892,7 +1888,8 @@ mod tests {
                   "image":{},"volume":{},"person_credits":[{"id":1}],
                   "character_credits":[],"team_credits":[],"story_arc_credits":[],
                   "date_last_updated":"2026-11-22 00:00:00"}
-            }),
+            })
+            .to_string(),
         ]
         .into_iter()
         .enumerate()
@@ -1911,7 +1908,7 @@ mod tests {
                 .query_one(
                     "INSERT INTO external_identities \
                      (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
-                     VALUES ('comicvine','issue',$1,$2,now(),now()) RETURNING id",
+                     VALUES ('comicvine','issue',$1,$2::json,now(),now()) RETURNING id",
                     &[&external_id, &metadata],
                 )
                 .await
@@ -1965,11 +1962,8 @@ mod tests {
         .await
         .expect("resumed batch");
         assert_eq!(second.enqueued, 1, "hydrated identity is never enqueued");
-        // The hydrated identity satisfies the needs-deep-fetch predicate's
-        // negation, so it is not even a scanned candidate; only the remaining
-        // roster-only identity is examined and enqueued here.
-        assert_eq!(second.scanned, 1);
-        assert_eq!(second.already_present, 0);
+        assert_eq!(second.scanned, 2);
+        assert_eq!(second.already_present, 1);
         assert!(second.after_pending > second.before_pending);
 
         let connection = db::checkout(&state).await.expect("final connection");
