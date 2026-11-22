@@ -84,22 +84,6 @@ export default function QueuePage() {
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
 
-  // `N of M series` for the applied search (#3614). The server's
-  // `filtered_count` is the authoritative match total across the whole active
-  // collection, and `active_count` is the pre-filter denominator, so both come
-  // from the settled first page. While a search transition still shows
-  // placeholder rows (or either total is missing) the count is explicitly
-  // unsettled, and a failed first page says so instead of inventing numbers;
-  // a next-page-only failure leaves the settled first-page counts valid.
-  const countSettled =
-    !isPlaceholderData && filteredCount != null && activeCount != null
-  const resultCountText =
-    isError && !isFetchNextPageError
-      ? 'Series count unavailable.'
-      : countSettled
-        ? `${filteredCount} of ${activeCount} series`
-        : 'Updating series count…'
-
   const navigateToRoll = useCallback(
     (_thread: ThreadListItem, response: unknown) => {
       navigate('/', { state: { rollResponse: response } })
