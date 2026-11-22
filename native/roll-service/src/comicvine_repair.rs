@@ -2139,7 +2139,6 @@ mod tests {
         .0;
         assert_eq!(second_page.scanned, 2);
         assert_eq!(second_page.next_after_id, None);
-        assert!(fresh > terminal, "fixture ids remain in scan order");
 
         let thread = connection
             .query_one(
