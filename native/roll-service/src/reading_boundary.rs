@@ -941,6 +941,23 @@ mod tests {
     }
 
     #[test]
+    fn batch_response_exposes_the_deployment_evaluator() {
+        for (evaluator, wire_value) in [
+            (BoundaryEvaluator::Enabled, "enabled"),
+            (BoundaryEvaluator::Unavailable, "unavailable"),
+        ] {
+            let response = ReadingBoundaryBatchResponseV2 {
+                threads: HashMap::new(),
+                evaluator,
+            };
+            let value = serde_json::to_value(response)
+                .expect("boundary batch response serializes to JSON");
+            assert_eq!(value["threads"], serde_json::json!({}));
+            assert_eq!(value["evaluator"], serde_json::json!(wire_value));
+        }
+    }
+
+    #[test]
     fn prerequisite_origin_label_mapping() {
         assert_eq!(
             prerequisite_origin_label(Some("reader")),
