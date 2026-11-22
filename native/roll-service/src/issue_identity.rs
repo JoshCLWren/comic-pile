@@ -2827,6 +2827,22 @@ async fn do_cbl_adoption_commit(
         })?;
     let planned = calculate_adoption_plan_entries(&report_entries, &series_bool, &entry_bool); // series_overrides handled in merge below
 
+    // A deleted Reading List leaves recovery provenance on its Plan. Reusing
+    // that orphaned Plan would report a successful adoption and then route the
+    // reader to the same 409 recovery screen (#3933). Preserve it as history
+    // and create a fresh Plan instead, including when it was explicitly chosen
+    // by the collision UI before its orphaned state was known.
+    let orphaned_plan_ids = orphaned_plan_ids_tx(&tx, user_id).await.map_err(|e| {
+        if e.is_database_unavailable() {
+            CommitErr::Db(e)
+        } else {
+            CommitErr::Unexpected(e.to_string())
+        }
+    })?;
+    let requested_target_plan_id = target_plan_id;
+    let update_target_plan_id = target_plan_id.filter(|pid| !orphaned_plan_ids.contains(pid));
+    let force_new_plan = requested_target_plan_id.is_some() && update_target_plan_id.is_none();
+
     // Determine/create plan
     let (
         plan_id,
@@ -2837,7 +2853,7 @@ async fn do_cbl_adoption_commit(
         mut nodes_json,
         _created_at,
         _updated_at,
-    ) = if let Some(pid) = target_plan_id {
+    ) = if let Some(pid) = update_target_plan_id {
         let prow = tx.run_query_opt("SELECT id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&pid, &user_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(e.to_string()) })?
             .ok_or_else(|| CommitErr::Adoption("Reading Plan not found".to_string()))?;
         (
