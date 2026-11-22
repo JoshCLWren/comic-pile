@@ -130,6 +130,7 @@ pub struct PrerequisiteAuditReport {
     pub historical_evidence_complete: bool,
     pub policy: String,
     pub manual_review_count: usize,
+    pub manual_review_frontier_ids: Vec<i32>,
     pub categorized_dependency_counts: BTreeMap<PrerequisiteEvidenceCategory, usize>,
     pub dependencies: Vec<PrerequisiteAuditDependency>,
 }
