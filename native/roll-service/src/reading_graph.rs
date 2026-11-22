@@ -80,17 +80,58 @@ pub struct ReadingGraphRepairOption {
     pub prerequisite_id: Option<i32>,
 }
 
-/// Categorization of an unresolved reference for issue #4198 closure.
-/// These track the three completeness blockers documented in
-/// PRODUCTION_READING_GRAPH_REPLAY.md: unread issues outside strict-list
-/// coverage, Reading List vs Reading Plan differences, and converted
-/// historical relationships (including JLI) that can contradict newer strict lists.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema, PartialOrd, Ord)]
-#[allow(dead_code)]
-pub enum UnresolvedCategory {
-    UnreadOutsideList,
-    ReadingPlanVsList,
-    JliConverted,
+/// Stored provenance class for the read-only prerequisite audit (#4198).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, utoipa::ToSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum PrerequisiteEvidenceCategory {
+    ReaderAuthored,
+    ArchivalCblOrder,
+    CompiledAdjacency,
+    UncertainLegacy,
+}
+
+/// One endpoint's current Reading List placement and gate.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct PrerequisiteAuditListMembership {
+    pub list_id: i32,
+    pub list_name: String,
+    pub mode: String,
+    pub gate: String,
+    pub skipped: bool,
+}
+
+/// Exact stored evidence for one cross-series edge into a current frontier.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct PrerequisiteAuditDependency {
+    pub prerequisite_id: i32,
+    pub source: ReadingGraphIssue,
+    pub source_status: String,
+    pub source_lists: Vec<PrerequisiteAuditListMembership>,
+    pub target: ReadingGraphIssue,
+    pub target_status: String,
+    pub target_lists: Vec<PrerequisiteAuditListMembership>,
+    pub origin: Option<String>,
+    pub note: Option<String>,
+    pub classification: Option<String>,
+    pub provenance: Option<String>,
+    pub category: PrerequisiteEvidenceCategory,
+    /// True only when the active Option E evaluator currently offers the target.
+    pub target_eligible: bool,
+    pub recommended_manual_review: bool,
+    pub recommendation: String,
+}
+
+/// Evidence for manual review under #2366 and #3676, never an execution input.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct PrerequisiteAuditReport {
+    /// False on repair previews, which intentionally do not load historical rows.
+    pub historical_evidence_complete: bool,
+    pub policy: String,
+    pub manual_review_count: usize,
+    pub categorized_dependency_counts: BTreeMap<PrerequisiteEvidenceCategory, usize>,
+    pub dependencies: Vec<PrerequisiteAuditDependency>,
 }
 
 /// Complete graph state. `status` is `ok`, `cycle`, or `invalid`.
@@ -102,10 +143,9 @@ pub struct ReadingGraphResponse {
     pub affected_lists: Vec<ReadingGraphList>,
     pub affected_threads: Vec<ReadingGraphThread>,
     pub repairs: Vec<ReadingGraphRepairOption>,
-    /// Total count of unresolved references.
+    /// Total count of unresolved authoritative references.
     pub unresolved_reference_count: usize,
-    /// Per-category breakdown of unresolved references for issue #4198 census.
-    pub unresolved_reference_breakdown: BTreeMap<UnresolvedCategory, usize>,
+    pub prerequisite_audit: PrerequisiteAuditReport,
 }
 
 /// One validated repair action.
