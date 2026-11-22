@@ -2009,6 +2009,85 @@ mod tests {
         assert_eq!(state_value, "no_credits");
     }
 
+    /// #5592: a transient provider failure stays durable, observes its
+    /// cooldown, and succeeds on a later worker invocation without reopening
+    /// the issue or creating another request.
+    #[tokio::test]
+    async fn drain_retries_a_transient_failure_after_its_cooldown() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::SERVICE_UNAVAILABLE,
+            HeaderMap::new(),
+            Bytes::new(),
+        );
+
+        let first = drain_for_test(&state).await;
+        assert_eq!(first.claimed, 1);
+        assert_eq!(first.deferred, 1);
+        assert_eq!(first.failed, 0);
+        let connection = db::checkout(&state).await.expect("request connection");
+        let row = connection
+            .query_one(
+                "SELECT state, attempts, last_error, next_attempt_at > now() \
+                 FROM comicvine_metadata_refresh_requests WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("deferred request");
+        assert_eq!(row.get::<_, String>(0), "deferred");
+        assert_eq!(row.get::<_, i32>(1), 1);
+        assert_eq!(row.get::<_, Option<String>>(2).as_deref(), Some("provider_unavailable"));
+        assert!(row.get::<_, bool>(3));
+
+        let cooled = drain_for_test(&state).await;
+        assert_eq!(cooled.claimed, 0, "backoff must suppress immediate retries");
+        connection
+            .execute(
+                "UPDATE comicvine_metadata_refresh_requests \
+                 SET next_attempt_at = now() - interval '1 second' \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("make retry due");
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+
+        let retry = drain_for_test(&state).await;
+        assert_eq!(retry.claimed, 1);
+        assert_eq!(retry.completed, 1);
+        let row = connection
+            .query_one(
+                "SELECT r.state, r.attempts, r.last_error, e.metadata_json::text \
+                 FROM comicvine_metadata_refresh_requests r \
+                 JOIN external_identities e ON e.id = r.external_identity_id \
+                 WHERE r.external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("completed retry");
+        assert_eq!(row.get::<_, String>(0), "completed");
+        assert_eq!(row.get::<_, i32>(1), 2);
+        assert_eq!(row.get::<_, Option<String>>(2), None);
+        let metadata: Value = serde_json::from_str(row.get(3)).expect("hydrated metadata");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+        let count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("single durable request")
+            .get(0);
+        assert_eq!(count, 1);
+        assert_eq!(state.recording_fake().expect("recording provider").calls().len(), 2);
+    }
+
     /// #5592: a sparse/empty fresh roster must not overwrite previously hydrated credits.
     #[tokio::test]
     async fn drain_preserves_previously_hydrated_credits_on_sparse_refresh() {
