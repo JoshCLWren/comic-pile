@@ -73,10 +73,6 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
    * refetch for every other error.
    */
   isFetchNextPageError: boolean
-  /** True while any fetch is in flight (mirrors TanStack `isFetching`). */
-  isFetching: boolean
-  /** True when placeholder data is being shown (mirrors TanStack `isPlaceholderData`). */
-  isPlaceholderData: boolean
   isError: boolean
   error: unknown
 }
@@ -148,8 +144,6 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     fetchNextPage,
     refetch,
     isFetchNextPageError: query.isFetchNextPageError,
-    isPlaceholderData: query.isPlaceholderData,
-    isFetching: query.isFetching,
     isError: query.isError,
     error: query.error,
   }

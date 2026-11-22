@@ -53,6 +53,7 @@ const FALLBACK_SOURCE_TITLE = 'CBL source'
  * sources above the fold on a phone without hiding the total result count.
  */
 const PAGE_SIZE = 50
+
 interface CatalogErrorState {
   message: string
   recover: 'browse-root' | 'retry'
@@ -762,13 +763,24 @@ export default function CblBrowserPage() {
   const lastShown = browsePage
     ? (browsePage.page - 1) * browsePage.page_size + browsePage.items.length
     : 0
+  // Placeholder rows may remain visible during a key transition, but their
+  // metadata belongs to the previous submitted search/page and must not be
+  // presented as the current result count.
   const settledBrowsePage = browseQuery.isPlaceholderData ? null : browsePage
-  const resultCountPending = !catalogError && (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
-  const resultCountText = catalogError || (!resultCountPending && !settledBrowsePage)
+  const resultCountPending =
+    !catalogError &&
+    (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
+  const resultCountText = catalogError
     ? 'Source list count unavailable.'
     : resultCountPending
       ? 'Updating source list count…'
-      : `${settledBrowsePage!.total} of ${settledBrowsePage!.catalog_total} source lists`
+      : settledBrowsePage
+        ? `${settledBrowsePage.total} of ${
+            settledBrowsePage.scope === 'search'
+              ? settledBrowsePage.catalog_total
+              : settledBrowsePage.total
+          } source lists`
+        : 'Source list count unavailable.'
 
   const openConfirm = () => {
     if (!selectedSource || !preview || commitBlocked) return
@@ -1206,7 +1218,14 @@ export default function CblBrowserPage() {
           {submittedQuery && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--theme-text-muted)]">
               <span>Searching every shared CBL for “{submittedQuery}”.</span>
-              <button type="button" onClick={clearSearch} disabled={isCommitting} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50">Clear search</button>
+              <button
+                type="button"
+                onClick={clearSearch}
+                disabled={isCommitting}
+                className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
+              >
+                Clear search
+              </button>
             </div>
           )}
 
@@ -1230,7 +1249,11 @@ export default function CblBrowserPage() {
             </div>
           )}
 
-          {browseQuery.isPending && <p role="status" className="text-sm text-[var(--theme-text-muted)]">Loading the shared CBL catalog…</p>}
+          {browseQuery.isPending && (
+            <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+              Loading the shared CBL catalog…
+            </p>
+          )}
 
           {browsePage && !catalogError && (
             <div className="space-y-4" data-testid="cbl-browse-results">
@@ -1399,6 +1422,7 @@ export default function CblBrowserPage() {
         onClose={() => setConfirmOpen(false)}
         onConfirm={confirmCommit}
       />
+
     </section>
   )
 }

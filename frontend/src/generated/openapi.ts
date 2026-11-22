@@ -6880,8 +6880,6 @@ export interface components {
              * @default 0
              */
             active_count: number;
-            /** Filtered Count */
-            filtered_count?: number | null;
             /** Next Page Token */
             next_page_token?: string | null;
             /** Threads */

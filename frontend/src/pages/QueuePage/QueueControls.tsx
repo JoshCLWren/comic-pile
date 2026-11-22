@@ -5,12 +5,6 @@ const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
   activeCount: number
-  /** Active series matching the currently applied search/filter state. */
-  filteredCount: number | null
-  /** True while the authoritative count for the applied search is unavailable. */
-  isCountPending?: boolean
-  /** True when count loading failed and no reliable count can be shown. */
-  isCountError?: boolean
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
@@ -40,9 +34,6 @@ interface QueueControlsProps {
  */
 function QueueControlsInner({
   activeCount,
-  filteredCount,
-  isCountPending = false,
-  isCountError = false,
   shuffleDisabled,
   shufflePending,
   onShuffle,
@@ -207,20 +198,6 @@ function QueueControlsInner({
           )}
         </div>
       </div>
-      <p
-        role="status"
-        aria-live="polite"
-        className="min-h-4 text-xs text-[var(--theme-text-muted)]"
-        data-testid="queue-result-count"
-      >
-        {isCountError
-          ? 'Series count unavailable.'
-          : isCountPending
-            ? 'Updating series count…'
-            : filteredCount !== null
-              ? `${filteredCount} of ${activeCount} series`
-              : 'Series count unavailable.'}
-      </p>
       <span className="sr-only" data-testid="queue-active-count">{activeCount}</span>
     </header>
   )
