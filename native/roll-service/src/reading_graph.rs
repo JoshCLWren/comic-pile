@@ -1148,15 +1148,15 @@ mod tests {
         let _guard = test_support::reset_for_test(&state).await;
         frontier_audit_fixture(&state).await;
 
-        // Author the correction explicitly: reader 9101 authors
-        // X-Men #1/2 -> UXM #361 through the Dependency Builder surface.
+        // Author the correction explicitly: the owner-approved repair promotes
+        // exactly the one legacy edge to a reviewed reader-authored
+        // prerequisite — never a bulk reclassification of legacy rows.
         let connection = db::checkout(&state).await.expect("author connection");
         connection
             .batch_execute(
-                "INSERT INTO dependencies (id, source_issue_id, target_issue_id, origin,
-                                          classification, provenance, created_at)
-                 VALUES (9904, 9202, 9029, 'reader', 'A',
-                         'Reader-authored through the Dependency Builder', NOW());",
+                "UPDATE dependencies SET origin = 'reader', classification = 'A',
+                        provenance = 'Reader-authored through the Dependency Builder'
+                 WHERE id = 9901;",
             )
             .await
             .expect("seed authored prerequisite");
