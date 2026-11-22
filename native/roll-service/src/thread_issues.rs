@@ -1950,6 +1950,35 @@ mod tests {
     }
 
     #[test]
+    fn natural_order_repairs_cbl_appended_issues_3483() {
+        // #3483: adopting the Ultimate Universe CBL list into a thread that
+        // already held #7-#24 appended the missing low issues after #24.
+        // Every insertion path (series:import, CBL adoption materialization,
+        // reading-plan sync and the shared create-issues handler) seats new
+        // numbers through this one ordering routine.
+        let high_run: Vec<String> = (7..=24).map(|n| n.to_string()).collect();
+        let expected: Vec<String> = (1..=24).map(|n| n.to_string()).collect();
+
+        // First adoption: the missing #1 and #2 must be seated in front of the
+        // existing run, regardless of the CBL roster order.
+        let ascending = natural_issue_order(&high_run, &strings(&["1", "2"]));
+        let descending = natural_issue_order(&high_run, &strings(&["2", "1"]));
+        assert_eq!(ascending, Some(expected.clone()));
+        assert_eq!(descending, Some(expected.clone()));
+
+        // Re-adoption after the historical append bug: the stored order is
+        // #7-#24, then #2-#6, then #1. A subsequent natural pass reseats every
+        // ordinary number instead of appending again.
+        let mut appended = high_run;
+        appended.extend(["2", "3", "4", "5", "6", "1"].iter().map(|n| (*n).to_string()));
+        assert_eq!(
+            natural_issue_order(&appended, &[]),
+            Some(expected),
+            "all-ordinary threads are repaired on the next natural pass"
+        );
+    }
+
+    #[test]
     fn python_int_parsing() {
         assert_eq!(python_int("5"), Some(5));
         assert_eq!(python_int(" 5 "), Some(5));
