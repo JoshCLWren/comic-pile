@@ -761,6 +761,96 @@ async fn adoption_commit_materializes_missing_importable_issue() {
 }
 
 #[tokio::test]
+async fn adoption_commit_seats_missing_low_issues_in_natural_order_3483() {
+    // #3483: adopting a CBL list into an existing series thread that already
+    // held #7-#24 must seat #1 and #2 in front of #7, not append them after
+    // #24. The ordering is owned by the shared `natural_issue_order` routine
+    // used by every insertion path.
+    let (state, token, csrf, _guard) = setup().await;
+
+    let conn = state.pool.get().await.unwrap();
+    let (user_id,): (i32,) = conn
+        .query_one("SELECT id FROM users WHERE username LIKE 'issue-identity-%' ORDER BY id DESC LIMIT 1", &[])
+        .await
+        .unwrap();
+    let issues_seed = (7..=24)
+        .enumerate()
+        .map(|(idx, number)| format!("({}, 34830, '{}', {}, 'unread', NOW())", 348300 + idx, number, idx + 1))
+        .collect::<Vec<_>>()
+        .join(",\n          ");
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+        VALUES (40, '{MIRROR_REPOSITORY}-3483', 'rev-3483', NOW(), NOW(), NOW());
+        INSERT INTO cbl_source_lists
+          (id, source_id, source_path, name, declared_issue_count, content_hash,
+           revision_sha, active, created_at, updated_at)
+        VALUES
+          (40, 40, 'Marvel/Ultimate/Ultimate Spider-Man.cbl', 'Ultimate Spider-Man',
+           2, 'h-3483', 'rev-3483', TRUE, NOW(), NOW());
+        INSERT INTO external_identities
+          (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+        VALUES
+          (3481, 'comicvine', 'issue', '4000-3483-1', '{{}}'::json, NOW(), NOW()),
+          (3482, 'comicvine', 'issue', '4000-3483-2', '{{}}'::json, NOW(), NOW()),
+          (3483, 'comicvine', 'series', '4050-3483', '{{}}'::json, NOW(), NOW());
+        INSERT INTO cbl_source_entries
+          (id, list_id, "position", series_name, issue_number, volume_year,
+           publication_year, external_issue_identity_id, external_series_identity_id, created_at)
+        VALUES
+          (3481, 40, 0, 'Ultimate Spider-Man', '1', 2024, 2024, 3481, 3483, NOW()),
+          (3482, 40, 1, 'Ultimate Spider-Man', '2', 2024, 2024, 3482, 3483, NOW());
+        INSERT INTO threads
+          (id, user_id, title, format, issues_remaining, queue_position, status,
+           total_issues, reading_progress, created_at)
+        VALUES
+          (34830, {user_id}, 'Ultimate Spider-Man', 'comic', 18, 40, 'active',
+           18, 'in_progress', NOW());
+        INSERT INTO thread_external_series_mappings
+          (thread_id, external_identity_id, status, evidence_source, created_at, updated_at)
+        VALUES (34830, 3483, 'confirmed', 'test', NOW(), NOW());
+        INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+        VALUES
+          {issues_seed};
+        "#
+    ))
+    .await
+    .unwrap();
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/40/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-3483",
+            "revision_sha": "rev-3483"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+    assert_eq!(body["created_positions"], json!([0, 1]), "{body}");
+
+    let rows = conn
+        .query(
+            "SELECT issue_number FROM issues WHERE thread_id = 34830 ORDER BY position, id",
+            &[],
+        )
+        .await
+        .unwrap();
+    let actual: Vec<String> = rows.iter().map(|row| row.get::<_, String>(0)).collect();
+    let mut expected: Vec<String> = vec!["1".to_string(), "2".to_string()];
+    expected.extend((7..=24).map(|number| number.to_string()));
+    assert_eq!(actual, expected, "CBL-adopted low issues must be natural-ordered");
+}
+
+#[tokio::test]
 async fn targeted_adoption_commit_route_returns_200() {
     let (state, token, csrf, _guard) = setup().await;
     let (status, body) = post_json(
