@@ -973,6 +973,225 @@ mod tests {
         drop(Object::take(connection));
     }
 
+    fn deep_provider_result(issue_id: u32, date_last_updated: &str) -> Value {
+        json!({
+            "id": issue_id,
+            "name": "Going For It",
+            "issue_number": "3",
+            "cover_date": "1988-03-01",
+            "store_date": "1988-03-24",
+            "image": {"medium_url": "https://img.example/medium.jpg"},
+            "volume": {"id": 4001, "name": "Hellblazer"},
+            "person_credits": [{"id": 1, "name": "Writer", "role": "writer"}],
+            "character_credits": [],
+            "team_credits": [],
+            "story_arc_credits": [{"id": 4, "name": "Arc"}],
+            "date_last_updated": date_last_updated,
+        })
+    }
+
+    fn queue_deep_provider_result(state: &AppState, issue_id: u32, date_last_updated: &str) {
+        let body = json!({
+            "status_code": 1,
+            "results": deep_provider_result(issue_id, date_last_updated),
+        })
+        .to_string();
+        state
+            .recording_fake()
+            .expect("recording provider")
+            .push_ok(
+                StatusCode::OK,
+                HeaderMap::new(),
+                Bytes::from(body),
+            );
+    }
+
+    /// #4516 legacy oracle: `_provider_timestamp` returned a naive datetime
+    /// for ComicVine's `YYYY-MM-DD HH:MM:SS` revision. The retired Python
+    /// identity upsert then evaluated
+    /// `provider_updated_at < identity.provider_updated_at` against the
+    /// UTC-aware value read from PostgreSQL, raising TypeError before metadata
+    /// could be persisted. This exercises the canonical Rust replacement with
+    /// the same pre-existing aware DB value and deterministic provider payload.
+    #[tokio::test]
+    async fn naive_provider_revision_hydrates_existing_utc_identity() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        connection
+            .execute(
+                "UPDATE external_identities \
+                 SET metadata_json = '{\"issue_number\":\"3\"}'::json, \
+                     provider_updated_at = TIMESTAMPTZ '2025-01-01 00:00:00+00' \
+                 WHERE id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("seed aware provider revision");
+        drop(Object::take(connection));
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+
+        let job = claim(&state).await.expect("claim").expect("due job");
+        assert_eq!(
+            process(&state, &job, Some("TESTKEY123"))
+                .await
+                .expect("hydrate naive provider revision"),
+            "completed"
+        );
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let row = connection
+            .query_one(
+                "SELECT e.metadata_json::text, e.provider_updated_at, \
+                        r.state, r.last_error, r.completed_at IS NOT NULL \
+                 FROM external_identities e \
+                 JOIN comicvine_metadata_refresh_requests r \
+                   ON r.external_identity_id = e.id \
+                 WHERE e.id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("read hydrated identity");
+        let metadata: Value = serde_json::from_str(row.get(0)).expect("stored metadata JSON");
+        assert_eq!(metadata["primary_image"], "https://img.example/medium.jpg");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+        assert_eq!(metadata["story_arcs"][0]["name"], "Arc");
+        assert!(metadata["deep_metadata_refreshed_at"].is_string());
+        let provider_updated_at: Option<chrono::DateTime<chrono::Utc>> = row.get(1);
+        assert_eq!(
+            provider_updated_at,
+            Some(
+                chrono::DateTime::parse_from_rfc3339("2026-11-01T17:33:53+00:00")
+                    .expect("expected revision")
+                    .with_timezone(&chrono::Utc)
+            )
+        );
+        assert_eq!(row.get::<_, String>(2), "completed");
+        assert_eq!(row.get::<_, Option<String>>(3), None);
+        assert!(row.get::<_, bool>(4));
+        drop(Object::take(connection));
+
+        let calls = state
+            .recording_fake()
+            .expect("recording provider")
+            .calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].host, HOST);
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319/"));
+    }
+
+    /// The inline catalog path runs only after its identity transaction has
+    /// committed. Passing another owner's issue id must neither fetch nor
+    /// mutate that owner's provider identity, while the requested owner's
+    /// sparse identity receives the complete response and UTC revision.
+    #[tokio::test]
+    async fn post_commit_hydration_is_owner_scoped_and_persists_utc_metadata() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES \
+                   (1, 'repair-owner'), (2, 'repair-other'); \
+                 INSERT INTO threads \
+                   (id, title, format, issues_remaining, queue_position, status, user_id) \
+                 VALUES \
+                   (11, 'Owned', 'Series', 1, 1, 'active', 1), \
+                   (12, 'Other', 'Series', 1, 1, 'active', 2); \
+                 INSERT INTO issues (id, thread_id, issue_number, status, position) \
+                 VALUES (101, 11, '3', 'unread', 1), (102, 12, '3', 'unread', 1); \
+                 INSERT INTO external_identities \
+                   (id, provider, entity_type, external_id, metadata_json, \
+                    provider_updated_at, created_at, updated_at) \
+                 VALUES \
+                   (201, 'comicvine', 'issue', '4000-29319', \
+                    '{\"issue_number\":\"3\"}'::json, \
+                    TIMESTAMPTZ '2025-01-01 00:00:00+00', now(), now()), \
+                   (202, 'comicvine', 'issue', '4000-29320', \
+                    '{\"issue_number\":\"other\"}'::json, \
+                    TIMESTAMPTZ '2025-02-02 00:00:00+00', now(), now()); \
+                 INSERT INTO issue_external_identity_mappings \
+                   (issue_id, external_identity_id, status, evidence_source, confidence, \
+                    evidence_json, created_at, updated_at) \
+                 VALUES \
+                   (101, 201, 'confirmed', 'user_series_confirmation', 1.0, \
+                    '{}'::json, now(), now()), \
+                   (102, 202, 'confirmed', 'user_series_confirmation', 1.0, \
+                    '{}'::json, now(), now());",
+            )
+            .await
+            .expect("seed committed owner mappings");
+        drop(Object::take(connection));
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+
+        hydrate_catalog_commit_with_key(
+            &state,
+            1,
+            &[101, 102],
+            Duration::from_secs(5),
+            "TESTKEY123",
+        )
+        .await;
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let owned = connection
+            .query_one(
+                "SELECT metadata_json::text, provider_updated_at \
+                 FROM external_identities WHERE id = 201",
+                &[],
+            )
+            .await
+            .expect("read owned hydration");
+        let metadata: Value = serde_json::from_str(owned.get(0)).expect("owned metadata JSON");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+        assert_eq!(metadata["story_arcs"][0]["name"], "Arc");
+        assert!(metadata["deep_metadata_refreshed_at"].is_string());
+        let provider_updated_at: Option<chrono::DateTime<chrono::Utc>> = owned.get(1);
+        assert_eq!(
+            provider_updated_at,
+            Some(
+                chrono::DateTime::parse_from_rfc3339("2026-11-01T17:33:53+00:00")
+                    .expect("expected revision")
+                    .with_timezone(&chrono::Utc)
+            )
+        );
+
+        let other = connection
+            .query_one(
+                "SELECT metadata_json::text, provider_updated_at \
+                 FROM external_identities WHERE id = 202",
+                &[],
+            )
+            .await
+            .expect("read other owner identity");
+        let other_metadata: Value =
+            serde_json::from_str(other.get(0)).expect("other owner metadata JSON");
+        assert_eq!(other_metadata, json!({"issue_number": "other"}));
+        let other_revision: Option<chrono::DateTime<chrono::Utc>> = other.get(1);
+        assert_eq!(
+            other_revision,
+            Some(
+                chrono::DateTime::parse_from_rfc3339("2025-02-02T00:00:00+00:00")
+                    .expect("original revision")
+                    .with_timezone(&chrono::Utc)
+            )
+        );
+        drop(Object::take(connection));
+
+        let calls = state
+            .recording_fake()
+            .expect("recording provider")
+            .calls();
+        assert_eq!(calls.len(), 1, "cross-owner ids must not be fetched");
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319/"));
+    }
+
     #[tokio::test]
     async fn expired_lease_is_reclaimed_and_persist_is_fenced() {
         let Some(state) = crate::test_support::test_state(2).await else {
