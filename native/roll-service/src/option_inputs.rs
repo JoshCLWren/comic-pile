@@ -47,6 +47,28 @@ pub struct Prerequisite {
     pub origin: String,
     pub provenance: Vec<String>,
 }
+
+/// Exact stored evidence for the read-only prerequisite audit (#4198).
+///
+/// This type is deliberately separate from [`Prerequisite`]. Historical rows
+/// are inspected here and never become Option E execution inputs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct StoredPrerequisite {
+    pub prerequisite_id: i32,
+    pub source_issue_id: i32,
+    pub target_issue_id: i32,
+    pub origin: Option<String>,
+    pub note: Option<String>,
+    pub classification: Option<String>,
+    pub provenance: Option<String>,
+}
+
+/// One owner-scoped graph snapshot plus its non-executable historical evidence.
+pub(crate) struct GraphDiagnostics {
+    pub inputs: OptionInputs,
+    pub stored_prerequisites: Vec<StoredPrerequisite>,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UnresolvedReference {
     pub kind: &'static str,
