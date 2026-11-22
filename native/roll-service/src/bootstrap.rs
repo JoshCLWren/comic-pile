@@ -1375,6 +1375,26 @@ mod cover_source_tests {
     }
 
     #[test]
+    fn thumbnail_is_the_last_resort_cover_source() {
+        // Production regression #5624: a mapped issue whose provider entry
+        // exposes only a thumbnail must still show a cover on the thread.
+        let metadata = json!({"image": {"thumb_url": " https://example.com/thumb.jpg "}});
+        assert_eq!(
+            extract_cover_source(&metadata),
+            Some("https://example.com/thumb.jpg")
+        );
+        // Higher-priority sizes still win over the thumbnail.
+        let metadata = json!({"image": {
+            "thumb_url": "https://example.com/thumb.jpg",
+            "small_url": "https://example.com/small.jpg"
+        }});
+        assert_eq!(
+            extract_cover_source(&metadata),
+            Some("https://example.com/small.jpg")
+        );
+    }
+
+    #[test]
     fn empty_and_non_string_direct_fields_do_not_hide_stored_covers() {
         for value in [json!(null), json!(""), json!("  "), json!(23), json!({})] {
             let metadata = json!({"image_url": value, "primary_image": " https://example.com/primary.jpg ",
