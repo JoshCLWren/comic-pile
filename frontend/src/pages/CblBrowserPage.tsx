@@ -42,6 +42,7 @@ import {
 } from '../utils/cblAdoptionPlan'
 import { identityResolutionReason } from '../utils/cblResolutionReason'
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
+import { catalogSourceCount, catalogTotalLabel, isStaleBrowsePosition } from '../utils/cblCatalogBrowse'
 import { isObject, isString } from '../utils/runtimeChecks'
 import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
 
@@ -282,13 +283,7 @@ export default function CblBrowserPage() {
     gcTime: 15 * 60 * 1000, // 15 minutes
   })
   const browsePage = browseQuery.data ?? null
-  // Hide stale folders under a fresh search banner (#4171), but keep a
-  // server-clamped page visible: compare the served position, not the placeholder.
-  const browseStale =
-    browseQuery.isFetching && browsePage !== null &&
-    (submittedQuery
-      ? browsePage.scope !== 'search' || (browsePage.query ?? '') !== submittedQuery
-      : browsePage.scope === 'search' || browsePage.folder !== folder)
+  const browseStale = isStaleBrowsePosition(browsePage, browseQuery.isFetching, folder, submittedQuery)
 
   // The server clamps an out-of-range page to the last valid page (#5381).
   // Adopt the returned page in the URL so Previous/Next step from the page
