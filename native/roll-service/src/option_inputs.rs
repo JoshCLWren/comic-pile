@@ -396,8 +396,8 @@ async fn load_frontier_diagnostics_transaction(
     })?;
     let inputs = assemble_snapshot(snapshot)?;
     let legacy_encoded: String = row.try_get(1).map_err(db::query_error)?;
-    let legacy_dependencies: Vec<LegacyDependencyRow> =
-        serde_json::from_str(&legacy_encoded).map_err(|error| {
+    let legacy_dependencies: Vec<LegacyDependencyRow> = serde_json::from_str(&legacy_encoded)
+        .map_err(|error| {
             tracing::error!(%error, "Invalid legacy dependency diagnostics response");
             ApiError::Internal("Invalid reading snapshot".to_string())
         })?;

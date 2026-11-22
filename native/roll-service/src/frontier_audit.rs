@@ -231,9 +231,8 @@ pub fn audit_frontiers(
                     target_issue_id: row.target_issue_id,
                     source_owned: row.source_owned,
                     source_issue_number: source.map(|issue| issue.issue_number.clone()),
-                    source_series_title: source.and_then(|issue| {
-                        titles.get(&issue.thread_id).cloned()
-                    }),
+                    source_series_title: source
+                        .and_then(|issue| titles.get(&issue.thread_id).cloned()),
                     source_status: source.map(|issue| issue.status.clone()),
                     origin: row.origin.clone(),
                     classification: row.classification.clone(),
@@ -286,7 +285,9 @@ mod tests {
     use super::*;
     use crate::option_inputs::{OverlapDecision, Prerequisite, ReadingEntry, ReadingList};
     use crate::reading_constraints::ValidatedReadingInputs;
-    use crate::reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility};
+    use crate::reading_inputs::{
+        CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility,
+    };
     use std::collections::BTreeSet;
 
     /// The issue #4198 fixture chain:
@@ -386,10 +387,10 @@ mod tests {
     }
 
     fn validated(inputs: OptionInputs) -> ValidatedReadingInputs {
-        ValidatedReadingInputs::contained(inputs, &BTreeMap::from([(
-            7,
-            "90s crossovers".to_string(),
-        )]))
+        ValidatedReadingInputs::contained(
+            inputs,
+            &BTreeMap::from([(7, "90s crossovers".to_string())]),
+        )
         .expect("fixture inputs validate")
     }
 
@@ -404,7 +405,10 @@ mod tests {
             .into_iter()
             .map(|frontier| frontier.issue_id)
             .collect();
-        assert!(eligible.contains(&2029), "UXM #361 must be eligible before the correction");
+        assert!(
+            eligible.contains(&2029),
+            "UXM #361 must be eligible before the correction"
+        );
         assert!(eligible.contains(&2101), "X-Men #80 stays eligible");
 
         let report = audit_frontiers(&inputs, &validated, &[legacy_edge()]);
@@ -452,7 +456,10 @@ mod tests {
             .collect();
         // Option E blocks #361 until the authored prerequisite is read; the
         // unrelated X-Men frontier stays eligible.
-        assert!(!eligible.contains(&2029), "UXM #361 must be blocked after authoring");
+        assert!(
+            !eligible.contains(&2029),
+            "UXM #361 must be blocked after authoring"
+        );
         assert!(eligible.contains(&2101), "X-Men #80 must remain eligible");
 
         let report = audit_frontiers(&inputs, &validated, &[legacy_edge()]);

@@ -1175,12 +1175,10 @@ mod tests {
 
         // The exact Option E authority blocks #361 and leaves X-Men #80
         // eligible.
-        let validated = option_inputs::load_option_inputs_contained(
-            &state,
-            AuthenticatedUser::for_test(9101),
-        )
-        .await
-        .expect("validated Option E inputs");
+        let validated =
+            option_inputs::load_option_inputs_contained(&state, AuthenticatedUser::for_test(9101))
+                .await
+                .expect("validated Option E inputs");
         let eligible: Vec<i32> = validated
             .eligible_frontiers()
             .expect("eligibility")
