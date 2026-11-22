@@ -2952,7 +2952,7 @@ async fn do_cbl_adoption_commit(
         planned: &planned,
         source_path: &source_path,
         series_overrides: &override_bool,
-        preserve_existing_order: target_plan_id.is_some(),
+        preserve_existing_order: update_target_plan_id.is_some(),
     };
     let merge = merge_adoption_nodes_tx(&mut tx, &mut nodes_json, &merge_ctx).await?;
     tx.run_execute(
@@ -2976,7 +2976,7 @@ async fn do_cbl_adoption_commit(
         }
     })?;
 
-    let status = if target_plan_id.is_some() {
+    let status = if requested_target_plan_id.is_some() {
         StatusCode::OK
     } else {
         StatusCode::CREATED
