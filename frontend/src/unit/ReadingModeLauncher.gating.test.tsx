@@ -1,33 +1,29 @@
 import { render, screen } from '@testing-library/react'
-import type { ComponentType } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as readingMode from '../services/readingMode'
+import { FEATURES } from '../config/features'
+import ReadingModeLauncher from '../components/ReadingModeLauncher'
 
-vi.mock('../services/readingMode', () => ({
-  getReadingMode: vi.fn().mockResolvedValue(null),
-  dismissReadingModeSuggestion: vi.fn().mockResolvedValue(null),
-  getQuizQuestions: vi.fn().mockReturnValue([]),
-  setReadingModeFromQuiz: vi.fn(),
-}))
-
-async function loadLauncher(enabled: boolean): Promise<ComponentType> {
-  vi.doMock('../config/features', () => ({
-    FEATURES: { readingModeQuiz: enabled },
-  }))
-  vi.resetModules()
-  const mod = await import('../components/ReadingModeLauncher')
-  return mod.default
-}
+const originalReadingModeQuiz = FEATURES.readingModeQuiz
 
 describe('ReadingModeLauncher production gating (issue #1945)', () => {
-  afterEach(() => {
+  beforeEach(() => {
     vi.restoreAllMocks()
-    vi.resetModules()
+    vi.spyOn(readingMode, 'getReadingMode').mockResolvedValue(null as never)
+    vi.spyOn(readingMode, 'dismissReadingModeSuggestion').mockResolvedValue(null as never)
+    vi.spyOn(readingMode, 'getQuizQuestions').mockReturnValue([] as never)
+    vi.spyOn(readingMode, 'setReadingModeFromQuiz').mockResolvedValue(null as never)
   })
 
-  it('renders nothing on the normal production Roll surface when the quiz feature is disabled', async () => {
-    const Launcher = await loadLauncher(false)
+  afterEach(() => {
+    ;(FEATURES as { readingModeQuiz: boolean }).readingModeQuiz = originalReadingModeQuiz
+    vi.restoreAllMocks()
+  })
 
-    const { container } = render(<Launcher />)
+  it('renders nothing on the normal production Roll surface when the quiz feature is disabled', () => {
+    ;(FEATURES as { readingModeQuiz: boolean }).readingModeQuiz = false
+
+    const { container } = render(<ReadingModeLauncher />)
 
     expect(screen.queryByTestId('open-reading-mode-quiz')).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-mode-suggestion')).not.toBeInTheDocument()
@@ -35,10 +31,10 @@ describe('ReadingModeLauncher production gating (issue #1945)', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('exposes the launcher and quiz entry point only when the feature is explicitly enabled', async () => {
-    const Launcher = await loadLauncher(true)
+  it('exposes the launcher and quiz entry point only when the feature is explicitly enabled', () => {
+    ;(FEATURES as { readingModeQuiz: boolean }).readingModeQuiz = true
 
-    render(<Launcher />)
+    render(<ReadingModeLauncher />)
 
     expect(screen.getByTestId('open-reading-mode-quiz')).toHaveTextContent(
       'Find my reading mode',

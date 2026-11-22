@@ -1,19 +1,16 @@
 import { createElement, type ReactNode } from 'react'
 import { act, renderHook } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { validateIssueRangeForStaging } from '../utils/issueParser'
 import { useQueueModals } from '../pages/QueuePage/useQueueModals'
 import { DEFAULT_CREATE_STATE } from '../pages/QueuePage/types'
 import { BugReportRestoreContext } from '../contexts/BugReportRestoreContextValue'
+import { issuesApi } from '../services/api-issues'
 
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    migrateThread: vi.fn(async () => undefined),
-    create: vi.fn(async () => ({ issues: [] })),
-    bulkMarkRead: vi.fn(async () => undefined),
-  },
-}))
+const originalMigrateThread = issuesApi.migrateThread
+const originalCreate = issuesApi.create
+const originalBulkMarkRead = issuesApi.bulkMarkRead
 
 describe('#3631 Add Series save enforcement (focus)', () => {
   it('rejects unparseable token "abc" so save cannot proceed (#3631)', () => {
