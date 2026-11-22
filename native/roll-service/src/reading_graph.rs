@@ -81,9 +81,7 @@ pub struct ReadingGraphRepairOption {
 }
 
 /// Stored provenance class for the read-only prerequisite audit (#4198).
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, utoipa::ToSchema,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PrerequisiteEvidenceCategory {
     ReaderAuthored,
@@ -496,7 +494,9 @@ fn push_repairs(
     }
 }
 
-fn prerequisite_category(stored: &option_inputs::StoredPrerequisite) -> PrerequisiteEvidenceCategory {
+fn prerequisite_category(
+    stored: &option_inputs::StoredPrerequisite,
+) -> PrerequisiteEvidenceCategory {
     let note = stored.note.as_deref().unwrap_or_default().trim();
     let provenance = stored.provenance.as_deref().unwrap_or_default();
     if stored.origin.as_deref() == Some("reader") {
@@ -1143,8 +1143,8 @@ mod tests {
             is_blocked: false,
             queue_position,
         };
-        let dependency = |id, source_issue_id, target_issue_id, note: Option<&str>| {
-            StoredPrerequisite {
+        let dependency =
+            |id, source_issue_id, target_issue_id, note: Option<&str>| StoredPrerequisite {
                 prerequisite_id: id,
                 source_issue_id,
                 target_issue_id,
@@ -1152,8 +1152,7 @@ mod tests {
                 note: note.map(str::to_string),
                 classification: None,
                 provenance: None,
-            }
-        };
+            };
         let inputs = OptionInputs {
             core: CoreReadingInputs {
                 threads: vec![
@@ -1288,10 +1287,16 @@ mod tests {
         assert_eq!(candidate.target.issue_id, 361);
         assert_eq!(candidate.target_status, "unread");
         assert_eq!(candidate.origin, None);
-        assert_eq!(candidate.note.as_deref(), Some("Late-90s X-Men Reading Order"));
+        assert_eq!(
+            candidate.note.as_deref(),
+            Some("Late-90s X-Men Reading Order")
+        );
         assert_eq!(candidate.classification, None);
         assert_eq!(candidate.provenance, None);
-        assert_eq!(candidate.category, PrerequisiteEvidenceCategory::UncertainLegacy);
+        assert_eq!(
+            candidate.category,
+            PrerequisiteEvidenceCategory::UncertainLegacy
+        );
         assert!(candidate.target_eligible);
         assert!(candidate.recommended_manual_review);
         assert_eq!(candidate.source_lists[0].list_id, 20);
@@ -1313,7 +1318,10 @@ mod tests {
             source_issue_id: 875,
             target_issue_id: 361,
             origin: "reader".into(),
-            provenance: vec!["classification:A".into(), "owner-approved manual correction".into()],
+            provenance: vec![
+                "classification:A".into(),
+                "owner-approved manual correction".into(),
+            ],
         });
         let (validated, after, roll_after) = evaluated(&inputs);
         assert_eq!(after.get(&361), Some(&false));
@@ -1336,7 +1344,10 @@ mod tests {
             .iter()
             .find(|dependency| dependency.prerequisite_id == 102)
             .unwrap();
-        assert_eq!(authored.category, PrerequisiteEvidenceCategory::ReaderAuthored);
+        assert_eq!(
+            authored.category,
+            PrerequisiteEvidenceCategory::ReaderAuthored
+        );
         assert!(!authored.target_eligible);
         assert!(!authored.recommended_manual_review);
 
@@ -1350,8 +1361,14 @@ mod tests {
         // An independent reader has no inherited edge or changed eligibility.
         let (mut other_reader, _) = crossover_audit_fixture();
         other_reader.core.threads.retain(|thread| thread.id == 3);
-        other_reader.core.issues.retain(|issue| issue.thread_id == 3);
-        other_reader.core.stored.retain(|stored| stored.thread_id == 3);
+        other_reader
+            .core
+            .issues
+            .retain(|issue| issue.thread_id == 3);
+        other_reader
+            .core
+            .stored
+            .retain(|stored| stored.thread_id == 3);
         other_reader.lists.clear();
         let (_, other_before, _) = evaluated(&other_reader);
         let (_, other_after, _) = evaluated(&other_reader);
