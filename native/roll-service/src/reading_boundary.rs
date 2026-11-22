@@ -774,7 +774,11 @@ async fn get_reading_boundary_explanations(
             tx.rollback().await.map_err(db::query_error)?;
             return Err(ApiError::NotFound(format!("Thread {thread_id} not found")));
         }
-        let validated = option_inputs::load_validated_contained_in_transaction(&tx, user).await?;
+        let validated = if state.option_e {
+            Some(option_inputs::load_validated_contained_in_transaction(&tx, user).await?)
+        } else {
+            None
+        };
         tx.rollback().await.map_err(db::query_error)?;
         Ok::<_, ApiError>((labels, validated))
     })
