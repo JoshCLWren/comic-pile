@@ -763,23 +763,14 @@ export default function CblBrowserPage() {
   const lastShown = browsePage
     ? (browsePage.page - 1) * browsePage.page_size + browsePage.items.length
     : 0
-  // Placeholder rows may remain visible during a key transition, but their
-  // metadata belongs to the previous submitted search/page and must not be
-  // presented as the current result count.
   const settledBrowsePage = browseQuery.isPlaceholderData ? null : browsePage
-  const resultCountPending =
-    !catalogError &&
-    (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
+  const resultCountPending = !catalogError && (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
   const resultCountText = catalogError
     ? 'Source list count unavailable.'
     : resultCountPending
       ? 'Updating source list count…'
       : settledBrowsePage
-        ? `${settledBrowsePage.total} of ${
-            settledBrowsePage.scope === 'search'
-              ? settledBrowsePage.catalog_total
-              : settledBrowsePage.total
-          } source lists`
+        ? `${settledBrowsePage.total} of ${settledBrowsePage.scope === 'search' ? settledBrowsePage.catalog_total : settledBrowsePage.total} source lists`
         : 'Source list count unavailable.'
 
   const openConfirm = () => {
@@ -1206,12 +1197,7 @@ export default function CblBrowserPage() {
         </div>
       ) : (
         <>
-          <p
-            role="status"
-            aria-live="polite"
-            className="min-h-4 text-xs text-[var(--theme-text-muted)]"
-            data-testid="cbl-result-count"
-          >
+          <p role="status" aria-live="polite" className="min-h-4 text-xs text-[var(--theme-text-muted)]" data-testid="cbl-result-count">
             {resultCountText}
           </p>
 
