@@ -1385,9 +1385,12 @@ export default function CblBrowserPage() {
                     >
                       Previous page
                     </button>
-                    <span className="text-xs text-[var(--theme-text-muted)]">
-                      Page {browsePage.page} of {Math.max(browsePage.total_pages, 1)}
-                    </span>
+                    {settledBrowsePage && (
+                      <span className="text-xs text-[var(--theme-text-muted)]">
+                        Page {settledBrowsePage.page} of{' '}
+                        {Math.max(settledBrowsePage.total_pages, 1)}
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => openPage(page + 1)}
