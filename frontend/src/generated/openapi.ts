@@ -3879,6 +3879,11 @@ export interface components {
         };
         CBLCatalogBrowseResponse: {
             breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
+            /**
+             * Format: int64
+             * @description Total active source lists in the whole shared catalog, independent of search and folder.
+             */
+            catalog_total: number;
             folder: string;
             folders: components["schemas"]["CBLSourceFolder"][];
             has_next: boolean;
@@ -8764,6 +8769,11 @@ export interface components {
         ThreadListResponse: {
             /** Format: int32 */
             active_count: number;
+            /**
+             * Format: int32
+             * @description Total active Queue rows matching the applied search, independent of the bounded page.
+             */
+            filtered_count?: number | null;
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
         };
