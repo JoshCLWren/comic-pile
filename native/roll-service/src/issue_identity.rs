@@ -2957,10 +2957,12 @@ async fn do_cbl_adoption_commit(
         preserve_existing_order: update_target_plan_id.is_some(),
     };
     let merge = merge_adoption_nodes_tx(&mut tx, &mut nodes_json, &merge_ctx).await?;
-    let _ = tx.run_execute(
+    tx.run_execute(
         "INSERT INTO dependency_groups (user_id, name, created_at) VALUES ($1, $2, NOW())",
         &[&user_id, &list_name],
-    );
+    )
+    .await
+    .expect("injected dependency group insert");
     tx.run_execute(
         "UPDATE continuity_plans SET nodes_json=$1::jsonb, updated_at=NOW() WHERE id=$2",
         &[&tokio_postgres::types::Json(&nodes_json), &plan_id],
