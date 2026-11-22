@@ -1347,7 +1347,9 @@ export default function CblBrowserPage() {
                 </ul>
               )}
 
-              {browsePage.items.length === 0 && browsePage.folders.length === 0 && (
+              {!browseQuery.isPlaceholderData &&
+                browsePage.items.length === 0 &&
+                browsePage.folders.length === 0 && (
                 <p className="text-sm text-[var(--theme-text-muted)]">
                   {browsePage.scope === 'search'
                     ? 'No matching source lists found.'
