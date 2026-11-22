@@ -1929,14 +1929,20 @@ fn normalize_roster_issue(row: &Value) -> Value {
         .get("image")
         .and_then(Value::as_object)
         .and_then(|image| {
-            ["original_url", "super_url", "medium_url", "small_url"]
-                .iter()
-                .find_map(|key| {
-                    image
-                        .get(*key)
-                        .and_then(Value::as_str)
-                        .filter(|url| !url.is_empty())
-                })
+            [
+                "original_url",
+                "super_url",
+                "medium_url",
+                "small_url",
+                "thumb_url",
+            ]
+            .iter()
+            .find_map(|key| {
+                image
+                    .get(*key)
+                    .and_then(Value::as_str)
+                    .filter(|url| !url.is_empty())
+            })
         })
         .map(|url| Value::String(url.to_owned()))
         .unwrap_or(Value::Null);
