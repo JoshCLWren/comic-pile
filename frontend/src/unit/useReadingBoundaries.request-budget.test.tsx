@@ -14,6 +14,11 @@ import { useThreadBlockingInfo } from '../hooks/useDependencies'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { clearSessionCache } from '../query/cacheEffects'
 import { createAppQueryClient } from '../query/queryClient'
+import {
+  getQueryRetryBudgetSnapshot,
+  resetQueryRetryBudget,
+  shouldRetryQuery,
+} from '../query/outageRetryBudget'
 import { queryKeys } from '../query/queryKeys'
 import { setDefaultHttpClient } from '../services/httpClient'
 import {
