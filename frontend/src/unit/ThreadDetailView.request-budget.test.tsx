@@ -44,7 +44,7 @@ const THREADS = {
     issues_remaining: 5,
     queue_position: 1,
     status: 'active',
-    total_issues: null,
+    total_issues: 10,
     notes: null,
     blocking_reasons: [],
     next_unread_issue_number: '1',
@@ -56,7 +56,7 @@ const THREADS = {
     issues_remaining: 2,
     queue_position: 2,
     status: 'active',
-    total_issues: null,
+    total_issues: 8,
     notes: null,
     blocking_reasons: [],
     next_unread_issue_number: '1',
@@ -281,5 +281,49 @@ describe('Thread detail request budget', () => {
     expect(groupsCalls(calls)).toHaveLength(1)
     expect(requestedThreadIds(groupsCalls(calls)[0])).toEqual([999])
     expect(screen.queryByText('Unable to load crossover memberships.')).not.toBeInTheDocument()
+  })
+
+  it('expanded issues: cold-loads each issues read exactly once', async () => {
+    const { calls, client } = createRequestRecorder((call) => {
+      if (call.url === '/v1/threads/42') return THREADS[42]
+      if (call.url === '/v1/threads/42/connected') return { thread_id: 42, connected_threads: [] }
+      if (call.url === '/v2/reading-boundaries') return boundaryBatch('available', [42])
+      if (call.url === '/v1/threads/groups:batch') return { '42': CROSSOVERS[42] }
+      if (call.url === '/v2/tags/effective/threads/42') return { target_type: 'Thread', target_id: 42, direct_tags: [], effective_tags: [] }
+      if (call.url === '/v1/threads/42/issues') return { issues: [], next_page_token: null, total_count: 0 }
+      if (call.url === '/v1/threads/42/issues/creators') return { thread_id: 42, issues: [] }
+      if (call.url === '/v2/tags/effective/threads/42/issues') return { issues: [] }
+      if (call.url === '/v2/issues/cards') return { items: [] }
+      return {}
+    })
+    setDefaultHttpClient(client)
+
+    // Navigate with an issue parameter to trigger expansion
+    const { unmount: unmount1 } = render(renderThread('/thread/42?issue=1'))
+
+    await waitFor(() => expect(screen.getByText(/Issues \(\d+\)/)).toBeInTheDocument())
+    await waitFor(() => expect(calls.some((call) => call.url === '/v1/threads/42/issues')).toBe(true))
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    expect(requestCounts(calls)).toEqual({
+      'POST /v2/reading-boundaries': 1,
+      'GET /v1/threads/42': 1,
+      'GET /v1/threads/42/connected': 1,
+      'GET /v2/tags/effective/threads/42': 1,
+      'POST /v1/threads/groups:batch': 1,
+      'GET /v1/threads/42/issues?page_size=100': 1,
+      'GET /v1/threads/42/issues/creators': 1,
+      'GET /v2/tags/effective/threads/42/issues': 1,
+    })
+    expect(calls.some((call) => call.url === '/v2/tags')).toBe(false)
+
+    // Warm remount inside the query stale window must reuse the cache.
+    unmount1()
+    const { unmount: unmount2 } = render(renderThread('/thread/42?issue=1'))
+    const callCount = calls.length
+    await waitFor(() => expect(screen.getByText(/Issues \(\d+\)/)).toBeInTheDocument())
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(calls).toHaveLength(callCount)
+    unmount2()
   })
 })
