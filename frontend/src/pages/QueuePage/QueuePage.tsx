@@ -52,9 +52,12 @@ export default function QueuePage() {
     data: threads,
     isPending,
     isError,
+    isFetching,
+    isPlaceholderData,
     nextPageToken,
     loadMore,
     activeCount,
+    filteredCount,
   } = queueLoader
 
   // Series that show the per-row `Map series` repair action (everything except
@@ -79,6 +82,11 @@ export default function QueuePage() {
     searchQuery,
   )
   const authoritativeActiveCount = activeCount ?? activeThreads.length
+  const authoritativeFilteredCount = filteredCount
+  // Placeholder rows/counts belong to the previous search key. Keep the count
+  // honest until the current search's first page settles.
+  const countPending = !isError && (isPlaceholderData || (isFetching && filteredCount === null))
+  const countError = isError || (!countPending && filteredCount === null && threads !== null)
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
@@ -181,6 +189,9 @@ export default function QueuePage() {
       <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
         <QueueControls
           activeCount={authoritativeActiveCount}
+          filteredCount={authoritativeFilteredCount}
+          isCountPending={countPending}
+          isCountError={countError}
           shuffleDisabled={shuffleDisabled}
           shufflePending={shuffleQueueMutation.isPending}
           onShuffle={actions.requestShuffle}
