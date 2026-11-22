@@ -1449,33 +1449,6 @@ mod tests {
         assert!(normalized_metadata(&incomplete, 29319).is_err());
     }
     #[tokio::test]
-    async fn provider_response_accepts_float_status_code() {
-        let fake = crate::outbound::RecordingFakeOutbound::new();
-        let outbound: Arc<dyn crate::outbound::OutboundHttp> = Arc::new(fake);
-        let fake = outbound
-            .as_any()
-            .downcast_ref::<crate::outbound::RecordingFakeOutbound>()
-            .expect("fake");
-        let issue = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
-            "cover_date":"1988-03-01", "store_date":"1988-03-24", "image":{},
-            "volume":{"id": 4001,"name":"Hellblazer"},
-            "person_credits":[{"id":1,"name":"Jamie Delano","api_detail_url":"https://example"}],
-            "character_credits":[], "team_credits":[], "story_arc_credits":[],
-            "date_last_updated":"2020-01-01T00:00:00+00:00"});
-        fake.push_ok(
-            StatusCode::OK,
-            HeaderMap::new(),
-            bytes::Bytes::from(json!({"status_code": 1.0, "results": issue.clone()}).to_string()),
-        );
-        let result = provider_issue(&outbound, 29319, "TESTKEY123")
-            .await
-            .expect("1.0 status should be accepted");
-        let (metadata, present, _, _) = normalized_metadata(&result, 29319).expect("normalized");
-        assert!(present);
-        assert_eq!(metadata["creator_credits"][0]["name"], "Jamie Delano");
-    }
-
-    #[tokio::test]
     async fn float_status_singular_fetch_completes_and_persists_credits() {
         // Production returned `status_code: 1.0` on the working singular
         // fetch while the worker recorded `provider_unavailable`. The worker
