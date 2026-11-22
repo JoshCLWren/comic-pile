@@ -1108,9 +1108,17 @@ async fn backfill_authorized(
                 &[&missing],
             )
             .await
-            .map_err(db::query_error)?;
+            .map_err(db::query_error)? as u32;
         }
-        report.enqueued = needs_fetch.len() as u32;
+        // Only inserts and reopened terminal rows are new work. Active rows,
+        // plus rows concurrently locked or inserted by another worker, were
+        // already queued and must not inflate the operator-facing audit.
+        let unresolved = missing.len() as u32 - inserted;
+        report.enqueued = reopened + inserted;
+        report.already_queued_or_fresh += already_active + unresolved;
+        report.needs_enqueue = report
+            .needs_enqueue
+            .saturating_sub(already_active + unresolved);
     }
 
     tx.commit().await.map_err(db::query_error)?;
