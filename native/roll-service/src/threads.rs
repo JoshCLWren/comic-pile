@@ -607,6 +607,7 @@ pub async fn list_completed_threads(
         threads,
         next_page_token,
         active_count: 0,
+        filtered_count: None,
     }))
 }
 
@@ -684,6 +685,7 @@ pub(crate) async fn list_excluded_page(
         threads,
         next_page_token,
         active_count: 0,
+        filtered_count: None,
     }))
 }
 
