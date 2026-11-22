@@ -46,11 +46,11 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
     toastSpy = vi.fn()
     modalsDeps = { toastHook: () => ({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] }) }
     // SAFETY: mock payload supplies only the fields this test asserts
-    issuesApi.migrateThread = vi.fn(async () => undefined) as typeof issuesApi.migrateThread
+    issuesApi.migrateThread = vi.fn(async () => undefined) as unknown as typeof issuesApi.migrateThread
     // SAFETY: mock payload supplies only the fields this test asserts
-    issuesApi.create = vi.fn(async () => ({ issues: [] })) as typeof issuesApi.create
+    issuesApi.create = vi.fn(async () => ({ issues: [] })) as unknown as typeof issuesApi.create
     // SAFETY: mock payload supplies only the fields this test asserts
-    issuesApi.bulkMarkRead = vi.fn(async () => undefined) as typeof issuesApi.bulkMarkRead
+    issuesApi.bulkMarkRead = vi.fn(async () => undefined) as unknown as typeof issuesApi.bulkMarkRead
   })
 
   afterEach(() => {
