@@ -71,6 +71,17 @@ async def _insert_list(raw: asyncpg.Connection, owner_id: int, name: str, issue_
     return list_id
 
 
+async def _seed_list_owner(engine, url: str, prefix: str) -> tuple[dict[str, str], str]:
+    """Create one isolated owner and return a GET reading-lists runner environment."""
+    username = f"{prefix}_{uuid4().hex[:12]}"
+    async with AsyncSession(engine, expire_on_commit=False) as db:
+        owner = User(username=username)
+        db.add(owner)
+        await db.commit()
+    token = _token(username, jti=f"jti-{uuid4().hex}")
+    return _run_env(token, "GET", "/api/v2/reading-lists"), token
+
+
 def _run_env(token: str, method: str, uri: str, *, body: str | None = None) -> dict[str, str]:
     env = {
         **os.environ,
@@ -499,6 +510,86 @@ async def test_create_reading_list_statements_respect_budget() -> None:
 
         assert small_delta is not None and large_delta is not None
         assert_declared_budget("POST", "/api/v2/reading-lists", small_delta, large_delta)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_deliberate_extra_query_fails_route_budget() -> None:
+    """A deliberately injected extra query pushes a measured route over its budget."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        # One real GET consumes the full declared budget for this set-based route.
+        env_small, _token_value = await _seed_list_owner(engine, url, "budget_extra")
+        _, _, before = await db_counters(engine)
+        response, _, _, _ = await run_rust_example(BINARY, env_small)
+        assert response.get("status") == 200
+        _, _, after = await db_counters(engine)
+        route_delta = (after - before) if before is not None and after is not None else None
+        assert route_delta is not None
+
+        # Inject one extra statement under the same isolated route role.
+        _, _, extra_before = await db_counters(engine)
+        connection = await asyncpg.connect(url)
+        try:
+            await connection.execute("SELECT 1")
+        finally:
+            await connection.close()
+        _, _, extra_after = await db_counters(engine)
+        injected = (extra_after - extra_before) if extra_before is not None and extra_after is not None else None
+        assert injected == 1
+
+        # The same budget helper used by the route test rejects the inflated count.
+        with pytest.raises(AssertionError, match="declared maximum"):
+            assert_declared_budget(
+                "GET", "/api/v2/reading-lists", route_delta + injected
+            )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_deliberate_n_plus_one_fails_growth_and_budget() -> None:
+    """A per-row query pattern grows with data and is rejected by the fixed budget."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        async def issue_ids(count: int, prefix: str) -> list[int]:
+            raw = await asyncpg.connect(url)
+            try:
+                owner_id = await raw.fetchval(
+                    "INSERT INTO users (username) VALUES ($1) RETURNING id",
+                    f"{prefix}_{uuid4().hex[:12]}",
+                )
+                ids: list[int] = []
+                for index in range(count):
+                    _, thread_ids = await _insert_owned_thread(raw, owner_id, index)
+                    ids.append(thread_ids[0])
+                return ids
+            finally:
+                await raw.close()
+
+        async def per_row_statement_count(ids: list[int]) -> int | None:
+            _, _, before = await db_counters(engine)
+            raw = await asyncpg.connect(url)
+            try:
+                for issue_id in ids:
+                    await raw.fetchval("SELECT id FROM issues WHERE id=$1", issue_id)
+            finally:
+                await raw.close()
+            _, _, after = await db_counters(engine)
+            return (after - before) if before is not None and after is not None else None
+
+        small_ids = await issue_ids(5, "n1_small")
+        large_ids = await issue_ids(200, "n1_large")
+        small_extra = await per_row_statement_count(small_ids)
+        large_extra = await per_row_statement_count(large_ids)
+        assert small_extra is not None and large_extra is not None
+        assert large_extra > small_extra, "N+1 pattern must grow with row count"
+        assert not (large_extra <= small_extra + 2), "growth check must reject N+1"
+        with pytest.raises(AssertionError, match="declared maximum"):
+            assert_declared_budget("GET", "/api/v2/reading-lists", large_extra)
     finally:
         await engine.dispose()
 
