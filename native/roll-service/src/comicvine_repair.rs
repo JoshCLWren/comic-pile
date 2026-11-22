@@ -1879,4 +1879,161 @@ mod tests {
             .expect_err("403 must be unavailable");
         assert!(matches!(err, ProviderFailure::Unavailable));
     }
+
+    /// #5592: worker fetches a singular issue and persists creator credits.
+    #[tokio::test]
+    async fn drain_persists_creator_credits_for_pending_identity() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer test-secret".parse().unwrap());
+        let report = drain_authorized(&state, &headers, Some("test-secret"))
+            .await
+            .expect("drain")
+            .0;
+        assert_eq!(report.claimed, 1);
+        assert_eq!(report.completed, 1);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let row = connection
+            .query_one(
+                "SELECT e.metadata_json::text, r.state \
+                 FROM external_identities e \
+                 JOIN comicvine_metadata_refresh_requests r ON r.external_identity_id = e.id \
+                 WHERE e.id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("row");
+        let metadata: Value = serde_json::from_str(row.get(0)).expect("json");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+        assert_eq!(row.get::<_, String>(1), "completed");
+    }
+
+    /// #5592: legitimate empty credits remain distinct from transient failure.
+    #[tokio::test]
+    async fn drain_marks_explicit_empty_credits_as_no_credits() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        let body = json!({
+            "status_code": 1,
+            "results": {
+                "id": 29319,
+                "name": "Issue",
+                "issue_number": "1",
+                "cover_date": "2020-01-01",
+                "store_date": "2020-01-01",
+                "image": {"medium_url": "https://img.example/m.jpg"},
+                "volume": {"id": 1, "name": "V"},
+                "person_credits": [],
+                "character_credits": [],
+                "team_credits": [],
+                "story_arc_credits": [],
+                "date_last_updated": "2026-11-01 17:33:53",
+            }
+        })
+        .to_string();
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(body),
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer test-secret".parse().unwrap());
+        let report = drain_authorized(&state, &headers, Some("test-secret"))
+            .await
+            .expect("drain")
+            .0;
+        assert_eq!(report.no_credits, 1);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let state_value: String = connection
+            .query_one(
+                "SELECT state FROM comicvine_metadata_refresh_requests WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("row")
+            .get(0);
+        assert_eq!(state_value, "no_credits");
+    }
+
+    /// #5592: a sparse/empty fresh roster must not overwrite previously hydrated credits.
+    #[tokio::test]
+    async fn drain_preserves_previously_hydrated_credits_on_sparse_refresh() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        connection
+            .execute(
+                "UPDATE external_identities SET metadata_json = $2::json, updated_at = now() WHERE id = $1",
+                &[
+                    &identity_id,
+                    &json!({
+                        "creator_credits": [{"id": 7, "name": "Existing Writer"}],
+                        "raw_provider_payload": {
+                            "id": 29319, "name": "Old", "issue_number": "1",
+                            "cover_date": null, "store_date": null, "image": null,
+                            "volume": {"id": 1}, "person_credits": [{"id": 7, "name": "Existing Writer"}],
+                            "character_credits": [], "team_credits": [], "story_arc_credits": [],
+                            "date_last_updated": "2020-01-01 00:00:00"
+                        },
+                        "deep_metadata_refreshed_at": "2020-01-01T00:00:00+00:00"
+                    }).to_string(),
+                ],
+            )
+            .await
+            .expect("seed metadata");
+        drop(Object::take(connection));
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        let body = json!({
+            "status_code": 1,
+            "results": {
+                "id": 29319, "name": "Issue", "issue_number": "1",
+                "cover_date": "2020-01-01", "store_date": "2020-01-01",
+                "image": {"medium_url": "https://img.example/m.jpg"},
+                "volume": {"id": 1, "name": "V"},
+                "person_credits": [], "character_credits": [], "team_credits": [],
+                "story_arc_credits": [], "date_last_updated": "2026-11-01 17:33:53",
+            }
+        })
+        .to_string();
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(body),
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer test-secret".parse().unwrap());
+        let report = drain_authorized(&state, &headers, Some("test-secret"))
+            .await
+            .expect("drain")
+            .0;
+        assert_eq!(report.completed, 1);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let metadata_text: String = connection
+            .query_one(
+                "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("row")
+            .get(0);
+        let metadata: Value = serde_json::from_str(&metadata_text).expect("json");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Existing Writer");
+    }
 }
