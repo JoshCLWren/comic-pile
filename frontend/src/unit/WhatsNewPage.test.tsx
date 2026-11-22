@@ -46,6 +46,11 @@ function release(overrides: Partial<Release> = {}): Release {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  releasesApi.list = api.list as typeof releasesApi.list
+})
+
+afterEach(() => {
+  releasesApi.list = originalList
 })
 
 describe('release ordering helpers', () => {
