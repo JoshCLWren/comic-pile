@@ -131,6 +131,7 @@ function renderPage() {
 
 function canonicalNextBoundary(title: string) {
   return {
+    evaluator: 'enabled',
     threads: { 1: {
       thread_id: 1,
       state: 'available',
