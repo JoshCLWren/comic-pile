@@ -764,13 +764,21 @@ export default function CblBrowserPage() {
     ? (browsePage.page - 1) * browsePage.page_size + browsePage.items.length
     : 0
   const settledBrowsePage = browseQuery.isPlaceholderData ? null : browsePage
-  const resultCountPending = !catalogError && (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
+  const catalogScopeTotal =
+    settledBrowsePage?.scope === 'folder' && settledBrowsePage.folder
+      ? settledBrowsePage.total
+      : settledBrowsePage?.catalog_total
+  const catalogMatchTotal =
+    settledBrowsePage?.scope === 'search' ? settledBrowsePage.total : catalogScopeTotal
+  const resultCountPending =
+    !catalogError &&
+    (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
   const resultCountText = catalogError
     ? 'Source list count unavailable.'
     : resultCountPending
       ? 'Updating source list count…'
-      : settledBrowsePage
-        ? `${settledBrowsePage.total} of ${settledBrowsePage.scope === 'search' ? settledBrowsePage.catalog_total : settledBrowsePage.total} source lists`
+      : catalogMatchTotal != null && catalogScopeTotal != null
+        ? `${catalogMatchTotal} of ${catalogScopeTotal} source lists`
         : 'Source list count unavailable.'
 
   const openConfirm = () => {
