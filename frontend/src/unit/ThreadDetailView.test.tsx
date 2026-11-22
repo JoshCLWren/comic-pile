@@ -130,19 +130,13 @@ function renderPage() {
 }
 
 function canonicalNextBoundary(title: string) {
-  return {
+  vi.mocked(readingBoundariesApi.batch).mockResolvedValue({ 
+    evaluator: 'enabled',
     threads: { 1: {
-      thread_id: 1,
-      state: 'available',
-      summary: `${title} #1 is available next.`,
-      blockers: [],
-      next: { issue: {
-        issue_id: 401,
-        thread_id: 1,
-        thread_title: title,
-        issue_number: '1',
-        label: `${title} #1`,
-        volume_label: null,
+      thread_id: 1, state: 'available', summary: `${title} #1 is available next.`,
+      blockers: [], next: { issue: {
+        issue_id: 401, thread_id: 1, thread_title: title,
+        issue_number: '1', label: `${title} #1`, volume_label: null,
       } },
     } },
   }
