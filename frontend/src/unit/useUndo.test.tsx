@@ -16,9 +16,7 @@ const mockedUndoApi = { listSnapshots: vi.fn(), undo: vi.fn() }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   undoApi.listSnapshots = mockedUndoApi.listSnapshots as typeof undoApi.listSnapshots
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   undoApi.undo = mockedUndoApi.undo as typeof undoApi.undo
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedUndoApi.listSnapshots.mockResolvedValue([{ id: 1 }] as never)

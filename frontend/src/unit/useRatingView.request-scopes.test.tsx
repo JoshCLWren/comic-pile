@@ -14,10 +14,8 @@ const mock_readerContextApi = { get: vi.fn() }
 const original_readingBoundariesApi = { ...readingBoundariesApi }
 const mock_readingBoundariesApi = { batch: vi.fn() }
 
-// SAFETY: test mock narrows vi.fn to the API method signature for typed calls.
 const getBoundaries = (mock_readingBoundariesApi.batch as any)
 
-// SAFETY: test mock narrows vi.fn to the API method signature for typed calls.
 const getReaderContext = (mock_readerContextApi.get as any)
 
 const ACTIVE_THREAD: RatingThread = {

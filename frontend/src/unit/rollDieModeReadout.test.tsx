@@ -14,7 +14,6 @@ import type { RatingThread } from '../pages/RollPage/types'
 const original_readerContextApi = { ...readerContextApi }
 const mock_readerContextApi = { get: vi.fn() }
 
-// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const getReaderContext = (mock_readerContextApi.get as any)
 
 const setDie = vi.fn<(die: number) => Promise<void>>().mockResolvedValue(undefined)

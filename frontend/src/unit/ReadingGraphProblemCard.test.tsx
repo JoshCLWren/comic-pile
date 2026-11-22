@@ -77,9 +77,7 @@ function renderCard() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: test replaces API methods with vi.fn mocks while preserving their typed signatures.
   readingGraphProblemApi.getGraph = vi.fn() as typeof readingGraphProblemApi.getGraph
-  // SAFETY: test replaces API methods with vi.fn mocks while preserving their typed signatures.
   readingGraphProblemApi.repair = vi.fn() as typeof readingGraphProblemApi.repair
 })
 

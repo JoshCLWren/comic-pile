@@ -30,9 +30,7 @@ const QUIZ_QUESTIONS = [
 
 beforeEach(() => {
   vi.restoreAllMocks()
-  // SAFETY: test supplies a minimal quiz fixture matching the mocked return shape.
   vi.spyOn(readingMode, 'getQuizQuestions').mockReturnValue(QUIZ_QUESTIONS as never)
-  // SAFETY: test mock resolves with undefined to satisfy the typed async signature.
   vi.spyOn(readingMode, 'setReadingModeFromQuiz').mockResolvedValue(undefined as never)
 })
 

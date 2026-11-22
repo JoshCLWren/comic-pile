@@ -9,7 +9,6 @@ import type { CreatorListItem, CreatorListResponse } from '../services/api-creat
 const original_creatorsApi = { ...creatorsApi }
 const mock_creatorsApi = { getList: vi.fn() }
 
-// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedGetList = (mock_creatorsApi.getList as any)
 
 const COMPLETE_COVERAGE = {

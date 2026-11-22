@@ -73,14 +73,10 @@ beforeEach(() => {
   moveToFront.mockReset()
   moveToFront.mockResolvedValue(undefined)
   fetchCards.mockImplementation(async (ids) => ids.map(cardFor))
-  patchIssue.mockImplementation(async (id, input) => receipt(id, input.status ?? 'read'));
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
-  (mock_tagsApi.threadIssuesEffective as any).mockResolvedValue({ thread_id: 1, issues: [] });
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
-  (mock_customCBLApi.getReader as any).mockResolvedValue(structuredClone(view));
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
-  (mock_issuesApi.markRead as any).mockResolvedValue();
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
+  patchIssue.mockImplementation(async (id, input) => receipt(id, input.status ?? 'read'))
+  (mock_tagsApi.threadIssuesEffective as any).mockResolvedValue({ thread_id: 1, issues: [] })
+  (mock_customCBLApi.getReader as any).mockResolvedValue(structuredClone(view))
+  (mock_issuesApi.markRead as any).mockResolvedValue()
   (mock_issuesApi.markUnread as any).mockResolvedValue()
 })
 
@@ -124,7 +120,6 @@ it('leaves the issue unread after a failed write and offers a retry', async () =
 })
 
 it('distinguishes failed loads from an empty or inactive list', async () => {
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   (mock_customCBLApi.getReader as any).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ ...view, execution_mode: 'legacy', entries: [] })
   mount()
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load this Reading List')
@@ -140,8 +135,7 @@ function entryFixture() {
 }
 
 it('shows read, later, excluded and inactive states with manual reading available', async () => {
-  const entry = entryFixture();
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
+  const entry = entryFixture()
   (mock_customCBLApi.getReader as any).mockResolvedValue({ ...view, mode: 'loose', entries: [
     { ...entry, availability: 'read', status: 'read' },
     { ...entry, id: 3, issue_id: 30, availability: 'later' },
@@ -164,7 +158,6 @@ it('shows read, later, excluded and inactive states with manual reading availabl
 })
 
 it('keeps legacy unread members visible while withholding direct availability claims', async () => {
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   (mock_customCBLApi.getReader as any).mockResolvedValue({ ...view, execution_mode: 'legacy', entries: [
     { ...entryFixture(), availability: 'legacy' },
   ] })
@@ -190,7 +183,6 @@ it('prevents duplicate progress writes while a mutation is pending', async () =>
 })
 
 it('keeps read state after a failed mark-unread action', async () => {
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   (mock_customCBLApi.getReader as any).mockResolvedValue({ ...view, entries: [
     { ...entryFixture(), availability: 'read', status: 'read' },
   ] })
@@ -205,7 +197,6 @@ it('keeps read state after a failed mark-unread action', async () => {
 })
 
 it('keeps progress usable when tags fail to load', async () => {
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   (mock_tagsApi.threadIssuesEffective as any).mockRejectedValue(new Error('tags offline'))
   mount()
   expect((await screen.findAllByText('Tags unavailable.')).length).toBeGreaterThan(0)
@@ -213,8 +204,7 @@ it('keeps progress usable when tags fail to load', async () => {
 })
 
 it('shows inherited tags and lets readers inspect their source', async () => {
-  const tag = { id: 9, name: 'Physical', normalized_name: 'physical', scope: 'private' as const, owner_user_id: 1, color: '#3B82F6', created_at: '', updated_at: '' };
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
+  const tag = { id: 9, name: 'Physical', normalized_name: 'physical', scope: 'private' as const, owner_user_id: 1, color: '#3B82F6', created_at: '', updated_at: '' }
   (mock_tagsApi.threadIssuesEffective as any).mockResolvedValue({ thread_id: 1, issues: [{
     target_type: 'Issue', target_id: 10, direct_tags: [], effective_tags: [{
       tag, direct: false, sources: [{ target_type: 'Thread', target_id: 1, display_name: 'The Dead Remembered' }],
@@ -271,7 +261,6 @@ it('shows a single bounded card-load failure and restores issue-specific covers 
 })
 
 it('does not guess an issue ID or fetch an issue cover for thread-only prerequisites', async () => {
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   (mock_customCBLApi.getReader as any).mockResolvedValue({
     ...view,
     entries: (view.entries ?? []).map((entry) => entry.issue_id !== 20 ? entry : {
@@ -298,8 +287,7 @@ it('does not guess an issue ID or fetch an issue cover for thread-only prerequis
 it('renders a safe empty list when a stale reader response omits entries', async () => {
   // Preserve the generated response type while modeling a stale server
   // payload that omitted `entries`. Do not weaken the runtime boundary.
-  const missingEntries = Object.assign({}, view, { entries: undefined });
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
+  const missingEntries = Object.assign({}, view, { entries: undefined })
   (mock_customCBLApi.getReader as any).mockResolvedValue(missingEntries)
   mount()
   expect(await screen.findByText('This Reading List is empty.')).toBeVisible()

@@ -17,7 +17,6 @@ import type { RollBootstrapResponse } from '../types/rollBootstrap'
 const original_rollBootstrapApi = { ...rollBootstrapApi }
 const mock_rollBootstrapApi = { get: vi.fn() }
 
-// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedBootstrap = (mock_rollBootstrapApi.get as any)
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={queryClient}>

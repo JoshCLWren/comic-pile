@@ -18,7 +18,6 @@ import { queryKeys } from '../query/queryKeys'
 const original_identityInboxApi = { ...identityInboxApi }
 const mock_identityInboxApi = { list: vi.fn(), confirm: vi.fn(), reject: vi.fn(), defer: vi.fn(), skip: vi.fn() }
 
-// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedInboxApi = (mock_identityInboxApi as any)
 
 function createWrapper(path = '/queue') {

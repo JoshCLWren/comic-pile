@@ -9,7 +9,6 @@ import type { ReaderContextResponse } from '../types'
 const original_readerContextApi = { ...readerContextApi }
 const mock_readerContextApi = { get: vi.fn() }
 
-// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedGet = (mock_readerContextApi.get as any)
 
 function createWrapper() {

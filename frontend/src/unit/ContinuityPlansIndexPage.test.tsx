@@ -22,9 +22,7 @@ const plan = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   continuityPlansApi.list = mockList as typeof continuityPlansApi.list
-  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   continuityPlansApi.delete = mockDelete as typeof continuityPlansApi.delete
 })
 

@@ -13,7 +13,6 @@ const thread = { id: 7, title: 'Saga' }
 describe('MigrationDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
     migrationApi.migrateThread = migrateThreadMock as typeof migrationApi.migrateThread
   })
 

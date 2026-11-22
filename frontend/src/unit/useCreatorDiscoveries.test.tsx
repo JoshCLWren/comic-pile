@@ -9,7 +9,6 @@ import type { CreatorDiscoveryResponse } from '../types/index'
 const original_creatorDiscoveryApi = { ...creatorDiscoveryApi }
 const mock_creatorDiscoveryApi = { getDiscoveries: vi.fn() }
 
-// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedGetDiscoveries = (mock_creatorDiscoveryApi.getDiscoveries as any)
 
 function makeResponse(): CreatorDiscoveryResponse {
