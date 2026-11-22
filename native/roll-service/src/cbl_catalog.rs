@@ -557,15 +557,18 @@ async fn browse_items(
         };
         let count_row = conn
             .query_one(
-                "SELECT COUNT(*)::bigint
+                "SELECT COUNT(*) FILTER (
+                            WHERE ($1::text IS NULL OR l.source_path LIKE $1 ESCAPE '\\')
+                              AND strpos(substr(l.source_path, $2::int + 1), '/') = 0
+                        )::bigint AS total,
+                        COUNT(*)::bigint AS catalog_total
              FROM cbl_source_lists l
-             WHERE l.active IS TRUE
-               AND ($1::text IS NULL OR l.source_path LIKE $1 ESCAPE '\\')
-               AND strpos(substr(l.source_path, $2::int + 1), '/') = 0",
+             WHERE l.active IS TRUE",
                 &[&folder_like, &prefix_len],
             )
             .await?;
         let total: i64 = count_row.get(0);
+        let catalog_total: i64 = count_row.get(1);
         let effective_page = if total <= 0 {
             1
         } else {
