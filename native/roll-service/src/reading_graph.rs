@@ -801,12 +801,16 @@ pub async fn reading_graph(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
 ) -> Result<Json<ReadingGraphResponse>, crate::ApiError> {
-    let inputs = option_inputs::load_option_diagnostics(&state, user).await?;
-    if !inputs.unresolved.is_empty() {
-        return Ok(Json(invalid_response(&inputs)));
+    let diagnostics = option_inputs::load_graph_diagnostics(&state, user).await?;
+    if !diagnostics.inputs.unresolved.is_empty() {
+        return Ok(Json(invalid_response(&diagnostics.inputs)));
     }
-    let validated = option_inputs::validated_contained(inputs)?;
-    Ok(Json(project(validated.inputs(), &validated)))
+    let validated = option_inputs::validated_contained(diagnostics.inputs)?;
+    Ok(Json(project(
+        validated.inputs(),
+        &validated,
+        Some(&diagnostics.prerequisites),
+    )?))
 }
 
 fn remove_from_inputs(
@@ -948,7 +952,7 @@ pub async fn repair(
         }));
     }
     let validated = option_inputs::validated_contained(inputs.clone())?;
-    let allowed = project(&inputs, &validated).repairs;
+    let allowed = project(&inputs, &validated, None)?.repairs;
     let status_before = if validated.graph_problem().is_some() {
         "cycle"
     } else {
@@ -994,7 +998,7 @@ pub async fn repair(
                 "ok".to_string()
             },
             removed,
-            graph: project(after.inputs(), &after),
+            graph: project(after.inputs(), &after, None)?,
         }));
     }
     let after = option_inputs::validated_contained(projected)?;
@@ -1007,7 +1011,7 @@ pub async fn repair(
             "ok".to_string()
         },
         removed,
-        graph: project(after.inputs(), &after),
+        graph: project(after.inputs(), &after, None)?,
     }))
 }
 
@@ -1126,7 +1130,7 @@ mod tests {
             &BTreeMap::from([(7, "Julix".to_string())]),
         )
         .unwrap();
-        let graph = project(&source, &validated);
+        let graph = project(&source, &validated, None).unwrap();
         assert_eq!(graph.status, "cycle");
         assert!(!graph.cycles.is_empty());
         assert_eq!(graph.cycles[0].edges[0].source.series_title, "B.P.R.D.");
