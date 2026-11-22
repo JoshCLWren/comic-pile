@@ -411,6 +411,57 @@ async fn confirmed_repair_revalidates_after_waiting_for_a_graph_writer() {
 }
 
 #[tokio::test]
+async fn v2_dialog_create_uses_cbl_natural_order_3483() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "natural-order-3483").await;
+    let high: Vec<String> = (7..=24).map(|number| number.to_string()).collect();
+    let labels: Vec<&str> = high.iter().map(String::as_str).collect();
+    let (thread, _) = seed_thread(&state, owner, "Ultimate Spider-Man", 1, &labels).await;
+
+    // Queue and thread-page dialogs both use this v2 create-issues operation.
+    // Exercise the same missing-low-issue shape as CBL adoption in #3483.
+    let (status, created) = send(
+        &state,
+        (token.as_str(), csrf.as_str()),
+        "POST",
+        &format!("/api/v2/threads/{thread}/issues"),
+        Some(json!({"issue_range": "2,1"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+
+    let actual: Vec<String> = position_order(&state, thread)
+        .await
+        .into_iter()
+        .map(|(label, _)| label)
+        .collect();
+    let mut expected = vec!["1".to_string(), "2".to_string()];
+    expected.extend(high);
+    assert_eq!(actual, expected);
+
+    let conn = state.pool.get().await.unwrap();
+    let next_unread: i32 = conn
+        .query_one(
+            "SELECT next_unread_issue_id FROM threads WHERE id=$1",
+            &[&thread],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let first: i32 = conn
+        .query_one(
+            "SELECT id FROM issues WHERE thread_id=$1 AND issue_number='1'",
+            &[&thread],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(next_unread, first);
+}
+
+#[tokio::test]
 async fn bprd_normal_add_preserves_reader_order_and_return_master_history() {
     let Some((state, _db)) = database().await else {
         return;
