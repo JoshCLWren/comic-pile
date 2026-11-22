@@ -79,6 +79,49 @@ describe('CblBrowserPage catalog', () => {
     expect(screen.queryByText('Ultimate.cbl')).not.toBeInTheDocument()
   })
 
+  it('shows accurate N of M source-list counts across applied search transitions (#3614)', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockImplementation(async (params: { folder: string; query: string; page: number; pageSize: number }) => {
+      if (params.query === 'x-men') {
+        return browsePage({
+          scope: 'search',
+          query: 'x-men',
+          items: [source, { ...source, id: 8, name: 'X-Men Gold' }],
+          total: 2,
+          catalog_total: 13,
+          total_pages: 1,
+        })
+      }
+      return browsePage({
+        scope: 'folder',
+        folder: params.folder,
+        query: null,
+        items: [source],
+        total: 13,
+        catalog_total: 13,
+        total_pages: 1,
+      })
+    })
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByTestId('cbl-result-count')).toHaveTextContent('13 of 13 source lists')
+    })
+
+    await user.type(screen.getByLabelText('Search source lists'), 'x-men')
+    expect(screen.getByTestId('cbl-result-count')).toHaveTextContent('13 of 13 source lists')
+
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('cbl-result-count')).toHaveTextContent('2 of 13 source lists')
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('cbl-result-count')).toHaveTextContent('13 of 13 source lists')
+    })
+  })
+
   it('hides filesystem mirror paths from source cards (#3365)', async () => {
     const user = userEvent.setup()
     const leaked: CBLSourceListDiscoveryItem = {
