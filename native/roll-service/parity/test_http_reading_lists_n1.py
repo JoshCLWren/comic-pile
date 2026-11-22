@@ -517,21 +517,35 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         await engine.dispose()
 
 
-def test_reading_lists_budget_rejects_extra_query_and_n1_growth() -> None:
-    """Budget checks must reject a deliberately extra query and N+1-style growth."""
-    for method, path in [
-        ("GET", "/api/v2/reading-lists"),
-        ("GET", "/api/v2/reading-lists/{list_id}"),
-        ("GET", "/api/v2/reading-lists/{list_id}/reader"),
-        ("DELETE", "/api/v2/reading-lists/{list_id}"),
-        ("POST", "/api/v2/reading-lists"),
-        ("PUT", "/api/v2/reading-lists/{list_id}"),
-    ]:
+def test_reading_lists_budget_rejects_extra_query() -> None:
+    """A deliberately added extra query must fail the same budget check used by route tests."""
+    over_max = {
+        ("GET", "/api/v2/reading-lists"): 5,  # max 4
+        ("POST", "/api/v2/reading-lists"): 10,  # max 9
+        ("DELETE", "/api/v2/reading-lists/{list_id}"): 7,  # max 6
+        ("GET", "/api/v2/reading-lists/{list_id}"): 4,  # max 3
+        ("PUT", "/api/v2/reading-lists/{list_id}"): 14,  # max 13
+        ("GET", "/api/v2/reading-lists/{list_id}/reader"): 7,  # max 6
+    }
+    for (method, path), measured in over_max.items():
         with pytest.raises(AssertionError, match="declared maximum"):
-            assert_declared_budget(method, path, 999)
+            assert_declared_budget(method, path, measured)
 
-    small_delta, large_delta = 5, 40  # deliberate N+1 growth
-    with pytest.raises(AssertionError, match="statement count grew"):
-        assert large_delta <= small_delta + 2, (
-            f"statement count grew: {small_delta} -> {large_delta}"
-        )
+
+def test_reading_lists_budget_rejects_n1_growth() -> None:
+    """A deliberately introduced N+1 query pattern must fail budget/growth checks."""
+    cases = [
+        ("GET", "/api/v2/reading-lists", 4, 199),
+        ("POST", "/api/v2/reading-lists", 9, 204),
+        ("DELETE", "/api/v2/reading-lists/{list_id}", 6, 201),
+        ("GET", "/api/v2/reading-lists/{list_id}", 3, 198),
+        ("PUT", "/api/v2/reading-lists/{list_id}", 13, 208),
+        ("GET", "/api/v2/reading-lists/{list_id}/reader", 6, 201),
+    ]
+    for method, path, small_delta, large_delta in cases:
+        with pytest.raises(AssertionError, match="declared maximum"):
+            assert_declared_budget(method, path, small_delta, large_delta)
+        with pytest.raises(AssertionError, match="statement count grew"):
+            assert large_delta <= small_delta + 2, (
+                f"statement count grew: {small_delta} -> {large_delta}"
+            )
