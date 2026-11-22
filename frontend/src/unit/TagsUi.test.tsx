@@ -10,7 +10,6 @@ import { tagErrorMessage } from '../components/Tags/tagErrors'
 import { useAdminFlag } from '../components/Tags/useAdminFlag'
 import { tagsApi } from '../services/api-tags'
 import type {
-import { injectModuleDoubles } from './injectModuleDoubles'
   CreateTagResponse,
   EffectiveTagsResponse,
   Tag,
@@ -18,6 +17,7 @@ import { injectModuleDoubles } from './injectModuleDoubles'
   TagUsage,
 } from '../services/api-tags'
 import { renderHook } from './testingLibrary'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   // SAFETY: the palette constants and payload types are real; only the transport singleton is doubled
