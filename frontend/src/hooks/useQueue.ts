@@ -162,6 +162,12 @@ export function useQueueThreads(
   // the canonical source. Falls back to null so callers can decide how to
   // degrade when a cached/older response omits the field.
   const activeCount = query.pages[0]?.active_count ?? null
+  // Filtered match count for the applied search/filter. While placeholder data
+  // from a previous query key is on screen, suppress the count so a rapid
+  // search never flashes a stale N of M (#3614).
+  const filteredCount = query.isPlaceholderData
+    ? null
+    : (query.pages[0]?.filtered_count ?? query.pages[0]?.active_count ?? null)
   // Initial load OR an in-flight next-page append both keep already-rendered
   // rows visible: `isPending` drives the full-screen loader only before any
   // data exists, while `isNextPageLoading` drives the inline loading indicator.
@@ -171,6 +177,7 @@ export function useQueueThreads(
   // (issue #3922).
   const isLoadingMore = query.isNextPageLoading
   const isError = query.isError
+  const isPlaceholderData = query.isPlaceholderData
   const nextPageToken = query.nextPageToken
 
   const refetch = useCallback(async (): Promise<void> => {
@@ -186,10 +193,12 @@ export function useQueueThreads(
     isPending,
     isLoadingMore,
     isError,
+    isPlaceholderData,
     refetch,
     nextPageToken,
     loadMore,
     activeCount,
+    filteredCount,
   }
 }
 
