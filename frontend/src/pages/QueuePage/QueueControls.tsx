@@ -4,7 +4,8 @@ import type { QueueSortBy } from './useQueueFilters'
 const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
-  activeCount: number
+  /** Authoritative whole-queue total before search filters; null when unknown. */
+  activeCount: number | null
   /** Filtered match total for the current applied search; null when unknown. */
   filteredCount: number | null
   /** True while the authoritative count for the current applied search is still loading. */
@@ -82,7 +83,7 @@ function QueueControlsInner({
     ? 'Series count unavailable.'
     : countPending
       ? 'Updating series count…'
-      : filteredCount != null
+      : filteredCount != null && activeCount != null
         ? `${filteredCount} of ${activeCount} series`
         : 'Series count unavailable.'
 
@@ -223,7 +224,7 @@ function QueueControlsInner({
       >
         {resultCountText}
       </p>
-      <span className="sr-only" data-testid="queue-active-count">{activeCount}</span>
+      <span className="sr-only" data-testid="queue-active-count">{activeCount ?? ''}</span>
     </header>
   )
 }

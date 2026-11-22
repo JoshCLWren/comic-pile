@@ -183,7 +183,7 @@ export default function QueuePage() {
     <PositionMenuProvider>
       <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
         <QueueControls
-          activeCount={authoritativeActiveCount}
+          activeCount={isPlaceholderData ? null : activeCount}
           filteredCount={isPlaceholderData ? null : filteredCount}
           countPending={!isError && (isPlaceholderData || (isPending && !threads?.length))}
           countError={isError}
