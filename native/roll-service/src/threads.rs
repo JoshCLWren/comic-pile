@@ -1275,6 +1275,10 @@ SELECT json_build_object(
     'active_count', (SELECT count(*)::int FROM threads t
                      JOIN me ON t.user_id = me.user_id
                      WHERE t.status = 'active' AND t.queue_position >= 1),
+    'filtered_count', (SELECT count(*)::int FROM threads t
+                       JOIN me ON t.user_id = me.user_id
+                       WHERE t.status = 'active'
+                         AND ($4 = '' OR t.title ILIKE '%' || $4 || '%')),
     'list_names', COALESCE((
         SELECT json_agg(json_build_object('id', l.id, 'name', l.name) ORDER BY l.id)
         FROM custom_cbl_lists l
