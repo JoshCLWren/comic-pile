@@ -1,16 +1,13 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCreatorDiscoveries } from '../hooks/useCreatorDiscoveries'
 import { creatorDiscoveryApi } from '../services/creatorDiscoveryApi'
 import type { CreatorDiscoveryResponse } from '../types/index'
 
-vi.mock('../services/creatorDiscoveryApi', () => ({
-  creatorDiscoveryApi: {
-    getDiscoveries: vi.fn(),
-  },
-}))
+const original_creatorDiscoveryApi = { ...creatorDiscoveryApi }
+const mock_creatorDiscoveryApi = { getDiscoveries: vi.fn() }
 
 const mockedGetDiscoveries = vi.mocked(creatorDiscoveryApi.getDiscoveries)
 
@@ -46,9 +43,15 @@ function createWrapper() {
 }
 
 beforeEach(() => {
+  Object.assign(creatorDiscoveryApi, mock_creatorDiscoveryApi)
   vi.clearAllMocks()
   mockedGetDiscoveries.mockResolvedValue(makeResponse())
 })
+
+afterEach(() => {
+  Object.assign(creatorDiscoveryApi, original_creatorDiscoveryApi)
+})
+
 
 describe('useCreatorDiscoveries', () => {
   it('fetches through the canonical query key once enabled', async () => {

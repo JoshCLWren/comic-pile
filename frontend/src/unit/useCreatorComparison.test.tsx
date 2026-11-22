@@ -1,16 +1,13 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCreatorComparison } from '../hooks/useCreatorComparison'
 import { creatorComparisonApi } from '../services/creatorComparisonApi'
 import type { CreatorComparisonResponse } from '../types/index'
 
-vi.mock('../services/creatorComparisonApi', () => ({
-  creatorComparisonApi: {
-    getComparison: vi.fn(),
-  },
-}))
+const original_creatorComparisonApi = { ...creatorComparisonApi }
+const mock_creatorComparisonApi = { getComparison: vi.fn() }
 
 const mockedGetComparison = vi.mocked(creatorComparisonApi.getComparison)
 
@@ -42,9 +39,15 @@ function createWrapper() {
 }
 
 beforeEach(() => {
+  Object.assign(creatorComparisonApi, mock_creatorComparisonApi)
   vi.clearAllMocks()
   mockedGetComparison.mockResolvedValue(makeResponse())
 })
+
+afterEach(() => {
+  Object.assign(creatorComparisonApi, original_creatorComparisonApi)
+})
+
 
 describe('useCreatorComparison', () => {
   it('fetches one bounded request with deduplicated sorted keys', async () => {

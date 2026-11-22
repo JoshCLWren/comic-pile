@@ -2,17 +2,14 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useQueueThreads } from '../hooks/useQueue'
 import * as useThreadModule from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
 import type { ThreadListItem } from '../types'
 
-vi.mock('../services/api-threads', () => ({
-  threadsApi: {
-    list: vi.fn(),
-  },
-}))
+const original_threadsApi = { ...threadsApi }
+const mock_threadsApi = { list: vi.fn() }
 
 const mockedThreadsApi = vi.mocked(threadsApi)
 
@@ -30,6 +27,7 @@ function createWrapper() {
 }
 
 beforeEach(() => {
+  Object.assign(threadsApi, mock_threadsApi)
   vi.clearAllMocks()
   // SAFETY: Test data supplies only id; remaining ThreadListItem fields are never read by this guard test.
   mockedThreadsApi.list.mockResolvedValue({
@@ -38,6 +36,11 @@ beforeEach(() => {
     active_count: 51,
   })
 })
+
+afterEach(() => {
+  Object.assign(threadsApi, original_threadsApi)
+})
+
 
 describe('bounded thread hydration guard', () => {
   it('does not export the universal useThreads hook anymore', () => {

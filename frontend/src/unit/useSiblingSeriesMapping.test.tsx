@@ -1,19 +1,15 @@
 import { act, renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useCommitSeriesMapping,
   useSiblingSeriesMappingPreview,
 } from '../hooks/useSiblingSeriesMapping'
 import { seriesMappingApi } from '../services/api-series-mapping'
 
-vi.mock('../services/api-series-mapping', () => ({
-  seriesMappingApi: {
-    preview: vi.fn(),
-    commit: vi.fn(),
-  },
-}))
+const original_seriesMappingApi = { ...seriesMappingApi }
+const mock_seriesMappingApi = { preview: vi.fn(), commit: vi.fn() }
 
 const mockedSeriesMappingApi = vi.mocked(seriesMappingApi)
 
@@ -23,10 +19,16 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 beforeEach(() => {
+  Object.assign(seriesMappingApi, mock_seriesMappingApi)
   vi.clearAllMocks()
   mockedSeriesMappingApi.preview.mockReset()
   mockedSeriesMappingApi.commit.mockReset()
 })
+
+afterEach(() => {
+  Object.assign(seriesMappingApi, original_seriesMappingApi)
+})
+
 
 describe('useSiblingSeriesMappingPreview', () => {
   it('returns a disabled query when required parameters are missing', () => {

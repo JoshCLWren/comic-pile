@@ -1,14 +1,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useReaderContext } from '../hooks/useReaderContext'
 import { readerContextApi } from '../services/api-reader-context'
 import type { ReaderContextResponse } from '../types'
 
-vi.mock('../services/api-reader-context', () => ({
-  readerContextApi: { get: vi.fn() },
-}))
+const original_readerContextApi = { ...readerContextApi }
+const mock_readerContextApi = { get: vi.fn() }
 
 const mockedGet = vi.mocked(readerContextApi.get)
 
@@ -42,8 +41,14 @@ function context(issueId: number): ReaderContextResponse {
 }
 
 beforeEach(() => {
+  Object.assign(readerContextApi, mock_readerContextApi)
   mockedGet.mockReset()
 })
+
+afterEach(() => {
+  Object.assign(readerContextApi, original_readerContextApi)
+})
+
 
 it('never requests reader context while disabled or without an issue id', () => {
   const wrapper = createWrapper()

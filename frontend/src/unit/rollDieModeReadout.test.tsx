@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSetDie } from '../hooks/useRoll'
 import { useRatingView } from '../pages/RollPage/useRatingView'
 import { readerContextApi } from '../services/api-reader-context'
@@ -11,9 +11,8 @@ import { queryKeys } from '../query/queryKeys'
 import type { RollPageState, RollPageStateSetters } from '../pages/RollPage/useRollPageState'
 import type { RatingThread } from '../pages/RollPage/types'
 
-vi.mock('../services/api-reader-context', () => ({
-  readerContextApi: { get: vi.fn().mockResolvedValue(null) },
-}))
+const original_readerContextApi = { ...readerContextApi }
+const mock_readerContextApi = { get: vi.fn() }
 
 const getReaderContext = vi.mocked(readerContextApi.get)
 
@@ -138,9 +137,15 @@ function renderUseRatingView(currentDie = 6) {
 }
 
 beforeEach(() => {
+  Object.assign(readerContextApi, mock_readerContextApi)
   getReaderContext.mockClear()
   setDie.mockClear()
 })
+
+afterEach(() => {
+  Object.assign(readerContextApi, original_readerContextApi)
+})
+
 
 describe('rating view die projection (#4352 contract-after)', () => {
   it('reports automatic mode while no die is pinned', () => {

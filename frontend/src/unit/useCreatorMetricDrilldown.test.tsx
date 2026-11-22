@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   useCreatorMetricDrilldown,
@@ -18,14 +18,8 @@ import type {
   CreatorSeriesDrilldown,
 } from '../types/index'
 
-vi.mock('../services/creatorMetricDrilldownApi', () => ({
-  creatorMetricDrilldownApi: {
-    getMetricDrilldown: vi.fn(),
-    getRatingDistributionDrilldown: vi.fn(),
-    getRoleDrilldown: vi.fn(),
-    getSeriesDrilldown: vi.fn(),
-  },
-}))
+const original_creatorMetricDrilldownApi = { ...creatorMetricDrilldownApi }
+const mock_creatorMetricDrilldownApi = { getMetricDrilldown: vi.fn(), getRatingDistributionDrilldown: vi.fn(), getRoleDrilldown: vi.fn(), getSeriesDrilldown: vi.fn() }
 
 const mockedGetMetric = vi.mocked(creatorMetricDrilldownApi.getMetricDrilldown)
 const mockedGetDistribution = vi.mocked(creatorMetricDrilldownApi.getRatingDistributionDrilldown)
@@ -90,12 +84,18 @@ function createWrapper() {
 }
 
 beforeEach(() => {
+  Object.assign(creatorMetricDrilldownApi, mock_creatorMetricDrilldownApi)
   vi.clearAllMocks()
   mockedGetMetric.mockResolvedValue(makeResponse())
   mockedGetDistribution.mockResolvedValue(makeDistributionResponse())
   mockedGetRole.mockResolvedValue(makeRoleResponse())
   mockedGetSeries.mockResolvedValue(makeSeriesResponse())
 })
+
+afterEach(() => {
+  Object.assign(creatorMetricDrilldownApi, original_creatorMetricDrilldownApi)
+})
+
 
 describe('useCreatorMetricDrilldown', () => {
   it('fetches the generic metric drilldown with the given params', async () => {

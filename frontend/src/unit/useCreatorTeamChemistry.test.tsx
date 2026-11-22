@@ -1,16 +1,13 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import { creatorTeamChemistryApi } from '../services/creatorTeamChemistryApi'
 import type { CreatorTeamChemistryResponse } from '../types/index'
 
-vi.mock('../services/creatorTeamChemistryApi', () => ({
-  creatorTeamChemistryApi: {
-    getChemistry: vi.fn(),
-  },
-}))
+const original_creatorTeamChemistryApi = { ...creatorTeamChemistryApi }
+const mock_creatorTeamChemistryApi = { getChemistry: vi.fn() }
 
 const mockedGetChemistry = vi.mocked(creatorTeamChemistryApi.getChemistry)
 
@@ -36,9 +33,15 @@ function createWrapper() {
 }
 
 beforeEach(() => {
+  Object.assign(creatorTeamChemistryApi, mock_creatorTeamChemistryApi)
   vi.clearAllMocks()
   mockedGetChemistry.mockResolvedValue(makeResponse())
 })
+
+afterEach(() => {
+  Object.assign(creatorTeamChemistryApi, original_creatorTeamChemistryApi)
+})
+
 
 describe('useCreatorTeamChemistry', () => {
   it('fetches through the canonical query key once enabled', async () => {

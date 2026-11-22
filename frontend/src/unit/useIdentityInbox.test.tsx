@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useIdentityInbox,
   useIdentityInboxStatus,
@@ -15,15 +15,8 @@ import { identityInboxApi } from '../services/api-identity'
 import type { IdentityInboxItem } from '../services/api-identity'
 import { queryKeys } from '../query/queryKeys'
 
-vi.mock('../services/api-identity', () => ({
-  identityInboxApi: {
-    list: vi.fn(),
-    confirm: vi.fn(),
-    reject: vi.fn(),
-    defer: vi.fn(),
-    skip: vi.fn(),
-  },
-}))
+const original_identityInboxApi = { ...identityInboxApi }
+const mock_identityInboxApi = { list: vi.fn(), confirm: vi.fn(), reject: vi.fn(), defer: vi.fn(), skip: vi.fn() }
 
 const mockedInboxApi = vi.mocked(identityInboxApi)
 
@@ -61,6 +54,7 @@ const inboxResponse = {
 }
 
 beforeEach(() => {
+  Object.assign(identityInboxApi, mock_identityInboxApi)
   vi.clearAllMocks()
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedInboxApi.list.mockResolvedValue(inboxResponse as never)
@@ -73,6 +67,11 @@ beforeEach(() => {
   // SAFETY: the endpoint returns no body, so the mock resolves to undefined
   mockedInboxApi.skip.mockResolvedValue(undefined as never)
 })
+
+afterEach(() => {
+  Object.assign(identityInboxApi, original_identityInboxApi)
+})
+
 
 describe('useIdentityInbox', () => {
   it('uses the identityInbox.list query key with correct params', async () => {

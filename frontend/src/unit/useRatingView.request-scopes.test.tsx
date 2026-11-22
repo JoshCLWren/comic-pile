@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useRatingView } from '../pages/RollPage/useRatingView'
 import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { readerContextApi } from '../services/api-reader-context'
@@ -8,11 +8,12 @@ import type { RollPageState, RollPageStateSetters } from '../pages/RollPage/useR
 import type { RatingThread } from '../pages/RollPage/types'
 import type { ReaderContextResponse } from '../services/api-reader-context'
 
-vi.mock('../services/api-reader-context', () => ({
-  readerContextApi: { get: vi.fn() },
-}))
+const original_readerContextApi = { ...readerContextApi }
+const mock_readerContextApi = { get: vi.fn() }
 
-vi.mock('../services/api-reading-boundaries', () => ({ readingBoundariesApi: { batch: vi.fn() } }))
+const original_readingBoundariesApi = { ...readingBoundariesApi }
+const mock_readingBoundariesApi = { batch: vi.fn() }
+
 const getBoundaries = vi.mocked(readingBoundariesApi.batch)
 
 const getReaderContext = vi.mocked(readerContextApi.get)
@@ -156,11 +157,19 @@ function renderRatingView(initialScopes: ScopeOverrides = {}) {
 }
 
 beforeEach(() => {
+  Object.assign(readingBoundariesApi, mock_readingBoundariesApi)
+  Object.assign(readerContextApi, mock_readerContextApi)
   getBoundaries.mockReset()
   getBoundaries.mockResolvedValue({ threads: { [ACTIVE_THREAD.id]: { thread_id: ACTIVE_THREAD.id, state: 'available', summary: 'Ready to read.', blockers: [] } } })
   getReaderContext.mockReset()
   getReaderContext.mockResolvedValue(READER_CONTEXT)
 })
+
+afterEach(() => {
+  Object.assign(readingBoundariesApi, original_readingBoundariesApi)
+  Object.assign(readerContextApi, original_readerContextApi)
+})
+
 
 it('rating entry fetches no reader context while every optional scope is closed', async () => {
   const { result } = renderRatingView()

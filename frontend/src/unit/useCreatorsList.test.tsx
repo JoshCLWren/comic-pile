@@ -1,16 +1,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCreatorsList, CREATOR_LIST_PAGE_SIZE } from '../hooks/useCreatorsList'
 import { creatorsApi } from '../services/api-creators'
 import type { CreatorListItem, CreatorListResponse } from '../services/api-creators'
 
-vi.mock('../services/api-creators', () => ({
-  creatorsApi: {
-    getList: vi.fn(),
-  },
-}))
+const original_creatorsApi = { ...creatorsApi }
+const mock_creatorsApi = { getList: vi.fn() }
 
 const mockedGetList = vi.mocked(creatorsApi.getList)
 
@@ -55,8 +52,14 @@ function createWrapper() {
 }
 
 beforeEach(() => {
+  Object.assign(creatorsApi, mock_creatorsApi)
   vi.clearAllMocks()
 })
+
+afterEach(() => {
+  Object.assign(creatorsApi, original_creatorsApi)
+})
+
 
 describe('useCreatorsList', () => {
   it('requests one bounded page with the normalized selection', async () => {

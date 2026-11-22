@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ReadingListReader } from '../components/ReadingListReader'
 import { customCBLApi, type ReadingListReader as ReaderView } from '../services/api-custom-cbl'
 import { tagsApi } from '../services/api-tags'
@@ -11,9 +11,14 @@ import { queueApi } from '../services/api-queue'
 import { issueCardsApi, type IssueCard, type IssueReadRateResponse } from '../services/issueCardsApi'
 import { queryKeys } from '../query/queryKeys'
 
-vi.mock('../services/api-custom-cbl', () => ({ customCBLApi: { getReader: vi.fn() } }))
-vi.mock('../services/api-issues', () => ({ issuesApi: { markRead: vi.fn(), markUnread: vi.fn() } }))
-vi.mock('../services/api-tags', () => ({ tagsApi: { threadIssuesEffective: vi.fn().mockResolvedValue({ issues: [] }) } }))
+const original_customCBLApi = { ...customCBLApi }
+const mock_customCBLApi = { getReader: vi.fn() }
+
+const original_issuesApi = { ...issuesApi }
+const mock_issuesApi = { markRead: vi.fn(), markUnread: vi.fn() }
+
+const original_tagsApi = { ...tagsApi }
+const mock_tagsApi = { threadIssuesEffective: vi.fn() }
 
 const view: ReaderView = {
   list_id: 2, name: 'Julix', mode: 'strict', execution_mode: 'option_e', entries: [
@@ -61,6 +66,9 @@ function mount(backTo?: string) {
   return client
 }
 beforeEach(() => {
+  Object.assign(tagsApi, mock_tagsApi)
+  Object.assign(issuesApi, mock_issuesApi)
+  Object.assign(customCBLApi, mock_customCBLApi)
   vi.clearAllMocks()
   moveToFront.mockReset()
   moveToFront.mockResolvedValue(undefined)
@@ -71,6 +79,13 @@ beforeEach(() => {
   vi.mocked(issuesApi.markRead).mockResolvedValue()
   vi.mocked(issuesApi.markUnread).mockResolvedValue()
 })
+
+afterEach(() => {
+  Object.assign(tagsApi, original_tagsApi)
+  Object.assign(issuesApi, original_issuesApi)
+  Object.assign(customCBLApi, original_customCBLApi)
+})
+
 
 it('shows every blocker, exact issue links and list-local skip while keeping blocked reads actionable', async () => {
   mount()

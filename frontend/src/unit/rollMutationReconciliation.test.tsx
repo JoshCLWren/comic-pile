@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
@@ -14,11 +14,8 @@ import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
-vi.mock('../services/rollBootstrapApi', () => ({
-  rollBootstrapApi: {
-    get: vi.fn(),
-  },
-}))
+const original_rollBootstrapApi = { ...rollBootstrapApi }
+const mock_rollBootstrapApi = { get: vi.fn() }
 
 const mockedBootstrap = vi.mocked(rollBootstrapApi.get)
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -57,9 +54,15 @@ const bootstrapState = (
 })
 
 beforeEach(() => {
+  Object.assign(rollBootstrapApi, mock_rollBootstrapApi)
   mockedBootstrap.mockReset()
   localStorage.clear()
 })
+
+afterEach(() => {
+  Object.assign(rollBootstrapApi, original_rollBootstrapApi)
+})
+
 
 describe('Roll mutation reconciliation', () => {
   it('classifies only response-less timeout and network failures as ambiguous', () => {

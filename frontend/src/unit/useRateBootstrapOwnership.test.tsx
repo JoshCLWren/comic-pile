@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useRate } from '../hooks/useRate'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
@@ -14,10 +14,11 @@ import type { RollBootstrapResponse } from '../types/rollBootstrap'
 // file is to exercise the real applyRatedThreadCache against a live bootstrap
 // observer. The existing useRate.test.tsx mocks it and can only assert the
 // option was passed, not that a second GET was actually avoided.
-vi.mock('../services/protectedRollMutationApi', () => ({
-  protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() },
-}))
-vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi: { get: vi.fn() } }))
+const original_protectedRollMutationApi = { ...protectedRollMutationApi }
+const mock_protectedRollMutationApi = { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() }
+
+const original_rollBootstrapApi = { ...rollBootstrapApi }
+const mock_rollBootstrapApi = { get: vi.fn() }
 
 const mockedRate = vi.mocked(protectedRollMutationApi.rate)
 const mockedBootstrapGet = vi.mocked(rollBootstrapApi.get)
@@ -100,11 +101,19 @@ function Harness({ client, children }: { client: QueryClient; children: ReactNod
 }
 
 beforeEach(() => {
+  Object.assign(rollBootstrapApi, mock_rollBootstrapApi)
+  Object.assign(protectedRollMutationApi, mock_protectedRollMutationApi)
   vi.clearAllMocks()
   mockedRate.mockResolvedValue(thread)
   mockedBootstrapGet.mockResolvedValue(bootstrapState())
   globalThis.document.cookie = 'comicpile_roll_snoozes=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
 })
+
+afterEach(() => {
+  Object.assign(rollBootstrapApi, original_rollBootstrapApi)
+  Object.assign(protectedRollMutationApi, original_protectedRollMutationApi)
+})
+
 
 it('does not issue a second bootstrap GET when useRate owns the authoritative fetch (#5264)', async () => {
   const client = makeClient()
