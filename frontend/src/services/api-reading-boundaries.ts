@@ -18,7 +18,14 @@ export function createReadingBoundariesApi(client: HttpClient) {
         ))
       }
       const responses = await Promise.all(pages)
-      return { threads: Object.assign({}, ...responses.map((page) => page.threads)) }
+      const evaluator = responses[0]?.evaluator ?? 'unavailable'
+      if (responses.some((page) => page.evaluator !== evaluator)) {
+        throw new Error('Reading boundary evaluator changed during a paginated batch')
+      }
+      return {
+        threads: Object.assign({}, ...responses.map((page) => page.threads)),
+        evaluator,
+      }
     },
   }
 }
