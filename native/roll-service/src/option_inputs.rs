@@ -327,14 +327,39 @@ struct EntryRow {
     gate: String,
     skipped: bool,
 }
+fn default_reader_origin() -> Option<String> {
+    Some("reader".to_string())
+}
+
 #[derive(Debug, Deserialize)]
 struct PrerequisiteRow {
     id: i32,
     source_issue_id: i32,
     target_issue_id: i32,
+    // Old compact unit fixtures predate origin projection and represent the
+    // reader-only execution query. Explicit JSON null remains unknown origin.
+    #[serde(default = "default_reader_origin")]
+    origin: Option<String>,
+    #[serde(default)]
+    note: Option<String>,
     classification: Option<String>,
     provenance: Option<String>,
 }
+
+impl PrerequisiteRow {
+    fn stored_evidence(&self) -> StoredPrerequisite {
+        StoredPrerequisite {
+            prerequisite_id: self.id,
+            source_issue_id: self.source_issue_id,
+            target_issue_id: self.target_issue_id,
+            origin: self.origin.clone(),
+            note: self.note.clone(),
+            classification: self.classification.clone(),
+            provenance: self.provenance.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct VolumeEvidenceRow {
     thread_id: i32,
