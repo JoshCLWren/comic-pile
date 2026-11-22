@@ -601,10 +601,7 @@ async fn runtime_identity(request: Request, next: Next) -> Response {
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::middleware::csrf_middleware;
-    use custom_cbl::{
-        apply_custom_cbl, delete_overlap_decision, export_custom_cbl, get_overlap_decisions,
-        save_overlap_decision, search_custom_cbl_issues,
-    };
+    // custom_cbl handlers are referenced as custom_cbl::* in routes.
     Router::new()
         .route(
             "/health",
@@ -926,27 +923,27 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/reading-lists/issue-candidates",
-            get(search_custom_cbl_issues),
+            get(custom_cbl::search_custom_cbl_issues),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/export",
-            get(export_custom_cbl),
+            get(custom_cbl::export_custom_cbl),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
-            post(apply_custom_cbl),
+            post(custom_cbl::apply_custom_cbl),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/overlap-decisions",
-            get(get_overlap_decisions),
+            get(custom_cbl::get_overlap_decisions),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/overlap-decisions",
-            put(save_overlap_decision),
+            put(custom_cbl::save_overlap_decision),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
-            delete(delete_overlap_decision),
+            delete(custom_cbl::delete_overlap_decision),
         )
         .route(
             "/api/v2/continuity-plans/{plan_id}/reader",
