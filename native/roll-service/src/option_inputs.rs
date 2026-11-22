@@ -357,7 +357,7 @@ pub struct LegacyDependencyRow {
 /// Read-only owner diagnostics plus the inert legacy dependency evidence the
 /// Option E snapshot deliberately ignores.
 #[derive(Debug)]
-pub(crate) struct OptionDiagnostics {
+pub struct OptionDiagnostics {
     pub inputs: OptionInputs,
     pub legacy_dependencies: Vec<LegacyDependencyRow>,
 }
