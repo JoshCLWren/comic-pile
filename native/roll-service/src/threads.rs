@@ -440,7 +440,7 @@ pub async fn list_threads(
         threads,
         next_page_token,
         active_count,
-        filtered_count,
+        filtered_count: Some(filtered_count),
     }))
 }
 
