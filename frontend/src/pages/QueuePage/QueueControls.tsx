@@ -41,6 +41,9 @@ interface QueueControlsProps {
  */
 function QueueControlsInner({
   activeCount,
+  filteredCount,
+  countPending = false,
+  countError = false,
   shuffleDisabled,
   shufflePending,
   onShuffle,
