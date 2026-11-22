@@ -75,6 +75,10 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
   isFetchNextPageError: boolean
   isError: boolean
   error: unknown
+  /** True while any fetch is in flight, including background refetches. */
+  isFetching: boolean
+  /** True when the rendered data is placeholder data from a previous query key. */
+  isPlaceholderData: boolean
 }
 
 /**
@@ -146,5 +150,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     isFetchNextPageError: query.isFetchNextPageError,
     isError: query.isError,
     error: query.error,
+    isFetching: query.isFetching,
+    isPlaceholderData: query.isPlaceholderData,
   }
 }
