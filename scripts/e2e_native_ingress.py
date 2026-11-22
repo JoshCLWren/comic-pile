@@ -53,7 +53,7 @@ class Ingress(BaseHTTPRequestHandler):
             if key.lower() not in HOP_BY_HOP
         }
         connection = http.client.HTTPConnection(
-            upstream.hostname, upstream.port, timeout=60.0
+            upstream.hostname, upstream.port, timeout=60
         )
         try:
             connection.request(self.command, self.path, body=body, headers=headers)

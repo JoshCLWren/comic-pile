@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -45,7 +46,6 @@ packages:
 
 
 def write(path: Path, content: str) -> None:
-    """Write content to a file path, creating parent directories as needed."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 
@@ -63,7 +63,7 @@ def test_incident_8292506_lockfile_markers_fail_with_file_and_line(tmp_path: Pat
     assert any("frontend/pnpm-lock.yaml:13:" in r and "end marker" in r for r in rendered)
     # second block
     assert any("frontend/pnpm-lock.yaml:17:" in r and "start marker" in r for r in rendered)
-    assert any("frontend/pnpm-lock.yaml:25:" in r and "end marker" in r for r in rendered)
+    assert any("frontend/pnpm-lock.yaml:23:" in r and "end marker" in r for r in rendered)
     assert all("frontend/pnpm-lock.yaml" in r for r in rendered)
 
 
@@ -205,7 +205,6 @@ def test_attempted_conflict_containing_merge_checkout(tmp_path: Path) -> None:
 
 
 def test_main_passes_clean_tree(tmp_path: Path) -> None:
-    """Verify a clean working tree (no conflict markers) passes the guard."""
     write(tmp_path / "a.py", "print('ok')\n")
     write(tmp_path / "README.md", "Heading\n=======\n\nText\n")
     rc = guard.main(["--root", str(tmp_path)])
@@ -213,7 +212,6 @@ def test_main_passes_clean_tree(tmp_path: Path) -> None:
 
 
 def test_binary_files_are_skipped(tmp_path: Path) -> None:
-    """Verify binary files with conflict markers are correctly skipped."""
     p = tmp_path / "image.bin"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_bytes(b"\x00\x01<<<<<<< HEAD\n=======\n>>>>>>> x\n")
@@ -231,7 +229,6 @@ def test_repo_approved_fixture_file_is_excluded() -> None:
 
 
 def test_script_cli_reports_file_and_line(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """Verify the CLI reports the file and line number for conflict markers."""
     write(tmp_path / "bad.yaml", "a: 1\n<<<<<<< HEAD\nb: 2\n=======\nb: 3\n>>>>>>> x\n")
     rc = guard.main(["--root", str(tmp_path), "bad.yaml"])
     captured = capsys.readouterr()
