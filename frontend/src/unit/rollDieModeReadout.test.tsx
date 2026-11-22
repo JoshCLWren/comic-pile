@@ -12,9 +12,9 @@ import type { RollPageState, RollPageStateSetters } from '../pages/RollPage/useR
 import type { RatingThread } from '../pages/RollPage/types'
 
 const original_readerContextApi = { ...readerContextApi }
-const mock_readerContextApi = { get: vi.fn() }
+const mock_readerContextApi = { get: vi.fn<typeof readerContextApi.get>() }
 
-const getReaderContext = (mock_readerContextApi.get as any)
+const getReaderContext = mock_readerContextApi.get
 
 const setDie = vi.fn<(die: number) => Promise<void>>().mockResolvedValue(undefined)
 

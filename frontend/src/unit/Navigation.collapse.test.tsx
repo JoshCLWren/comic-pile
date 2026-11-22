@@ -62,6 +62,13 @@ function renderNavigation(initialEntry = '/') {
 
 describe('navigation collapse behavior (#2285)', () => {
   beforeEach(() => {
+    Object.assign(api, { get: mocks.get, post: mocks.post, patch: mocks.patch })
+    vi.spyOn(authTransport, 'clearAccessToken').mockImplementation(mocks.clearAccessToken)
+    vi.spyOn(authTransport, 'setAccessToken').mockImplementation(mocks.setAccessToken)
+    vi.spyOn(authTransport, 'getAccessToken').mockImplementation(mocks.getAccessToken)
+    vi.spyOn(authTransport, 'readStoredAccessToken').mockImplementation(mocks.readStoredAccessToken)
+    vi.spyOn(authTransport, 'refreshSession').mockImplementation(mocks.refreshSession)
+    vi.spyOn(authTransport, 'isSessionRefreshRejected').mockImplementation(mocks.isSessionRefreshRejected)
     document.documentElement.removeAttribute('data-theme')
     localStorage.clear()
     mocks.get.mockReset()

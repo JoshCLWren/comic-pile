@@ -12,7 +12,7 @@ const originalGetMetricDrilldown = creatorMetricDrilldownApi.getMetricDrilldown
 const originalGetRatingDistributionDrilldown = creatorMetricDrilldownApi.getRatingDistributionDrilldown
 const originalGetRoleDrilldown = creatorMetricDrilldownApi.getRoleDrilldown
 const originalGetSeriesDrilldown = creatorMetricDrilldownApi.getSeriesDrilldown
-const mockedGetMetricDrilldown = vi.fn()
+const mockedGetMetricDrilldown = vi.fn<typeof creatorMetricDrilldownApi.getMetricDrilldown>()
 
 const DRILLDOWN: CreatorMetricDrilldown = {
   metric_type: 'average-rating',
@@ -81,10 +81,10 @@ function renderModal(drilldown: CreatorMetricDrilldown | undefined) {
 describe('CreatorMetricDrilldownModal', () => {
   beforeEach(() => {
     mockedGetMetricDrilldown.mockReset()
-    creatorMetricDrilldownApi.getMetricDrilldown = mockedGetMetricDrilldown as typeof creatorMetricDrilldownApi.getMetricDrilldown
-    creatorMetricDrilldownApi.getRatingDistributionDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getRatingDistributionDrilldown
-    creatorMetricDrilldownApi.getRoleDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getRoleDrilldown
-    creatorMetricDrilldownApi.getSeriesDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getSeriesDrilldown
+    creatorMetricDrilldownApi.getMetricDrilldown = mockedGetMetricDrilldown
+    creatorMetricDrilldownApi.getRatingDistributionDrilldown = vi.fn<typeof creatorMetricDrilldownApi.getRatingDistributionDrilldown>()
+    creatorMetricDrilldownApi.getRoleDrilldown = vi.fn<typeof creatorMetricDrilldownApi.getRoleDrilldown>()
+    creatorMetricDrilldownApi.getSeriesDrilldown = vi.fn<typeof creatorMetricDrilldownApi.getSeriesDrilldown>()
     // By default a fetch never settles, so the loading test is deterministic and
     // no test depends on jsdom's real network behavior.
     mockedGetMetricDrilldown.mockImplementation(() => new Promise<CreatorMetricDrilldown>(() => {}))

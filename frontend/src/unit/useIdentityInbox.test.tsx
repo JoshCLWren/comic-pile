@@ -16,9 +16,15 @@ import type { IdentityInboxItem } from '../services/api-identity'
 import { queryKeys } from '../query/queryKeys'
 
 const original_identityInboxApi = { ...identityInboxApi }
-const mock_identityInboxApi = { list: vi.fn(), confirm: vi.fn(), reject: vi.fn(), defer: vi.fn(), skip: vi.fn() }
+const mock_identityInboxApi = {
+  list: vi.fn<typeof identityInboxApi.list>(),
+  confirm: vi.fn<typeof identityInboxApi.confirm>(),
+  reject: vi.fn<typeof identityInboxApi.reject>(),
+  defer: vi.fn<typeof identityInboxApi.defer>(),
+  skip: vi.fn<typeof identityInboxApi.skip>(),
+}
 
-const mockedInboxApi = (mock_identityInboxApi as any)
+const mockedInboxApi = mock_identityInboxApi
 
 function createWrapper(path = '/queue') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
