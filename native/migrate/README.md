@@ -14,6 +14,9 @@ MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -- up
 - `migrations/V2__queue_exclusion_groups.sql` adds the queue-exclusion group
   schema introduced for container bulk remove/restore in Queue (#5435), bringing
   the schema to the current Alembic head `m54i537800001`.
+- `migrations/V3__repair_cbl_natural_issue_order_3483.sql` repairs only production
+  thread 17977 reported in #3483 and refreshes its next-unread pointer. It does
+  not change the schema or alter manual ordering on unrelated threads.
 - `BASELINE_ALEMBIC_HEAD` in `src/lib.rs` is the current Alembic head and must
   stay in sync with Alembic/parity checks. Each new Alembic revision must be
   mirrored by a new refinery migration (or a regenerated baseline) before the
