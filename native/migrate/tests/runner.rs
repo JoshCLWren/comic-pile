@@ -119,8 +119,8 @@ async fn alembic_managed_at_baseline(client: &Client) {
         .unwrap();
 }
 
-/// Simulate an Alembic-managed database at the current head: both migration
-/// schemas are present.
+/// Simulate an Alembic-managed database at the current head: both schema
+/// migrations are present, while later data repairs remain pending.
 async fn alembic_managed_at_head(client: &Client) {
     alembic_managed_at_baseline(client).await;
     client
