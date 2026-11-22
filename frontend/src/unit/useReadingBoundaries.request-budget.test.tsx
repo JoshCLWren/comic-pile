@@ -46,6 +46,7 @@ function useBoundaryAndLegacyFallback(threadId: number) {
 
 describe('reading boundary evaluator request budget', () => {
   afterEach(() => {
+    resetQueryRetryBudget()
     vi.restoreAllMocks()
   })
 
