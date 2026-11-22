@@ -12,7 +12,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-lists-n1-secret"
 BINARY = str(cargo_example_path("http_reading_lists"))
@@ -113,12 +119,22 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
 
         env = _run_env(token, "GET", "/api/v2/reading-lists")
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, list) and len(body) == 5
         assert body[0]["issue_count"] == 1
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
+        nested_delta = (
+            nested_after - nested_before
+            if nested_before is not None and nested_after is not None
+            else None
+        )
+        assert nested_delta == 0, (
+            f"unexpected nested trigger statements: {nested_delta}"
+        )
         small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
@@ -133,11 +149,21 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, list) and len(large_body) == 200
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
+        nested_delta2 = (
+            nested_after2 - nested_before2
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
+        assert nested_delta2 == 0, (
+            f"unexpected nested trigger statements: {nested_delta2}"
+        )
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None
@@ -173,6 +199,7 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}")
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
         body = small.get("body")
@@ -181,6 +208,15 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
         assert body.get("issue_count") == 5
         assert isinstance(body.get("entries"), list) and len(body["entries"]) == 5
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
+        nested_delta = (
+            nested_after - nested_before
+            if nested_before is not None and nested_after is not None
+            else None
+        )
+        assert nested_delta == 0, (
+            f"unexpected nested trigger statements: {nested_delta}"
+        )
         small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
@@ -197,12 +233,22 @@ async def test_get_reading_list_statements_do_not_grow_with_entry_count() -> Non
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         assert len(large_body.get("entries", [])) == 200
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
+        nested_delta2 = (
+            nested_after2 - nested_before2
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
+        assert nested_delta2 == 0, (
+            f"unexpected nested trigger statements: {nested_delta2}"
+        )
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None
@@ -238,6 +284,7 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
 
         env = _run_env(token, "GET", f"/api/v2/reading-lists/{list_id}/reader")
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
         body = small.get("body")
@@ -248,6 +295,15 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
         assert isinstance(entries, list) and len(entries) == 5
         assert all(e.get("availability") in {"available", "later", "blocked", "read", "excluded", "inactive"} for e in entries)
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
+        nested_delta = (
+            nested_after - nested_before
+            if nested_before is not None and nested_after is not None
+            else None
+        )
+        assert nested_delta == 0, (
+            f"unexpected nested trigger statements: {nested_delta}"
+        )
         small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
@@ -264,12 +320,22 @@ async def test_reading_list_reader_statements_do_not_grow_with_entry_count() -> 
             await raw.close()
 
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict)
         assert len(large_body.get("entries", [])) == 200
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
+        nested_delta2 = (
+            nested_after2 - nested_before2
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
+        assert nested_delta2 == 0, (
+            f"unexpected nested trigger statements: {nested_delta2}"
+        )
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None
@@ -304,10 +370,20 @@ async def test_delete_reading_list_statements_bounded() -> None:
         small_id = await _seed_one()
         env = _run_env(token, "DELETE", f"/api/v2/reading-lists/{small_id}")
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 204, small
         assert small.get("body") is None
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
+        nested_delta = (
+            nested_after - nested_before
+            if nested_before is not None and nested_after is not None
+            else None
+        )
+        assert nested_delta == 0, (
+            f"unexpected nested trigger statements: {nested_delta}"
+        )
         small_delta = (after - before) if before is not None and after is not None else None
 
         large_id = await _seed_one()
@@ -323,9 +399,19 @@ async def test_delete_reading_list_statements_bounded() -> None:
 
         env2 = _run_env(token, "DELETE", f"/api/v2/reading-lists/{large_id}")
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 204, large
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
+        nested_delta2 = (
+            nested_after2 - nested_before2
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
+        assert nested_delta2 == 0, (
+            f"unexpected nested trigger statements: {nested_delta2}"
+        )
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None
@@ -361,6 +447,7 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         body_small = json.dumps({"name": "Small", "mode": "loose", "issue_ids": issue_ids_small})
         env = _run_env(token, "POST", "/api/v2/reading-lists", body=body_small)
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 201, small
         small_body = small.get("body")
@@ -369,6 +456,15 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         assert small_body.get("issue_count") == 5
         assert len(small_body.get("entries", [])) == 5
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
+        nested_delta = (
+            nested_after - nested_before
+            if nested_before is not None and nested_after is not None
+            else None
+        )
+        assert nested_delta == 0, (
+            f"unexpected nested trigger statements: {nested_delta}"
+        )
         small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
@@ -384,11 +480,21 @@ async def test_create_reading_list_statements_respect_budget() -> None:
         body_large = json.dumps({"name": "Large", "mode": "loose", "issue_ids": issue_ids_large})
         env2 = _run_env(token, "POST", "/api/v2/reading-lists", body=body_large)
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 201, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
+        nested_delta2 = (
+            nested_after2 - nested_before2
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
+        assert nested_delta2 == 0, (
+            f"unexpected nested trigger statements: {nested_delta2}"
+        )
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None
@@ -424,6 +530,7 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         body_small = json.dumps({"name": "Up-small", "mode": "loose", "issue_ids": issue_ids_small})
         env = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_small)
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
         small_body = small.get("body")
@@ -431,6 +538,15 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         assert small_body.get("name") == "Up-small"
         assert small_body.get("issue_count") == 5
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
+        nested_delta = (
+            nested_after - nested_before
+            if nested_before is not None and nested_after is not None
+            else None
+        )
+        assert nested_delta == 0, (
+            f"unexpected nested trigger statements: {nested_delta}"
+        )
         small_delta = (after - before) if before is not None and after is not None else None
 
         raw = await asyncpg.connect(url)
@@ -448,11 +564,21 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         body_large = json.dumps({"name": "Up-large", "mode": "loose", "issue_ids": full_ids[:200]})
         env2 = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_large)
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
+        nested_delta2 = (
+            nested_after2 - nested_before2
+            if nested_before2 is not None and nested_after2 is not None
+            else None
+        )
+        assert nested_delta2 == 0, (
+            f"unexpected nested trigger statements: {nested_delta2}"
+        )
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
 
         assert small_delta is not None and large_delta is not None
