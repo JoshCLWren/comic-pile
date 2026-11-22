@@ -3074,30 +3074,66 @@ async fn series_import_commits_hydration_requests_without_opening_roll() {
         .await
         .unwrap()
         .get(0);
+    // Leave only the second issue due, then run the real cron drain. The
+    // worker must fetch the singular provider payload and persist the credits
+    // before the Roll read; no test SQL fabricates the hydrated state.
     conn.execute(
-        "UPDATE external_identities SET metadata_json = \
-           '{\"creator_credits\":[{\"id\":7,\"name\":\"Jamie Delano\"}],\
-             \"deep_metadata_refreshed_at\":\"2026-11-22T00:00:00+00:00\",\
-             \"raw_provider_payload\":{\"id\":91002,\"name\":\"Issue Two\",\
-               \"issue_number\":\"2\",\"cover_date\":null,\"store_date\":null,\
-               \"image\":{},\"volume\":{},\
-               \"person_credits\":[{\"id\":7,\"name\":\"Jamie Delano\"}],\
-               \"character_credits\":[],\"team_credits\":[],\"story_arc_credits\":[],\
-               \"date_last_updated\":\"2026-11-22 00:00:00\"}}'::json \
-         WHERE external_id = '91002'",
+        "UPDATE comicvine_metadata_refresh_requests r SET next_attempt_at = \
+           CASE WHEN e.external_id = '91002' THEN now() - interval '1 minute' \
+                ELSE now() + interval '1 hour' END \
+         FROM external_identities e WHERE e.id = r.external_identity_id",
         &[],
     )
     .await
     .unwrap();
-    conn.execute(
-        "UPDATE comicvine_metadata_refresh_requests r SET state = 'completed', \
-           completed_at = now(), next_attempt_at = now() \
-         FROM external_identities e WHERE e.id = r.external_identity_id \
-           AND e.external_id = '91002'",
-        &[],
+    fake(&state).clear();
+    provider_ok(
+        &state,
+        json!({"results": {
+            "id": 91002, "name": "Issue Two", "issue_number": "2",
+            "cover_date": null, "store_date": null, "image": {}, "volume": {},
+            "person_credits": [{"id": 7, "name": "Jamie Delano"}],
+            "character_credits": [], "team_credits": [], "story_arc_credits": [],
+            "date_last_updated": "2026-11-22 00:00:00"
+        }}),
+    );
+    let previous_cron_secret = std::env::var_os("CRON_SECRET");
+    std::env::set_var("CRON_SECRET", "comicvine-test-cron-secret");
+    let (status, drain) = send(
+        &state,
+        Request::builder()
+            .method("GET")
+            .uri("/api/v2/maintenance/comicvine-metadata-repairs")
+            .header(
+                header::AUTHORIZATION,
+                "Bearer comicvine-test-cron-secret",
+            )
+            .body(Body::empty())
+            .unwrap(),
     )
-    .await
-    .unwrap();
+    .await;
+    if let Some(previous) = previous_cron_secret {
+        std::env::set_var("CRON_SECRET", previous);
+    } else {
+        std::env::remove_var("CRON_SECRET");
+    }
+    assert_eq!(status, StatusCode::OK, "{drain:?}");
+    assert_eq!(drain["claimed"], 1);
+    assert_eq!(drain["completed"], 1);
+    assert_eq!(drain["no_credits"], 0);
+    assert_eq!(drain["deferred"], 0);
+    assert_eq!(drain["failed"], 0);
+    let request_state: String = conn
+        .query_one(
+            "SELECT r.state FROM comicvine_metadata_refresh_requests r \
+             JOIN external_identities e ON e.id = r.external_identity_id \
+             WHERE e.external_id = '91002'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(request_state, "completed");
     let (status, intel) = send(
         &state,
         call(
