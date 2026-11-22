@@ -1964,10 +1964,12 @@ mod tests {
         )
         .await
         .expect("resumed batch");
-        println!("SECOND REPORT: {second:?}");
         assert_eq!(second.enqueued, 1, "hydrated identity is never enqueued");
-        assert_eq!(second.scanned, 2);
-        assert_eq!(second.already_present, 1);
+        // The hydrated identity satisfies the needs-deep-fetch predicate's
+        // negation, so it is not even a scanned candidate; only the remaining
+        // roster-only identity is examined and enqueued here.
+        assert_eq!(second.scanned, 1);
+        assert_eq!(second.already_present, 0);
         assert!(second.after_pending > second.before_pending);
 
         let connection = db::checkout(&state).await.expect("final connection");
