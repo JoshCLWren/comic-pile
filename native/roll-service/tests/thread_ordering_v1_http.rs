@@ -901,12 +901,7 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
     let dead_thread = thread(&conn, user_id, "B.P.R.D.: The Dead Remembered").await;
     let killing_thread = thread(&conn, user_id, "B.P.R.D.: Killing Ground").await;
     let dark_horse_thread = thread(&conn, user_id, "MySpace Dark Horse Presents").await;
-    let witchfinder_thread = thread(
-        &conn,
-        user_id,
-        "Witchfinder: In the Service of Angels",
-    )
-    .await;
+    let witchfinder_thread = thread(&conn, user_id, "Witchfinder: In the Service of Angels").await;
     let warning_thread = thread(&conn, user_id, "B.P.R.D.: The Warning").await;
     let goddess_thread = thread(&conn, user_id, "B.P.R.D.: The Black Goddess").await;
     let wild_hunt_thread = thread(&conn, user_id, "Hellboy: The Wild Hunt").await;
@@ -1061,11 +1056,7 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
     assert_eq!(eligible["thread_ids"], json!([dead_thread]));
     assert_eq!(eligible["pool_reason"], "ready");
 
-    let (status, bootstrap) = send(
-        &state,
-        get("/api/v2/roll/bootstrap", &token, &csrf),
-    )
-    .await;
+    let (status, bootstrap) = send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{bootstrap:?}");
     assert_eq!(bootstrap["rollable"].as_array().unwrap().len(), 1);
     assert_eq!(bootstrap["rollable"][0]["thread"]["id"], json!(dead_thread));
@@ -1079,11 +1070,7 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
 
     // Queue and Thread Detail derive the same blocked state despite every
     // stored flag being false. The correct frontier is the only readable row.
-    let (status, queue) = send(
-        &state,
-        get("/api/v2/threads?page_size=100", &token, &csrf),
-    )
-    .await;
+    let (status, queue) = send(&state, get("/api/v2/threads?page_size=100", &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{queue:?}");
     let queue_rows = queue["threads"].as_array().unwrap();
     assert_eq!(queue_rows.len(), 7, "{queue:?}");

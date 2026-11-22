@@ -592,13 +592,15 @@ mod tests {
                 .collect(),
             overlap_decisions: vec![],
         });
-        inputs.prerequisites.push(crate::option_inputs::Prerequisite {
-            prerequisite_id: 1_724_900,
-            source_issue_id: 50,
-            target_issue_id: 20,
-            origin: "reader".into(),
-            provenance: vec!["continuity-rule:1715697".into()],
-        });
+        inputs
+            .prerequisites
+            .push(crate::option_inputs::Prerequisite {
+                prerequisite_id: 1_724_900,
+                source_issue_id: 50,
+                target_issue_id: 20,
+                origin: "reader".into(),
+                provenance: vec!["continuity-rule:1715697".into()],
+            });
 
         let validated = ValidatedReadingInputs::new(inputs.clone(), &BTreeMap::new()).unwrap();
         let states = evaluate(&validated).unwrap();
