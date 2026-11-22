@@ -981,8 +981,9 @@ pub async fn backfill(
     let secret = std::env::var("CRON_SECRET").ok();
     authorize(&headers, secret.as_deref())?;
     let limit = query.limit.clamp(1, 2000);
-    let connection = db::checkout(&state).await?;
-    let rows = connection
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    let rows = tx
         .query(
             "SELECT e.id, e.metadata_json::text \
              FROM external_identities e \
@@ -1029,8 +1030,7 @@ pub async fn backfill(
     };
 
     if !query.dry_run && !needs_fetch.is_empty() {
-        // Reuse the same set-based, SKIP LOCKED enqueue contract as import.
-        let claimable_rows = connection
+        let claimable_rows = tx
             .query(
                 "WITH claimable AS ( \
                     SELECT id, external_identity_id, state \
@@ -1060,39 +1060,26 @@ pub async fn backfill(
             .copied()
             .filter(|id| !claimable.contains(id))
             .collect();
-        let mut enqueued = (claimable.len() - {
-            // claimable includes pending/running/deferred that were already there;
-            // count as "already queued" for audit purposes? report.enqueued should
-            // represent rows we made actionable.
-            0
-        }) as u32;
-        // The reopened rows and existing pending/running/deferred rows in claimable
-        // are already actionable; count missing inserts below.
         if !missing.is_empty() {
-            let inserted = connection
-                .execute(
-                    "INSERT INTO comicvine_metadata_refresh_requests \
-                        (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
-                     SELECT v, 'pending', 0, now(), now(), now() \
-                     FROM unnest($1::int[]) AS v \
-                     WHERE NOT EXISTS ( \
-                         SELECT 1 FROM comicvine_metadata_refresh_requests \
-                         WHERE external_identity_id = v \
-                     ) \
-                     ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
-                    &[&missing],
-                )
-                .await
-                .map_err(db::query_error)?;
-            enqueued += inserted as u32;
+            tx.execute(
+                "INSERT INTO comicvine_metadata_refresh_requests \
+                    (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
+                 SELECT v, 'pending', 0, now(), now(), now() \
+                 FROM unnest($1::int[]) AS v \
+                 WHERE NOT EXISTS ( \
+                     SELECT 1 FROM comicvine_metadata_refresh_requests \
+                     WHERE external_identity_id = v \
+                 ) \
+                 ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
+                &[&missing],
+            )
+            .await
+            .map_err(db::query_error)?;
         }
-        // "enqueued" reports identities made actionable by this run (reopened or inserted
-        // or already pending/running/deferred). For audit clarity, use needs_fetch count
-        // minus those that were locked/skipped is tricky; report the actionable total.
         report.enqueued = needs_fetch.len() as u32;
-        let _ = enqueued;
     }
 
+    tx.commit().await.map_err(db::query_error)?;
     Ok(Json(report))
 }
 
