@@ -834,7 +834,8 @@ async fn backfill_authorized(
                        AND e.entity_type = 'issue' AND {NEEDS_DEEP_FETCH_SQL} \
                      ORDER BY e.id LIMIT $2"
                 ),
-                &[&after, &limit],
+                // Postgres infers `LIMIT` as int8; bind an i64 to match it.
+                &[&after, &i64::from(limit)],
             )
             .await
             .map_err(db::query_error)?
