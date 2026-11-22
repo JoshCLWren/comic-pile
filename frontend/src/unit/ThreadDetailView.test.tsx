@@ -139,7 +139,8 @@ function canonicalNextBoundary(title: string) {
         issue_number: '1', label: `${title} #1`, volume_label: null,
       } },
     } },
-  }
+  } as never)
+}
 }
 
 function canonicalNextCard(title: string): IssueCard {
