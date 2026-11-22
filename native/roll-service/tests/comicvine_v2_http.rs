@@ -3104,10 +3104,7 @@ async fn series_import_commits_hydration_requests_without_opening_roll() {
         Request::builder()
             .method("GET")
             .uri("/api/v2/maintenance/comicvine-metadata-repairs")
-            .header(
-                header::AUTHORIZATION,
-                "Bearer comicvine-test-cron-secret",
-            )
+            .header(header::AUTHORIZATION, "Bearer comicvine-test-cron-secret")
             .body(Body::empty())
             .unwrap(),
     )

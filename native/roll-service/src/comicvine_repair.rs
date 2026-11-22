@@ -1549,7 +1549,10 @@ mod tests {
             .expect("deferred request");
         assert_eq!(row.get::<_, String>(0), "deferred");
         assert_eq!(row.get::<_, i32>(1), 1);
-        assert_eq!(row.get::<_, Option<String>>(2).as_deref(), Some("provider_unavailable"));
+        assert_eq!(
+            row.get::<_, Option<String>>(2).as_deref(),
+            Some("provider_unavailable")
+        );
         assert!(row.get::<_, bool>(3));
         assert!(row.get::<_, bool>(4));
 
@@ -1574,7 +1577,10 @@ mod tests {
             HeaderMap::new(),
             bytes::Bytes::from(json!({"status_code": 1.0, "results": issue}).to_string()),
         );
-        let retry = claim(&state).await.expect("retry claim").expect("due retry");
+        let retry = claim(&state)
+            .await
+            .expect("retry claim")
+            .expect("due retry");
         assert_eq!(retry.attempt, 2);
         assert_eq!(
             process(&state, &retry, Some("TESTKEY123"))
