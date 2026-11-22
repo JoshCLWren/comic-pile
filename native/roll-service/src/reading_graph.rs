@@ -544,7 +544,7 @@ fn project(
         unresolved_reference_breakdown: {
             let mut breakdown = BTreeMap::new();
             for ref_ in &inputs.unresolved {
-                let category = categorize_unresolved(&ref_.kind);
+                let category = categorize_unresolved(ref_.kind);
                 *breakdown.entry(category).or_insert(0) += 1;
             }
             breakdown
@@ -592,7 +592,7 @@ fn repair_is_offered(
 fn invalid_response(inputs: &OptionInputs) -> ReadingGraphResponse {
     let mut breakdown = BTreeMap::new();
     for ref_ in &inputs.unresolved {
-        let category = categorize_unresolved(&ref_.kind);
+        let category = categorize_unresolved(ref_.kind);
         *breakdown.entry(category).or_insert(0) += 1;
     }
     ReadingGraphResponse {

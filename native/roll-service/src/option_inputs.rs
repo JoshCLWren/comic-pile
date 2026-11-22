@@ -819,7 +819,7 @@ mod tests {
             kind: "list_entry",
             object_id: 42,
         };
-        let category = crate::reading_graph::categorize_unresolved(&ref_.kind);
+        let category = crate::reading_graph::categorize_unresolved(ref_.kind);
         assert_eq!(category, UnresolvedCategory::UnreadOutsideList);
     }
 
@@ -832,7 +832,7 @@ mod tests {
             kind: "prerequisite",
             object_id: 42,
         };
-        let category = crate::reading_graph::categorize_unresolved(&ref_.kind);
+        let category = crate::reading_graph::categorize_unresolved(ref_.kind);
         assert_eq!(category, UnresolvedCategory::ReadingPlanVsList);
     }
 
@@ -845,7 +845,7 @@ mod tests {
             kind: "unknown_kind",
             object_id: 42,
         };
-        let category = crate::reading_graph::categorize_unresolved(&ref_.kind);
+        let category = crate::reading_graph::categorize_unresolved(ref_.kind);
         assert_eq!(category, UnresolvedCategory::JliConverted);
     }
 }
