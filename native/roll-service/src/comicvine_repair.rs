@@ -310,10 +310,7 @@ pub(crate) async fn provider_response(
             status: 420 | 429,
             retry_after,
         } => Err(ProviderFailure::RateLimited(
-            retry_after
-                .and_then(|h| h.parse::<u32>().ok())
-                .unwrap_or(60)
-                .clamp(60, 3600),
+            repair_retry_after_seconds(retry_after.as_deref(), chrono::Utc::now()),
         )),
         Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
         Exchange::Payload(payload) => {
