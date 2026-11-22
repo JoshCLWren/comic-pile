@@ -1074,22 +1074,28 @@ async fn backfill_authorized(
                     WHERE r.id = c.id AND r.state NOT IN ('pending', 'running', 'deferred') \
                     RETURNING r.external_identity_id \
                  ) \
-                 SELECT external_identity_id FROM claimable",
+                 SELECT external_identity_id, state FROM claimable",
                 &[&needs_fetch],
             )
             .await
             .map_err(db::query_error)?;
-        let claimable: std::collections::HashSet<i32> = claimable_rows
+        let claimable: std::collections::HashMap<i32, String> = claimable_rows
             .iter()
-            .map(|row| row.get::<_, i32>(0))
+            .map(|row| (row.get::<_, i32>(0), row.get::<_, String>(1)))
             .collect();
+        let already_active = claimable
+            .values()
+            .filter(|state| matches!(state.as_str(), "pending" | "running" | "deferred"))
+            .count() as u32;
+        let reopened = claimable.len() as u32 - already_active;
         let missing: Vec<i32> = needs_fetch
             .iter()
             .copied()
-            .filter(|id| !claimable.contains(id))
+            .filter(|id| !claimable.contains_key(id))
             .collect();
+        let mut inserted = 0_u32;
         if !missing.is_empty() {
-            tx.execute(
+            inserted = tx.execute(
                 "INSERT INTO comicvine_metadata_refresh_requests \
                     (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
                  SELECT v, 'pending', 0, now(), now(), now() \
