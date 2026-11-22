@@ -6,6 +6,9 @@ import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 
 const baseProps = {
   activeCount: 5,
+  filteredCount: 5,
+  countPending: false,
+  countError: false,
   shuffleDisabled: false,
   shufflePending: false,
   onShuffle: vi.fn(),
