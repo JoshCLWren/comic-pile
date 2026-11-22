@@ -1,6 +1,6 @@
 //! Owner-scoped tag vocabulary, assignments and effective-tag inheritance.
 //!
-//! Rust replacement for the Python `/api/v1/tags/*` routes. The HTTP method
+//! Rust replacement for the Python `/api/v2/tags*` routes. The HTTP method
 //! and exact path are preserved; only the implementation moves.
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
@@ -511,6 +511,55 @@ async fn visible_assignments_conn(
     Ok(out)
 }
 
+// Plan membership for tag inheritance.
+//
+// The v2 plan reader (GET /api/v2/continuity-plans/{plan_id}/reader) renders
+// plan steps from the plan's linked authoritative Reading List alone
+// (`reading_plan_sources.custom_cbl_list_id` -> `custom_cbl_entries`), and
+// relinking a plan never rewrites the retained `reading_plan_issues` snapshot.
+// An issue the plan page shows through the authoritative list must therefore
+// inherit the plan's tags even when the snapshot predates the link (#5265), so
+// membership here is the union of the snapshot and every linked owned list's
+// entries. Ownership of both the plan and the linked list is enforced, so one
+// user's plan or list existence never leaks through an inheritance source.
+
+/// `(issue_id, plan_id, plan_name)` for every viewer-owned plan containing any
+/// of `issue_placeholders` (positional `$1..$n`), with the viewer id at
+/// `${user_param}`.
+fn plan_membership_select(issue_placeholders: &str, user_param: usize) -> String {
+    format!(
+        "SELECT rpi.issue_id, cp.id, cp.name \
+         FROM continuity_plans cp \
+         JOIN reading_plan_issues rpi ON rpi.plan_id = cp.id \
+         WHERE rpi.issue_id IN ({issue_placeholders}) AND cp.user_id = ${user_param} \
+         UNION \
+         SELECT e.issue_id, cp.id, cp.name \
+         FROM continuity_plans cp \
+         JOIN reading_plan_sources s ON s.plan_id = cp.id AND s.custom_cbl_list_id IS NOT NULL \
+         JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = cp.user_id \
+         JOIN custom_cbl_entries e ON e.list_id = l.id \
+         WHERE e.issue_id IN ({issue_placeholders}) AND cp.user_id = ${user_param} \
+         ORDER BY 2, 1"
+    )
+}
+
+/// Single-issue variant of [`plan_membership_select`] with `$1` = issue id and
+/// `$2` = viewer id, returning `(plan_id, plan_name)`.
+fn plan_membership_select_one() -> &'static str {
+    "SELECT cp.id, cp.name \
+     FROM continuity_plans cp \
+     JOIN reading_plan_issues rpi ON rpi.plan_id = cp.id \
+     WHERE rpi.issue_id = $1 AND cp.user_id = $2 \
+     UNION \
+     SELECT cp.id, cp.name \
+     FROM continuity_plans cp \
+     JOIN reading_plan_sources s ON s.plan_id = cp.id AND s.custom_cbl_list_id IS NOT NULL \
+     JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = cp.user_id \
+     JOIN custom_cbl_entries e ON e.list_id = l.id \
+     WHERE e.issue_id = $1 AND cp.user_id = $2 \
+     ORDER BY 1"
+}
+
 // combine
 fn combine_assignments(
     self_type: &str,
@@ -597,7 +646,7 @@ async fn find_near_global_tags(
 // Handlers
 // ---------------------------------------------------------------------------
 
-/// GET /api/v1/tags/
+/// GET /api/v2/tags
 pub async fn list_tags(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -629,7 +678,7 @@ pub async fn list_tags(
     Ok(Json(TagListResponse { tags }))
 }
 
-/// GET /api/v1/tags/{tag_id}/
+/// GET /api/v2/tags/{tag_id}
 pub async fn get_tag(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -647,7 +696,7 @@ pub async fn get_tag(
     Ok(Json(tag))
 }
 
-/// POST /api/v1/tags/
+/// POST /api/v2/tags
 pub async fn create_tag(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -767,7 +816,7 @@ pub async fn create_tag(
     }
 }
 
-/// PUT /api/v1/tags/{tag_id}/
+/// PATCH /api/v2/tags/{tag_id}
 pub async fn update_tag(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -871,7 +920,7 @@ pub async fn update_tag(
     }
 }
 
-/// DELETE /api/v1/tags/{tag_id}/
+/// DELETE /api/v2/tags/{tag_id}
 pub async fn delete_tag(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -922,7 +971,7 @@ pub async fn delete_tag(
     }))
 }
 
-/// GET /api/v1/tags/{tag_id}/usage/
+/// GET /api/v2/tags/{tag_id}/usage
 pub async fn get_tag_usage(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -966,7 +1015,7 @@ pub async fn get_tag_usage(
     }))
 }
 
-/// POST /api/v1/tags/{tag_id}/assign/
+/// POST /api/v2/tags/{tag_id}/assignments
 pub async fn assign_tag(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1042,13 +1091,16 @@ pub async fn assign_tag(
     }))
 }
 
-/// DELETE /api/v1/tags/{tag_id}/unassign/
+/// DELETE /api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}
 pub async fn unassign_tag(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(tag_id): Path<i32>,
-    Json(req): Json<AssignTagRequest>,
+    Path((tag_id, target_type, target_id)): Path<(i32, String, i32)>,
 ) -> Result<Json<TagAssignmentResponse>, ApiError> {
+    let req = AssignTagRequest {
+        target_type,
+        target_id,
+    };
     let mut conn = db::checkout(&state).await?;
     let tag = load_tag_conn(&conn, tag_id).await?;
     let tag = match tag {
@@ -1103,7 +1155,7 @@ pub async fn unassign_tag(
     }))
 }
 
-/// POST /api/v1/tags/{tag_id}/bulk-assign/
+/// POST /api/v2/tags/{tag_id}/assignment-batches
 pub async fn bulk_assign_tag(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1199,7 +1251,7 @@ pub async fn bulk_assign_tag(
     }))
 }
 
-/// POST /api/v1/tags/{tag_id}/bulk-unassign/
+/// POST /api/v2/tags/{tag_id}/unassignment-batches
 pub async fn bulk_unassign_tag(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1336,11 +1388,7 @@ async fn issues_still_inheriting_tag(
         plans_by_issue.insert(*id, vec![]);
     }
     let placeholders2: Vec<String> = (1..=unique.len()).map(|i| format!("${i}")).collect();
-    let sql2 = format!(
-        "SELECT rpi.issue_id, cp.id FROM continuity_plans cp JOIN reading_plan_issues rpi ON rpi.plan_id=cp.id WHERE rpi.issue_id IN ({}) AND cp.user_id = ${}",
-        placeholders2.join(","),
-        unique.len() + 1
-    );
+    let sql2 = plan_membership_select(&placeholders2.join(","), unique.len() + 1);
     let mut params2: Vec<Box<dyn tokio_postgres::types::ToSql + Send + Sync>> = Vec::new();
     for id in &unique {
         params2.push(Box::new(*id));
@@ -1450,7 +1498,7 @@ async fn issues_still_inheriting_tag(
 // Effective tags handlers
 // ---------------------------------------------------------------------------
 
-/// GET /api/v1/tags/effective/issue/{issue_id}/
+/// GET /api/v2/tags/effective/issues/{issue_id}
 pub async fn effective_for_issue(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1483,12 +1531,10 @@ pub async fn effective_for_issue(
         None => return Err(not_found(&format!("Issue {issue_id} does not exist"))),
     };
 
-    // plans containing issue for user
+    // plans containing issue for user (retained snapshot plus linked
+    // authoritative Reading List entries, see plan_membership_select)
     let plan_rows = conn
-        .query(
-            "SELECT cp.id, cp.name FROM continuity_plans cp JOIN reading_plan_issues rpi ON rpi.plan_id=cp.id WHERE rpi.issue_id=$1 AND cp.user_id=$2 ORDER BY cp.id",
-            &[&issue_id, &user_id],
-        )
+        .query(plan_membership_select_one(), &[&issue_id, &user_id])
         .await
         .map_err(db::query_error)?;
     let mut plan_names: BTreeMap<i32, String> = BTreeMap::new();
@@ -1526,7 +1572,7 @@ pub async fn effective_for_issue(
     Ok(Json(resp))
 }
 
-/// GET /api/v1/tags/effective/thread/{thread_id}/
+/// GET /api/v2/tags/effective/threads/{thread_id}
 pub async fn effective_for_thread(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1557,7 +1603,7 @@ pub async fn effective_for_thread(
     Ok(Json(resp))
 }
 
-/// GET /api/v1/tags/effective/plan/{plan_id}/
+/// GET /api/v2/tags/effective/plans/{plan_id}
 pub async fn effective_for_plan(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1588,7 +1634,7 @@ pub async fn effective_for_plan(
     Ok(Json(resp))
 }
 
-/// GET /api/v1/tags/effective/thread/{thread_id}/issues/
+/// GET /api/v2/tags/effective/threads/{thread_id}/issues
 pub async fn thread_issues_effective(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1631,13 +1677,10 @@ pub async fn thread_issues_effective(
         }));
     }
 
-    // plans containing issues for user
+    // plans containing issues for user (retained snapshot plus linked
+    // authoritative Reading List entries, see plan_membership_select)
     let placeholders: Vec<String> = (1..=issue_ids.len()).map(|i| format!("${i}")).collect();
-    let plan_sql = format!(
-        "SELECT rpi.issue_id, cp.id, cp.name FROM continuity_plans cp JOIN reading_plan_issues rpi ON rpi.plan_id=cp.id WHERE rpi.issue_id IN ({}) AND cp.user_id = ${}",
-        placeholders.join(","),
-        issue_ids.len() + 1
-    );
+    let plan_sql = plan_membership_select(&placeholders.join(","), issue_ids.len() + 1);
     let mut params: Vec<Box<dyn tokio_postgres::types::ToSql + Send + Sync>> = Vec::new();
     for id in &issue_ids {
         params.push(Box::new(*id));
@@ -1725,54 +1768,54 @@ pub async fn thread_issues_effective(
 
 // We'll declare documentation functions manually below.
 
-#[utoipa::path(get, path = "/api/v1/tags/", tag = "tags",
+#[utoipa::path(get, path = "/api/v2/tags", tag = "tags",
     responses((status = 200, description = "ok", body = TagListResponse)),
     security(("HTTPBearer" = [])))]
 #[allow(dead_code)]
 pub fn list_tags_documentation() {}
 
-#[utoipa::path(post, path = "/api/v1/tags/", tag = "tags", request_body = CreateTagRequest,
+#[utoipa::path(post, path = "/api/v2/tags", tag = "tags", request_body = CreateTagRequest,
     responses((status = 200, description = "ok", body = CreateTagResponse)),
     security(("HTTPBearer" = [])))]
 #[allow(dead_code)]
 pub fn create_tag_documentation() {}
 
-#[utoipa::path(get, path = "/api/v1/tags/effective/issue/{issue_id}/", tag = "tags",
+#[utoipa::path(get, path = "/api/v2/tags/effective/issues/{issue_id}", tag = "tags",
     params(("issue_id" = i32, Path, description = "Issue id")),
     responses((status = 200, description = "ok", body = EffectiveTagsResponse)),
     security(("HTTPBearer" = [])))]
 #[allow(dead_code)]
 pub fn effective_issue_documentation() {}
 
-#[utoipa::path(get, path = "/api/v1/tags/effective/plan/{plan_id}/", tag = "tags",
+#[utoipa::path(get, path = "/api/v2/tags/effective/plans/{plan_id}", tag = "tags",
     params(("plan_id" = i32, Path, description = "Plan id")),
     responses((status = 200, description = "ok", body = EffectiveTagsResponse)),
     security(("HTTPBearer" = [])))]
 #[allow(dead_code)]
 pub fn effective_plan_documentation() {}
 
-#[utoipa::path(get, path = "/api/v1/tags/effective/thread/{thread_id}/", tag = "tags",
+#[utoipa::path(get, path = "/api/v2/tags/effective/threads/{thread_id}", tag = "tags",
     params(("thread_id" = i32, Path, description = "Thread id")),
     responses((status = 200, description = "ok", body = EffectiveTagsResponse)),
     security(("HTTPBearer" = [])))]
 #[allow(dead_code)]
 pub fn effective_thread_documentation() {}
 
-#[utoipa::path(get, path = "/api/v1/tags/effective/thread/{thread_id}/issues/", tag = "tags",
+#[utoipa::path(get, path = "/api/v2/tags/effective/threads/{thread_id}/issues", tag = "tags",
     params(("thread_id" = i32, Path, description = "Thread id")),
     responses((status = 200, description = "ok", body = ThreadIssuesEffectiveTagsResponse)),
     security(("HTTPBearer" = [])))]
 #[allow(dead_code)]
 pub fn effective_thread_issues_documentation() {}
 
-#[utoipa::path(get, path = "/api/v1/tags/{tag_id}/", tag = "tags",
+#[utoipa::path(get, path = "/api/v2/tags/{tag_id}", tag = "tags",
     params(("tag_id" = i32, Path, description = "Tag id")),
     responses((status = 200, description = "ok", body = Tag)),
     security(("HTTPBearer" = [])))]
 #[allow(dead_code)]
 pub fn get_tag_documentation() {}
 
-#[utoipa::path(put, path = "/api/v1/tags/{tag_id}/", tag = "tags",
+#[utoipa::path(patch, path = "/api/v2/tags/{tag_id}", tag = "tags",
     params(("tag_id" = i32, Path, description = "Tag id")),
     request_body = UpdateTagRequest,
     responses((status = 200, description = "ok", body = Tag)),
@@ -1780,14 +1823,14 @@ pub fn get_tag_documentation() {}
 #[allow(dead_code)]
 pub fn update_tag_documentation() {}
 
-#[utoipa::path(delete, path = "/api/v1/tags/{tag_id}/", tag = "tags",
+#[utoipa::path(delete, path = "/api/v2/tags/{tag_id}", tag = "tags",
     params(("tag_id" = i32, Path, description = "Tag id")),
     responses((status = 200, description = "ok", body = TagDeleteResponse)),
     security(("HTTPBearer" = [])))]
 #[allow(dead_code)]
 pub fn delete_tag_documentation() {}
 
-#[utoipa::path(post, path = "/api/v1/tags/{tag_id}/assign/", tag = "tags",
+#[utoipa::path(post, path = "/api/v2/tags/{tag_id}/assignments", tag = "tags",
     params(("tag_id" = i32, Path, description = "Tag id")),
     request_body = AssignTagRequest,
     responses((status = 200, description = "ok", body = TagAssignmentResponse)),
@@ -1795,7 +1838,7 @@ pub fn delete_tag_documentation() {}
 #[allow(dead_code)]
 pub fn assign_tag_documentation() {}
 
-#[utoipa::path(post, path = "/api/v1/tags/{tag_id}/bulk-assign/", tag = "tags",
+#[utoipa::path(post, path = "/api/v2/tags/{tag_id}/assignment-batches", tag = "tags",
     params(("tag_id" = i32, Path, description = "Tag id")),
     request_body = BulkAssignRequest,
     responses((status = 200, description = "ok", body = BulkAssignResponse)),
@@ -1803,7 +1846,7 @@ pub fn assign_tag_documentation() {}
 #[allow(dead_code)]
 pub fn bulk_assign_tag_documentation() {}
 
-#[utoipa::path(post, path = "/api/v1/tags/{tag_id}/bulk-unassign/", tag = "tags",
+#[utoipa::path(post, path = "/api/v2/tags/{tag_id}/unassignment-batches", tag = "tags",
     params(("tag_id" = i32, Path, description = "Tag id")),
     request_body = BulkAssignRequest,
     responses((status = 200, description = "ok", body = BulkAssignResponse)),
@@ -1811,15 +1854,16 @@ pub fn bulk_assign_tag_documentation() {}
 #[allow(dead_code)]
 pub fn bulk_unassign_tag_documentation() {}
 
-#[utoipa::path(delete, path = "/api/v1/tags/{tag_id}/unassign/", tag = "tags",
-    params(("tag_id" = i32, Path, description = "Tag id")),
-    request_body = AssignTagRequest,
+#[utoipa::path(delete, path = "/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}", tag = "tags",
+    params(("tag_id" = i32, Path, description = "Tag id"),
+        ("target_type" = String, Path, description = "Target type"),
+        ("target_id" = i32, Path, description = "Target id")),
     responses((status = 200, description = "ok", body = TagAssignmentResponse)),
     security(("HTTPBearer" = [])))]
 #[allow(dead_code)]
 pub fn unassign_tag_documentation() {}
 
-#[utoipa::path(get, path = "/api/v1/tags/{tag_id}/usage/", tag = "tags",
+#[utoipa::path(get, path = "/api/v2/tags/{tag_id}/usage", tag = "tags",
     params(("tag_id" = i32, Path, description = "Tag id")),
     responses((status = 200, description = "ok", body = TagUsageResponse)),
     security(("HTTPBearer" = [])))]
@@ -1948,11 +1992,7 @@ mod db_tests {
         let Json(unassigned) = unassign_tag(
             State(state.clone()),
             AuthenticatedUser::for_test(1),
-            Path(tag_id),
-            Json(AssignTagRequest {
-                target_type: "Thread".into(),
-                target_id: 10,
-            }),
+            Path((tag_id, "Thread".to_string(), 10)),
         )
         .await
         .expect("unassign tag");

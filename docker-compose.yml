@@ -20,29 +20,6 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
-    build:
-      context: .
-      args:
-        USER_ID: ${UID:-1000}
-        GROUP_ID: ${GID:-1000}
-    container_name: comic-pile-test-001-app
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+asyncpg://comicpile:comicpile_password@db:5432/comicpile
-      ENVIRONMENT: development
-    ports:
-      - "8003:8000"
-    volumes:
-      - ./app:/app/app
-      - ./comic_pile:/app/comic_pile
-      - ./alembic:/app/alembic
-      - ./scripts:/app/scripts
-    command: [".venv/bin/python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--reload"]
-
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: comic-pile-test-001-pgadmin

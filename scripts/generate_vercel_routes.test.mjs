@@ -11,18 +11,19 @@ import {
 } from './generate_vercel_routes.mjs';
 
 function metadata(withOrphan = true) {
-  return {
-    paths: {
-      '/api/v1/threads/{id}': {get: {}},
-      ...(withOrphan ? {'/api/v1/orphan': {get: {}}} : {}),
-    },
-    registered: [
-      {path: '/api/v1/threads/{id}', methods: ['GET'], visible: true},
-      {path: '/api/v1/cron/release-sync', methods: ['GET'], visible: false},
-      ...(withOrphan ? [{path: '/api/v1/orphan', methods: ['GET'], visible: true}] : []),
-      {path: '/api/{path:path}', methods: ['GET'], visible: false},
-    ],
+  const paths = {
+    '/api/v1/threads/{id}': {get: {}},
   };
+  if (withOrphan) paths['/api/v1/orphan'] = {get: {}};
+
+  const registered = [
+    {path: '/api/v1/threads/{id}', methods: ['GET'], visible: true},
+    {path: '/api/v1/cron/release-sync', methods: ['GET'], visible: false},
+  ];
+  if (withOrphan) registered.push({path: '/api/v1/orphan', methods: ['GET'], visible: true});
+  registered.push({path: '/api/{path:path}', methods: ['GET'], visible: false});
+
+  return {paths, registered};
 }
 const config = {routes: [
   {src: '/api/v2/health', methods: ['GET'], dest: '/api/native_roll.rs'},
@@ -67,6 +68,12 @@ test('generated config idempotence and anchored parameter matching', () => {
   assert.deepEqual(generateVercel(generated, ops), generated);
   assert(new RegExp(routeRegex('/api/v1/threads/{id}')).test('/api/v1/threads/7'));
   assert(!new RegExp(routeRegex('/api/v1/threads/{id}')).test('/api/v1/threads/7/other'));
+});
+test('an empty Python operation set leaves the fragment-owned inventory untouched', () => {
+  const inventory = {full_surface: {v1_operations: [
+    {method: 'GET', path: '/api/v1/tags/', consumers: ['client.ts'], status: 'transitional', owning_issue: 5},
+  ], unversioned_operations: [], catch_all: {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'}}};
+  assert.equal(updateInventory(inventory, []), inventory);
 });
 test('deleted Python routes leave the inventory, surviving caller metadata persists', () => {
   const inventory = {full_surface: {v1_operations: [

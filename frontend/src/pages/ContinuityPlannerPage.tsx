@@ -181,7 +181,7 @@ export default function ContinuityPlannerPage({
         groups={groups}
       />
 
-      <PlannerLanes editor={editor} planId={planId} />
+      <PlannerLanes editor={editor} planId={planId} threads={threads} />
 
       <PlannerFooter editor={editor} planId={planId} />
     </section>

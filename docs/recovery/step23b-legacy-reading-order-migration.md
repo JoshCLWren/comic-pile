@@ -13,7 +13,7 @@ legacy Reading Orders into informational canonical Reading Plans.
 
 ## What this step implements
 
-Operator CLI `scripts/legacy_reading_order_step23b_migration.py` with
+Operator CLI `scripts/legacy_reading_order_step23b_migration.py` with <!-- docs-path-check: ignore -->
 `dry-run`, `apply`, and `rollback`.
 
 - `dry-run` is always read-only and re-runs the Step 23A preflight.

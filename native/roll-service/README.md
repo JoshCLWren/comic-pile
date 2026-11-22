@@ -12,21 +12,31 @@ parity gates #4311. A bootstrap request currently gets 404, never partial JSON.
 ## Build and test
 
 Install rustup, the platform C compiler, pkg-config and OpenSSL development
-headers. Commands run from `native/roll-service`; `rust-toolchain.toml` selects
-the stable toolchain including rustfmt/clippy, and Cargo.lock pins all
-dependencies. `rust-version = "1.88"` documents the minimum toolchain the pinned
-lockfile supports.
+headers. The repository is a single Cargo workspace: the root
+`rust-toolchain.toml` selects the stable toolchain including rustfmt/clippy,
+and the root `Cargo.lock` pins one dependency graph for both this service and
+the deployed Vercel ingress. `rust-version = "1.88"` documents the minimum
+compiler version.
+
+From the repository root:
 
 ```sh
-cargo fmt --all --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked --all-targets
-cargo build --release --locked
+cargo fmt --all -- --check
+cargo clippy --workspace --locked --all-targets -- -D warnings
+cargo test --workspace --locked --all-targets
+cargo build --release --locked -p comicpile-roll-service
 ```
 
 The `Native Rust Roll` GitHub Actions job runs these checks and publishes the
 Linux x86_64 release binary. It does not deploy previews or change ingress.
-The standalone binary is `target/release/comicpile-roll-service` and depends
+The workspace target directory is the repository root `target/`. The Rust Roll CI
+job uses an absolute `CARGO_TARGET_DIR`
+(`$GITHUB_WORKSPACE/native/roll-service/target`) so parity examples and artifact
+uploads keep their existing paths; e2e builds from the repository root. When
+building from another working directory, set an absolute `CARGO_TARGET_DIR`;
+relative values are resolved against the workspace root by the parity helper
+(Cargo itself resolves a relative `CARGO_TARGET_DIR` against the current
+working directory). The standalone binary depends
 on the build platform's OpenSSL/runtime libraries. It is not a Vercel function;
 provider selection and actual ingress verification belong to #4313.
 
@@ -112,20 +122,25 @@ failures return the sanitized Python database-unavailable 503 envelope and
 
 Tests require a **disposable local PostgreSQL** connection. The native Roll
 service never creates or alters schema, so its integration tests run against the
-canonical Alembic schema in `public`, loaded from
-`tests/fixtures/schema/public_schema.sql` (a `pg_dump --schema-only` of a database
+canonical schema in `public`, loaded from
+`native/migrate/migrations/V1__baseline.sql` (a `pg_dump --schema-only` of a database
 at Alembic head — regenerate with `make roll-test-schema`). They truncate and
 reseed the application tables between cases and never hand-write them:
 
 ```sh
 export RUST_ROLL_TEST_DATABASE_URL=postgresql://localhost/native_auth_test
 # migrate the database once (or load the fixture by running any test)
-cargo test --locked --all-targets
+cargo test --locked -p comicpile-roll-service --all-targets
 ```
 
 Missing test configuration fails instead of silently skipping integration tests.
+CI also runs `node scripts/check_native_route_db_tests.mjs` (with its own
+`node --test` regression file): every module that registers an HTTP route in
+`lib.rs::router` must have at least one `tests/*.rs` HTTP test using this real
+database harness, or an explicit reason in the checker's allowlist. This closes
+the gap that let a route module ship with no database test at all (#5351).
 CI provisions PostgreSQL. `tests/fixtures/roll-v2/auth-matrix.json` is consumed by
-both Rust integration tests and `tests/test_native_auth_matrix.py`, pinning valid
+both Rust integration tests and `tests/test_native_auth_matrix.py`, pinning valid <!-- docs-path-check: ignore -->
 credentials and exact auth rejection status/detail/challenge across languages.
 Python tests use the existing isolated database fixtures. Run them with the
 repository's disposable `TEST_DATABASE_URL` and `DATABASE_URL`, never a live library.
@@ -141,17 +156,16 @@ never used to choose eligibility. Missing or cross-thread pointers fail closed;
 failed or canceled transactions discard their physical pool connection.
 
 The local parity example is a CLI only, with no public HTTP route. On a disposable
-PostgreSQL database with the canonical Alembic schema already applied:
+PostgreSQL database with the canonical schema already applied
+(`MIGRATE_DATABASE_URL=<url> cargo run --locked -p comicpile-migrate -- up`):
 
 ```bash
-cd native/roll-service
-cargo build --locked --example reading_snapshot
-cd ../..
+cargo build --locked -p comicpile-roll-service --example reading_snapshot
 PYTHONPATH=. uv run pytest native/roll-service/parity/test_core_inputs.py -q -s --no-cov
 ```
 
 Set `RUST_ROLL_TEST_DATABASE_URL` to that disposable database. The parity suite
-uses the restricted `roll_test_dml` role against the canonical Alembic schema in
+uses the restricted `roll_test_dml` role against the canonical schema in
 `public`; it never creates schemas or tables. Run a Rust test first to provision
 the role, then set `RUST_ROLL_PARITY_DATABASE_URL` to its DSN and run pytest.
 Each parity case takes a shared advisory lock, truncates application rows, and
@@ -192,9 +206,8 @@ loader. The checked execution loader also enforces the global cycle-validation g
 With a disposable local PostgreSQL URL in `RUST_ROLL_TEST_DATABASE_URL`:
 
 ```sh
-cargo build --locked --examples
+cargo build --locked -p comicpile-roll-service --examples
 export RUST_ROLL_PARITY_DATABASE_URL=postgresql://roll_test_dml:roll-test-dml@localhost/native_auth_test
-cd ../..
 PYTHONPATH=. uv run pytest native/roll-service/parity/ -q -s --no-cov
 ```
 
@@ -231,8 +244,7 @@ The offline `constraint_validation` example reads sanitized JSON lines from stdi
 it needs no database, credentials or Python subprocess at runtime.
 
 ```sh
-cargo build --locked --examples
-cd ../..
+cargo build --locked -p comicpile-roll-service --examples
 PYTHONPATH=. uv run pytest native/roll-service/parity/test_constraint_validation.py -q --no-cov
 ```
 
@@ -269,7 +281,7 @@ inference fails without committing an aborted transaction. Deadlock retries are
 bounded to three attempts inside one overall deadline. Failed/cancelled work
 discards the connection, rolling back session and checkpoint together.
 
-`parity/test_session_bootstrap.py` runs Python and Rust on the same seeded initial
+`parity/test_session_bootstrap.py` runs Python and Rust on the same seeded initial <!-- docs-path-check: ignore -->
 state in the canonical schema, rolls back Python, then compares every
 persisted session field and snapshot payload. It tests fresh/reused/expired
 sessions, pending context, recent cancellation activity, cutoff equality,
@@ -284,7 +296,7 @@ unchanged. Timestamp spelling is normalized; values, nulls, ordering, and state
 are not discarded. No production data is used.
 
 ```sh
-cargo build --locked --examples
+cargo build --locked -p comicpile-roll-service --examples
 PYTHONPATH=. uv run pytest native/roll-service/parity/test_session_bootstrap.py -q --no-cov
 ```
 
@@ -302,11 +314,5 @@ the real write path (the insert/update and the resulting rows), not only auth,
 request-shape, or read helpers. The #4423 production 500 shipped because the
 offer suite never ran its INSERT.
 
-`tests/test_native_roll_write_test_guard.py` enforces this for every
-`post(module::handler)` mounted in `src/lib.rs`. The test module must reference
-`handler(` or its extracted `persist_<handler>(` writer, so a read-only DB test
-cannot satisfy the rule. Handlers that predate the rule or delegate to an
-already-tested writer live in the frozen
-`tests/native_roll_write_test_baseline.json` (`allowed_modules` is asserted
-exactly); add the missing test and remove the entry rather than expanding the
-baseline.
+`scripts/check_native_route_db_tests.mjs` (run in CI) fails when a native module
+that serves an HTTP route has no PostgreSQL-backed HTTP test in `tests/*.rs`.

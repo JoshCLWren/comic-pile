@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanEditRoute from '../pages/ReadingPlanEditRoute'
-import { useReadingPlanReader } from '../hooks/useReadingPlans'
+import { useReadingPlanReader, useReadingPlanRecoveryPreview } from '../hooks/useReadingPlans'
 import { continuityPlansApi, type ReadingPlanReaderView } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
 
@@ -29,6 +29,7 @@ vi.mock('../hooks/useReadingPlans', async (importOriginal) => {
   return {
     ...actual,
     useReadingPlanReader: vi.fn(actual.useReadingPlanReader),
+    useReadingPlanRecoveryPreview: vi.fn(actual.useReadingPlanRecoveryPreview),
   }
 })
 
@@ -39,7 +40,7 @@ function ListEditor() {
   return <div>Reading List editor {id}</div>
 }
 
-function renderEditRoute(planId = '29') {
+function renderEditRoute(planId = '29', search = '') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -47,7 +48,7 @@ function renderEditRoute(planId = '29') {
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
   return render(
-    <MemoryRouter initialEntries={['/continuity-plans/' + planId + '/edit']}>
+    <MemoryRouter initialEntries={['/continuity-plans/' + planId + '/edit' + search]}>
       <Routes>
         <Route
           path="/continuity-plans/:id/edit"
@@ -71,6 +72,7 @@ function response(
 beforeEach(() => {
   getReader.mockReset()
   vi.mocked(useReadingPlanReader).mockRestore()
+  vi.mocked(useReadingPlanRecoveryPreview).mockRestore()
 })
 
 describe('ReadingPlanEditRoute', () => {
@@ -117,6 +119,70 @@ describe('ReadingPlanEditRoute', () => {
     } as ReturnType<typeof useReadingPlanReader>)
     renderEditRoute()
     expect(screen.getByText(/Could not determine this Plan/)).toBeInTheDocument()
+    expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
+  })
+
+  it('opens the saved Plan editor from the recovery authoring link when the plan is orphaned', () => {
+    // An orphaned plan still returns 409 from the reader. The recovery screen
+    // hands the owner an explicit opt-in link so the saved plan can be authored.
+    // SAFETY: Only isError, isPending, and data are read by the route here; the
+    // remaining React Query result properties are irrelevant to this branch.
+    vi.mocked(useReadingPlanReader).mockReturnValue({
+      isError: true,
+      isPending: false,
+      data: undefined,
+    } as ReturnType<typeof useReadingPlanReader>)
+    // SAFETY: Only isPending and data.status are read by the route in this
+    // branch; the remaining React Query result properties are irrelevant.
+    vi.mocked(useReadingPlanRecoveryPreview).mockReturnValue({
+      isPending: false,
+      data: { status: 'orphaned' },
+    } as ReturnType<typeof useReadingPlanRecoveryPreview>)
+    renderEditRoute('29', '?authoring=1')
+    expect(screen.getByText('Legacy Plan editor')).toBeInTheDocument()
+    expect(screen.queryByText(/Could not determine this Plan/)).not.toBeInTheDocument()
+  })
+
+  it('does not unlock the editor for a relinked plan from a stale authoring link', () => {
+    // SAFETY: The route reads only isError, isPending, and data here.
+    vi.mocked(useReadingPlanReader).mockReturnValue({
+      isError: true,
+      isPending: false,
+      data: undefined,
+    } as ReturnType<typeof useReadingPlanReader>)
+    // SAFETY: The route reads only isPending and data.status here.
+    vi.mocked(useReadingPlanRecoveryPreview).mockReturnValue({
+      isPending: false,
+      data: { status: 'linked' },
+    } as ReturnType<typeof useReadingPlanRecoveryPreview>)
+    renderEditRoute('29', '?authoring=1')
+    expect(screen.getByText(/Could not determine this Plan/)).toBeInTheDocument()
+    expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
+  })
+
+  it('does not unlock the editor for an ambiguous authority from a stale authoring link', () => {
+    // SAFETY: The route reads only isError, isPending, and data here.
+    vi.mocked(useReadingPlanReader).mockReturnValue({
+      isError: true,
+      isPending: false,
+      data: undefined,
+    } as ReturnType<typeof useReadingPlanReader>)
+    // SAFETY: The route reads only isPending and data.status here.
+    vi.mocked(useReadingPlanRecoveryPreview).mockReturnValue({
+      isPending: false,
+      data: { status: 'ambiguous' },
+    } as ReturnType<typeof useReadingPlanRecoveryPreview>)
+    renderEditRoute('29', '?authoring=1')
+    expect(screen.getByText(/Could not determine this Plan/)).toBeInTheDocument()
+    expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
+  })
+
+  it('still redirects a linked Option E plan from the authoring link', async () => {
+    getReader.mockResolvedValue(response('option_e', [
+      { raw_source_path: 'custom-cbl:1000018', display_name: 'Planetary / Authority' },
+    ]))
+    renderEditRoute('29', '?authoring=1')
+    expect(await screen.findByText('Reading List editor 1000018')).toBeInTheDocument()
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 

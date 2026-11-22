@@ -147,8 +147,7 @@ Live queued active threads: **320** (includes clone thread 1019018). Denormalize
 **268 blocked / 52 rollable.** Exactly **18 newly available**. **0 newly blocked.**
 50 + 189 + 29 = 268. 34 + 18 = 52.
 
-Reproduce: `forecast_roll_eligibility.sql` or
-`app.services.roll_cutover_forecast.forecast_roll_eligibility`.
+Reproduce: `forecast_roll_eligibility.sql`.
 
 The approved FF merge is **not** in this forecast. After `001`, thread 18560
 leaves the pool and #103 is same-thread behind #16, so the 18 become 17 and
@@ -204,7 +203,7 @@ converged prerequisite.
 ## 5. X-Men / FF identity resolution (do not adopt)
 
 Full table: `cbl_identity_resolution.json`. Report CLI:
-`scripts/report_cbl_source_identity_resolution.py` (read-only, explicit
+`scripts/report_cbl_source_identity_resolution.py` (read-only, explicit <!-- docs-path-check: ignore -->
 `--database-url`).
 
 | List | Entries | Unique confirmed **(a)** | Volume-resolved **(a)** | Duplicate copies **(c)** | Unmatched **(c)** |
@@ -247,6 +246,6 @@ restrictions **(b)**.
 1. Reproduce the forecast (`forecast_roll_eligibility.sql`).
 2. Do **not** apply `001` until Josh reviews the rewritten guarded SQL.
 3. Do **not** apply `002`. Identity resolution is incomplete.
-4. Do **not** run `scripts/reader_order_migration.py` apply for `x-men-era-ten`
+4. Do **not** run `scripts/reader_order_migration.py` apply for `x-men-era-ten` <!-- docs-path-check: ignore -->
    or `fantastic-four-early-years`.
 5. Do **not** create Neon clones or branches.

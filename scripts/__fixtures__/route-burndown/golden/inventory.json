@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "description": "Hermetic route-burndown fixture caf\u00e9 \ud83d\ude00",
+  "updated_by_issue": 4739,
+  "burndown": {
+    "generated_by": "scripts/generate_route_burndown.mjs",
+    "issue": 4739,
+    "ingress_source": "vercel.json",
+    "total_live_operations": 2,
+    "native_rust": 1,
+    "python_fastapi": 1,
+    "native_rust_status": 1,
+    "shadowed_by_rust": 0,
+    "live_transitional_python_with_callers": 1,
+    "unreferenced_or_orphaned": 0
+  },
+  "operations": [
+    {
+      "owning_issue": 42,
+      "status": "complete",
+      "runtime": "native-rust",
+      "method": "GET",
+      "path": "/api/v2/alpha",
+      "consumers": [
+        "alpha.ts"
+      ],
+      "sql_budget": {
+        "max_statements": 3
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 7,
+      "status": "transitional",
+      "method": "GET",
+      "path": "/api/v2/unicode",
+      "runtime": "python-fastapi",
+      "consumers": [
+        "caf\u00e9.ts \ud83d\ude00"
+      ],
+      "ingress_destination": "/api/index.py",
+      "burndown_status": "live transitional Python with callers",
+      "verified_against": "vercel.json"
+    }
+  ],
+  "full_surface": {
+    "generated_by": "scripts/generate_route_burndown.mjs",
+    "issue": 4739,
+    "ingress_source": "vercel.json",
+    "summary": {
+      "generated_by": "scripts/generate_route_burndown.mjs",
+      "issue": 4739,
+      "ingress_source": "vercel.json",
+      "catch_all_src": "/api(?:/.*)?",
+      "catch_all_dest": "/api/native_roll.rs",
+      "v1_total": 1,
+      "v1_shadowed_by_rust": 1,
+      "v1_live_python": 0,
+      "v1_orphaned": 0,
+      "unversioned_total": 0,
+      "unversioned_shadowed_by_rust": 0,
+      "unversioned_live_python": 0,
+      "unversioned_orphaned": 0,
+      "total_python_surface": 1,
+      "total_shadowed_by_rust": 1,
+      "total_live_python": 0,
+      "total_orphaned": 0
+    },
+    "catch_all": {
+      "src": "/api(?:/.*)?",
+      "dest": "/api/native_roll.rs"
+    },
+    "v1_operations": [
+      {
+        "method": "GET",
+        "path": "/api/v1/legacy",
+        "runtime": "python-fastapi",
+        "status": "shadowed",
+        "owning_issue": 1,
+        "consumers": [],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      }
+    ],
+    "unversioned_operations": []
+  },
+  "retired_legacy_operations": []
+}

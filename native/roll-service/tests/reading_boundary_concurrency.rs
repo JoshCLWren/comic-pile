@@ -36,27 +36,21 @@ use tower::ServiceExt;
 const PASSWORD: &str = "correct-horse-battery";
 
 fn state(url: &str) -> Arc<AppState> {
-    Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.into()),
-                "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
-                "RUST_ROLL_POOL_SIZE" => Some("4".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.into()),
+            "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
+            "RUST_ROLL_POOL_SIZE" => Some("4".into()),
+            "OPTION_E_ENABLED" => Some("true".into()),
+            "OPTION_E_APPROVED_PREVIEW" => Some("injected-by-test".into()),
+            _ => None,
+        })
         .unwrap(),
-    )
+    ))
 }
 
 async fn database() -> Option<(Arc<AppState>, tokio::sync::MutexGuard<'static, ()>)> {
     let url = test_support::database_url().await;
-    std::env::set_var("OPTION_E_ENABLED", "true");
-    std::env::set_var(
-        "OPTION_E_APPROVED_PREVIEW",
-        "reading-boundary-concurrency-4347-g5",
-    );
     let state = state(&url);
     let guard = test_support::reset_for_test(&state).await;
     Some((state, guard))

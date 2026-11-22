@@ -19,7 +19,7 @@ const SEARCH_DEBOUNCE_MS = 300
 const MAX_COMPARISON_SELECTION = 4
 
 /**
- * Server-side browse orderings exposed by `GET /api/v1/creators`. Labels stay
+ * Server-side browse orderings exposed by `GET /api/v2/creators`. Labels stay
  * human-readable; the option value is the wire contract from #2775.
  */
 const SORT_OPTIONS: ReadonlyArray<{ value: CreatorListSort; label: string }> = [

@@ -1,4 +1,4 @@
-//! Native same-path session-history reads.
+//! Native resource-shaped session-history read: snapshots of an owned session.
 //!
 //! The snapshot list is deliberately isolated from the rest of the session
 //! projection so this first browser-called slice can be deployed and reviewed
@@ -70,10 +70,10 @@ pub async fn list_session_snapshots(
     ))
 }
 
-/// OpenAPI declaration for both legacy and versioned same-path aliases.
+/// OpenAPI declaration for the v2 session snapshots read.
 #[utoipa::path(
     get,
-    path = "/api/v1/sessions/{session_id}/snapshots",
+    path = "/api/v2/reading-sessions/{session_id}/snapshots",
     tag = "sessions",
     params(("session_id" = i32, Path, description = "Owned reading session")),
     responses(

@@ -14,6 +14,51 @@
       "id": "linked-issue-acceptance-evidence",
       "severity": "high",
       "rule": "For each implementation PR with a linked GitHub issue, compare the actual code and executable validation evidence against every stated acceptance criterion, including scope fences and regression requirements. Identify missing behavior, unrun/invalid tests, tests that cannot exercise the stated scenario, and evidence tied to a stale PR head as blocking findings, citing concrete changed paths and criteria. A checkbox, PR description, reviewer assertion, or 'tests added' claim alone is not proof. If the linked issue or test evidence is inaccessible, say acceptance is not independently verified rather than implying completion. Do not approve a partial handoff as complete delivery."
+    },
+    {
+      "id": "rust-write-lock-order",
+      "severity": "high",
+      "rule": "Rust write paths take the per-reader queue advisory lock BEFORE any thread/issue row lock (SELECT ... FOR UPDATE); every new/changed writer needs a concurrent DB test against sibling writers (#5398/#5419 deadlocks)."
+    },
+    {
+      "id": "bounded-input-before-allocation",
+      "severity": "high",
+      "rule": "Request-supplied counts/ranges must be bounded and use checked arithmetic before allocating, looping or inserting; prefer set-based SQL (generate_series/unnest) (#5398 12GB alloc, #5420 overflow bypass)."
+    },
+    {
+      "id": "python-parity-wire-contract",
+      "severity": "high",
+      "rule": "Rust replacements of frozen Python routes must match production wire behavior -- validation 422 body {\"detail\":\"Validation failed\"}, always-emitted [] / null instead of omitted fields, Python round()/int parsing semantics; require golden tests measured from Python (#5428, #5451, #5439, #5411)."
+    },
+    {
+      "id": "postgres-integer-width",
+      "severity": "high",
+      "rule": "int4 columns read as i32 or cast ::bigint in SQL; never row.get::<i64> on int4 (#5351 panic)."
+    },
+    {
+      "id": "tests-no-network",
+      "severity": "medium",
+      "rule": "Tests must not call real external services (GitHub, ComicVine); use injectable fakes (#5339)."
+    },
+    {
+      "id": "no-test-weakening",
+      "severity": "high",
+      "rule": "Flag removed/loosened assertions, added timeouts/retries/sleeps, or new skip guards; flaky tests are deleted and redesigned deterministically (owner rule)."
+    },
+    {
+      "id": "bot-owned-route-outputs",
+      "severity": "high",
+      "rule": "PRs must not change vercel.json, docs/api/v2-route-inventory.json, docs/api/route-fragments/vercel-rewrites.json or the AGENTS.md route-burndown marker block."
+    },
+    {
+      "id": "no-sql-in-loops",
+      "severity": "high",
+      "rule": "No SQL inside loops over rows, issues, threads, or users; prevent N+1 fetches and per-item round trips. Prefer set-based joins/CTEs, = ANY($1) / unnest batched statements, bounded batch requests, indexed filters, and predictable pagination. See AGENTS.md Database query efficiency rule."
+    },
+    {
+      "id": "manual-qa-contract-current",
+      "severity": "medium",
+      "rule": "A PR that changes user-facing behavior (UI, routes, copy, eligibility/die/queue rules, reader-visible API behavior, removed or retired features) must update the affected MQA-* scenarios in docs/manual-qa/ or cite the affected IDs and state 'contract unchanged' in the PR description. Flag user-facing behavior changes that touch neither. Retirements keep the ID with Status: Retired, reason and date; IDs are never deleted or reused. Expected results may change only with a cited owner decision, never merely to match current code. See docs/manual-qa/README.md Maintenance rule."
     }
   ]
 }

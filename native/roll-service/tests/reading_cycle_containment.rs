@@ -26,24 +26,21 @@ use tower::ServiceExt;
 const PASSWORD: &str = "correct-horse-battery";
 
 fn state(url: &str) -> Arc<AppState> {
-    Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.into()),
-                "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
-                "RUST_ROLL_POOL_SIZE" => Some("4".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.into()),
+            "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
+            "RUST_ROLL_POOL_SIZE" => Some("4".into()),
+            "OPTION_E_ENABLED" => Some("true".into()),
+            "OPTION_E_APPROVED_PREVIEW" => Some("injected-by-test".into()),
+            _ => None,
+        })
         .unwrap(),
-    )
+    ))
 }
 
 async fn database() -> Option<(Arc<AppState>, tokio::sync::MutexGuard<'static, ()>)> {
     let url = test_support::database_url().await;
-    std::env::set_var("OPTION_E_ENABLED", "true");
-    std::env::set_var("OPTION_E_APPROVED_PREVIEW", "regression-4684");
     let state = state(&url);
     let guard = test_support::reset_for_test(&state).await;
     Some((state, guard))
@@ -1196,6 +1193,102 @@ async fn reading_list_resources_contain_cycles_and_reject_cyclic_creation() {
         .unwrap()
         .get(0);
     assert_eq!(count, 1);
+}
+
+#[tokio::test]
+async fn converted_legacy_cycle_does_not_block_creation_but_reader_cycle_does() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "converted-cycle-owner").await;
+    let auth = (token.as_str(), csrf.as_str());
+    let (_series, ids) = seed_thread(&state, owner, "X-Force", 1, &["1", "2", "3"]).await;
+    let conn = state.pool.get().await.unwrap();
+
+    // A historical converted back-edge closes the natural series order. It is
+    // audit data: the row stays, but it has no Option E execution authority.
+    let converted_id: i32 = conn
+        .query_one(
+            "INSERT INTO dependencies
+               (source_issue_id, target_issue_id, origin, classification, provenance, note, created_at)
+             VALUES ($1,$2,'converted','B','historical classification unknown',
+                     'cbl-order:legacy',NOW())
+             RETURNING id",
+            &[&ids["2"], &ids["1"]],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let (status, created) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/reading-lists",
+        Some(json!({
+            "name": "Allowed despite converted legacy cycle",
+            "issue_ids": []
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    assert_eq!(created["name"], "Allowed despite converted legacy cycle");
+
+    let historical = conn
+        .query_one(
+            "SELECT origin, provenance FROM dependencies WHERE id=$1",
+            &[&converted_id],
+        )
+        .await
+        .unwrap();
+    let origin: String = historical.get(0);
+    let provenance: String = historical.get(1);
+    assert_eq!(origin, "converted");
+    assert_eq!(provenance, "historical classification unknown");
+
+    // The same shape becomes authoritative only when explicitly reader-authored.
+    conn.execute(
+        "INSERT INTO dependencies
+           (source_issue_id, target_issue_id, origin, classification, provenance, created_at)
+         VALUES ($1,$2,'reader','A','Reader-authored through Dependency Builder',NOW())",
+        &[&ids["3"], &ids["1"]],
+    )
+    .await
+    .unwrap();
+
+    let (status, rejected) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/reading-lists",
+        Some(json!({
+            "name": "Rejected reader cycle",
+            "issue_ids": []
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{rejected}");
+    let detail = rejected["detail"].as_str().unwrap();
+    assert!(detail.contains("Reading constraint cycle"), "{detail}");
+    assert!(detail.contains("X-Force #1"), "{detail}");
+    assert!(detail.contains("prerequisite"), "{detail}");
+    assert!(detail.contains("Nothing was changed"), "{detail}");
+
+    let list_count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM custom_cbl_lists WHERE user_id=$1",
+            &[&owner],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(list_count, 1);
+    let dependency_count: i64 = conn
+        .query_one("SELECT count(*) FROM dependencies", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(dependency_count, 2);
 }
 
 #[tokio::test]

@@ -170,7 +170,7 @@ test.describe('Issue #3626: creator issue deep links', () => {
       }
     })
 
-    await page.route('**/v1/creators/*', (route) =>
+    await page.route('**/v2/creators/*', (route) =>
       route.fulfill({
         json: creatorPayload({
           issueId: target.id,
@@ -224,7 +224,7 @@ test.describe('Issue #3626: creator issue deep links', () => {
     const target = await issueByNumber(page, hellboy.id, '96')
     const insightIssue = await issueByNumber(page, hellboy.id, '115')
 
-    await page.route('**/v1/creators/*', (route) =>
+    await page.route('**/v2/creators/*', (route) =>
       route.fulfill({
         json: creatorPayload(
           {

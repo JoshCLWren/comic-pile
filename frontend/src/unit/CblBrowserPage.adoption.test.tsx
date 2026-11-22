@@ -8,6 +8,7 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from 'vitest'
 import type {
   CBLAdoptionPreview,
@@ -27,6 +28,7 @@ import {
   mockBrowse,
   mockPreview,
   mockPlan,
+  mockCommit,
   mockCommitNew,
   mockGraphPreview,
   mockListPlans,
@@ -44,6 +46,8 @@ import {
   openChecklist,
   expandVolume,
 } from './CblBrowserPage.fixture'
+import { issueCardsApi } from '../services/issueCardsApi'
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 describe('CblBrowserPage adoption', () => {
   it('selecting a source shows the preview with the consequence summary', async () => {
@@ -191,6 +195,121 @@ describe('CblBrowserPage adoption', () => {
     await waitFor(() => {
       expect(mockApplyCommitted).toHaveBeenCalled()
       expect(screen.getByTestId('location')).toHaveTextContent('/continuity-plans/42')
+    })
+  })
+
+  it('requires an explicit target for a same-named Reading Plan', async () => {
+    const user = userEvent.setup()
+    mockListPlans.mockResolvedValue([
+      {
+        id: 88,
+        name: 'Ultimate Universe',
+        ordering_mode: 'informational',
+        lane_count: 1,
+        step_count: 12,
+        source_paths: [],
+        updated_at: '2026-11-20T00:00:00Z',
+      },
+    ])
+    mockCommit.mockResolvedValue({ id: 88, name: 'Ultimate Universe' })
+    mockApplyCommitted.mockResolvedValue(undefined)
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    const target = await screen.findByRole('radio', {
+      name: 'Update Ultimate Universe (Reading Plan #88)',
+    })
+    expect(target).not.toBeChecked()
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+    expect(
+      screen.getByText('Choose the exact Reading Plan to update before adding this source.'),
+    ).toBeInTheDocument()
+    expect(mockCommitNew).not.toHaveBeenCalled()
+
+    await user.click(target)
+    const update = screen.getByRole('button', { name: 'Update selected Reading Plan' })
+    expect(update).toBeEnabled()
+    await user.click(update)
+    expect(screen.getByRole('heading', { name: 'Update this Reading Plan?' })).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Update Ultimate Universe (Reading Plan #88) with Ultimate Universe? Only the checked entries are applied; Cancel leaves it unchanged.',
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(mockCommit).not.toHaveBeenCalled()
+    expect(mockCommitNew).not.toHaveBeenCalled()
+    expect(screen.queryByRole('heading', { name: 'Update this Reading Plan?' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Update selected Reading Plan' }))
+    await user.click(screen.getByRole('button', { name: 'Update Reading Plan' }))
+    await waitFor(() => {
+      expect(mockCommit).toHaveBeenCalledWith(
+        7,
+        88,
+        expect.objectContaining({ total_positions: 2 }),
+        { series_decisions: {}, entry_decisions: {}, overlap_decisions: [] },
+      )
+    })
+    expect(mockCommitNew).not.toHaveBeenCalled()
+  })
+
+  it('requires confirmation before updating a plan already linked to the source', async () => {
+    const user = userEvent.setup()
+    mockListPlans.mockResolvedValue([
+      {
+        id: 89,
+        name: 'Curated Ultimate Reading',
+        ordering_mode: 'informational',
+        lane_count: 1,
+        step_count: 2,
+        source_paths: ['Ultimate.cbl'],
+        updated_at: '2026-11-20T00:00:00Z',
+      },
+    ])
+    mockCommit.mockResolvedValue({ id: 89, name: 'Curated Ultimate Reading' })
+    mockApplyCommitted.mockResolvedValue(undefined)
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    const target = await screen.findByRole('radio', {
+      name: 'Update Curated Ultimate Reading (Reading Plan #89)',
+    })
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+    await user.click(target)
+    await user.click(screen.getByRole('button', { name: 'Update selected Reading Plan' }))
+    expect(
+      screen.getByText(
+        'Update Curated Ultimate Reading (Reading Plan #89) with Ultimate Universe? Only the checked entries are applied; Cancel leaves it unchanged.',
+      ),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Update Reading Plan' }))
+
+    await waitFor(() => {
+      expect(mockCommit).toHaveBeenCalledWith(7, 89, expect.anything(), expect.anything())
+    })
+    expect(mockCommitNew).not.toHaveBeenCalled()
+  })
+
+  it('keeps Add blocked until the existing Reading Plan check succeeds', async () => {
+    const user = userEvent.setup()
+    mockListPlans.mockRejectedValueOnce(new Error('plans unavailable')).mockResolvedValue([])
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    expect(await screen.findByRole('button', { name: 'Retry Reading Plan check' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+    expect(
+      screen.getByText('Check existing Reading Plans before adding this source.'),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Retry Reading Plan check' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeEnabled()
     })
   })
 
@@ -546,7 +665,7 @@ describe('CblBrowserPage adoption', () => {
       code: 'ECONNABORTED',
     })
     mockCommitNew.mockRejectedValue(timeout)
-    mockListPlans.mockResolvedValue([
+    mockListPlans.mockResolvedValueOnce([]).mockResolvedValue([
       {
         id: 88,
         name: 'Ultimate Universe',
@@ -704,6 +823,128 @@ describe('CblBrowserPage adoption', () => {
       expect(
         screen.getByRole('button', { name: 'Add this reading order' }),
       ).not.toBeDisabled()
+    })
+    expect(screen.getByText('Need attention').nextElementSibling).toHaveTextContent('0')
+    expect(screen.queryByText(/still needs attention/)).not.toBeInTheDocument()
+  })
+
+  it('skips a collection entry whose identity needs review instead of offering a false Include choice', async () => {
+    const user = userEvent.setup()
+    const unresolvedEntry = entry({
+      cbl_position: 2,
+      cbl_entry_id: 102,
+      issue_number: '120',
+      series_name: 'X-Men (1963)',
+      series_group_id: 'group-x-men',
+      adoption_class: 'existing',
+      adoption_decision: 'unresolved',
+      adopted: false,
+      resolved_issue_id: 12,
+      canonical_issue_id: 12,
+      resolution_status: 'resolved_via_comicvine_canonical',
+      is_duplicate_identity: true,
+      collection_excluded: true,
+      collection_exclusion_reason: 'collection_identity_requires_review',
+    })
+    const initialPreview = preview({
+      entries: [entry({}), unresolvedEntry],
+      summary: {
+        reused_existing_count: 1,
+        missing_would_create_count: 0,
+        excluded_count: 0,
+        unresolved_count: 1,
+        awaiting_opt_in_count: 0,
+        final_adopted_count: 1,
+        final_adopted_order: [1],
+        reused_existing_positions: [1],
+        missing_would_create_positions: [],
+        excluded_positions: [],
+        unresolved_positions: [2],
+        awaiting_opt_in_positions: [],
+      },
+    })
+    renderPage()
+    await searchFor(user)
+    await selectSource(user, initialPreview)
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+
+    await openChecklist(user)
+    await expandVolume(user, 'X-Men (1963)')
+    expect(screen.queryByRole('checkbox', { name: 'Include X-Men (1963) #120' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Skip' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Need attention').nextElementSibling).toHaveTextContent('0')
+      expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeEnabled()
+    })
+    expect(screen.getByRole('button', { name: 'Unskip' })).toBeInTheDocument()
+    expect(mockPlan).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Unskip' }))
+    await waitFor(() => {
+      expect(screen.getByText('Need attention').nextElementSibling).toHaveTextContent('1')
+      expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+    })
+  })
+
+  it('keeps unrelated exclusions out of the attention count', async () => {
+    const user = userEvent.setup()
+    const unresolvedEntry = entry({
+      cbl_position: 2,
+      cbl_entry_id: 102,
+      issue_number: '2',
+      adoption_class: 'ambiguous_unresolved',
+      adoption_decision: 'unresolved',
+      adopted: false,
+      resolved_issue_id: null,
+      canonical_issue_id: null,
+      resolution_status: 'ambiguous_no_comicvine_id',
+    })
+    const excludedEntry = entry({
+      cbl_position: 3,
+      cbl_entry_id: 103,
+      issue_number: '3',
+      series_name: 'Ultimate X-Men',
+      series_group_id: 'group-excluded',
+      adoption_class: 'existing',
+      adoption_decision: 'excluded',
+      adopted: false,
+      collection_excluded: true,
+      collection_exclusion_reason: 'collection_volume_excluded',
+    })
+    const initialPreview = preview({
+      entries: [entry({}), unresolvedEntry, excludedEntry],
+      summary: {
+        reused_existing_count: 1,
+        missing_would_create_count: 0,
+        excluded_count: 1,
+        unresolved_count: 1,
+        awaiting_opt_in_count: 0,
+        final_adopted_count: 1,
+        final_adopted_order: [1],
+        reused_existing_positions: [1],
+        missing_would_create_positions: [],
+        excluded_positions: [3],
+        unresolved_positions: [2],
+        awaiting_opt_in_positions: [],
+      },
+    })
+    renderPage()
+    await searchFor(user)
+    await selectSource(user, initialPreview)
+
+    // A collection exclusion is not an attention entry: only the unresolved
+    // entry should count, so the reader sees 1 rather than 0.
+    expect(screen.getByText('Need attention').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
+
+    await openChecklist(user)
+    await expandVolume(user, 'Ultimate Spider-Man')
+    await user.click(screen.getByRole('button', { name: 'Skip' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Need attention').nextElementSibling).toHaveTextContent('0')
+      expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeEnabled()
     })
   })
 
@@ -1009,6 +1250,96 @@ describe('CblBrowserPage adoption', () => {
     expect(
       screen.getByText('Resolve the reading-order loop before adding this source.'),
     ).toBeInTheDocument()
+  })
+
+  it('shows the graph, the loop, and a resolve path when a cycle has no overlap questions (#5379)', async () => {
+    const user = userEvent.setup()
+    const cyclePreview = readingGraphPreview({
+      overlaps: [],
+      cycle_errors: [
+        {
+          code: 'reading_constraint_cycle',
+          message:
+            'Reading constraint cycle: Supreme #1 --source order--> Alpha Flight #1 --source order--> Supreme #1.',
+        },
+      ],
+    })
+    // The loop exists only while both series are included; excluding one
+    // breaks it, so the server answers without a cycle for the rest.
+    mockGraphPreview.mockImplementation(
+      async (_listId: number, request: { included_positions: number[] }) =>
+        request.included_positions.includes(1) ? cyclePreview : withoutOverlap(),
+    )
+    renderPage()
+    await searchFor(user)
+    await selectSource(
+      user,
+      preview({
+        entries: [
+          entry({
+            cbl_entry_id: 101,
+            cbl_position: 1,
+            series_name: 'Supreme',
+            issue_number: '1',
+            series_group_id: 'group-supreme',
+            resolved_issue_id: 11,
+          }),
+          entry({
+            cbl_entry_id: 102,
+            cbl_position: 2,
+            series_name: 'Alpha Flight',
+            issue_number: '1',
+            series_group_id: 'group-alpha-flight',
+            resolved_issue_id: 12,
+          }),
+        ],
+        summary: {
+          reused_existing_count: 2,
+          missing_would_create_count: 0,
+          final_adopted_count: 2,
+          final_adopted_order: [1, 2],
+          reused_existing_positions: [1, 2],
+          missing_would_create_positions: [],
+        },
+      }),
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Add this reading order' }),
+      ).toBeDisabled()
+    })
+    // The loop itself must be visible, not just the disabled-button tooltip.
+    expect(screen.getByTestId('reading-graph-summary')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Reading constraint cycle: Supreme #1/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Resolve the reading-order loop before adding this source.'),
+    ).toBeInTheDocument()
+    // A resolve path must be visible: the reader can break the loop from the checklist.
+    expect(
+      screen.getByText(/exclude one of the series in this loop under Customize/i),
+    ).toBeInTheDocument()
+
+    // Recovery: excluding a loop series re-checks the graph and enables Add.
+    await openChecklist(user)
+    await expandVolume(user, 'Supreme')
+    await user.click(screen.getByRole('checkbox', { name: 'Include Supreme #1' }))
+    await waitFor(() => {
+      expect(mockGraphPreview).toHaveBeenLastCalledWith(
+        7,
+        expect.objectContaining({ included_positions: [2] }),
+      )
+    })
+    await waitFor(() => {
+      expect(screen.queryByText(/Reading constraint cycle/)).not.toBeInTheDocument()
+    })
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Add this reading order' }),
+      ).toBeEnabled()
+    })
   })
 
   it('keeps each source\'s own checklist choices when switching sources (#4014)', async () => {

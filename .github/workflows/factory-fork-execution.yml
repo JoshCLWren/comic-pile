@@ -19,6 +19,11 @@ on:
 
 # This job deliberately receives no repository/provider secrets or inherited
 # secret bundle. Contributor code, dependencies, tests, and hooks run only here.
+env:
+  # Operator settings (rotisserie factory settings) reach every factory script.
+  FACTORY_REPO_VARS: >-
+    {"FACTORY_SLOTS_PER_PROVIDER": "${{ vars.FACTORY_SLOTS_PER_PROVIDER }}", "FACTORY_PR_WIP_LIMIT": "${{ vars.FACTORY_PR_WIP_LIMIT }}", "FACTORY_REVIEW_BACKLOG_LIMIT": "${{ vars.FACTORY_REVIEW_BACKLOG_LIMIT }}", "FACTORY_OMNIROUTE_FREE_ENTRY_CAP": "${{ vars.FACTORY_OMNIROUTE_FREE_ENTRY_CAP }}", "FACTORY_NO_DIFF_RETRY_LIMIT": "${{ vars.FACTORY_NO_DIFF_RETRY_LIMIT }}", "FACTORY_NO_DIFF_RETRY_RESET_SECONDS": "${{ vars.FACTORY_NO_DIFF_RETRY_RESET_SECONDS }}", "FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS": "${{ vars.FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS }}", "FACTORY_FIXED_LEASE_TTL_SECONDS": "${{ vars.FACTORY_FIXED_LEASE_TTL_SECONDS }}", "FACTORY_LOCAL_LEASE_TTL_SECONDS": "${{ vars.FACTORY_LOCAL_LEASE_TTL_SECONDS }}", "FACTORY_PRIORITY_ORDER": "${{ vars.FACTORY_PRIORITY_ORDER }}"}
+
 permissions:
   contents: read
   issues: read
@@ -66,6 +71,15 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: main
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
@@ -84,10 +98,11 @@ jobs:
           set -Eeuo pipefail
           trusted="$RUNNER_TEMP/fork-trusted"
           mkdir -p "$trusted"
-          cp .github/scripts/factory_fork_control.py .github/scripts/factory_roster.py \
-            .github/scripts/kilo-auto-factory-run.sh .github/scripts/factory-fast-checks.sh \
+          cp .github/scripts/factory_fork_control.py .github/scripts/factory_adopter.py .github/scripts/factory_worker_slots.py \
+            .github/scripts/factory_provider_registry.py .github/scripts/kilo-auto-factory-run.sh \
+            .github/scripts/factory-fast-checks.sh \
             .github/scripts/factory-fork-execute.sh "$trusted/"
-          cp .github/free-model-factories.tsv scripts/install-git-hooks.sh "$trusted/"
+          cp scripts/install-git-hooks.sh "$trusted/"
           echo "TRUSTED_FORK_DIRECTORY=$trusted" >> "$GITHUB_ENV"
       - name: Install pinned anonymous Kilo runtime
         shell: bash
@@ -100,7 +115,7 @@ jobs:
           tar -xzf "$archive" -C "$RUNNER_TEMP/kilo-bin"
           binary="$(find "$RUNNER_TEMP/kilo-bin" -type f -name kilo -perm -111 | head -n 1)"
           test -n "$binary"
-          echo "$(dirname "$binary")" >> "$GITHUB_PATH"
+          dirname "$binary" >> "$GITHUB_PATH"
           npm install -g pnpm@10.15.0
       - name: Run isolated contributor repair
         shell: bash

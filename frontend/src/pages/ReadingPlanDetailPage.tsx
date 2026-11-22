@@ -4,7 +4,8 @@ import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import type { IssueCard } from '../services/issueCardsApi'
 import { ReadingPlanRecovery } from '../components/ReadingPlanRecovery'
-import { useState } from 'react'
+import ContainerQueueActions from '../components/ContainerQueueActions'
+import { useMemo, useState } from 'react'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Breadcrumbs from '../components/Breadcrumbs'
@@ -199,7 +200,7 @@ export default function ReadingPlanDetailPage() {
   const [visibleOrderCount, setVisibleOrderCount] = useState(40)
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
-  const readerQuery = useReadingPlanReader(planId)
+  const readerQuery = useReadingPlanReader(planId, { refetchOnWindowFocus: 'always' })
   // Hydrate only rendered rows. Expanding a section fetches newly visible ids.
   // Hidden 400+ issue lanes must not trigger large initial batches.
   const planView = readerQuery.data
@@ -221,9 +222,25 @@ export default function ReadingPlanDetailPage() {
             : []),
         ]
       : [],
-    { enabled: readerQuery.isSuccess },
+    { enabled: readerQuery.isSuccess, refetchOnWindowFocus: 'always' },
   )
   const cardsByIssue = indexIssueCards(planCardsQuery.data)
+  const memberThreads = useMemo(() => {
+    const view = readerQuery.data
+    if (!view) return []
+    const byId = new Map<number, { id: number; title: string }>()
+    const issues = [
+      ...view.available_now,
+      ...view.blocked_next,
+      ...view.lanes.flatMap((lane) => lane.issues),
+    ]
+    for (const issue of issues) {
+      if (issue.thread_id > 0 && !byId.has(issue.thread_id)) {
+        byId.set(issue.thread_id, { id: issue.thread_id, title: issue.thread_title })
+      }
+    }
+    return Array.from(byId.values())
+  }, [readerQuery.data])
 
   if (planId == null) {
     return (
@@ -340,6 +357,13 @@ export default function ReadingPlanDetailPage() {
           )}
         </div>
       </header>
+
+      <ContainerQueueActions
+        sourceKind="reading_plan"
+        sourceId={view.plan_id}
+        sourceName={view.name}
+        memberThreads={memberThreads}
+      />
 
       <div
         className="surface-panel rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3 sm:px-6 sm:py-4"

@@ -49,20 +49,15 @@ test.describe('Issue #3467: Pick this series double-click prevention', () => {
     await expect(dialog).not.toBeVisible({ timeout: 15000 })
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
 
-    // The duplicate only ever surfaced in the session timeline, so open the
-    // newest session and assert a single ROLLED card for the picked series.
+    // #4822 makes the owner-scoped activity stream the reader-visible history,
+    // so assert a single rolled action for the picked series there. A second
+    // double-click-created roll would appear as a second list item.
     await page.goto('/history')
-    await page
-      .getByRole('list', { name: 'Session history' })
-      .getByRole('listitem')
-      .first()
-      .getByRole('link', { name: /View full session/ })
-      .click()
-    await expect(page.getByRole('heading', { name: 'Event Timeline' })).toBeVisible()
+    const activity = page.getByRole('list', { name: 'Activity history' })
+    await expect(activity).toBeVisible()
 
-    const rolledCards = page.locator('article').filter({ hasText: 'Rolled' })
-    await expect(rolledCards).toHaveCount(1)
-    await expect(rolledCards.first()).toContainText(title)
+    const rolledCards = activity.getByRole('listitem').filter({ hasText: 'Rolled' })
+    await expect(rolledCards.filter({ hasText: title })).toHaveCount(1)
   })
 
   test('Pick this series is disabled while the request is in flight', async ({

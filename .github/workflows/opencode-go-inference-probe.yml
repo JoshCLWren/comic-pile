@@ -1,0 +1,130 @@
+name: Verify OpenCode Go service-account inference
+run-name: OpenCode Go free-model inference probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/opencode-go-inference-probe.yml'
+
+# Diagnostic only. No repository writes, no factory assignment, no lease mutations.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out trusted repository
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Check out current Rotisserie factory runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: main
+          path: .rotisserie/runtime
+          persist-credentials: false
+
+      - name: Set up Node for the same OpenCode 2 CLI as the factory
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Install factory OpenCode 2 CLI
+        shell: bash
+        run: bash .rotisserie/runtime/factory/.github/scripts/install-opencode-v2.sh
+
+      - name: Exchange Go OIDC, verify zero-price model, and make one inference
+        shell: bash
+        env:
+          OPENCODE_GO_CLIENT_ID: ${{ secrets.OPENCODE_GO_CLIENT_ID }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${OPENCODE_GO_CLIENT_ID:-}" ]]; then
+            echo '::error::ComicPile OPENCODE_GO_CLIENT_ID secret is missing'
+            exit 1
+          fi
+          # Trusted helper uses the service-account client ID to exchange the
+          # signed Actions OIDC JWT for a short-lived, masked API token.
+          source .rotisserie/runtime/factory/.github/scripts/factory_opencode_go_oidc.sh
+          if ! factory_opencode_go_oidc; then
+            echo '::error::Go service-account OIDC token exchange failed'
+            exit 1
+          fi
+          echo 'Go OIDC token exchange succeeded'
+
+          # Only request an actual inference after verifying this exact
+          # Go workspace publishes the preferred chat/tool model at $0.
+          choice="$(python3 .rotisserie/runtime/factory/.github/scripts/factory_opencode_go.py \
+            --worker 1327811785100)" || {
+              echo '::error::Go workspace catalog validation failed'
+              exit 1
+            }
+          selected="$(jq -er '.runtime_model' <<< "$choice")"
+          if [[ "$selected" != 'opencode-go/hy4-flash-free' ]]; then
+            echo "::error::Preferred free Go model unavailable; selector chose $selected. No paid model will be tried."
+            exit 1
+          fi
+          echo "Authenticated free catalog selected $selected"
+
+          # Diagnostic runs with no GitHub write capability and denies code
+          # modification / terminal tools even within the throwaway workspace.
+          config="$HOME/.config/opencode/opencode.json"
+          temp="$(mktemp)"
+          jq --arg model "$selected" '
+            .model = $model |
+            .agents.title.model = $model |
+            .permissions = [
+              {"action":"read","resource":"*","effect":"deny"},
+              {"action":"edit","resource":"*","effect":"deny"},
+              {"action":"shell","resource":"*","effect":"deny"},
+              {"action":"glob","resource":"*","effect":"deny"},
+              {"action":"grep","resource":"*","effect":"deny"},
+              {"action":"skill","resource":"*","effect":"deny"},
+              {"action":"subagent","resource":"*","effect":"deny"}
+            ]
+          ' "$config" > "$temp"
+          mv "$temp" "$config"
+          chmod 600 "$config"
+
+          mkdir -p "$RUNNER_TEMP/go-inference-probe"
+          cd "$RUNNER_TEMP/go-inference-probe"
+          marker='ROTISSERIE_GO_FREE_INFERENCE_OK'
+          # Never echo the raw response, provider errors, token, or API headers.
+          if timeout 150s opencode run --standalone --format json --model "$selected" \
+            "Reply exactly $marker and nothing else. Do not call tools." \
+            > events.jsonl 2> stderr.log; then
+            if jq -es --arg marker "$marker" '
+              any(.[];
+                .type == "text"
+                and (((.part // {}).text // .text // "") | contains($marker))
+              )
+            ' events.jsonl > /dev/null; then
+              echo "PASS: live $selected inference returned the expected text"
+              {
+                echo "## OpenCode Go inference verified"
+                echo "- OIDC service-account token exchange: passed"
+                echo "- Authenticated Go free-model catalog: passed"
+                echo "- Exact provider/model inference: \`$selected\` passed"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo '::error::OpenCode returned no matching text response for the exact Go model'
+          else
+            echo '::error::OpenCode CLI inference request failed or timed out'
+          fi
+          # Do not expose raw stderr: upstream errors sometimes include keys.
+          if grep -Eiq '(401|403|unauthoriz|forbidden|credential|token)' stderr.log; then
+            echo 'Provider reported an authentication or authorization problem'
+          elif grep -Eiq '(429|quota|rate.limit|capacity|limit.hit)' stderr.log; then
+            echo 'Provider reported a model rate or quota limit'
+          fi
+          exit 1

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import type { CrossoverApiDeps } from '../hooks/useCrossovers'
+import { issueCardsApi } from '../services/issueCardsApi'
 
 const groupsApi = {
   list: vi.fn(),
@@ -59,6 +60,8 @@ function renderPage(entry: string) {
     { wrapper: createWrapper() },
   )
 }
+
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 beforeEach(() => {
   vi.clearAllMocks()

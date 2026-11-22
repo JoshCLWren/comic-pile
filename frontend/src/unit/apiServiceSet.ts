@@ -3,7 +3,6 @@ import { createAuthApi } from '../services/api-auth'
 import { createBugReportsApi } from '../services/api-bug-reports'
 import { createMigrationApi } from '../services/api-migration'
 import { createPreferencesApi } from '../services/api-preferences'
-import { createTasksApi } from '../services/api-tasks'
 import { createCreatorsApi } from '../services/api-creators'
 import { createDependenciesApi } from '../services/api-dependencies'
 import { createQueueApi } from '../services/api-queue'
@@ -29,7 +28,6 @@ export function createApiServiceSet(client: HttpClient) {
     queueApi: createQueueApi(client),
     rollApi: createRollApi(client),
     sessionApi: createSessionApi(client),
-    tasksApi: createTasksApi(client),
     threadsApi: createThreadsApi(client),
     undoApi: createUndoApi(client),
   }

@@ -20,7 +20,7 @@ python3 .github/scripts/factory_worker_github_app.py bootstrap-collision 48
 
 ## Terminal provisioning (preferred)
 
-Use the resumable [owner-run provisioning helper](../docs/WORKER_APP_PROVISIONING.md).
+Use the resumable [owner-run provisioning helper](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/WORKER_APP_PROVISIONING.md).
 It prepares the manifest, captures the generated private key, verifies installation,
 and uploads the three secrets without manual credential copying. An interactive
 agent may drive creation and installation only with Josh's explicit session
