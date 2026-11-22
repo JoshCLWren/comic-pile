@@ -5,6 +5,12 @@ const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
   activeCount: number
+  /** Active series matching the currently applied search/filter state. */
+  filteredCount: number | null
+  /** True while the authoritative count for the applied search is unavailable. */
+  isCountPending?: boolean
+  /** True when count loading failed and no reliable count can be shown. */
+  isCountError?: boolean
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
@@ -34,6 +40,9 @@ interface QueueControlsProps {
  */
 function QueueControlsInner({
   activeCount,
+  filteredCount,
+  isCountPending = false,
+  isCountError = false,
   shuffleDisabled,
   shufflePending,
   onShuffle,

@@ -144,6 +144,8 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     fetchNextPage,
     refetch,
     isFetchNextPageError: query.isFetchNextPageError,
+    isPlaceholderData: query.isPlaceholderData,
+    isFetching: query.isFetching,
     isError: query.isError,
     error: query.error,
   }
