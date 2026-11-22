@@ -22,7 +22,7 @@ and mutation-refresh behavior are covered by the specs listed per row.
 | --- | --- | --- | --- | --- | --- |
 | `/` (Roll) | Cold load | 1 bootstrap read | 1 (required) | — | #4501 budget preserved |
 | `/queue` | Cold load | 6 reads | 6 (each feeds rendered row/count/state) | — | #4501 budget preserved |
-| `/queue` → `/thread/:id` | New thread key after evaluator reports unavailable | `POST /v2/reading-boundaries` x2 + `POST /v1/threads:getBlockingInfo` x2 | **canonical x1 + legacy x2**; warm remount x0; invalidation adds only the active legacy read | repeated canonical probes cannot add information after capability discovery | #5656: native `evaluator` signal + shared query cache |
+| `/queue` → `/thread/:id` | New thread key after evaluator reports unavailable | `POST /v2/reading-boundaries` x2 + `POST /v1/threads:getBlockingInfo` x2 | **canonical x1 + legacy x2**; warm remount x0; invalidation inside the 30-second freshness window adds only the active legacy read | repeated canonical probes cannot add information while capability discovery is fresh; expiry permits rollout recovery | #5656: native `evaluator` signal + shared query cache |
 | `/queue` | Search `r→ro→…→robert` | intermediate requests | 1 final-value request | debounce commits once | #4501 |
 | `/thread/:id` | Cold load, canonical evaluator available | 6 reads | **5** | closed `TagEditor` fetched tag catalog before its open gate | #4508: `useTags` enabled scope |
 | `/thread/:id` | Cold load, evaluator unavailable | 7 reads | **6** | same | #4508 |
