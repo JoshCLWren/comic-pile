@@ -253,6 +253,34 @@ async fn insert_issue(
     })
 }
 
+/// Insert a naturally positioned batch in one statement, without per-issue round trips.
+async fn insert_natural_issues(
+    tx: &Transaction<'_>,
+    thread_id: i32,
+    numbers: &[String],
+    positions: &[i32],
+) -> Result<Vec<IssueMutationItem>, ApiError> {
+    let rows = tx
+        .query(
+            "INSERT INTO issues (thread_id, issue_number, status, created_at, position)
+             SELECT $1, new.number, 'unread', NOW(), new.position
+             FROM unnest($2::text[], $3::int[]) AS new(number, position)
+             RETURNING id, thread_id, issue_number, status",
+            &[&thread_id, &numbers, &positions],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(rows
+        .iter()
+        .map(|row| IssueMutationItem {
+            id: row.get(0),
+            thread_id: row.get(1),
+            issue_number: row.get(2),
+            status: row.get(3),
+        })
+        .collect())
+}
+
 pub(crate) async fn reseat_positions(
     tx: &Transaction<'_>,
     thread_id: i32,
