@@ -13,7 +13,10 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, test_support, AppState};
+use comicpile_roll_service::{
+    auth, config::Config, option_inputs, reading_constraints, reading_eligibility, router,
+    test_support, AppState,
+};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{
