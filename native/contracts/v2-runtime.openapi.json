@@ -7275,7 +7275,8 @@
           "strict_order",
           "hold",
           "after_previous",
-          "prerequisite"
+          "prerequisite",
+          "reading_cycle"
         ]
       },
       "BlockerOrigin": {
