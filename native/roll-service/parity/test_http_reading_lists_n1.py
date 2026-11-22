@@ -499,14 +499,39 @@ async def test_update_reading_list_statements_respect_budget() -> None:
         body_large = json.dumps({"name": "Up-large", "mode": "loose", "issue_ids": full_ids[:200]})
         env2 = _run_env(token, "PUT", f"/api/v2/reading-lists/{list_id}", body=body_large)
         _, _, before2 = await db_counters(engine)
+        nested_before2 = await db_nested_statements(engine)
         large, _, _, _ = await run_rust_example(BINARY, env2)
         assert large.get("status") == 200, large
         large_body = large.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue_count") == 200
         _, _, after2 = await db_counters(engine)
+        nested_after2 = await db_nested_statements(engine)
         large_delta = (after2 - before2) if before2 is not None and after2 is not None else None
+        large_nested = (nested_after2 - nested_before2) if nested_before2 is not None and nested_after2 is not None else None
 
         assert small_delta is not None and large_delta is not None
+        assert small_nested is not None and large_nested is not None, "nested pg_stat_statements tracking is required (track=all)"
+        assert small_nested == 0 and large_nested == 0
         assert_declared_budget("PUT", "/api/v2/reading-lists/{list_id}", small_delta, large_delta)
     finally:
         await engine.dispose()
+
+
+def test_reading_lists_budget_rejects_extra_query_and_n1_growth() -> None:
+    """Budget checks must reject a deliberately extra query and N+1-style growth."""
+    for method, path in [
+        ("GET", "/api/v2/reading-lists"),
+        ("GET", "/api/v2/reading-lists/{list_id}"),
+        ("GET", "/api/v2/reading-lists/{list_id}/reader"),
+        ("DELETE", "/api/v2/reading-lists/{list_id}"),
+        ("POST", "/api/v2/reading-lists"),
+        ("PUT", "/api/v2/reading-lists/{list_id}"),
+    ]:
+        with pytest.raises(AssertionError, match="declared maximum"):
+            assert_declared_budget(method, path, 999)
+
+    small_delta, large_delta = 5, 40  # deliberate N+1 growth
+    with pytest.raises(AssertionError, match="statement count grew"):
+        assert large_delta <= small_delta + 2, (
+            f"statement count grew: {small_delta} -> {large_delta}"
+        )

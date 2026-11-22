@@ -7,13 +7,13 @@
 //! Queue use, so a persisted cycle cannot make this page fail globally.
 
 use crate::{
-    auth::AuthenticatedUser, db, option_inputs, reading_blocker_projection,
-    reading_constraints::ValidatedReadingInputs, reading_eligibility, ApiError, AppState,
+    ApiError, AppState, auth::AuthenticatedUser, db, option_inputs, reading_blocker_projection,
+    reading_constraints::ValidatedReadingInputs, reading_eligibility,
 };
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -559,8 +559,8 @@ pub(crate) async fn ensure_list_unlinked(
         let plan_id: i32 = row.get(0);
         let plan_name: String = row.get(1);
         return Err(ApiError::Conflict(format!(
-                "Reading List is authoritative for Reading Plan \"{plan_name}\" (#{plan_id}). Relink that plan before deleting the list; nothing was changed."
-            )));
+            "Reading List is authoritative for Reading Plan \"{plan_name}\" (#{plan_id}). Relink that plan before deleting the list; nothing was changed."
+        )));
     }
     Ok(())
 }
