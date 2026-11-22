@@ -3014,6 +3014,93 @@ async fn import_series_enqueues_durable_metadata_refresh_requests() {
     let _ = user_id;
 }
 
+/// #5592: exercise the complete production read path used by Roll after a
+/// fresh import and an awaited repair batch. No Roll read is needed to enqueue
+/// the work, and no manual identity remap participates in hydration.
+#[tokio::test]
+async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-5592-roll").await;
+    set_key(true);
+    std::env::set_var("CRON_SECRET", "test-secret");
+    provider_ok(
+        &state,
+        json!({"results": {"id": 5593, "name": "Roll Hydration"}}),
+    );
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 1, "results": [
+            roster_row(92001, "1", 5593)
+        ]}),
+    );
+    let (status, imported) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 5593})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{imported:?}");
+    let issue_id = imported["issue_results"][0]["issue_id"]
+        .as_i64()
+        .expect("imported issue id");
+    let intelligence_path = format!("/api/v2/issues/{issue_id}/comicvine");
+
+    let (status, before) = send(&state, get(&intelligence_path, &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{before:?}");
+    assert_eq!(before["metadata_status"], "refresh_pending");
+    assert_eq!(before["creators"], json!([]));
+
+    provider_ok(
+        &state,
+        json!({"results": {
+            "id": 92001,
+            "name": "Roll Hydration 1",
+            "issue_number": "1",
+            "cover_date": "2020-01-01",
+            "store_date": "2020-01-02",
+            "image": {"medium_url": "https://img.example/roll.jpg"},
+            "volume": {"id": 5593, "name": "Roll Hydration"},
+            "person_credits": [{"id": 77, "name": "Roll Writer", "role": "writer"}],
+            "character_credits": [],
+            "team_credits": [],
+            "story_arc_credits": [],
+            "date_last_updated": "2026-11-01 17:33:53"
+        }}),
+    );
+    let (status, drained) = send(
+        &state,
+        Request::builder()
+            .method("GET")
+            .uri("/api/v2/maintenance/comicvine-metadata-repairs")
+            .header(header::AUTHORIZATION, "Bearer test-secret")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{drained:?}");
+    assert_eq!(drained["claimed"], 1);
+    assert_eq!(drained["completed"], 1);
+    assert_eq!(drained["deferred"], 0);
+
+    let (status, after) = send(&state, get(&intelligence_path, &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{after:?}");
+    assert_eq!(after["metadata_status"], "complete");
+    assert_eq!(after["creators"].as_array().map(Vec::len), Some(1));
+    assert_eq!(after["creators"][0]["creator_id"], 77);
+    assert_eq!(after["creators"][0]["name"], "Roll Writer");
+    assert_eq!(after["creators"][0]["roles"], json!(["writer"]));
+    let singular_calls = fake(&state)
+        .calls()
+        .iter()
+        .filter(|call| call.path.starts_with("/api/issue/4000-92001/"))
+        .count();
+    assert_eq!(singular_calls, 1, "the durable worker fetched the issue once");
+}
+
 #[tokio::test]
 async fn import_series_error_contract_and_reading_order() {
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-serr").await;
