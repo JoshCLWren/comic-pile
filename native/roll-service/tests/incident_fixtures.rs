@@ -24,6 +24,20 @@
 pub const BPRD_THREAD_SOURCE_ID: i64 = 18874;
 pub const BPRD_JULIX_STRICT_LIST_SOURCE_ID: i64 = 2;
 pub const BPRD_CONTINUITY_PLAN_SOURCE_ID: i64 = 6;
+
+/// Issue #3735: the first unread Julix entry and the later frontier that the
+/// legacy adjacent-prerequisite check incorrectly offered. Tests map these
+/// historical identities to generated database IDs; never insert them as PKs.
+pub const JULIX_DEAD_REMEMBERED_2_SOURCE_ID: i64 = 117250;
+pub const JULIX_BLACK_GODDESS_5_SOURCE_ID: i64 = 117268;
+pub const JULIX_KING_OF_FEAR_1_SOURCE_ID: i64 = 117275;
+pub const JULIX_WILD_HUNT_8_SOURCE_ID: i64 = 1117773;
+pub const JULIX_DEAD_REMEMBERED_THREAD_SOURCE_ID: i64 = 18830;
+pub const JULIX_KING_OF_FEAR_THREAD_SOURCE_ID: i64 = 18837;
+pub const JULIX_FIRST_UNREAD_POSITION: i32 = 23;
+pub const JULIX_BLACK_GODDESS_5_POSITION: i32 = 45;
+pub const JULIX_KING_OF_FEAR_POSITION: i32 = 54;
+
 pub const BPRD_BEFORE_ISSUE_NUMBERS: &[u16] = &[
     129, 140, 141, 142, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 143,
 ];
