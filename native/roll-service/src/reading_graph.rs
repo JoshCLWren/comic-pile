@@ -80,19 +80,6 @@ pub struct ReadingGraphRepairOption {
     pub prerequisite_id: Option<i32>,
 }
 
-/// Categorization of an unresolved reference for issue #4198 closure.
-/// These track the three completeness blockers documented in
-/// PRODUCTION_READING_GRAPH_REPLAY.md: unread issues outside strict-list
-/// coverage, Reading List vs Reading Plan differences, and converted
-/// historical relationships (including JLI) that can contradict newer strict lists.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema, PartialOrd, Ord)]
-#[allow(dead_code)]
-pub enum UnresolvedCategory {
-    UnreadOutsideList,
-    ReadingPlanVsList,
-    JliConverted,
-}
-
 /// Complete graph state. `status` is `ok`, `cycle`, or `invalid`.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ReadingGraphResponse {
@@ -102,10 +89,7 @@ pub struct ReadingGraphResponse {
     pub affected_lists: Vec<ReadingGraphList>,
     pub affected_threads: Vec<ReadingGraphThread>,
     pub repairs: Vec<ReadingGraphRepairOption>,
-    /// Total count of unresolved references.
     pub unresolved_reference_count: usize,
-    /// Per-category breakdown of unresolved references for issue #4198 census.
-    pub unresolved_reference_breakdown: BTreeMap<UnresolvedCategory, usize>,
 }
 
 /// One validated repair action.
@@ -541,14 +525,6 @@ fn project(
         affected_threads,
         repairs,
         unresolved_reference_count: inputs.unresolved.len(),
-        unresolved_reference_breakdown: {
-            let mut breakdown = BTreeMap::new();
-            for ref_ in &inputs.unresolved {
-                let category = categorize_unresolved(&ref_.kind);
-                *breakdown.entry(category).or_insert(0) += 1;
-            }
-            breakdown
-        },
     }
 }
 
@@ -590,11 +566,6 @@ fn repair_is_offered(
 }
 
 fn invalid_response(inputs: &OptionInputs) -> ReadingGraphResponse {
-    let mut breakdown = BTreeMap::new();
-    for ref_ in &inputs.unresolved {
-        let category = categorize_unresolved(&ref_.kind);
-        *breakdown.entry(category).or_insert(0) += 1;
-    }
     ReadingGraphResponse {
         status: "invalid".to_string(),
         cycles: vec![],
@@ -603,7 +574,6 @@ fn invalid_response(inputs: &OptionInputs) -> ReadingGraphResponse {
         affected_threads: vec![],
         repairs: vec![],
         unresolved_reference_count: inputs.unresolved.len(),
-        unresolved_reference_breakdown: breakdown,
     }
 }
 
@@ -858,15 +828,6 @@ pub fn reading_graph_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn repair_documentation() {}
-
-/// Mapping from UnresolvedReference kind string to UnresolvedCategory.
-pub fn categorize_unresolved(kind: &str) -> UnresolvedCategory {
-    match kind {
-        "list_entry" => UnresolvedCategory::UnreadOutsideList,
-        "prerequisite" => UnresolvedCategory::ReadingPlanVsList,
-        _ => UnresolvedCategory::JliConverted,
-    }
-}
 
 #[cfg(test)]
 mod tests {
