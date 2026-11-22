@@ -3575,10 +3575,42 @@ async fn resolve_canonical_for_entry<E: DbExec>(
     ))
 }
 
+/// Return Plans whose former authoritative Reading List no longer exists.
+/// This is the same ownership and provenance boundary as the Plan reader: a
+/// live owned List keeps the Plan usable, while retained `custom-cbl:` history
+/// with no live List requires explicit recovery.
+async fn orphaned_plan_ids_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+) -> Result<std::collections::HashSet<i32>, ApiError> {
+    let rows = tx
+        .run_query(
+            "SELECT p.id FROM continuity_plans p
+             WHERE p.user_id=$1
+               AND EXISTS (
+                   SELECT 1 FROM reading_plan_sources s
+                   WHERE s.plan_id=p.id
+                     AND (s.raw_source_path LIKE 'custom-cbl:%'
+                          OR s.custom_cbl_list_id IS NOT NULL)
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM reading_plan_sources s
+                   JOIN custom_cbl_lists l
+                     ON l.id=s.custom_cbl_list_id AND l.user_id=$1
+                   WHERE s.plan_id=p.id
+               )",
+            &[&user_id],
+        )
+        .await
+        .map_err(|e| tx_db_error(e, ""))?;
+    Ok(rows.into_iter().map(|row| row.get(0)).collect())
+}
+
 async fn find_existing_adopted_plan_tx(
     tx: &tokio_postgres::Transaction<'_>,
     user_id: i32,
     source_path: &str,
+    orphaned_plan_ids: &std::collections::HashSet<i32>,
 ) -> Result<Option<i32>, ApiError> {
     let rows = tx
         .run_query(
@@ -3589,6 +3621,9 @@ async fn find_existing_adopted_plan_tx(
         .map_err(|e| tx_db_error(e, ""))?;
     for row in rows {
         let pid: i32 = row.get(0);
+        if orphaned_plan_ids.contains(&pid) {
+            continue;
+        }
         let nodes_text: String = row.get(1);
         if let Ok(nodes) = serde_json::from_str::<Vec<JsonValue>>(&nodes_text) {
             for node in nodes {
