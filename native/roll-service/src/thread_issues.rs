@@ -1953,9 +1953,10 @@ mod tests {
     fn natural_order_repairs_cbl_appended_issues_3483() {
         // #3483: adopting the Ultimate Universe CBL list into a thread that
         // already held #7-#24 appended the missing low issues after #24.
-        // Every insertion path (series:import, CBL adoption materialization,
-        // reading-plan sync and the shared create-issues handler) seats new
-        // numbers through this one ordering routine.
+        // This routine is the single ordering authority for series:import,
+        // CBL adoption materialization and reading-plan sync; the Queue and
+        // thread-page dialogs are covered by the same #3029 ordering contract
+        // through their shared create-issues handler.
         let high_run: Vec<String> = (7..=24).map(|n| n.to_string()).collect();
         let mut seated: Vec<String> = strings(&["1", "2"]);
         seated.extend(high_run.iter().cloned());
