@@ -53,7 +53,6 @@ const FALLBACK_SOURCE_TITLE = 'CBL source'
  * sources above the fold on a phone without hiding the total result count.
  */
 const PAGE_SIZE = 50
-
 interface CatalogErrorState {
   message: string
   recover: 'browse-root' | 'retry'
@@ -1411,7 +1410,6 @@ export default function CblBrowserPage() {
         onClose={() => setConfirmOpen(false)}
         onConfirm={confirmCommit}
       />
-
     </section>
   )
 }
