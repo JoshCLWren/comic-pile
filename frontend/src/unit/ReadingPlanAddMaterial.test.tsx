@@ -1,23 +1,16 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
+import { cblSourcesApi } from '../services/api-cbl-sources'
 
-const mocks = vi.hoisted(() => ({
-  discover: vi.fn(),
-  preview: vi.fn(),
-}))
+const originalCBLSourcesApi = { ...cblSourcesApi }
+const mocks = {
+  discover: vi.fn<typeof cblSourcesApi.discover>(),
+  preview: vi.fn<typeof cblSourcesApi.preview>(),
+}
 
-vi.mock('../services/api-cbl-sources', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-cbl-sources')>(
-    '../services/api-cbl-sources',
-  )
-  return {
-    ...actual,
-    cblSourcesApi: {
-      discover: mocks.discover,
-      preview: mocks.preview,
-    },
-  }
+afterEach(() => {
+  Object.assign(cblSourcesApi, originalCBLSourcesApi)
 })
 
 describe('ReadingPlanAddMaterial', () => {
