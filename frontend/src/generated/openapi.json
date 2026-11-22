@@ -10904,6 +10904,18 @@
             "title": "Active Count",
             "type": "integer"
           },
+          "filtered_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Total active Queue rows matching the applied search, independent of the bounded page.",
+            "title": "Filtered Count"
+          },
           "next_page_token": {
             "anyOf": [
               {
