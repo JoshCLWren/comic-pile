@@ -1938,13 +1938,10 @@ mod tests {
         seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
         queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
-        let job = claim(&state).await.expect("claim").expect("due job");
-        assert_eq!(
-            process(&state, &job, Some("TESTKEY123"))
-                .await
-                .expect("process"),
-            "completed"
-        );
+        let report = drain_for_test(&state).await;
+        assert_eq!(report.claimed, 1);
+        assert_eq!(report.completed, 1);
+        assert_eq!(report.deferred, 0);
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let row = connection
