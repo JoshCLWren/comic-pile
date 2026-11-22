@@ -12,7 +12,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-lists-n1-secret"
 BINARY = str(cargo_example_path("http_reading_lists"))
@@ -113,13 +119,16 @@ async def test_list_reading_lists_statements_do_not_grow_with_list_count() -> No
 
         env = _run_env(token, "GET", "/api/v2/reading-lists")
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small, _, _, _ = await run_rust_example(BINARY, env)
         assert small.get("status") == 200, small
         body = small.get("body")
         assert isinstance(body, list) and len(body) == 5
         assert body[0]["issue_count"] == 1
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested = (nested_after - nested_before) if nested_before is not None and nested_after is not None else None
 
         raw = await asyncpg.connect(url)
         try:
