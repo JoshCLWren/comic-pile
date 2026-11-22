@@ -522,7 +522,10 @@ fn search_result(value: &Value) -> Option<ComicVineSeriesResult> {
         image_url: object
             .get("image")
             .and_then(Value::as_object)
-            .and_then(|image| first_truthy(image, "medium_url", "small_url")),
+            .and_then(|image| {
+                first_truthy(image, "medium_url", "small_url")
+                    .or_else(|| python_str(image.get("thumb_url")))
+            }),
     })
 }
 
