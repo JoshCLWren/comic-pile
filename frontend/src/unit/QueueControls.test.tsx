@@ -244,4 +244,36 @@ describe('QueueControls', () => {
     expect(baseProps.onSearchChange).not.toHaveBeenCalled()
   })
 
+  it('shows M of M series when no search filter is applied', () => {
+    render(<QueueControls {...baseProps} activeCount={12} filteredCount={12} searchQuery="" />)
+
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('12 of 12 series')
+  })
+
+  it('shows N of M series for an applied search filter', () => {
+    render(<QueueControls {...baseProps} activeCount={12} filteredCount={3} searchQuery="bat" />)
+
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('3 of 12 series')
+  })
+
+  it('shows 0 of M series when no results match', () => {
+    render(<QueueControls {...baseProps} activeCount={12} filteredCount={0} searchQuery="nomatch" />)
+
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('0 of 12 series')
+  })
+
+  it('shows a loading state instead of stale counts while counts are pending', () => {
+    render(<QueueControls {...baseProps} activeCount={12} filteredCount={12} countPending />)
+
+    const count = screen.getByTestId('queue-result-count')
+    expect(count).toHaveTextContent('Updating series count…')
+    expect(count).toHaveAttribute('role', 'status')
+  })
+
+  it('shows an unavailable state when counts cannot be loaded reliably', () => {
+    render(<QueueControls {...baseProps} activeCount={12} filteredCount={12} countError />)
+
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Series count unavailable.')
+  })
+
 })
