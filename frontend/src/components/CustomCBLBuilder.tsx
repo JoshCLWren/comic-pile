@@ -79,7 +79,9 @@ export default function CustomCBLBuilder({
   const listNavigationRef = useRef<HTMLDivElement>(null)
   const pendingNavigationFocusRef = useRef<number | null>(null)
   const currentIssueRef = useRef<HTMLLIElement>(null)
+  const currentUnreadIssueRef = useRef<HTMLLIElement>(null)
   const pendingProgressRevealRef = useRef<number | null>(null)
+  const pendingUnreadRevealRef = useRef<number | null>(null)
   const [readerOpen, setReaderOpen] = useState(false)
   const [open, setOpen] = useState(initialListId !== undefined)
   const [selectedId, setSelectedId] = useState<number | null>(initialListId ?? null)
@@ -165,6 +167,10 @@ export default function CustomCBLBuilder({
     const progressIndex = getReadingListProgressIndex(list.entries)
     setEntryPage(Math.floor(progressIndex / ENTRY_PAGE_SIZE))
     pendingProgressRevealRef.current = list.entries[progressIndex]?.issue_id ?? null
+    const nextUnreadIssueId = list.entries.find(
+      (entry) => !entry.skipped && entry.status === 'unread',
+    )?.issue_id ?? null
+    pendingUnreadRevealRef.current = nextUnreadIssueId
     setJumpPosition('')
     setExpandedEntryOptions(null)
     setMoveDestinations({})
@@ -446,6 +452,15 @@ export default function CustomCBLBuilder({
     target.scrollIntoView?.({ block: 'center' })
     target.focus({ preventScroll: true })
   }, [entries, currentPage, entrySearch])
+  useLayoutEffect(() => {
+    if (!nextUnreadIssueId) return
+    if (pendingUnreadRevealRef.current !== nextUnreadIssueId) return
+    if (!currentUnreadIssueRef.current) return
+    const target = currentUnreadIssueRef.current
+    pendingUnreadRevealRef.current = null
+    target.scrollIntoView?.({ block: 'center' })
+    target.focus({ preventScroll: true })
+  }, [entries, currentPage, entrySearch, nextUnreadIssueId])
   const returnToProgress = () => {
     if (!progressIssue) return
     pendingProgressRevealRef.current = progressIssue.issue_id
@@ -863,7 +878,11 @@ export default function CustomCBLBuilder({
                     index={index}
                     entryCount={entries.length}
                     isNextUnread={entry.issue_id === nextUnreadIssueId}
-                    cardRef={entry.issue_id === progressIssue?.issue_id ? currentIssueRef : undefined}
+                    cardRef={
+        entry.issue_id === progressIssue?.issue_id ? currentIssueRef
+          : entry.issue_id === nextUnreadIssueId ? currentUnreadIssueRef
+          : undefined
+      }
                     mode={mode}
                     waitingOn={requirements.get(entry.issue_id) ?? []}
                     nameOf={nameFor}
