@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from './testingLibrary'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import PlannerLanes from '../pages/continuity-planner/PlannerLanes'
 import type { ContinuityPlannerEditor } from '../pages/continuity-planner/useContinuityPlannerEditor'

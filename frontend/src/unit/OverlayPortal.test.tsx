@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from './testingLibrary'
 import { afterEach, expect, it } from 'vitest'
 import OverlayPortal from '../components/OverlayPortal'
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent } from '../../unit/testingLibrary'
 
 // The authenticated redirect target is the Roll home, which is peer-owned and
 // has its own request suite. Stub only that page so this spec measures the

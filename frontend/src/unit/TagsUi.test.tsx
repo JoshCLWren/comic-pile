@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,7 +17,7 @@ import { injectModuleDoubles } from './injectModuleDoubles'
   TagAssignment,
   TagUsage,
 } from '../services/api-tags'
-import { renderHook } from '@testing-library/react'
+import { renderHook } from './testingLibrary'
 
 await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   // SAFETY: the palette constants and payload types are real; only the transport singleton is doubled

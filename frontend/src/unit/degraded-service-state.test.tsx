@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent } from './testingLibrary'
 import { vi } from 'vitest'
 import { DegradedServiceState, ServiceUnavailableShell } from '../components/DegradedServiceState'
 

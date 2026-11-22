@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { Mock } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { queueThreadsQueryOptions, QUEUE_PAGE_SIZE } from '../hooks/useQueue'

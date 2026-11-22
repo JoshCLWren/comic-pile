@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, waitFor, act } from '@testing-library/react'
+import { render, waitFor, act } from './testingLibrary'
 import ImageWithLoading from '../components/ImageWithLoading'
 
 describe('ImageWithLoading', () => {

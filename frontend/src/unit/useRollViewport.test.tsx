@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { act, fireEvent, render } from '@testing-library/react'
+import { act, fireEvent, render } from './testingLibrary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRollViewport } from '../pages/RollPage/useRollViewport'
 import { beginRouteRestore } from '../scroll/scrollCoordinator'

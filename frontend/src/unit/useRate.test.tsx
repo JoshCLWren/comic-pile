@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useRate } from '../hooks/useRate'

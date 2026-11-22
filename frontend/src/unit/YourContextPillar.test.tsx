@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { describe, expect, it, vi } from 'vitest'
 import { YourContextPillar } from '../pages/RollPage/components/YourContextPillar'
 

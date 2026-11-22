@@ -1,5 +1,5 @@
 import { expect, test, vi, beforeEach, describe, afterEach } from 'vitest'
-import { render, screen, waitFor, act, within } from '@testing-library/react'
+import { render, screen, waitFor, act, within } from './testingLibrary'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import type { AuthContextValue } from '../App'

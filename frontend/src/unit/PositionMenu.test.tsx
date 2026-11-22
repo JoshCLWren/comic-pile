@@ -1,4 +1,4 @@
-import { act, fireEvent, render as baseRender, screen } from '@testing-library/react'
+import { act, fireEvent, render as baseRender, screen } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import PositionMenu from '../components/PositionMenu'

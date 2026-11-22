@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from './testingLibrary'
 import { expect, test, beforeEach, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../App'

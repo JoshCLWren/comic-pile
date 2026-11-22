@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { expect, it, vi } from 'vitest'
 import LazyDice3D from '../components/LazyDice3D'
 

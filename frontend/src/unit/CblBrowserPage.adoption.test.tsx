@@ -2,7 +2,7 @@ import {
   act,
   screen,
   waitFor,
-} from '@testing-library/react'
+} from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import {
   describe,

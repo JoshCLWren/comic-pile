@@ -8,7 +8,7 @@
  * - the story title reads as a subtitle of the main issue title instead of
  *   floating under the cover.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from './testingLibrary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import type { RatingThread } from '../pages/RollPage/types'

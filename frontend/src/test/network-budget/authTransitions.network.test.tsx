@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest'
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen } from '../../unit/testingLibrary'
 import { setAccessToken } from '../../services/api'
 import { OTHER_USER, TEST_USER, renderAppAtRoute, type HarnessUser } from './appNetworkHarness'
 

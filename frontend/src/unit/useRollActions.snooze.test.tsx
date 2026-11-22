@@ -7,7 +7,7 @@
  * saw the click "succeed" and nothing was recorded.
  */
 import type { RollUnsnoozeResponse } from '../services/apiTypes'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook } from './testingLibrary'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NavigateFunction } from 'react-router-dom'
 import { useRollActions } from '../pages/RollPage/useRollActions'

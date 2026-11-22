@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook, waitFor } from './testingLibrary'
 import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 import { QUEUE_PAGE_SIZE } from '../hooks/useQueue'

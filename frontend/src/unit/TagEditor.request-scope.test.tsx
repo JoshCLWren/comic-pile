@@ -7,7 +7,7 @@
  * catalog exactly once. The bulk toolbar has the same rule for an empty
  * selection.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from './testingLibrary'
 import { describe, expect, it } from 'vitest'
 import { TagSection } from '../components/Tags/TagSection'
 import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'

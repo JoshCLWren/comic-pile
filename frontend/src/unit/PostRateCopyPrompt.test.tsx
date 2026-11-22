@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PostRateCopyPrompt, type PostRateReference } from '../pages/RollPage/components/PostRateCopyPrompt'

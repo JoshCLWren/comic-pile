@@ -6,7 +6,7 @@
  * the reader to count the face-mapping list by hand. These cases pin the
  * result-card surface that closes that loop.
  */
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RatingThread } from '../pages/RollPage/types'
 

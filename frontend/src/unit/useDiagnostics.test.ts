@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react'
+import { renderHook } from './testingLibrary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDiagnostics } from '../hooks/useDiagnostics'
 import { cast } from '../utils/cast'

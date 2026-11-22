@@ -6,7 +6,7 @@
  * runs only on demand, and provider-only entries never hit the owner-scoped
  * mapping mutation.
  */
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from './testingLibrary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IssueIdentityResponse } from '../services/api-comicvine'
 

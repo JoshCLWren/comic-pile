@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from './testingLibrary'
 import ResumeRecovery from '../components/ResumeRecovery'
 
 const { revalidateSession, recoverSession, invalidateSessionRecoveryCache, invalidateAfterResumeRecovery } = vi.hoisted(() => ({

@@ -15,7 +15,7 @@
  * the failure would be silently missed, and the reader would be told the move
  * succeeded.
  */
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook } from './testingLibrary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { QueryClientProvider, useQuery } from '@tanstack/react-query'

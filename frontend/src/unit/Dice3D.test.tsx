@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react'
+import { act, render } from './testingLibrary'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
 import Dice3D, { getFaceRotation, getProjectedCenterOffsetPx } from '../components/Dice3D'

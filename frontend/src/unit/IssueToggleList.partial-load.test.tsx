@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from './testingLibrary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRef } from 'react'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'

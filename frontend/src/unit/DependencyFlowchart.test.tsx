@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from './testingLibrary'
 import { describe, expect, it } from 'vitest'
 import DependencyFlowchart from '../components/DependencyFlowchart'
 

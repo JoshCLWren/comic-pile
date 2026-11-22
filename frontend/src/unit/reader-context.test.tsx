@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { describe, expect, it } from 'vitest'
 import type { ReaderContextResponse } from '../services/api-reader-context'
 import { SeriesPanel } from '../pages/RollPage/components/SeriesPanel'

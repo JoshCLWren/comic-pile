@@ -1,7 +1,7 @@
 /* eslint-disable */
 // Scratch reproduction for #3609 — removed before commit.
 import { type PropsWithChildren } from 'react'
-import { render, screen, within, waitFor, cleanup } from '@testing-library/react'
+import { render, screen, within, waitFor, cleanup } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'

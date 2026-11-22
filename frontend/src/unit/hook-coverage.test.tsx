@@ -1,4 +1,4 @@
-import { renderHook, waitFor, act } from '@testing-library/react'
+import { renderHook, waitFor, act } from './testingLibrary'
 import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

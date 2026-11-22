@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from 'react'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { validateIssueRangeForStaging } from '../utils/issueParser'

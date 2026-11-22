@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { renderHook } from '@testing-library/react'
+import { renderHook } from './testingLibrary'
 import { useRollPendingSync } from '../pages/QueuePage/useRollPendingSync'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 

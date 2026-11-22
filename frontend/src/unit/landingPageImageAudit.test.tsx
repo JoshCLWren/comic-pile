@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { render } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import LandingPage from '../pages/LandingPage'

@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { renderHook, act, waitFor } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { ContinuityPlan } from '../services/api-continuity-plans'

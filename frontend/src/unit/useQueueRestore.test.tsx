@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook } from './testingLibrary'
 import { useQueueRestore } from '../pages/QueuePage/useQueueRestore'
 
 const mutate = vi.fn()

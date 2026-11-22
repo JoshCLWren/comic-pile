@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { expect, it } from 'vitest'
 import { MarqueeTitle } from '../components/MarqueeTitle'
 
