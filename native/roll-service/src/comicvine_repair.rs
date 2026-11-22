@@ -2064,8 +2064,11 @@ mod tests {
         .await
         .expect("resumed batch");
         assert_eq!(second.enqueued, 1, "hydrated identity is never enqueued");
-        assert_eq!(second.scanned, 2);
-        assert_eq!(second.already_present, 1);
+        // Deep-complete identities are filtered in SQL before LIMIT, so only
+        // the remaining roster-only identity is scanned in this resumed batch.
+        assert_eq!(second.scanned, 1);
+        assert_eq!(second.already_present, 0);
+        assert_eq!(second.last_identity_id, Some(identity_ids[2]));
         assert!(second.after_pending > second.before_pending);
 
         // Re-scanning an earlier range must dedup: every candidate there now
@@ -2074,6 +2077,10 @@ mod tests {
             .await
             .expect("dedup rescan");
         assert_eq!(rescan.scanned, 2);
+        assert_eq!(rescan.eligible, 0);
+        assert_eq!(rescan.enqueued, 0);
+        assert_eq!(rescan.already_present, 2);
+        assert_eq!(rescan.before_pending, rescan.after_pending);
         let connection = db::checkout(&state).await.expect("final connection");
         let count: i64 = connection
             .query_one(
