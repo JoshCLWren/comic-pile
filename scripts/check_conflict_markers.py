@@ -158,7 +158,11 @@ def tracked_files(root: Path) -> list[str]:
             for path in sorted(root.rglob("*"))
             if path.is_file() and ".git" not in path.parts
         ]
-    return [entry.decode("utf-8", errors="surrogateescape") for entry in out.split(b"\0") if entry]
+    # Unmerged index entries appear once per stage; each worktree path needs
+    # only one scan or a single conflict is reported multiple times.
+    return sorted(
+        {entry.decode("utf-8", errors="surrogateescape") for entry in out.split(b"\0") if entry}
+    )
 
 
 def read_text_lines(root: Path, rel_path: str) -> list[str] | None:

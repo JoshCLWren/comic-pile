@@ -279,7 +279,8 @@ class ConflictMarkerGuardTests(unittest.TestCase):
         self.assertNotEqual(merge.returncode, 0)
         self.assertIn(guard.START_PREFIX, (root / relative).read_text(encoding="utf-8"))
         self.assertEqual(result, 1)
-        self.assertIn("frontend/pnpm-lock.yaml:4:", stderr)
+        self.assertIn("frontend/pnpm-lock.yaml:3:", stderr)
+        self.assertEqual(stderr.count("unresolved conflict start marker"), 1)
 
     def test_main_passes_clean_tree(self) -> None:
         """A clean tree with ordinary Markdown separators exits successfully."""
