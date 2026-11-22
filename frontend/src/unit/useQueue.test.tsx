@@ -442,7 +442,7 @@ describe('useQueueThreads result count text (#3614)', () => {
     })
 
     // Two rows are visible but the count must restate the whole-queue totals.
-    expect(result.current.data).toHaveLength(2)
+    await waitFor(() => expect(result.current.data).toHaveLength(2))
     expect(result.current.resultCountText).toBe('5 of 5 series')
   })
 
