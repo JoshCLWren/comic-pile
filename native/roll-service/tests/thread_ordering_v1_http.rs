@@ -6,12 +6,16 @@
 //! mounted router against the canonical disposable PostgreSQL schema. Requires
 //! `RUST_ROLL_TEST_DATABASE_URL` and hard-fails without it.
 
+mod incident_fixtures;
+use incident_fixtures as fixture;
+
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
 use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
