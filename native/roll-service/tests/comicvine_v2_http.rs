@@ -2292,6 +2292,65 @@ async fn correction_provider_values_use_python_str() {
 // Chunk D: single-issue import.
 // ---------------------------------------------------------------------------
 
+/// #5592: single-issue adoption is an import commit — it must durably enqueue
+/// deep-metadata work without waiting for a Roll intelligence read, and a
+/// re-import that reuses the confirmed identity must not duplicate the request.
+#[tokio::test]
+async fn import_issue_enqueues_durable_metadata_refresh_request() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-5592-issue").await;
+    set_key(false);
+    let conn = state.pool.get().await.unwrap();
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({
+                "title": "Durable Issue", "comicvine_issue_id": 93001, "issue_number": "3"
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let external_identity_id = body["external_identity_id"].as_i64().unwrap() as i32;
+
+    // No Roll read happened: the import commit itself queued the work.
+    let row = conn
+        .query_one(
+            "SELECT r.state, r.attempts, e.external_id \
+             FROM comicvine_metadata_refresh_requests r \
+             JOIN external_identities e ON e.id = r.external_identity_id \
+             WHERE r.external_identity_id = $1",
+            &[&external_identity_id],
+        )
+        .await
+        .unwrap();
+    assert_eq!(row.get::<_, String>(0), "pending");
+    assert_eq!(row.get::<_, i32>(1), 0);
+    assert_eq!(row.get::<_, String>(2), "93001");
+
+    // A Roll read now finds active durable work and must not add another row.
+    let issue_id = body["issue_id"].as_i64().unwrap() as i32;
+    let (status, intelligence) = send(
+        &state,
+        get(&format!("/api/v2/issues/{issue_id}/comicvine"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{intelligence:?}");
+    let count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM comicvine_metadata_refresh_requests \
+             WHERE external_identity_id = $1",
+            &[&external_identity_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 1, "the Roll read must not duplicate the request");
+}
+
 #[tokio::test]
 async fn import_issue_creates_thread_identity_and_reading_order_slot() {
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-impissue").await;
