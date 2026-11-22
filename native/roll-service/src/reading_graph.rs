@@ -1124,6 +1124,234 @@ mod tests {
         }
     }
 
+    fn crossover_audit_fixture() -> (OptionInputs, Vec<StoredPrerequisite>) {
+        let thread = |id, title, next_unread_issue_id, queue_position| ReadingThread {
+            id,
+            status: "active".into(),
+            title: title.into(),
+        };
+        let issue = |id, thread_id, position, status, number: &str| ReadingIssue {
+            id,
+            thread_id,
+            position,
+            status: status.into(),
+            issue_number: number.into(),
+        };
+        let stored = |thread_id, next_issue_id, queue_position| StoredThreadEligibility {
+            thread_id,
+            next_issue_id: Some(next_issue_id),
+            is_blocked: false,
+            queue_position,
+        };
+        let dependency = |id, source_issue_id, target_issue_id, note: Option<&str>| {
+            StoredPrerequisite {
+                prerequisite_id: id,
+                source_issue_id,
+                target_issue_id,
+                origin: None,
+                note: note.map(str::to_string),
+                classification: None,
+                provenance: None,
+            }
+        };
+        let inputs = OptionInputs {
+            core: CoreReadingInputs {
+                threads: vec![
+                    thread(1, "Uncanny X-Men", 361, 1),
+                    thread(2, "X-Men", 80, 2),
+                    thread(3, "Unrelated series", 1, 3),
+                ],
+                issues: vec![
+                    issue(360, 1, 1, "read", "360"),
+                    issue(361, 1, 2, "unread", "361"),
+                    issue(80, 2, 1, "unread", "80"),
+                    issue(875, 2, 2, "unread", "1/2"),
+                    issue(1, 3, 1, "unread", "1"),
+                ],
+                stored: vec![stored(1, 361, 1), stored(2, 80, 2), stored(3, 1, 3)],
+            },
+            thread_volumes: BTreeMap::new(),
+            lists: vec![
+                ReadingList {
+                    list_id: 20,
+                    mode: "loose".into(),
+                    name: "X-Men source placements".into(),
+                    entries: vec![ReadingEntry {
+                        issue_id: 80,
+                        gate: "none".into(),
+                        skipped: false,
+                    }],
+                    overlap_decisions: vec![],
+                },
+                ReadingList {
+                    list_id: 21,
+                    mode: "loose".into(),
+                    name: "UXM placements".into(),
+                    entries: vec![ReadingEntry {
+                        issue_id: 361,
+                        gate: "after_previous".into(),
+                        skipped: false,
+                    }],
+                    overlap_decisions: vec![],
+                },
+            ],
+            // The execution loader contains reader-authored rows only. Historical
+            // evidence is supplied separately to the audit, never to Option E.
+            prerequisites: vec![],
+            excluded_issue_ids: BTreeSet::new(),
+            unresolved: vec![],
+        };
+        let evidence = vec![
+            dependency(100, 360, 80, None),
+            dependency(101, 80, 875, Some("Late-90s X-Men Reading Order")),
+            dependency(102, 875, 361, Some("Late-90s X-Men Reading Order")),
+            dependency(103, 875, 361, Some("cbl-order:source:archive")),
+            StoredPrerequisite {
+                provenance: Some("continuity-plan:9".into()),
+                ..dependency(104, 875, 361, Some("compiled adjacency"))
+            },
+        ];
+        (inputs, evidence)
+    }
+
+    fn evaluated(
+        inputs: &OptionInputs,
+    ) -> (
+        crate::reading_constraints::ValidatedReadingInputs,
+        BTreeMap<i32, bool>,
+        BTreeSet<i32>,
+    ) {
+        let validated = crate::reading_constraints::ValidatedReadingInputs::new(
+            inputs.clone(),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+        let evaluated = crate::reading_eligibility::evaluate(&validated).unwrap();
+        let eligibility = evaluated
+            .values()
+            .filter_map(|thread| thread.next_issue_id.map(|id| (id, thread.eligible)))
+            .collect();
+        let roll_frontiers = validated
+            .eligible_frontiers()
+            .unwrap()
+            .into_iter()
+            .map(|frontier| frontier.issue_id)
+            .collect();
+        (validated, eligibility, roll_frontiers)
+    }
+
+    #[test]
+    fn read_only_cross_series_audit_matches_active_option_e_before_and_after_authoring() {
+        let (mut inputs, mut evidence) = crossover_audit_fixture();
+        let pristine = serde_json::to_value(&inputs).unwrap();
+        let (validated, before, roll_before) = evaluated(&inputs);
+        assert_eq!(before.get(&361), Some(&true));
+        assert_eq!(before.get(&80), Some(&true));
+        assert_eq!(before.get(&1), Some(&true));
+        assert!(roll_before.contains(&361));
+        assert!(roll_before.contains(&80));
+
+        let report = audit_frontier_prerequisites(&inputs, &validated, Some(&evidence)).unwrap();
+        assert!(report.historical_evidence_complete);
+        assert_eq!(report.manual_review_frontier_ids, vec![361]);
+        assert_eq!(report.manual_review_count, 1);
+        assert_eq!(
+            report
+                .categorized_dependency_counts
+                .get(&PrerequisiteEvidenceCategory::ArchivalCblOrder),
+            Some(&1)
+        );
+        assert_eq!(
+            report
+                .categorized_dependency_counts
+                .get(&PrerequisiteEvidenceCategory::CompiledAdjacency),
+            Some(&1)
+        );
+        assert!(!report
+            .dependencies
+            .iter()
+            .any(|dependency| dependency.prerequisite_id == 101));
+        let candidate = report
+            .dependencies
+            .iter()
+            .find(|dependency| dependency.prerequisite_id == 102)
+            .unwrap();
+        assert_eq!(candidate.source.issue_id, 875);
+        assert_eq!(candidate.source_status, "unread");
+        assert_eq!(candidate.target.issue_id, 361);
+        assert_eq!(candidate.target_status, "unread");
+        assert_eq!(candidate.origin, None);
+        assert_eq!(candidate.note.as_deref(), Some("Late-90s X-Men Reading Order"));
+        assert_eq!(candidate.classification, None);
+        assert_eq!(candidate.provenance, None);
+        assert_eq!(candidate.category, PrerequisiteEvidenceCategory::UncertainLegacy);
+        assert!(candidate.target_eligible);
+        assert!(candidate.recommended_manual_review);
+        assert_eq!(candidate.source_lists[0].list_id, 20);
+        assert_eq!(candidate.target_lists[0].gate, "after_previous");
+        assert!(report
+            .dependencies
+            .iter()
+            .filter(|dependency| dependency.prerequisite_id != 102)
+            .all(|dependency| !dependency.recommended_manual_review));
+        assert_eq!(serde_json::to_value(&inputs).unwrap(), pristine);
+
+        // An explicit, separately approved correction changes only this stored
+        // edge. The retired UXM #360 chain and every archival row stay inert.
+        evidence[2].origin = Some("reader".into());
+        evidence[2].classification = Some("A".into());
+        evidence[2].provenance = Some("owner-approved manual correction".into());
+        inputs.prerequisites.push(Prerequisite {
+            prerequisite_id: 102,
+            source_issue_id: 875,
+            target_issue_id: 361,
+            origin: "reader".into(),
+            provenance: vec!["classification:A".into(), "owner-approved manual correction".into()],
+        });
+        let (validated, after, roll_after) = evaluated(&inputs);
+        assert_eq!(after.get(&361), Some(&false));
+        assert_eq!(after.get(&80), Some(&true));
+        assert_eq!(after.get(&1), Some(&true));
+        assert!(!roll_after.contains(&361));
+        assert!(roll_after.contains(&80));
+        let blockers = crate::reading_eligibility::evaluate(&validated)
+            .unwrap()
+            .remove(&1)
+            .unwrap()
+            .blockers;
+        assert_eq!(blockers.len(), 1);
+        assert_eq!(blockers[0].kind, "prerequisite");
+        assert_eq!(blockers[0].waiting_on_issue_ids, vec![875]);
+        let report = audit_frontier_prerequisites(&inputs, &validated, Some(&evidence)).unwrap();
+        assert!(report.manual_review_frontier_ids.is_empty());
+        let authored = report
+            .dependencies
+            .iter()
+            .find(|dependency| dependency.prerequisite_id == 102)
+            .unwrap();
+        assert_eq!(authored.category, PrerequisiteEvidenceCategory::ReaderAuthored);
+        assert!(!authored.target_eligible);
+        assert!(!authored.recommended_manual_review);
+
+        // The authored requirement releases only when its actual source is read.
+        inputs.core.issues[3].status = "read".into();
+        let (_, released, roll_released) = evaluated(&inputs);
+        assert_eq!(released.get(&361), Some(&true));
+        assert_eq!(released.get(&80), Some(&true));
+        assert!(roll_released.contains(&361));
+
+        // An independent reader has no inherited edge or changed eligibility.
+        let (mut other_reader, _) = crossover_audit_fixture();
+        other_reader.core.threads.retain(|thread| thread.id == 3);
+        other_reader.core.issues.retain(|issue| issue.thread_id == 3);
+        other_reader.core.stored.retain(|stored| stored.thread_id == 3);
+        other_reader.lists.clear();
+        let (_, other_before, _) = evaluated(&other_reader);
+        let (_, other_after, _) = evaluated(&other_reader);
+        assert_eq!(other_before, other_after);
+        assert_eq!(other_after.get(&1), Some(&true));
+    }
+
     #[test]
     fn projection_names_edges_lists_and_safe_repairs() {
         let source = inputs();
