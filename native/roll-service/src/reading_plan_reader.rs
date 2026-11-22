@@ -174,7 +174,6 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
             let prefix_len = collapsed_series.len();
             // Map the prefix length back onto the original by counting chars in
             // the collapsed form.
-            let mut orig_idx = 0;
             let mut collapsed_seen = 0;
             let orig_chars: Vec<char> = candidate.chars().collect();
             let mut i = 0;
