@@ -416,17 +416,7 @@ async fn create_issue_beyond_maximum_anchors_before_trailing_special() {
         return;
     };
     let (token, csrf, owner) = register(&state, "natural-maximum").await;
-    let labels = [
-        "1",
-        "2",
-        "5",
-        "7",
-        "8",
-        "Annual 1",
-        "9",
-        "10",
-        "Special 0",
-    ];
+    let labels = ["1", "2", "5", "7", "8", "Annual 1", "9", "10", "Special 0"];
     let (thread, _issue_ids) = seed_thread(&state, owner, "Natural Maximum", 1, &labels).await;
     let before = position_order(&state, thread).await;
 

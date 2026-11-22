@@ -1962,7 +1962,16 @@ mod tests {
     fn natural_order_places_new_maximum_before_trailing_special() {
         let existing = strings(&["1", "2", "5", "7", "8", "Annual 1", "9", "10", "Special 0"]);
         let expected = strings(&[
-            "1", "2", "5", "7", "8", "Annual 1", "9", "10", "11", "Special 0",
+            "1",
+            "2",
+            "5",
+            "7",
+            "8",
+            "Annual 1",
+            "9",
+            "10",
+            "11",
+            "Special 0",
         ]);
         assert_eq!(
             natural_issue_order(&existing, &strings(&["11"])),
