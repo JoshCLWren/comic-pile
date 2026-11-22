@@ -274,9 +274,10 @@ pub(crate) enum Exchange {
     },
 }
 
-/// One repair-worker provider call: 429/403 are throttles whose
-/// `Retry-After` is clamped to 60..=3600 s, other non-2xx statuses (420
-/// included) are unavailable, and the envelope must carry `status_code: 1`.
+/// One repair-worker provider call, matching Python `ComicVineClient`
+/// throttle rules: 420/429 are throttles whose `Retry-After` is clamped to
+/// 60..=3600 s; any other non-2xx status (403 included) is a plain provider
+/// error. The envelope must carry `status_code: 1`.
 pub(crate) async fn provider_response(
     outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
@@ -285,7 +286,7 @@ pub(crate) async fn provider_response(
 ) -> Result<Value, ProviderFailure> {
     match provider_exchange(outbound, resource, extra_query, api_key).await? {
         Exchange::Throttled {
-            status: 429 | 403,
+            status: 420 | 429,
             retry_after,
         } => Err(ProviderFailure::RateLimited(
             retry_after
