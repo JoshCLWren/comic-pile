@@ -486,7 +486,16 @@ pub(crate) fn natural_issue_order(existing: &[String], incoming: &[String]) -> O
         });
         match slot {
             Some(index) => result.insert(index, label.clone()),
-            None => result.push(label.clone()),
+            None => {
+                let last_numbered = result
+                    .iter()
+                    .rposition(|current| ordinary_key(current).is_some());
+                if let Some(index) = last_numbered {
+                    result.insert(index + 1, label.clone());
+                } else {
+                    result.push(label.clone());
+                }
+            }
         }
     }
     Some(result)
