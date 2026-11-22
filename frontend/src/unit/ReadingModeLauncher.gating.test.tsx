@@ -20,14 +20,12 @@ describe('ReadingModeLauncher production gating (issue #1945)', () => {
   })
 
   afterEach(() => {
-    // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
-    ;(FEATURES as { readingModeQuiz: boolean }).readingModeQuiz = originalReadingModeQuiz
+    Reflect.set(FEATURES, 'readingModeQuiz', originalReadingModeQuiz)
     vi.restoreAllMocks()
   })
 
   it('renders nothing on the normal production Roll surface when the quiz feature is disabled', () => {
-    // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
-    ;(FEATURES as { readingModeQuiz: boolean }).readingModeQuiz = false
+    Reflect.set(FEATURES, 'readingModeQuiz', false)
 
     const { container } = render(<ReadingModeLauncher />)
 
@@ -38,8 +36,7 @@ describe('ReadingModeLauncher production gating (issue #1945)', () => {
   })
 
   it('exposes the launcher and quiz entry point only when the feature is explicitly enabled', () => {
-    // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
-    ;(FEATURES as { readingModeQuiz: boolean }).readingModeQuiz = true
+    Reflect.set(FEATURES, 'readingModeQuiz', true)
 
     render(<ReadingModeLauncher />)
 
