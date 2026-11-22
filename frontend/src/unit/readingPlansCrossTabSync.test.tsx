@@ -148,6 +148,7 @@ it('announces a committed plan delete to other tabs (#5686)', async () => {
   observer.addEventListener('message', (event: MessageEvent<unknown>) => {
     const data = event.data
     if (data && typeof data === 'object' && 'type' in data) {
+      // SAFETY: the 'in' guard above confirms the broadcast payload carries a type field.
       changes.push(String((data as { type: unknown }).type))
     }
   })
@@ -175,6 +176,7 @@ it('announces a committed plan save to other tabs (#5686)', async () => {
   observer.addEventListener('message', (event: MessageEvent<unknown>) => {
     const data = event.data
     if (data && typeof data === 'object' && 'type' in data) {
+      // SAFETY: the 'in' guard above confirms the broadcast payload carries a type field.
       changes.push(String((data as { type: unknown }).type))
     }
   })
@@ -207,6 +209,7 @@ it('announces a committed plan adoption to other tabs (#5686 G1)', async () => {
   observer.addEventListener('message', (event: MessageEvent<unknown>) => {
     const data = event.data
     if (data && typeof data === 'object' && 'type' in data) {
+      // SAFETY: the 'in' guard above confirms the broadcast payload carries a type field.
       changes.push(String((data as { type: unknown }).type))
     }
   })
