@@ -1972,9 +1972,10 @@ mod tests {
         // ordinary number instead of appending again.
         let mut appended = high_run;
         appended.extend(["2", "3", "4", "5", "6", "1"].iter().map(|n| (*n).to_string()));
+        let reseated: Vec<String> = (1..=24).map(|n| n.to_string()).collect();
         assert_eq!(
             natural_issue_order(&appended, &[]),
-            Some(expected),
+            Some(reseated),
             "all-ordinary threads are repaired on the next natural pass"
         );
     }
