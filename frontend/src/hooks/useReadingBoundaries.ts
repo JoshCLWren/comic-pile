@@ -3,6 +3,8 @@ import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { recordReadingBoundaryEvaluator } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 
+const EVALUATOR_CAPABILITY_TTL_MS = 30_000
+
 /** Reading state shares dependency invalidation after reads, list edits and rule changes. */
 export function useReadingBoundaries(threadIds: number[], enabled = true) {
   const client = useQueryClient()
