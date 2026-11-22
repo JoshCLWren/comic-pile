@@ -142,7 +142,7 @@ describe('ContinuityPlannerPage - Custom CBL apply (#3609)', () => {
     // SAFETY: each API method is replaced by a vi.fn() stub configured below and restored in afterEach.
     customCBLApi.apply = mocks.cblApply as never
     vi.clearAllMocks()
-    mocks.list.mockResolvedValue({ plans: [], next_page_token: null })
+    mocks.list.mockResolvedValue([])
     mocks.listGroups.mockResolvedValue([{ id: 8, name: 'Fourth World', memberships: [], created_at: '2026-08-12T00:00:00Z' }])
     mocks.listIssues.mockResolvedValue({ issues: [], total_count: 0, page_size: 100, next_page_token: null })
     mocks.listThreads.mockResolvedValue({ threads: [thread], next_page_token: null })
@@ -180,7 +180,7 @@ describe('ContinuityPlannerPage - Custom CBL apply (#3609)', () => {
     const holdListRefresh = vi.fn(async () => {
       signalRefreshStarted()
       await refreshReleased
-      return { plans: [], next_page_token: null }
+      return []
     })
 
     render(
