@@ -4,7 +4,8 @@ import { isFunction } from '../utils/runtimeChecks'
 
 type InjectableFunction = (...args: never[]) => void
 type InjectableFunctionTable = Record<string, InjectableFunction>
-type ModuleDoubleFactory = () => object | Promise<object>
+type ImportOriginal = <OriginalModule = object>() => Promise<OriginalModule>
+type ModuleDoubleFactory = (importOriginal: ImportOriginal) => object | Promise<object>
 
 /**
  * Installs explicit test doubles on Vitest's configurable ES-module exports.

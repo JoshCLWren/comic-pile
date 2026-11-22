@@ -169,7 +169,9 @@ describe('LoginPage password recovery entry point', () => {
   it('exposes a discoverable forgot-password link', () => {
     render(
       <MemoryRouter>
-        <LoginPage />
+        <AuthContext.Provider value={auth}>
+          <LoginPage />
+        </AuthContext.Provider>
       </MemoryRouter>,
     )
 
@@ -298,7 +300,9 @@ describe('post-reset re-login', () => {
     login.mockResolvedValueOnce(undefined)
     render(
       <MemoryRouter>
-        <LoginPage />
+        <AuthContext.Provider value={auth}>
+          <LoginPage />
+        </AuthContext.Provider>
       </MemoryRouter>,
     )
 
