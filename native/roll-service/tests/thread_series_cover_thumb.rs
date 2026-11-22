@@ -1,3 +1,195 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+use axum::{
+    body::{to_bytes, Body},
+    http::{header, Request, StatusCode},
+};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
+use serde_json::{json, Value};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
+use tower::ServiceExt;
+
+static NEXT_TEST_CLIENT: AtomicUsize = AtomicUsize::new(1);
+
+fn unique_suffix() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+}
+
+struct Ctx {
+    state: Arc<AppState>,
+    token: String,
+    csrf: String,
+    user_id: i32,
+    _guard: tokio::sync::MutexGuard<'static, ()>,
+}
+
+async fn setup(prefix: &str) -> Ctx {
+    let url = comicpile_roll_service::test_support::database_url().await;
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-thread-series-cover-secret".into()),
+            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            _ => None,
+        })
+        .unwrap(),
+    ));
+    let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
+    let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
+    let (token, csrf, user_id) = register_user(&state, &username).await;
+    Ctx {
+        state,
+        token,
+        csrf,
+        user_id,
+        _guard: guard,
+    }
+}
+
+async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String, i32) {
+    let response = router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/auth/register")
+                .header(
+                    "x-forwarded-for",
+                    format!(
+                        "2001:db8::{:x}",
+                        NEXT_TEST_CLIENT.fetch_add(1, Ordering::Relaxed)
+                    ),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "username": username,
+                        "email": format!("{username}@example.com"),
+                        "password": "correct-horse-battery"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let csrf = response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|cookie| cookie.to_str().ok())
+        .find_map(|cookie| cookie.strip_prefix("csrf_token="))
+        .and_then(|cookie| cookie.split(';').next())
+        .unwrap_or_else(|| panic!("csrf cookie missing (status {status})"))
+        .to_owned();
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let token = body["access_token"].as_str().unwrap().to_owned();
+    let user_id: i32 = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one("SELECT id FROM users WHERE username = $1", &[&username])
+        .await
+        .unwrap()
+        .get(0);
+    (token, csrf, user_id)
+}
+
+fn authed(method: &str, path: &str, token: &str, csrf: &str) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri(path)
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header("x-csrf-token", csrf)
+        .header(header::COOKIE, format!("csrf_token={csrf}"))
+        .body(Body::empty())
+        .unwrap()
+}
+
+async fn call(ctx: &Ctx, method: &str, path: &str) -> (StatusCode, Value) {
+    let response = router(ctx.state.clone())
+        .oneshot(authed(method, path, &ctx.token, &ctx.csrf))
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 256 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    (status, body)
+}
+
+async fn seed_thread(
+    ctx: &Ctx,
+    user_id: i32,
+    title: &str,
+    status: &str,
+    queue_position: i32,
+) -> i32 {
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position,
+                                   status, manual_creator_credits, is_test, is_blocked,
+                                   queue_position_is_manual, created_at)
+              VALUES ($1, $2, 'Comic', 0, $3, $4, '[]'::json, false, false, false, NOW())
+              RETURNING id",
+            &[&user_id, &title, &queue_position, &status],
+        )
+        .await
+        .unwrap()
+        .get(0)
+}
+
+async fn seed_issue(ctx: &Ctx, thread_id: i32, number: &str, position: i32, status: &str) -> i32 {
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, status, position, created_at)
+              VALUES ($1, $2, $3, $4, NOW()) RETURNING id",
+            &[&thread_id, &number, &status, &position],
+        )
+        .await
+        .unwrap()
+        .get(0)
+}
+
+async fn set_frontier(ctx: &Ctx, thread_id: i32, next_unread_issue_id: Option<i32>) {
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "UPDATE threads SET next_unread_issue_id = $2, reading_progress = 'in_progress'
+              WHERE id = $1",
+            &[&thread_id, &next_unread_issue_id],
+        )
+        .await
+        .unwrap();
+}
+
+fn thread_cover(body: &Value, title: &str) -> Option<String> {
+    let threads = body["threads"].as_array()?;
+    threads
+        .iter()
+        .find(|thread| thread["title"] == title)
+        .and_then(|thread| thread["series_cover_image_url"].as_str())
+        .map(|s| s.to_owned())
+}
+
 #[tokio::test]
 async fn series_cover_uses_thumb_url_fallback() {
     let ctx = setup("sc-thumb-fallback").await;
