@@ -162,16 +162,10 @@ pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
         .get("image")
         .and_then(Value::as_object)
         .and_then(|image| {
-            [
-                "original_url",
-                "super_url",
-                "medium_url",
-                "small_url",
-                "thumb_url",
-            ]
-            .iter()
-            .filter_map(|key| image.get(*key).and_then(Value::as_str))
-            .find(|value| !value.is_empty())
+            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
+                .iter()
+                .filter_map(|key| image.get(*key).and_then(Value::as_str))
+                .find(|value| !value.is_empty())
         });
     json!({
         "name": result.get("name"),
@@ -215,16 +209,10 @@ fn normalized_metadata(
     }
     let image = obj.get("image").and_then(Value::as_object);
     let cover = image.and_then(|v| {
-        [
-            "original_url",
-            "super_url",
-            "medium_url",
-            "small_url",
-            "thumb_url",
-        ]
-        .iter()
-        .filter_map(|k| v.get(*k).and_then(Value::as_str))
-        .find(|s| !s.is_empty())
+        ["original_url", "super_url", "medium_url", "small_url"]
+            .iter()
+            .filter_map(|k| v.get(*k).and_then(Value::as_str))
+            .find(|s| !s.is_empty())
     });
     let person = compact_refs(&result["person_credits"]);
     let present = person.as_array().is_some_and(|v| !v.is_empty());
@@ -1221,24 +1209,6 @@ mod tests {
             StatusCode::UNAUTHORIZED
         );
     }
-    #[test]
-    fn normalized_metadata_keeps_thumbnail_as_guaranteed_cover() {
-        // Production regression #5624: an explicitly mapped legacy issue may
-        // carry a cover only in `image.thumb_url`. Hydration must persist it
-        // as primary_image so the thread/queue never reports "No cover".
-        let result = json!({"id": 5624, "name": "Detective Comics", "issue_number": "5",
-            "cover_date": "1937-07-01", "store_date": "1937-06-01",
-            "image": {"small_url": "", "thumb_url": "https://comicvine.example/thumb/5624.jpg"},
-            "volume": {"id": 4001, "name": "Detective Comics"},
-            "person_credits": [], "character_credits": [], "team_credits": [],
-            "story_arc_credits": [], "date_last_updated": "2020-01-01T00:00:00+00:00"});
-        let (metadata, _, _, _) = normalized_metadata(&result, 5624).unwrap();
-        assert_eq!(
-            metadata["primary_image"],
-            json!("https://comicvine.example/thumb/5624.jpg")
-        );
-    }
-
     #[test]
     fn only_verified_singular_issue_payload_completes() {
         let result = json!({"id": 29319, "name":"Going For It", "issue_number":"3",

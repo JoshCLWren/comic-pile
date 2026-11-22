@@ -1222,23 +1222,6 @@ pub struct ReadingListMembershipCheckResponse {
     pub thread_ids: Vec<i32>,
 }
 
-/// Documentation-only operation for the batched reading-list membership check.
-#[utoipa::path(
-    post,
-    path = "/api/v2/reading-lists/memberships:check",
-    tag = "reading-lists",
-    description = "Return which requested threads belong to another owned reading list.",
-    request_body = ReadingListMembershipCheckRequest,
-    responses(
-        (status = 200, description = "Thread ids present in another owned reading list", body = ReadingListMembershipCheckResponse),
-        (status = 400, description = "Invalid thread ids"),
-        (status = 401, description = "Not authenticated")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn check_thread_memberships_documentation() {}
-
 const MAX_MEMBERSHIP_CHECK_THREAD_IDS: usize = 1000;
 
 /// `POST /api/v2/reading-lists/memberships:check`

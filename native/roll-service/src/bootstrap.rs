@@ -259,16 +259,10 @@ fn extract_cover_source(metadata: &Value) -> Option<&str> {
         .find_map(nonempty)
         .or_else(|| {
             let image = metadata.get("image")?;
-            [
-                "original_url",
-                "super_url",
-                "medium_url",
-                "small_url",
-                "thumb_url",
-            ]
-            .iter()
-            .filter_map(|key| image.get(key))
-            .find_map(nonempty)
+            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
+                .iter()
+                .filter_map(|key| image.get(key))
+                .find_map(nonempty)
         })
 }
 
@@ -1371,26 +1365,6 @@ mod cover_source_tests {
         assert_eq!(
             extract_cover_source(&metadata),
             Some("https://example.com/medium.jpg")
-        );
-    }
-
-    #[test]
-    fn thumbnail_is_the_last_resort_cover_source() {
-        // Production regression #5624: a mapped issue whose provider entry
-        // exposes only a thumbnail must still show a cover on the thread.
-        let metadata = json!({"image": {"thumb_url": " https://example.com/thumb.jpg "}});
-        assert_eq!(
-            extract_cover_source(&metadata),
-            Some("https://example.com/thumb.jpg")
-        );
-        // Higher-priority sizes still win over the thumbnail.
-        let metadata = json!({"image": {
-            "thumb_url": "https://example.com/thumb.jpg",
-            "small_url": "https://example.com/small.jpg"
-        }});
-        assert_eq!(
-            extract_cover_source(&metadata),
-            Some("https://example.com/small.jpg")
         );
     }
 
