@@ -1345,8 +1345,91 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
         .iter()
         .map(|row| (row.get(0), row.get(1)))
         .collect();
+    let ratings_after: Vec<(i32, Option<f64>)> = conn
+        .query(
+            "SELECT issue_id, rating FROM events \
+             WHERE user_id=$1 AND type='rate' ORDER BY issue_id, id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    let dependencies_after: Vec<(i32, i32, i32, Option<String>, Option<String>)> = conn
+        .query(
+            "SELECT d.id, d.source_issue_id, d.target_issue_id, d.note, d.origin \
+             FROM dependencies d \
+             JOIN issues i ON i.id=d.source_issue_id \
+             JOIN threads t ON t.id=i.thread_id \
+             WHERE t.user_id=$1 ORDER BY d.id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| {
+            (
+                row.get(0),
+                row.get(1),
+                row.get(2),
+                row.get(3),
+                row.get(4),
+            )
+        })
+        .collect();
     assert_eq!(issue_states_after, issue_states_before);
     assert_eq!(list_positions_after, list_positions_before);
+    assert_eq!(ratings_after, ratings_before);
+    assert_eq!(dependencies_after, dependencies_before);
+
+    // A stale snoozed offer is another way King could re-enter Roll. Removing
+    // its snooze is allowed, but unsnooze must not restore an ineligible pending
+    // offer or revert the die even when it is the latest snooze event.
+    conn.execute(
+        "UPDATE sessions SET snoozed_thread_ids=$2::text::json WHERE user_id=$1",
+        &[&user_id, &json!([king_thread]).to_string()],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "INSERT INTO events (user_id, type, timestamp, die, die_after, thread_id) \
+         VALUES ($1, 'snooze', clock_timestamp(), 6, 1, $2)",
+        &[&user_id, &king_thread],
+    )
+    .await
+    .unwrap();
+    let (status, unsnooze) = send(
+        &state,
+        post(
+            "/api/v2/roll/unsnooze",
+            &token,
+            &csrf,
+            Some(json!({ "thread_id": king_thread })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{unsnooze:?}");
+    assert_eq!(unsnooze["restored"], false);
+    let session_state: (Option<i32>, Option<String>) = conn
+        .query_one(
+            "SELECT pending_thread_id, snoozed_thread_ids::text FROM sessions WHERE user_id=$1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .into();
+    assert_eq!(session_state.0, Some(dead_thread));
+    assert_eq!(session_state.1.as_deref(), Some("[]"));
+    let unsnooze_events: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM events WHERE user_id=$1 AND type='unsnooze'",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(unsnooze_events, 0);
 }
 
 #[tokio::test]
