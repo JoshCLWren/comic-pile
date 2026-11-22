@@ -491,6 +491,12 @@ pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, 
     }
     let mut prerequisites = vec![];
     for row in snapshot.prerequisites {
+        // The graph-audit statement deliberately includes historical evidence.
+        // Keep this second execution boundary even though the normal SQL also
+        // filters by origin, so diagnostic rows can never become constraints.
+        if row.origin.as_deref() != Some("reader") {
+            continue;
+        }
         if !owned.contains(&row.source_issue_id) || !owned.contains(&row.target_issue_id) {
             unresolved.push(UnresolvedReference {
                 kind: "prerequisite",
