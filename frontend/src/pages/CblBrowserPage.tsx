@@ -282,13 +282,10 @@ export default function CblBrowserPage() {
     gcTime: 15 * 60 * 1000, // 15 minutes
   })
   const browsePage = browseQuery.data ?? null
-  // While a new folder/search loads, `keepPreviousData` leaves the prior page
-  // in place. Those stale folders must not appear under a fresh search banner
-  // (#4171). Compare the served position with the URL instead of hiding on any
-  // placeholder fetch, so a server-clamped page still renders its result.
+  // Hide stale folders under a fresh search banner (#4171), but keep a
+  // server-clamped page visible: compare the served position, not the placeholder.
   const browseStale =
-    browseQuery.isFetching &&
-    browsePage !== null &&
+    browseQuery.isFetching && browsePage !== null &&
     (submittedQuery
       ? browsePage.scope !== 'search' || (browsePage.query ?? '') !== submittedQuery
       : browsePage.scope === 'search' || browsePage.folder !== folder)
