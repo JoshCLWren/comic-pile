@@ -404,19 +404,6 @@ const [customCblList, setCustomCblList] = useState<Array<{ id: number; name: str
       const committed = await customCBLApi.apply(cblId, planId!)
       acceptCommittedPlan(committed)
     } catch (error) {
-      // TODO: handle error appropriately
-      setSaveError('Failed to apply custom CBL')
-    } finally {
-      setCblApplyPending(false)
-    }
-  }
-
-  const applyCustomCBL = async (cblId: number) => {
-    setCblApplyPending(true)
-    try {
-      const committed = await customCBLApi.apply(cblId, planId!)
-      acceptCommittedPlan(committed)
-    } catch (error) {
       setSaveError('Failed to apply custom CBL')
     } finally {
       setCblApplyPending(false)
