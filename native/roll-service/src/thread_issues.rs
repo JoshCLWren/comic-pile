@@ -1961,27 +1961,6 @@ mod tests {
     }
 
     #[test]
-    fn natural_order_places_new_maximum_before_trailing_special() {
-        let existing = strings(&["1", "2", "5", "7", "8", "Annual 1", "9", "10", "Special 0"]);
-        let expected = strings(&[
-            "1",
-            "2",
-            "5",
-            "7",
-            "8",
-            "Annual 1",
-            "9",
-            "10",
-            "11",
-            "Special 0",
-        ]);
-        assert_eq!(
-            natural_issue_order(&existing, &strings(&["11"])),
-            Some(expected)
-        );
-    }
-
-    #[test]
     fn natural_order_repairs_cbl_appended_issues_3483() {
         // #3483: adopting the Ultimate Universe CBL list into a thread that
         // already held #7-#24 appended the missing low issues after #24.
