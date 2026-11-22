@@ -52,9 +52,11 @@ export default function QueuePage() {
     data: threads,
     isPending,
     isError,
+    isPlaceholderData,
     nextPageToken,
     loadMore,
     activeCount,
+    filteredCount,
   } = queueLoader
 
   // Series that show the per-row `Map series` repair action (everything except
@@ -181,6 +183,9 @@ export default function QueuePage() {
       <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
         <QueueControls
           activeCount={authoritativeActiveCount}
+          filteredCount={filteredCount}
+          countPending={isPlaceholderData || (isPending && !threads?.length)}
+          countError={isError && !threads?.length}
           shuffleDisabled={shuffleDisabled}
           shufflePending={shuffleQueueMutation.isPending}
           onShuffle={actions.requestShuffle}

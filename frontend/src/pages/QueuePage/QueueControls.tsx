@@ -5,6 +5,9 @@ const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
   activeCount: number
+  filteredCount: number | null
+  countPending?: boolean
+  countError?: boolean
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
@@ -34,6 +37,9 @@ interface QueueControlsProps {
  */
 function QueueControlsInner({
   activeCount,
+  filteredCount,
+  countPending = false,
+  countError = false,
   shuffleDisabled,
   shufflePending,
   onShuffle,
