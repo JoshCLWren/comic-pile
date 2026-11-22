@@ -455,18 +455,25 @@ async def test_extra_and_n_plus_one_queries_fail_roll_budget_guards(
         assert baseline.response.get("status") == 200, baseline.response
 
         # Same measurement window as a real route, plus deliberate extra queries.
+        # Use a fresh reader so the observed route executes the same path shape as
+        # the baseline, not a post-mutation follow-up state.
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            observed_seed = dict(seed_kwargs)
+            observed_seed["prefix"] = f"budget_guard_observed_{path.replace('/', '_').strip('_')}"
+            observed_reader = await _seed_reader(db, **observed_seed)
+
+        observed_body = body_by_path[path]
         env = {
             **os.environ,
             "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_POOL_SIZE": "2",
-            "RUST_ROLL_TEST_TOKEN": reader.token,
+            "RUST_ROLL_TEST_TOKEN": observed_reader.token,
             "RUST_ROLL_TEST_METHOD": method,
             "RUST_ROLL_TEST_URI": path,
         }
-        # Use fresh idempotency keys so route mutations remain valid.
-        if body is not None:
-            route_body = dict(body)
+        if observed_body is not None:
+            route_body = dict(observed_body)
             if "idempotency_key" in route_body:
                 route_body["idempotency_key"] = f"budget-extra-{uuid4().hex}"
             env["RUST_ROLL_TEST_BODY"] = json.dumps(route_body)
