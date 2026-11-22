@@ -239,7 +239,7 @@ async fn seed_strict_wait(state: &Arc<AppState>, owner: i32) -> (i32, i32, i32) 
 /// is in flight must not split labels and eligibility across two snapshots.
 #[tokio::test]
 async fn concurrent_list_mutation_cannot_split_boundary_snapshot() {
-    let Some((state, _db)) = database().await else {
+    let Some((state, _db)) = database(true).await else {
         return;
     };
     let (token, csrf, owner) = register(&state, "boundary-g5-reader").await;
