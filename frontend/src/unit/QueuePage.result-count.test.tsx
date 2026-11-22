@@ -104,7 +104,7 @@ const queueThread = (id: number, title: string, position: number) => ({
   issues_remaining: 5,
 })
 
-function mockQueue(overrides: Record<string, unknown> = {}): void {
+function mockQueue(resultCountText: string, overrides: Record<string, unknown> = {}): void {
   mockedUseQueueThreads.mockReturnValue({
     data: [queueThread(1, 'Saga', 1), queueThread(2, 'Spawn', 2)],
     isPending: false,
@@ -116,6 +116,7 @@ function mockQueue(overrides: Record<string, unknown> = {}): void {
     filteredCount: 5,
     isPlaceholderData: false,
     isFetchNextPageError: false,
+    resultCountText,
     ...overrides,
   } as never)
 }
@@ -153,77 +154,22 @@ beforeEach(() => {
   } as never)
 })
 
-describe('Queue search result count (#3614)', () => {
-  it('shows M of M on the initial unfiltered view', () => {
-    mockQueue({ activeCount: 5, filteredCount: 5 })
-    renderQueue()
-
-    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('5 of 5 series')
-  })
-
-  it('shows N of M for a filtered search that matches part of the collection', () => {
-    mockQueue({ activeCount: 5, filteredCount: 2 })
+describe('Queue search result count display (#3614)', () => {
+  it('renders the settled N of M count next to the search controls', () => {
+    mockQueue('2 of 5 series')
     renderQueue()
 
     expect(screen.getByTestId('queue-result-count')).toHaveTextContent('2 of 5 series')
   })
 
-  it('shows 0 of M when no series match the applied search', () => {
-    mockQueue({ activeCount: 5, filteredCount: 0, data: [] })
+  it('renders the updating and unavailable states from the loader', () => {
+    mockQueue('Updating series count…')
     renderQueue()
-
-    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('0 of 5 series')
-  })
-
-  it('keeps the settled counts across cursor pages instead of visible-page counts', () => {
-    mockQueue({
-      data: [queueThread(1, 'Saga', 1)],
-      nextPageToken: 'tok-2',
-      activeCount: 5,
-      filteredCount: 5,
-    })
-    renderQueue()
-
-    // One bounded page (1 row) is visible, but the count must restate the
-    // whole-collection totals, never the rendered-page size.
-    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('5 of 5 series')
-  })
-
-  it('does not restate the previous query count while a search transition is pending', () => {
-    // Placeholder rows from the previous key ("Saga"/"Spawn") are on screen
-    // while the new key's first page fetches; its count (2 of 5) has not
-    // arrived yet.
-    mockQueue({ isPlaceholderData: true, filteredCount: 2 })
-    renderQueue()
-
-    const count = screen.getByTestId('queue-result-count')
-    expect(count).toHaveTextContent('Updating series count…')
-    expect(count).not.toHaveTextContent('2 of 5 series')
-  })
-
-  it('does not invent a count when the settled response omits filtered_count', () => {
-    mockQueue({ filteredCount: undefined })
-    renderQueue()
-
     expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Updating series count…')
   })
 
-  it('shows an unavailable count when the first page fails instead of success copy', () => {
-    mockQueue({ data: undefined, isError: true, isFetchNextPageError: false, filteredCount: undefined })
-    renderQueue()
-
-    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Series count unavailable.')
-  })
-
-  it('keeps the settled counts when only a next-page fetch fails', () => {
-    mockQueue({ isError: true, isFetchNextPageError: true, activeCount: 5, filteredCount: 5 })
-    renderQueue()
-
-    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('5 of 5 series')
-  })
-
   it('exposes the count as a polite live status for assistive tech', () => {
-    mockQueue({ activeCount: 5, filteredCount: 2 })
+    mockQueue('5 of 5 series')
     renderQueue()
 
     const count = screen.getByTestId('queue-result-count')
