@@ -1842,4 +1842,41 @@ mod tests {
         );
         assert_eq!(issue_id("4000-29319"), Some(29319));
     }
+
+    /// #5592: ComicVine 420 is a rate limit (Python parity), not provider_unavailable.
+    #[tokio::test]
+    async fn provider_response_treats_420_as_rate_limited() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let mut headers = HeaderMap::new();
+        headers.insert("retry-after", "120".parse().unwrap());
+        state
+            .recording_fake()
+            .expect("recording provider")
+            .push_ok(StatusCode::from_u16(420).unwrap(), headers, Bytes::new());
+        let err = provider_response(&state.outbound, "issue/4000-1", "", "TESTKEY123")
+            .await
+            .expect_err("420 must be rate limited");
+        assert!(matches!(err, ProviderFailure::RateLimited(120)));
+    }
+
+    /// #5592: 403 is a plain provider error (Python parity), not a throttle.
+    #[tokio::test]
+    async fn provider_response_treats_403_as_unavailable() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::FORBIDDEN,
+            HeaderMap::new(),
+            Bytes::new(),
+        );
+        let err = provider_response(&state.outbound, "issue/4000-1", "", "TESTKEY123")
+            .await
+            .expect_err("403 must be unavailable");
+        assert!(matches!(err, ProviderFailure::Unavailable));
+    }
 }
