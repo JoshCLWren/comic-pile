@@ -97,6 +97,8 @@ describe('AuthProvider transient recovery', () => {
   })
 
   afterEach(() => {
+    Object.assign(api, originalApiMethods)
+    Object.assign(authTransport, originalAuthTransport)
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
