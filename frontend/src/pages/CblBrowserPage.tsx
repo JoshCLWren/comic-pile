@@ -1370,9 +1370,10 @@ export default function CblBrowserPage() {
 
               {browsePage.total > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  {browsePage.items.length > 0 && (
+                  {settledBrowsePage && settledBrowsePage.items.length > 0 && (
                     <p role="status" className="text-xs text-[var(--theme-text-muted)]">
-                      Showing {firstShown}–{lastShown} of {sourceCountLabel(browsePage.total)}
+                      Showing {firstShown}–{lastShown} of{' '}
+                      {sourceCountLabel(settledBrowsePage.total)}
                     </p>
                   )}
                   <div className="flex items-center gap-2">
