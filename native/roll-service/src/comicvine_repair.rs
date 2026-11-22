@@ -834,7 +834,9 @@ async fn backfill_authorized(
                        AND e.entity_type = 'issue' AND {NEEDS_DEEP_FETCH_SQL} \
                      ORDER BY e.id LIMIT $2"
                 ),
-                &[&after, &limit],
+                // LIMIT is bigint in PostgreSQL; bind i64 so the bounded
+                // backfill query never fails with a client-side ToSql error.
+                &[&after, &i64::from(limit)],
             )
             .await
             .map_err(db::query_error)?
@@ -1852,9 +1854,6 @@ mod tests {
 
     #[tokio::test]
     async fn backfill_is_bounded_resumable_and_dry_runnable() {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::TRACE)
-            .try_init();
         let Some(state) = crate::test_support::test_state(2).await else {
             return;
         };

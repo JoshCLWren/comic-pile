@@ -238,7 +238,6 @@ pub(crate) fn query_error_for(operation: &'static str, error: tokio_postgres::Er
             tracing::error!(
                 operation,
                 sqlstate = sqlstate.unwrap_or("none"),
-                error = ?error,
                 "database statement failed"
             );
             ApiError::Internal("Internal Server Error".to_string())
