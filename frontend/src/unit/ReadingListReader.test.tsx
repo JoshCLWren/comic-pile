@@ -12,13 +12,16 @@ import { issueCardsApi, type IssueCard, type IssueReadRateResponse } from '../se
 import { queryKeys } from '../query/queryKeys'
 
 const original_customCBLApi = { ...customCBLApi }
-const mock_customCBLApi = { getReader: vi.fn() }
+const mock_customCBLApi = { getReader: vi.fn<typeof customCBLApi.getReader>() }
 
 const original_issuesApi = { ...issuesApi }
-const mock_issuesApi = { markRead: vi.fn(), markUnread: vi.fn() }
+const mock_issuesApi = {
+  markRead: vi.fn<typeof issuesApi.markRead>(),
+  markUnread: vi.fn<typeof issuesApi.markUnread>(),
+}
 
 const original_tagsApi = { ...tagsApi }
-const mock_tagsApi = { threadIssuesEffective: vi.fn() }
+const mock_tagsApi = { threadIssuesEffective: vi.fn<typeof tagsApi.threadIssuesEffective>() }
 
 const view: ReaderView = {
   list_id: 2, name: 'Julix', mode: 'strict', execution_mode: 'option_e', entries: [
