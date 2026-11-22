@@ -1098,8 +1098,11 @@ mod tests {
                  VALUES \
                    (11, 'Owned', 'Series', 1, 1, 'active', 1), \
                    (12, 'Other', 'Series', 1, 1, 'active', 2); \
-                 INSERT INTO issues (id, thread_id, issue_number, status, position) \
-                 VALUES (101, 11, '3', 'unread', 1), (102, 12, '3', 'unread', 1); \
+                 INSERT INTO issues \
+                   (id, thread_id, issue_number, status, position, created_at) \
+                 VALUES \
+                   (101, 11, '3', 'unread', 1, now()), \
+                   (102, 12, '3', 'unread', 1, now()); \
                  INSERT INTO external_identities \
                    (id, provider, entity_type, external_id, metadata_json, \
                     provider_updated_at, created_at, updated_at) \
