@@ -50,7 +50,9 @@ afterEach(() => {
 function renderForgot(initialEntry = '/forgot-password') {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <ForgotPasswordPage />
+      <AuthContext.Provider value={auth}>
+        <ForgotPasswordPage />
+      </AuthContext.Provider>
     </MemoryRouter>,
   )
 }
@@ -58,7 +60,9 @@ function renderForgot(initialEntry = '/forgot-password') {
 function renderReset(initialEntry = '/reset-password') {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <ResetPasswordPage />
+      <AuthContext.Provider value={auth}>
+        <ResetPasswordPage />
+      </AuthContext.Provider>
     </MemoryRouter>,
   )
 }

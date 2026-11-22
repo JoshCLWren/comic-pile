@@ -129,10 +129,17 @@ function renderPage() {
   )
 }
 
-vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
-
 beforeEach(() => {
+  Object.assign(dependencyGroupsApi, mockedGroups)
+  Object.assign(threadsApi, mockedThreads)
+  Object.assign(issuesApi, mockedIssues)
+  Object.assign(issueCardsApi, { fetchCards })
   vi.clearAllMocks()
+  fetchCards.mockResolvedValue([])
+  mockedThreads.checkExcludedStatus.mockResolvedValue({
+    excluded_thread_ids: [],
+    active_thread_ids: [],
+  })
 })
 
 describe('CrossoverDetailPage', () => {
