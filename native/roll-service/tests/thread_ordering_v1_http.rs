@@ -1091,6 +1091,41 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
         .iter()
         .map(|row| (row.get(0), row.get(1)))
         .collect();
+    let ratings_before: Vec<(i32, Option<f64>)> = conn
+        .query(
+            "SELECT issue_id, rating FROM events \
+             WHERE user_id=$1 AND type='rate' ORDER BY issue_id, id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    assert_eq!(ratings_before.len(), 2);
+    let dependencies_before: Vec<(i32, i32, i32, Option<String>, Option<String>)> = conn
+        .query(
+            "SELECT d.id, d.source_issue_id, d.target_issue_id, d.note, d.origin \
+             FROM dependencies d \
+             JOIN issues i ON i.id=d.source_issue_id \
+             JOIN threads t ON t.id=i.thread_id \
+             WHERE t.user_id=$1 ORDER BY d.id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| {
+            (
+                row.get(0),
+                row.get(1),
+                row.get(2),
+                row.get(3),
+                row.get(4),
+            )
+        })
+        .collect();
+    assert_eq!(dependencies_before.len(), 1);
 
     // Both native Roll reads expose only The Dead Remembered #2. A top-die
     // bound, stored queue position, or cached blocked flag cannot resurrect King.
