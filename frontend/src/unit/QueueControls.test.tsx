@@ -6,6 +6,9 @@ import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 
 const baseProps = {
   activeCount: 3,
+  filteredCount: 3,
+  countPending: false,
+  countError: false,
   shuffleDisabled: false,
   shufflePending: false,
   onShuffle: vi.fn(),
@@ -243,4 +246,35 @@ describe('QueueControls', () => {
     expect(baseProps.onSearchChange).not.toHaveBeenCalled()
   })
 
+  it('shows M of M series when unfiltered', () => {
+    render(<QueueControls {...baseProps} activeCount={371} filteredCount={371} searchQuery="" />)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('371 of 371 series')
+  })
+
+  it('shows N of M series for applied filtered results', () => {
+    render(<QueueControls {...baseProps} activeCount={371} filteredCount={12} searchQuery="bat" />)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('12 of 371 series')
+  })
+
+  it('shows 0 of M series when no results match', () => {
+    render(<QueueControls {...baseProps} activeCount={371} filteredCount={0} searchQuery="zzzz-no-match" />)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('0 of 371 series')
+  })
+
+  it('shows loading state instead of stale counts while count is pending', () => {
+    render(<QueueControls {...baseProps} activeCount={371} filteredCount={null} countPending />)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Updating series count…')
+  })
+
+  it('shows error state when count is unavailable', () => {
+    render(<QueueControls {...baseProps} activeCount={371} filteredCount={null} countError />)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Series count unavailable.')
+  })
+
+  it('announces result count updates accessibly', () => {
+    render(<QueueControls {...baseProps} activeCount={10} filteredCount={3} />)
+    const count = screen.getByTestId('queue-result-count')
+    expect(count).toHaveAttribute('role', 'status')
+    expect(count).toHaveAttribute('aria-live', 'polite')
+  })
 })
