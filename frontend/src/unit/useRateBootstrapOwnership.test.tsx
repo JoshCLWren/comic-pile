@@ -20,7 +20,9 @@ const mock_protectedRollMutationApi = { rate: vi.fn(), snooze: vi.fn(), bootstra
 const original_rollBootstrapApi = { ...rollBootstrapApi }
 const mock_rollBootstrapApi = { get: vi.fn() }
 
+// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedRate = (mock_protectedRollMutationApi.rate as any)
+// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedBootstrapGet = (mock_rollBootstrapApi.get as any)
 
 const thread: Thread = {

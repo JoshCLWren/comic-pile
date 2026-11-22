@@ -9,6 +9,7 @@ import type { CreatorTeamChemistryResponse } from '../types/index'
 const original_creatorTeamChemistryApi = { ...creatorTeamChemistryApi }
 const mock_creatorTeamChemistryApi = { getChemistry: vi.fn() }
 
+// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedGetChemistry = (mock_creatorTeamChemistryApi.getChemistry as any)
 
 function makeResponse(): CreatorTeamChemistryResponse {

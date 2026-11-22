@@ -9,6 +9,7 @@ import type { CreatorComparisonResponse } from '../types/index'
 const original_creatorComparisonApi = { ...creatorComparisonApi }
 const mock_creatorComparisonApi = { getComparison: vi.fn() }
 
+// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedGetComparison = (mock_creatorComparisonApi.getComparison as any)
 
 const COMPLETE_COVERAGE = {

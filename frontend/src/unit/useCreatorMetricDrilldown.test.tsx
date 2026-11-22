@@ -23,8 +23,11 @@ const mock_creatorMetricDrilldownApi = { getMetricDrilldown: vi.fn(), getRatingD
 
 // SAFETY: test mocks narrow vi.fn to API method signatures for typed mock calls.
 const mockedGetMetric = (mock_creatorMetricDrilldownApi.getMetricDrilldown as any)
+// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedGetDistribution = (mock_creatorMetricDrilldownApi.getRatingDistributionDrilldown as any)
+// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedGetRole = (mock_creatorMetricDrilldownApi.getRoleDrilldown as any)
+// SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
 const mockedGetSeries = (mock_creatorMetricDrilldownApi.getSeriesDrilldown as any)
 
 function makeResponse(): CreatorMetricDrilldown {

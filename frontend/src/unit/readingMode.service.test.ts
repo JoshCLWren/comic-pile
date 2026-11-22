@@ -17,8 +17,11 @@ const originalPut = api.put
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   api.get = vi.fn() as typeof api.get
+  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   api.post = vi.fn() as typeof api.post
+  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   api.put = vi.fn() as typeof api.put
 })
 

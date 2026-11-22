@@ -46,6 +46,7 @@ function release(overrides: Partial<Release> = {}): Release {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   releasesApi.list = api.list as typeof releasesApi.list
 })
 

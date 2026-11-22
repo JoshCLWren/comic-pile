@@ -72,7 +72,9 @@ function renderRecovery(onRecovered = vi.fn()) {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   readingPlanRecoveryApi.preview = previewApi as typeof readingPlanRecoveryApi.preview
+  // SAFETY: test mock assertion; the cast targets an injected test double with a compatible runtime shape
   readingPlanRecoveryApi.relink = relinkApi as typeof readingPlanRecoveryApi.relink
   previewApi.mockResolvedValue(preview)
   relinkApi.mockResolvedValue({ plan_id: 1000096, list_id: 1000109, status: 'relinked' })
