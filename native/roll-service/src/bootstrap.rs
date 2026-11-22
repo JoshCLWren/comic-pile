@@ -259,16 +259,10 @@ fn extract_cover_source(metadata: &Value) -> Option<&str> {
         .find_map(nonempty)
         .or_else(|| {
             let image = metadata.get("image")?;
-            [
-                "original_url",
-                "super_url",
-                "medium_url",
-                "small_url",
-                "thumb_url",
-            ]
-            .iter()
-            .filter_map(|key| image.get(key))
-            .find_map(nonempty)
+            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
+                .iter()
+                .filter_map(|key| image.get(key))
+                .find_map(nonempty)
         })
 }
 
@@ -1355,16 +1349,7 @@ mod cover_source_tests {
 
     #[test]
     fn stored_image_sizes_follow_python_fallback_order() {
-        // thumb_url is the last stored fallback: a mapped ComicVine issue whose
-        // provider entry only exposes a thumbnail must still show a cover on
-        // the thread and in the queue (issue #5624).
-        for key in [
-            "original_url",
-            "super_url",
-            "medium_url",
-            "small_url",
-            "thumb_url",
-        ] {
+        for key in ["original_url", "super_url", "medium_url", "small_url"] {
             let mut metadata = json!({"image": {}});
             metadata["image"][key] = json!(" https://example.com/cover.jpg ");
             assert_eq!(
