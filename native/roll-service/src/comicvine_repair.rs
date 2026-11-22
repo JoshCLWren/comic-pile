@@ -1461,13 +1461,16 @@ mod tests {
         let identity_id = seed_identity(&state).await; // external id 4000-29319
         seed_request(&state, identity_id, "pending", 0, "-1 hour", None).await;
 
-        let mut payload = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
+        let issue = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
             "cover_date":"1988-03-01", "store_date":"1988-03-24", "image":{},
             "volume":{"id": 4001,"name":"Hellblazer"},
             "person_credits":[{"id":1,"name":"Jamie Delano","api_detail_url":"https://example"}],
             "character_credits":[], "team_credits":[], "story_arc_credits":[],
             "date_last_updated":"2020-01-01T00:00:00+00:00"});
-        payload["status_code"] = json!(1.0);
+        // ComicVine carries `status_code` on the response envelope, not on the
+        // issue `results` object. Production returned `status_code: 1.0` there;
+        // the worker must accept that float and complete the singular fetch.
+        let envelope = json!({"status_code": 1.0, "error": "OK", "results": issue});
         let fake = state
             .outbound
             .as_any()
@@ -1476,7 +1479,7 @@ mod tests {
         fake.push_ok(
             StatusCode::OK,
             HeaderMap::new(),
-            bytes::Bytes::from(payload.to_string()),
+            bytes::Bytes::from(envelope.to_string()),
         );
 
         let job = claim(&state).await.expect("claim").expect("pending job");
@@ -1908,7 +1911,7 @@ mod tests {
                 .query_one(
                     "INSERT INTO external_identities \
                      (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
-                     VALUES ('comicvine','issue',$1,$2::json,now(),now()) RETURNING id",
+                     VALUES ('comicvine','issue',$1,($2::text)::json,now(),now()) RETURNING id",
                     &[&external_id, &metadata],
                 )
                 .await
