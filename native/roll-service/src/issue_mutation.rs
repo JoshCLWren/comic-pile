@@ -386,9 +386,7 @@ pub async fn create_issues(
                 .max()
                 .unwrap_or(0);
             for (offset, number) in new_numbers.iter().enumerate() {
-                created.push(
-                    insert_issue(&tx, thread_id, number, next + offset as i32 + 1).await?,
-                );
+                created.push(insert_issue(&tx, thread_id, number, next + offset as i32 + 1).await?);
             }
         }
     }
