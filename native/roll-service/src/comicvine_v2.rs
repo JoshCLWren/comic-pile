@@ -1826,9 +1826,12 @@ pub async fn import_issue(
         .await
         .map_err(db::query_error)?;
     let issue_id: i32 = issue_row.get(0);
-    // Python `confirm_comicvine_identity` (no post-commit hydration on import).
     let external_identity_id =
         link_with_source(&tx, issue_id, request.comicvine_issue_id, "user_confirmed").await?;
+    // A single-issue import is an adoption too: commit its hydration request
+    // with the identity so creators arrive without a Roll page visit (#5592
+    // AC1). The helper dedups and skips already-hydrated identities.
+    crate::comicvine_repair::enqueue_hydration_batch(&tx, &[external_identity_id]).await?;
 
     let mut response = ImportIssueResponse {
         thread_id,
@@ -2327,6 +2330,9 @@ pub async fn import_series(
                     ),
                 }
             } else {
+                if let Some(identity_id) = existing_identity_ids.get(&cv_text) {
+                    reused_identity_ids.push(*identity_id);
+                }
                 SimOutcome::ReusedExisting(existing_id)
             }
         } else if number.chars().count() > 50 {
@@ -2469,6 +2475,22 @@ pub async fn import_series(
         .await
         .map_err(db::query_error)?;
     }
+
+    // Commit durable hydration work with the adoption. Roster-only identities
+    // carry no `deep_metadata_refreshed_at`, so the repair worker will fetch
+    // the singular issue and persist its creator credits even if the reader
+    // never opens Roll (#5592 AC1). Set-based and idempotent: a reimport does
+    // not duplicate requests, reopen finished rows or overwrite credits.
+    let mut hydration_ids = link_identity_ids.clone();
+    hydration_ids.extend(reused_identity_ids);
+    hydration_ids.sort_unstable();
+    hydration_ids.dedup();
+    let enqueued = crate::comicvine_repair::enqueue_hydration_batch(&tx, &hydration_ids).await?;
+    tracing::info!(
+        enqueued,
+        identities = hydration_ids.len(),
+        "comicvine series import hydration requests committed"
+    );
 
     // Results, in roster order.
     let mut issue_results = Vec::with_capacity(entries.len());
