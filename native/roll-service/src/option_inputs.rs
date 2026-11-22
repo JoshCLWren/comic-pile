@@ -291,6 +291,8 @@ pub(crate) struct SnapshotRows {
     lists: Vec<ListRow>,
     entries: Vec<EntryRow>,
     prerequisites: Vec<PrerequisiteRow>,
+    #[serde(default)]
+    audit_prerequisites: Vec<PrerequisiteRow>,
     evidence: Vec<VolumeEvidenceRow>,
     overlaps: Vec<OverlapRow>,
     exclusions: Vec<ExclusionRow>,
