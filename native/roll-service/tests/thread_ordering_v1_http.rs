@@ -1020,6 +1020,46 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
         .unwrap();
     }
 
+    // The #3672 shadow comparison starts from the same stale stored flags that
+    // admitted King in production. Evaluation must reject it without writes.
+    let shadow_user = auth::authenticate(&state, &token).await.unwrap();
+    let shadow_inputs = option_inputs::load_option_diagnostics(&state, shadow_user)
+        .await
+        .unwrap();
+    let stored_king = shadow_inputs
+        .core
+        .stored
+        .iter()
+        .find(|stored| stored.thread_id == king_thread)
+        .unwrap();
+    assert!(!stored_king.is_blocked);
+    let shadow_validated =
+        reading_constraints::ValidatedReadingInputs::new(shadow_inputs, &BTreeMap::new()).unwrap();
+    let shadow_states = reading_eligibility::evaluate(&shadow_validated).unwrap();
+    assert!(shadow_states[&dead_thread].eligible);
+    assert!(!shadow_states[&king_thread].eligible);
+    assert_eq!(
+        shadow_validated.eligible_frontiers().unwrap(),
+        vec![reading_constraints::EligibleFrontier {
+            thread_id: dead_thread,
+            issue_id: dead_2,
+            queue_position: 1,
+        }]
+    );
+
+    // Seed historical ratings so the write-path regression proves Roll does not
+    // overwrite reader progress or rating history.
+    conn.execute(
+        "INSERT INTO events
+            (type, timestamp, user_id, thread_id, issue_id, issue_number, rating, issues_read)
+         VALUES
+            ('rate', NOW() - INTERVAL '2 days', $1, $2, $3, '1', 4.0, 1),
+            ('rate', NOW() - INTERVAL '1 day', $1, $4, $5, '8', 4.5, 1)",
+        &[&user_id, &dead_thread, &dead_1, &wild_hunt_thread, &wild_hunt[7]],
+    )
+    .await
+    .unwrap();
+
     let thread_ids = vec![
         dead_thread,
         killing_thread,
