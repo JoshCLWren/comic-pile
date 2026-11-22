@@ -5,22 +5,23 @@ import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useRollDieState } from '../hooks/useRollResources'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const spies = vi.hoisted(() => ({
   refetch: vi.fn(), navigate: vi.fn(), list: vi.fn(),
 }))
 
-vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
-vi.mock('../contexts/useBugReportRestore', () => ({
+await injectModuleDoubles(await import('react-router-dom'), () => ({ useNavigate: () => spies.navigate }))
+await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }),
 }))
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
-vi.mock('../hooks/useRollResources', () => ({
+await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({ useRollBootstrap: vi.fn() }))
+await injectModuleDoubles(await import('../hooks/useRollResources'), () => ({
   useRollDieState: vi.fn(),
   useRollEligibleIssueIds: () => ({ data: undefined }),
   useRollIssueCards: () => ({ data: undefined }),
 }))
-vi.mock('../hooks/useRoll', () => ({
+await injectModuleDoubles(await import('../hooks/useRoll'), () => ({
   useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: () => ({ mutate: vi.fn(), isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
@@ -28,25 +29,25 @@ vi.mock('../hooks/useRoll', () => ({
   useDismissPending: () => ({ mutate: vi.fn(), isPending: false }),
   useOverrideRoll: () => ({ mutate: vi.fn(), isPending: false }),
 }))
-vi.mock('../hooks/useSnooze', () => ({
+await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({
   useSnooze: () => ({ mutate: vi.fn(), isPending: false }),
   useUnsnooze: () => ({ mutate: vi.fn(), isPending: false }),
 }))
-vi.mock('../hooks/useQueue', () => ({
+await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useMoveToFront: () => ({ mutate: vi.fn(), isPending: false }),
   useMoveToBack: () => ({ mutate: vi.fn(), isPending: false }),
   useShuffleQueue: () => ({ mutate: vi.fn(), isPending: false }),
   useActiveSeriesCount: () => null,
 }))
-vi.mock('../hooks', () => ({ useRate: () => ({ mutate: vi.fn(), isPending: false }) }))
-vi.mock('../services/api-taste', () => ({
+await injectModuleDoubles(await import('../hooks'), () => ({ useRate: () => ({ mutate: vi.fn(), isPending: false }) }))
+await injectModuleDoubles(await import('../services/api-taste'), () => ({
   tasteApi: {
     getDiscoveries: vi.fn().mockResolvedValue({ discoveries: [], generated_at: new Date().toISOString() }),
     dismiss: vi.fn().mockResolvedValue({ dismissed: true }),
     submitVerdict: vi.fn().mockResolvedValue({}),
   },
 }))
-vi.mock('../services/api', () => ({
+await injectModuleDoubles(await import('../services/api'), () => ({
   default: {},
   threadsApi: {
     list: spies.list,
@@ -57,21 +58,21 @@ vi.mock('../services/api', () => ({
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
   },
 }))
-vi.mock('../services/api-reading-orders', () => ({
+await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
 }))
-vi.mock('../components/LazyDice3D', () => ({
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({
   default: () => <div data-testid="dice" />,
 }))
-vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
-vi.mock('../components/GlossaryLink', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Tooltip'), () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
+await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({ isOpen, title, children }: { isOpen: boolean; title: string; children: React.ReactNode }) =>
     isOpen ? <section><h2>{title}</h2>{children}</section> : null,
 }))
-vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
-vi.mock('../components/SimpleMigrationDialog', () => ({ default: () => null }))
-vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: () => <div>pool</div> }))
+await injectModuleDoubles(await import('../components/MigrationDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/SimpleMigrationDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../pages/RollPage/components/ThreadPool'), () => ({ ThreadPool: () => <div>pool</div> }))
 
 // Emulates a pending roll for a d8 current die: useRollPendingSession hydrates
 // the rating view with the default 3.0 rating on first paint, before the slider

@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import Dice3D, { getFaceRotation, getProjectedCenterOffsetPx } from '../components/Dice3D'
 import { DEFAULT_DICE_RENDER_CONFIG } from '../components/diceRenderConfig'
 import { cast } from '../utils/cast'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const diceMock = vi.hoisted(() => ({
   failRenderer: false,
@@ -23,7 +24,7 @@ const diceMock = vi.hoisted(() => ({
   lastMesh: null as { rotation: { x: number; y: number; z: number; set: ReturnType<typeof vi.fn> } } | null,
 }))
 
-vi.mock('three', () => {
+await injectModuleDoubles(await import('three'), () => {
   class BufferGeometry {
     attributes: Record<
       string,

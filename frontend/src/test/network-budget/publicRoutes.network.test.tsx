@@ -4,12 +4,13 @@ import { screen, fireEvent } from '../../unit/testingLibrary'
 // The authenticated redirect target is the Roll home, which is peer-owned and
 // has its own request suite. Stub only that page so this spec measures the
 // credential-form redirect and shell, not Roll bootstrap internals.
-vi.mock('../../pages/RollPage', () => ({
+await injectModuleDoubles(await import('../../pages/RollPage'), () => ({
   default: () => <div data-testid="roll-page-stub" />,
 }))
 import { setAccessToken } from '../../services/api'
 import { TEST_USER, renderAppAtRoute } from './appNetworkHarness'
 import { GUEST_AUTH_PROBE, publicBudget } from './routeBudgets'
+import { injectModuleDoubles } from '../../unit/injectModuleDoubles'
 
 beforeEach(() => {
   setAccessToken(null)

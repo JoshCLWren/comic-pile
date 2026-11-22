@@ -7,6 +7,7 @@ import { createRouterHarness } from './routerTestHarness'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import { issueCardsApi } from '../services/issueCardsApi'
+import { injectModuleDoubles } from './injectModuleDoubles'
 vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 const toast = createToastSpy()
@@ -19,7 +20,7 @@ function renderWithToast(ui: ReactElement) {
   return render(ui, { wrapper: ToastWrapper })
 }
 
-vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+await injectModuleDoubles(await import('../hooks/useReaderContext'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
   return {
     ...actual,

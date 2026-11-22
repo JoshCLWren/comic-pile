@@ -6,8 +6,9 @@ import QueueNextIssueCard from '../pages/QueuePage/QueueNextIssueCard'
 import { issuesApi } from '../services/api-issues'
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import type { IssueListResponse } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/ComicIssueCard', () => ({
+await injectModuleDoubles(await import('../components/ComicIssueCard'), () => ({
   ComicIssueCard: ({
     issueId, threadTitle, issueNumber, card, onMutated,
   }: {

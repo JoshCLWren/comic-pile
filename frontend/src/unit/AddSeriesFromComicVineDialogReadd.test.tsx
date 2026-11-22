@@ -25,7 +25,7 @@ const { importSeriesSpy, searchSeriesSpy, importStatusSpy, toastSpy } = vi.hoist
   },
 }))
 
-vi.mock('../services/api-comicvine', () => ({
+await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     importSeries: importSeriesSpy,
@@ -33,16 +33,17 @@ vi.mock('../services/api-comicvine', () => ({
   },
 }))
 
-vi.mock('../contexts/useToast', () => ({
+await injectModuleDoubles(await import('../contexts/useToast'), () => ({
   useToast: () => toastSpy,
 }))
 
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({ isOpen, title, children, size }: { isOpen: boolean; title: string; children: ReactNode; size?: string }) =>
     isOpen ? <div role="dialog" data-modal-size={size}><h2>{title}</h2>{children}</div> : null,
 }))
 
 import AddSeriesFromComicVineDialog from '../components/AddSeriesFromComicVineDialog'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const saga = {
   comicvine_volume_id: 99,

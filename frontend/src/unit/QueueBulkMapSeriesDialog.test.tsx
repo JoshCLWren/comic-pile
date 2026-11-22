@@ -3,8 +3,9 @@ import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueBulkMapSeriesDialog from '../components/QueueBulkMapSeriesDialog'
 import QueueMapSeriesDialog from '../components/QueueMapSeriesDialog'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/QueueMapSeriesDialog', () => ({
+await injectModuleDoubles(await import('../components/QueueMapSeriesDialog'), () => ({
   default: vi.fn(),
 }))
 

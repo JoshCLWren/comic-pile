@@ -16,6 +16,7 @@ import {
 } from '../services/themePreferenceSync'
 import { PreferencesSync } from '../hooks/usePreferences'
 import { queryClient } from '../query/queryClient'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -27,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   readStoredAccessToken: vi.fn<() => string | null>(),
 }))
 
-vi.mock('../services/api', () => {
+await injectModuleDoubles(await import('../services/api'), () => {
   const apiMock = {
     get: mocks.get,
     post: mocks.post,
@@ -45,7 +46,7 @@ vi.mock('../services/api', () => {
   }
 })
 
-vi.mock('../services/api-preferences', () => ({
+await injectModuleDoubles(await import('../services/api-preferences'), () => ({
   preferencesApi: {
     get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
       mocks.get('/v2/users/me/preferences', options),
@@ -56,7 +57,7 @@ vi.mock('../services/api-preferences', () => ({
 // The navigation shell reads the identity inbox through `api-identity`. Keep it
 // stubbed so the ordered preferences `mocks.get` sequence below stays
 // deterministic for this theme-only test.
-vi.mock('../services/api-identity', () => ({
+await injectModuleDoubles(await import('../services/api-identity'), () => ({
   identityInboxApi: {
     list: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 1 }),
   },

@@ -6,8 +6,9 @@ import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { cast } from '../utils/cast'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../contexts/useToast', () => ({
+await injectModuleDoubles(await import('../contexts/useToast'), () => ({
   useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
 }))
 
@@ -17,7 +18,7 @@ const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 const mockGetAccessToken = vi.fn(() => 'test-token')
 
-vi.mock('../services/api', () => ({
+await injectModuleDoubles(await import('../services/api'), () => ({
   default: {
     get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
     post: (...args: Parameters<typeof mockApiPost>) => mockApiPost(...args),

@@ -13,6 +13,7 @@ import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { issuesApi } from '../services/api-issues'
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import { tagsApi } from '../services/api-tags'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const navigateSpy = vi.fn()
 const routeParams = { id: '1' }
@@ -23,7 +24,7 @@ interface LocationState {
 }
 
 const locationState: LocationState = { state: undefined }
-vi.mock('react-router-dom', async () => {
+await injectModuleDoubles(await import('react-router-dom'), async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return {
     ...actual,
@@ -32,14 +33,14 @@ vi.mock('react-router-dom', async () => {
     useLocation: () => locationState,
   }
 })
-vi.mock('../hooks/useThread', async () => {
+await injectModuleDoubles(await import('../hooks/useThread'), async () => {
   const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
   return { ...actual, useUpdateThread: vi.fn() }
 })
-vi.mock('../services/api-threads', () => ({
+await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: { get: vi.fn(), update: vi.fn() },
 }))
-vi.mock('../services/api-dependencies', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-dependencies'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-dependencies')>()
   return {
     ...actual,
@@ -50,9 +51,9 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
     },
   }
 })
-vi.mock('../services/api-reading-boundaries', () => ({ readingBoundariesApi: { batch: vi.fn() } }))
-vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn(), listCreators: vi.fn() } }))
-vi.mock('../services/api-tags', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-reading-boundaries'), () => ({ readingBoundariesApi: { batch: vi.fn() } }))
+await injectModuleDoubles(await import('../services/api-issues'), () => ({ issuesApi: { list: vi.fn(), listCreators: vi.fn() } }))
+await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
     ...actual,

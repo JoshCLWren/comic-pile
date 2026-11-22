@@ -1,8 +1,9 @@
 import { render, screen } from './testingLibrary'
 import { expect, it, vi } from 'vitest'
 import LazyDice3D from '../components/LazyDice3D'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/Dice3D', () => ({
+await injectModuleDoubles(await import('../components/Dice3D'), () => ({
   default: () => <div data-testid="dice-3d" />,
 }))
 

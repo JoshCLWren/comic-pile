@@ -15,7 +15,7 @@ const unauthenticatedError = () => Object.assign(new Error('unauthenticated'), {
   response: { status: 401 },
 })
 
-vi.mock('../services/api', () => {
+await injectModuleDoubles(await import('../services/api'), () => {
   return {
     default: {
       get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
@@ -42,30 +42,31 @@ vi.mock('../services/api', () => {
   }
 })
 
-vi.mock('../pages/LandingPage', () => ({
+await injectModuleDoubles(await import('../pages/LandingPage'), () => ({
   default: () => <div data-testid="landing-page">Landing</div>,
 }))
-vi.mock('../pages/LoginPage', () => ({
+await injectModuleDoubles(await import('../pages/LoginPage'), () => ({
   default: () => <div data-testid="login-page">Welcome Back</div>,
 }))
-vi.mock('../pages/RegisterPage', () => ({
+await injectModuleDoubles(await import('../pages/RegisterPage'), () => ({
   default: () => <div data-testid="register-page">Create Account</div>,
 }))
-vi.mock('../pages/RollPage', () => ({ default: () => <div data-testid="roll-page">Roll</div> }))
-vi.mock('../pages/RatePage', () => ({ default: () => <div data-testid="rate-page">Rate</div> }))
-vi.mock('../pages/QueuePage', () => ({ default: () => <div data-testid="queue-page">Queue</div> }))
-vi.mock('../pages/HistoryPage', () => ({ default: () => <div data-testid="history-page">History</div> }))
-vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="session-page">Session</div> }))
-vi.mock('../pages/ThreadDetailView', () => ({ default: () => <div data-testid="thread-detail-page">Thread detail</div> }))
-vi.mock('../pages/ContinuityPlansIndexPage', () => ({ default: () => <div data-testid="continuity-plans-page">Continuity plans</div> }))
-vi.mock('../pages/CrossoversPage', () => ({ default: () => <div data-testid="crossovers-page">Crossovers</div> }))
-vi.mock('../pages/HelpPage', () => ({ default: () => <div data-testid="help-page">Help</div> }))
+await injectModuleDoubles(await import('../pages/RollPage'), () => ({ default: () => <div data-testid="roll-page">Roll</div> }))
+await injectModuleDoubles(await import('../pages/RatePage'), () => ({ default: () => <div data-testid="rate-page">Rate</div> }))
+await injectModuleDoubles(await import('../pages/QueuePage'), () => ({ default: () => <div data-testid="queue-page">Queue</div> }))
+await injectModuleDoubles(await import('../pages/HistoryPage'), () => ({ default: () => <div data-testid="history-page">History</div> }))
+await injectModuleDoubles(await import('../pages/SessionPage'), () => ({ default: () => <div data-testid="session-page">Session</div> }))
+await injectModuleDoubles(await import('../pages/ThreadDetailView'), () => ({ default: () => <div data-testid="thread-detail-page">Thread detail</div> }))
+await injectModuleDoubles(await import('../pages/ContinuityPlansIndexPage'), () => ({ default: () => <div data-testid="continuity-plans-page">Continuity plans</div> }))
+await injectModuleDoubles(await import('../pages/CrossoversPage'), () => ({ default: () => <div data-testid="crossovers-page">Crossovers</div> }))
+await injectModuleDoubles(await import('../pages/HelpPage'), () => ({ default: () => <div data-testid="help-page">Help</div> }))
 
 import App, { AuthProvider, AppRoutes, useAuth } from '../App'
 import AppErrorBoundary from '../components/AppErrorBoundary'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 let authContextValue: AuthContextValue | null = null
 

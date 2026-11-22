@@ -5,12 +5,13 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CblSourceDetailPanel } from '../components/CblSourceDetailPanel'
 import type { CBLSourceEntryDetail, CBLSourceListDetail } from '../services/api-cbl-sources'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mocks = vi.hoisted(() => ({
   detail: vi.fn(),
 }))
 
-vi.mock('../services/api-cbl-sources', () => ({
+await injectModuleDoubles(await import('../services/api-cbl-sources'), () => ({
   cblSourcesApi: {
     detail: mocks.detail,
   },

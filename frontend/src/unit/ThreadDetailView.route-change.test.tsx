@@ -10,10 +10,11 @@ import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListResponse, Thread } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const routeParams = { id: '1' }
 
-vi.mock('react-router-dom', async () => {
+await injectModuleDoubles(await import('react-router-dom'), async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return {
     ...actual,
@@ -22,21 +23,21 @@ vi.mock('react-router-dom', async () => {
     useLocation: () => ({ state: undefined }),
   }
 })
-vi.mock('../hooks/useThread', async () => {
+await injectModuleDoubles(await import('../hooks/useThread'), async () => {
   const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
   return { ...actual, useUpdateThread: vi.fn() }
 })
-vi.mock('../services/api-threads', () => ({
+await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: { get: vi.fn() },
 }))
-vi.mock('../services/api', () => ({
+await injectModuleDoubles(await import('../services/api'), () => ({
   dependenciesApi: {
     getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
     getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
   },
 }))
-vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn() } }))
-vi.mock('../services/api-tags', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-issues'), () => ({ issuesApi: { list: vi.fn() } }))
+await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
     ...actual,

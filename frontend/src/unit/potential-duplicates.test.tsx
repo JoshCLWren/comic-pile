@@ -7,17 +7,18 @@ import { QueueModals } from '../pages/QueuePage/QueueModals'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
 import { threadsApi } from '../services/api-threads'
 import type { PotentialDuplicateMatch, Thread } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({ isOpen, title, children }: { isOpen: boolean; title: string; children: React.ReactNode }) =>
     isOpen ? <section aria-label={title}>{children}</section> : null,
 }))
-vi.mock('../components/PositionSlider', () => ({ default: () => null }))
-vi.mock('../components/DependencyBuilder', () => ({ default: () => null }))
-vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
-vi.mock('../components/AddSeriesFromComicVineDialog', () => ({ default: () => null }))
-vi.mock('../pages/QueuePage/IssueToggleList', () => ({ IssueToggleList: () => null }))
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
+await injectModuleDoubles(await import('../components/PositionSlider'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/DependencyBuilder'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/MigrationDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/AddSeriesFromComicVineDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../pages/QueuePage/IssueToggleList'), () => ({ IssueToggleList: () => null }))
+await injectModuleDoubles(await import('../pages/QueuePage/FormatSelect'), () => ({
   FormatSelect: ({
     id,
     value,
@@ -32,7 +33,7 @@ vi.mock('../pages/QueuePage/FormatSelect', () => ({
     </select>
   ),
 }))
-vi.mock('../services/api-threads', () => ({
+await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: { checkPotentialDuplicates: vi.fn() },
 }))
 

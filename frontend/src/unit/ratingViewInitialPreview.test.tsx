@@ -6,11 +6,12 @@ import { RatingView } from '../pages/RollPage/components/RatingView'
 import { computePredictedDie } from '../pages/RollPage/utils'
 import { cast } from '../utils/cast'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 // Mock heavy components
-vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
-vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
-vi.mock('../components/IssueCorrectionDialog', () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({ default: () => <div data-testid="dice" /> }))
+await injectModuleDoubles(await import('../components/Tooltip'), () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
+await injectModuleDoubles(await import('../components/IssueCorrectionDialog'), () => ({ default: () => null }))
 
 const callbacks = {
   onUpdateRating: vi.fn(),

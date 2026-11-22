@@ -22,30 +22,31 @@ import { useRate } from '../hooks'
 import { threadsApi } from '../services/api-threads'
 import { writeRollSnoozes } from '../services/api-roll'
 import { cast } from '../utils/cast'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const navigateSpy = vi.fn()
 
-vi.mock('react-router-dom', async () => {
+await injectModuleDoubles(await import('react-router-dom'), async () => {
   const actual = await vi.importActual('react-router-dom')
   return { ...actual, useNavigate: () => navigateSpy }
 })
 
-vi.mock('../components/LazyDice3D', () => ({
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({
   default: ({ sides }: { sides: number }) => <div data-testid="lazy-dice" data-sides={sides} />,
 }))
 
-vi.mock('../components/GlossaryLink', () => ({
+await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
-vi.mock('../hooks/useRollResources', () => ({
+await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({ useRollBootstrap: vi.fn() }))
+await injectModuleDoubles(await import('../hooks/useRollResources'), () => ({
   useRollDieState: vi.fn(),
   useRollEligibleIssueIds: vi.fn(),
   useRollIssueCards: vi.fn(),
 }))
-vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
-vi.mock('../hooks/useRoll', () => ({
+await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({ useBugReportRestore: vi.fn() }))
+await injectModuleDoubles(await import('../hooks/useRoll'), () => ({
   useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: vi.fn(),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
@@ -53,28 +54,28 @@ vi.mock('../hooks/useRoll', () => ({
   useOverrideRoll: vi.fn(),
   useDismissPending: vi.fn(),
 }))
-vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
-vi.mock('../hooks/useQueue', () => ({
+await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({ useSnooze: vi.fn() }))
+await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useShuffleQueue: vi.fn(),
   useActiveSeriesCount: () => null,
   useRestoreExclusionGroup: vi.fn(),
 }))
-vi.mock('../hooks', async (importOriginal) => {
+await injectModuleDoubles(await import('../hooks'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks')>()
   return { ...actual, useRate: vi.fn() }
 })
-vi.mock('../services/api-reading-orders', () => ({
+await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
 }))
-vi.mock('../services/api-threads', () => ({
+await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: {
     list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
     setPending: vi.fn(),
   },
 }))
-vi.mock('../services/api', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api')>()
   return {
     ...actual,

@@ -6,12 +6,13 @@ import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import type { CreatorDetailState } from '../hooks/useCreatorDetail'
 import { useCreatorSeriesIssues } from '../hooks/useCreatorSeriesIssues'
 import type { CreatorIssueInsight } from '../services/api-creators'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../hooks/useCreatorDetail', () => ({
+await injectModuleDoubles(await import('../hooks/useCreatorDetail'), () => ({
   useCreatorDetail: vi.fn(),
 }))
 
-vi.mock('../hooks/useCreatorSeriesIssues', () => ({
+await injectModuleDoubles(await import('../hooks/useCreatorSeriesIssues'), () => ({
   useCreatorSeriesIssues: vi.fn(),
 }))
 

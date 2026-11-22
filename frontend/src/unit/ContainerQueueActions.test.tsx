@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ContainerQueueActions from '../components/ContainerQueueActions'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mocks = vi.hoisted(() => ({
   checkExcludedStatus: vi.fn(),
@@ -15,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   invalidateCrossoverGroupsForThreads: vi.fn(),
 }))
 
-vi.mock('../services/api-threads', () => ({
+await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: {
     checkExcludedStatus: mocks.checkExcludedStatus,
     bulkExclude: mocks.bulkExclude,
@@ -23,17 +24,17 @@ vi.mock('../services/api-threads', () => ({
   },
 }))
 
-vi.mock('../services/api-custom-cbl', () => ({
+await injectModuleDoubles(await import('../services/api-custom-cbl'), () => ({
   customCBLApi: {
     checkThreadMemberships: mocks.checkThreadMemberships,
   },
 }))
 
-vi.mock('../hooks/useCrossoverGroups', () => ({
+await injectModuleDoubles(await import('../hooks/useCrossoverGroups'), () => ({
   useCrossoverGroups: (ids: number[]) => mocks.useCrossoverGroups(ids),
 }))
 
-vi.mock('../query/cacheEffects', () => ({
+await injectModuleDoubles(await import('../query/cacheEffects'), () => ({
   invalidateAfterQueueMutation: (...args: unknown[]) => mocks.invalidateAfterQueueMutation(...args),
   invalidateCrossoverGroupsForThreads: (...args: unknown[]) =>
     mocks.invalidateCrossoverGroupsForThreads(...args),

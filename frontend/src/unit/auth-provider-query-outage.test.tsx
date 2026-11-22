@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   resumeQueriesAfterOutage: vi.fn(async () => undefined),
 }))
 
-vi.mock('../services/api', () => {
+await injectModuleDoubles(await import('../services/api'), () => {
   const apiMock = {
     get: mocks.get,
     post: mocks.post,
@@ -34,7 +34,7 @@ vi.mock('../services/api', () => {
   }
 })
 
-vi.mock('../services/api-preferences', () => ({
+await injectModuleDoubles(await import('../services/api-preferences'), () => ({
   preferencesApi: {
     get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
       mocks.get('/v2/users/me/preferences', options),
@@ -42,7 +42,7 @@ vi.mock('../services/api-preferences', () => ({
   },
 }))
 
-vi.mock('../query/cacheEffects', async (importOriginal) => {
+await injectModuleDoubles(await import('../query/cacheEffects'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../query/cacheEffects')>()
   return {
     ...actual,
@@ -52,6 +52,7 @@ vi.mock('../query/cacheEffects', async (importOriginal) => {
 
 import { resetQueryRetryBudget, getQueryRetryBudgetSnapshot } from '../query/outageRetryBudget'
 import { AuthProvider, useAuth } from '../App'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 let auth: AuthContextValue | null = null
 

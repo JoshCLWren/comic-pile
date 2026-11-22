@@ -2,7 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from './test
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
-vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
+import { injectModuleDoubles } from './injectModuleDoubles'
+await injectModuleDoubles(await import('../contexts/useToast'), () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 const spies = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -60,76 +61,76 @@ interface StaleTestThread {
 let staleData: StaleTestThread[] = []
 let threadsValue: typeof threadData | undefined = threadData
 
-vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
-vi.mock('../contexts/useBugReportRestore', () => ({
+await injectModuleDoubles(await import('react-router-dom'), () => ({ useNavigate: () => spies.navigate }))
+await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: () => ({
     setRestoreAction: vi.fn((restore: () => void) => restore()),
     clearRestoreAction: vi.fn(),
   }),
 }))
-vi.mock('../hooks/useSession', () => ({ useSession: () => sessionHook.value ?? ({ data: sessionData, refetch: spies.refetch }) }))
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: () => bootstrapHook.value ?? ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }) }))
-vi.mock('../hooks/useRollResources', () => ({
+await injectModuleDoubles(await import('../hooks/useSession'), () => ({ useSession: () => sessionHook.value ?? ({ data: sessionData, refetch: spies.refetch }) }))
+await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({ useRollBootstrap: () => bootstrapHook.value ?? ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }) }))
+await injectModuleDoubles(await import('../hooks/useRollResources'), () => ({
   useRollDieState: () => dieStateHook.value ?? ({ data: undefined, isError: false }),
   useRollEligibleIssueIds: () => ({ data: undefined }),
   useRollIssueCards: () => ({ data: undefined }),
 }))
-vi.mock('../hooks/useThread', () => ({ useStaleThreads: () => ({ data: staleData, refetch: spies.refetch }) }))
-vi.mock('../hooks/useRoll', () => ({
+await injectModuleDoubles(await import('../hooks/useThread'), () => ({ useStaleThreads: () => ({ data: staleData, refetch: spies.refetch }) }))
+await injectModuleDoubles(await import('../hooks/useRoll'), () => ({
   useUnsnooze: () => ({ mutate: spies.unsnoozeNative, isPending: false }),
   useSetDie: () => ({ mutate: spies.setDie, isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: spies.roll, isPending: false }), useDismissPending: () => ({ mutate: spies.dismissPending, isPending: false }),
   useOverrideRoll: () => ({ mutate: spies.override, isPending: false }),
 }))
-vi.mock('../hooks/useSnooze', () => ({ useSnooze: () => ({ mutate: spies.snooze, isPending: false }), useUnsnooze: () => ({ mutate: spies.unsnooze, isPending: false }) }))
-vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }), useActiveSeriesCount: () => null, useRestoreExclusionGroup: () => ({ mutate: vi.fn(), isPending: false, isError: false }) }))
-vi.mock('../hooks', () => ({ useRate: () => ({ mutate: spies.rate, isPending: false }) }))
-vi.mock('../services/api-taste', () => ({
+await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({ useSnooze: () => ({ mutate: spies.snooze, isPending: false }), useUnsnooze: () => ({ mutate: spies.unsnooze, isPending: false }) }))
+await injectModuleDoubles(await import('../hooks/useQueue'), () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }), useActiveSeriesCount: () => null, useRestoreExclusionGroup: () => ({ mutate: vi.fn(), isPending: false, isError: false }) }))
+await injectModuleDoubles(await import('../hooks'), () => ({ useRate: () => ({ mutate: spies.rate, isPending: false }) }))
+await injectModuleDoubles(await import('../services/api-taste'), () => ({
   tasteApi: {
     getDiscoveries: vi.fn().mockResolvedValue({ discoveries: [], generated_at: new Date().toISOString() }),
     dismiss: vi.fn().mockResolvedValue({ dismissed: true }),
     submitVerdict: vi.fn().mockResolvedValue({}),
   },
 }))
-vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+await injectModuleDoubles(await import('../hooks/useReaderContext'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
   return {
     ...actual,
     useReaderContext: () => ({ context: null, isLoading: false, error: null, refetch: vi.fn() }),
   }
 })
-vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) } }))
-vi.mock('../services/api-sessions', () => ({ sessionApi: {} }))
-vi.mock('../services/api', () => ({ default: {} }))
-vi.mock('../services/api-dependencies', () => ({ dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
-vi.mock('../services/api-reading-orders', () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
-vi.mock('../query/cacheEffects', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-threads'), () => ({ threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) } }))
+await injectModuleDoubles(await import('../services/api-sessions'), () => ({ sessionApi: {} }))
+await injectModuleDoubles(await import('../services/api'), () => ({ default: {} }))
+await injectModuleDoubles(await import('../services/api-dependencies'), () => ({ dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
+await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
+await injectModuleDoubles(await import('../query/cacheEffects'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../query/cacheEffects')>()
   return {
     ...actual,
     invalidateRollBootstrapOnNavigation: spies.invalidateRollBootstrapOnNavigation,
   }
 })
-vi.mock('../components/LazyDice3D', () => ({
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({
   default: ({ onRollComplete }: { onRollComplete?: () => void }) => (
     <div data-testid="dice"><button type="button" onClick={onRollComplete}>complete dice</button></div>
   ),
 }))
-vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
-vi.mock('../components/GlossaryLink', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
+await injectModuleDoubles(await import('../components/Tooltip'), () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
+await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 // SAFETY: the mock only forwards `data-testid` so tests can scope to a specific dialog; the real Modal owns portal/focus behavior these tests do not exercise.
-vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onClose, 'data-testid': testId }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void; 'data-testid'?: string }) => isOpen ? <section data-testid={testId}><h2>{title}</h2><button onClick={onClose}>close modal</button>{children}</section> : null }))
-vi.mock('../components/CollectionDialog', () => ({ default: ({ collection }: { collection: { name?: string } | null }) => <div data-testid="collection-dialog">collection dialog {collection?.name ?? 'new'}</div> }))
-vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: unknown) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button><button onClick={() => onComplete({ id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })}>complete migration</button></div> }))
-vi.mock('../components/SimpleMigrationDialog', () => ({ default: ({ onComplete, onClose }: { onComplete: (issue: string) => void; onClose: () => void }) => <div><button onClick={() => onComplete('1')}>complete simple</button><button onClick={onClose}>close simple</button></div> }))
+await injectModuleDoubles(await import('../components/Modal'), () => ({ default: ({ isOpen, title, children, onClose, 'data-testid': testId }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void; 'data-testid'?: string }) => isOpen ? <section data-testid={testId}><h2>{title}</h2><button onClick={onClose}>close modal</button>{children}</section> : null }))
+await injectModuleDoubles(await import('../components/CollectionDialog'), () => ({ default: ({ collection }: { collection: { name?: string } | null }) => <div data-testid="collection-dialog">collection dialog {collection?.name ?? 'new'}</div> }))
+await injectModuleDoubles(await import('../components/MigrationDialog'), () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: unknown) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button><button onClick={() => onComplete({ id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })}>complete migration</button></div> }))
+await injectModuleDoubles(await import('../components/SimpleMigrationDialog'), () => ({ default: ({ onComplete, onClose }: { onComplete: (issue: string) => void; onClose: () => void }) => <div><button onClick={() => onComplete('1')}>complete simple</button><button onClick={onClose}>close simple</button></div> }))
 interface ThreadPoolMockProps {
   onThreadClick: (thread: unknown) => void
   onShuffle: () => void
   onUnsnooze: () => void
   onToggleSnoozed: () => void
 }
-vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: ThreadPoolMockProps) => <div><button onClick={() => props.onThreadClick({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle}>shuffle pool</button><button onClick={props.onUnsnooze}>unsnooze</button><button onClick={props.onToggleSnoozed}>toggle snoozed</button></div> }))
+await injectModuleDoubles(await import('../pages/RollPage/components/ThreadPool'), () => ({ ThreadPool: (props: ThreadPoolMockProps) => <div><button onClick={() => props.onThreadClick({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle}>shuffle pool</button><button onClick={props.onUnsnooze}>unsnooze</button><button onClick={props.onToggleSnoozed}>toggle snoozed</button></div> }))
 interface RatingViewMockData {
   activeRatingThread: { title?: string; issue_number?: string | null } | null
   errorMessage: string
@@ -139,7 +140,7 @@ interface RatingViewMockData {
   onCancel: () => void
   onRefreshThread: () => void
 }
-vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: { data?: RatingViewMockData }) => {
+await injectModuleDoubles(await import('../pages/RollPage/components/RatingView'), () => ({ RatingView: (props: { data?: RatingViewMockData }) => {
   const data = props.data
   const thread = data?.activeRatingThread ?? null
   // SAFETY: RatingView now receives one colocated data object (see useRatingView); the mock reads thread metadata and handler callbacks from data so firing them here triggers the real RollPage handlers with their declared argument shapes.

@@ -9,6 +9,7 @@ import PositionSlider from '../components/PositionSlider'
 import ReadingOrderTimeline from '../components/ReadingOrderTimeline'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { MarqueeTitle } from '../components/MarqueeTitle'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 // Timeline gates now show owner-scoped issue covers through one bounded query.
 const fetchIssueCards = vi.spyOn(issueCardsApi, 'fetchCards')
@@ -19,7 +20,7 @@ function renderTimeline(node: ReactElement) {
 }
 
 const migrate = vi.hoisted(() => vi.fn())
-vi.mock('../services/api-migration', () => ({ migrationApi: { migrateThread: migrate } }))
+await injectModuleDoubles(await import('../services/api-migration'), () => ({ migrationApi: { migrateThread: migrate } }))
 
 const thread = { id: 1, title: 'Saga' }
 

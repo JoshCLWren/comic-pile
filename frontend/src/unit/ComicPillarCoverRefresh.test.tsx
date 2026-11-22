@@ -16,7 +16,7 @@ const { searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, confirmIdentit
     getIntelligenceSpy: vi.fn(),
   }))
 
-vi.mock('../services/api-comicvine', () => ({
+await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     getSeriesIssues: getSeriesIssuesSpy,
@@ -31,16 +31,16 @@ vi.mock('../services/api-comicvine', () => ({
   },
 }))
 
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({ isOpen, title, children }: { isOpen: boolean; title: string; children: ReactNode }) =>
     isOpen ? <div role="dialog"><h2>{title}</h2>{children}</div> : null,
 }))
 
-vi.mock('../components/IssueCorrectionDialog', () => ({
+await injectModuleDoubles(await import('../components/IssueCorrectionDialog'), () => ({
   default: () => null,
 }))
 
-vi.mock('../services/api-tags', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
     ...actual,
@@ -69,6 +69,7 @@ vi.mock('../services/api-tags', async (importOriginal) => {
 })
 
 import { ComicPillar } from '../pages/RollPage/components/ComicPillar'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 /** Issue #4450: mapping is a visible control; cover refresh flows use Change mapping. */
 async function openReplaceMapping(): Promise<HTMLElement> {

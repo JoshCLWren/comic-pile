@@ -3,15 +3,16 @@ import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import BugReportButton from '../components/BugReportButton'
 import type { ReportType } from '../components/BugReportModal'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const collectDiagnostics = vi.fn(() => ({ route: '/queue' }))
 const restoreLastView = vi.fn()
 
-vi.mock('../hooks/useDiagnostics', () => ({ useDiagnostics: () => ({ collectDiagnostics }) }))
-vi.mock('../contexts/useBugReportRestore', () => ({
+await injectModuleDoubles(await import('../hooks/useDiagnostics'), () => ({ useDiagnostics: () => ({ collectDiagnostics }) }))
+await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: () => ({ restoreLastView }),
 }))
-vi.mock('../components/BugReportModal', () => ({
+await injectModuleDoubles(await import('../components/BugReportModal'), () => ({
   default: ({ isOpen, onClose, onSubmit, diagnosticData }: {
     isOpen: boolean
     onClose: () => void

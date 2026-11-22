@@ -12,12 +12,13 @@ const { useSiblingSeriesMappingPreviewMock, useCommitSeriesMappingMock } = vi.ho
   useCommitSeriesMappingMock: vi.fn(),
 }))
 
-vi.mock('../hooks/useSiblingSeriesMapping', () => ({
+await injectModuleDoubles(await import('../hooks/useSiblingSeriesMapping'), () => ({
   useSiblingSeriesMappingPreview: useSiblingSeriesMappingPreviewMock,
   useCommitSeriesMapping: useCommitSeriesMappingMock,
 }))
 
 import SiblingSeriesMappingOffer from '../components/SiblingSeriesMappingOffer'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 function previewRow(overrides: Partial<SeriesMappingPreviewRow>): SeriesMappingPreviewRow {
   return {

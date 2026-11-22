@@ -4,11 +4,12 @@ const { post, get } = vi.hoisted(() => ({ post: vi.fn(), get: vi.fn() }))
 
 // The service module binds the shared client at import time, so the transport is
 // doubled here instead of standing up the real axios/interceptor pipeline.
-vi.mock('../services/api', () => ({
+await injectModuleDoubles(await import('../services/api'), () => ({
   default: { post, get, put: vi.fn(), patch: vi.fn(), delete: vi.fn(), head: vi.fn() },
 }))
 
 import { COMICVINE_ROSTER_TIMEOUT_MS, SERIES_IMPORT_TIMEOUT_MS, comicVineApi } from '../services/api-comicvine'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 describe('comicVineApi series import (#3445)', () => {
   beforeEach(() => {

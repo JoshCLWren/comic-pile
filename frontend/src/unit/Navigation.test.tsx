@@ -11,6 +11,7 @@ import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
 import { createRouterHarness } from './routerTestHarness'
 import { identityInboxApi } from '../services/api-identity'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const toast = createToastSpy()
 
@@ -30,7 +31,7 @@ const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 const mockGetAccessToken = vi.fn(() => 'test-token')
 
-vi.mock('../services/api', () => {
+await injectModuleDoubles(await import('../services/api'), () => {
   return {
     default: {
       get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
@@ -44,7 +45,7 @@ vi.mock('../services/api', () => {
   }
 })
 
-vi.mock('../services/api-identity', () => ({
+await injectModuleDoubles(await import('../services/api-identity'), () => ({
   identityInboxApi: {
     list: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 1 }),
   },

@@ -4,9 +4,10 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ComicIssueAvailability, ComicIssueCard, ComicIssueCover, ComicIssueIdentity, ComicIssueRatingSlider } from '../components/ComicIssueCard'
 import { issueCardsApi, type IssueCard, type IssueReadRateResponse } from '../services/issueCardsApi'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 
-vi.mock('../components/ComicIssueMappingAction', () => ({
+await injectModuleDoubles(await import('../components/ComicIssueMappingAction'), () => ({
   default: ({
     issueId, initialIdentity, fetchEnabled, isOwned, compact, onAddToLibrary, onMapped,
   }: {

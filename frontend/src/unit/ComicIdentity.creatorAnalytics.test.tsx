@@ -9,6 +9,7 @@ import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { creatorsApi } from '../services/creatorsApi'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
 import { queryClient } from '../query/queryClient'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const toast = createToastSpy()
 
@@ -21,14 +22,14 @@ function renderWithToast(ui: ReactElement) {
 }
 
 
-vi.mock('../services/api-comicvine', async () => {
+await injectModuleDoubles(await import('../services/api-comicvine'), async () => {
   const actual = await vi.importActual<typeof import('../services/api-comicvine')>('../services/api-comicvine')
   return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn(), importIssue: vi.fn() } }
 })
-vi.mock('../services/creatorsApi', () => ({
+await injectModuleDoubles(await import('../services/creatorsApi'), () => ({
   creatorsApi: { getSummaries: vi.fn() },
 }))
-vi.mock('../services/api-reading-orders', () => ({
+await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
   readingOrdersApi: { list: vi.fn().mockResolvedValue({ reading_orders: [] }) },
 }))
 const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)

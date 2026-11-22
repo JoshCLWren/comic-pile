@@ -25,12 +25,13 @@ import {
   ROLL_WORKSPACE_TRACKS,
 } from '../pages/RollPage/workspaceLayout'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
-vi.mock('../components/Tooltip', () => ({
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({ default: () => <div data-testid="dice" /> }))
+await injectModuleDoubles(await import('../components/Tooltip'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
-vi.mock('../components/GlossaryLink', () => ({
+await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 

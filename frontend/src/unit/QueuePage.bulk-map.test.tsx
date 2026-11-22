@@ -8,19 +8,20 @@ import QueueBulkMapSeriesDialog from '../components/QueueBulkMapSeriesDialog'
 import { useCreateThread, useUpdateThread, useReactivateThread } from '../hooks/useThread'
 import { useQueueThreads, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../hooks/useCompletedThreads', () => ({
+await injectModuleDoubles(await import('../hooks/useCompletedThreads'), () => ({
   useCompletedThreads: vi.fn(() => ({
     threads: [], hasNextPage: false, isLoadingMore: false, isError: false,
     loadMore: vi.fn(), retry: vi.fn(),
   })),
 }))
 
-vi.mock('../components/QueueBulkMapSeriesDialog', () => ({
+await injectModuleDoubles(await import('../components/QueueBulkMapSeriesDialog'), () => ({
   default: vi.fn(() => null),
 }))
 
-vi.mock('../hooks/useThread', () => ({
+await injectModuleDoubles(await import('../hooks/useThread'), () => ({
   useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useCreateThread: vi.fn(),
   useUpdateThread: vi.fn(),
@@ -28,7 +29,7 @@ vi.mock('../hooks/useThread', () => ({
   useReactivateThread: vi.fn(),
 }))
 
-vi.mock('../hooks/useQueue', () => ({
+await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
   useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
@@ -39,22 +40,22 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
-vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
-vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
+await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({ useRollBootstrap: vi.fn() }))
+await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
+await injectModuleDoubles(await import('../hooks/useQueueBlockingInfo'), () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 
-vi.mock('../services/api-threads', () => ({
+await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: { setPending: vi.fn().mockResolvedValue({}) },
 }))
 
-vi.mock('../services/api-dependencies', () => ({
+await injectModuleDoubles(await import('../services/api-dependencies'), () => ({
   dependenciesApi: {
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
   },
 }))
 
-vi.mock('../services/api-issues', () => ({
+await injectModuleDoubles(await import('../services/api-issues'), () => ({
   issuesApi: {
     create: vi.fn().mockResolvedValue({ issues: [] }),
     markRead: vi.fn().mockResolvedValue(undefined),
@@ -64,7 +65,7 @@ vi.mock('../services/api-issues', () => ({
   },
 }))
 
-vi.mock('../contexts/useBugReportRestore', () => ({
+await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: vi.fn(() => ({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
@@ -72,13 +73,13 @@ vi.mock('../contexts/useBugReportRestore', () => ({
   })),
 }))
 
-vi.mock('../contexts/useToast', () => ({
+await injectModuleDoubles(await import('../contexts/useToast'), () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
-vi.mock('../pages/QueuePage/QueueModals', () => ({ QueueModals: () => null }))
+await injectModuleDoubles(await import('../pages/QueuePage/QueueModals'), () => ({ QueueModals: () => null }))
 
-vi.mock('../pages/QueuePage/useQueueFilters', () => ({
+await injectModuleDoubles(await import('../pages/QueuePage/useQueueFilters'), () => ({
   useQueueFilters: vi.fn(() => ({
     activeThreads: [],
     completedThreads: [],
@@ -86,11 +87,11 @@ vi.mock('../pages/QueuePage/useQueueFilters', () => ({
   })),
 }))
 
-vi.mock('../pages/QueuePage/useQueueThreadCards', () => ({
+await injectModuleDoubles(await import('../pages/QueuePage/useQueueThreadCards'), () => ({
   useQueueThreadCards: vi.fn(() => () => null),
 }))
 
-vi.mock('../pages/QueuePage/useQueueThreadActions', () => ({
+await injectModuleDoubles(await import('../pages/QueuePage/useQueueThreadActions'), () => ({
   useQueueThreadActions: vi.fn(() => ({
     requestShuffle: vi.fn(),
     reorderError: null,

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NewReleasesSection } from '../components/NewReleasesSection'
 import { cast } from '../utils/cast'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mocks = vi.hoisted(() => ({
   updateReleaseSourceEnabled: vi.fn(),
@@ -15,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   followError: null as Error | null,
 }))
 
-vi.mock('../services/api-continuity-plans', async () => {
+await injectModuleDoubles(await import('../services/api-continuity-plans'), async () => {
   const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
     '../services/api-continuity-plans',
   )
@@ -29,7 +30,7 @@ vi.mock('../services/api-continuity-plans', async () => {
   }
 })
 
-vi.mock('../hooks/useReleaseSources', async () => {
+await injectModuleDoubles(await import('../hooks/useReleaseSources'), async () => {
   const actual = await vi.importActual<typeof import('../hooks/useReleaseSources')>(
     '../hooks/useReleaseSources',
   )

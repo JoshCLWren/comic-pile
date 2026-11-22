@@ -8,16 +8,17 @@ import { useCreatorComparison } from '../hooks/useCreatorComparison'
 import type { CreatorListSelection, CreatorsListState } from '../hooks/useCreatorsList'
 import type { CreatorListItem } from '../services/api-creators'
 import type { CreatorComparisonItem } from '../types/index'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../hooks/useCreatorsList', () => ({
+await injectModuleDoubles(await import('../hooks/useCreatorsList'), () => ({
   useCreatorsList: vi.fn(),
 }))
 
-vi.mock('../hooks/useCreatorComparison', () => ({
+await injectModuleDoubles(await import('../hooks/useCreatorComparison'), () => ({
   useCreatorComparison: vi.fn(),
 }))
 
-vi.mock('../hooks/useDebounce', () => ({
+await injectModuleDoubles(await import('../hooks/useDebounce'), () => ({
   useDebounce: <T,>(value: T) => value,
 }))
 

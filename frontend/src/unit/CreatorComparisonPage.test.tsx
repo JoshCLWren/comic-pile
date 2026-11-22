@@ -9,12 +9,13 @@ import type {
   CreatorComparisonResponse,
   CreatorMetricDrilldown,
 } from '../types/index'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../hooks/useCreatorComparison', () => ({
+await injectModuleDoubles(await import('../hooks/useCreatorComparison'), () => ({
   useCreatorComparison: vi.fn(),
 }))
 
-vi.mock('../services/creatorMetricDrilldownApi', () => ({
+await injectModuleDoubles(await import('../services/creatorMetricDrilldownApi'), () => ({
   creatorMetricDrilldownApi: {
     getMetricDrilldown: vi.fn(),
     getRatingDistributionDrilldown: vi.fn(),

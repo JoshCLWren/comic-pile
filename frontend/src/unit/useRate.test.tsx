@@ -11,15 +11,16 @@ import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RatePayload, Thread } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { cast } from '../utils/cast'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
-vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() } }))
-vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi: { get: vi.fn() } }))
-vi.mock('../query/cacheEffects', () => ({ applyRatedThreadCache: vi.fn() }))
+await injectModuleDoubles(await import('../services/protectedRollMutationApi'), () => ({ protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() } }))
+await injectModuleDoubles(await import('../services/rollBootstrapApi'), () => ({ rollBootstrapApi: { get: vi.fn() } }))
+await injectModuleDoubles(await import('../query/cacheEffects'), () => ({ applyRatedThreadCache: vi.fn() }))
 
 const mockedProtectedApi = vi.mocked(protectedRollMutationApi)
 const mockedRollBootstrapApi = vi.mocked(rollBootstrapApi)

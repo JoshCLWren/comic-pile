@@ -11,19 +11,20 @@ import {
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import { issueCardsApi } from '../services/issueCardsApi'
+import { injectModuleDoubles } from './injectModuleDoubles'
 vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
-vi.mock('../hooks/useDependencyGroups', () => ({
+await injectModuleDoubles(await import('../hooks/useDependencyGroups'), () => ({
   useDependencyGroups: vi.fn(),
 }))
-vi.mock('../hooks/useRollBootstrap', () => ({
+await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({
   useRollBootstrap: vi.fn(),
 }))
-vi.mock('../hooks/rollMutationReconciliation', () => ({
+await injectModuleDoubles(await import('../hooks/rollMutationReconciliation'), () => ({
   fetchAndPublishRollBootstrap: vi.fn(),
   isAmbiguousNetworkFailure: vi.fn(),
 }))
-vi.mock('../services/rollBootstrapApi', () => ({
+await injectModuleDoubles(await import('../services/rollBootstrapApi'), () => ({
   rollBootstrapApi: {
     switchPrerequisite: vi.fn(),
   },

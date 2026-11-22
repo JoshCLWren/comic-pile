@@ -22,8 +22,9 @@ import {
   SECOND_MISTER_MIRACLE_OVERLAP,
   withoutOverlap,
 } from './readingGraphFixture'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../services/api-cbl-sources', () => ({
+await injectModuleDoubles(await import('../services/api-cbl-sources'), () => ({
   cblSourcesApi: {
     discover: vi.fn(),
     browse: vi.fn(),
@@ -70,20 +71,20 @@ vi.mock('../services/api-cbl-sources', () => ({
   },
 }))
 
-vi.mock('../services/api-reading-graph', () => ({
+await injectModuleDoubles(await import('../services/api-reading-graph'), () => ({
   readingGraphApi: {
     preview: vi.fn(),
   },
 }))
 
-vi.mock('../services/api-continuity-plans', () => ({
+await injectModuleDoubles(await import('../services/api-continuity-plans'), () => ({
   continuityPlansApi: {
     list: vi.fn(),
     get: vi.fn(),
   },
 }))
 
-vi.mock('../query/cacheEffects', () => ({
+await injectModuleDoubles(await import('../query/cacheEffects'), () => ({
   applyCommittedReadingPlan: vi.fn(),
 }))
 

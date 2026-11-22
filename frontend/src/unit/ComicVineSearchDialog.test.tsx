@@ -12,7 +12,7 @@ const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssues
   resolveIdentitySpy: vi.fn(),
 }))
 
-vi.mock('../services/api-comicvine', () => ({
+await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     getSeriesIssues: getSeriesIssuesSpy,
@@ -28,7 +28,7 @@ vi.mock('../services/api-comicvine', () => ({
   },
 }))
 
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({ isOpen, title, children, size }: { isOpen: boolean; title: string; children: ReactNode; size?: string }) =>
     isOpen ? <div role="dialog" data-modal-size={size}><h2>{title}</h2>{children}</div> : null,
 }))
@@ -95,12 +95,13 @@ const {
   }
 })
 
-vi.mock('../hooks/useSiblingSeriesMapping', () => ({
+await injectModuleDoubles(await import('../hooks/useSiblingSeriesMapping'), () => ({
   useSiblingSeriesMappingPreview: useSiblingSeriesMappingPreviewMock,
   useCommitSeriesMapping: useCommitSeriesMappingMock,
 }))
 
 import ComicVineSearchDialog from '../components/ComicVineSearchDialog'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mockSeries = {
   comicvine_volume_id: 42,

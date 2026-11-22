@@ -6,7 +6,7 @@ const { getIssueIdentitySpy } = vi.hoisted(() => ({
   getIssueIdentitySpy: vi.fn(),
 }))
 
-vi.mock('../services/api-comicvine', () => ({
+await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   comicVineApi: {
     searchSeries: vi.fn(),
     getSeriesIssues: vi.fn(),
@@ -21,20 +21,21 @@ vi.mock('../services/api-comicvine', () => ({
   },
 }))
 
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({ isOpen, title, children }: { isOpen: boolean; title: string; children: ReactNode }) =>
     isOpen ? <div role="dialog"><h2>{title}</h2>{children}</div> : null,
 }))
 
-vi.mock('../components/IssueCorrectionDialog', () => ({
+await injectModuleDoubles(await import('../components/IssueCorrectionDialog'), () => ({
   default: () => null,
 }))
 
-vi.mock('../pages/RollPage/components/ComicIdentity', () => ({
+await injectModuleDoubles(await import('../pages/RollPage/components/ComicIdentity'), () => ({
   ComicIdentity: () => <div data-testid="comic-identity-stub" />,
 }))
 
 import { ComicPillar } from '../pages/RollPage/components/ComicPillar'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const longTitle =
   'Absolute Batman The Extremely Long Comic Title That Should Still Be Readable Without Covering Controls And Must Wrap Gracefully'
