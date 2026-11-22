@@ -736,6 +736,12 @@ pub async fn update_reading_list(
     .await
     .map_err(db::query_error)?;
 
+    let mut positions: Vec<i32> = Vec::with_capacity(request.issue_ids.len());
+    let mut entry_issue_ids: Vec<i32> = Vec::with_capacity(request.issue_ids.len());
+    let mut is_checkpoints: Vec<bool> = Vec::with_capacity(request.issue_ids.len());
+    let mut targets_json: Vec<String> = Vec::with_capacity(request.issue_ids.len());
+    let mut gates: Vec<String> = Vec::with_capacity(request.issue_ids.len());
+    let mut skippeds: Vec<bool> = Vec::with_capacity(request.issue_ids.len());
     for (position, issue_id) in request.issue_ids.iter().enumerate() {
         let old = old_by_issue.get(issue_id);
         let intent = request
@@ -788,19 +794,37 @@ pub async fn update_reading_list(
                 "custom_cbl_invalid_checkpoint_targets".to_string(),
             ));
         }
-        let targets_json = serde_json::to_string(&targets).map_err(|e| {
+        let targets_value = serde_json::to_string(&targets).map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
                 "preserved underlying error before mapping"
             );
             ApiError::Internal("Invalid checkpoint".into())
         })?;
+        let has_targets = !targets.is_empty();
+        positions.push(position as i32);
+        entry_issue_ids.push(*issue_id);
+        is_checkpoints.push(has_targets);
+        targets_json.push(targets_value);
+        gates.push(gate.to_string());
+        skippeds.push(skipped);
+    }
+    if !entry_issue_ids.is_empty() {
         tx.execute(
             "INSERT INTO custom_cbl_entries
              (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[&list_id, issue_id, &(position as i32), &(!targets.is_empty()),
-              &targets_json, &gate, &skipped],
+             SELECT l, i, p, NOW(), c, t::json, g, s
+             FROM unnest($1::int[],$2::int[],$3::int[],$4::bool[],$5::text[],$6::text[],$7::bool[])
+                  AS u(l, i, p, c, t, g, s)",
+            &[
+                &vec![list_id; entry_issue_ids.len()],
+                &entry_issue_ids,
+                &positions,
+                &is_checkpoints,
+                &targets_json,
+                &gates,
+                &skippeds,
+            ],
         ).await.map_err(db::query_error)?;
     }
 
