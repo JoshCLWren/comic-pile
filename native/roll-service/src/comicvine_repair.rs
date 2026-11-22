@@ -1178,6 +1178,46 @@ mod tests {
         drop(Object::take(connection));
     }
 
+    async fn seed_confirmed_identity_for_thread(
+        connection: &Object,
+        thread_id: i32,
+        issue_number: &str,
+        external_id: &str,
+        metadata: &Value,
+    ) -> i32 {
+        let identity_id: i32 = connection
+            .query_one(
+                "INSERT INTO external_identities \
+                 (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'issue', $1, ($2::text)::json, now(), now()) \
+                 RETURNING id",
+                &[&external_id, &metadata.to_string()],
+            )
+            .await
+            .expect("backfill identity")
+            .get(0);
+        let issue_id: i32 = connection
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, status, position, created_at) \
+                 VALUES ($1, $2, 'unread', ($2::text)::int, now()) RETURNING id",
+                &[&thread_id, &issue_number],
+            )
+            .await
+            .expect("backfill issue")
+            .get(0);
+        connection
+            .execute(
+                "INSERT INTO issue_external_identity_mappings \
+                 (issue_id, external_identity_id, status, evidence_source, confidence, \
+                  evidence_json, created_at, updated_at) \
+                 VALUES ($1, $2, 'confirmed', 'seed', 1.0, '{}'::json, now(), now())",
+                &[&issue_id, &identity_id],
+            )
+            .await
+            .expect("confirmed backfill mapping");
+        identity_id
+    }
+
     fn deep_provider_result(issue_id: u32, date_last_updated: &str) -> Value {
         json!({
             "id": issue_id,
