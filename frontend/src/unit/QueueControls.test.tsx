@@ -246,4 +246,29 @@ describe('QueueControls', () => {
     expect(baseProps.onSearchChange).not.toHaveBeenCalled()
   })
 
+  it('shows M of M series when counts are settled', () => {
+    render(<QueueControls {...baseProps} activeCount={371} filteredCount={371} />)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('371 of 371 series')
+  })
+
+  it('shows N of M series for a filtered search', () => {
+    render(<QueueControls {...baseProps} activeCount={371} filteredCount={12} />)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('12 of 371 series')
+  })
+
+  it('shows 0 of M series when no results match', () => {
+    render(<QueueControls {...baseProps} activeCount={371} filteredCount={0} />)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('0 of 371 series')
+  })
+
+  it('shows loading state instead of stale counts while pending', () => {
+    render(<QueueControls {...baseProps} activeCount={371} filteredCount={12} countPending />)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Updating series count…')
+  })
+
+  it('shows unavailable state when counts cannot be trusted', () => {
+    render(<QueueControls {...baseProps} activeCount={null} filteredCount={null} countError />)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Series count unavailable.')
+  })
+
 })
