@@ -7,7 +7,7 @@
  * transitions must permit a fresh discovery after a deployment or account change.
  */
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useThreadBlockingInfo } from '../hooks/useDependencies'
