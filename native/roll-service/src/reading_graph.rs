@@ -849,6 +849,7 @@ mod tests {
     use crate::{
         option_inputs::{OverlapDecision, Prerequisite, ReadingEntry, ReadingList},
         reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
+        test_support,
     };
 
     fn inputs() -> OptionInputs {
@@ -1090,13 +1091,9 @@ mod tests {
         frontier_audit_fixture(&state).await;
         let before = dependency_count(&state).await;
 
-        let Json(response) = reading_graph(
-            State(state.clone()),
-            AuthenticatedUser::for_test(9101),
-            State(state.clone()),
-        )
-        .await
-        .expect("reading graph for reader A");
+        let Json(response) = reading_graph(State(state.clone()), AuthenticatedUser::for_test(9101))
+            .await
+            .expect("reading graph for reader A");
         assert_eq!(response.status, "ok");
         let audit = response.frontier_audit.as_ref().expect("audit present");
         assert_eq!(audit.frontiers_examined, 2);
@@ -1125,13 +1122,9 @@ mod tests {
 
         // An independent reader's library is untouched: their own legacy edge
         // targets their frontier, but the audit is owner-scoped per user.
-        let Json(other) = reading_graph(
-            State(state.clone()),
-            AuthenticatedUser::for_test(9102),
-            State(state.clone()),
-        )
-        .await
-        .expect("reading graph for reader B");
+        let Json(other) = reading_graph(State(state.clone()), AuthenticatedUser::for_test(9102))
+            .await
+            .expect("reading graph for reader B");
         assert_eq!(other.status, "ok");
         let other_audit = other.frontier_audit.as_ref().expect("audit present");
         assert_eq!(other_audit.frontiers_examined, 1);
@@ -1166,13 +1159,9 @@ mod tests {
             .expect("seed authored prerequisite");
         drop(connection);
 
-        let Json(response) = reading_graph(
-            State(state.clone()),
-            AuthenticatedUser::for_test(9101),
-            State(state.clone()),
-        )
-        .await
-        .expect("reading graph after authoring");
+        let Json(response) = reading_graph(State(state.clone()), AuthenticatedUser::for_test(9101))
+            .await
+            .expect("reading graph after authoring");
         let audit = response.frontier_audit.as_ref().expect("audit present");
         assert!(
             audit.findings.is_empty(),
