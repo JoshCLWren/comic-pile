@@ -163,6 +163,14 @@ use utoipa::OpenApi;
         crate::creators_v2::rating_distribution_documentation,
         crate::creators_v2::role_documentation,
         crate::creators_v2::series_documentation,
+        // Bulk queue exclusion/restore and membership-check operations (#5435)
+        // are mounted in the production router and must be published in the
+        // canonical runtime contract.
+        crate::queue_exclusions::bulk_exclude_documentation,
+        crate::queue_exclusions::bulk_restore_documentation,
+        crate::queue_exclusions::check_excluded_status_documentation,
+        crate::queue_exclusions::restore_group_documentation,
+        crate::reading_list::check_thread_memberships_documentation,
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -335,6 +343,18 @@ use utoipa::OpenApi;
         crate::creators_v2::CreatorMetricIssue,
         crate::creators_v2::CreatorMetricPagination,
         crate::creators_v2::CreatorMetricDrilldown,
+        // Request/response schemas for the mounted #5435 bulk queue and
+        // membership-check operations.
+        crate::queue_exclusions::QueueExclusionSource,
+        crate::queue_exclusions::BulkQueueExclusionRequest,
+        crate::queue_exclusions::QueueExclusionGroup,
+        crate::queue_exclusions::BulkQueueExclusionResponse,
+        crate::queue_exclusions::BulkQueueRestoreRequest,
+        crate::queue_exclusions::BulkQueueRestoreResponse,
+        crate::queue_exclusions::ExcludedStatusCheckRequest,
+        crate::queue_exclusions::ExcludedStatusCheckResponse,
+        crate::reading_list::ReadingListMembershipCheckRequest,
+        crate::reading_list::ReadingListMembershipCheckResponse,
     )),
     modifiers(&NativeSecurityAddon)
 )]
