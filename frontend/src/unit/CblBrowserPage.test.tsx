@@ -49,6 +49,18 @@ describe('CblBrowserPage catalog', () => {
     })
   })
 
+  it('counts the whole shared catalog on the initial empty search, including nested lists', async () => {
+    mockBrowse.mockResolvedValue(
+      browsePage({ items: [source], total: 1, catalog_total: 8, total_pages: 1 }),
+    )
+    renderPage()
+
+    const count = await screen.findByTestId('cbl-result-count')
+    expect(count).toHaveTextContent('8 of 8 source lists')
+    expect(count).toHaveAttribute('role', 'status')
+    expect(count).toHaveAttribute('aria-live', 'polite')
+  })
+
   it('opens the deep-linked source list detail with its ordered positions', async () => {
     renderPage('/cbl-sources?list=7')
     const detail = await screen.findByTestId('cbl-source-detail')
