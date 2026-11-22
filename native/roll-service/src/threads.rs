@@ -124,6 +124,8 @@ pub struct ThreadListResponse {
     pub threads: Vec<ThreadListItem>,
     pub next_page_token: Option<String>,
     pub active_count: i32,
+    /// Total rows matching the applied search, independent of the bounded page.
+    pub filtered_count: i32,
 }
 
 /// The legacy single-thread response retained for the v1 and bare aliases.
