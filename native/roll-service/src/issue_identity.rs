@@ -2853,75 +2853,50 @@ async fn do_cbl_adoption_commit(
             prow.get::<_, String>(6),
         )
     } else {
-        // Try existing adopted plan by source path
-        let existing = find_existing_adopted_plan_tx(&tx, user_id, &source_path)
+        // #3933: an untargeted adoption must never produce a second
+        // indistinguishable plan with a name the reader already uses. A
+        // distinct name keeps the existing curated plan addressable and
+        // makes any later update an explicit, targeted choice.
+        let base_name = if list_name.is_empty() {
+            format!("CBL adoption for {source_path}")
+        } else {
+            list_name.clone()
+        };
+        // Get all existing plan names for this user to ensure uniqueness.
+        let existing_names: std::collections::HashSet<String> = tx
+            .run_query(
+                "SELECT name FROM continuity_plans WHERE user_id=$1",
+                &[&user_id],
+            )
             .await
             .map_err(|e| {
-                if e.is_database_unavailable() {
-                    CommitErr::Db(e)
+                if crate::db::is_transport_failure(&e) {
+                    CommitErr::Db(ApiError::database_unavailable())
                 } else {
-                    CommitErr::Unexpected(e.to_string())
+                    CommitErr::Unexpected(format!("existing plan names: {e}"))
                 }
-            })?;
-        if let Some(pid) = existing {
-            let prow = tx.run_query_one("SELECT id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&pid, &user_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("load existing plan: {e}")) })?;
-            (
-                prow.get::<_, i32>(0),
-                false,
-                prow.get::<_, String>(1),
-                prow.get::<_, String>(2),
-                serde_json::from_str::<JsonValue>(&prow.get::<_, String>(3))
-                    .unwrap_or(serde_json::json!([])),
-                serde_json::from_str::<JsonValue>(&prow.get::<_, String>(4))
-                    .unwrap_or(serde_json::json!([])),
-                prow.get::<_, String>(5),
-                prow.get::<_, String>(6),
-            )
-        } else {
-            let base_name = if list_name.is_empty() {
-                format!("CBL adoption for {source_path}")
-            } else {
-                list_name.clone()
-            };
-            // #3933: an untargeted adoption must never produce a second
-            // indistinguishable plan with a name the reader already uses. A
-            // distinct name keeps the existing curated plan addressable and
-            // makes any later update an explicit, targeted choice.
-            let existing_names: std::collections::HashSet<String> = tx
-                .run_query(
-                    "SELECT name FROM continuity_plans WHERE user_id=$1",
-                    &[&user_id],
-                )
-                .await
-                .map_err(|e| {
-                    if crate::db::is_transport_failure(&e) {
-                        CommitErr::Db(ApiError::database_unavailable())
-                    } else {
-                        CommitErr::Unexpected(format!("existing plan names: {e}"))
-                    }
-                })?
-                .into_iter()
-                .map(|row: tokio_postgres::Row| row.get::<_, String>(0))
-                .collect();
-            let name = unique_adoption_plan_name(&base_name, &existing_names);
-            let lanes = serde_json::json!([{"id":"default","name":"Default","order":0}]);
-            let prow = tx.run_query_one(
-                "INSERT INTO continuity_plans (user_id,name,ordering_mode,lanes_json,nodes_json,created_at,updated_at) VALUES ($1,$2,'informational',$3::jsonb,'[]'::jsonb,NOW(),NOW()) RETURNING id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text",
-                &[&user_id,&name,&tokio_postgres::types::Json(&lanes)]
-            ).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("insert plan: {e}")) })?;
-            (
-                prow.get::<_, i32>(0),
-                true,
-                prow.get::<_, String>(1),
-                prow.get::<_, String>(2),
-                serde_json::from_str::<JsonValue>(&prow.get::<_, String>(3))
-                    .unwrap_or(serde_json::json!([])),
-                serde_json::from_str::<JsonValue>(&prow.get::<_, String>(4))
-                    .unwrap_or(serde_json::json!([])),
-                prow.get::<_, String>(5),
-                prow.get::<_, String>(6),
-            )
-        }
+            })?
+            .into_iter()
+            .map(|row: tokio_postgres::Row| row.get::<_, String>(0))
+            .collect();
+        let name = unique_adoption_plan_name(&base_name, &existing_names);
+        let lanes = serde_json::json!([{"id":"default","name":"Default","order":0}]);
+        let prow = tx.run_query_one(
+            "INSERT INTO continuity_plans (user_id,name,ordering_mode,lanes_json,nodes_json,created_at,updated_at) VALUES ($1,$2,'informational',$3::jsonb,'[]'::jsonb,NOW(),NOW()) RETURNING id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text",
+            &[&user_id,&name,&tokio_postgres::types::Json(&lanes)]
+        ).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("insert plan: {e}")) })?;
+        (
+            prow.get::<_, i32>(0),
+            true,
+            prow.get::<_, String>(1),
+            prow.get::<_, String>(2),
+            serde_json::from_str::<JsonValue>(&prow.get::<_, String>(3))
+                .unwrap_or(serde_json::json!([])),
+            serde_json::from_str::<JsonValue>(&prow.get::<_, String>(4))
+                .unwrap_or(serde_json::json!([])),
+            prow.get::<_, String>(5),
+            prow.get::<_, String>(6),
+        )
     };
 
     // Merge nodes (preserves key semantics and propagates DB outages as 503).
