@@ -1879,7 +1879,10 @@ pub async fn import_issue(
     tx.batch_execute("SAVEPOINT comicvine_hydration_enqueue")
         .await
         .map_err(db::query_error)?;
-    if enqueue_hydration_if_needed(&tx, external_identity_id).await.is_ok() {
+    if enqueue_hydration_if_needed(&tx, external_identity_id)
+        .await
+        .is_ok()
+    {
         tx.batch_execute("RELEASE SAVEPOINT comicvine_hydration_enqueue")
             .await
             .map_err(db::query_error)?;

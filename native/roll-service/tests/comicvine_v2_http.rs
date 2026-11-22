@@ -2335,7 +2335,11 @@ async fn import_issue_enqueues_durable_metadata_refresh_request() {
     let issue_id = body["issue_id"].as_i64().unwrap() as i32;
     let (status, intelligence) = send(
         &state,
-        get(&format!("/api/v2/issues/{issue_id}/comicvine"), &token, &csrf),
+        get(
+            &format!("/api/v2/issues/{issue_id}/comicvine"),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{intelligence:?}");
