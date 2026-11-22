@@ -769,13 +769,24 @@ async fn adoption_commit_seats_missing_low_issues_in_natural_order_3483() {
     let (state, token, csrf, _guard) = setup().await;
 
     let conn = state.pool.get().await.unwrap();
-    let (user_id,): (i32,) = conn
-        .query_one("SELECT id FROM users WHERE username LIKE 'issue-identity-%' ORDER BY id DESC LIMIT 1", &[])
+    let user_id: i32 = conn
+        .query_one(
+            "SELECT id FROM users WHERE username LIKE 'issue-identity-%' ORDER BY id DESC LIMIT 1",
+            &[],
+        )
         .await
-        .unwrap();
+        .unwrap()
+        .get(0);
     let issues_seed = (7..=24)
         .enumerate()
-        .map(|(idx, number)| format!("({}, 34830, '{}', {}, 'unread', NOW())", 348300 + idx, number, idx + 1))
+        .map(|(idx, number)| {
+            format!(
+                "({}, 34830, '{}', {}, 'unread', NOW())",
+                348300 + idx,
+                number,
+                idx + 1
+            )
+        })
         .collect::<Vec<_>>()
         .join(",\n          ");
     conn.batch_execute(&format!(
@@ -847,7 +858,10 @@ async fn adoption_commit_seats_missing_low_issues_in_natural_order_3483() {
     let actual: Vec<String> = rows.iter().map(|row| row.get::<_, String>(0)).collect();
     let mut expected: Vec<String> = vec!["1".to_string(), "2".to_string()];
     expected.extend((7..=24).map(|number| number.to_string()));
-    assert_eq!(actual, expected, "CBL-adopted low issues must be natural-ordered");
+    assert_eq!(
+        actual, expected,
+        "CBL-adopted low issues must be natural-ordered"
+    );
 }
 
 #[tokio::test]

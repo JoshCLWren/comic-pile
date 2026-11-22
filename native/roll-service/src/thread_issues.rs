@@ -1971,7 +1971,11 @@ mod tests {
         // #7-#24, then #2-#6, then #1. A subsequent natural pass reseats every
         // ordinary number instead of appending again.
         let mut appended = high_run;
-        appended.extend(["2", "3", "4", "5", "6", "1"].iter().map(|n| (*n).to_string()));
+        appended.extend(
+            ["2", "3", "4", "5", "6", "1"]
+                .iter()
+                .map(|n| (*n).to_string()),
+        );
         let reseated: Vec<String> = (1..=24).map(|n| n.to_string()).collect();
         assert_eq!(
             natural_issue_order(&appended, &[]),
