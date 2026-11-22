@@ -769,7 +769,7 @@ export default function CblBrowserPage() {
     ? 'Source list count unavailable.'
     : resultCountPending
       ? 'Updating source list count…'
-      : `${settledBrowsePage!.total} of ${settledBrowsePage!.scope === 'search' ? settledBrowsePage!.catalog_total : settledBrowsePage!.total} source lists`
+      : `${settledBrowsePage!.total} of ${settledBrowsePage!.catalog_total} source lists`
 
   const openConfirm = () => {
     if (!selectedSource || !preview || commitBlocked) return
