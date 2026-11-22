@@ -1011,4 +1011,27 @@ mod tests {
         assert_eq!(path[0]["origin"], "list order");
         assert_eq!(path[0]["provenance"], serde_json::json!(["Julix"]));
     }
+
+
+/// Categorization of an unresolved reference for issue #4198 closure.
+/// These track the three completeness blockers documented in
+/// PRODUCTION_READING_GRAPH_REPLAY.md: unread issues outside strict-list
+/// coverage, Reading List vs Reading Plan differences, and converted
+/// historical relationships (including JLI) that can contradict newer strict lists.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[allow(dead_code)]
+pub enum UnresolvedCategory {
+    UnreadOutsideList,
+    ReadingPlanVsList,
+    JliConverted,
+}
+
+/// Mapping from UnresolvedReference kind string to UnresolvedCategory.
+pub fn categorize_unresolved(kind: &str) -> UnresolvedCategory {
+    match kind {
+        "list_entry" => UnresolvedCategory::UnreadOutsideList,
+        "prerequisite" => UnresolvedCategory::ReadingPlanVsList,
+        _ => UnresolvedCategory::JliConverted,
+    }
+}
 }

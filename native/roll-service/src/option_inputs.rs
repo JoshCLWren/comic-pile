@@ -52,19 +52,6 @@ pub struct UnresolvedReference {
     pub kind: &'static str,
     pub object_id: i32,
 }
-
-/// The three unresolved categories tracked for issue #4198 closure.
-/// These correspond to the "outstanding completeness blockers" documented in
-/// PRODUCTION_READING_GRAPH_REPLAY.md: unread issues outside strict-list
-/// coverage, Reading List vs Reading Plan differences, and converted
-/// historical relationships (including JLI) that can contradict newer strict lists.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
-pub enum UnresolvedCategory {
-    UnreadOutsideList,
-    ReadingPlanVsList,
-    JliConverted,
-}
 #[derive(Debug, Clone, Serialize)]
 pub struct OptionInputs {
     pub core: CoreReadingInputs,
@@ -822,33 +809,4 @@ mod tests {
         assert!(inputs.require_resolved().is_ok());
         assert!(inputs.core.issues.is_empty());
     }
-
-    #[test]
-    fn unresolved_categories_track_unread_outside_list() {
-        // Verify that list_entry kind is categorized as UnreadOutsideList
-        use crate::option_inputs::UnresolvedReference;
-        use crate::reading_graph::UnresolvedCategory;
-        let ref_ = UnresolvedReference {
-            kind: "list_entry",
-            object_id: 42,
-        };
-        let category = crate::reading_graph::categorize_unresolved(&ref_.kind);
-        assert_eq!(category, UnresolvedCategory::UnreadOutsideList);
-    }
-
-    #[test]
-    fn unresolved_categories_track_reading_plan_vs_list() {
-        // Verify that prerequisite kind is categorized as ReadingPlanVsList
-        use crate::option_inputs::UnresolvedReference;
-        use crate::reading_graph::UnresolvedCategory;
-        let ref_ = UnresolvedReference {
-            kind: "prerequisite",
-            object_id: 42,
-        };
-        let category = crate::reading_graph::categorize_unresolved(&ref_.kind);
-        assert_eq!(category, UnresolvedCategory::ReadingPlanVsList);
-    }
-
-    #[test]
-    fn unresolved_categories_default_to_jli_converted() {
-        // Verify that unknown kind defaults to JliConverted
+}
