@@ -414,9 +414,13 @@ pub async fn create_issues(
             .map(|number| (number, target[number.as_str()]))
             .collect();
         creations.sort_by_key(|(_, position)| *position);
-        for (number, position) in creations {
-            created.push(insert_issue(&tx, thread_id, number, position).await?);
-        }
+        let numbers: Vec<String> = creations
+            .iter()
+            .map(|(number, _)| (*number).clone())
+            .collect();
+        let positions: Vec<i32> = creations.iter().map(|(_, position)| *position).collect();
+        created = insert_natural_issues(&tx, thread_id, &numbers, &positions).await?;
+        created.sort_by_key(|issue| target[issue.issue_number.as_str()]);
     } else if append {
         let next = existing
             .iter()
