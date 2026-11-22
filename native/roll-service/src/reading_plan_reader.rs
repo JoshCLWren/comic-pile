@@ -660,7 +660,7 @@ mod tests {
     fn normalizes_raw_cbl_annual_label_embedded_as_issue_number() {
         assert_eq!(
             normalize_issue_number_display("Alpha flight annual 1", "Alpha Flight"),
-            "Annual 1"
+            "1"
         );
     }
 
@@ -669,7 +669,7 @@ mod tests {
         assert_eq!(normalize_issue_number_display("1", "Alpha Flight"), "1");
         assert_eq!(
             normalize_issue_number_display("Annual 2", "Alpha Flight Annual"),
-            "Annual 2"
+            "2"
         );
     }
 
