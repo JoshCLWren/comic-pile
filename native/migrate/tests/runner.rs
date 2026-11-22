@@ -225,6 +225,131 @@ async fn alembic_schema_at_head_is_adopted_and_data_repairs_run() {
 }
 
 #[tokio::test]
+async fn cbl_natural_order_repair_runs_after_alembic_schema_adoption_3483() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    alembic_managed_at_head(&client).await;
+
+    let mut spider_labels: Vec<String> = (7..=24).map(|number| number.to_string()).collect();
+    spider_labels.extend(["2".to_string(), "1".to_string()]);
+    let mut xmen_labels: Vec<String> = (7..=24).map(|number| number.to_string()).collect();
+    xmen_labels.extend((2..=6).map(|number| number.to_string()));
+    xmen_labels.push("1".to_string());
+    let manual_labels = vec!["2".to_string(), "1".to_string()];
+
+    // Seed each thread in one statement. The first eighteen rows of each CBL
+    // thread are read, so the repair must also move next_unread to #1.
+    let issue_values = |thread_id: i32, first_id: i32, labels: &[String], read_count: usize| {
+        labels
+            .iter()
+            .enumerate()
+            .map(|(index, label)| {
+                let status = if index < read_count { "read" } else { "unread" };
+                format!(
+                    "({}, {}, '{}', {}, '{}', NOW())",
+                    first_id + index as i32,
+                    thread_id,
+                    label,
+                    index + 1,
+                    status
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",\n          ")
+    };
+    let all_values = [
+        issue_values(17977, 348300, &spider_labels, 18),
+        issue_values(17982, 348400, &xmen_labels, 18),
+        issue_values(17978, 348500, &manual_labels, 0),
+    ]
+    .join(",\n          ");
+    client
+        .batch_execute(&format!(
+            r#"
+            INSERT INTO public.users (id, username)
+            VALUES (3483, 'migrate-3483');
+            INSERT INTO public.threads
+              (id, title, format, issues_remaining, queue_position, status, user_id,
+               total_issues, reading_progress)
+            VALUES
+              (17977, 'Ultimate Spider-Man', 'comic', 2, 1, 'active', 3483, 20, 'in_progress'),
+              (17982, 'Ultimate X-Men', 'comic', 6, 2, 'active', 3483, 24, 'in_progress'),
+              (17978, 'Manual order control', 'comic', 2, 3, 'active', 3483, 2, 'in_progress');
+            INSERT INTO public.issues
+              (id, thread_id, issue_number, position, status, created_at)
+            VALUES
+              {all_values};
+            UPDATE public.threads AS t
+            SET next_unread_issue_id = (
+              SELECT i.id FROM public.issues AS i
+              WHERE i.thread_id = t.id AND i.issue_number = '2'
+            )
+            WHERE t.id IN (17977, 17982, 17978);
+            "#
+        ))
+        .await
+        .unwrap();
+
+    let report = run(&mut client).await.unwrap();
+    assert_eq!((report.applied, report.adopted), (vec![3], vec![1, 2]));
+
+    let rows = client
+        .query(
+            "SELECT thread_id, issue_number FROM public.issues \
+             WHERE thread_id IN (17977, 17982, 17978) \
+             ORDER BY thread_id, position, id",
+            &[],
+        )
+        .await
+        .unwrap();
+    let mut actual: std::collections::BTreeMap<i32, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for row in rows {
+        actual
+            .entry(row.get(0))
+            .or_default()
+            .push(row.get::<_, String>(1));
+    }
+    let mut expected_spider = vec!["1".to_string(), "2".to_string()];
+    expected_spider.extend((7..=24).map(|number| number.to_string()));
+    let expected_xmen: Vec<String> = (1..=24).map(|number| number.to_string()).collect();
+    assert_eq!(actual.get(&17977), Some(&expected_spider));
+    assert_eq!(actual.get(&17982), Some(&expected_xmen));
+    assert_eq!(
+        actual.get(&17978),
+        Some(&manual_labels),
+        "the data repair must not rewrite unrelated manual ordering"
+    );
+
+    let next_rows = client
+        .query(
+            "SELECT t.id, i.issue_number FROM public.threads AS t \
+             JOIN public.issues AS i ON i.id = t.next_unread_issue_id \
+             WHERE t.id IN (17977, 17982, 17978) ORDER BY t.id",
+            &[],
+        )
+        .await
+        .unwrap();
+    let next: Vec<(i32, String)> = next_rows
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    assert_eq!(
+        next,
+        vec![
+            (17977, "1".to_string()),
+            (17978, "2".to_string()),
+            (17982, "1".to_string()),
+        ]
+    );
+
+    let again = run(&mut client).await.unwrap();
+    assert_eq!((again.applied, again.adopted), (vec![], vec![]));
+    drop(client);
+    db.drop_database().await;
+}
+
+#[tokio::test]
 async fn alembic_database_at_baseline_head_adopts_baseline_and_runs_pending() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
