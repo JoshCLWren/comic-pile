@@ -3756,16 +3756,21 @@ async fn merge_adoption_nodes_tx(
         if created_now {
             created_positions.push(pos);
         }
+        let series_name = entry
+            .get("series_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let raw_issue_number = entry
+            .get("issue_number")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let label = format!(
             "{} #{}",
-            entry
-                .get("series_name")
-                .and_then(|v| v.as_str())
-                .unwrap_or(""),
-            entry
-                .get("issue_number")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
+            series_name,
+            crate::reading_plan_reader::normalize_issue_number_display(
+                raw_issue_number,
+                series_name,
+            )
         );
         let placement = serde_json::json!({"source_path": source_path, "position": pos});
         if let Some(&idx) = issue_node_index.get(&issue_id) {

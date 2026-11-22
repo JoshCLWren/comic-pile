@@ -168,8 +168,14 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
         // Handle "Alpha Flight Annual 1" stored as issue number when the series
         // title is "Alpha Flight Annual" or when the raw label contains the
         // series title as a prefix with different casing/spacing.
-        let collapsed_candidate = lower_candidate.split_whitespace().collect::<Vec<_>>().join(" ");
-        let collapsed_series = lower_series.split_whitespace().collect::<Vec<_>>().join(" ");
+        let collapsed_candidate = lower_candidate
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let collapsed_series = lower_series
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
         if collapsed_candidate.starts_with(&collapsed_series) {
             let prefix_len = collapsed_series.len();
             // Map the prefix length back onto the original by counting chars in
@@ -471,10 +477,7 @@ pub async fn read(
             issue_id: entry.issue_id,
             lane_id: "reading-list".to_string(),
             display_position: entry.position,
-            issue_number: normalize_issue_number_display(
-                &entry.issue_number,
-                &entry.series_name,
-            ),
+            issue_number: normalize_issue_number_display(&entry.issue_number, &entry.series_name),
             thread_id: entry.thread_id,
             thread_title: entry.series_name,
             status: entry.status,
