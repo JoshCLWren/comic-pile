@@ -364,8 +364,10 @@ pub async fn create_issues(
             created.push(insert_issue(&tx, thread_id, number, next + offset as i32 + 1).await?);
         }
     } else {
-        let existing_labels: Vec<String> =
-            existing.iter().map(|(_, number, _)| number.clone()).collect();
+        let existing_labels: Vec<String> = existing
+            .iter()
+            .map(|(_, number, _)| number.clone())
+            .collect();
         if let Some(order) = natural_issue_order(&existing_labels, &new_numbers) {
             let target: BTreeMap<&str, i32> = order
                 .iter()
@@ -386,7 +388,7 @@ pub async fn create_issues(
                 let position = target[number.as_str()];
                 created_rows.push(insert_issue(&tx, thread_id, number, position).await?);
             }
-            created_rows.sort_by_key(|issue| issue.position);
+            created_rows.sort_by_key(|issue| target[issue.issue_number.as_str()]);
             created = created_rows;
         } else {
             let next = existing
@@ -395,9 +397,7 @@ pub async fn create_issues(
                 .max()
                 .unwrap_or(0);
             for (offset, number) in new_numbers.iter().enumerate() {
-                created.push(
-                    insert_issue(&tx, thread_id, number, next + offset as i32 + 1).await?,
-                );
+                created.push(insert_issue(&tx, thread_id, number, next + offset as i32 + 1).await?);
             }
         }
     }
