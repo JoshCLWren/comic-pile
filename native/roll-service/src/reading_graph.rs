@@ -1130,7 +1130,7 @@ mod tests {
             status: "active".into(),
             title: title.into(),
         };
-        let issue = |id, thread_id, position, status, number: &str| ReadingIssue {
+        let issue = |id, thread_id, position, status: &str, number: &str| ReadingIssue {
             id,
             thread_id,
             position,
