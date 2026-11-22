@@ -8741,28 +8741,6 @@
         },
         "type": "object"
       },
-      "NativeReadingBoundaryBatchResponseV2": {
-        "properties": {
-          "evaluator": {
-            "$ref": "#/components/schemas/BoundaryEvaluator"
-          },
-          "threads": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/ReadingBoundaryExplanationV2"
-            },
-            "propertyNames": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "object"
-          }
-        },
-        "required": [
-          "threads",
-          "evaluator"
-        ],
-        "type": "object"
-      },
       "NativeReadingGraphBlocker": {
         "properties": {
           "explanation": {
@@ -11387,6 +11365,9 @@
       },
       "ReadingBoundaryBatchResponseV2": {
         "properties": {
+          "evaluator": {
+            "$ref": "#/components/schemas/BoundaryEvaluator"
+          },
           "threads": {
             "additionalProperties": {
               "$ref": "#/components/schemas/ReadingBoundaryExplanationV2"
@@ -11399,7 +11380,8 @@
           }
         },
         "required": [
-          "threads"
+          "threads",
+          "evaluator"
         ],
         "type": "object"
       },
@@ -25490,7 +25472,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeReadingBoundaryBatchResponseV2"
+                  "$ref": "#/components/schemas/ReadingBoundaryBatchResponseV2"
                 }
               }
             },
