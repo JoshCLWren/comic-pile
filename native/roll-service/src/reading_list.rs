@@ -737,72 +737,98 @@ pub async fn update_reading_list(
     .await
     .map_err(db::query_error)?;
 
-    for (position, issue_id) in request.issue_ids.iter().enumerate() {
-        let old = old_by_issue.get(issue_id);
-        let intent = request
-            .entry_intents
-            .as_ref()
-            .and_then(|intents| intents.get(issue_id));
-        let gate = intent
-            .map(|entry| entry.gate.as_str())
-            .or_else(|| old.map(|entry| entry.gate.as_str()))
-            .unwrap_or("none");
-        if !matches!(gate, "none" | "hold" | "after_previous") {
-            return Err(ApiError::BadRequest("Invalid gate".into()));
-        }
-        let skipped = intent
-            .map(|entry| entry.skipped)
-            .or_else(|| old.map(|entry| entry.skipped))
-            .unwrap_or(false);
-        let targets: Vec<i32> = match request.checkpoint_targets.as_ref() {
-            Some(requested) => requested.get(issue_id).cloned().unwrap_or_default(),
-            None => {
-                if checkpoints.contains(issue_id) {
-                    old.map(|entry| {
-                        entry
-                            .checkpoint_target_issue_ids
-                            .iter()
-                            .copied()
-                            .filter(|target| unique.contains(target))
-                            .collect()
-                    })
-                    .unwrap_or_else(|| {
-                        request
-                            .issue_ids
-                            .get(position + 1)
-                            .copied()
-                            .into_iter()
-                            .collect()
-                    })
-                } else {
-                    vec![]
-                }
+    if !request.issue_ids.is_empty() {
+        let mut entry_issue_ids: Vec<i32> = Vec::with_capacity(request.issue_ids.len());
+        let mut entry_positions: Vec<i32> = Vec::with_capacity(request.issue_ids.len());
+        let mut entry_is_checkpoints: Vec<bool> = Vec::with_capacity(request.issue_ids.len());
+        let mut entry_targets_json: Vec<String> = Vec::with_capacity(request.issue_ids.len());
+        let mut entry_gates: Vec<String> = Vec::with_capacity(request.issue_ids.len());
+        let mut entry_skipped: Vec<bool> = Vec::with_capacity(request.issue_ids.len());
+        for (position, issue_id) in request.issue_ids.iter().enumerate() {
+            let old = old_by_issue.get(issue_id);
+            let intent = request
+                .entry_intents
+                .as_ref()
+                .and_then(|intents| intents.get(issue_id));
+            let gate = intent
+                .map(|entry| entry.gate.as_str())
+                .or_else(|| old.map(|entry| entry.gate.as_str()))
+                .unwrap_or("none");
+            if !matches!(gate, "none" | "hold" | "after_previous") {
+                return Err(ApiError::BadRequest("Invalid gate".into()));
             }
-        };
-        let valid: BTreeSet<i32> = targets.iter().copied().collect();
-        if targets.len() != valid.len()
-            || !valid.is_subset(&unique)
-            || valid.contains(issue_id)
-            || (!checkpoints.contains(issue_id) && !targets.is_empty())
-        {
-            return Err(ApiError::Unprocessable(
-                "custom_cbl_invalid_checkpoint_targets".to_string(),
-            ));
+            let skipped = intent
+                .map(|entry| entry.skipped)
+                .or_else(|| old.map(|entry| entry.skipped))
+                .unwrap_or(false);
+            let targets: Vec<i32> = match request.checkpoint_targets.as_ref() {
+                Some(requested) => requested.get(issue_id).cloned().unwrap_or_default(),
+                None => {
+                    if checkpoints.contains(issue_id) {
+                        old.map(|entry| {
+                            entry
+                                .checkpoint_target_issue_ids
+                                .iter()
+                                .copied()
+                                .filter(|target| unique.contains(target))
+                                .collect()
+                        })
+                        .unwrap_or_else(|| {
+                            request
+                                .issue_ids
+                                .get(position + 1)
+                                .copied()
+                                .into_iter()
+                                .collect()
+                        })
+                    } else {
+                        vec![]
+                    }
+                }
+            };
+            let valid: BTreeSet<i32> = targets.iter().copied().collect();
+            if targets.len() != valid.len()
+                || !valid.is_subset(&unique)
+                || valid.contains(issue_id)
+                || (!checkpoints.contains(issue_id) && !targets.is_empty())
+            {
+                return Err(ApiError::Unprocessable(
+                    "custom_cbl_invalid_checkpoint_targets".to_string(),
+                ));
+            }
+            let targets_json = serde_json::to_string(&targets).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ApiError::Internal("Invalid checkpoint".into())
+            })?;
+            entry_issue_ids.push(*issue_id);
+            entry_positions.push(position as i32);
+            entry_is_checkpoints.push(!targets.is_empty());
+            entry_targets_json.push(targets_json);
+            entry_gates.push(gate.to_string());
+            entry_skipped.push(skipped);
         }
-        let targets_json = serde_json::to_string(&targets).map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            ApiError::Internal("Invalid checkpoint".into())
-        })?;
         tx.execute(
             "INSERT INTO custom_cbl_entries
              (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped)
-             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
-            &[&list_id, issue_id, &(position as i32), &(!targets.is_empty()),
-              &targets_json, &gate, &skipped],
-        ).await.map_err(db::query_error)?;
+             SELECT $1, x.issue_id, x.position, NOW(), x.is_checkpoint,
+                    x.targets::text::json, x.gate, x.skipped
+             FROM unnest($2::int[], $3::int[], $4::bool[], $5::text[], $6::text[], $7::bool[])
+               AS x(issue_id, position, is_checkpoint, targets, gate, skipped)",
+            &[
+                &list_id,
+                &entry_issue_ids,
+                &entry_positions,
+                &entry_is_checkpoints,
+                &entry_targets_json,
+                &entry_gates,
+                &entry_skipped,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
     }
 
     graph_preflight(&tx, user).await?;
