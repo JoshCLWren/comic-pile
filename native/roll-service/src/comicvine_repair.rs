@@ -1196,11 +1196,15 @@ mod tests {
             .await
             .expect("backfill identity")
             .get(0);
+        // Bind position as its own typed parameter: reusing $2 for the varchar
+        // issue_number column and a text-to-int cast makes Postgres deduce
+        // inconsistent parameter types (E42P08).
+        let position: i32 = issue_number.parse().expect("numeric issue number");
         let issue_id: i32 = connection
             .query_one(
                 "INSERT INTO issues (thread_id, issue_number, status, position, created_at) \
-                 VALUES ($1, $2, 'unread', ($2::text)::int, now()) RETURNING id",
-                &[&thread_id, &issue_number],
+                 VALUES ($1, $2, 'unread', $3, now()) RETURNING id",
+                &[&thread_id, &issue_number, &position],
             )
             .await
             .expect("backfill issue")
