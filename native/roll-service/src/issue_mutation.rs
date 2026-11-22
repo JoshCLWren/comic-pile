@@ -8,7 +8,7 @@
 
 use crate::{
     auth::AuthenticatedUser, db, option_inputs, reading_constraints::ValidatedReadingInputs,
-    ApiError, AppState,
+    thread_issues::natural_issue_order, ApiError, AppState,
 };
 use axum::{
     extract::{Path, State},
@@ -323,17 +323,28 @@ pub async fn create_issues(
         .map_err(db::query_error)?;
 
     let mut created = vec![];
+    // Natural placement is only safe when persisted numeric order is already
+    // monotonic. A non-monotonic series is reader-authored; appending must not
+    // silently re-sort it into a different strict-list relationship.
+    let numbered: Option<Vec<i64>> = existing
+        .iter()
+        .map(|(_, number, _)| ordinary(number))
+        .collect();
+    let mixed_natural_order = if !request.append_to_end
+        && request.insert_after_issue_id.is_none()
+        && numbered.is_none()
+    {
+        let existing_labels: Vec<String> = existing
+            .iter()
+            .map(|(_, number, _)| number.clone())
+            .collect();
+        natural_issue_order(&existing_labels, &new_numbers)
+    } else {
+        None
+    };
     let append = request.append_to_end
-        || (request.insert_after_issue_id.is_none() && {
-            // Natural placement is only safe when persisted numeric order is already
-            // monotonic. A non-monotonic series is reader-authored; appending must not
-            // silently re-sort it into a different strict-list relationship.
-            let numbered: Option<Vec<i64>> = existing
-                .iter()
-                .map(|(_, number, _)| ordinary(number))
-                .collect();
-            numbered.is_none_or(|values| values.windows(2).any(|pair| pair[0] >= pair[1]))
-        });
+        || (request.insert_after_issue_id.is_none()
+            && numbered.is_none_or(|values| values.windows(2).any(|pair| pair[0] >= pair[1])));
 
     if let Some(anchor) = request.insert_after_issue_id {
         let anchor_position = existing
@@ -353,6 +364,30 @@ pub async fn create_issues(
             created.push(
                 insert_issue(&tx, thread_id, number, anchor_position + offset as i32 + 1).await?,
             );
+        }
+    } else if let Some(order) = mixed_natural_order {
+        let target: BTreeMap<&str, i32> = order
+            .iter()
+            .enumerate()
+            .map(|(index, number)| (number.as_str(), index as i32 + 1))
+            .collect();
+        let positions: Vec<(i32, i32)> = existing
+            .iter()
+            .filter_map(|(id, number, position)| {
+                target
+                    .get(number.as_str())
+                    .filter(|wanted| **wanted != *position)
+                    .map(|wanted| (*id, *wanted))
+            })
+            .collect();
+        reseat_positions(&tx, thread_id, &positions).await?;
+        let mut creations: Vec<(&String, i32)> = new_numbers
+            .iter()
+            .map(|number| (number, target[number.as_str()]))
+            .collect();
+        creations.sort_by_key(|(_, position)| *position);
+        for (number, position) in creations {
+            created.push(insert_issue(&tx, thread_id, number, position).await?);
         }
     } else if append {
         let next = existing
