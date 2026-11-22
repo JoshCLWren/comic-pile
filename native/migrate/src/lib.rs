@@ -95,10 +95,10 @@ pub struct Report {
 #[derive(Debug, PartialEq, Eq)]
 enum AlembicState {
     /// `alembic_version` is at the merged head (or the queue-exclusion head):
-    /// both migrations are already reflected in the schema.
+    /// V1/V2 are already reflected in the schema.
     CurrentHead,
     /// `alembic_version` is at the baseline schema head (or its no-op deferred
-    /// repair): only V1 is reflected; V2 must still run.
+    /// repair): only V1 is reflected; V2 and later migrations must still run.
     BaselineHead,
     /// `alembic_version` exists but has no revision row.
     Empty,
