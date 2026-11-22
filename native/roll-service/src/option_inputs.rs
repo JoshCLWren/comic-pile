@@ -405,6 +405,21 @@ async fn load_transaction(
     assemble_snapshot(snapshot)
 }
 
+/// Preserve exact historical evidence while assembling the same execution
+/// inputs as the reader-only statement. Non-reader rows are discarded by
+/// [`assemble_snapshot`] and cannot reach constraint validation.
+fn assemble_graph_diagnostics(snapshot: SnapshotRows) -> Result<GraphDiagnostics, ApiError> {
+    let stored_prerequisites = snapshot
+        .prerequisites
+        .iter()
+        .map(PrerequisiteRow::stored_evidence)
+        .collect();
+    Ok(GraphDiagnostics {
+        inputs: assemble_snapshot(snapshot)?,
+        stored_prerequisites,
+    })
+}
+
 /// Assemble the validated Option E inputs from one decoded snapshot.
 ///
 /// The caller owns the statement that produced the snapshot; this only turns
