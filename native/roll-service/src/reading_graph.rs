@@ -946,14 +946,25 @@ mod tests {
     #[test]
     fn reading_graph_response_carries_the_frontier_audit() {
         use crate::option_inputs::LegacyDependencyRow;
-        let source = inputs();
+        // Acyclic fixture: the strict list holds only the frontier, so Option E
+        // offers issue 11 today while the inert legacy edge from unread issue
+        // 14 still records possible reader intent.
+        let source = {
+            let mut source = inputs();
+            source.lists[0].mode = "strict".into();
+            source.lists[0].entries = vec![ReadingEntry {
+                issue_id: 11,
+                gate: "none".into(),
+                skipped: false,
+            }];
+            source.prerequisites = vec![];
+            source
+        };
         let validated = crate::reading_constraints::ValidatedReadingInputs::contained(
             source.clone(),
             &BTreeMap::from([(7, "Julix".to_string())]),
         )
         .unwrap();
-        // Issue 11 is the stored frontier (queue position 1) and an inert
-        // legacy edge into it from unread issue 14 exists.
         let legacy = vec![LegacyDependencyRow {
             id: 5001,
             source_issue_id: 14,
@@ -969,6 +980,7 @@ mod tests {
         assert_eq!(audit.frontiers_examined, 1);
         assert_eq!(audit.findings.len(), 1);
         assert_eq!(audit.findings[0].frontier_issue_id, 11);
+        assert_eq!(audit.findings[0].list_memberships[0].list_id, 7);
         assert_eq!(audit.findings[0].legacy_evidence[0].dependency_id, 5001);
         assert_eq!(
             audit.findings[0].legacy_evidence[0].evidence_class,
