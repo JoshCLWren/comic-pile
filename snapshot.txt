@@ -1,39 +1,39 @@
-utc: 2026-11-22T04:54:01Z
-uptime: 492.89s load: 3.52 2.37 1.07
-processes: 170
+utc: 2026-11-22T04:54:18Z
+uptime: 509.61s load: 3.25 2.37 1.09
+processes: 166
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15982        2521        1283          50       12572       13460
+Mem:           15982        2949         848          50       12579       13032
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   69G   77G  48% /
 /dev/root       145G   69G   77G  48% /
 --- top rss (KiB, name only)
-1488940 clippy-driver
-220016 Runner.Worker
-207820 clippy-driver
-138912 provjobd3004516
-111492 Runner.Listener
-92412 clippy-driver
-84868 cargo
+1146144 rustc
+1083312 rustc
+220408 Runner.Worker
+139356 provjobd3004516
+111500 Runner.Listener
 82412 dockerd
+79664 cargo
 56004 php-fpm8.5
 44520 containerd
-44076 ExtHandler
+44132 ExtHandler
 36948 Daemon
 30272 networkd-dispat
-26232 cargo-clippy
 21448 php-fpm8.5
+21448 php-fpm8.5
+17892 systemd-journal
 --- top cpu (name only)
- 104 clippy-driver
- 100 ps
-99.7 clippy-driver
-66.6 clippy-driver
-33.3 clippy-driver
- 4.0 provjobd3004516
- 3.7 cargo
- 1.9 Runner.Worker
+ 100 rustc
+ 100 rustc
+ 3.9 provjobd3004516
+ 2.0 cargo
+ 1.8 Runner.Worker
+ 0.4 systemd
+ 0.3 hv_kvp_daemon
+ 0.3 Runner.Listener
 --- kernel oom/kill
 --- shutdown/session signals
 2026-11-22T04:46:01+00:00 runnervm0hi8g hosted-compute-agent[2174]: {"level":"INFO","ts":1795322761.3138914,"logger":"hosted-compute-agent","msg":"Reading metadata to detect shutdown tag..."}
