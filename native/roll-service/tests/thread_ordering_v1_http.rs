@@ -870,15 +870,20 @@ async fn thread_detail_blocked_order_matches_queue_list_under_option_e() {
     assert_eq!(list_position(eligible_high), 2, "{list_body:?}");
     assert_eq!(list_position(no_unread), 3, "{list_body:?}");
 
-    for (id, expected) in [(eligible_low, 1i64), (eligible_high, 2), (no_unread, 3)] {
+    for (id, expected_position, expected_blocked) in [
+        (eligible_low, 1i64, false),
+        (eligible_high, 2, false),
+        (no_unread, 3, true),
+    ] {
         let (status, body) =
             send(&state, get(&format!("/api/v1/threads/{id}"), &token, &csrf)).await;
         assert_eq!(status, StatusCode::OK, "{body:?}");
         assert_eq!(
             body["queue_position"].as_i64().unwrap(),
-            expected,
+            expected_position,
             "{body:?}"
         );
+        assert_eq!(body["is_blocked"], json!(expected_blocked), "{body:?}");
     }
 }
 
