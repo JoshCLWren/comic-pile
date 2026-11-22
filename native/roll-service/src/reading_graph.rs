@@ -1045,10 +1045,10 @@ mod tests {
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'frontier-audit-a'), (9102, 'frontier-audit-b');
                  INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position,
-                                      status, total_issues, next_unread_issue_id)
-                 VALUES (9305, 9101, 'Uncanny X-Men', 'series', 1, 1, 'active', 2, 9029),
-                        (9306, 9101, 'X-Men', 'series', 2, 2, 'active', 2, 9201),
-                        (9401, 9102, 'Unrelated Series', 'series', 1, 1, 'active', 2, 9403);
+                                      status, total_issues)
+                 VALUES (9305, 9101, 'Uncanny X-Men', 'series', 1, 1, 'active', 2),
+                        (9306, 9101, 'X-Men', 'series', 2, 2, 'active', 2),
+                        (9401, 9102, 'Unrelated Series', 'series', 1, 1, 'active', 2);
                  INSERT INTO issues (id, thread_id, issue_number, status, created_at, position) VALUES
                      (9028, 9305, '360', 'read', NOW(), 1),
                      (9029, 9305, '361', 'unread', NOW(), 2),
@@ -1056,6 +1056,9 @@ mod tests {
                      (9202, 9306, '1/2', 'unread', NOW(), 2),
                      (9402, 9401, '1', 'read', NOW(), 1),
                      (9403, 9401, '2', 'unread', NOW(), 2);
+                 UPDATE threads SET next_unread_issue_id = 9029 WHERE id = 9305;
+                 UPDATE threads SET next_unread_issue_id = 9201 WHERE id = 9306;
+                 UPDATE threads SET next_unread_issue_id = 9403 WHERE id = 9401;
                  INSERT INTO custom_cbl_lists (id, user_id, name, mode, created_at, updated_at)
                  VALUES (9701, 9101, '90s crossovers', 'loose', NOW(), NOW());
                  INSERT INTO custom_cbl_entries (id, list_id, issue_id, position, created_at, gate, skipped)
