@@ -1966,9 +1966,22 @@ mod tests {
         .await
         .expect("resumed batch");
         assert_eq!(second.enqueued, 1, "hydrated identity is never enqueued");
-        assert_eq!(second.scanned, 2);
-        assert_eq!(second.already_present, 1);
+        // The resume cursor is exclusive (`e.id > after`), and the freshness
+        // predicate excludes the hydrated identity, so only the third
+        // roster-only identity is scanned here.
+        assert_eq!(second.scanned, 1);
+        assert_eq!(second.already_present, 0);
         assert!(second.after_pending > second.before_pending);
+
+        // Re-scanning an earlier range must dedup: every candidate there now
+        // has a ledger row, so nothing is eligible or enqueued again.
+        let rescan = backfill_authorized(&state, &headers, expected, false, 2, 0)
+            .await
+            .expect("dedup rescan");
+        assert_eq!(rescan.scanned, 2);
+        assert_eq!(rescan.already_present, 2);
+        assert_eq!(rescan.eligible, 0);
+        assert_eq!(rescan.enqueued, 0);
 
         let connection = db::checkout(&state).await.expect("final connection");
         let count: i64 = connection
