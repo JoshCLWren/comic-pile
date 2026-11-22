@@ -44,14 +44,12 @@ function renderAuthProvider() {
 describe('hard refresh session bootstrap', () => {
   beforeEach(() => {
     Object.assign(api, { get: mockApiGet, post: mockApiPost })
-    Object.assign(authTransport, {
-      getAccessToken: mockGetAccessToken,
-      readStoredAccessToken: mockReadStoredAccessToken,
-      setAccessToken: mockSetAccessToken,
-      clearAccessToken: mockClearAccessToken,
-      refreshSession: mockRefreshSession,
-      isSessionRefreshRejected: mockIsSessionRefreshRejected,
-    })
+    vi.spyOn(authTransport, 'getAccessToken').mockImplementation(mockGetAccessToken)
+    vi.spyOn(authTransport, 'readStoredAccessToken').mockImplementation(mockReadStoredAccessToken)
+    vi.spyOn(authTransport, 'setAccessToken').mockImplementation(mockSetAccessToken)
+    vi.spyOn(authTransport, 'clearAccessToken').mockImplementation(mockClearAccessToken)
+    vi.spyOn(authTransport, 'refreshSession').mockImplementation(mockRefreshSession)
+    vi.spyOn(authTransport, 'isSessionRefreshRejected').mockImplementation(mockIsSessionRefreshRejected)
     authState = null
     mockApiGet.mockReset()
     mockApiPost.mockReset()

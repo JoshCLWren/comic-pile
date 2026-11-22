@@ -119,14 +119,12 @@ async function flushTimers(milliseconds = 0): Promise<void> {
 describe('auth bootstrap retry budget (#4269)', () => {
   beforeEach(() => {
     Object.assign(api, { get: mocks.get, post: mocks.post, patch: mocks.patch })
-    Object.assign(authTransport, {
-      clearAccessToken: mocks.clearAccessToken,
-      setAccessToken: mocks.setAccessToken,
-      getAccessToken: mocks.getAccessToken,
-      readStoredAccessToken: mocks.readStoredAccessToken,
-      refreshSession: mocks.refreshSession,
-      isSessionRefreshRejected: mocks.isSessionRefreshRejected,
-    })
+    vi.spyOn(authTransport, 'clearAccessToken').mockImplementation(mocks.clearAccessToken)
+    vi.spyOn(authTransport, 'setAccessToken').mockImplementation(mocks.setAccessToken)
+    vi.spyOn(authTransport, 'getAccessToken').mockImplementation(mocks.getAccessToken)
+    vi.spyOn(authTransport, 'readStoredAccessToken').mockImplementation(mocks.readStoredAccessToken)
+    vi.spyOn(authTransport, 'refreshSession').mockImplementation(mocks.refreshSession)
+    vi.spyOn(authTransport, 'isSessionRefreshRejected').mockImplementation(mocks.isSessionRefreshRejected)
     auth = null
     mocks.get.mockReset()
     mocks.post.mockReset()
