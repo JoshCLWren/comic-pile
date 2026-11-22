@@ -8,7 +8,7 @@
 
 use crate::{
     auth::AuthenticatedUser, db, option_inputs, reading_constraints::ValidatedReadingInputs,
-    ApiError, AppState,
+    thread_issues::natural_issue_order, ApiError, AppState,
 };
 use axum::{
     extract::{Path, State},
