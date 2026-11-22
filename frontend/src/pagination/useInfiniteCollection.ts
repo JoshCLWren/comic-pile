@@ -75,6 +75,8 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
   isFetchNextPageError: boolean
   isError: boolean
   error: unknown
+  /** True when the rendered data is placeholder data from a previous query key. */
+  isPlaceholderData: boolean
 }
 
 /**
