@@ -149,6 +149,7 @@ function renderInRouter(ui: React.ReactElement) {
 }
 
 beforeEach(() => {
+  Object.assign(threadsApi, { checkPotentialDuplicates: CHECK })
   CHECK.mockReset()
 })
 
