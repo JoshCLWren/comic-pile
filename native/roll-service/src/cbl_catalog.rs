@@ -589,7 +589,7 @@ async fn browse_items(
             return Ok((Vec::new(), total, catalog_total, 1));
         }
         let Some(offset) = page_offset(effective_page, page_size) else {
-            return Ok((Vec::new(), total, effective_page));
+            return Ok((Vec::new(), total, catalog_total, effective_page));
         };
         let rows = conn
             .query(
