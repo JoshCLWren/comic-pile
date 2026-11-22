@@ -503,14 +503,18 @@ async fn browse_items(
         let pattern = format!("%{}%", escape_like(term));
         let count_row = conn
             .query_one(
-                "SELECT COUNT(*)::bigint
+                "SELECT COUNT(*) FILTER (
+                            WHERE l.name ILIKE $1 ESCAPE '\\'
+                               OR l.source_path ILIKE $1 ESCAPE '\\'
+                        )::bigint AS total,
+                        COUNT(*)::bigint AS catalog_total
              FROM cbl_source_lists l
-             WHERE l.active IS TRUE
-               AND (l.name ILIKE $1 ESCAPE '\\' OR l.source_path ILIKE $1 ESCAPE '\\')",
+             WHERE l.active IS TRUE",
                 &[&pattern],
             )
             .await?;
         let total: i64 = count_row.get(0);
+        let catalog_total: i64 = count_row.get(1);
         let effective_page = if total <= 0 {
             1
         } else {
