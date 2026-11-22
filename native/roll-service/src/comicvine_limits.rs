@@ -280,16 +280,12 @@ impl ComicVineLimits {
 
 /// Python `_request_async` envelope rule: the body must be an object whose
 /// `status_code` is absent, `null` or equal to `1` (`status_code not in
-/// (None, 1)` raises).
+/// (None, 1)` raises). The repair worker fetches the same provider with the
+/// same rule; both call [`crate::comicvine_repair::provider_envelope_ok`] so
+/// a valid singular payload can never be misread as `provider_unavailable`
+/// on one path only (#5592 AC2).
 fn browser_envelope_ok(payload: &Value) -> bool {
-    let Some(object) = payload.as_object() else {
-        return false;
-    };
-    match object.get("status_code") {
-        None | Some(Value::Null) | Some(Value::Bool(true)) => true,
-        Some(Value::Number(n)) => n.as_f64() == Some(1.0),
-        Some(_) => false,
-    }
+    crate::comicvine_repair::provider_envelope_ok(payload)
 }
 
 /// Python `_parse_retry_after`: delta-seconds (any float) or an HTTP date

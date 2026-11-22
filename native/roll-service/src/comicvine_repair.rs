@@ -12,9 +12,10 @@ use axum::{
 };
 use bytes::Bytes;
 use http_body_util::BodyExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::{sync::Arc, time::Duration};
+use tokio_postgres::Transaction;
 
 const HOST: &str = "comicvine.gamespot.com";
 const MAX_BODY: usize = 2_000_000;
@@ -27,6 +28,40 @@ const COMPLETE_FRESH_DAYS: i64 = 30;
 const EMPTY_CREDIT_RECHECK_DAYS: i64 = 7;
 
 pub(crate) const FIELDS: &str = "id,name,issue_number,cover_date,store_date,image,volume,person_credits,character_credits,team_credits,story_arc_credits,date_last_updated";
+/// Bound every backfill invocation so an operator cannot enqueue the whole
+/// library in one request (#5592 AC3).
+pub const BACKFILL_MAX_LIMIT: i32 = 500;
+/// SQL predicate for a ComicVine issue identity whose deep provider metadata
+/// is missing or incomplete. `e` is the `external_identities` alias. Import
+/// and backfill use the same predicate so a roster-only identity is enqueued
+/// once and a hydrated identity is never reopened by a later reimport
+/// (#5592 AC1/AC3). The full freshness window logic lives in
+/// `comicvine_issue::READ_SQL` and `needs_provider_fetch`; those paths still
+/// handle genuine staleness of already-hydrated rows.
+const NEEDS_DEEP_FETCH_SQL: &str =
+  "(e.metadata_json::jsonb->>'deep_metadata_refreshed_at' IS NULL \
+     OR NOT COALESCE((e.metadata_json::jsonb->'raw_provider_payload') ?& ARRAY[ \
+       'id','name','issue_number','cover_date','store_date','image','volume', \
+       'person_credits','character_credits','team_credits','story_arc_credits', \
+       'date_last_updated'], false))";
+/// Set-based, idempotent hydration enqueue. One statement for the whole
+/// batch, with no per-issue SQL and no provider call (#5592 AC1).
+const ENQUEUE_BATCH_SQL: &str = concat!(
+    r#"
+INSERT INTO comicvine_metadata_refresh_requests
+  (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at)
+SELECT e.id, 'pending', 0, now(), now(), now()
+FROM external_identities e
+WHERE e.id = ANY($1::int[])
+  AND e.provider = 'comicvine' AND e.entity_type = 'issue'
+  AND "#,
+    NEEDS_DEEP_FETCH_SQL,
+    r#"
+  AND NOT EXISTS (SELECT 1 FROM comicvine_metadata_refresh_requests r
+                  WHERE r.external_identity_id = e.id)
+ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING
+"#
+);
 const CLAIM: &str = r#"
 WITH candidate AS (
   SELECT id FROM comicvine_metadata_refresh_requests
@@ -268,9 +303,29 @@ pub(crate) enum Exchange {
     },
 }
 
+/// Python `ComicVineClient._request_async` envelope rule: `status_code` may
+/// be absent, null, `true` or `1` (including the JSON float `1.0`), and
+/// anything else is a provider error. The browser routes already use this
+/// rule through `comicvine_limits::browser_envelope_ok`; the repair worker
+/// previously required `as_i64() == Some(1)` and misclassified valid `1.0`
+/// / `true` / absent-status responses as `provider_unavailable` while the
+/// singular Python fetch succeeded. Share one implementation so the two
+/// paths cannot drift again (#5592 AC2).
+pub(crate) fn provider_envelope_ok(payload: &Value) -> bool {
+    let Some(object) = payload.as_object() else {
+        return false;
+    };
+    match object.get("status_code") {
+        None | Some(Value::Null) | Some(Value::Bool(true)) => true,
+        Some(Value::Number(n)) => n.as_f64() == Some(1.0),
+        Some(_) => false,
+    }
+}
+
 /// One repair-worker provider call: 429/403 are throttles whose
 /// `Retry-After` is clamped to 60..=3600 s, other non-2xx statuses (420
-/// included) are unavailable, and the envelope must carry `status_code: 1`.
+/// included) are unavailable, and the envelope must satisfy the Python
+/// `status_code` rule above.
 pub(crate) async fn provider_response(
     outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
@@ -288,7 +343,7 @@ pub(crate) async fn provider_response(
                 .clamp(60, 3600),
         )),
         Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
-        Exchange::Payload(payload) if payload["status_code"].as_i64() == Some(1) => Ok(payload),
+        Exchange::Payload(payload) if provider_envelope_ok(&payload) => Ok(payload),
         Exchange::Payload(_) => Err(ProviderFailure::Unavailable),
     }
 }
