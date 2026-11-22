@@ -149,7 +149,7 @@ fn parse_meta(raw: &str) -> Value {
 /// (e.g. "Alpha flight annual 1") instead of a parsed issue number. Strips an
 /// embedded series title prefix and normalizes annual/special tokens so the
 /// reader shows "Annual 1" rather than echoing the raw label.
-fn normalize_issue_number_display(raw: &str, series_title: &str) -> String {
+pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return trimmed.to_string();
