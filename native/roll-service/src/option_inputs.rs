@@ -343,7 +343,7 @@ struct IssueVolumeRow {
 /// read-only frontier audit only (#4198): these rows never enter the Option E
 /// evaluator, which keeps converted and legacy edges inert (#2366, #3676).
 #[derive(Debug, Clone, Deserialize)]
-pub(crate) struct LegacyDependencyRow {
+pub struct LegacyDependencyRow {
     pub id: i32,
     pub source_issue_id: i32,
     pub target_issue_id: i32,

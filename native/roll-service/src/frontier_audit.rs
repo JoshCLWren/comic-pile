@@ -22,9 +22,8 @@
 #![forbid(unsafe_code)]
 
 use crate::{
-    option_inputs::LegacyDependencyRow,
-    reading_constraints::{ValidatedReadingInputs, ValidationError},
-    option_inputs::OptionInputs,
+    option_inputs::{LegacyDependencyRow, OptionInputs},
+    reading_constraints::ValidatedReadingInputs,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -179,11 +178,6 @@ pub fn audit_frontiers(
         .issues
         .iter()
         .map(|issue| (issue.id, issue))
-        .collect();
-    let frontier_issue_ids: std::collections::HashSet<i32> = frontiers
-        .iter()
-        .filter(|frontier| frontier.unsatisfied.is_empty())
-        .map(|frontier| frontier.issue_id)
         .collect();
 
     let mut findings = Vec::new();
@@ -561,7 +555,7 @@ mod tests {
         let validated = validated(inputs.clone());
         let legacy: Vec<LegacyDependencyRow> = (0..MAX_REPORTED_FINDINGS + 5)
             .map(|offset| LegacyDependencyRow {
-                id: 3000 + offset,
+                id: 3000 + i32::try_from(offset).unwrap_or(i32::MAX),
                 source_issue_id: 2102,
                 target_issue_id: 2029,
                 origin: None,
