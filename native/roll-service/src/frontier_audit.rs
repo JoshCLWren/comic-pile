@@ -99,9 +99,13 @@ pub struct FrontierAuditFinding {
 pub struct FrontierAuditReport {
     /// Live frontiers examined (active queued Threads, one next unread each).
     pub frontiers_examined: usize,
-    /// Frontiers no actionable Option E constraint currently protects.
+    /// Examined frontiers an actionable Option E constraint currently blocks
+    /// (reader prerequisite or list order).
+    pub frontiers_protected: usize,
+    /// Examined frontiers with no actionable Option E constraint while inert
+    /// legacy evidence records possible reader intent: the reported gaps.
     pub unprotected_frontiers: usize,
-    /// Unprotected frontiers that also carry inert legacy evidence.
+    /// The gap findings, bounded at [`MAX_REPORTED_FINDINGS`].
     pub findings: Vec<FrontierAuditFinding>,
     /// Findings beyond [`MAX_REPORTED_FINDINGS`] omitted from `findings`.
     pub findings_omitted: usize,
@@ -157,6 +161,7 @@ pub fn audit_frontiers(
     let Ok(frontiers) = validated.frontier_blockers() else {
         return FrontierAuditReport {
             frontiers_examined: 0,
+            frontiers_protected: 0,
             unprotected_frontiers: 0,
             findings: vec![],
             findings_omitted: 0,
@@ -181,13 +186,14 @@ pub fn audit_frontiers(
         .collect();
 
     let mut findings = Vec::new();
-    let mut unprotected = 0usize;
+    let mut protected = 0usize;
+    let mut gaps = 0usize;
     for frontier in &frontiers {
         if !frontier.unsatisfied.is_empty() {
             // An actionable Option E constraint protects this frontier.
+            protected += 1;
             continue;
         }
-        unprotected += 1;
         let evidence: Vec<&LegacyDependencyRow> = legacy
             .iter()
             .filter(|row| row.target_issue_id == frontier.issue_id)
@@ -195,6 +201,7 @@ pub fn audit_frontiers(
         if evidence.is_empty() {
             continue;
         }
+        gaps += 1;
         let Some(frontier_issue) = issues.get(&frontier.issue_id) else {
             continue;
         };
