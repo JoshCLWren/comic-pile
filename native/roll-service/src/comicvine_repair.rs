@@ -720,6 +720,163 @@ pub(crate) fn needs_provider_fetch(metadata: &Value, now: chrono::DateTime<chron
     age >= window
 }
 
+/// Durably enqueue one pending hydration request per confirmed imported
+/// identity that lacks deep relationship/creator metadata. Callers run this
+/// inside the import transaction, so the work record commits atomically with
+/// the adoption and never depends on the Roll issue page being opened
+/// (#5592 AC1).
+///
+/// One set-based statement: no per-issue SQL, no provider fan-out. Rows that
+/// already have a request in any state are left alone, so reimports dedup and
+/// never reset a worker's attempts, lease or backoff. `ON CONFLICT DO NOTHING`
+/// is a second dedup guard for a racing enqueue; it cannot deadlock against
+/// the worker because enqueues hold the reader's queue advisory lock and the
+/// worker only ever *updates* existing request rows.
+pub(crate) async fn enqueue_hydration_batch(
+    tx: &Transaction<'_>,
+    identity_ids: &[i32],
+) -> Result<usize, ApiError> {
+    if identity_ids.is_empty() {
+        return Ok(0);
+    }
+    let count = tx
+        .execute(ENQUEUE_BATCH_SQL, &[&identity_ids])
+        .await
+        .map_err(db::query_error)?;
+    Ok(usize::try_from(count).unwrap_or(usize::MAX))
+}
+
+/// Optional, bounded query contract for the maintenance backfill (#5592 AC3).
+#[derive(Debug, Deserialize)]
+pub struct BackfillQuery {
+    pub dry_run: Option<bool>,
+    pub limit: Option<i32>,
+    /// Exclusive lower bound on identity ids; pass the report's
+    /// `last_identity_id` to resume where the previous batch stopped.
+    pub after_identity_id: Option<i32>,
+}
+
+/// Auditable result of one bounded backfill batch (#5592 AC3).
+#[derive(Debug, Serialize)]
+pub struct BackfillReport {
+    pub dry_run: bool,
+    pub limit: i32,
+    pub scanned: i32,
+    pub eligible: i32,
+    pub enqueued: i32,
+    pub already_present: i32,
+    pub before_pending: i64,
+    pub after_pending: i64,
+    /// `None` means the batch was empty; otherwise feed it back as
+    /// `after_identity_id` to continue.
+    pub last_identity_id: Option<i32>,
+}
+
+/// CRON_SECRET-authenticated, bounded and resumable hydration backfill.
+/// Identities are scanned by ascending id with `LIMIT`; because each enqueued
+/// identity gains a request row, the next batch naturally starts after the
+/// previous one without any stored cursor.
+pub async fn backfill(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    query: Result<axum::extract::Query<BackfillQuery>, axum::extract::QueryRejection>,
+) -> Result<Json<BackfillReport>, ApiError> {
+    let axum::extract::Query(query) = query
+        .map_err(|_| crate::ApiError::Unprocessable("Validation failed".to_owned()))?;
+    let limit = query.limit.unwrap_or(BACKFILL_MAX_LIMIT);
+    if !(1..=BACKFILL_MAX_LIMIT).contains(&limit) {
+        return Err(crate::ApiError::Unprocessable(
+            "Validation failed".to_owned(),
+        ));
+    }
+    let after = query.after_identity_id.unwrap_or(0).max(0);
+    let dry_run = query.dry_run.unwrap_or(false);
+    let secret = std::env::var("CRON_SECRET").ok();
+    let report = backfill_authorized(&state, &headers, secret.as_deref(), dry_run, limit, after)
+        .await?;
+    Ok(Json(report))
+}
+
+async fn backfill_authorized(
+    state: &AppState,
+    headers: &HeaderMap,
+    expected: Option<&str>,
+    dry_run: bool,
+    limit: i32,
+    after: i32,
+) -> Result<BackfillReport, ApiError> {
+    authorize(headers, expected)?;
+    let before_pending = count_by_state(state, "pending").await?;
+    let candidates = {
+        let connection = db::checkout(state).await?;
+        connection
+            .query(
+                &format!(
+                    "SELECT DISTINCT e.id, (r.id IS NOT NULL) AS has_request \
+                     FROM external_identities e \
+                     JOIN issue_external_identity_mappings m \
+                       ON m.external_identity_id = e.id AND m.status = 'confirmed' \
+                     JOIN issues i ON i.id = m.issue_id \
+                     LEFT JOIN comicvine_metadata_refresh_requests r \
+                       ON r.external_identity_id = e.id \
+                     WHERE e.id > $1 AND e.provider = 'comicvine' \
+                       AND e.entity_type = 'issue' AND {NEEDS_DEEP_FETCH_SQL} \
+                     ORDER BY e.id LIMIT $2"
+                ),
+                &[&after, &limit],
+            )
+            .await
+            .map_err(db::query_error)?
+    };
+    let scanned = candidates.len() as i32;
+    let last_identity_id = candidates.last().map(|row| row.get::<_, i32>(0));
+    let mut ids = Vec::with_capacity(candidates.len());
+    let mut already_present = 0i32;
+    for row in &candidates {
+        let id = row.get::<_, i32>(0);
+        if row.get::<_, bool>(1) {
+            already_present += 1;
+        } else {
+            ids.push(id);
+        }
+    }
+    let eligible = ids.len() as i32;
+    let enqueued = if dry_run || ids.is_empty() {
+        0
+    } else {
+        let mut connection = db::checkout(state).await?;
+        let tx = connection.transaction().await.map_err(db::query_error)?;
+        let inserted = enqueue_hydration_batch(&tx, &ids).await?;
+        tx.commit().await.map_err(db::query_error)?;
+        inserted as i32
+    };
+    let after_pending = count_by_state(state, "pending").await?;
+    Ok(BackfillReport {
+        dry_run,
+        limit,
+        scanned,
+        eligible,
+        enqueued,
+        already_present,
+        before_pending,
+        after_pending,
+        last_identity_id,
+    })
+}
+
+async fn count_by_state(state: &AppState, state_name: &str) -> Result<i64, ApiError> {
+    let connection = db::checkout(state).await?;
+    let count: i64 = connection
+        .query_one(
+            "SELECT count(*) FROM comicvine_metadata_refresh_requests WHERE state = $1",
+            &[&state_name],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
+    Ok(count)
+}
+
 async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'static str, ApiError> {
     if job.provider.as_deref() != Some("comicvine") || job.entity_type.as_deref() != Some("issue") {
         settle(state, job, "failed", 21600, Some("identity_ineligible")).await?;

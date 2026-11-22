@@ -2304,6 +2304,10 @@ pub async fn import_series(
     let mut identity_specs: Vec<(String, Option<String>, String)> = Vec::new();
     let mut identity_seen: HashSet<String> = HashSet::new();
     let mut links: Vec<(usize, String)> = Vec::new();
+    // Confirmed identities already mapped to an issue of this same thread on
+    // a previous import. They must also enter the durable hydration ledger
+    // without waiting for the Roll page to be opened (#5592 AC1).
+    let mut reused_identity_ids: Vec<i32> = Vec::new();
     for item in &roster {
         let number = item
             .number
