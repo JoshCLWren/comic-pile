@@ -373,27 +373,27 @@ function renderShell(): ReactNode {
     <QueryClientProvider client={routeQueryClient}>
       <MemoryRouter initialEntries={['/queue']}>
         <AuthContext.Provider
-        value={{
-          authState,
-          isAuthenticated: true,
-          isLoading: false,
-          user: authState.user,
-          login: async () => undefined,
-          logout: () => undefined,
-          revalidateSession: async () => undefined,
-          recoverSession: async () => undefined,
-          retryAuth: async () => undefined,
-          clearAuthError: () => undefined,
-        }}
-      >
-        <NavCollapseProvider>
-          <BugReportRestoreProvider>
-            <ToastProvider>
-              <Navigation onBugReportSubmit={async () => undefined} />
-              <PreferencesSync isAuthenticated />
-            </ToastProvider>
-          </BugReportRestoreProvider>
-        </NavCollapseProvider>
+          value={{
+            authState,
+            isAuthenticated: true,
+            isLoading: false,
+            user: authState.user,
+            login: async () => undefined,
+            logout: () => undefined,
+            revalidateSession: async () => undefined,
+            recoverSession: async () => undefined,
+            retryAuth: async () => undefined,
+            clearAuthError: () => undefined,
+          }}
+        >
+          <NavCollapseProvider>
+            <BugReportRestoreProvider>
+              <ToastProvider>
+                <Navigation onBugReportSubmit={async () => undefined} />
+                <PreferencesSync isAuthenticated />
+              </ToastProvider>
+            </BugReportRestoreProvider>
+          </NavCollapseProvider>
         </AuthContext.Provider>
       </MemoryRouter>
     </QueryClientProvider>
