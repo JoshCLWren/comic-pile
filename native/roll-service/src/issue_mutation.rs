@@ -8,7 +8,7 @@
 
 use crate::{
     auth::AuthenticatedUser, db, option_inputs, reading_constraints::ValidatedReadingInputs,
-    ApiError, AppState,
+    thread_issues::natural_issue_order, ApiError, AppState,
 };
 use axum::{
     extract::{Path, State},
@@ -323,66 +323,72 @@ pub async fn create_issues(
         .map_err(db::query_error)?;
 
     let mut created = vec![];
-    let append = request.append_to_end
-        || (request.insert_after_issue_id.is_none() && {
-            // Natural placement is only safe when persisted numeric order is already
-            // monotonic. A non-monotonic series is reader-authored; appending must not
-            // silently re-sort it into a different strict-list relationship.
-            let numbered: Option<Vec<i64>> = existing
+    let mut placed = false;
+    if request.insert_after_issue_id.is_none() && !request.append_to_end {
+        let existing_labels: Vec<String> = existing
+            .iter()
+            .map(|(_, number, _)| number.clone())
+            .collect();
+        if let Some(order) = natural_issue_order(&existing_labels, &new_numbers) {
+            let target: BTreeMap<&str, i32> = order
                 .iter()
-                .map(|(_, number, _)| ordinary(number))
+                .enumerate()
+                .map(|(index, number)| (number.as_str(), index as i32 + 1))
                 .collect();
-            numbered.is_none_or(|values| values.windows(2).any(|pair| pair[0] >= pair[1]))
-        });
-
-    if let Some(anchor) = request.insert_after_issue_id {
-        let anchor_position = existing
-            .iter()
-            .find(|(id, _, _)| *id == anchor)
-            .map(|(_, _, position)| *position)
-            .ok_or_else(|| ApiError::NotFound(format!("Issue {anchor} not found")))?;
-        let count = new_numbers.len() as i32;
-        tx.execute(
-            "UPDATE issues SET position=position+$1
-             WHERE thread_id=$2 AND position>$3",
-            &[&count, &thread_id, &anchor_position],
-        )
-        .await
-        .map_err(db::query_error)?;
-        for (offset, number) in new_numbers.iter().enumerate() {
-            created.push(
-                insert_issue(&tx, thread_id, number, anchor_position + offset as i32 + 1).await?,
-            );
-        }
-    } else if append {
-        let next = existing
-            .iter()
-            .map(|(_, _, position)| *position)
-            .max()
-            .unwrap_or(0);
-        for (offset, number) in new_numbers.iter().enumerate() {
-            created.push(insert_issue(&tx, thread_id, number, next + offset as i32 + 1).await?);
-        }
-    } else {
-        let mut merged = existing.clone();
-        for number in &new_numbers {
-            merged.push((0, number.clone(), 0));
-        }
-        merged.sort_by(|left, right| {
-            let left_value = ordinary(&left.1).unwrap_or(i64::MAX);
-            let right_value = ordinary(&right.1).unwrap_or(i64::MAX);
-            (left_value, &left.1).cmp(&(right_value, &right.1))
-        });
-        let mut positions = vec![];
-        for (next_position, (id, _number, _)) in (1..).zip(merged.iter()) {
-            if *id != 0 {
-                positions.push((*id, next_position));
+            let mut positions = vec![];
+            for (id, number, position) in &existing {
+                if let Some(wanted) = target.get(number.as_str()) {
+                    if *wanted != *position {
+                        positions.push((*id, *wanted));
+                    }
+                }
             }
-        }
-        reseat_positions(&tx, thread_id, &positions).await?;
-        for (position, (id, number, _)) in (1..).zip(merged.iter()) {
-            if *id == 0 {
+            reseat_positions(&tx, thread_id, &positions).await?;
+            for number in &new_numbers {
+                let position = target[number.as_str()];
                 created.push(insert_issue(&tx, thread_id, number, position).await?);
+            }
+            created.sort_by_key(|issue| {
+                target
+                    .get(issue.issue_number.as_str())
+                    .copied()
+                    .unwrap_or(i32::MAX)
+            });
+            placed = true;
+        }
+    }
+
+    if !placed {
+        if let Some(anchor) = request.insert_after_issue_id {
+            let anchor_position = existing
+                .iter()
+                .find(|(id, _, _)| *id == anchor)
+                .map(|(_, _, position)| *position)
+                .ok_or_else(|| ApiError::NotFound(format!("Issue {anchor} not found")))?;
+            let count = new_numbers.len() as i32;
+            tx.execute(
+                "UPDATE issues SET position=position+$1
+                 WHERE thread_id=$2 AND position>$3",
+                &[&count, &thread_id, &anchor_position],
+            )
+            .await
+            .map_err(db::query_error)?;
+            for (offset, number) in new_numbers.iter().enumerate() {
+                created.push(
+                    insert_issue(&tx, thread_id, number, anchor_position + offset as i32 + 1)
+                        .await?,
+                );
+            }
+        } else {
+            let next = existing
+                .iter()
+                .map(|(_, _, position)| *position)
+                .max()
+                .unwrap_or(0);
+            for (offset, number) in new_numbers.iter().enumerate() {
+                created.push(
+                    insert_issue(&tx, thread_id, number, next + offset as i32 + 1).await?,
+                );
             }
         }
     }
