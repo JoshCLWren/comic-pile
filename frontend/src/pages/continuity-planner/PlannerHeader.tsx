@@ -69,6 +69,32 @@ export default function PlannerHeader({ editor, planId, onReopenLast }: PlannerH
         </section>
       )}
 
+      {planId && !editor.cblApplyPending && editor.customCblId !== undefined && (
+        <button
+          type="button"
+          onClick={() => editor.applyCustomCBL(editor.customCblId)}
+          disabled={!editor.isDirty || editor.cblApplyPending}
+          className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50"
+        >
+          {editor.cblApplyPending ? 'Applying…' : 'Apply to this Reading Plan'}
+        </button>
+      )}
+
+      {planId && (
+        <label className="block text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
+          Custom CBL
+          <select
+            value={editor.customCblId ?? ''}
+            onChange={(event) => editor.setCustomCblId(event.target.value === '' ? undefined : Number(event.target.value))}
+            disabled={editor.cblApplyPending || editor.isSaving}
+            className="mt-1 min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)] disabled:opacity-50"
+          >
+            <option value="">Choose a custom CBL</option>
+            {editor.customCblList?.length > 0 && editor.customCblList.map((cbl) => <option key={cbl.id} value={cbl.id}>{cbl.name} · {cbl.issue_count} issues · {cbl.mode}</option>)}
+          </select>
+        </label>
+      )}
+
       {!planId && editor.lastPlanId && (
         <button
           type="button"

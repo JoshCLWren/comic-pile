@@ -75,6 +75,8 @@ export function useContinuityPlannerEditor({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [cblCommitPending, setCblCommitPending] = useState(false)
 const [cblApplyPending, setCblApplyPending] = useState(false)
+const [customCblId, setCustomCblId] = useState<number | undefined>(undefined)
+const [customCblList, setCustomCblList] = useState<Array<{ id: number; name: string; description: string | null; mode: string; issue_count: number; updated_at: string }>>([])
   const [isProjectionOpen, setIsProjectionOpen] = useState(false)
   const [laneSeq, setLaneSeq] = useState(0)
   const [editingGateNodeId, setEditingGateNodeId] = useState<string | null>(null)
@@ -166,6 +168,13 @@ const [cblApplyPending, setCblApplyPending] = useState(false)
     threads,
     hydrateLabels,
   ])
+
+  // Fetch custom CBL list when plan loads
+  useEffect(() => {
+    if (planId) {
+      fetchCustomCBLList()
+    }
+  }, [planId])
 
   const isDirty =
     name !== savedName ||
@@ -401,6 +410,33 @@ const [cblApplyPending, setCblApplyPending] = useState(false)
     }
   }
 
+  const applyCustomCBL = async (cblId: number) => {
+    setCblApplyPending(true)
+    try {
+      const committed = await customCBLApi.apply(cblId, planId!)
+      acceptCommittedPlan(committed)
+    } catch (error) {
+      setSaveError('Failed to apply custom CBL')
+    } finally {
+      setCblApplyPending(false)
+    }
+  }
+
+  const fetchCustomCBLList = async () => {
+    if (!planId) return
+    setCustomCblList([])
+    setCustomCblId(undefined)
+    try {
+      const { data: cbls } = await customCBLApi.list(planId)
+      setCustomCblList(cbls)
+      if (cbls.length > 0) {
+        setCustomCblId(cbls[0].id)
+      }
+    } catch (error) {
+      setSaveError('Failed to load custom CBLs')
+    }
+  }
+
   const cancel = () => {
     setName(savedName || DEFAULT_PLAN_NAME)
     setLanes(
@@ -466,6 +502,7 @@ const [cblApplyPending, setCblApplyPending] = useState(false)
     setSelectedGroupId,
     setCblCommitPending,
     setCblApplyPending,
+    setCustomCblId,
     setIsProjectionOpen,
     setEditingGateNodeId,
     // orchestration actions
@@ -485,6 +522,7 @@ const [cblApplyPending, setCblApplyPending] = useState(false)
     cancel,
     acceptCommittedPlan,
     applyCustomCBL,
+    customCblList,
   }
 }
 
