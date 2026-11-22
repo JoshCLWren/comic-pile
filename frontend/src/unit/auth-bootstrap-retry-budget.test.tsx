@@ -39,35 +39,28 @@ import type { AuthContextValue } from '../contexts/AuthContext'
  * Active CPU and fewer cold-start opportunities per page load; this harness
  * does not measure Vercel-attributed CPU directly.
  */
-const mocks = vi.hoisted(() => ({
-  get: vi.fn(),
-  post: vi.fn(),
-  patch: vi.fn(),
-  clearAccessToken: vi.fn(),
-  setAccessToken: vi.fn(),
-  getAccessToken: vi.fn<() => string | null>(),
-  readStoredAccessToken: vi.fn<() => string | null>(),
-  refreshSession: vi.fn(),
-  isSessionRefreshRejected: vi.fn(() => false),
-}))
+import api, * as authTransport from '../services/api'
 
-vi.mock('../services/api', () => {
-  const apiMock = {
-    get: mocks.get,
-    post: mocks.post,
-    patch: mocks.patch,
-  }
-  return {
-    default: apiMock,
-    api: apiMock,
-    clearAccessToken: mocks.clearAccessToken,
-    setAccessToken: mocks.setAccessToken,
-    getAccessToken: mocks.getAccessToken,
-    readStoredAccessToken: mocks.readStoredAccessToken,
-    refreshSession: mocks.refreshSession,
-    isSessionRefreshRejected: mocks.isSessionRefreshRejected,
-  }
-})
+const originalApiMethods = { get: api.get, post: api.post, patch: api.patch }
+const originalAuthTransport = {
+  clearAccessToken: authTransport.clearAccessToken,
+  setAccessToken: authTransport.setAccessToken,
+  getAccessToken: authTransport.getAccessToken,
+  readStoredAccessToken: authTransport.readStoredAccessToken,
+  refreshSession: authTransport.refreshSession,
+  isSessionRefreshRejected: authTransport.isSessionRefreshRejected,
+}
+const mocks = {
+  get: vi.fn<typeof api.get>(),
+  post: vi.fn<typeof api.post>(),
+  patch: vi.fn<typeof api.patch>(),
+  clearAccessToken: vi.fn<typeof authTransport.clearAccessToken>(),
+  setAccessToken: vi.fn<typeof authTransport.setAccessToken>(),
+  getAccessToken: vi.fn<typeof authTransport.getAccessToken>(),
+  readStoredAccessToken: vi.fn<typeof authTransport.readStoredAccessToken>(),
+  refreshSession: vi.fn<typeof authTransport.refreshSession>(),
+  isSessionRefreshRejected: vi.fn<typeof authTransport.isSessionRefreshRejected>(),
+}
 
 import { AuthProvider, useAuth } from '../App'
 
