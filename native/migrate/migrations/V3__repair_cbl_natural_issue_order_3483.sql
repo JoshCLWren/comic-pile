@@ -6,7 +6,7 @@
 -- Digit-string length then lexical order is numeric order for canonical
 -- positive integers and cannot overflow, matching the Rust insertion routine.
 
-SET CONSTRAINTS uq_issue_thread_position DEFERRED;
+SET CONSTRAINTS public.uq_issue_thread_position DEFERRED;
 
 WITH affected_threads AS (
     SELECT thread_id
