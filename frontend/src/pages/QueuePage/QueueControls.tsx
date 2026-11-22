@@ -4,7 +4,14 @@ import type { QueueSortBy } from './useQueueFilters'
 const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
-  activeCount: number
+  /** Authoritative whole-queue total before search filters; null when unknown. */
+  activeCount: number | null
+  /** Filtered match total for the current applied search; null when unknown. */
+  filteredCount: number | null
+  /** True while the authoritative count for the current applied search is still loading. */
+  countPending?: boolean
+  /** True when loading/error prevents a reliable count for the current applied search. */
+  countError?: boolean
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void

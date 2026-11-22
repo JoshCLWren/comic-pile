@@ -191,6 +191,8 @@ export function useQueueThreads(
     nextPageToken,
     loadMore,
     activeCount,
+    filteredCount,
+    isPlaceholderData: query.isPlaceholderData,
   }
 }
 
