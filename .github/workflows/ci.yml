@@ -586,10 +586,37 @@ jobs:
       - name: Check Markdown code-path references
         run: node scripts/check_doc_code_paths.mjs
 
+  conflict-markers:
+    name: Conflict Marker Guard
+    # Required on every event, including factory-only fast-path changes. The
+    # default pull_request checkout is the effective merge candidate; the exact
+    # PR head is archived separately below so neither tree can bypass the guard.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test conflict-marker guard
+        run: python3 -m unittest discover -s tests -p test_check_conflict_markers.py
+      - name: Check effective candidate tree
+        run: python3 scripts/check_conflict_markers.py
+      - name: Check exact pull request head
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -Eeuo pipefail
+          head_tree="$RUNNER_TEMP/conflict-marker-head"
+          mkdir -p "$head_tree"
+          git archive "$HEAD_SHA" | tar -x -C "$head_tree"
+          python3 scripts/check_conflict_markers.py --root "$head_tree"
+
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [factory-scope, factory-fast-contracts, build, build-fork, rust-ingress, route-fragment-guard, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
+    needs: [factory-scope, factory-fast-contracts, build, build-fork, rust-ingress, route-fragment-guard, conflict-markers, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
     if: always()
     steps:
       - name: Check job results
@@ -603,6 +630,7 @@ jobs:
             for result in \
               "${{ needs.factory-fast-contracts.result }}" \
               "${{ needs.route-fragment-guard.result }}" \
+              "${{ needs.conflict-markers.result }}" \
               "${{ needs.factory-actionlint.result }}" \
               "${{ needs.factory-shellcheck.result }}"; do
               if [[ "$result" != success ]]; then
@@ -617,6 +645,7 @@ jobs:
           echo "Fork build: ${{ needs.build-fork.result }}"
           echo "Rust default route discovery: ${{ needs.rust-ingress.result }}"
           echo "Route fragment guard: ${{ needs.route-fragment-guard.result }}"
+          echo "Conflict markers: ${{ needs.conflict-markers.result }}"
           echo "Docs code paths: ${{ needs.docs-code-paths.result }}"
           echo "Node script tests: ${{ needs.script-checks.result }}"
           echo "Workflow syntax: ${{ needs.factory-actionlint.result }}"
@@ -632,6 +661,7 @@ jobs:
           if { [ "${{ needs.build.result }}" != "success" ] && [ "${{ needs.build-fork.result }}" != "success" ]; } || \
              [ "${{ needs.rust-ingress.result }}" != "success" ] || \
              [ "${{ needs.route-fragment-guard.result }}" != "success" ] || \
+             [ "${{ needs.conflict-markers.result }}" != "success" ] || \
              [ "${{ needs.docs-code-paths.result }}" != "success" ] || \
              [ "${{ needs.script-checks.result }}" != "success" ] || \
              [ "${{ needs.factory-actionlint.result }}" != "success" ] || \
