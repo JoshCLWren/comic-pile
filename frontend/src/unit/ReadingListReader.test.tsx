@@ -73,10 +73,10 @@ beforeEach(() => {
   moveToFront.mockReset()
   moveToFront.mockResolvedValue(undefined)
   fetchCards.mockImplementation(async (ids) => ids.map(cardFor))
-  patchIssue.mockImplementation(async (id, input) => receipt(id, input.status ?? 'read'))
-  (mock_tagsApi.threadIssuesEffective as any).mockResolvedValue({ thread_id: 1, issues: [] })
-  (mock_customCBLApi.getReader as any).mockResolvedValue(structuredClone(view))
-  (mock_issuesApi.markRead as any).mockResolvedValue()
+  patchIssue.mockImplementation(async (id, input) => receipt(id, input.status ?? 'read'));
+  (mock_tagsApi.threadIssuesEffective as any).mockResolvedValue({ thread_id: 1, issues: [] });
+  (mock_customCBLApi.getReader as any).mockResolvedValue(structuredClone(view));
+  (mock_issuesApi.markRead as any).mockResolvedValue();
   (mock_issuesApi.markUnread as any).mockResolvedValue()
 })
 
@@ -135,7 +135,7 @@ function entryFixture() {
 }
 
 it('shows read, later, excluded and inactive states with manual reading available', async () => {
-  const entry = entryFixture()
+  const entry = entryFixture();
   (mock_customCBLApi.getReader as any).mockResolvedValue({ ...view, mode: 'loose', entries: [
     { ...entry, availability: 'read', status: 'read' },
     { ...entry, id: 3, issue_id: 30, availability: 'later' },
@@ -287,7 +287,7 @@ it('does not guess an issue ID or fetch an issue cover for thread-only prerequis
 it('renders a safe empty list when a stale reader response omits entries', async () => {
   // Preserve the generated response type while modeling a stale server
   // payload that omitted `entries`. Do not weaken the runtime boundary.
-  const missingEntries = Object.assign({}, view, { entries: undefined })
+  const missingEntries = Object.assign({}, view, { entries: undefined });
   (mock_customCBLApi.getReader as any).mockResolvedValue(missingEntries)
   mount()
   expect(await screen.findByText('This Reading List is empty.')).toBeVisible()
