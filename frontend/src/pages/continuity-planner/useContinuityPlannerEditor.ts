@@ -9,6 +9,7 @@ import type {
 import type { Issue, ThreadListItem } from '../../types'
 import { isString } from '../../utils/runtimeChecks'
 import { useSaveReadingPlan } from '../../hooks/useReadingPlans'
+import { customCBLApi } from '../../services/api-custom-cbl'
 import {
   DEFAULT_LANE_ID,
   DEFAULT_LANE_NAME,
@@ -427,7 +428,7 @@ const [customCblList, setCustomCblList] = useState<Array<{ id: number; name: str
     setCustomCblList([])
     setCustomCblId(undefined)
     try {
-      const { data: cbls } = await customCBLApi.list(planId)
+      const { data: cbls } = await customCBLApi.list()
       setCustomCblList(cbls)
       if (cbls.length > 0) {
         setCustomCblId(cbls[0].id)
