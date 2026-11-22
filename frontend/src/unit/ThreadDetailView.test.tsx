@@ -89,7 +89,10 @@ const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
 
 beforeEach(() => {
-  vi.mocked(readingBoundariesApi.batch).mockReset().mockResolvedValue({ threads: { 1: { thread_id: 1, state: 'available', summary: 'Available now', blockers: [] } } })
+  vi.mocked(readingBoundariesApi.batch).mockReset().mockResolvedValue({ 
+    evaluator: 'enabled',
+    threads: { 1: { thread_id: 1, state: 'available', summary: 'Available now', blockers: [] } } 
+  })
   routeParams.id = '1'
   locationState.state = undefined
   locationState.search = undefined
