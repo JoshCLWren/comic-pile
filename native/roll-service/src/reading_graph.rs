@@ -532,14 +532,8 @@ fn project(
         affected_threads,
         repairs,
         unresolved_reference_count: inputs.unresolved.len(),
-        unresolved_reference_breakdown: {
-            let mut breakdown = BTreeMap::new();
-            for ref_ in &inputs.unresolved {
-                let category = categorize_unresolved(ref_.kind);
-                *breakdown.entry(category).or_insert(0) += 1;
-            }
-            breakdown
-        },
+        frontier_audit: legacy
+            .map(|rows| crate::frontier_audit::audit_frontiers(inputs, validated, rows)),
     }
 }
 
@@ -581,11 +575,6 @@ fn repair_is_offered(
 }
 
 fn invalid_response(inputs: &OptionInputs) -> ReadingGraphResponse {
-    let mut breakdown = BTreeMap::new();
-    for ref_ in &inputs.unresolved {
-        let category = categorize_unresolved(ref_.kind);
-        *breakdown.entry(category).or_insert(0) += 1;
-    }
     ReadingGraphResponse {
         status: "invalid".to_string(),
         cycles: vec![],
@@ -594,7 +583,7 @@ fn invalid_response(inputs: &OptionInputs) -> ReadingGraphResponse {
         affected_threads: vec![],
         repairs: vec![],
         unresolved_reference_count: inputs.unresolved.len(),
-        unresolved_reference_breakdown: breakdown,
+        frontier_audit: None,
     }
 }
 
@@ -603,12 +592,16 @@ pub async fn reading_graph(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
 ) -> Result<Json<ReadingGraphResponse>, crate::ApiError> {
-    let inputs = option_inputs::load_option_diagnostics(&state, user).await?;
-    if !inputs.unresolved.is_empty() {
-        return Ok(Json(invalid_response(&inputs)));
+    let diagnostics = option_inputs::load_frontier_diagnostics(&state, user).await?;
+    if !diagnostics.inputs.unresolved.is_empty() {
+        return Ok(Json(invalid_response(&diagnostics.inputs)));
     }
-    let validated = option_inputs::validated_contained(inputs)?;
-    Ok(Json(project(validated.inputs(), &validated)))
+    let validated = option_inputs::validated_contained(diagnostics.inputs)?;
+    Ok(Json(project(
+        validated.inputs(),
+        &validated,
+        Some(&diagnostics.legacy_dependencies),
+    )))
 }
 
 fn remove_from_inputs(
@@ -750,7 +743,7 @@ pub async fn repair(
         }));
     }
     let validated = option_inputs::validated_contained(inputs.clone())?;
-    let allowed = project(&inputs, &validated).repairs;
+    let allowed = project(&inputs, &validated, None).repairs;
     let status_before = if validated.graph_problem().is_some() {
         "cycle"
     } else {
@@ -796,7 +789,7 @@ pub async fn repair(
                 "ok".to_string()
             },
             removed,
-            graph: project(after.inputs(), &after),
+            graph: project(after.inputs(), &after, None),
         }));
     }
     let after = option_inputs::validated_contained(projected)?;
@@ -809,7 +802,7 @@ pub async fn repair(
             "ok".to_string()
         },
         removed,
-        graph: project(after.inputs(), &after),
+        graph: project(after.inputs(), &after, None),
     }))
 }
 
@@ -818,7 +811,7 @@ pub async fn repair(
     get,
     path = "/api/v2/reading-graph",
     tag = "reading-graph",
-    description = "Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin.",
+    description = "Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin. The read-only frontier audit names current unread frontiers that Option E would offer while inert legacy or converted dependency evidence still records possible reader intent; the report is manual-review evidence only (#4198).",
     responses(
         (status = 200, description = "Graph status, cycles and safe repair options", body = ReadingGraphResponse),
         (status = 401, description = "Not authenticated"),
@@ -849,15 +842,6 @@ pub fn reading_graph_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn repair_documentation() {}
-
-/// Mapping from UnresolvedReference kind string to UnresolvedCategory.
-pub fn categorize_unresolved(kind: &str) -> UnresolvedCategory {
-    match kind {
-        "list_entry" => UnresolvedCategory::UnreadOutsideList,
-        "prerequisite" => UnresolvedCategory::ReadingPlanVsList,
-        _ => UnresolvedCategory::JliConverted,
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -937,7 +921,7 @@ mod tests {
             &BTreeMap::from([(7, "Julix".to_string())]),
         )
         .unwrap();
-        let graph = project(&source, &validated);
+        let graph = project(&source, &validated, None);
         assert_eq!(graph.status, "cycle");
         assert!(!graph.cycles.is_empty());
         assert_eq!(graph.cycles[0].edges[0].source.series_title, "B.P.R.D.");
@@ -955,6 +939,41 @@ mod tests {
             .iter()
             .any(|repair| repair.action == "delete_prerequisite"
                 && repair.prerequisite_id == Some(5)));
+        // Repair previews project an in-memory state, not stored legacy rows.
+        assert!(graph.frontier_audit.is_none());
+    }
+
+    #[test]
+    fn reading_graph_response_carries_the_frontier_audit() {
+        use crate::option_inputs::LegacyDependencyRow;
+        let source = inputs();
+        let validated = crate::reading_constraints::ValidatedReadingInputs::contained(
+            source.clone(),
+            &BTreeMap::from([(7, "Julix".to_string())]),
+        )
+        .unwrap();
+        // Issue 11 is the stored frontier (queue position 1) and an inert
+        // legacy edge into it from unread issue 14 exists.
+        let legacy = vec![LegacyDependencyRow {
+            id: 5001,
+            source_issue_id: 14,
+            target_issue_id: 11,
+            origin: None,
+            classification: None,
+            provenance: None,
+            note: None,
+            source_owned: true,
+        }];
+        let graph = project(&source, &validated, Some(&legacy));
+        let audit = graph.frontier_audit.expect("audit present");
+        assert_eq!(audit.frontiers_examined, 1);
+        assert_eq!(audit.findings.len(), 1);
+        assert_eq!(audit.findings[0].frontier_issue_id, 11);
+        assert_eq!(audit.findings[0].legacy_evidence[0].dependency_id, 5001);
+        assert_eq!(
+            audit.findings[0].legacy_evidence[0].evidence_class,
+            "legacy_canonical_unclassified"
+        );
     }
 
     #[test]
