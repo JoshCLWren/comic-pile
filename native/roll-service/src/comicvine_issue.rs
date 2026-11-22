@@ -407,7 +407,7 @@ fn image(metadata: &Value) -> Option<String> {
     as_string(&metadata["image_url"])
         .or_else(|| as_string(&metadata["primary_image"]))
         .or_else(|| {
-            ["original_url", "super_url", "medium_url", "small_url"]
+            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
                 .iter()
                 .find_map(|key| as_string(&metadata["image"][*key]))
         })
