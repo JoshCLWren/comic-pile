@@ -162,6 +162,11 @@ export function useQueueThreads(
   // the canonical source. Falls back to null so callers can decide how to
   // degrade when a cached/older response omits the field.
   const activeCount = query.pages[0]?.active_count ?? null
+  // Authoritative whole-collection match total for the applied search exposed
+  // by the first page (issue #3614). Every page re-states it for the same
+  // cursor key, so the first page stays canonical. Null when the response is
+  // a completed/excluded read or a stale cached page that omits the field.
+  const filteredCount = query.pages[0]?.filtered_count ?? null
   // Initial load OR an in-flight next-page append both keep already-rendered
   // rows visible: `isPending` drives the full-screen loader only before any
   // data exists, while `isNextPageLoading` drives the inline loading indicator.
