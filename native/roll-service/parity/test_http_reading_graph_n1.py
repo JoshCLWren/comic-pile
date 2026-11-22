@@ -264,14 +264,29 @@ async def test_reading_graph_repairs_preview_statements_do_not_grow_with_library
         await engine.dispose()
 
 
-def test_reading_graph_budget_rejects_extra_query_and_n1_growth() -> None:
-    """Budget checks must reject a deliberately extra query and N+1-style growth."""
+def test_reading_graph_budget_rejects_extra_query() -> None:
+    """A deliberately added extra query must fail the same budget check used by route tests."""
     with pytest.raises(AssertionError, match="declared maximum"):
-        assert_declared_budget("GET", "/api/v2/reading-graph", 999)
+        assert_declared_budget("GET", "/api/v2/reading-graph", 7)  # max 6 + 1 extra query
     with pytest.raises(AssertionError, match="declared maximum"):
-        assert_declared_budget("POST", "/api/v2/reading-graph/repairs", 999)
+        assert_declared_budget("POST", "/api/v2/reading-graph/repairs", 9)  # max 8 + 1 extra query
 
-    small_delta, large_delta = 4, 40  # deliberate N+1 growth
+
+def test_reading_graph_budget_rejects_n1_growth() -> None:
+    """A deliberately introduced N+1 query pattern must fail budget/growth checks."""
+    # GET /api/v2/reading-graph: per-row N+1 would grow with library size.
+    small_delta, large_delta = 6, 201  # 1 query per extra row
+    with pytest.raises(AssertionError, match="declared maximum"):
+        assert_declared_budget("GET", "/api/v2/reading-graph", small_delta, large_delta)
+    with pytest.raises(AssertionError, match="statement count grew"):
+        assert large_delta <= small_delta + 2, (
+            f"statement count grew: {small_delta} -> {large_delta}"
+        )
+
+    # POST /api/v2/reading-graph/repairs preview: same N+1 rejection.
+    small_delta, large_delta = 8, 203
+    with pytest.raises(AssertionError, match="declared maximum"):
+        assert_declared_budget("POST", "/api/v2/reading-graph/repairs", small_delta, large_delta)
     with pytest.raises(AssertionError, match="statement count grew"):
         assert large_delta <= small_delta + 2, (
             f"statement count grew: {small_delta} -> {large_delta}"
