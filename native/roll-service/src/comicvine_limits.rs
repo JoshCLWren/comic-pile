@@ -538,6 +538,14 @@ mod tests {
             (json!([]), false),
         ] {
             assert_eq!(browser_envelope_ok(&payload), ok, "{payload}");
+            // The repair worker fetches the same singular issue; if the two
+            // envelope rules drift, a valid payload is silently recorded as
+            // provider_unavailable only on the repair path (#5592 AC2).
+            assert_eq!(
+                crate::comicvine_repair::provider_envelope_ok(&payload),
+                ok,
+                "{payload}"
+            );
         }
     }
 

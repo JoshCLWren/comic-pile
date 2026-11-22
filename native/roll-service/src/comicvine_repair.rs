@@ -1651,4 +1651,277 @@ mod tests {
         );
         assert_eq!(issue_id("4000-29319"), Some(29319));
     }
+
+    #[test]
+    fn provider_envelope_accepts_every_python_status_code_shape() {
+        // ComicVine has been observed returning the success flag as an integer,
+        // a float, a boolean, or omitting it. All of those satisfy Python's
+        // `status_code not in (None, 1)` rule and must not become
+        // `provider_unavailable` in the repair worker (#5592 AC2).
+        for payload in [
+            json!({}),
+            json!({"status_code": null}),
+            json!({"status_code": true}),
+            json!({"status_code": 1}),
+            json!({"status_code": 1.0}),
+        ] {
+            assert!(provider_envelope_ok(&payload), "{payload}");
+        }
+        for payload in [
+            json!({"status_code": 0}),
+            json!({"status_code": 2}),
+            json!({"status_code": "1"}),
+            json!({"status_code": false}),
+            json!([]),
+        ] {
+            assert!(!provider_envelope_ok(&payload), "{payload}");
+        }
+    }
+
+    #[test]
+    fn enqueue_batch_sql_is_set_based_and_deduping() {
+        let sql = ENQUEUE_BATCH_SQL.as_str();
+        assert!(sql.contains("ANY($1::int[])"));
+        assert!(sql.contains("NOT EXISTS"));
+        assert!(sql.contains(NEEDS_DEEP_FETCH_SQL));
+        assert!(sql.contains("uq_comicvine_metadata_refresh_identity"));
+        // It must never wait on a request row the repair worker is persisting.
+        assert!(!sql.contains("FOR UPDATE"));
+    }
+
+    #[tokio::test]
+    async fn hydration_batch_is_idempotent_and_preserves_hydrated_credits() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("connection");
+
+        let roster_only: i32 = connection
+            .query_one(
+                "INSERT INTO external_identities \
+                 (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine','issue','4000-8001', \
+                   '{\"creator_credits\":[]}'::json, now(), now()) RETURNING id",
+                &[],
+            )
+            .await
+            .expect("roster identity")
+            .get(0);
+        let hydrated: i32 = connection
+            .query_one(
+                "INSERT INTO external_identities \
+                 (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine','issue','4000-8002', \
+                   '{\"creator_credits\":[{\"id\":1,\"name\":\"Jamie Delano\"}],\
+                     \"deep_metadata_refreshed_at\":\"2026-11-22T00:00:00+00:00\",\
+                     \"raw_provider_payload\":{\"id\":8002,\"name\":\"Batman\",\
+                       \"issue_number\":\"1\",\"cover_date\":null,\"store_date\":null,\
+                       \"image\":{},\"volume\":{},\"person_credits\":[{\"id\":1}],\
+                       \"character_credits\":[],\"team_credits\":[],\
+                       \"story_arc_credits\":[],\"date_last_updated\":\"2026-11-22 00:00:00\"}}'::json, \
+                   now(), now()) RETURNING id",
+                &[],
+            )
+            .await
+            .expect("hydrated identity")
+            .get(0);
+        let with_request: i32 = connection
+            .query_one(
+                "INSERT INTO external_identities \
+                 (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine','issue','4000-8003', '{}'::json, now(), now()) RETURNING id",
+                &[],
+            )
+            .await
+            .expect("request identity")
+            .get(0);
+        drop(Object::take(connection));
+        seed_request(&state, with_request, "failed", 3, "-1 hour", None).await;
+
+        let mut connection = db::checkout(&state).await.expect("enqueue connection");
+        let tx = connection.transaction().await.expect("transaction");
+        let inserted = enqueue_hydration_batch(
+            &tx,
+            &[roster_only, hydrated, with_request],
+        )
+        .await
+        .expect("enqueue batch");
+        tx.commit().await.expect("commit");
+        assert_eq!(inserted, 1, "only the roster-only identity is enqueued");
+
+        let states: Vec<String> = connection
+            .query(
+                "SELECT state FROM comicvine_metadata_refresh_requests \
+                 ORDER BY external_identity_id",
+                &[],
+            )
+            .await
+            .expect("ledger")
+            .iter()
+            .map(|row| row.get(0))
+            .collect();
+        assert_eq!(states, ["pending", "failed"]);
+        let credits: serde_json::Value = connection
+            .query_one(
+                "SELECT metadata_json::jsonb->'creator_credits' FROM external_identities WHERE id=$1",
+                &[&hydrated],
+            )
+            .await
+            .expect("hydrated credits")
+            .get(0);
+        assert_eq!(credits[0]["name"], "Jamie Delano");
+        drop(Object::take(connection));
+
+        // A reimport cannot duplicate work or reset an existing job.
+        let mut connection = db::checkout(&state).await.expect("recheck connection");
+        let tx = connection.transaction().await.expect("transaction");
+        assert_eq!(
+            enqueue_hydration_batch(&tx, &[roster_only, with_request])
+                .await
+                .expect("idempotent enqueue"),
+            0
+        );
+        tx.commit().await.expect("commit");
+    }
+
+    #[tokio::test]
+    async fn backfill_is_bounded_resumable_and_dry_runnable() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("connection");
+        let user_id: i32 = connection
+            .query_one(
+                "INSERT INTO users (username, created_at) VALUES ($1, now()) RETURNING id",
+                &[&"cv5592-backfill"],
+            )
+            .await
+            .expect("user")
+            .get(0);
+        let thread_id: i32 = connection
+            .query_one(
+                "INSERT INTO threads (title, format, issues_remaining, total_issues, \
+                 queue_position, status, user_id) \
+                 VALUES ('Backfill','Comic',0,0,1,'active',$1) RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .expect("thread")
+            .get(0);
+
+        let mut identity_ids = Vec::new();
+        // Three roster-only identities and one hydrated identity.
+        for (index, metadata) in [
+            "{}".to_owned(),
+            "{}".to_owned(),
+            "{}".to_owned(),
+            json!({
+                "creator_credits": [{"id":1,"name":"Creator"}],
+                "deep_metadata_refreshed_at": "2026-11-22T00:00:00+00:00",
+                "raw_provider_payload": {"id":8004,"name":"Hydrated",
+                  "issue_number":"4","cover_date":null,"store_date":null,
+                  "image":{},"volume":{},"person_credits":[{"id":1}],
+                  "character_credits":[],"team_credits":[],"story_arc_credits":[],
+                  "date_last_updated":"2026-11-22 00:00:00"}
+            })
+            .to_string(),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let external_id = format!("4000-81{:02}", index + 1);
+            let issue_id: i32 = connection
+                .query_one(
+                    "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
+                     VALUES ($1,$2,$3,'unread',now()) RETURNING id",
+                    &[&thread_id, &(index + 1).to_string(), &(index as i32 + 1)],
+                )
+                .await
+                .expect("issue")
+                .get(0);
+            let identity: i32 = connection
+                .query_one(
+                    "INSERT INTO external_identities \
+                     (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                     VALUES ('comicvine','issue',$1,$2::json,now(),now()) RETURNING id",
+                    &[&external_id, &metadata],
+                )
+                .await
+                .expect("identity")
+                .get(0);
+            connection
+                .execute(
+                    "INSERT INTO issue_external_identity_mappings \
+                     (issue_id, external_identity_id, status, evidence_source, evidence_json, \
+                      confidence, created_at, updated_at) \
+                     VALUES ($1,$2,'confirmed','comicvine_issue_adoption','{}'::json,1.0,now(),now())",
+                    &[&issue_id, &identity],
+                )
+                .await
+                .expect("mapping");
+            identity_ids.push(identity);
+        }
+        drop(Object::take(connection));
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "authorization",
+            "Bearer cron-test-secret".parse().expect("valid header"),
+        );
+        let expected = Some("cron-test-secret");
+
+        let dry = backfill_authorized(&state, &headers, expected, true, 2, 0)
+            .await
+            .expect("dry run");
+        assert!(dry.dry_run);
+        assert_eq!(dry.scanned, 2);
+        assert_eq!(dry.eligible, 2);
+        assert_eq!(dry.enqueued, 0);
+        assert_eq!(dry.before_pending, dry.after_pending);
+        assert_eq!(dry.last_identity_id, Some(identity_ids[1]));
+
+        let first = backfill_authorized(&state, &headers, expected, false, 2, 0)
+            .await
+            .expect("first batch");
+        assert_eq!(first.enqueued, 2);
+        assert_eq!(first.last_identity_id, Some(identity_ids[1]));
+
+        let second = backfill_authorized(
+            &state,
+            &headers,
+            expected,
+            false,
+            BACKFILL_MAX_LIMIT,
+            first.last_identity_id.unwrap(),
+        )
+        .await
+        .expect("resumed batch");
+        assert_eq!(second.enqueued, 1, "hydrated identity is never enqueued");
+        assert_eq!(second.scanned, 2);
+        assert_eq!(second.already_present, 1);
+        assert!(second.after_pending > second.before_pending);
+
+        let connection = db::checkout(&state).await.expect("final connection");
+        let count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM comicvine_metadata_refresh_requests",
+                &[],
+            )
+            .await
+            .expect("final count")
+            .get(0);
+        assert_eq!(count, 3);
+        let hydrated_requests: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&identity_ids[3]],
+            )
+            .await
+            .expect("hydrated identity ledger")
+            .get(0);
+        assert_eq!(hydrated_requests, 0);
+    }
 }
