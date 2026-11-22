@@ -1,25 +1,51 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const authApi = vi.hoisted(() => ({
-  forgotPassword: vi.fn(),
-  resetPassword: vi.fn(),
-}))
-const apiClient = vi.hoisted(() => ({ post: vi.fn() }))
-const auth = vi.hoisted(() => ({ login: vi.fn() }))
-
-vi.mock('../services/api', () => ({
-  default: apiClient,
-}))
-vi.mock('../services/api-auth', () => ({
-  authApi,
-}))
-vi.mock('../App', () => ({ useAuth: () => auth }))
-
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ForgotPasswordPage from '../pages/ForgotPasswordPage'
 import LoginPage from '../pages/LoginPage'
 import ResetPasswordPage from '../pages/ResetPasswordPage'
+import { AuthContext, type AuthContextValue } from '../contexts/AuthContext'
+import api from '../services/api'
+import { authApi } from '../services/api-auth'
+
+const originalApiPost = api.post
+const originalAuthApi = { ...authApi }
+const mockApiPost = vi.fn<typeof api.post>()
+const mockForgotPassword = vi.fn<typeof authApi.forgotPassword>()
+const mockResetPassword = vi.fn<typeof authApi.resetPassword>()
+const login = vi.fn<AuthContextValue['login']>()
+const auth: AuthContextValue = {
+  authState: {
+    status: 'unauthenticated',
+    isLoading: false,
+    user: null,
+    error: null,
+    retryCount: 0,
+    lastRetryAt: null,
+  },
+  isAuthenticated: false,
+  isLoading: false,
+  user: null,
+  login,
+  logout: vi.fn(),
+  revalidateSession: vi.fn<AuthContextValue['revalidateSession']>(),
+  recoverSession: vi.fn<AuthContextValue['recoverSession']>(),
+  retryAuth: vi.fn<AuthContextValue['retryAuth']>(),
+  clearAuthError: vi.fn(),
+}
+
+beforeEach(() => {
+  Object.assign(api, { post: mockApiPost })
+  Object.assign(authApi, {
+    forgotPassword: mockForgotPassword,
+    resetPassword: mockResetPassword,
+  })
+})
+
+afterEach(() => {
+  Object.assign(api, { post: originalApiPost })
+  Object.assign(authApi, originalAuthApi)
+})
 
 function renderForgot(initialEntry = '/forgot-password') {
   return render(
