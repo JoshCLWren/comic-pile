@@ -1966,6 +1966,12 @@ mod tests {
         assert_eq!(second.already_present, 1);
         assert!(second.after_pending > second.before_pending);
 
+        // Re-scanning an earlier range must dedup: every candidate there now
+        // has a ledger row, so nothing is eligible or enqueued again.
+        let rescan = backfill_authorized(&state, &headers, expected, false, 2, 0)
+            .await
+            .expect("dedup rescan");
+        assert_eq!(rescan.scanned, 2);
         let connection = db::checkout(&state).await.expect("final connection");
         let count: i64 = connection
             .query_one(
