@@ -1067,7 +1067,7 @@ mod tests {
                  VALUES (9901, 9202, 9029, NULL, NOW());
                  INSERT INTO dependencies (id, source_issue_id, target_issue_id, origin,
                                            classification, provenance, created_at)
-                 VALUES (9902, 9202, 9029, 'converted', 'C', 'generation evidence', NOW());
+                 VALUES (9902, 9201, 9029, 'converted', 'C', 'generation evidence', NOW());
                  INSERT INTO dependencies (id, source_issue_id, target_issue_id, origin, created_at)
                  VALUES (9903, 9402, 9403, NULL, NOW());",
             )
