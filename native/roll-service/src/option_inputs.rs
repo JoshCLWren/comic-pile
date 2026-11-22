@@ -404,6 +404,26 @@ async fn load_transaction(
 /// the owner-scoped rows into the evaluator's inputs and fails closed on a
 /// row that references data the reader does not own.
 pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
+    Ok(assemble_snapshot_rows(snapshot, false)?.inputs)
+}
+
+fn assemble_diagnostic_snapshot(snapshot: SnapshotRows) -> Result<OptionDiagnostics, ApiError> {
+    assemble_snapshot_rows(snapshot, true)
+}
+
+fn assemble_snapshot_rows(
+    snapshot: SnapshotRows,
+    include_legacy_diagnostics: bool,
+) -> Result<OptionDiagnostics, ApiError> {
+    let stored_prerequisites = if include_legacy_diagnostics {
+        snapshot
+            .prerequisites
+            .iter()
+            .map(PrerequisiteRow::stored_evidence)
+            .collect()
+    } else {
+        vec![]
+    };
     let core = CoreReadingInputs {
         threads: snapshot
             .threads
@@ -469,7 +489,9 @@ pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, 
     }
     let mut prerequisites = vec![];
     for row in snapshot.prerequisites {
-        if !owned.contains(&row.source_issue_id) || !owned.contains(&row.target_issue_id) {
+        if (!include_legacy_diagnostics || row.origin.as_deref() == Some("reader"))
+            && (!owned.contains(&row.source_issue_id) || !owned.contains(&row.target_issue_id))
+        {
             unresolved.push(UnresolvedReference {
                 kind: "prerequisite",
                 object_id: row.id,
@@ -479,7 +501,11 @@ pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, 
             prerequisite_id: row.id,
             source_issue_id: row.source_issue_id,
             target_issue_id: row.target_issue_id,
-            origin: "reader".into(),
+            origin: if include_legacy_diagnostics {
+                row.origin.unwrap_or_default()
+            } else {
+                "reader".into()
+            },
             provenance: vec![
                 format!(
                     "classification:{}",
@@ -557,13 +583,16 @@ pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, 
         .map(|i| i.id)
         .collect();
     unresolved.sort();
-    Ok(OptionInputs {
-        core,
-        thread_volumes,
-        lists: lists.into_values().collect(),
-        prerequisites,
-        excluded_issue_ids,
-        unresolved,
+    Ok(OptionDiagnostics {
+        inputs: OptionInputs {
+            core,
+            thread_volumes,
+            lists: lists.into_values().collect(),
+            prerequisites,
+            excluded_issue_ids,
+            unresolved,
+        },
+        prerequisites: stored_prerequisites,
     })
 }
 struct Pending(Option<Object>);
