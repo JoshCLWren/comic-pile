@@ -167,7 +167,7 @@ owned_entries AS (
     JOIN owned_lists l ON l.id = e.list_id
 ),
 reader_prerequisites AS (
-    SELECT d.id, d.source_issue_id, d.target_issue_id,
+    SELECT d.id, d.source_issue_id, d.target_issue_id, d.origin, d.note,
            d.classification, d.provenance
     FROM dependencies d
     WHERE d.origin = 'reader'
@@ -251,7 +251,7 @@ fn preauthenticated_statement() -> &'static str {
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct SnapshotRows {
     threads: Vec<ThreadRow>,
     issues: Vec<IssueRow>,
@@ -294,13 +294,31 @@ struct EntryRow {
     gate: String,
     skipped: bool,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct PrerequisiteRow {
     id: i32,
     source_issue_id: i32,
     target_issue_id: i32,
+    #[serde(default)]
+    origin: Option<String>,
+    #[serde(default)]
+    note: Option<String>,
     classification: Option<String>,
     provenance: Option<String>,
+}
+
+impl PrerequisiteRow {
+    fn stored_evidence(&self) -> StoredPrerequisite {
+        StoredPrerequisite {
+            prerequisite_id: self.id,
+            source_issue_id: self.source_issue_id,
+            target_issue_id: self.target_issue_id,
+            origin: self.origin.clone(),
+            note: self.note.clone(),
+            classification: self.classification.clone(),
+            provenance: self.provenance.clone(),
+        }
+    }
 }
 #[derive(Debug, Deserialize)]
 struct VolumeEvidenceRow {
