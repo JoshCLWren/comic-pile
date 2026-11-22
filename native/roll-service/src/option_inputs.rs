@@ -47,6 +47,27 @@ pub struct Prerequisite {
     pub origin: String,
     pub provenance: Vec<String>,
 }
+
+/// Exact stored evidence for the read-only frontier audit (#4198).
+///
+/// This is deliberately separate from execution inputs: historical rows are
+/// inspected here, never promoted into Option E constraints.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StoredPrerequisite {
+    pub prerequisite_id: i32,
+    pub source_issue_id: i32,
+    pub target_issue_id: i32,
+    pub origin: Option<String>,
+    pub note: Option<String>,
+    pub classification: Option<String>,
+    pub provenance: Option<String>,
+}
+
+pub struct OptionDiagnostics {
+    pub inputs: OptionInputs,
+    pub prerequisites: Vec<StoredPrerequisite>,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UnresolvedReference {
     pub kind: &'static str,
