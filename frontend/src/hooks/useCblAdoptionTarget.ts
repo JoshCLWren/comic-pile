@@ -27,17 +27,7 @@ function findMatchingAdoptionPlans(
   sourceTitle: string | null,
 ): ContinuityPlanListItem[] {
   if (!source || !sourceTitle) return []
-  const sourceNames = new Set(
-    [
-      source.name,
-      sourceTitle,
-      `CBL adoption for ${source.source_path}`,
-    ].map((name) => name.trim().toLowerCase()),
-  )
-  return plans.filter(
-    (plan) =>
-      planMatchesSource(plan, source) || sourceNames.has(plan.name.trim().toLowerCase()),
-  )
+  return plans.filter((plan) => planMatchesSource(plan, source))
 }
 
 /** Load adoption targets and require a fresh, explicit choice for each source. */
