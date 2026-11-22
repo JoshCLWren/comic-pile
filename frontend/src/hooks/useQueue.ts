@@ -171,6 +171,11 @@ export function useQueueThreads(
   // rows visible: `isPending` drives the full-screen loader only before any
   // data exists, while `isNextPageLoading` drives the inline loading indicator.
   const isPending = query.isPending || query.isNextPageLoading
+  // True while the rendered rows are placeholder data from the previous
+  // search/sort key (see `placeholderData` above). Count displays must treat
+  // that window as unsettled instead of restating the old key's numbers
+  // (#3614).
+  const isPlaceholderData = query.isPlaceholderData
   // The append alone, so a consumer can read the Queue cursor to completion
   // without being confused by the combined "anything is loading" flag
   // (issue #3922).
