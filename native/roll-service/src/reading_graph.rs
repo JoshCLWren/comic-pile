@@ -723,7 +723,7 @@ fn project(
         .graph_problem()
         .map(|problem| problem.cyclic_issue_ids.iter().copied().collect())
         .unwrap_or_default();
-    ReadingGraphResponse {
+    Ok(ReadingGraphResponse {
         status: if validated.graph_problem().is_some() {
             "cycle".to_string()
         } else {
@@ -735,15 +735,8 @@ fn project(
         affected_threads,
         repairs,
         unresolved_reference_count: inputs.unresolved.len(),
-        unresolved_reference_breakdown: {
-            let mut breakdown = BTreeMap::new();
-            for ref_ in &inputs.unresolved {
-                let category = categorize_unresolved(&ref_.kind);
-                *breakdown.entry(category).or_insert(0) += 1;
-            }
-            breakdown
-        },
-    }
+        prerequisite_audit,
+    })
 }
 
 fn repair_target_exists(inputs: &OptionInputs, action: &ReadingGraphRepairAction) -> bool {
@@ -784,11 +777,6 @@ fn repair_is_offered(
 }
 
 fn invalid_response(inputs: &OptionInputs) -> ReadingGraphResponse {
-    let mut breakdown = BTreeMap::new();
-    for ref_ in &inputs.unresolved {
-        let category = categorize_unresolved(&ref_.kind);
-        *breakdown.entry(category).or_insert(0) += 1;
-    }
     ReadingGraphResponse {
         status: "invalid".to_string(),
         cycles: vec![],
@@ -797,7 +785,14 @@ fn invalid_response(inputs: &OptionInputs) -> ReadingGraphResponse {
         affected_threads: vec![],
         repairs: vec![],
         unresolved_reference_count: inputs.unresolved.len(),
-        unresolved_reference_breakdown: breakdown,
+        prerequisite_audit: PrerequisiteAuditReport {
+            historical_evidence_complete: false,
+            policy: "Resolve authoritative references before auditing historical prerequisites; no mutation is authorized.".to_string(),
+            manual_review_count: 0,
+            manual_review_frontier_ids: vec![],
+            categorized_dependency_counts: BTreeMap::new(),
+            dependencies: vec![],
+        },
     }
 }
 
@@ -1052,15 +1047,6 @@ pub fn reading_graph_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn repair_documentation() {}
-
-/// Mapping from UnresolvedReference kind string to UnresolvedCategory.
-pub fn categorize_unresolved(kind: &str) -> UnresolvedCategory {
-    match kind {
-        "list_entry" => UnresolvedCategory::UnreadOutsideList,
-        "prerequisite" => UnresolvedCategory::ReadingPlanVsList,
-        _ => UnresolvedCategory::JliConverted,
-    }
-}
 
 #[cfg(test)]
 mod tests {
