@@ -1235,6 +1235,137 @@ async fn adoption_commit_uses_next_suffix_when_dedupe_variants_exist() {
     );
 }
 
+async fn seed_orphaned_adopted_plan(
+    state: &Arc<AppState>,
+    user_id: i32,
+    plan_id: i32,
+) -> Value {
+    let nodes = json!([{
+        "id": "curated-original",
+        "node_type": "issue",
+        "ref_id": 999999,
+        "lane_id": "default",
+        "position": 0,
+        "label": "Curated original",
+        "source_cbl_placements": [{
+            "source_path": MIRROR_SOURCE_PATH,
+            "position": 0
+        }]
+    }]);
+    let nodes_text = nodes.to_string();
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO continuity_plans
+           (id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
+         VALUES
+           ($1, $2, 'Mister Miracle 1989', 'informational',
+            '[{\"id\":\"default\",\"name\":\"Default\",\"order\":0}]'::jsonb,
+            $3::jsonb, NOW(), NOW())",
+        &[&plan_id, &user_id, &nodes_text],
+    )
+    .await
+    .unwrap();
+    // This retained provenance is exactly what deleting an authoritative
+    // Reading List leaves behind: the reader returns 409 until recovery.
+    conn.execute(
+        "INSERT INTO reading_plan_sources (plan_id, raw_source_path, recorded_at)
+         VALUES ($1, 'custom-cbl:999999', NOW())",
+        &[&plan_id],
+    )
+    .await
+    .unwrap();
+    nodes
+}
+
+async fn assert_plan_nodes(
+    state: &Arc<AppState>,
+    plan_id: i32,
+) -> Value {
+    let conn = state.pool.get().await.unwrap();
+    let nodes_text: String = conn
+        .query_one(
+            "SELECT nodes_json::text FROM continuity_plans WHERE id=$1",
+            &[&plan_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    serde_json::from_str(&nodes_text).unwrap()
+}
+
+/// #3933's orphan re-adoption report: the source receipt must not make an
+/// unusable orphaned Plan the implicit target of another successful commit.
+#[tokio::test]
+async fn adoption_commit_creates_fresh_plan_instead_of_reusing_orphan() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+    let original_nodes = seed_orphaned_adopted_plan(&state, user_id, 960).await;
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{status} {body}");
+    assert_ne!(body["id"], 960, "orphan must not be reused: {body}");
+    assert_eq!(body["name"], "Mister Miracle 1989 (2)", "{body}");
+    assert_eq!(
+        assert_plan_nodes(&state, 960).await,
+        original_nodes,
+        "the orphaned Plan's retained history must remain untouched"
+    );
+}
+
+/// The collision UI uses the targeted route when it finds the source receipt.
+/// That route must apply the same orphan safeguard instead of returning 200
+/// for a write that leaves the reader on a persistent 409 recovery screen.
+#[tokio::test]
+async fn targeted_adoption_commit_creates_fresh_plan_instead_of_updating_orphan() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+    let original_nodes = seed_orphaned_adopted_plan(&state, user_id, 961).await;
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/reading-plans/961/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+
+    // Keep the targeted route's established 200 wire contract even though the
+    // response identifies the fresh Plan that replaced the unusable target.
+    assert_eq!(status, StatusCode::OK, "{status} {body}");
+    assert_ne!(body["id"], 961, "orphan must not be updated: {body}");
+    assert_eq!(body["name"], "Mister Miracle 1989 (2)", "{body}");
+    assert_eq!(
+        assert_plan_nodes(&state, 961).await,
+        original_nodes,
+        "the explicitly selected orphan must remain preserved for recovery"
+    );
+}
+
 #[tokio::test]
 async fn adoption_commit_inactive_list_returns_422() {
     let (state, token, csrf, _guard) = setup().await;
