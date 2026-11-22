@@ -774,6 +774,16 @@ pub struct BackfillReport {
 }
 
 /// CRON_SECRET-authenticated, bounded and resumable hydration backfill.
+///
+/// ```text
+/// # dry run: counts only, no ledger writes
+/// curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+///   'https://comic-pile.vercel.app/api/v2/maintenance/comicvine-hydration-backfill?dry_run=true&limit=50'
+/// # apply a batch, then pass the reported last_identity_id back as after_identity_id
+/// curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+///   'https://comic-pile.vercel.app/api/v2/maintenance/comicvine-hydration-backfill?limit=50&after_identity_id=12345'
+/// ```
+///
 /// Identities are scanned by ascending id with `LIMIT`; because each enqueued
 /// identity gains a request row, the next batch naturally starts after the
 /// previous one without any stored cursor.

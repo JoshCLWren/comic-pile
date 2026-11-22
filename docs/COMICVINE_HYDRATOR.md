@@ -2,7 +2,25 @@
 
 The ComicVine hydrator inspects comics that already exist in ComicPile and writes a machine-readable JSON report. It does not modify threads, issues, reading progress, ratings, dependencies, continuity rules, or confirmed provider mappings.
 
-## Read-issue identity and creator backfill
+## Durable ledger backfill (live Rust path)
+
+A successful Queue → Add Series import commits one `comicvine_metadata_refresh_requests` row for every roster-only confirmed issue identity, so creator hydration no longer depends on the Roll issue page being opened. The scheduled repair drain (`GET /api/v2/maintenance/comicvine-metadata-repairs`) claims due rows in bounded batches with 120-second leases, preserved backoff, and a distinct `no_credits` outcome for legitimate empty credit lists.
+
+For identities imported before that fix, use the CRON_SECRET-authenticated backfill endpoint. It scans confirmed ComicVine issue identities in ascending id order, enqueues only those lacking deep metadata, and never remaps an identity, fabricates credits, or touches reading/rating state. Already-hydrated identities and identities with any existing request row are skipped. `limit` is bounded to 1–500; pass the returned `last_identity_id` back as `after_identity_id` to resume. The report includes `dry_run`, `scanned`, `eligible`, `enqueued`, `already_present`, and before/after `pending` counts.
+
+```bash
+# Dry run: counts only, no ledger writes.
+curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  'https://comic-pile.vercel.app/api/v2/maintenance/comicvine-hydration-backfill?dry_run=true&limit=50'
+
+# Apply a batch, then resume with the reported last_identity_id.
+curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  'https://comic-pile.vercel.app/api/v2/maintenance/comicvine-hydration-backfill?limit=50&after_identity_id=12345'
+```
+
+## Read-issue identity and creator backfill (historical Python operator)
+
+The retired Python entrypoint below is retained for provenance only; it is not present in the Rust-only checkout. Use the durable ledger backfill above for live repair. <!-- docs-path-check: ignore -->
 
 Use `scripts/backfill_read_comicvine.py` as the single operator entrypoint for read <!-- docs-path-check: ignore -->
 issues. It targets only the explicitly exported `DATABASE_URL` and runs four resumable
