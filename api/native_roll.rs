@@ -642,6 +642,8 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/roll/override", post(native_dispatch))
         .route(
             "/api/v1/roll/events/{event_id}/recommendation-explanation",
@@ -1303,6 +1305,8 @@ mod tests {
         // registered here too, otherwise it falls through to native_not_found.
         for (method, uri) in [
             ("POST", "/api/v2/roll/override"),
+            ("POST", "/api/v1/roll/dismiss-pending"),
+            ("POST", "/api/roll/dismiss-pending"),
             ("POST", "/api/v2/roll/dismiss-pending"),
             ("POST", "/api/v2/roll/switch-prerequisite"),
             ("GET", "/api/v2/releases"),
