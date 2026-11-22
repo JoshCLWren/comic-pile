@@ -200,6 +200,7 @@ fn blocker_kind_from_str(kind: &str) -> BlockerKind {
         "strict_order" => BlockerKind::StrictOrder,
         "hold" => BlockerKind::Hold,
         "after_previous" => BlockerKind::AfterPrevious,
+        "reading_cycle" => BlockerKind::ReadingCycle,
         _ => BlockerKind::Prerequisite,
     }
 }
