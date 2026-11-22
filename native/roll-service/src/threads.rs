@@ -369,7 +369,7 @@ pub async fn list_threads(
         preauthenticated = Some(user.id());
     }
 
-    let (auth, active_count, list_names, rows) = query_page(
+    let (auth, active_count, filtered_count, list_names, rows) = query_page(
         &state,
         &claims,
         preauthenticated,
