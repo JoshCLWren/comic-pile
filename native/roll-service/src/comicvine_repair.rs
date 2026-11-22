@@ -1467,7 +1467,7 @@ mod tests {
             "person_credits":[{"id":1,"name":"Jamie Delano","api_detail_url":"https://example"}],
             "character_credits":[], "team_credits":[], "story_arc_credits":[],
             "date_last_updated":"2020-01-01T00:00:00+00:00"});
-        let mut payload = json!({"status_code": 1.0, "results": issue});
+        let payload = json!({"status_code": 1.0, "results": issue});
         let fake = state
             .outbound
             .as_any()
