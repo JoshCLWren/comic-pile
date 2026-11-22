@@ -1227,7 +1227,7 @@ mod tests {
         // carry a cover only in `image.thumb_url`. Hydration must persist it
         // as primary_image so the thread/queue never reports "No cover".
         let result = json!({"id": 5624, "name": "Detective Comics", "issue_number": "5",
-            "cover_date": "1937-07-01",
+            "cover_date": "1937-07-01", "store_date": "1937-06-01",
             "image": {"small_url": "", "thumb_url": "https://comicvine.example/thumb/5624.jpg"},
             "volume": {"id": 4001, "name": "Detective Comics"},
             "person_credits": [], "character_credits": [], "team_credits": [],
