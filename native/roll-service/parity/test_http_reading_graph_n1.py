@@ -12,7 +12,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-reading-graph-n1-secret"
 BINARY = str(cargo_example_path("http_reading_graph"))
@@ -88,6 +94,7 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
         _, _, before = await db_counters(engine)
+        nested_before = await db_nested_statements(engine)
         small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
@@ -96,7 +103,9 @@ async def test_reading_graph_statements_do_not_grow_with_library_size() -> None:
         assert small_body.get("cycles") == []
         assert isinstance(small_body.get("affected_lists"), list)
         _, _, after = await db_counters(engine)
+        nested_after = await db_nested_statements(engine)
         small_delta = (after - before) if before is not None and after is not None else None
+        small_nested = (nested_after - nested_before) if nested_before is not None and nested_after is not None else None
 
         raw = await asyncpg.connect(url)
         try:
