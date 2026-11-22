@@ -784,13 +784,23 @@ pub(crate) async fn hydrate_catalog_commit(
     committed_issue_ids: &[i32],
     budget: Duration,
 ) {
-    if committed_issue_ids.is_empty() || budget.is_zero() {
-        return;
-    }
     let Ok(api_key) = std::env::var("COMICVINE_API_KEY") else {
         return;
     };
-    if api_key.is_empty() {
+    hydrate_catalog_commit_with_key(state, user_id, committed_issue_ids, budget, &api_key).await;
+}
+
+/// Post-commit hydration with provider configuration supplied by the caller.
+/// Keeping environment lookup at the HTTP boundary lets the DB regression use
+/// the recording transport without mutating process-global environment state.
+async fn hydrate_catalog_commit_with_key(
+    state: &AppState,
+    user_id: i32,
+    committed_issue_ids: &[i32],
+    budget: Duration,
+    api_key: &str,
+) {
+    if committed_issue_ids.is_empty() || budget.is_zero() || api_key.is_empty() {
         return;
     }
 
