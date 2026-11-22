@@ -1456,16 +1456,23 @@ mod tests {
             .as_any()
             .downcast_ref::<crate::outbound::RecordingFakeOutbound>()
             .expect("fake");
-        let issue = json!({"id": 29319, "name":"Going For It"});
+        let issue = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
+            "cover_date":"1988-03-01", "store_date":"1988-03-24", "image":{},
+            "volume":{"id": 4001,"name":"Hellblazer"},
+            "person_credits":[{"id":1,"name":"Jamie Delano","api_detail_url":"https://example"}],
+            "character_credits":[], "team_credits":[], "story_arc_credits":[],
+            "date_last_updated":"2020-01-01T00:00:00+00:00"});
         fake.push_ok(
             StatusCode::OK,
             HeaderMap::new(),
-            bytes::Bytes::from(json!({"status_code": 1.0, "results": issue}).to_string()),
+            bytes::Bytes::from(json!({"status_code": 1.0, "results": issue.clone()}).to_string()),
         );
-        let result = provider_response(&outbound, "issue/4000-29319", "", "TESTKEY123")
+        let result = provider_issue(&outbound, 29319, "TESTKEY123")
             .await
             .expect("1.0 status should be accepted");
-        assert_eq!(result["results"]["id"], 29319);
+        let (metadata, present, _, _) = normalized_metadata(&result, 29319).expect("normalized");
+        assert!(present);
+        assert_eq!(metadata["creator_credits"][0]["name"], "Jamie Delano");
     }
 
     #[tokio::test]
