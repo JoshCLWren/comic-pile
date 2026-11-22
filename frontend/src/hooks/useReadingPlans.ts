@@ -110,7 +110,6 @@ export function useSaveReadingPlan(planId: number | null, deps: SaveReadingPlanD
         : api.create(payload),
     onSuccess: async (plan) => {
       await applyCommittedReadingPlanUpdate(client, plan)
-      notifyReadingPlansChanged()
     },
   })
 }
