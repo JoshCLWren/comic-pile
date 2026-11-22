@@ -1056,7 +1056,9 @@ pub fn repair_documentation() {}
 mod tests {
     use super::*;
     use crate::{
-        option_inputs::{OverlapDecision, Prerequisite, ReadingEntry, ReadingList},
+        option_inputs::{
+            OverlapDecision, Prerequisite, ReadingEntry, ReadingList, StoredPrerequisite,
+        },
         reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
     };
 
