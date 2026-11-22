@@ -274,6 +274,27 @@ pub(crate) enum Exchange {
     },
 }
 
+/// Parse Python-compatible delta-seconds or an HTTP-date, then apply the
+/// repair worker's 60..=3600 s bound. Fractional values round up so integer
+/// persistence never retries before the provider's requested deadline.
+fn repair_retry_after_seconds(raw: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> u32 {
+    raw.and_then(|header| {
+        let value = header.trim();
+        if value.is_empty() {
+            return None;
+        }
+        if let Ok(seconds) = value.parse::<f64>() {
+            return Some(seconds);
+        }
+        chrono::DateTime::parse_from_rfc2822(value)
+            .ok()
+            .map(|at| (at.with_timezone(&chrono::Utc) - now).num_milliseconds() as f64 / 1000.0)
+    })
+    .filter(|seconds| seconds.is_finite())
+    .map(|seconds| seconds.clamp(60.0, 3600.0).ceil() as u32)
+    .unwrap_or(60)
+}
+
 /// One repair-worker provider call, matching Python `ComicVineClient`
 /// throttle rules: 420/429 are throttles whose `Retry-After` is clamped to
 /// 60..=3600 s; any other non-2xx status (403 included) is a plain provider
