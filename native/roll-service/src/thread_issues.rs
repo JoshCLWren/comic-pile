@@ -487,6 +487,8 @@ pub(crate) fn natural_issue_order(existing: &[String], incoming: &[String]) -> O
         match slot {
             Some(index) => result.insert(index, label.clone()),
             None => {
+                // Beyond the maximum, anchor after the last ordinary number rather
+                // than after any irregular labels saved at the tail.
                 let last_numbered = result
                     .iter()
                     .rposition(|current| ordinary_key(current).is_some());
