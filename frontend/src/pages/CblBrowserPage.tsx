@@ -1206,14 +1206,7 @@ export default function CblBrowserPage() {
           {submittedQuery && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--theme-text-muted)]">
               <span>Searching every shared CBL for “{submittedQuery}”.</span>
-              <button
-                type="button"
-                onClick={clearSearch}
-                disabled={isCommitting}
-                className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
-              >
-                Clear search
-              </button>
+              <button type="button" onClick={clearSearch} disabled={isCommitting} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50">Clear search</button>
             </div>
           )}
 
@@ -1237,11 +1230,7 @@ export default function CblBrowserPage() {
             </div>
           )}
 
-          {browseQuery.isPending && (
-            <p role="status" className="text-sm text-[var(--theme-text-muted)]">
-              Loading the shared CBL catalog…
-            </p>
-          )}
+          {browseQuery.isPending && <p role="status" className="text-sm text-[var(--theme-text-muted)]">Loading the shared CBL catalog…</p>}
 
           {browsePage && !catalogError && (
             <div className="space-y-4" data-testid="cbl-browse-results">
