@@ -94,7 +94,7 @@ pub enum UnresolvedCategory {
 }
 
 /// Mapping from UnresolvedReference kind string to UnresolvedCategory.
-fn categorize_unresolved(kind: &str) -> UnresolvedCategory {
+pub fn categorize_unresolved(kind: &str) -> UnresolvedCategory {
     match kind {
         "list_entry" => UnresolvedCategory::UnreadOutsideList,
         "prerequisite" => UnresolvedCategory::ReadingPlanVsList,
