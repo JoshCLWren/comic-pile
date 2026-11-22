@@ -1880,14 +1880,13 @@ mod tests {
         seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
         queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
-        let mut headers = HeaderMap::new();
-        headers.insert("authorization", "Bearer test-secret".parse().unwrap());
-        let report = drain_authorized(&state, &headers, Some("test-secret"))
-            .await
-            .expect("drain")
-            .0;
-        assert_eq!(report.claimed, 1);
-        assert_eq!(report.completed, 1);
+        let job = claim(&state).await.expect("claim").expect("due job");
+        assert_eq!(
+            process(&state, &job, Some("TESTKEY123"))
+                .await
+                .expect("process"),
+            "completed"
+        );
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let row = connection
@@ -1937,13 +1936,14 @@ mod tests {
             HeaderMap::new(),
             Bytes::from(body),
         );
-        let mut headers = HeaderMap::new();
-        headers.insert("authorization", "Bearer test-secret".parse().unwrap());
-        let report = drain_authorized(&state, &headers, Some("test-secret"))
-            .await
-            .expect("drain")
-            .0;
-        assert_eq!(report.no_credits, 1);
+
+        let job = claim(&state).await.expect("claim").expect("due job");
+        assert_eq!(
+            process(&state, &job, Some("TESTKEY123"))
+                .await
+                .expect("process"),
+            "no_credits"
+        );
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let state_value: String = connection
@@ -1968,7 +1968,7 @@ mod tests {
         let connection = db::checkout(&state).await.expect("seed connection");
         connection
             .execute(
-                "UPDATE external_identities SET metadata_json = $2::json, updated_at = now() WHERE id = $1",
+                "UPDATE external_identities SET metadata_json = ($2::text)::json, updated_at = now() WHERE id = $1",
                 &[
                     &identity_id,
                     &json!({
@@ -2005,13 +2005,14 @@ mod tests {
             HeaderMap::new(),
             Bytes::from(body),
         );
-        let mut headers = HeaderMap::new();
-        headers.insert("authorization", "Bearer test-secret".parse().unwrap());
-        let report = drain_authorized(&state, &headers, Some("test-secret"))
-            .await
-            .expect("drain")
-            .0;
-        assert_eq!(report.completed, 1);
+
+        let job = claim(&state).await.expect("claim").expect("due job");
+        assert_eq!(
+            process(&state, &job, Some("TESTKEY123"))
+                .await
+                .expect("process"),
+            "completed"
+        );
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata_text: String = connection
