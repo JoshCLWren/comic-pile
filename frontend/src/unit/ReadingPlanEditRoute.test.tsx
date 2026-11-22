@@ -96,37 +96,21 @@ describe('ReadingPlanEditRoute', () => {
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 
-  it('fails closed on a reader request error', () => {
-    // SAFETY: Only isError, isPending, and data are read by the route in
-    // this test. The remaining React Query result properties are irrelevant.
-    vi.mocked(useReadingPlanReader).mockReturnValue({
-      isError: true,
-      isPending: false,
-      data: undefined,
-    } as ReturnType<typeof useReadingPlanReader>)
+  it('fails closed on a reader request error', async () => {
+    getReader.mockRejectedValue(new Error('reader unavailable'))
     renderEditRoute()
-    expect(screen.getByText(/Could not determine this Plan/)).toBeInTheDocument()
+    expect(await screen.findByText(/Could not determine this Plan/)).toBeInTheDocument()
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 
-  it('opens the saved Plan editor from the recovery authoring link when the plan is orphaned', () => {
+  it('opens the saved Plan editor from the recovery authoring link when the plan is orphaned', async () => {
     // An orphaned plan still returns 409 from the reader. The recovery screen
     // hands the owner an explicit opt-in link so the saved plan can be authored.
-    // SAFETY: Only isError, isPending, and data are read by the route here; the
-    // remaining React Query result properties are irrelevant to this branch.
-    vi.mocked(useReadingPlanReader).mockReturnValue({
-      isError: true,
-      isPending: false,
-      data: undefined,
-    } as ReturnType<typeof useReadingPlanReader>)
-    // SAFETY: Only isPending and data.status are read by the route in this
-    // branch; the remaining React Query result properties are irrelevant.
-    vi.mocked(useReadingPlanRecoveryPreview).mockReturnValue({
-      isPending: false,
-      data: { status: 'orphaned' },
-    } as ReturnType<typeof useReadingPlanRecoveryPreview>)
+    getReader.mockRejectedValue(new Error('reader unavailable'))
+    // SAFETY: The route reads only status from this recovery preview fixture.
+    getRecoveryPreview.mockResolvedValue(cast<PlanRecoveryPreview>({ status: 'orphaned' }))
     renderEditRoute('29', '?authoring=1')
-    expect(screen.getByText('Legacy Plan editor')).toBeInTheDocument()
+    expect(await screen.findByText('Legacy Plan editor')).toBeInTheDocument()
     expect(screen.queryByText(/Could not determine this Plan/)).not.toBeInTheDocument()
   })
 
