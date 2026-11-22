@@ -22,10 +22,12 @@ and mutation-refresh behavior are covered by the specs listed per row.
 | --- | --- | --- | --- | --- | --- |
 | `/` (Roll) | Cold load | 1 bootstrap read | 1 (required) | — | #4501 budget preserved |
 | `/queue` | Cold load | 6 reads | 6 (each feeds rendered row/count/state) | — | #4501 budget preserved |
+| `/queue` → `/thread/:id` | New thread key after evaluator reports unavailable | `POST /v2/reading-boundaries` x2 + `POST /v1/threads:getBlockingInfo` x2 | **canonical x1 + legacy x2**; warm remount x0; invalidation adds only the active legacy read | repeated canonical probes cannot add information after capability discovery | #5656: native `evaluator` signal + shared query cache |
 | `/queue` | Search `r→ro→…→robert` | intermediate requests | 1 final-value request | debounce commits once | #4501 |
 | `/thread/:id` | Cold load, canonical evaluator available | 6 reads | **5** | closed `TagEditor` fetched tag catalog before its open gate | #4508: `useTags` enabled scope |
 | `/thread/:id` | Cold load, evaluator unavailable | 7 reads | **6** | same | #4508 |
 | `/thread/:id` | Crossover groups | serial after thread detail | parallel with detail | keyed on loaded record | #4508: keyed on route id |
+| `/thread/:id` | Issues collapsed → expand → next cursor → collapse/reopen | 0 while collapsed; one `GET /v1/threads/:id/issues` per cursor | unchanged; warm reopen adds **0** issue-page reads | disclosure owns the historical QA hot path; each cursor is distinct required breadth | #4501 `ThreadDetailView.request-budget` regression |
 | `/history` | Cold load | 1 session-list page | 1 (required) | — | #4501 budget preserved |
 | `/sessions/:id` | Cold load | details + snapshots | 2 (required) | — | #4501 budget preserved |
 | Auth shell | Mount | prefs + identity-inbox badge | 1 each (required) | — | #4501 |
