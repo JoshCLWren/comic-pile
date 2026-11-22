@@ -182,7 +182,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
 }
 
 #[tokio::test]
-async fn alembic_database_at_head_is_adopted_without_rerunning() {
+async fn alembic_schema_at_head_is_adopted_and_data_repairs_run() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     alembic_managed_at_head(&client).await;
