@@ -780,7 +780,10 @@ pub struct BackfillReport {
 pub async fn backfill(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-    query: Result<axum::extract::Query<BackfillQuery>, axum::extract::QueryRejection>,
+    query: Result<
+        axum::extract::Query<BackfillQuery>,
+        axum::extract::rejection::QueryRejection,
+    >,
 ) -> Result<Json<BackfillReport>, ApiError> {
     let axum::extract::Query(query) = query
         .map_err(|_| crate::ApiError::Unprocessable("Validation failed".to_owned()))?;
