@@ -1,28 +1,54 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const auth = vi.hoisted(() => ({ login: vi.fn() }))
-const api = vi.hoisted(() => ({ post: vi.fn() }))
-
-vi.mock('../App', () => ({ useAuth: () => auth }))
-vi.mock('../services/api', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../services/api')>()
-  return { ...original, default: api }
-})
-
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
+import { AuthContext, type AuthContextValue } from '../contexts/AuthContext'
+import api, { AUTH_TOKEN_STORAGE_KEY } from '../services/api'
 import {
   RETURNING_VISITOR_STORAGE_KEY,
   isReturningVisitor,
   markReturningVisitor,
 } from '../utils/returningVisitor'
-import { AUTH_TOKEN_STORAGE_KEY } from '../services/api'
+
+const originalApiPost = api.post
+const mockApiPost = vi.fn<typeof api.post>()
+const login = vi.fn<AuthContextValue['login']>()
+const auth: AuthContextValue = {
+  authState: {
+    status: 'unauthenticated',
+    isLoading: false,
+    user: null,
+    error: null,
+    retryCount: 0,
+    lastRetryAt: null,
+  },
+  isAuthenticated: false,
+  isLoading: false,
+  user: null,
+  login,
+  logout: vi.fn(),
+  revalidateSession: vi.fn<AuthContextValue['revalidateSession']>(),
+  recoverSession: vi.fn<AuthContextValue['recoverSession']>(),
+  retryAuth: vi.fn<AuthContextValue['retryAuth']>(),
+  clearAuthError: vi.fn(),
+}
 
 function renderRoute(ui: React.ReactElement) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>)
+  return render(
+    <MemoryRouter>
+      <AuthContext.Provider value={auth}>{ui}</AuthContext.Provider>
+    </MemoryRouter>,
+  )
 }
+
+beforeEach(() => {
+  Object.assign(api, { post: mockApiPost })
+})
+
+afterEach(() => {
+  Object.assign(api, { post: originalApiPost })
+})
 
 describe('returning-visitor signal (issue #2754)', () => {
   beforeEach(() => {
@@ -48,8 +74,8 @@ describe('returning-visitor signal (issue #2754)', () => {
 describe('LoginPage auth chrome (issue #2754)', () => {
   beforeEach(() => {
     localStorage.clear()
-    auth.login.mockReset()
-    api.post.mockReset()
+    login.mockReset()
+    mockApiPost.mockReset()
   })
 
   it('welcomes first-time visitors without saying "Welcome Back"', () => {
@@ -83,13 +109,13 @@ describe('LoginPage auth chrome (issue #2754)', () => {
   })
 
   it('marks the browser as returning after a successful sign-in', async () => {
-    api.post.mockResolvedValueOnce({ access_token: 'token' })
-    auth.login.mockResolvedValueOnce(undefined)
+    mockApiPost.mockResolvedValueOnce({ access_token: 'token' })
+    login.mockResolvedValueOnce(undefined)
     renderRoute(<LoginPage />)
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'reader' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
-    await waitFor(() => expect(auth.login).toHaveBeenCalledWith('token'))
+    await waitFor(() => expect(login).toHaveBeenCalledWith('token'))
     expect(localStorage.getItem(RETURNING_VISITOR_STORAGE_KEY)).toBe('1')
   })
 })
@@ -97,8 +123,8 @@ describe('LoginPage auth chrome (issue #2754)', () => {
 describe('RegisterPage auth chrome (issue #2754)', () => {
   beforeEach(() => {
     localStorage.clear()
-    auth.login.mockReset()
-    api.post.mockReset()
+    login.mockReset()
+    mockApiPost.mockReset()
   })
 
   it('reads as a first-time welcome, never a return', () => {
@@ -112,8 +138,8 @@ describe('RegisterPage auth chrome (issue #2754)', () => {
   })
 
   it('marks the browser as returning after a successful sign-up', async () => {
-    api.post.mockResolvedValueOnce({ access_token: 'token' })
-    auth.login.mockResolvedValueOnce(undefined)
+    mockApiPost.mockResolvedValueOnce({ access_token: 'token' })
+    login.mockResolvedValueOnce(undefined)
     renderRoute(<RegisterPage />)
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'reader' } })
     fireEvent.change(screen.getByLabelText('Email'), {
@@ -121,7 +147,7 @@ describe('RegisterPage auth chrome (issue #2754)', () => {
     })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Create Account' }).closest('form')!)
-    await waitFor(() => expect(auth.login).toHaveBeenCalledWith('token'))
+    await waitFor(() => expect(login).toHaveBeenCalledWith('token'))
     expect(localStorage.getItem(RETURNING_VISITOR_STORAGE_KEY)).toBe('1')
   })
 

@@ -1,0 +1,45 @@
+import { vi } from 'vitest'
+import { cast } from '../utils/cast'
+
+type InjectableFunction = (...args: never[]) => unknown
+type InjectableFunctionTable = Record<string, InjectableFunction>
+type ModuleDoubleFactory = () => object | Promise<object>
+
+/**
+ * Installs explicit test doubles on Vitest's configurable ES-module exports.
+ *
+ * Unlike hoisted module replacement, this preserves every unmentioned export and
+ * uses spies for function exports, so tests can inspect and reset the injected
+ * boundary with the normal Vitest mock API. Object-valued service namespaces are
+ * replaced directly because they are dependency containers rather than calls.
+ */
+export async function injectModuleDoubles(
+  moduleExports: object,
+  factory: ModuleDoubleFactory,
+): Promise<void> {
+  const doubles = await factory()
+  for (const [exportName, replacement] of Object.entries(doubles)) {
+    const descriptor = Object.getOwnPropertyDescriptor(moduleExports, exportName)
+    if (descriptor?.value === replacement) continue
+
+    if (typeof descriptor?.value === 'function' && typeof replacement === 'function') {
+      // SAFETY: both property values were just checked as functions. Vitest's
+      // transformed ES-module namespace is configurable and spyable; the record
+      // view only exposes the string-keyed function table needed by vi.spyOn.
+      const functionExports = cast<InjectableFunctionTable>(moduleExports)
+      // SAFETY: the runtime function check above establishes the callable
+      // contract; the injected implementation keeps the original export's args
+      // and return behavior at each call site.
+      const implementation = cast<InjectableFunction>(replacement)
+      vi.spyOn(functionExports, exportName).mockImplementation(implementation)
+      continue
+    }
+
+    Object.defineProperty(moduleExports, exportName, {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: replacement,
+    })
+  }
+}
