@@ -41,7 +41,7 @@ export function createDependenciesApi(client: HttpClient) {
     getIssueDependencies: (issueId: number) =>
       client.get<IssueDependenciesResponse>(`/v2/issues/${issueId}/dependencies`),
     getBlockingInfo: (threadId: number) =>
-      client.post<BlockingInfoResponse>(`/v1/threads/${threadId}:getBlockingInfo`),
+      client.post<BlockingInfoResponse>(`/v2/threads/${threadId}:getBlockingInfo`),
     getBatchBlockingInfo: (threadIds: number[]) =>
       client.post<BatchBlockingInfoResponse>('/v1/threads:getBlockingInfo', { thread_ids: threadIds }),
     getConnectedThreads: (threadId: number) =>
