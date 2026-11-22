@@ -323,17 +323,28 @@ pub async fn create_issues(
         .map_err(db::query_error)?;
 
     let mut created = vec![];
+    // Natural placement is only safe when persisted numeric order is already
+    // monotonic. A non-monotonic series is reader-authored; appending must not
+    // silently re-sort it into a different strict-list relationship.
+    let numbered: Option<Vec<i64>> = existing
+        .iter()
+        .map(|(_, number, _)| ordinary(number))
+        .collect();
+    let mixed_natural_order = if !request.append_to_end
+        && request.insert_after_issue_id.is_none()
+        && numbered.is_none()
+    {
+        let existing_labels: Vec<String> = existing
+            .iter()
+            .map(|(_, number, _)| number.clone())
+            .collect();
+        natural_issue_order(&existing_labels, &new_numbers)
+    } else {
+        None
+    };
     let append = request.append_to_end
-        || (request.insert_after_issue_id.is_none() && {
-            // Natural placement is only safe when persisted numeric order is already
-            // monotonic. A non-monotonic series is reader-authored; appending must not
-            // silently re-sort it into a different strict-list relationship.
-            let numbered: Option<Vec<i64>> = existing
-                .iter()
-                .map(|(_, number, _)| ordinary(number))
-                .collect();
-            numbered.is_none_or(|values| values.windows(2).any(|pair| pair[0] >= pair[1]))
-        });
+        || (request.insert_after_issue_id.is_none()
+            && numbered.is_none_or(|values| values.windows(2).any(|pair| pair[0] >= pair[1])));
 
     if let Some(anchor) = request.insert_after_issue_id {
         let anchor_position = existing
