@@ -45,9 +45,9 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
   beforeEach(() => {
     toastSpy = vi.fn()
     modalsDeps = { toastHook: () => ({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] }) }
-    issuesApi.migrateThread = vi.fn(async () => undefined) as typeof issuesApi.migrateThread
-    issuesApi.create = vi.fn(async () => ({ issues: [] })) as typeof issuesApi.create
-    issuesApi.bulkMarkRead = vi.fn(async () => undefined) as typeof issuesApi.bulkMarkRead
+    issuesApi.migrateThread = vi.fn(async () => undefined) as unknown as typeof issuesApi.migrateThread
+    issuesApi.create = vi.fn(async () => ({ issues: [], page_size: 0, total_count: 0 })) as unknown as typeof issuesApi.create
+    issuesApi.bulkMarkRead = vi.fn(async () => undefined) as unknown as typeof issuesApi.bulkMarkRead
   })
 
   afterEach(() => {
