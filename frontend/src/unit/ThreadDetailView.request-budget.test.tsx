@@ -246,7 +246,9 @@ describe('Thread detail request budget', () => {
 
     render(renderThread())
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Expand' }))
+    const expand = await screen.findByRole('button', { name: 'Expand' })
+    expect(calls.some((call) => call.url === '/v1/threads/42/issues')).toBe(false)
+    fireEvent.click(expand)
     await screen.findByRole('group', { name: 'Issue #1 in Saga' })
     fireEvent.click(await screen.findByRole('button', { name: 'Load more' }))
     await screen.findByRole('group', { name: 'Issue #2 in Saga' })
