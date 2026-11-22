@@ -180,6 +180,14 @@ async fn issue(conn: &Conn, thread_id: i32, number: &str, position: i32, status:
     .get(0)
 }
 
+async fn issue_run(conn: &Conn, thread_id: i32, numbers: &[&str], status: &str) -> Vec<i32> {
+    let mut ids = Vec::with_capacity(numbers.len());
+    for (index, number) in numbers.iter().enumerate() {
+        ids.push(issue(conn, thread_id, number, index as i32 + 1, status).await);
+    }
+    ids
+}
+
 async fn frontier(conn: &Conn, thread_id: i32, issue_id: i32) {
     conn.execute(
         "UPDATE threads SET next_unread_issue_id = $2 WHERE id = $1",
