@@ -4340,6 +4340,175 @@
         ]
       }
     },
+    "/api/v2/queue-exclusions": {
+      "post": {
+        "tags": [
+          "queue-exclusions"
+        ],
+        "summary": "Bulk exclude threads from the active queue.",
+        "operationId": "bulk_exclude_queue_threads",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkQueueExclusionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Threads excluded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkQueueExclusionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/queue-exclusions/restore": {
+      "post": {
+        "tags": [
+          "queue-exclusions"
+        ],
+        "summary": "Restore explicitly excluded threads.",
+        "operationId": "bulk_restore_queue_threads",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkQueueRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Threads restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkQueueRestoreResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/queue-exclusions/status:check": {
+      "post": {
+        "tags": [
+          "queue-exclusions"
+        ],
+        "summary": "Check excluded/active status for requested threads.",
+        "operationId": "check_queue_exclusion_status",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExcludedStatusCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Scoped excluded-status lookup result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExcludedStatusCheckResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/queue-exclusion-groups/{group_id}/restore": {
+      "post": {
+        "tags": [
+          "queue-exclusions"
+        ],
+        "summary": "Restore all threads in an exclusion group.",
+        "operationId": "restore_queue_exclusion_group",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Group restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkQueueRestoreResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/reading-boundaries": {
       "post": {
         "tags": [
@@ -4549,6 +4718,48 @@
           },
           "503": {
             "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-lists/memberships:check": {
+      "post": {
+        "tags": [
+          "reading-lists"
+        ],
+        "summary": "Check which requested threads appear in owned reading lists.",
+        "operationId": "check_reading_list_thread_memberships",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingListMembershipCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Membership check result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingListMembershipCheckResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Not authenticated"
           }
         },
         "security": [
@@ -13998,6 +14209,167 @@
           }
         }
       },
+      "BulkQueueExclusionRequest": {
+        "type": "object",
+        "required": [
+          "thread_ids",
+          "source"
+        ],
+        "properties": {
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "source": {
+            "$ref": "#/components/schemas/QueueExclusionSource"
+          }
+        }
+      },
+      "BulkQueueExclusionResponse": {
+        "type": "object",
+        "required": [
+          "excluded_thread_ids"
+        ],
+        "properties": {
+          "excluded_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueueExclusionGroup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BulkQueueRestoreRequest": {
+        "type": "object",
+        "required": [
+          "thread_ids"
+        ],
+        "properties": {
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "BulkQueueRestoreResponse": {
+        "type": "object",
+        "required": [
+          "restored_thread_ids"
+        ],
+        "properties": {
+          "restored_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "ExcludedStatusCheckRequest": {
+        "type": "object",
+        "required": [
+          "thread_ids"
+        ],
+        "properties": {
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "ExcludedStatusCheckResponse": {
+        "type": "object",
+        "required": [
+          "excluded_thread_ids",
+          "active_thread_ids"
+        ],
+        "properties": {
+          "active_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "excluded_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "QueueExclusionGroup": {
+        "type": "object",
+        "required": [
+          "id",
+          "source_kind",
+          "source_id",
+          "source_name",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_kind": {
+            "type": "string"
+          },
+          "source_name": {
+            "type": "string"
+          }
+        }
+      },
+      "QueueExclusionSource": {
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "QueueOrderRequest": {
         "type": "object",
         "description": "Queue-order (shuffle) creation request.",
@@ -15206,6 +15578,43 @@
           "thread_id": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ReadingListMembershipCheckRequest": {
+        "type": "object",
+        "required": [
+          "thread_ids"
+        ],
+        "properties": {
+          "exclude_list_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "ReadingListMembershipCheckResponse": {
+        "type": "object",
+        "required": [
+          "thread_ids"
+        ],
+        "properties": {
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         }
       },
