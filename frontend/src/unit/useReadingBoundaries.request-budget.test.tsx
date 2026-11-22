@@ -2,8 +2,9 @@
  * Cross-route request budget for the deployment-wide boundary evaluator (#4501).
  *
  * The first unavailable response is the capability discovery. Later route keys,
- * warm remounts, and invalidations must use legacy blocking directly instead of
- * repeating the canonical batch that already proved it cannot answer.
+ * warm remounts, and invalidations inside its freshness window must use legacy
+ * blocking directly instead of repeating the canonical batch. Expiry and auth
+ * transitions must permit a fresh discovery after a deployment or account change.
  */
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
