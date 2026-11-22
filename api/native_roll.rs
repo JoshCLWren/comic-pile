@@ -641,6 +641,8 @@ fn app() -> Router {
             "/api/v2/tags/{tag_id}/unassignment-batches",
             post(native_dispatch),
         )
+        .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/roll/override", post(native_dispatch))
         .route(
