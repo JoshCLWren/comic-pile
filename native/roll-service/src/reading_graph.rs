@@ -496,10 +496,163 @@ fn push_repairs(
     }
 }
 
+fn prerequisite_category(stored: &option_inputs::StoredPrerequisite) -> PrerequisiteEvidenceCategory {
+    let note = stored.note.as_deref().unwrap_or_default().trim();
+    let provenance = stored.provenance.as_deref().unwrap_or_default();
+    if stored.origin.as_deref() == Some("reader") {
+        PrerequisiteEvidenceCategory::ReaderAuthored
+    } else if note.starts_with("cbl-order:") {
+        PrerequisiteEvidenceCategory::ArchivalCblOrder
+    } else if note.starts_with("continuity-plan:")
+        || provenance.starts_with("continuity-plan:")
+        || note.contains("compiled")
+        || provenance.contains("compiled")
+    {
+        PrerequisiteEvidenceCategory::CompiledAdjacency
+    } else {
+        // Converted rows, including class A, remain uncertain unless an
+        // explicit reader-authored row establishes current intent.
+        PrerequisiteEvidenceCategory::UncertainLegacy
+    }
+}
+
+fn audit_list_memberships(
+    inputs: &OptionInputs,
+    issue_id: i32,
+) -> Vec<PrerequisiteAuditListMembership> {
+    let mut memberships: Vec<_> = inputs
+        .lists
+        .iter()
+        .flat_map(|list| {
+            list.entries
+                .iter()
+                .filter(move |entry| entry.issue_id == issue_id)
+                .map(|entry| PrerequisiteAuditListMembership {
+                    list_id: list.list_id,
+                    list_name: list.name.clone(),
+                    mode: list.mode.clone(),
+                    gate: entry.gate.clone(),
+                    skipped: entry.skipped,
+                })
+        })
+        .collect();
+    memberships.sort_by_key(|membership| membership.list_id);
+    memberships
+}
+
+fn audit_frontier_prerequisites(
+    inputs: &OptionInputs,
+    validated: &crate::reading_constraints::ValidatedReadingInputs,
+    stored: Option<&[option_inputs::StoredPrerequisite]>,
+) -> Result<PrerequisiteAuditReport, ApiError> {
+    let mut report = PrerequisiteAuditReport {
+        historical_evidence_complete: stored.is_some(),
+        policy: "Read-only manual review for #2366 and #3676. Historical, CBL and compiled rows never authorize promotion or production mutation; any correction requires separate owner approval.".to_string(),
+        manual_review_count: 0,
+        manual_review_frontier_ids: vec![],
+        categorized_dependency_counts: BTreeMap::new(),
+        dependencies: vec![],
+    };
+    let Some(stored) = stored else {
+        return Ok(report);
+    };
+    let (issues, _) = issue_lookup(inputs);
+    let statuses: BTreeMap<_, _> = inputs
+        .core
+        .issues
+        .iter()
+        .map(|issue| (issue.id, issue.status.clone()))
+        .collect();
+    let eligibility = crate::reading_eligibility::evaluate(validated)?;
+    let frontier_eligibility: BTreeMap<i32, bool> = eligibility
+        .values()
+        .filter_map(|thread| thread.next_issue_id.map(|id| (id, thread.eligible)))
+        .collect();
+    let mut manual_review_frontiers = BTreeSet::new();
+
+    for dependency in stored {
+        let (Some(source), Some(target)) = (
+            issues.get(&dependency.source_issue_id),
+            issues.get(&dependency.target_issue_id),
+        ) else {
+            // Never expose foreign endpoint metadata. A dangling reader row is
+            // rejected before this projection; historical residue is skipped.
+            continue;
+        };
+        if source.thread_id == target.thread_id {
+            continue;
+        }
+        let Some(&target_eligible) = frontier_eligibility.get(&target.issue_id) else {
+            continue;
+        };
+        let category = prerequisite_category(dependency);
+        let named_legacy_evidence = dependency
+            .note
+            .as_deref()
+            .is_some_and(|note| !note.trim().is_empty());
+        let recommended_manual_review = target_eligible
+            && named_legacy_evidence
+            && category == PrerequisiteEvidenceCategory::UncertainLegacy;
+        if recommended_manual_review {
+            manual_review_frontiers.insert(target.issue_id);
+        }
+        *report
+            .categorized_dependency_counts
+            .entry(category)
+            .or_insert(0) += 1;
+        let recommendation = match category {
+            PrerequisiteEvidenceCategory::ReaderAuthored => {
+                "Current reader-authored prerequisite; no promotion needed."
+            }
+            PrerequisiteEvidenceCategory::ArchivalCblOrder => {
+                "Archival CBL adjacency remains inert; do not promote it as reader intent."
+            }
+            PrerequisiteEvidenceCategory::CompiledAdjacency => {
+                "Compiled adjacency remains inert; review the authored Reading List instead."
+            }
+            PrerequisiteEvidenceCategory::UncertainLegacy if recommended_manual_review => {
+                "Manually review this named legacy crossover as potentially lost reader intent; do not infer blocking or promote it automatically."
+            }
+            PrerequisiteEvidenceCategory::UncertainLegacy => {
+                "Uncertain legacy evidence only; no automatic correction is recommended."
+            }
+        };
+        report.dependencies.push(PrerequisiteAuditDependency {
+            prerequisite_id: dependency.prerequisite_id,
+            source: source.clone(),
+            source_status: statuses.get(&source.issue_id).cloned().unwrap_or_default(),
+            source_lists: audit_list_memberships(inputs, source.issue_id),
+            target: target.clone(),
+            target_status: statuses.get(&target.issue_id).cloned().unwrap_or_default(),
+            target_lists: audit_list_memberships(inputs, target.issue_id),
+            origin: dependency.origin.clone(),
+            note: dependency.note.clone(),
+            classification: dependency.classification.clone(),
+            provenance: dependency.provenance.clone(),
+            category,
+            target_eligible,
+            recommended_manual_review,
+            recommendation: recommendation.to_string(),
+        });
+    }
+    report.dependencies.sort_by_key(|dependency| {
+        (
+            dependency.target.issue_id,
+            dependency.source.issue_id,
+            dependency.prerequisite_id,
+        )
+    });
+    report.manual_review_frontier_ids = manual_review_frontiers.into_iter().collect();
+    report.manual_review_count = report.manual_review_frontier_ids.len();
+    Ok(report)
+}
+
 fn project(
     inputs: &OptionInputs,
     validated: &crate::reading_constraints::ValidatedReadingInputs,
-) -> ReadingGraphResponse {
+    stored: Option<&[option_inputs::StoredPrerequisite]>,
+) -> Result<ReadingGraphResponse, ApiError> {
+    let prerequisite_audit = audit_frontier_prerequisites(inputs, validated, stored)?;
     let (issues, titles) = issue_lookup(inputs);
     let lists = list_lookup(inputs);
     let mut repairs: Vec<ReadingGraphRepairOption> = vec![];
