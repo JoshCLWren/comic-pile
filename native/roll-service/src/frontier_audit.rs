@@ -262,7 +262,8 @@ pub fn audit_frontiers(
     findings.truncate(MAX_REPORTED_FINDINGS);
     FrontierAuditReport {
         frontiers_examined: frontiers.len(),
-        unprotected_frontiers: unprotected,
+        frontiers_protected: protected,
+        unprotected_frontiers: gaps,
         findings,
         findings_omitted,
         actionable_reader_prerequisites: inputs.prerequisites.len(),
@@ -408,7 +409,8 @@ mod tests {
 
         let report = audit_frontiers(&inputs, &validated, &[legacy_edge()]);
         assert_eq!(report.frontiers_examined, 2);
-        assert_eq!(report.unprotected_frontiers, 2);
+        assert_eq!(report.frontiers_protected, 0);
+        assert_eq!(report.unprotected_frontiers, 1);
         assert_eq!(report.findings.len(), 1);
         let finding = &report.findings[0];
         assert_eq!(finding.thread_id, 305);
@@ -459,7 +461,8 @@ mod tests {
             "a protected frontier must never be reported"
         );
         assert_eq!(report.actionable_reader_prerequisites, 1);
-        assert_eq!(report.unprotected_frontiers, 1);
+        assert_eq!(report.frontiers_protected, 1);
+        assert_eq!(report.unprotected_frontiers, 0);
     }
 
     #[test]
@@ -558,21 +561,52 @@ mod tests {
 
     #[test]
     fn findings_are_bounded_and_omissions_counted() {
-        let inputs = fixture_inputs();
-        let validated = validated(inputs.clone());
-        let legacy: Vec<LegacyDependencyRow> = (0..MAX_REPORTED_FINDINGS + 5)
-            .map(|offset| LegacyDependencyRow {
+        // One gap per frontier: 45 independent threads, each an active queued
+        // Thread whose frontier receives one inert legacy edge.
+        let mut inputs = fixture_inputs();
+        let mut legacy = vec![legacy_edge()];
+        for offset in 0..MAX_REPORTED_FINDINGS + 4 {
+            let thread_id = 1000 + offset;
+            let source_id = 4000 + offset * 2;
+            let target_id = source_id + 1;
+            inputs.core.threads.push(ReadingThread {
+                id: thread_id,
+                status: "active".into(),
+                title: format!("Series {offset}"),
+            });
+            inputs.core.issues.push(ReadingIssue {
+                id: source_id,
+                thread_id,
+                position: 1,
+                status: "unread".into(),
+                issue_number: "1".into(),
+            });
+            inputs.core.issues.push(ReadingIssue {
+                id: target_id,
+                thread_id,
+                position: 2,
+                status: "unread".into(),
+                issue_number: "2".into(),
+            });
+            inputs.core.stored.push(StoredThreadEligibility {
+                thread_id,
+                next_issue_id: Some(source_id),
+                is_blocked: false,
+                queue_position: 3 + offset as i32,
+            });
+            legacy.push(LegacyDependencyRow {
                 id: 3000 + i32::try_from(offset).unwrap_or(i32::MAX),
-                source_issue_id: 2102,
-                target_issue_id: 2029,
+                source_issue_id: source_id,
+                target_issue_id: source_id,
                 origin: None,
                 classification: None,
                 provenance: None,
                 note: None,
                 source_owned: true,
-            })
-            .collect();
-        let report = audit_frontiers(&inputs, &validated, &legacy);
+            });
+        }
+        let validated = validated(inputs);
+        let report = audit_frontiers(&inputs_ref_placeholder(), &validated_ref_placeholder(), &legacy);
         assert_eq!(report.findings.len(), MAX_REPORTED_FINDINGS);
         assert_eq!(report.findings_omitted, 5);
         assert_eq!(report.inert_evidence_rows, MAX_REPORTED_FINDINGS + 5);
@@ -587,6 +621,7 @@ mod tests {
         let report = audit_frontiers(&inputs, &validated, &[legacy_edge()]);
         assert!(report.findings.is_empty());
         assert_eq!(report.frontiers_examined, 1);
+        assert_eq!(report.frontiers_protected, 0);
         assert_eq!(report.unprotected_frontiers, 0);
     }
 }
