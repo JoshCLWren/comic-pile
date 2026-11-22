@@ -42,14 +42,6 @@ import type { AuthContextValue } from '../contexts/AuthContext'
 import api, * as authTransport from '../services/api'
 
 const originalApiMethods = { get: api.get, post: api.post, patch: api.patch }
-const originalAuthTransport = {
-  clearAccessToken: authTransport.clearAccessToken,
-  setAccessToken: authTransport.setAccessToken,
-  getAccessToken: authTransport.getAccessToken,
-  readStoredAccessToken: authTransport.readStoredAccessToken,
-  refreshSession: authTransport.refreshSession,
-  isSessionRefreshRejected: authTransport.isSessionRefreshRejected,
-}
 const mocks = {
   get: vi.fn<typeof api.get>(),
   post: vi.fn<typeof api.post>(),

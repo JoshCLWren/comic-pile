@@ -7,14 +7,6 @@ import { AuthProvider, useAuth } from '../App'
 import api, * as authTransport from '../services/api'
 
 const originalApiMethods = { get: api.get, post: api.post }
-const originalAuthTransport = {
-  getAccessToken: authTransport.getAccessToken,
-  readStoredAccessToken: authTransport.readStoredAccessToken,
-  setAccessToken: authTransport.setAccessToken,
-  clearAccessToken: authTransport.clearAccessToken,
-  refreshSession: authTransport.refreshSession,
-  isSessionRefreshRejected: authTransport.isSessionRefreshRejected,
-}
 const mockApiGet = vi.fn<typeof api.get>()
 const mockApiPost = vi.fn<typeof api.post>()
 const mockGetAccessToken = vi.fn<typeof authTransport.getAccessToken>()
