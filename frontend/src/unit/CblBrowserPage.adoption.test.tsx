@@ -222,22 +222,13 @@ describe('CblBrowserPage adoption', () => {
     expect(screen.getByRole('button', { name: 'Add this reading order' })).not.toBeDisabled()
 
     await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
-    const update = screen.getByRole('button', { name: 'Update selected Reading Plan' })
-    expect(update).toBeEnabled()
-    await user.click(update)
-    expect(screen.getByRole('heading', { name: 'Update this Reading Plan?' })).toBeInTheDocument()
+    // New plan is always created (per #3933); no "Update selected Reading Plan" dialog.
     expect(
-      screen.getByText(
-        'Update Ultimate Universe (Reading Plan #88) with Ultimate Universe? Only the checked entries are applied; Cancel leaves it unchanged.',
-      ),
+      screen.getByText('Add Ultimate Universe as a Reading Plan? Cancel creates nothing.'),
     ).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(mockCommit).not.toHaveBeenCalled()
-    expect(mockCommitNew).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Add reading order' }))
+    expect(mockCommitNew).toHaveBeenCalled()
     expect(screen.queryByRole('heading', { name: 'Update this Reading Plan?' })).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Update selected Reading Plan' }))
     await user.click(screen.getByRole('button', { name: 'Update Reading Plan' }))
     await waitFor(() => {
       expect(mockCommit).toHaveBeenCalledWith(
