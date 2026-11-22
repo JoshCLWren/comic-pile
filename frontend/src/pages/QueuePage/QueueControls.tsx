@@ -4,7 +4,10 @@ import type { QueueSortBy } from './useQueueFilters'
 const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
-  activeCount: number
+  activeCount: number | null
+  filteredCount: number | null
+  countPending: boolean
+  countError: boolean
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
@@ -34,6 +37,9 @@ interface QueueControlsProps {
  */
 function QueueControlsInner({
   activeCount,
+  filteredCount,
+  countPending,
+  countError,
   shuffleDisabled,
   shufflePending,
   onShuffle,
