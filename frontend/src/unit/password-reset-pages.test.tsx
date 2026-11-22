@@ -11,8 +11,8 @@ import { authApi } from '../services/api-auth'
 const originalApiPost = api.post
 const originalAuthApi = { ...authApi }
 const mockApiPost = vi.fn<typeof api.post>()
-const mockForgotPassword = vi.fn<typeof authApi.forgotPassword>()
-const mockResetPassword = vi.fn<typeof authApi.resetPassword>()
+const mockForgotPassword = vi.fn<typeof mockForgotPassword>()
+const mockResetPassword = vi.fn<typeof mockResetPassword>()
 const login = vi.fn<AuthContextValue['login']>()
 const auth: AuthContextValue = {
   authState: {
@@ -79,22 +79,22 @@ function axiosErrorWithDetail(status: number, detail: unknown) {
 
 describe('ForgotPasswordPage', () => {
   beforeEach(() => {
-    authApi.forgotPassword.mockReset()
+    mockForgotPassword.mockReset()
   })
 
   it('renders the request form and submits the email', async () => {
-    authApi.forgotPassword.mockResolvedValueOnce({ message: 'ok' })
+    mockForgotPassword.mockResolvedValueOnce({ message: 'ok' })
     renderForgot()
 
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'reader@example.com' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send Reset Link' }))
 
-    expect(authApi.forgotPassword).toHaveBeenCalledWith({ email: 'reader@example.com' })
+    expect(mockForgotPassword).toHaveBeenCalledWith({ email: 'reader@example.com' })
     expect(await screen.findByText('Check your email')).toBeInTheDocument()
   })
 
   it('renders the same acknowledgement for unknown emails', async () => {
-    authApi.forgotPassword.mockResolvedValueOnce({ message: 'ok' })
+    mockForgotPassword.mockResolvedValueOnce({ message: 'ok' })
     renderForgot()
 
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ghost@example.com' } })
@@ -114,11 +114,11 @@ describe('ForgotPasswordPage', () => {
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'not-an-email' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send Reset Link' }))
     expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument()
-    expect(authApi.forgotPassword).not.toHaveBeenCalled()
+    expect(mockForgotPassword).not.toHaveBeenCalled()
   })
 
   it('reports rate-limit errors without leaking account existence', async () => {
-    authApi.forgotPassword.mockRejectedValueOnce(axiosError(429))
+    mockForgotPassword.mockRejectedValueOnce(axiosError(429))
 
     renderForgot()
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'reader@example.com' } })
@@ -130,7 +130,7 @@ describe('ForgotPasswordPage', () => {
   })
 
   it('renders a safe message when the API rejects the request shape', async () => {
-    authApi.forgotPassword.mockRejectedValueOnce(
+    mockForgotPassword.mockRejectedValueOnce(
       axiosErrorWithDetail(422, [{ loc: ['body', 'email'], msg: 'value is not a valid email address' }]),
     )
 
@@ -146,7 +146,7 @@ describe('ForgotPasswordPage', () => {
   })
 
   it('announces the error to assistive technology', async () => {
-    authApi.forgotPassword.mockRejectedValueOnce(axiosError(429))
+    mockForgotPassword.mockRejectedValueOnce(axiosError(429))
 
     renderForgot()
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'reader@example.com' } })
@@ -158,8 +158,8 @@ describe('ForgotPasswordPage', () => {
 
 describe('LoginPage password recovery entry point', () => {
   beforeEach(() => {
-    auth.login.mockReset()
-    apiClient.post.mockReset()
+    login.mockReset()
+    mockApiPost.mockReset()
   })
 
   it('exposes a discoverable forgot-password link', () => {
@@ -178,7 +178,7 @@ describe('LoginPage password recovery entry point', () => {
 
 describe('ResetPasswordPage', () => {
   beforeEach(() => {
-    authApi.resetPassword.mockReset()
+    mockResetPassword.mockReset()
   })
 
   it('renders a safe invalid-link state when the token is missing', () => {
@@ -189,14 +189,14 @@ describe('ResetPasswordPage', () => {
   })
 
   it('submits the new password and shows a success state', async () => {
-    authApi.resetPassword.mockResolvedValueOnce({ message: 'ok' })
+    mockResetPassword.mockResolvedValueOnce({ message: 'ok' })
     renderReset('/reset-password?token=abc123')
 
     fireEvent.change(screen.getByLabelText('New Password'), { target: { value: 'newpassword' } })
     fireEvent.change(screen.getByLabelText('Confirm New Password'), { target: { value: 'newpassword' } })
     fireEvent.click(screen.getByRole('button', { name: 'Reset Password' }))
 
-    expect(authApi.resetPassword).toHaveBeenCalledWith({ token: 'abc123', new_password: 'newpassword' })
+    expect(mockResetPassword).toHaveBeenCalledWith({ token: 'abc123', new_password: 'newpassword' })
     expect(await screen.findByText('Password Reset Successfully')).toBeInTheDocument()
     expect(screen.getByText(/All existing sessions have been revoked/)).toBeInTheDocument()
   })
@@ -214,11 +214,11 @@ describe('ResetPasswordPage', () => {
     fireEvent.change(screen.getByLabelText('Confirm New Password'), { target: { value: 'different' } })
     fireEvent.click(screen.getByRole('button', { name: 'Reset Password' }))
     expect(screen.getByText('Passwords do not match')).toBeInTheDocument()
-    expect(authApi.resetPassword).not.toHaveBeenCalled()
+    expect(mockResetPassword).not.toHaveBeenCalled()
   })
 
   it('renders a safe expired-or-used state for a 400 response', async () => {
-    authApi.resetPassword.mockRejectedValueOnce(axiosError(400))
+    mockResetPassword.mockRejectedValueOnce(axiosError(400))
 
     renderReset('/reset-password?token=abc123')
     fireEvent.change(screen.getByLabelText('New Password'), { target: { value: 'newpassword' } })
@@ -239,7 +239,7 @@ describe('ResetPasswordPage', () => {
   })
 
   it('renders a safe message when the API rejects the request shape', async () => {
-    authApi.resetPassword.mockRejectedValueOnce(
+    mockResetPassword.mockRejectedValueOnce(
       axiosErrorWithDetail(422, [{ loc: ['body', 'token'], msg: 'field required' }]),
     )
 
@@ -254,7 +254,7 @@ describe('ResetPasswordPage', () => {
   })
 
   it('maps a server-supplied invalid-token detail to the safe invalid-link state', async () => {
-    authApi.resetPassword.mockRejectedValueOnce(
+    mockResetPassword.mockRejectedValueOnce(
       axiosErrorWithDetail(422, 'Reset token has already been used.'),
     )
 
@@ -273,13 +273,13 @@ describe('ResetPasswordPage', () => {
 
 describe('post-reset re-login', () => {
   beforeEach(() => {
-    authApi.resetPassword.mockReset()
-    auth.login.mockReset()
-    apiClient.post.mockReset()
+    mockResetPassword.mockReset()
+    login.mockReset()
+    mockApiPost.mockReset()
   })
 
   it('returns the reader to username login and signs in with the new password', async () => {
-    authApi.resetPassword.mockResolvedValueOnce({ message: 'ok' })
+    mockResetPassword.mockResolvedValueOnce({ message: 'ok' })
     const reset = renderReset('/reset-password?token=abc123')
     fireEvent.change(screen.getByLabelText('New Password'), { target: { value: 'newpassword' } })
     fireEvent.change(screen.getByLabelText('Confirm New Password'), { target: { value: 'newpassword' } })
@@ -290,8 +290,8 @@ describe('post-reset re-login', () => {
     expect(screen.getByText(/sign in with your username and new password/i)).toBeInTheDocument()
     reset.unmount()
 
-    apiClient.post.mockResolvedValueOnce({ access_token: 'fresh-token' })
-    auth.login.mockResolvedValueOnce(undefined)
+    mockApiPost.mockResolvedValueOnce({ access_token: 'fresh-token' })
+    login.mockResolvedValueOnce(undefined)
     render(
       <MemoryRouter>
         <LoginPage />
@@ -303,11 +303,11 @@ describe('post-reset re-login', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }))
 
     await waitFor(() => {
-      expect(apiClient.post).toHaveBeenCalledWith('/v2/auth/login', {
+      expect(mockApiPost).toHaveBeenCalledWith('/v2/auth/login', {
         username: 'reader',
         password: 'newpassword',
       })
     })
-    expect(auth.login).toHaveBeenCalledWith('fresh-token')
+    expect(login).toHaveBeenCalledWith('fresh-token')
   })
 })
