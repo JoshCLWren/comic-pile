@@ -866,13 +866,16 @@ it('retries canonical requirements without claiming a failed load means availabl
 })
 
 it('uses canonical list blockers even when explicit connected prerequisites are empty', async () => {
-  vi.mocked(readingBoundariesApi.batch).mockResolvedValue({ threads: { 1: {
-    thread_id: 1, state: 'blocked', summary: 'Waiting', blockers: [{
-      kind: 'hold', origin: 'reading_list', reason: 'Hold in Ultimate: waiting on One Year In #1',
-      waiting_on: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1', volume_label: 'One Year In (2025)', reading_lists: [] }],
-      editor: { kind: 'reading_list', list_id: 9, label: 'Ultimate' },
-    }],
-  } } })
+  vi.mocked(readingBoundariesApi.batch).mockResolvedValue({ 
+    evaluator: 'enabled',
+    threads: { 1: {
+      thread_id: 1, state: 'blocked', summary: 'Waiting', blockers: [{
+        kind: 'hold', origin: 'reading_list', reason: 'Hold in Ultimate: waiting on One Year In #1',
+        waiting_on: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1', volume_label: 'One Year In (2025)', reading_lists: [] }],
+        editor: { kind: 'reading_list', list_id: 9, label: 'Ultimate' },
+      }],
+    } } 
+  })
   renderPage()
   expect(await screen.findByText('Waiting')).toBeVisible()
   expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toHaveAttribute('href', '/thread/2?issue=9#issue-9')
