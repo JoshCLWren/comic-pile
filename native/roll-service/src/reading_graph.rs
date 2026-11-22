@@ -85,7 +85,7 @@ pub struct ReadingGraphRepairOption {
 /// PRODUCTION_READING_GRAPH_REPLAY.md: unread issues outside strict-list
 /// coverage, Reading List vs Reading Plan differences, and converted
 /// historical relationships (including JLI) that can contradict newer strict lists.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema, PartialOrd, Ord)]
 #[allow(dead_code)]
 pub enum UnresolvedCategory {
     UnreadOutsideList,
