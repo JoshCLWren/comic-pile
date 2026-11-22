@@ -42,7 +42,7 @@ pub const BACKFILL_MAX_LIMIT: i32 = 500;
 /// `comicvine_issue::READ_SQL` and `needs_provider_fetch`; those paths still
 /// handle genuine staleness of already-hydrated rows.
 const NEEDS_DEEP_FETCH_SQL: &str =
-  "(e.metadata_json::jsonb->>'deep_metadata_refreshed_at' IS NULL \
+    "(e.metadata_json::jsonb->>'deep_metadata_refreshed_at' IS NULL \
      OR NOT COALESCE((e.metadata_json::jsonb->'raw_provider_payload') ?& ARRAY[ \
        'id','name','issue_number','cover_date','store_date','image','volume', \
        'person_credits','character_credits','team_credits','story_arc_credits', \
@@ -780,13 +780,10 @@ pub struct BackfillReport {
 pub async fn backfill(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-    query: Result<
-        axum::extract::Query<BackfillQuery>,
-        axum::extract::rejection::QueryRejection,
-    >,
+    query: Result<axum::extract::Query<BackfillQuery>, axum::extract::rejection::QueryRejection>,
 ) -> Result<Json<BackfillReport>, ApiError> {
-    let axum::extract::Query(query) = query
-        .map_err(|_| crate::ApiError::Unprocessable("Validation failed".to_owned()))?;
+    let axum::extract::Query(query) =
+        query.map_err(|_| crate::ApiError::Unprocessable("Validation failed".to_owned()))?;
     let limit = query.limit.unwrap_or(BACKFILL_MAX_LIMIT);
     if !(1..=BACKFILL_MAX_LIMIT).contains(&limit) {
         return Err(crate::ApiError::Unprocessable(
@@ -796,8 +793,8 @@ pub async fn backfill(
     let after = query.after_identity_id.unwrap_or(0).max(0);
     let dry_run = query.dry_run.unwrap_or(false);
     let secret = std::env::var("CRON_SECRET").ok();
-    let report = backfill_authorized(&state, &headers, secret.as_deref(), dry_run, limit, after)
-        .await?;
+    let report =
+        backfill_authorized(&state, &headers, secret.as_deref(), dry_run, limit, after).await?;
     Ok(Json(report))
 }
 
@@ -1741,12 +1738,9 @@ mod tests {
 
         let mut connection = db::checkout(&state).await.expect("enqueue connection");
         let tx = connection.transaction().await.expect("transaction");
-        let inserted = enqueue_hydration_batch(
-            &tx,
-            &[roster_only, hydrated, with_request],
-        )
-        .await
-        .expect("enqueue batch");
+        let inserted = enqueue_hydration_batch(&tx, &[roster_only, hydrated, with_request])
+            .await
+            .expect("enqueue batch");
         tx.commit().await.expect("commit");
         assert_eq!(inserted, 1, "only the roster-only identity is enqueued");
 

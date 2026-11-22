@@ -2913,6 +2913,27 @@ async fn import_series_adopts_roster_and_reuses_on_retry() {
     );
 }
 
+async fn series_hydration_ledger(conn: &deadpool_postgres::Object) -> Vec<(String, String, i32)> {
+    conn.query(
+        "SELECT e.external_id, r.state, r.attempts \
+         FROM comicvine_metadata_refresh_requests r \
+         JOIN external_identities e ON e.id = r.external_identity_id \
+         ORDER BY e.external_id",
+        &[],
+    )
+    .await
+    .unwrap()
+    .iter()
+    .map(|row| {
+        (
+            row.get::<_, String>(0),
+            row.get::<_, String>(1),
+            row.get::<_, i32>(2),
+        )
+    })
+    .collect()
+}
+
 /// A Queue → Add Series import must commit durable hydration work for every
 /// adopted identity without anyone opening the Roll issue page (#5592 AC1).
 #[tokio::test]
@@ -2921,10 +2942,7 @@ async fn series_import_commits_hydration_requests_without_opening_roll() {
     set_key(true);
     let conn = state.pool.get().await.unwrap();
 
-    provider_ok(
-        &state,
-        json!({"results": {"id": 7171, "name": "The Cult"}}),
-    );
+    provider_ok(&state, json!({"results": {"id": 7171, "name": "The Cult"}}));
     provider_ok(
         &state,
         json!({"number_of_total_results": 3, "results": [
@@ -2945,27 +2963,7 @@ async fn series_import_commits_hydration_requests_without_opening_roll() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body:?}");
 
-    let ledger = |conn: &deadpool_postgres::Object| async move {
-        conn.query(
-            "SELECT e.external_id, r.state, r.attempts \
-             FROM comicvine_metadata_refresh_requests r \
-             JOIN external_identities e ON e.id = r.external_identity_id \
-             ORDER BY e.external_id",
-            &[],
-        )
-        .await
-        .unwrap()
-        .iter()
-        .map(|row| {
-            (
-                row.get::<_, String>(0),
-                row.get::<_, String>(1),
-                row.get::<_, i32>(2),
-            )
-        })
-        .collect::<Vec<_>>()
-    };
-    let rows = ledger(&conn).await;
+    let rows = series_hydration_ledger(&conn).await;
     assert_eq!(
         rows,
         vec![
@@ -2993,10 +2991,7 @@ async fn series_import_commits_hydration_requests_without_opening_roll() {
 
     // A reimport of the same roster dedups instead of duplicating jobs.
     fake(&state).clear();
-    provider_ok(
-        &state,
-        json!({"results": {"id": 7171, "name": "The Cult"}}),
-    );
+    provider_ok(&state, json!({"results": {"id": 7171, "name": "The Cult"}}));
     provider_ok(
         &state,
         json!({"number_of_total_results": 3, "results": [
@@ -3016,7 +3011,7 @@ async fn series_import_commits_hydration_requests_without_opening_roll() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED);
-    assert_eq!(ledger(&conn).await.len(), 3);
+    assert_eq!(series_hydration_ledger(&conn).await.len(), 3);
 
     // A newly added roster issue gets its own request; an already-hydrated
     // identity is not reopened and keeps its creators.
@@ -3030,10 +3025,7 @@ async fn series_import_commits_hydration_requests_without_opening_roll() {
     .await
     .unwrap();
     fake(&state).clear();
-    provider_ok(
-        &state,
-        json!({"results": {"id": 7171, "name": "The Cult"}}),
-    );
+    provider_ok(&state, json!({"results": {"id": 7171, "name": "The Cult"}}));
     provider_ok(
         &state,
         json!({"number_of_total_results": 4, "results": [
@@ -3055,7 +3047,7 @@ async fn series_import_commits_hydration_requests_without_opening_roll() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body:?}");
     assert_eq!(body["issues_adopted"], 1);
-    let rows = ledger(&conn).await;
+    let rows = series_hydration_ledger(&conn).await;
     assert_eq!(rows.len(), 4);
     assert_eq!(rows[3], ("91004".to_owned(), "pending".to_owned(), 0));
     let credits: Value = conn
