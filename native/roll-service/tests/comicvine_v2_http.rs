@@ -2913,6 +2913,163 @@ async fn import_series_adopts_roster_and_reuses_on_retry() {
     );
 }
 
+/// A Queue → Add Series import must commit durable hydration work for every
+/// adopted identity without anyone opening the Roll issue page (#5592 AC1).
+#[tokio::test]
+async fn series_import_commits_hydration_requests_without_opening_roll() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-series-hydration").await;
+    set_key(true);
+    let conn = state.pool.get().await.unwrap();
+
+    provider_ok(
+        &state,
+        json!({"results": {"id": 7171, "name": "The Cult"}}),
+    );
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 3, "results": [
+            roster_row(91001, "1", 7171),
+            roster_row(91002, "2", 7171),
+            roster_row(91003, "3", 7171)]}),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 7171, "already_read_count": 1})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+
+    let ledger = |conn: &deadpool_postgres::Object| async move {
+        conn.query(
+            "SELECT e.external_id, r.state, r.attempts \
+             FROM comicvine_metadata_refresh_requests r \
+             JOIN external_identities e ON e.id = r.external_identity_id \
+             ORDER BY e.external_id",
+            &[],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| {
+            (
+                row.get::<_, String>(0),
+                row.get::<_, String>(1),
+                row.get::<_, i32>(2),
+            )
+        })
+        .collect::<Vec<_>>()
+    };
+    let rows = ledger(&conn).await;
+    assert_eq!(
+        rows,
+        vec![
+            ("91001".to_owned(), "pending".to_owned(), 0),
+            ("91002".to_owned(), "pending".to_owned(), 0),
+            ("91003".to_owned(), "pending".to_owned(), 0),
+        ]
+    );
+    // Roster-only metadata is left alone; the singular deep fetch is the
+    // repair worker's job, never a synchronous fan-out inside the import.
+    let deep: Option<String> = conn
+        .query_one(
+            "SELECT metadata_json::jsonb->>'deep_metadata_refreshed_at' \
+             FROM external_identities WHERE external_id = '91001'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(deep, None);
+    assert!(fake(&state)
+        .calls()
+        .iter()
+        .all(|c| !c.path.contains("issue/4000-")));
+
+    // A reimport of the same roster dedups instead of duplicating jobs.
+    fake(&state).clear();
+    provider_ok(
+        &state,
+        json!({"results": {"id": 7171, "name": "The Cult"}}),
+    );
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 3, "results": [
+            roster_row(91001, "1", 7171),
+            roster_row(91002, "2", 7171),
+            roster_row(91003, "3", 7171)]}),
+    );
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 7171})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(ledger(&conn).await.len(), 3);
+
+    // A newly added roster issue gets its own request; an already-hydrated
+    // identity is not reopened and keeps its creators.
+    conn.execute(
+        "UPDATE external_identities SET metadata_json = \
+           '{\"creator_credits\":[{\"id\":7,\"name\":\"Jamie Delano\"}],\
+             \"deep_metadata_refreshed_at\":\"2026-11-22T00:00:00+00:00\"}'::json \
+         WHERE external_id = '91001'",
+        &[],
+    )
+    .await
+    .unwrap();
+    fake(&state).clear();
+    provider_ok(
+        &state,
+        json!({"results": {"id": 7171, "name": "The Cult"}}),
+    );
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 4, "results": [
+            roster_row(91001, "1", 7171),
+            roster_row(91002, "2", 7171),
+            roster_row(91003, "3", 7171),
+            roster_row(91004, "4", 7171)]}),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/series:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_volume_id": 7171})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["issues_adopted"], 1);
+    let rows = ledger(&conn).await;
+    assert_eq!(rows.len(), 4);
+    assert_eq!(rows[3], ("91004".to_owned(), "pending".to_owned(), 0));
+    let credits: Value = conn
+        .query_one(
+            "SELECT metadata_json::jsonb->'creator_credits' \
+             FROM external_identities WHERE external_id = '91001'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(credits[0]["name"], "Jamie Delano");
+}
+
 #[tokio::test]
 async fn import_series_error_contract_and_reading_order() {
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-serr").await;
