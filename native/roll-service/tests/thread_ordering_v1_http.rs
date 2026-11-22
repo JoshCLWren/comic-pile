@@ -10,15 +10,15 @@ mod incident_fixtures;
 use incident_fixtures as fixture;
 
 use axum::{
-    body::{Body, to_bytes},
-    http::{Request, StatusCode, header},
+    body::{to_bytes, Body},
+    http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{AppState, config::Config, router, test_support};
-use serde_json::{Value, json};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
+use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{
-    Arc,
     atomic::{AtomicUsize, Ordering},
+    Arc,
 };
 use tower::ServiceExt;
 
