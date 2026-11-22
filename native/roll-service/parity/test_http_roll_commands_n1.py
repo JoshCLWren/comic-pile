@@ -286,6 +286,12 @@ async def test_offer_statements_do_not_grow_with_candidate_library_size() -> Non
     """The offer remains set-based for five and 200 eligible candidates."""
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
     engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    first_offer_breakdown = StatementBreakdown(
+        application=13,
+        transaction_control=7,
+        runtime_overhead=4,
+        nested=2,
+    )
     try:
         async with AsyncSession(engine, expire_on_commit=False) as db:
             small_reader = await _seed_reader(
@@ -299,14 +305,14 @@ async def test_offer_statements_do_not_grow_with_candidate_library_size() -> Non
                 prefix="offer_large",
             )
 
-        small = await _measure_route(
+        small_first = await _measure_route(
             engine,
             method="POST",
             path="/api/v2/roll/offer",
             token=small_reader.token,
             body={"idempotency_key": f"offer-small-{uuid4().hex}"},
         )
-        large = await _measure_route(
+        large_first = await _measure_route(
             engine,
             method="POST",
             path="/api/v2/roll/offer",
@@ -314,10 +320,11 @@ async def test_offer_statements_do_not_grow_with_candidate_library_size() -> Non
             body={"idempotency_key": f"offer-large-{uuid4().hex}"},
         )
 
-        for measurement, reader in (
-            (small, small_reader),
-            (large, large_reader),
-        ):
+        first_measurements = (
+            (small_first, small_reader),
+            (large_first, large_reader),
+        )
+        for measurement, reader in first_measurements:
             assert measurement.response.get("status") == 200, measurement.response
             body = measurement.response.get("body")
             assert isinstance(body, dict)
@@ -335,6 +342,10 @@ async def test_offer_statements_do_not_grow_with_candidate_library_size() -> Non
             assert body.get("total_issues") == 1
             assert body.get("snoozed_count") == 0
             assert body.get("snoozed_thread_id") is None
+            # Branch-specific: first offer (no pending selection) must stay tight.
+            assert measurement.statements == first_offer_breakdown, (
+                f"first-offer statement breakdown changed: {measurement.statements}"
+            )
 
         async with AsyncSession(engine, expire_on_commit=False) as db:
             event_count = await db.scalar(
@@ -346,7 +357,63 @@ async def test_offer_statements_do_not_grow_with_candidate_library_size() -> Non
                 )
             )
         assert event_count == 1
-        _assert_route_budget("POST", "/api/v2/roll/offer", small, large)
+
+        # Second offer with an existing pending selection exercises the
+        # previous_offer/reroll persist_in_transaction path.
+        small_second = await _measure_route(
+            engine,
+            method="POST",
+            path="/api/v2/roll/offer",
+            token=small_reader.token,
+            body={"idempotency_key": f"offer-small-second-{uuid4().hex}"},
+        )
+        large_second = await _measure_route(
+            engine,
+            method="POST",
+            path="/api/v2/roll/offer",
+            token=large_reader.token,
+            body={"idempotency_key": f"offer-large-second-{uuid4().hex}"},
+        )
+
+        for measurement, reader in (
+            (small_second, small_reader),
+            (large_second, large_reader),
+        ):
+            assert measurement.response.get("status") == 200, measurement.response
+            body = measurement.response.get("body")
+            assert isinstance(body, dict)
+            assert body.get("thread_id") in reader.thread_ids
+            assert body.get("issue_id") in reader.issue_ids
+            assert body.get("snoozed_thread_id") in reader.thread_ids
+            assert body.get("snoozed_count") == 1
+
+        assert_no_statement_growth(
+            "POST",
+            "/api/v2/roll/offer",
+            small_first.statements.top_level,
+            large_first.statements.top_level,
+        )
+        assert_no_statement_growth(
+            "POST",
+            "/api/v2/roll/offer",
+            small_second.statements.top_level,
+            large_second.statements.top_level,
+        )
+        assert_declared_budget(
+            "POST",
+            "/api/v2/roll/offer",
+            small_first.statements.top_level,
+            large_first.statements.top_level,
+            small_second.statements.top_level,
+            large_second.statements.top_level,
+        )
+        # Declared budget covers the worst-case (second-offer) path.
+        assert_measured_statement_breakdown(
+            "POST", "/api/v2/roll/offer", small_second.statements
+        )
+        assert_measured_statement_breakdown(
+            "POST", "/api/v2/roll/offer", large_second.statements
+        )
     finally:
         await engine.dispose()
 
