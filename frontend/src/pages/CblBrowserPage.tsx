@@ -763,11 +763,8 @@ export default function CblBrowserPage() {
   const lastShown = browsePage
     ? (browsePage.page - 1) * browsePage.page_size + browsePage.items.length
     : 0
-  // Hide placeholder metadata from previous query during key transitions.
   const settledBrowsePage = browseQuery.isPlaceholderData ? null : browsePage
-  const resultCountPending =
-    !catalogError &&
-    (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
+  const resultCountPending = !catalogError && (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
   const resultCountText = catalogError
     ? 'Source list count unavailable.'
     : resultCountPending
@@ -1200,14 +1197,7 @@ export default function CblBrowserPage() {
         </div>
       ) : (
         <>
-          <p
-            role="status"
-            aria-live="polite"
-            className="min-h-4 text-xs text-[var(--theme-text-muted)]"
-            data-testid="cbl-result-count"
-          >
-            {resultCountText}
-          </p>
+          <p role="status" aria-live="polite" className="min-h-4 text-xs text-[var(--theme-text-muted)]" data-testid="cbl-result-count">{resultCountText}</p>
 
           {submittedQuery && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--theme-text-muted)]">
