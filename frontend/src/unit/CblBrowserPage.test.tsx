@@ -613,11 +613,16 @@ describe('CblBrowserPage source list result count (#3614)', () => {
 
   it('shows N of M for a submitted search against the whole shared catalog', async () => {
     const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+    renderPage()
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+
     mockBrowse.mockResolvedValue({
       ...searchPage('x-men', [source, secondSource]),
       catalog_total: 13,
     })
-    renderPage()
     await user.type(screen.getByLabelText('Search source lists'), 'x-men')
     await user.click(screen.getByRole('button', { name: 'Search' }))
 
@@ -629,11 +634,16 @@ describe('CblBrowserPage source list result count (#3614)', () => {
 
   it('shows 0 of M next to the empty state when nothing matches', async () => {
     const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+    renderPage()
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+
     mockBrowse.mockResolvedValue({
       ...searchPage('nothing', []),
       catalog_total: 13,
     })
-    renderPage()
     await user.type(screen.getByLabelText('Search source lists'), 'nothing')
     await user.click(screen.getByRole('button', { name: 'Search' }))
 
@@ -660,20 +670,26 @@ describe('CblBrowserPage source list result count (#3614)', () => {
 
   it('returns to M of M after clearing a search', async () => {
     const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+    renderPage()
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+
     mockBrowse.mockResolvedValue({
       ...searchPage('x-men', [source]),
       catalog_total: 13,
     })
-    renderPage()
     await user.type(screen.getByLabelText('Search source lists'), 'x-men')
     await user.click(screen.getByRole('button', { name: 'Search' }))
     await waitFor(() => {
       expect(countLine()).toHaveTextContent('1 of 13 source lists')
     })
 
-    mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
     await user.click(screen.getByRole('button', { name: 'Clear search' }))
 
+    // Clearing re-applies the unfiltered catalog scope, whose settled page is
+    // the M of M view.
     await waitFor(() => {
       expect(countLine()).toHaveTextContent('13 of 13 source lists')
     })
@@ -732,6 +748,7 @@ describe('CblBrowserPage source list result count (#3614)', () => {
     const user = userEvent.setup()
     let resolveAlpha: (page: ReturnType<typeof searchPage>) => void = () => undefined
     mockBrowse
+      .mockResolvedValueOnce(browsePage({ total: 13, catalog_total: 13 }))
       .mockImplementationOnce(
         () =>
           new Promise((resolve) => {
