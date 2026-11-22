@@ -565,7 +565,7 @@ pub async fn list_completed_threads(
         .filter(|token| !token.is_empty())
         .map(|token| decode_cursor(token, sort, &search, "legacy"))
         .transpose()?;
-    let (auth, _active_count, filtered_count, _list_names, rows) = query_page(
+    let (auth, _active_count, _filtered_count, _list_names, rows) = query_page(
         &state,
         &claims,
         None,
@@ -635,7 +635,7 @@ pub(crate) async fn list_excluded_page(
         .filter(|token| !token.is_empty())
         .map(|token| decode_cursor(token, sort, &search, "legacy"))
         .transpose()?;
-    let (auth, _active_count, filtered_count, _list_names, rows) = query_page(
+    let (auth, _active_count, _filtered_count, _list_names, rows) = query_page(
         state,
         claims,
         None,
