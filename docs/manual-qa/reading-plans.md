@@ -161,3 +161,11 @@ Some deployed legacy Plan pages may still exist pending the safe, gated retireme
 **Test:** Open an authoritative Reading List and its Thread detail in separate tabs. Rename the Thread, then return to the Reading List tab without manually reloading.
 
 **Expected:** The Reading List displays the canonical updated series title after a **short automatic refresh delay**; it need not update synchronously on focus. No prolonged stale state, manual hard refresh, or mutated list membership. Any remaining old Plan deep links follow the migration rules in #3678. Owner decision 2026-11-20; source #5486 (part of #5264).
+
+## MQA-LIST-019: Plans index refreshes after cross-tab plan changes
+
+**Setup:** Two browser tabs open to `/continuity-plans` (legacy plans index transition surface).
+
+**Test:** In tab 1, rename, create, or delete a Reading Plan. Switch to tab 2 or return focus to it without a manual reload.
+
+**Expected:** Tab 2 reconciles the plans list automatically (renamed name appears, newly created plan appears, deleted plan disappears) without a manual hard refresh. The refresh is scoped to plan data; Queue/Roll/session state is unchanged by this list reconciliation. Legacy-plan retirement/migration authority remains #3678. Source: #5686.

@@ -1,8 +1,10 @@
 import { act, render, renderHook, screen } from '@testing-library/react'
+import { QueryClient } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useDeleteReadingPlan, useSaveReadingPlan } from '../hooks/useReadingPlans'
 import ContinuityPlansIndexPage from '../pages/ContinuityPlansIndexPage'
+import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { notifyReadingPlansChanged, subscribeToCrossTabChanges } from '../query/crossTabDataSync'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
@@ -184,4 +186,48 @@ it('announces a committed plan save to other tabs (#5686)', async () => {
 
   expect(changes).toEqual(['reading-plans-changed'])
   observer.close()
+})
+
+it('ignores its own broadcast so the writing tab does not refresh twice (#5686 G2)', async () => {
+  const changes: string[] = []
+  const unsubscribe = subscribeToCrossTabChanges((change) => changes.push(change.type))
+
+  await act(async () => {
+    notifyReadingPlansChanged()
+    await Promise.resolve()
+  })
+
+  expect(changes).toEqual([])
+  unsubscribe()
+})
+
+it('announces a committed plan adoption to other tabs (#5686 G1)', async () => {
+  const changes: string[] = []
+  const observer = new BroadcastChannel('comic-pile-data')
+  observer.addEventListener('message', (event: MessageEvent<unknown>) => {
+    const data = event.data
+    if (data && typeof data === 'object' && 'type' in data) {
+      changes.push(String((data as { type: unknown }).type))
+    }
+  })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+  await act(async () => {
+    await applyCommittedReadingPlan(
+      client,
+      cast<Parameters<typeof applyCommittedReadingPlan>[1]>({
+        id: 1,
+        name: 'Plan',
+        ordering_mode: 'informational',
+        lane_count: 0,
+        step_count: 0,
+        source_paths: [],
+        updated_at: plan.updated_at,
+      }),
+    )
+  })
+
+  expect(changes).toEqual(['reading-plans-changed'])
+  observer.close()
+  client.clear()
 })
