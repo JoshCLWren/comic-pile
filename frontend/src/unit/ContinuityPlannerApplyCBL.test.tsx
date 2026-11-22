@@ -154,7 +154,6 @@ describe('ContinuityPlannerPage - Custom CBL apply (#3609)', () => {
   })
 
   it('refreshes editor baseline and step list after server-side custom CBL apply', async () => {
-    const user = userEvent.setup()
     render(
       <MemoryRouter initialEntries={['/continuity-plans/12/edit']}>
         <Routes>
@@ -163,6 +162,8 @@ describe('ContinuityPlannerPage - Custom CBL apply (#3609)', () => {
       </MemoryRouter>,
       { wrapper: wrapper(client) },
     )
+
+    const user = userEvent.setup()
 
     expect(await screen.findByText('Mister Miracle #Annual 1')).toBeVisible()
     expect(screen.getByText(/1 lane · 2 steps/)).toBeVisible()
