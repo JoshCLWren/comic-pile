@@ -1,16 +1,35 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
-
-const auth = vi.hoisted(() => ({ login: vi.fn() }))
-
-vi.mock('../App', () => ({ useAuth: () => auth }))
-vi.mock('../services/api', () => ({ default: { post: vi.fn() } }))
-
 import RegisterPage from '../pages/RegisterPage'
+import { AuthContext, type AuthContextValue } from '../contexts/AuthContext'
+
+const auth: AuthContextValue = {
+  authState: {
+    status: 'unauthenticated',
+    isLoading: false,
+    user: null,
+    error: null,
+    retryCount: 0,
+    lastRetryAt: null,
+  },
+  isAuthenticated: false,
+  isLoading: false,
+  user: null,
+  login: vi.fn<AuthContextValue['login']>(),
+  logout: vi.fn(),
+  revalidateSession: vi.fn<AuthContextValue['revalidateSession']>(),
+  recoverSession: vi.fn<AuthContextValue['recoverSession']>(),
+  retryAuth: vi.fn<AuthContextValue['retryAuth']>(),
+  clearAuthError: vi.fn(),
+}
 
 function renderRoute(ui: React.ReactElement) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>)
+  return render(
+    <MemoryRouter>
+      <AuthContext.Provider value={auth}>{ui}</AuthContext.Provider>
+    </MemoryRouter>,
+  )
 }
 
 describe('RegisterPage signup copy (issue #2756)', () => {
