@@ -45,9 +45,12 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
   beforeEach(() => {
     toastSpy = vi.fn()
     modalsDeps = { toastHook: () => ({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] }) }
-    issuesApi.migrateThread = vi.fn(async () => undefined) as unknown as typeof issuesApi.migrateThread
-    issuesApi.create = vi.fn(async () => ({ issues: [], page_size: 0, total_count: 0 })) as unknown as typeof issuesApi.create
-    issuesApi.bulkMarkRead = vi.fn(async () => undefined) as unknown as typeof issuesApi.bulkMarkRead
+    // SAFETY: test doubles replace the real API methods for this isolated hook test; call sites are not exercised
+    issuesApi.migrateThread = vi.fn(async () => undefined) as never
+    // SAFETY: test double returns the minimal shape consumed by this test
+    issuesApi.create = vi.fn(async () => ({ issues: [], page_size: 0, total_count: 0 })) as never
+    // SAFETY: test double replaces the real API method for this isolated hook test
+    issuesApi.bulkMarkRead = vi.fn(async () => undefined) as never
   })
 
   afterEach(() => {
