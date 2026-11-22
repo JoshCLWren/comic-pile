@@ -1941,6 +1941,231 @@ mod tests {
         assert_eq!(issue_id("4000-29319"), Some(29319));
     }
 
+    /// #5592: backfill dry-run and write reports share truthful accounting,
+    /// resume by identity cursor, and leave user reading state untouched.
+    #[tokio::test]
+    async fn backfill_is_bounded_idempotent_and_preserves_reading_state() {
+        let Some(state) = crate::test_support::test_state(4).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        let user_id: i32 = connection
+            .query_one(
+                "INSERT INTO users (username) VALUES ('backfill-owner') RETURNING id",
+                &[],
+            )
+            .await
+            .expect("backfill user")
+            .get(0);
+        let thread_id: i32 = connection
+            .query_one(
+                "INSERT INTO threads \
+                 (title, format, issues_remaining, total_issues, queue_position, status, \
+                  user_id, last_rating, reading_progress) \
+                 VALUES ('Backfill', 'Comic', 3, 4, 7, 'active', $1, 4.5, 'in_progress') \
+                 RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .expect("backfill thread")
+            .get(0);
+        let missing = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "1",
+            "4000-30001",
+            &json!({}),
+        )
+        .await;
+        let active = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "2",
+            "4000-30002",
+            &json!({}),
+        )
+        .await;
+        let terminal = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "3",
+            "4000-30003",
+            &json!({}),
+        )
+        .await;
+        let fresh_metadata = normalized_metadata(
+            &deep_provider_result(30004, "2026-11-01 17:33:53"),
+            30004,
+        )
+        .expect("fresh metadata")
+        .0;
+        let fresh = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "4",
+            "4000-30004",
+            &fresh_metadata,
+        )
+        .await;
+        seed_request(&state, active, "pending", 4, "1 hour", None).await;
+        seed_request(&state, terminal, "failed", 3, "1 hour", None).await;
+        connection
+            .execute(
+                "UPDATE issues SET status = 'read', read_at = now() \
+                 WHERE thread_id = $1 AND issue_number = '1'",
+                &[&thread_id],
+            )
+            .await
+            .expect("reading state");
+        connection
+            .execute(
+                "INSERT INTO events (type, thread_id, issue_id, user_id) \
+                 SELECT 'item_read', thread_id, id, $2 FROM issues \
+                 WHERE thread_id = $1 AND issue_number = '1'",
+                &[&thread_id, &user_id],
+            )
+            .await
+            .expect("reading history");
+
+        let dry = backfill_authorized(
+            &state,
+            &cron_headers(),
+            Some("test-secret"),
+            BackfillQuery {
+                dry_run: true,
+                limit: 500,
+                after_id: 0,
+            },
+        )
+        .await
+        .expect("dry backfill")
+        .0;
+        assert_eq!(dry.scanned, 4);
+        assert_eq!(dry.needs_enqueue, 2, "missing and terminal rows need work");
+        assert_eq!(dry.enqueued, 0);
+        assert_eq!(dry.already_queued_or_fresh, 2, "active and fresh rows");
+        assert_eq!(dry.next_after_id, None);
+        let unchanged: i64 = connection
+            .query_one("SELECT count(*) FROM comicvine_metadata_refresh_requests", &[])
+            .await
+            .expect("dry-run ledger")
+            .get(0);
+        assert_eq!(unchanged, 2, "dry-run must not insert or reopen rows");
+
+        let written = backfill_authorized(
+            &state,
+            &cron_headers(),
+            Some("test-secret"),
+            BackfillQuery {
+                dry_run: false,
+                limit: 500,
+                after_id: 0,
+            },
+        )
+        .await
+        .expect("write backfill")
+        .0;
+        assert_eq!(written.scanned, 4);
+        assert_eq!(written.needs_enqueue, 2);
+        assert_eq!(written.enqueued, 2, "one insert plus one reopen");
+        assert_eq!(written.already_queued_or_fresh, 2);
+        let rows = connection
+            .query(
+                "SELECT external_identity_id, state, attempts, last_error \
+                 FROM comicvine_metadata_refresh_requests ORDER BY external_identity_id",
+                &[],
+            )
+            .await
+            .expect("written ledger");
+        assert_eq!(rows.len(), 3, "fresh metadata must not be enqueued");
+        for row in &rows {
+            let identity_id: i32 = row.get(0);
+            assert_eq!(row.get::<_, String>(1), "pending");
+            if identity_id == active {
+                assert_eq!(row.get::<_, i32>(2), 4, "active work is untouched");
+            } else {
+                assert_eq!(row.get::<_, i32>(2), 0);
+                assert!(identity_id == missing || identity_id == terminal);
+            }
+        }
+
+        let rerun = backfill_authorized(
+            &state,
+            &cron_headers(),
+            Some("test-secret"),
+            BackfillQuery {
+                dry_run: false,
+                limit: 500,
+                after_id: 0,
+            },
+        )
+        .await
+        .expect("idempotent backfill")
+        .0;
+        assert_eq!(rerun.scanned, 4);
+        assert_eq!(rerun.needs_enqueue, 0);
+        assert_eq!(rerun.enqueued, 0, "active rows are not new work");
+        assert_eq!(rerun.already_queued_or_fresh, 4);
+
+        let first_page = backfill_authorized(
+            &state,
+            &cron_headers(),
+            Some("test-secret"),
+            BackfillQuery {
+                dry_run: true,
+                limit: 2,
+                after_id: 0,
+            },
+        )
+        .await
+        .expect("first cursor page")
+        .0;
+        assert_eq!(first_page.scanned, 2);
+        assert_eq!(first_page.next_after_id, Some(active));
+        let second_page = backfill_authorized(
+            &state,
+            &cron_headers(),
+            Some("test-secret"),
+            BackfillQuery {
+                dry_run: true,
+                limit: 3,
+                after_id: first_page.next_after_id.expect("cursor"),
+            },
+        )
+        .await
+        .expect("second cursor page")
+        .0;
+        assert_eq!(second_page.scanned, 2);
+        assert_eq!(second_page.next_after_id, None);
+        assert!(fresh > terminal, "fixture ids remain in scan order");
+
+        let thread = connection
+            .query_one(
+                "SELECT queue_position, last_rating, reading_progress FROM threads WHERE id = $1",
+                &[&thread_id],
+            )
+            .await
+            .expect("preserved thread");
+        assert_eq!(thread.get::<_, i32>(0), 7);
+        assert_eq!(thread.get::<_, Option<f64>>(1), Some(4.5));
+        assert_eq!(thread.get::<_, Option<String>>(2).as_deref(), Some("in_progress"));
+        let reading: (i64, i64, i64) = connection
+            .query_one(
+                "SELECT \
+                   (SELECT count(*) FROM issues WHERE thread_id = $1 AND status = 'read'), \
+                   (SELECT count(*) FROM events WHERE thread_id = $1 AND type = 'item_read'), \
+                   (SELECT count(*) FROM issue_external_identity_mappings m \
+                    JOIN issues i ON i.id = m.issue_id \
+                    WHERE i.thread_id = $1 AND m.status = 'confirmed')",
+                &[&thread_id],
+            )
+            .await
+            .expect("preserved reading and mappings")
+            .get(0);
+        assert_eq!(reading, (1, 1, 4));
+    }
+
     /// #5592: ComicVine 420 is a rate limit (Python parity), not provider_unavailable.
     #[tokio::test]
     async fn provider_response_treats_420_as_rate_limited() {
