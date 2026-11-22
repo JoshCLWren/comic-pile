@@ -275,7 +275,7 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         "src": "/api(?:/.*)?",
         "dest": "/api/native_roll.rs",
     }
-    assert any(route.get("dest") == "/api/index.py" for route in routes)
+    # Full Rust cutover: no Python legacy route allowlist remains.
     assert _route(routes, "^/(?:openapi\\.json|docs|redoc|health)$") == {
         "src": "^/(?:openapi\\.json|docs|redoc|health)$",
         "status": 404,

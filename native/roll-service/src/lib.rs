@@ -934,7 +934,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
-            post(apply_custom_cbl),
+            post(custom_cbl::apply_custom_cbl),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/overlap-decisions",
@@ -942,11 +942,11 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/reading-lists/{list_id}/overlap-decisions",
-            put(save_overlap_decision),
+            put(custom_cbl::save_overlap_decision),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
-            delete(delete_overlap_decision),
+            delete(custom_cbl::delete_overlap_decision),
         )
         .route(
             "/api/v2/continuity-plans/{plan_id}/reader",
