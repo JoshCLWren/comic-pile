@@ -259,10 +259,16 @@ fn extract_cover_source(metadata: &Value) -> Option<&str> {
         .find_map(nonempty)
         .or_else(|| {
             let image = metadata.get("image")?;
-            ["original_url", "super_url", "medium_url", "small_url", "thumb_url"]
-                .iter()
-                .filter_map(|key| image.get(key))
-                .find_map(nonempty)
+            [
+                "original_url",
+                "super_url",
+                "medium_url",
+                "small_url",
+                "thumb_url",
+            ]
+            .iter()
+            .filter_map(|key| image.get(key))
+            .find_map(nonempty)
         })
 }
 
@@ -1365,6 +1371,31 @@ mod cover_source_tests {
         assert_eq!(
             extract_cover_source(&metadata),
             Some("https://example.com/medium.jpg")
+        );
+    }
+
+    #[test]
+    fn thumb_url_is_used_when_it_is_the_only_stored_cover() {
+        // MQA-THREAD-004: a mapped old issue (e.g. Detective Comics #5, 1937)
+        // can expose its only provider cover via `image.thumb_url`. The thread
+        // and queue cover extraction must fall back to it instead of
+        // reporting "No cover" while the match dialog shows a cover.
+        let metadata = json!({"image": {"thumb_url": "https://example.com/thumb.jpg"}});
+        assert_eq!(
+            extract_cover_source(&metadata),
+            Some("https://example.com/thumb.jpg")
+        );
+        // Blank/invalid higher-priority sizes still fall through to thumb_url.
+        let metadata = json!({"image": {
+            "original_url": null,
+            "super_url": " ",
+            "medium_url": "",
+            "small_url": null,
+            "thumb_url": " https://example.com/thumb.jpg "
+        }});
+        assert_eq!(
+            extract_cover_source(&metadata),
+            Some("https://example.com/thumb.jpg")
         );
     }
 
