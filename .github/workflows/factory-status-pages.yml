@@ -37,8 +37,10 @@ permissions:
   pages: write
   id-token: write
 
+# Separate refresh and push queues, and never drop a queued Pages deployment.
 concurrency:
   group: factory-status-pages-${{ github.event_name == 'push' && 'push' || 'refresh' }}
+  queue: max
   cancel-in-progress: false
 
 jobs:
@@ -64,7 +66,11 @@ jobs:
             echo "stale=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          age=$(( $(date -u +%s) - $(date -u -d "$generated" +%s) ))
+          if ! generated_epoch="$(date -u -d "$generated" +%s 2>/dev/null)"; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          age=$(( $(date -u +%s) - generated_epoch ))
           echo "reliability snapshot age: ${age}s"
           if (( age > 840 )); then echo "stale=true"; else echo "stale=false"; fi >> "$GITHUB_OUTPUT"
 
@@ -73,6 +79,8 @@ jobs:
     if: needs.freshness.outputs.stale == 'true'
     concurrency:
       group: factory-status-pages-snapshot
+      # A newer refresh must not replace a queued push publish and its deploy.
+      queue: max
       cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
