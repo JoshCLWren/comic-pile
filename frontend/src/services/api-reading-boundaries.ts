@@ -18,7 +18,9 @@ export function createReadingBoundariesApi(client: HttpClient) {
         ))
       }
       const responses = await Promise.all(pages)
-      return { threads: Object.assign({}, ...responses.map((page) => page.threads)) }
+      const combinedThreads = Object.assign({}, ...responses.map((page) => page.threads))
+      const evaluator = responses[0]?.evaluator ?? 'unavailable'
+      return { threads: combinedThreads, evaluator }
     },
   }
 }
