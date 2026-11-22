@@ -69,18 +69,13 @@ and mutation-refresh behavior are covered by the specs listed per row.
 | `/glossary`, `/help` → `/glossary` | Cold load | shell only | 3 (required) | redirect does not duplicate shell reads | #4509 budget |
 | Cross-account | Logout/login | — | releases refetched; no cross-account cache leakage | session cache cleared | #4509 `authTransitions` spec |
 
-## Remaining before parent closure
+## Remaining verification and parent follow-ups
 
 - **Production-path verification** after deploy for representative journeys
   (Roll, Queue, Thread, creator, continuity, public/auth). Local and CI
   evidence above does not substitute for deployed proof.
-- **Queue canonical + legacy blocking double batch** in Option-E-off
-  deployments: needs a server capability signal; tracked under #4501.
 - **Authenticated shell remount on navigation**: an `App.tsx` layout change;
   allocated to the coordinator, not claimed here.
-- **Owner pause**: #4501 is parked `blocked` pending owner instruction for
-  the review/merge/deploy path. This parent stays open until the items
-  above are verified; no child merge closes it.
 
 No broad private-data HTTP caching, feature flags, shadow modes, or disabled
 tests were introduced to make any budget pass.
