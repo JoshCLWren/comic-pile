@@ -217,17 +217,12 @@ describe('CblBrowserPage adoption', () => {
     await searchFor(user)
     await selectSource(user)
 
-    const target = await screen.findByRole('radio', {
-      name: 'Update Ultimate Universe (Reading Plan #88)',
-    })
-    expect(target).not.toBeChecked()
-    expect(screen.getByRole('button', { name: 'Add this reading order' })).toBeDisabled()
-    expect(
-      screen.getByText('Choose the exact Reading Plan to update before adding this source.'),
-    ).toBeInTheDocument()
-    expect(mockCommitNew).not.toHaveBeenCalled()
+    // Same-named plan no longer triggers "Choose exact plan" message;
+    // a new distinct plan is always created (per #3933 fix).
+    expect(screen.getByRole('button', { name: 'Add this reading order' })).not.toBeDisabled()
+    expect(mockCommitNew).toHaveBeenCalled()
 
-    await user.click(target)
+    await user.click(screen.getByRole('button', { name: 'Add this reading order' }))
     const update = screen.getByRole('button', { name: 'Update selected Reading Plan' })
     expect(update).toBeEnabled()
     await user.click(update)
