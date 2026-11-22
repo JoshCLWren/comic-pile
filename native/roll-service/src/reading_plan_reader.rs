@@ -145,6 +145,97 @@ fn parse_meta(raw: &str) -> Value {
     serde_json::from_str(raw).unwrap_or(Value::Null)
 }
 
+/// Normalize an issue number for display when CBL source data stored a raw label
+/// (e.g. "Alpha flight annual 1") instead of a parsed issue number. Strips an
+/// embedded series title prefix and normalizes annual/special tokens so the
+/// reader shows "Annual 1" rather than echoing the raw label.
+fn normalize_issue_number_display(raw: &str, series_title: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return trimmed.to_string();
+    }
+
+    let mut candidate = trimmed.to_string();
+    let lower_candidate = candidate.to_lowercase();
+    let lower_series = series_title.trim().to_lowercase();
+
+    if !lower_series.is_empty() && lower_candidate.starts_with(&lower_series) {
+        candidate = candidate[series_title.trim().len()..]
+            .trim_start_matches(|c: char| c == ' ' || c == '-' || c == ':' || c == '#')
+            .trim()
+            .to_string();
+    } else if !lower_series.is_empty() {
+        // Handle "Alpha Flight Annual 1" stored as issue number when the series
+        // title is "Alpha Flight Annual" or when the raw label contains the
+        // series title as a prefix with different casing/spacing.
+        let collapsed_candidate = lower_candidate.split_whitespace().collect::<Vec<_>>().join(" ");
+        let collapsed_series = lower_series.split_whitespace().collect::<Vec<_>>().join(" ");
+        if collapsed_candidate.starts_with(&collapsed_series) {
+            let prefix_len = collapsed_series.len();
+            // Map the prefix length back onto the original by counting chars in
+            // the collapsed form.
+            let mut orig_idx = 0;
+            let mut collapsed_seen = 0;
+            let orig_chars: Vec<char> = candidate.chars().collect();
+            let mut i = 0;
+            while i < orig_chars.len() && collapsed_seen < prefix_len {
+                if orig_chars[i].is_whitespace() {
+                    // consume whitespace run as single space in collapsed
+                    while i < orig_chars.len() && orig_chars[i].is_whitespace() {
+                        i += 1;
+                    }
+                    collapsed_seen += 1; // space
+                } else {
+                    i += 1;
+                    collapsed_seen += 1;
+                }
+            }
+            candidate = orig_chars[i..]
+                .iter()
+                .collect::<String>()
+                .trim_start_matches(|c: char| c == ' ' || c == '-' || c == ':' || c == '#')
+                .trim()
+                .to_string();
+        }
+    }
+
+    if candidate.is_empty() {
+        return trimmed.to_string();
+    }
+
+    // Normalize "annual 1", "annual #1", "special 1" etc. to title case.
+    let collapsed = candidate.split_whitespace().collect::<Vec<_>>().join(" ");
+    let lower = collapsed.to_lowercase();
+    for prefix in ["annual", "special", "one-shot", "one shot"] {
+        if lower == prefix {
+            return capitalize_first(&collapsed);
+        }
+        let rest = lower.strip_prefix(prefix).unwrap_or("");
+        if !rest.is_empty() {
+            let rest_trimmed = rest
+                .trim_start_matches(|c: char| c == ' ' || c == '#' || c == '-' || c == ':')
+                .trim();
+            if !rest_trimmed.is_empty()
+                && rest_trimmed
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '.' || c.is_ascii_alphabetic())
+            {
+                return format!("{} {}", capitalize_first(prefix), rest_trimmed);
+            }
+        }
+    }
+
+    collapsed
+}
+
+fn capitalize_first(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
 /// GET /api/v2/continuity-plans/{plan_id}/reader
 pub async fn read(
     State(state): State<Arc<AppState>>,
