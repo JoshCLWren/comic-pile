@@ -198,6 +198,8 @@ describe('CustomCBLBuilder', () => {
   })
   const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
   beforeEach(() => {
+    Object.assign(customCBLApi, mocks)
+    Object.assign(cblSourcesApi, cblMocks)
     vi.resetAllMocks()
     fetchCards.mockResolvedValue([])
     mocks.list.mockResolvedValue([

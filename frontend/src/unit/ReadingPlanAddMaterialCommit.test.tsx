@@ -87,6 +87,7 @@ async function openSource(): Promise<void> {
 
 describe('ReadingPlanAddMaterial canonical commit', () => {
   beforeEach(() => {
+    Object.assign(cblSourcesApi, mocks)
     vi.resetAllMocks()
     mocks.discover.mockResolvedValue([source])
     mocks.preview.mockResolvedValue(preview())

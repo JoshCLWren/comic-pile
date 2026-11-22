@@ -15,6 +15,7 @@ afterEach(() => {
 
 describe('ReadingPlanAddMaterial', () => {
   beforeEach(() => {
+    Object.assign(cblSourcesApi, mocks)
     vi.resetAllMocks()
     window.history.replaceState({}, '', '/continuity-plans/77')
   })

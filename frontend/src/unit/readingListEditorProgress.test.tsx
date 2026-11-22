@@ -59,6 +59,7 @@ function renderEditor(entries: ReturnType<typeof entriesWithProgress>) {
 
 describe('Reading List editing progress', () => {
   beforeEach(() => {
+    Object.assign(customCBLApi, mocks)
     vi.resetAllMocks()
     mocks.list.mockResolvedValue([{ id: 2, name: 'Mignolaverse', issue_count: 466, mode: 'strict' }])
   })
