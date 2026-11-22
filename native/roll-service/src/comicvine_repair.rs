@@ -2079,6 +2079,7 @@ mod tests {
             .await
             .expect("written ledger");
         assert_eq!(rows.len(), 3, "fresh metadata must not be enqueued");
+        assert!(rows.iter().all(|row| row.get::<_, i32>(0) != fresh));
         for row in &rows {
             let identity_id: i32 = row.get(0);
             assert_eq!(row.get::<_, String>(1), "pending");
