@@ -14,8 +14,8 @@ type ModuleDoubleFactory = () => object | Promise<object>
  * boundary with the normal Vitest mock API. Object-valued service namespaces are
  * replaced directly because they are dependency containers rather than calls.
  */
-export async function injectModuleDoubles(
-  moduleExports: object,
+export async function injectModuleDoubles<ModuleExports extends object>(
+  moduleExports: ModuleExports,
   factory: ModuleDoubleFactory,
 ): Promise<void> {
   const doubles = await factory()
@@ -23,7 +23,7 @@ export async function injectModuleDoubles(
     const descriptor = Object.getOwnPropertyDescriptor(moduleExports, exportName)
     if (descriptor?.value === replacement) continue
 
-    if (typeof descriptor?.value === 'function' && typeof replacement === 'function') {
+    if (isFunction(descriptor?.value) && isFunction(replacement)) {
       // SAFETY: both property values were just checked as functions. Vitest's
       // transformed ES-module namespace is configurable and spyable; the record
       // view only exposes the string-keyed function table needed by vi.spyOn.

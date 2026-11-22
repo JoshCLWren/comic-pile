@@ -11,8 +11,8 @@ import { authApi } from '../services/api-auth'
 const originalApiPost = api.post
 const originalAuthApi = { ...authApi }
 const mockApiPost = vi.fn<typeof api.post>()
-const mockForgotPassword = vi.fn<typeof mockForgotPassword>()
-const mockResetPassword = vi.fn<typeof mockResetPassword>()
+const mockForgotPassword = vi.fn<typeof authApi.forgotPassword>()
+const mockResetPassword = vi.fn<typeof authApi.resetPassword>()
 const login = vi.fn<AuthContextValue['login']>()
 const auth: AuthContextValue = {
   authState: {
