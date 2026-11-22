@@ -725,7 +725,7 @@ pub async fn browse_cbl_source_catalog(
             )
         };
 
-        let (items, total, effective_page) =
+        let (items, total, catalog_total, effective_page) =
             browse_items(&conn, &folder, query_text.as_deref(), page, page_size).await?;
         let total_pages = if total == 0 {
             0
