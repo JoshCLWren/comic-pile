@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueueModals } from '../pages/QueuePage/QueueModals'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
 import { threadsApi } from '../services/api-threads'
 import type { PotentialDuplicateMatch, Thread } from '../types'
@@ -145,7 +146,11 @@ function EditHarness() {
 }
 
 function renderInRouter(ui: React.ReactElement) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>)
+  return render(
+    <MemoryRouter>
+      <ToastProvider>{ui}</ToastProvider>
+    </MemoryRouter>,
+  )
 }
 
 beforeEach(() => {

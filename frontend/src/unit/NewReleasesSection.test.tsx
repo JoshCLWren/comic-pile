@@ -177,7 +177,7 @@ describe('NewReleasesSection', () => {
     const toggle = screen.getByRole('button', { name: 'Stop following X-Men' })
     toggle.click()
     await waitFor(() =>
-      expect(mockUpdate).toHaveBeenCalledWith({ sourceId: 901, enabled: false }),
+      expect(mockUpdate).toHaveBeenCalledWith(901, false),
     )
     expect(mockUpdate).toHaveBeenCalledTimes(1)
   })
@@ -189,7 +189,7 @@ describe('NewReleasesSection', () => {
     const toggle = screen.getByRole('button', { name: 'Follow Incredible Hulk' })
     toggle.click()
     await waitFor(() =>
-      expect(mockUpdate).toHaveBeenCalledWith({ sourceId: 902, enabled: true }),
+      expect(mockUpdate).toHaveBeenCalledWith(902, true),
     )
   })
 

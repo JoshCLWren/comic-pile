@@ -35,14 +35,6 @@ await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   },
 }))
 
-await injectModuleDoubles(await import('../query/queryClient'), () => ({
-  queryClient: {
-    invalidateQueries: vi.fn().mockResolvedValue(undefined),
-    setQueryData: vi.fn(),
-    getQueriesData: vi.fn(() => []),
-  },
-}))
-
 import ComicIssueMappingAction from '../components/ComicIssueMappingAction'
 import { injectModuleDoubles } from './injectModuleDoubles'
 
