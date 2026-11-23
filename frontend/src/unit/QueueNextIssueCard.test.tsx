@@ -190,6 +190,45 @@ describe('Queue exact-issue shared actions', () => {
     expect(list).toHaveBeenCalledWith(42, { page_size: 50, page_token: 'next-owned-page' })
   })
 
+  it('disables a second page request while manual issue browsing is still loading', async () => {
+    const first = issueList(37).issues[0]!
+    const second = { ...first, id: 38, issue_number: '10' }
+    let releaseNextPage: (page: IssueListResponse) => void = () => {
+      throw new Error('Next page request has not started')
+    }
+    list.mockImplementation(async (_threadId, options) => {
+      if (options?.status === 'unread') return issueList(37)
+      if (options?.page_token === 'next-page') {
+        return new Promise<IssueListResponse>((resolve) => {
+          releaseNextPage = resolve
+        })
+      }
+      return {
+        ...issueList(37),
+        issues: [first],
+        page_size: 50,
+        next_page_token: 'next-page',
+      }
+    })
+    setup()
+    expect(await screen.findByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '37')
+    fireEvent.click(screen.getByRole('button', { name: 'Choose another owned issue' }))
+    const picker = await screen.findByTestId('direct-read-issue-picker')
+    fireEvent.click(await within(picker).findByRole('button', { name: 'Load more issues' }))
+    const loading = await within(picker).findByRole('button', { name: 'Loading…' })
+    expect(loading).toBeDisabled()
+    await act(async () => {
+      releaseNextPage({
+        ...issueList(38),
+        issues: [second],
+        page_size: 50,
+        next_page_token: null,
+      })
+    })
+    expect(await within(picker).findByRole('button', { name: 'Hellboy #10 (unread)' })).toBeVisible()
+    expect(within(picker).queryByRole('button', { name: 'Load more issues' })).not.toBeInTheDocument()
+  })
+
   it('keeps a previously read rating editor closed until its saved rating is loaded', async () => {
     const saved = { ...issueList(37).issues[0]!, status: 'read' as const }
     get.mockResolvedValue(saved)
