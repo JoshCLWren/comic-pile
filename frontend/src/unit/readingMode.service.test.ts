@@ -17,8 +17,11 @@ const originalPut = api.put
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: Test-only mock seam cast.
   api.get = vi.fn() as typeof api.get
+  // SAFETY: Test-only mock seam cast.
   api.post = vi.fn() as typeof api.post
+  // SAFETY: Test-only mock seam cast.
   api.put = vi.fn() as typeof api.put
 })
 

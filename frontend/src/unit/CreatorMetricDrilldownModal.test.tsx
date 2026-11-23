@@ -81,9 +81,13 @@ function renderModal(drilldown: CreatorMetricDrilldown | undefined) {
 describe('CreatorMetricDrilldownModal', () => {
   beforeEach(() => {
     mockedGetMetricDrilldown.mockReset()
+    // SAFETY: Test-only mock seam cast.
     creatorMetricDrilldownApi.getMetricDrilldown = mockedGetMetricDrilldown as typeof creatorMetricDrilldownApi.getMetricDrilldown
+    // SAFETY: Test-only mock seam cast.
     creatorMetricDrilldownApi.getRatingDistributionDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getRatingDistributionDrilldown
+    // SAFETY: Test-only mock seam cast.
     creatorMetricDrilldownApi.getRoleDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getRoleDrilldown
+    // SAFETY: Test-only mock seam cast.
     creatorMetricDrilldownApi.getSeriesDrilldown = vi.fn() as typeof creatorMetricDrilldownApi.getSeriesDrilldown
     // By default a fetch never settles, so the loading test is deterministic and
     // no test depends on jsdom's real network behavior.

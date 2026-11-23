@@ -22,7 +22,9 @@ const plan = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: Test-only mock seam cast.
   continuityPlansApi.list = mockList as typeof continuityPlansApi.list
+  // SAFETY: Test-only mock seam cast.
   continuityPlansApi.delete = mockDelete as typeof continuityPlansApi.delete
 })
 

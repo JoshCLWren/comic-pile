@@ -11,6 +11,7 @@ import type { ThreadListItem } from '../types'
 const original_threadsApi = { ...threadsApi }
 const mock_threadsApi = { list: vi.fn() }
 
+// SAFETY: Test-only mock seam cast.
 const mockedThreadsApi = (mock_threadsApi as any)
 
 function createWrapper() {

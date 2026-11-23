@@ -14,8 +14,10 @@ const mock_readerContextApi = { get: vi.fn() }
 const original_readingBoundariesApi = { ...readingBoundariesApi }
 const mock_readingBoundariesApi = { batch: vi.fn() }
 
+// SAFETY: Test-only mock seam cast.
 const getBoundaries = (mock_readingBoundariesApi.batch as any)
 
+// SAFETY: Test-only mock seam cast.
 const getReaderContext = (mock_readerContextApi.get as any)
 
 const ACTIVE_THREAD: RatingThread = {

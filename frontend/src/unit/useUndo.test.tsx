@@ -16,7 +16,9 @@ const mockedUndoApi = { listSnapshots: vi.fn(), undo: vi.fn() }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: Test-only mock seam cast.
   undoApi.listSnapshots = mockedUndoApi.listSnapshots as typeof undoApi.listSnapshots
+  // SAFETY: Test-only mock seam cast.
   undoApi.undo = mockedUndoApi.undo as typeof undoApi.undo
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedUndoApi.listSnapshots.mockResolvedValue([{ id: 1 }] as never)

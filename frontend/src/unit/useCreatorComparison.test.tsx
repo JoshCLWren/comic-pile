@@ -9,6 +9,7 @@ import type { CreatorComparisonResponse } from '../types/index'
 const original_creatorComparisonApi = { ...creatorComparisonApi }
 const mock_creatorComparisonApi = { getComparison: vi.fn() }
 
+// SAFETY: Test-only mock seam cast.
 const mockedGetComparison = (mock_creatorComparisonApi.getComparison as any)
 
 const COMPLETE_COVERAGE = {

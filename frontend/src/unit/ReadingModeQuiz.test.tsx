@@ -30,7 +30,9 @@ const QUIZ_QUESTIONS = [
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  // SAFETY: Test-only mock seam cast.
   vi.spyOn(readingMode, 'getQuizQuestions').mockReturnValue(QUIZ_QUESTIONS as never)
+  // SAFETY: Test-only mock seam cast.
   vi.spyOn(readingMode, 'setReadingModeFromQuiz').mockResolvedValue(undefined as never)
 })
 

@@ -45,8 +45,11 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
   beforeEach(() => {
     toastSpy = vi.fn()
     modalsDeps = { toastHook: () => ({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] }) }
+    // SAFETY: Test-only mock seam cast.
     issuesApi.migrateThread = vi.fn(async () => undefined) as typeof issuesApi.migrateThread
+    // SAFETY: Test-only mock seam cast.
     issuesApi.create = vi.fn(async () => ({ issues: [] })) as typeof issuesApi.create
+    // SAFETY: Test-only mock seam cast.
     issuesApi.bulkMarkRead = vi.fn(async () => undefined) as typeof issuesApi.bulkMarkRead
   })
 

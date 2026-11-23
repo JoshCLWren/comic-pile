@@ -14,6 +14,7 @@ import type { RatingThread } from '../pages/RollPage/types'
 const original_readerContextApi = { ...readerContextApi }
 const mock_readerContextApi = { get: vi.fn() }
 
+// SAFETY: Test-only mock seam cast.
 const getReaderContext = (mock_readerContextApi.get as any)
 
 const setDie = vi.fn<(die: number) => Promise<void>>().mockResolvedValue(undefined)
