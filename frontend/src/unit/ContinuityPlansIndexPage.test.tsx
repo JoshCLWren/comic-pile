@@ -7,8 +7,8 @@ import { continuityPlansApi } from '../services/api-continuity-plans'
 
 const originalList = continuityPlansApi.list
 const originalDelete = continuityPlansApi.delete
-const mockList = vi.fn<typeof continuityPlansApi.list>()
-const mockDelete = vi.fn<typeof continuityPlansApi.delete>()
+const mockList = vi.fn()
+const mockDelete = vi.fn()
 const plan = {
   id: 1,
   name: 'My Plan',

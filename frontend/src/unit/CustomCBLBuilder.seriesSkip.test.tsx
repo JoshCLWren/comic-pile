@@ -11,18 +11,18 @@ import { existingList } from './fixtures/customCblFixture'
 const originalCustomCBLApi = { ...customCBLApi }
 const originalCBLSourcesApi = { ...cblSourcesApi }
 const mocks = {
-  list: vi.fn<typeof customCBLApi.list>(),
-  get: vi.fn<typeof customCBLApi.get>(),
-  create: vi.fn<typeof customCBLApi.create>(),
-  update: vi.fn<typeof customCBLApi.update>(),
-  delete: vi.fn<typeof customCBLApi.delete>(),
-  searchIssues: vi.fn<typeof customCBLApi.searchIssues>(),
-  apply: vi.fn<typeof customCBLApi.apply>(),
-  exportXml: vi.fn<typeof customCBLApi.exportXml>(),
+  list: vi.fn(),
+  get: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  searchIssues: vi.fn(),
+  apply: vi.fn(),
+  exportXml: vi.fn(),
 }
 const cblMocks = {
-  discover: vi.fn<typeof cblSourcesApi.discover>(),
-  preview: vi.fn<typeof cblSourcesApi.preview>(),
+  discover: vi.fn(),
+  preview: vi.fn(),
 }
 
 afterEach(() => {

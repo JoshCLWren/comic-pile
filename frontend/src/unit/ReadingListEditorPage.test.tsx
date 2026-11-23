@@ -7,8 +7,8 @@ import { customCBLApi, type CustomCBL } from '../services/api-custom-cbl'
 import { existingList as existingListFixture } from './fixtures/customCblFixture'
 
 const originalCustomCBLApi = { ...customCBLApi }
-const getList = vi.fn<typeof customCBLApi.get>()
-const listLists = vi.fn<typeof customCBLApi.list>()
+const getList = vi.fn()
+const listLists = vi.fn()
 const existingList: CustomCBL = { ...existingListFixture, mode: 'loose' }
 const ownedList: CustomCBL = { ...existingList, id: 12, entries: [], issue_count: 0 }
 

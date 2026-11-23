@@ -7,8 +7,8 @@ import { NewReleasesSection } from '../components/NewReleasesSection'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 
 const originalContinuityPlansApi = { ...continuityPlansApi }
-const mockUpdate = vi.fn<typeof continuityPlansApi.updateReleaseSourceEnabled>()
-const mockCreate = vi.fn<typeof continuityPlansApi.createReleaseSource>()
+const mockUpdate = vi.fn()
+const mockCreate = vi.fn()
 
 afterEach(() => {
   Object.assign(continuityPlansApi, originalContinuityPlansApi)

@@ -52,7 +52,6 @@ await injectModuleDoubles(await import('../pages/RegisterPage'), () => ({
   default: () => <div data-testid="register-page">Create Account</div>,
 }))
 await injectModuleDoubles(await import('../pages/RollPage'), () => ({ default: () => <div data-testid="roll-page">Roll</div> }))
-await injectModuleDoubles(await import('../pages/RatePage'), () => ({ default: () => <div data-testid="rate-page">Rate</div> }))
 await injectModuleDoubles(await import('../pages/QueuePage'), () => ({ default: () => <div data-testid="queue-page">Queue</div> }))
 await injectModuleDoubles(await import('../pages/HistoryPage'), () => ({ default: () => <div data-testid="history-page">History</div> }))
 await injectModuleDoubles(await import('../pages/SessionPage'), () => ({ default: () => <div data-testid="session-page">Session</div> }))
