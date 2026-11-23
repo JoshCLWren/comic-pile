@@ -212,7 +212,8 @@ export default function QueuePage() {
 
         <QueueList
           activeThreads={activeThreads}
-          filteredThreads={filteredThreads}
+          filteredThreads={isSearching && queueLoader.isPlaceholderData ? [] : filteredThreads}
+          totalActiveCount={authoritativeActiveCount}
           reorderError={actions.reorderError}
           renderItem={renderThreadCard}
           isSearching={isSearching}
