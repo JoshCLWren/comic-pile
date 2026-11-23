@@ -1371,42 +1371,15 @@ export default function CblBrowserPage() {
               )}
 
               {browsePage.total > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  {settledBrowsePage && settledBrowsePage.items.length > 0 ? (
-                    <p role="status" className="text-xs text-[var(--theme-text-muted)]">
-                      Showing {firstShown}–{lastShown} of {sourceCountLabel(settledBrowsePage.total)}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-[var(--theme-text-muted)]">
-                      {resultCountPending ? 'Updating page results…' : 'Page results unavailable.'}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openPage(page - 1)}
-                      disabled={!settledBrowsePage?.has_previous || isCommitting}
-                      className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
-                    >
-                      Previous page
-                    </button>
-                    <span className="text-xs text-[var(--theme-text-muted)]">
-                      {settledBrowsePage
-                        ? `Page ${settledBrowsePage.page} of ${Math.max(settledBrowsePage.total_pages, 1)}`
-                        : resultCountPending
-                          ? 'Updating page…'
-                          : 'Page unavailable'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => openPage(page + 1)}
-                      disabled={!settledBrowsePage?.has_next || isCommitting}
-                      className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
-                    >
-                      Next page
-                    </button>
-                  </div>
-                </div>
+                <CblBrowsePagination
+                  settledBrowsePage={settledBrowsePage}
+                  firstShown={firstShown}
+                  lastShown={lastShown}
+                  resultCountPending={resultCountPending}
+                  requestedPage={page}
+                  isCommitting={isCommitting}
+                  onOpenPage={openPage}
+                />
               )}
             </div>
           )}
