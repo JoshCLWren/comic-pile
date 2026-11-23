@@ -495,6 +495,7 @@ listThreads.mockImplementation(
   it('keeps settled first-page counts when only a next-page fetch fails', async () => {
     listThreads
       .mockResolvedValueOnce({
+        // SAFETY: the stubbed page supplies only the thread fields the pager reads
         threads: [{ id: 1 } as never],
         next_page_token: 'tok-2',
         active_count: 5,
