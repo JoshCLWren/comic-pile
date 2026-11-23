@@ -1,4 +1,5 @@
 import type { CBLCatalogBrowsePage } from '../services/api-cbl-sources'
+import { catalogSourceCount } from './cblCatalogBrowse'
 
 interface CblBrowseResultStateInput {
   browsePage: CBLCatalogBrowsePage | null
