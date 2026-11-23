@@ -3423,7 +3423,7 @@ pub async fn create_release_source(
 
     let source_id: i32;
     let created_at: String;
-    let updated_at: String;
+    let mut updated_at: String;
     let mut last_synced_at: Option<String> = None;
     let mut enabled = true;
     let mut final_list_id: Option<i32> = resolved_list_id;
