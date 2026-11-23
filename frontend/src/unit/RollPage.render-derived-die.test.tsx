@@ -90,6 +90,10 @@ await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useShuffleQueue: vi.fn(),
   useActiveSeriesCount: () => null,
 }))
+await injectModuleDoubles(await import('../hooks'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks')>()
+  return { ...actual, useRate: vi.fn() }
+})
 await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
 }))
@@ -99,20 +103,6 @@ await injectModuleDoubles(await import('../services/api-threads'), () => ({
     setPending: vi.fn(),
   },
 }))
-await injectModuleDoubles(await import('../services/api'), async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../services/api')>()
-  return {
-    ...actual,
-    threadsApi: {
-      list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
-      setPending: vi.fn(),
-    },
-    dependenciesApi: {
-      getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
-      getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
-    },
-  }
-})
 
 // SAFETY: vi.mocked returns a typed mock whose mockReturnValue surface matches the hook; cast preserves the mock call API.
 const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
@@ -191,6 +181,7 @@ beforeEach(() => {
   vi.mocked(useMoveToFront).mockReturnValue(cast<ReturnType<typeof useMoveToFront>>({ mutate: vi.fn(), isPending: false }))
   vi.mocked(useMoveToBack).mockReturnValue(cast<ReturnType<typeof useMoveToBack>>({ mutate: vi.fn(), isPending: false }))
   vi.mocked(useShuffleQueue).mockReturnValue(cast<ReturnType<typeof useShuffleQueue>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useRate).mockReturnValue(cast<ReturnType<typeof useRate>>({ mutate: vi.fn(), isPending: false }))
 })
 
 describe('Roll die is render-derived from scoped die-state (#4768)', () => {
