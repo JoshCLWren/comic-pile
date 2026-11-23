@@ -252,6 +252,67 @@ describe('CblBrowserPage catalog', () => {
     expect(mockBrowse).toHaveBeenCalledWith({ folder: '', query: '', page: 1, pageSize: 50 })
   })
 
+  it('shows a stable catalog-wide grand total at the top level (#4171)', async () => {
+    mockBrowse.mockResolvedValue(
+      browsePage({
+        folders: [
+          { name: 'DC', path: 'DC', direct_list_count: 4, total_list_count: 40 },
+          { name: 'Marvel', path: 'Marvel', direct_list_count: 5, total_list_count: 97 },
+        ],
+        items: [source],
+        total: 1,
+        total_pages: 1,
+      }),
+    )
+    renderPage()
+
+    expect(await screen.findByTestId('cbl-catalog-total')).toHaveTextContent(
+      '138 sources in the shared CBL catalog across 2 folders',
+    )
+    // The pager's own total describes only direct sources; the grand total is
+    // the stable, catalog-wide count the QA checklist asks for.
+    expect(screen.getByText('Showing 1–1 of 1 source')).toBeInTheDocument()
+  })
+
+  it('does not render stale folders under a new search banner (#4171)', async () => {
+    const user = userEvent.setup()
+    const root = browsePage({
+      folders: [{ name: 'DC', path: 'DC', direct_list_count: 0, total_list_count: 4 }],
+      items: [source],
+      total: 1,
+      total_pages: 1,
+    })
+    let resolveSearch: (page: CBLCatalogBrowsePage) => void = () => undefined
+    mockBrowse
+      .mockResolvedValueOnce(root)
+      .mockImplementationOnce(
+        () =>
+          new Promise<CBLCatalogBrowsePage>((resolve) => {
+            resolveSearch = resolve
+          }),
+      )
+    renderPage()
+    expect(await screen.findByRole('button', { name: /DC/ })).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Search source lists'), 'Batman')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    // The old folder list must not linger while the new search is in flight.
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /DC/ })).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('status')).toHaveTextContent('Loading matching source lists…')
+    // The banner names the query once; the loading line does not repeat it.
+    expect(screen.getAllByText(/Searching every shared CBL for “Batman”/)).toHaveLength(1)
+    expect(screen.queryByTestId('cbl-browse-results')).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveSearch(searchPage('Batman', []))
+    })
+    expect(await screen.findByText('No matching source lists found.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /DC/ })).not.toBeInTheDocument()
+  })
+
   it('follows nested folder paths including unsorted and keeps breadcrumbs', async () => {
     const user = userEvent.setup()
     mockBrowse.mockImplementation(
