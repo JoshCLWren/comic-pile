@@ -921,7 +921,7 @@ async fn extend_adopted_issue_to_following_plans(
             // Validate cycle constraints; on failure the caller transaction rolls back.
             let inputs = crate::option_inputs::load_inputs_in_transaction(tx, AuthenticatedUser::from_id(user_id)).await?;
             let list_names: std::collections::BTreeMap<i32, String> = inputs.lists.iter().map(|l| (l.list_id, l.name.clone())).collect();
-            crate::ValidatedReadingInputs::new(inputs.clone(), &list_names)
+            crate::reading_constraints::ValidatedReadingInputs::new(inputs.clone(), &list_names)
                 .map_err(|e| ApiError::Unprocessable(format!("cycle validation failed: {e:?}")))?;
             continue;
         }
