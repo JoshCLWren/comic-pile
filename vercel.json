@@ -344,13 +344,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "/api/v2/maintenance/comicvine-metadata-backfill",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "^/api/v1/identity\\-inbox$",
       "methods": [
         "GET"
