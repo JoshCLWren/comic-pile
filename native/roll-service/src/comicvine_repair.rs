@@ -1181,15 +1181,12 @@ async fn backfill_authorized(
             )
             .await
             .map_err(db::query_error)?;
-        let claimable: std::collections::HashMap<i32, String> = claimable_rows
+        let claimable: std::collections::HashMap<i32, bool> = claimable_rows
             .iter()
-            .map(|row| (row.get::<_, i32>(0), row.get::<_, String>(1)))
+            .map(|row| (row.get::<_, i32>(0), row.get::<_, bool>(1)))
             .collect();
-        let already_active = claimable
-            .values()
-            .filter(|state| matches!(state.as_str(), "pending" | "running" | "deferred"))
-            .count() as u32;
-        let reopened = claimable.len() as u32 - already_active;
+        let reopened = claimable.values().filter(|reopened| **reopened).count() as u32;
+        let already_scheduled = claimable.len() as u32 - reopened;
         let missing: Vec<i32> = needs_fetch
             .iter()
             .copied()
