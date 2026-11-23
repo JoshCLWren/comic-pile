@@ -1,9 +1,9 @@
-utc: 2026-11-23T11:45:30Z
-uptime: 3909.94s load: 0.00 0.00 0.00
+utc: 2026-11-23T11:45:46Z
+uptime: 3926.57s load: 0.00 0.00 0.00
 processes: 186
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700         967       12028          53        3067       14733
+Mem:           15700         966       12029          53        3067       14734
 Swap:           3071           0        3071
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
@@ -16,13 +16,13 @@ Filesystem            Size  Used Avail Use% Mounted on
 86108 dockerd
 55456 php-fpm8.5
 47572 containerd
-43928 snapd
+43852 snapd
 29976 networkd-dispat
 21452 php-fpm8.5
 21452 php-fpm8.5
-18344 systemd-journal
-16156 hosted-compute-
+18348 systemd-journal
 16116 systemd
+15920 hosted-compute-
 14940 udisksd
 14092 systemd-resolve
 --- top cpu (name only)
