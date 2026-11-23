@@ -49,11 +49,11 @@ const headerCurrentDieProps = vi.hoisted(() => [] as number[])
 
 const navigateSpy = vi.fn()
 
-await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({}))
-
-await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({
-  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({
+  default: ({ sides }: { sides: number }) => <div data-testid="lazy-dice" data-sides={sides} />,
 }))
+
+await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({}))
 
 await injectModuleDoubles(await import('../pages/RollPage/components/RollHeader'), async (importOriginal) => {
   // SAFETY: importOriginal generic only types the mocked module's shape so the spy wrapper can spread the real component's props; no runtime assertion occurs.
