@@ -596,4 +596,52 @@ describe('CblBrowserPage catalog', () => {
     expect(screen.getByTestId('location-search')).not.toHaveTextContent('q=')
   })
 
+  describe('source list result count (#3614)', () => {
+    it('describes applied results, not the current draft, and resets on clear', async () => {
+      const user = userEvent.setup()
+      mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+      renderPage()
+      await waitFor(() => {
+        expect(screen.getByTestId('cbl-result-count')).toHaveTextContent('13 of 13 source lists')
+      })
+
+      // Typing alone must not change the count: CBL searches are submitted.
+      await user.type(screen.getByLabelText('Search source lists'), 'x-men')
+      expect(screen.getByTestId('cbl-result-count')).toHaveTextContent('13 of 13 source lists')
+
+      mockBrowse.mockResolvedValue(
+        browsePage({
+          scope: 'search',
+          query: 'x-men',
+          total: 2,
+          catalog_total: 13,
+          items: [source, { ...source, id: 8, name: 'Uncanny X-Men' }],
+        }),
+      )
+      await user.click(screen.getByRole('button', { name: 'Search' }))
+      await waitFor(() => {
+        expect(screen.getByTestId('cbl-result-count')).toHaveTextContent('2 of 13 source lists')
+      })
+
+      mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+      await user.clear(screen.getByLabelText('Search source lists'))
+      await user.click(screen.getByRole('button', { name: 'Search' }))
+      await waitFor(() => {
+        expect(screen.getByTestId('cbl-result-count')).toHaveTextContent('13 of 13 source lists')
+      })
+    })
+
+    it('shows 0 of M alongside the empty state when nothing matches', async () => {
+      const user = userEvent.setup()
+      mockBrowse.mockResolvedValue(
+        browsePage({ scope: 'search', query: 'nothing', total: 0, catalog_total: 13 }),
+      )
+      renderPage('/cbl-sources?q=nothing')
+      await waitFor(() => {
+        expect(screen.getByTestId('cbl-result-count')).toHaveTextContent('0 of 13 source lists')
+      })
+      expect(screen.getByText('No matching source lists found.')).toBeInTheDocument()
+    })
+  })
+
 })
