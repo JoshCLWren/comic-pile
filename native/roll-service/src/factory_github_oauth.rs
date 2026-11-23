@@ -7,7 +7,7 @@
 
 use crate::{outbound::OutboundRequest, ApiError, AppState};
 use axum::{
-    body::Bytes,
+    body::HttpBody,
     extract::{Query, State},
     http::{header, HeaderMap, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
@@ -115,6 +115,17 @@ fn is_admin(id: u64) -> bool {
     )
 }
 
+
+fn oauth_encoding_key(state: &AppState) -> Result<EncodingKey, ApiError> {
+    EncodingKey::from_secret(state.jwt_secret.as_bytes())
+        .map_err(|_| ApiError::Internal("GitHub sign-in unavailable".into()))
+}
+
+fn oauth_decoding_key(state: &AppState) -> Result<DecodingKey, ApiError> {
+    DecodingKey::from_secret(state.jwt_secret.as_bytes())
+        .map_err(|_| ApiError::Unauthorized("GitHub sign-in unavailable".into()))
+}
+
 fn jwt_validation(audience: &str) -> Validation {
     let mut validation = Validation::new(Algorithm::HS256);
     validation.set_audience(&[audience]);
@@ -125,7 +136,7 @@ fn jwt_validation(audience: &str) -> Validation {
 fn verified_session(state: &AppState, token: &str) -> Result<AdminSession, ApiError> {
     let claims = decode::<AdminSession>(
         token,
-        &DecodingKey::from_secret(state.jwt_secret.as_bytes()),
+        &oauth_decoding_key(&state)?,
         &jwt_validation(SESSION_AUDIENCE),
     )
     .map_err(|_| ApiError::Unauthorized("GitHub sign-in expired or invalid".into()))?
@@ -229,10 +240,14 @@ pub async fn start(State(state): State<Arc<AppState>>) -> Response {
         verifier,
         exp: seconds() + STATE_TTL_SECONDS,
     };
+    let key = match oauth_encoding_key(&state) {
+        Ok(value) => value,
+        Err(error) => return secure_response(error.into_response()),
+    };
     let cookie_value = match encode(
         &Header::new(Algorithm::HS256),
         &pending,
-        &EncodingKey::from_secret(state.jwt_secret.as_bytes()),
+        &key,
     ) {
         Ok(value) => value,
         Err(_) => {
@@ -316,7 +331,7 @@ async fn finish_callback(
         .ok_or_else(|| ApiError::Unauthorized("Missing OAuth state cookie".into()))?;
     let pending = decode::<OAuthState>(
         signed_state,
-        &DecodingKey::from_secret(state.jwt_secret.as_bytes()),
+        &oauth_decoding_key(&state)?,
         &jwt_validation(STATE_AUDIENCE),
     )
     .map_err(|_| ApiError::Unauthorized("OAuth state expired".into()))?
@@ -388,10 +403,11 @@ async fn finish_callback(
         iat: now,
         exp: now + SESSION_TTL_SECONDS,
     };
+    let key = oauth_encoding_key(&state)?;
     let signed = encode(
         &Header::new(Algorithm::HS256),
         &session,
-        &EncodingKey::from_secret(state.jwt_secret.as_bytes()),
+        &key,
     )
     .map_err(|_| ApiError::Internal("Sign-in unavailable".into()))?;
     tracing::info!(github_user_id = user.id, "Rotisserie OAuth admin signed in");
