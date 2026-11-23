@@ -3726,7 +3726,6 @@ pub async fn update_release_source(
         .map_err(db::query_error)?
         .ok_or_else(|| not_found(format!("Release source {source_id} not found")))?;
 
-    let custom_cbl_list_id: Option<i32> = source_row.get(2);
     let thread_id: i32 = source_row.get(3);
     let external_identity_id: i32 = source_row.get(4);
     let currently_enabled: bool = source_row.get(5);

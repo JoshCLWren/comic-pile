@@ -232,6 +232,7 @@ fn parse_store_date(value: Option<&Value>) -> Option<DateTime<Utc>> {
 struct EnabledSourceRow {
     source_id: i32,
     plan_id: i32,
+    #[allow(dead_code)]
     custom_cbl_list_id: Option<i32>,
     thread_id: i32,
     external_identity_id: i32,
