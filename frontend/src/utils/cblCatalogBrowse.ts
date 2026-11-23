@@ -17,6 +17,7 @@ export interface CatalogServedPosition {
   scope: string
   query: string | null
   folder: string
+  page: number | null
 }
 
 /**
@@ -66,9 +67,11 @@ export function isStaleBrowsePosition(
   fetching: boolean,
   folder: string,
   submittedQuery: string,
+  page: number,
 ): boolean {
   if (!fetching || served === null) return false
-  return submittedQuery
-    ? served.scope !== 'search' || (served.query ?? '') !== submittedQuery
-    : served.scope === 'search' || served.folder !== folder
+  if (submittedQuery) {
+    return served.scope !== 'search' || (served.query ?? '') !== submittedQuery || (served.page ?? 1) !== page
+  }
+  return served.scope === 'search' || served.folder !== folder || (served.page ?? 1) !== page
 }
