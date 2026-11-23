@@ -2120,4 +2120,377 @@ mod tests {
             .expect("message")
             .contains("2 users deferred"));
     }
+
+    struct ReleaseListFixture {
+        user_id: i32,
+        plan_id: i32,
+        thread_id: i32,
+        source_id: i32,
+        list_id: i32,
+        first_issue_id: i32,
+        adopted_issue_id: i32,
+    }
+
+    async fn seed_release_list_fixture(
+        state: &Arc<AppState>,
+        foreign_list: bool,
+    ) -> ReleaseListFixture {
+        const USER_ID: i32 = 910001;
+        const OTHER_USER_ID: i32 = 910002;
+        const THREAD_ID: i32 = 910101;
+        const FIRST_ISSUE_ID: i32 = 910201;
+        const ADOPTED_ISSUE_ID: i32 = 910202;
+        const PLAN_ID: i32 = 910301;
+        const LIST_ID: i32 = 910401;
+        const IDENTITY_ID: i32 = 910501;
+        const SOURCE_ID: i32 = 910601;
+        let list_owner = if foreign_list { OTHER_USER_ID } else { USER_ID };
+        let connection = crate::db::checkout(state).await.expect("fixture connection");
+        connection
+            .batch_execute(&format!(
+                "INSERT INTO users (id, username) VALUES
+                     ({USER_ID}, 'release-list-owner'), ({OTHER_USER_ID}, 'release-list-other');
+                 INSERT INTO threads
+                     (id, title, format, issues_remaining, queue_position, status,
+                      user_id, total_issues, next_unread_issue_id, created_at)
+                 VALUES ({THREAD_ID}, 'Release list series', 'Comic', 2, 1, 'active',
+                         {USER_ID}, 2, {FIRST_ISSUE_ID}, NOW());
+                 INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+                 VALUES
+                     ({FIRST_ISSUE_ID}, {THREAD_ID}, '1', 'unread', NOW(), 1),
+                     ({ADOPTED_ISSUE_ID}, {THREAD_ID}, '2', 'unread', NOW(), 2);
+                 INSERT INTO continuity_plans
+                     (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+                 VALUES ({PLAN_ID}, {USER_ID}, 'Release linked plan', 'informational',
+                         '[{{\"id\":\"keep\",\"node_type\":\"note\"}}]'::json,
+                         '[]'::json, '2024-01-01T00:00:00+00', '2024-01-01T00:00:00+00');
+                 INSERT INTO custom_cbl_lists
+                     (id, user_id, name, mode, created_at, updated_at)
+                 VALUES ({LIST_ID}, {list_owner}, 'Release authority', 'loose',
+                         '2024-01-01T00:00:00+00', '2024-01-01T00:00:00+00');
+                 INSERT INTO custom_cbl_entries
+                     (list_id, issue_id, position, created_at, is_checkpoint,
+                      checkpoint_target_issue_ids, gate, skipped)
+                 VALUES ({LIST_ID}, {FIRST_ISSUE_ID}, 7, '2024-01-01T00:00:00+00',
+                         TRUE, '[]'::json, 'hold', TRUE);
+                 INSERT INTO external_identities
+                     (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                 VALUES ({IDENTITY_ID}, 'comicvine', 'series', '4050-{IDENTITY_ID}',
+                         '{{}}'::json, NOW(), NOW());
+                 INSERT INTO thread_external_series_mappings
+                     (thread_id, external_identity_id, status, created_at, updated_at)
+                 VALUES ({THREAD_ID}, {IDENTITY_ID}, 'confirmed', NOW(), NOW());
+                 INSERT INTO reading_plan_release_sources
+                     (id, plan_id, thread_id, external_identity_id, enabled,
+                      custom_cbl_list_id, last_synced_at, created_at, updated_at)
+                 VALUES ({SOURCE_ID}, {PLAN_ID}, {THREAD_ID}, {IDENTITY_ID}, TRUE,
+                         {LIST_ID}, '2024-01-02T03:04:05+00',
+                         '2023-01-01T00:00:00+00', '2024-01-02T03:04:05+00');"
+            ))
+            .await
+            .expect("seed linked release list fixture");
+        ReleaseListFixture {
+            user_id: USER_ID,
+            plan_id: PLAN_ID,
+            thread_id: THREAD_ID,
+            source_id: SOURCE_ID,
+            list_id: LIST_ID,
+            first_issue_id: FIRST_ISSUE_ID,
+            adopted_issue_id: ADOPTED_ISSUE_ID,
+        }
+    }
+
+    fn release_list_roster() -> Value {
+        json!({
+            "910501": [{
+                "id": "release-list-issue-2",
+                "issue_number": "2",
+                "store_date": "2024-01-01"
+            }]
+        })
+    }
+
+    async fn run_release_list_sync(state: &Arc<AppState>, user_id: i32) -> SyncReport {
+        sync_released_issues_for_user_with_rosters(
+            state,
+            user_id,
+            DateTime::parse_from_rfc3339("2025-01-01T00:00:00Z")
+                .expect("release boundary")
+                .with_timezone(&Utc),
+            Some(release_list_roster()),
+        )
+        .await
+        .expect("release sync report")
+    }
+
+    async fn assert_plan_unchanged(
+        connection: &deadpool_postgres::Client,
+        plan_id: i32,
+        expected_nodes: &Value,
+        expected_updated_at: &str,
+    ) {
+        let plan = connection
+            .query_one(
+                "SELECT nodes_json, updated_at::text FROM continuity_plans WHERE id = $1",
+                &[&plan_id],
+            )
+            .await
+            .expect("linked plan");
+        assert_eq!(plan.get::<_, Value>(0), *expected_nodes);
+        assert_eq!(plan.get::<_, String>(1), expected_updated_at);
+    }
+
+    #[tokio::test]
+    async fn linked_list_sync_rolls_back_cycles_then_retries_idempotently() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let fixture = seed_release_list_fixture(&state, false).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        let original_plan = connection
+            .query_one(
+                "SELECT nodes_json, updated_at::text FROM continuity_plans WHERE id = $1",
+                &[&fixture.plan_id],
+            )
+            .await
+            .expect("original plan");
+        let original_nodes: Value = original_plan.get(0);
+        let original_updated_at: String = original_plan.get(1);
+        let original_entry = connection
+            .query_one(
+                "SELECT position, created_at::text, is_checkpoint,
+                        checkpoint_target_issue_ids::text, gate, skipped
+                 FROM custom_cbl_entries WHERE list_id = $1 AND issue_id = $2",
+                &[&fixture.list_id, &fixture.first_issue_id],
+            )
+            .await
+            .expect("original authored entry");
+        let dependency_id: i32 = connection
+            .query_one(
+                "INSERT INTO dependencies
+                    (source_issue_id, target_issue_id, origin, classification, provenance, created_at)
+                 VALUES ($1, $2, 'reader', 'A', 'Reader-authored test cycle', NOW())
+                 RETURNING id",
+                &[&fixture.adopted_issue_id, &fixture.first_issue_id],
+            )
+            .await
+            .expect("reader back-edge")
+            .get(0);
+        drop(connection);
+
+        let rejected = run_release_list_sync(&state, fixture.user_id).await;
+        assert_eq!(rejected.failed_sources, 1);
+        assert_eq!(rejected.successful_sources, 0);
+        assert!(rejected.failures[0].error.contains("Reading constraint cycle"));
+
+        let connection = crate::db::checkout(&state).await.expect("rollback connection");
+        let entries_after_failure: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM custom_cbl_entries WHERE list_id = $1",
+                &[&fixture.list_id],
+            )
+            .await
+            .expect("rolled back entries")
+            .get(0);
+        assert_eq!(entries_after_failure, 1);
+        let source = connection
+            .query_one(
+                "SELECT enabled, last_synced_at::text FROM reading_plan_release_sources
+                 WHERE id = $1",
+                &[&fixture.source_id],
+            )
+            .await
+            .expect("preserved rejected source");
+        assert!(source.get::<_, bool>(0));
+        assert_eq!(
+            source.get::<_, Option<String>>(1).as_deref(),
+            Some("2024-01-02 03:04:05+00")
+        );
+        let identity_mappings: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issue_external_identity_mappings WHERE issue_id = $1",
+                &[&fixture.adopted_issue_id],
+            )
+            .await
+            .expect("rolled back identity mapping")
+            .get(0);
+        assert_eq!(identity_mappings, 0, "the whole source transaction must roll back");
+        assert_plan_unchanged(
+            &connection,
+            fixture.plan_id,
+            &original_nodes,
+            &original_updated_at,
+        )
+        .await;
+        connection
+            .execute("DELETE FROM dependencies WHERE id = $1", &[&dependency_id])
+            .await
+            .expect("repair reader back-edge");
+        drop(connection);
+
+        let accepted = run_release_list_sync(&state, fixture.user_id).await;
+        assert_eq!(accepted.failed_sources, 0);
+        assert_eq!(accepted.successful_sources, 1);
+        assert_eq!(accepted.reused_issues, 1);
+
+        let connection = crate::db::checkout(&state).await.expect("retry connection");
+        let appended = connection
+            .query_one(
+                "SELECT position, is_checkpoint, checkpoint_target_issue_ids::text, gate, skipped
+                 FROM custom_cbl_entries WHERE list_id = $1 AND issue_id = $2",
+                &[&fixture.list_id, &fixture.adopted_issue_id],
+            )
+            .await
+            .expect("appended issue");
+        assert_eq!(appended.get::<_, i32>(0), 8);
+        assert!(!appended.get::<_, bool>(1));
+        assert_eq!(appended.get::<_, String>(2), "[]");
+        assert_eq!(appended.get::<_, String>(3), "none");
+        assert!(!appended.get::<_, bool>(4));
+        let current_entry = connection
+            .query_one(
+                "SELECT position, created_at::text, is_checkpoint,
+                        checkpoint_target_issue_ids::text, gate, skipped
+                 FROM custom_cbl_entries WHERE list_id = $1 AND issue_id = $2",
+                &[&fixture.list_id, &fixture.first_issue_id],
+            )
+            .await
+            .expect("current authored entry");
+        for column in 0..6 {
+            assert_eq!(
+                current_entry.get::<_, String>(column),
+                original_entry.get::<_, String>(column),
+                "existing membership column {column} changed"
+            );
+        }
+        assert_plan_unchanged(
+            &connection,
+            fixture.plan_id,
+            &original_nodes,
+            &original_updated_at,
+        )
+        .await;
+        let synced_at = connection
+            .query_one(
+                "SELECT last_synced_at::text FROM reading_plan_release_sources WHERE id = $1",
+                &[&fixture.source_id],
+            )
+            .await
+            .expect("successful sync timestamp")
+            .get::<_, String>(0);
+        assert_ne!(synced_at, "2024-01-02 03:04:05+00");
+        let appended_created_at: String = connection
+            .query_one(
+                "SELECT created_at::text FROM custom_cbl_entries
+                 WHERE list_id = $1 AND issue_id = $2",
+                &[&fixture.list_id, &fixture.adopted_issue_id],
+            )
+            .await
+            .expect("appended timestamp")
+            .get(0);
+        drop(connection);
+
+        // The adopted issue is now current-list membership: another run reuses
+        // it without inserting, reordering, or changing gates/progress.
+        let repeated = run_release_list_sync(&state, fixture.user_id).await;
+        assert_eq!(repeated.failed_sources, 0);
+        assert_eq!(repeated.successful_sources, 1);
+        let connection = crate::db::checkout(&state).await.expect("idempotence connection");
+        let membership: Vec<(i32, String, String, bool)> = connection
+            .query(
+                "SELECT position, gate, created_at::text, skipped
+                 FROM custom_cbl_entries WHERE list_id = $1 ORDER BY position",
+                &[&fixture.list_id],
+            )
+            .await
+            .expect("stable membership")
+            .iter()
+            .map(|row| (row.get(0), row.get(1), row.get(2), row.get(3)))
+            .collect();
+        assert_eq!(membership.len(), 2);
+        assert_eq!(membership[0].0, 7);
+        assert_eq!(membership[0].1, "hold");
+        assert!(membership[0].3);
+        assert_eq!(membership[1].0, 8);
+        assert_eq!(membership[1].1, "none");
+        assert_eq!(membership[1].2, appended_created_at);
+        assert_plan_unchanged(
+            &connection,
+            fixture.plan_id,
+            &original_nodes,
+            &original_updated_at,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn exclusion_guard_and_cross_owner_list_fail_without_membership_changes() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let fixture = seed_release_list_fixture(&state, true).await;
+        let connection = crate::db::checkout(&state).await.expect("exclusion connection");
+        connection
+            .execute(
+                "INSERT INTO collection_exclusions (user_id, thread_id, created_at)
+                 VALUES ($1, $2, NOW())",
+                &[&fixture.user_id, &fixture.thread_id],
+            )
+            .await
+            .expect("thread exclusion");
+        drop(connection);
+
+        let excluded = run_release_list_sync(&state, fixture.user_id).await;
+        assert_eq!(excluded.failed_sources, 0);
+        assert_eq!(excluded.excluded_sources, 1);
+        assert_eq!(excluded.skipped_sources, 1);
+
+        let connection = crate::db::checkout(&state).await.expect("ownership connection");
+        connection
+            .execute(
+                "DELETE FROM collection_exclusions WHERE user_id = $1 AND thread_id = $2",
+                &[&fixture.user_id, &fixture.thread_id],
+            )
+            .await
+            .expect("remove exclusion");
+        drop(connection);
+        let rejected = run_release_list_sync(&state, fixture.user_id).await;
+        assert_eq!(rejected.failed_sources, 1);
+        assert!(rejected.failures[0].error.contains("not owned"));
+
+        let connection = crate::db::checkout(&state).await.expect("verification connection");
+        let source = connection
+            .query_one(
+                "SELECT enabled, last_synced_at::text FROM reading_plan_release_sources
+                 WHERE id = $1",
+                &[&fixture.source_id],
+            )
+            .await
+            .expect("unchanged source");
+        assert!(source.get::<_, bool>(0));
+        assert_eq!(
+            source.get::<_, Option<String>>(1).as_deref(),
+            Some("2024-01-02 03:04:05+00")
+        );
+        let entries: Vec<i32> = connection
+            .query(
+                "SELECT issue_id FROM custom_cbl_entries WHERE list_id = $1 ORDER BY position",
+                &[&fixture.list_id],
+            )
+            .await
+            .expect("unchanged foreign list")
+            .iter()
+            .map(|row| row.get(0))
+            .collect();
+        assert_eq!(entries, vec![fixture.first_issue_id]);
+        let identity_mappings: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issue_external_identity_mappings WHERE issue_id = $1",
+                &[&fixture.adopted_issue_id],
+            )
+            .await
+            .expect("rolled back identity mapping")
+            .get(0);
+        assert_eq!(identity_mappings, 0);
+    }
 }
