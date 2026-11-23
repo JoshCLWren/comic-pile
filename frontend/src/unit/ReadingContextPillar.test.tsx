@@ -1,13 +1,10 @@
 import { render, screen, waitFor } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { ReadingContextPillar } from '../pages/RollPage/components/ReadingContextPillar'
 import type { ReaderContextResponse } from '../types'
 import { injectModuleDoubles } from './injectModuleDoubles'
-import { NavigationSpy } from './routerTestHarness'
-
-const navigateSpy = vi.fn()
 
 await injectModuleDoubles(await import('../pages/RollPage/components/ReadingOrderGroups'), () => ({
   ReadingOrderGroups: () => null,
@@ -67,10 +64,15 @@ const baseContext: ReaderContextResponse = {
   },
 }
 
+function LocationDisplay() {
+  const location = useLocation()
+  return <div data-testid="location">{location.pathname}</div>
+}
+
 function renderPillar(context: ReaderContextResponse) {
   return render(
     <MemoryRouter>
-      <NavigationSpy navigate={navigateSpy} />
+      <LocationDisplay />
       <ReadingContextPillar
         activeRatingThread={ratingThread}
         readingOrders={[]}
@@ -461,7 +463,6 @@ describe('ReadingContextPillar crossover membership chips', () => {
     }
 
     renderPillar(context)
-    console.log('navigate implementation', navigateSpy.getMockImplementation())
 
     const button = await screen.findByRole('button', { name: /Show context for Animal Man issue 2/ })
     await userEvent.setup().click(button)
@@ -469,6 +470,6 @@ describe('ReadingContextPillar crossover membership chips', () => {
     const chip = screen.getByRole('button', { name: 'Open Annihilation crossover' })
     expect(chip).toBeVisible()
     await userEvent.setup().click(chip)
-    expect(navigateSpy).toHaveBeenCalledWith('/crossovers/3')
+    expect(screen.getByTestId('location')).toHaveTextContent('/crossovers/3')
   })
 })
