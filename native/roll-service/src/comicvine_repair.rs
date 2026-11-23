@@ -1095,7 +1095,7 @@ async fn backfill_authorized(
         let claimable_rows = tx
             .query(
                 "WITH claimable AS ( \
-                    SELECT id, external_identity_id, state \
+                    SELECT id, external_identity_id, state, next_attempt_at \
                     FROM comicvine_metadata_refresh_requests \
                     WHERE external_identity_id = ANY($1::int[]) \
                     FOR UPDATE SKIP LOCKED \
