@@ -17,7 +17,7 @@ export interface RollPageState {
   isDirectReadOpen: boolean
   activeRatingThread: RatingThread | null
   showMigrationDialog: boolean
-  threadToMigrate: Pick<RatingThread, 'id' | 'title'> | null
+  threadToMigrate: RatingThread | null
   showSimpleMigration: boolean
   isRatingView: boolean
   isShuffleOpen: boolean
@@ -45,7 +45,7 @@ export interface RollPageStateSetters {
   setIsDirectReadOpen: (value: boolean) => void
   setActiveRatingThread: (value: RatingThread | null) => void
   setShowMigrationDialog: (value: boolean) => void
-  setThreadToMigrate: (value: Pick<RatingThread, 'id' | 'title'> | null) => void
+  setThreadToMigrate: (value: RatingThread | null) => void
   setShowSimpleMigration: (value: boolean) => void
   setIsRatingView: (value: boolean) => void
   setIsShuffleOpen: (value: boolean) => void
@@ -69,7 +69,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [isDirectReadOpen, setIsDirectReadOpen] = useState(false)
   const [activeRatingThread, setActiveRatingThread] = useState<RatingThread | null>(null)
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
-  const [threadToMigrate, setThreadToMigrate] = useState<Pick<RatingThread, 'id' | 'title'> | null>(null)
+  const [threadToMigrate, setThreadToMigrate] = useState<RatingThread | null>(null)
   const [showSimpleMigration, setShowSimpleMigration] = useState(false)
   const [isRatingView, setIsRatingView] = useState(false)
   const [isShuffleOpen, setIsShuffleOpen] = useState(false)
