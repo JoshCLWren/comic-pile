@@ -484,7 +484,7 @@ listThreads.mockImplementation(
       filtered_count: 0,
     })
     await act(async () => { await refresh })
-    expect(result.current.resultCountText).toBe('0 of 5 series')
+    await waitFor(() => expect(result.current.resultCountText).toBe('0 of 5 series'))
   })
 
   it('does not invent a count when the settled response omits filtered_count', async () => {
