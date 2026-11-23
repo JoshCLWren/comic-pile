@@ -1004,11 +1004,17 @@ async fn drain_authorized(
             break;
         };
         report.claimed += 1;
-        match process(state, &job, key).await? {
+        let (status, rate_limited) = process(state, &job, key).await?;
+        match status {
             "completed" => report.completed += 1,
             "no_credits" => report.no_credits += 1,
             "failed" => report.failed += 1,
             _ => report.deferred += 1,
+        }
+        if rate_limited {
+            // ComicVine throttles are provider-wide. The current row is durably
+            // deferred/failed; do not spend sibling requests during its cooldown.
+            break;
         }
         if index + 1 < BATCH_LIMIT {
             tokio::time::sleep(Duration::from_secs(1)).await;
