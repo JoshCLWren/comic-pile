@@ -74,10 +74,14 @@ beforeEach(() => {
   moveToFront.mockResolvedValue(undefined)
   fetchCards.mockImplementation(async (ids) => ids.map(cardFor))
   patchIssue.mockImplementation(async (id, input) => receipt(id, input.status ?? 'read'))
-  (mock_tagsApi.threadIssuesEffective as any).mockResolvedValue({ thread_id: 1, issues: [] })
-  (mock_customCBLApi.getReader as any).mockResolvedValue(structuredClone(view))
-  (mock_issuesApi.markRead as any).mockResolvedValue()
-  (mock_issuesApi.markUnread as any).mockResolvedValue()
+  // SAFETY: Test-only mock wiring for dependency-injected API seam.
+  ;(mock_tagsApi.threadIssuesEffective as any).mockResolvedValue({ thread_id: 1, issues: [] })
+  // SAFETY: Test-only mock wiring for dependency-injected API seam.
+  ;(mock_customCBLApi.getReader as any).mockResolvedValue(structuredClone(view))
+  // SAFETY: Test-only mock wiring for dependency-injected API seam.
+  ;(mock_issuesApi.markRead as any).mockResolvedValue()
+  // SAFETY: Test-only mock wiring for dependency-injected API seam.
+  ;(mock_issuesApi.markUnread as any).mockResolvedValue()
 })
 
 afterEach(() => {
