@@ -1073,7 +1073,8 @@ async fn backfill_authorized(
                 "SELECT external_identity_id \
                  FROM comicvine_metadata_refresh_requests \
                  WHERE external_identity_id = ANY($1::int[]) \
-                   AND state IN ('pending', 'running', 'deferred')",
+                   AND (state IN ('pending', 'running', 'deferred') OR \
+                        (state = 'failed' AND next_attempt_at > now()))",
                 &[&needs_fetch],
             )
             .await
@@ -1105,15 +1106,23 @@ async fn backfill_authorized(
             )
             .await
             .map_err(db::query_error)?;
-        let claimable: std::collections::HashMap<i32, String> = claimable_rows
+        let claimable: std::collections::HashMap<i32, (bool, bool)> = claimable_rows
             .iter()
-            .map(|row| (row.get::<_, i32>(0), row.get::<_, String>(1)))
+            .map(|row| {
+                (
+                    row.get::<_, i32>(0),
+                    (row.get::<_, bool>(1), row.get::<_, bool>(2)),
+                )
+            })
             .collect();
         let already_active = claimable
             .values()
-            .filter(|state| matches!(state.as_str(), "pending" | "running" | "deferred"))
+            .filter(|(already_scheduled, _)| *already_scheduled)
             .count() as u32;
-        let reopened = claimable.len() as u32 - already_active;
+        let reopened = claimable
+            .values()
+            .filter(|(_, reopenable)| *reopenable)
+            .count() as u32;
         let missing: Vec<i32> = needs_fetch
             .iter()
             .copied()
@@ -1137,8 +1146,9 @@ async fn backfill_authorized(
             .map_err(db::query_error)? as u32;
         }
         // Only inserts and reopened terminal rows are new work. Active rows,
-        // plus rows concurrently locked or inserted by another worker, were
-        // already queued and must not inflate the operator-facing audit.
+        // failed rows still cooling down, plus rows concurrently locked or
+        // inserted by another worker, were already queued and must not inflate
+        // the operator-facing audit or bypass durable backoff.
         let unresolved = missing.len() as u32 - inserted;
         report.enqueued = reopened + inserted;
         report.already_queued_or_fresh += already_active + unresolved;

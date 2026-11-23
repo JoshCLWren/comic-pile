@@ -1165,7 +1165,8 @@ async fn enqueue_hydration_if_needed(
 /// request rows (a worker claiming/persisting them) are skipped with
 /// `SKIP LOCKED`, preserving the same deadlock-avoidance contract as the
 /// single-identity enqueue. Idempotent: pending/running/deferred rows and
-/// fresh complete metadata are left alone.
+/// fresh complete metadata and failed rows still inside their retry cooldown
+/// are left alone.
 async fn enqueue_hydration_for_identities(
     tx: &Transaction<'_>,
     identity_ids: &[i32],
@@ -1213,8 +1214,14 @@ async fn enqueue_hydration_for_identities(
                     lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
                     updated_at = now() \
                 FROM claimable c \
-                WHERE r.id = c.id AND r.state NOT IN ('pending', 'running', 'deferred') \
-                RETURNING r.external_identity_id \
+                WHERE r.id = c.id AND ( \
+                   (r.state = 'completed' AND (r.completed_at IS NULL OR \
+                     r.completed_at <= now() - interval '30 days')) OR \
+                   (r.state = 'no_credits' AND (r.completed_at IS NULL OR \
+                     r.completed_at <= now() - interval '7 days')) OR \
+                   (r.state = 'failed' AND r.next_attempt_at <= now()) \
+                 ) \
+                 RETURNING r.external_identity_id \
              ) \
              SELECT external_identity_id FROM claimable",
             &[&needs_fetch],
