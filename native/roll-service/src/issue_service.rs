@@ -1463,7 +1463,7 @@ mod tests {
         // thread is not a random Roll candidate. Its prerequisites cannot
         // veto a direct read, and the test rolls it back to keep the automatic
         // eligibility fixtures unmodified for the following assertions.
-        let blocked_action = request(Some("read"), Some(4.0));
+        let mut blocked_action = request(Some("read"), Some(4.0));
         blocked_action.idempotency_key = "direct-blocked-owned-issue-01".into();
         let tx = first.transaction().await.unwrap();
         let blocked_owned = persist(&tx, user, 301, &blocked_action)
