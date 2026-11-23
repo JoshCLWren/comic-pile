@@ -836,6 +836,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn github_oauth_routes_are_registered_in_production_ingress() {
+        // The inner router tests authorization. This test catches routes
+        // missing from the separate Vercel entrypoint (404/405).
+        for (method, path) in [
+            ("GET", "/api/v2/factory/github/start"),
+            ("GET", "/api/v2/factory/github/callback"),
+            ("GET", "/api/v2/factory/github/session"),
+            ("OPTIONS", "/api/v2/factory/github/session"),
+            ("POST", "/api/v2/factory/github/dispatch"),
+            ("OPTIONS", "/api/v2/factory/github/dispatch"),
+        ] {
+            let response = app()
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("factory ingress response");
+            assert_ne!(response.status(), StatusCode::NOT_FOUND, "{method} {path}");
+            assert_ne!(
+                response.status(),
+                StatusCode::METHOD_NOT_ALLOWED,
+                "{method} {path}"
+            );
+            assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+        }
+    }
+
+    #[tokio::test]
     async fn guest_demo_ingress_needs_no_auth_or_database_state() {
         let mut router = app();
         let response = router
