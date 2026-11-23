@@ -151,10 +151,21 @@ await injectModuleDoubles(await import('../pages/RollPage/components/RatingView'
   </div>
 } }))
 
+function LocationProbe() {
+  const location = useLocation()
+  return (
+    <>
+      <div data-testid="location-pathname">{location.pathname}</div>
+      <div data-testid="location-state">{JSON.stringify(location.state)}</div>
+    </>
+  )
+}
+
 function renderRollPage() {
   return render(
     <MemoryRouter>
       <NavigationSpy navigate={spies.navigate} />
+      <LocationProbe />
       <RollPage />
     </MemoryRouter>,
   )
@@ -270,7 +281,8 @@ describe('RollPage parent handlers', () => {
     await user.click(snoozeAction)
     await openActions()
     await user.click(screen.getByRole('button', { name: /edit series/i }))
-    expect(spies.navigate).toHaveBeenCalledWith('/thread/1', { state: { openEditModal: true } })
+    expect(screen.getByTestId('location-pathname')).toHaveTextContent('/thread/1')
+    expect(screen.getByTestId('location-state')).toHaveTextContent('{"openEditModal":true}')
 
     await user.click(screen.getAllByRole('button', { name: 'd6' })[0]!)
     await user.click(screen.getAllByRole('button', { name: 'd4' })[0]!)
@@ -351,7 +363,7 @@ describe('RollPage parent handlers', () => {
     // guarantee (issue #4140). The reader still lands on /queue (issue #3107).
     expect(spies.dismissPending).not.toHaveBeenCalled()
     await waitFor(() => expect(spies.invalidateRollBootstrapOnNavigation).toHaveBeenCalled())
-    await waitFor(() => expect(spies.navigate).toHaveBeenCalledWith('/queue'))
+    await waitFor(() => expect(screen.getByTestId('location-pathname')).toHaveTextContent('/queue'))
 
     // navigate is mocked here, so the page is still mounted. The preserved
     // pending read keeps the rating controls available rather than leaving the
@@ -369,7 +381,7 @@ describe('RollPage parent handlers', () => {
 
     await user.click(screen.getByTestId('roll-back-to-queue'))
     expect(spies.dismissPending).not.toHaveBeenCalled()
-    await waitFor(() => expect(spies.navigate).toHaveBeenCalledWith('/queue'))
+    await waitFor(() => expect(screen.getByTestId('location-pathname')).toHaveTextContent('/queue'))
 
     // Returning to Roll remounts the page and hydrates from bootstrap. Because
     // "Back to queue" never dismissed the read, the server still reports the
@@ -771,7 +783,7 @@ describe('RollPage parent handlers', () => {
     renderRollPage()
     expect(screen.getByText('Session Error')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /go to login/i }))
-    expect(spies.navigate).toHaveBeenCalledWith('/login')
+    expect(screen.getByTestId('location-pathname')).toHaveTextContent('/login')
   })
 
   it('issues no optional detail fetches on rating entry while rating stays usable (#2764)', async () => {
