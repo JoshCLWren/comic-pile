@@ -624,7 +624,7 @@ describe('CblBrowserPage source list result count (#3614)', () => {
       catalog_total: 13,
     })
     await user.type(screen.getByLabelText('Search source lists'), 'x-men')
-    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await user.keyboard('{Enter}')
 
     await waitFor(() => {
       expect(countLine()).toHaveTextContent('2 of 13 source lists')
