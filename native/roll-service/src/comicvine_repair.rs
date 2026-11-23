@@ -823,9 +823,13 @@ async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'sta
             }
         }
         Err(error) => {
+            let rate_limited = matches!(error, ProviderFailure::RateLimited(_));
             let (status, delay, code) = failure_transition(&error, job.attempt);
             settle(state, job, status, delay, Some(code)).await?;
-            Ok(status)
+            // The durable state remains deferred/failed; this internal outcome
+            // tells the batch driver that the provider-wide throttle must stop
+            // sibling claims as well as this identity's retry.
+            Ok(if rate_limited { "rate_limited" } else { status })
         }
     }
 }
