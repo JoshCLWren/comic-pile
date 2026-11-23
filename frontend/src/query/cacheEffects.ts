@@ -209,6 +209,17 @@ export async function applyUpdatedThreadCache(
   ])
 }
 
+/** Reopen a manually selected series after tracking migration. */
+export async function invalidateDirectReadIssueSelection(
+  client: QueryClient,
+  threadId: number,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.thread.nextUnreadIssue(threadId) }),
+    client.invalidateQueries({ queryKey: queryKeys.thread.directReadBrowse(threadId) }),
+  ])
+}
+
 export async function invalidateAfterIssueEdit(
   client: QueryClient,
   threadId: number,
