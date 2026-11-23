@@ -2000,6 +2000,40 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn provider_urls_match_python_canonical_slash_policy() {
+        for (resource, expected_path) in [
+            (
+                "issue/4000-1",
+                "/api/issue/4000-1?api_key=TESTKEY123&format=json",
+            ),
+            (
+                "volume/4050-2",
+                "/api/volume/4050-2?api_key=TESTKEY123&format=json",
+            ),
+            (
+                "issues",
+                "/api/issues/?api_key=TESTKEY123&format=json",
+            ),
+            (
+                "search",
+                "/api/search/?api_key=TESTKEY123&format=json",
+            ),
+        ] {
+            let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+            fake.push_ok(
+                StatusCode::OK,
+                HeaderMap::new(),
+                Bytes::from_static(br#"{"results": {}}"#),
+            );
+            let outbound: Arc<dyn crate::outbound::OutboundHttp> = fake.clone();
+            provider_response(&outbound, resource, "", "TESTKEY123")
+                .await
+                .expect("valid provider envelope");
+            assert_eq!(fake.calls()[0].path, expected_path);
+        }
+    }
+
     #[test]
     fn backoff_does_not_retry_exhausted_jobs_without_cooldown() {
         assert!(CLAIM.contains("FOR UPDATE SKIP LOCKED"));
