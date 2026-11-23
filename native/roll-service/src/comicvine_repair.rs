@@ -2179,10 +2179,13 @@ mod tests {
         .await
         .expect("dry backfill")
         .0;
-        assert_eq!(dry.scanned, 4);
-        assert_eq!(dry.needs_enqueue, 2, "missing and terminal rows need work");
+        assert_eq!(dry.scanned, 5);
+        assert_eq!(dry.needs_enqueue, 2, "missing and due terminal rows need work");
         assert_eq!(dry.enqueued, 0);
-        assert_eq!(dry.already_queued_or_fresh, 2, "active and fresh rows");
+        assert_eq!(
+            dry.already_queued_or_fresh, 3,
+            "active, fresh, and cooling-down rows"
+        );
         assert_eq!(dry.next_after_id, None);
         let unchanged: i64 = connection
             .query_one(
