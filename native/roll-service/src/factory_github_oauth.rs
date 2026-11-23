@@ -5,10 +5,7 @@
 //! No GitHub access token or application secret ever reaches the public page.
 #![forbid(unsafe_code)]
 
-use crate::{
-    outbound::OutboundRequest,
-    ApiError, AppState,
-};
+use crate::{outbound::OutboundRequest, ApiError, AppState};
 use axum::{
     body::Bytes,
     extract::{Query, State},
@@ -134,7 +131,11 @@ fn verified_session(state: &AppState, token: &str) -> Result<AdminSession, ApiEr
     .map_err(|_| ApiError::Unauthorized("GitHub sign-in expired or invalid".into()))?
     .claims;
     if claims.aud != SESSION_AUDIENCE
-        || claims.sub.parse::<u64>().ok().is_none_or(|id| !is_admin(id))
+        || claims
+            .sub
+            .parse::<u64>()
+            .ok()
+            .is_none_or(|id| !is_admin(id))
         || claims.exp > seconds() + SESSION_TTL_SECONDS
     {
         return Err(ApiError::Forbidden("Not a Rotisserie administrator".into()));
@@ -162,10 +163,9 @@ fn state_cookie(headers: &HeaderMap) -> Option<&str> {
 }
 
 fn secure_response(mut response: Response) -> Response {
-    response.headers_mut().insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("no-store"),
-    );
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response.headers_mut().insert(
         header::REFERRER_POLICY,
         HeaderValue::from_static("no-referrer"),
@@ -191,9 +191,7 @@ fn with_cookie(mut response: Response, value: &str) -> Response {
 fn clear_cookie(response: Response) -> Response {
     with_cookie(
         response,
-        &format!(
-            "{STATE_COOKIE}=; Path={COOKIE_PATH}; Max-Age=0; Secure; HttpOnly; SameSite=Lax"
-        ),
+        &format!("{STATE_COOKIE}=; Path={COOKIE_PATH}; Max-Age=0; Secure; HttpOnly; SameSite=Lax"),
     )
 }
 
@@ -223,11 +221,7 @@ pub async fn start(State(state): State<Arc<AppState>>) -> Response {
         Err(error) => return secure_response(error.into_response()),
     };
     let nonce = Uuid::new_v4().simple().to_string();
-    let verifier = format!(
-        "{}{}",
-        Uuid::new_v4().simple(),
-        Uuid::new_v4().simple(),
-    );
+    let verifier = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple(),);
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
     let pending = OAuthState {
         aud: STATE_AUDIENCE.into(),
@@ -241,7 +235,11 @@ pub async fn start(State(state): State<Arc<AppState>>) -> Response {
         &EncodingKey::from_secret(state.jwt_secret.as_bytes()),
     ) {
         Ok(value) => value,
-        Err(_) => return secure_response(ApiError::Internal("Sign-in unavailable".into()).into_response()),
+        Err(_) => {
+            return secure_response(
+                ApiError::Internal("Sign-in unavailable".into()).into_response(),
+            )
+        }
     };
     let query = form_urlencoded::Serializer::new(String::new())
         .append_pair("client_id", &client_id)
@@ -264,20 +262,22 @@ async fn provider_json(
     host: &str,
     request: OutboundRequest,
 ) -> Result<(StatusCode, Value), ApiError> {
-    let response = tokio::time::timeout(
-        Duration::from_secs(10),
-        state.outbound.send(host, request),
-    )
-    .await
-    .map_err(|_| ApiError::ServiceUnavailable("GitHub authentication timed out".into()))?
-    .map_err(|_| ApiError::ServiceUnavailable("GitHub authentication unavailable".into()))?;
+    let response =
+        tokio::time::timeout(Duration::from_secs(10), state.outbound.send(host, request))
+            .await
+            .map_err(|_| ApiError::ServiceUnavailable("GitHub authentication timed out".into()))?
+            .map_err(|_| {
+                ApiError::ServiceUnavailable("GitHub authentication unavailable".into())
+            })?;
     if response
         .body
         .size_hint()
         .upper()
         .is_some_and(|length| length > MAX_PROVIDER_RESPONSE as u64)
     {
-        return Err(ApiError::ServiceUnavailable("Invalid GitHub response".into()));
+        return Err(ApiError::ServiceUnavailable(
+            "Invalid GitHub response".into(),
+        ));
     }
     let status = response.status;
     let bytes = tokio::time::timeout(Duration::from_secs(10), response.body.collect())
@@ -286,7 +286,9 @@ async fn provider_json(
         .map_err(|_| ApiError::ServiceUnavailable("Invalid GitHub response".into()))?
         .to_bytes();
     if bytes.len() > MAX_PROVIDER_RESPONSE {
-        return Err(ApiError::ServiceUnavailable("GitHub response too large".into()));
+        return Err(ApiError::ServiceUnavailable(
+            "GitHub response too large".into(),
+        ));
     }
     let data: Value = serde_json::from_slice(&bytes)
         .map_err(|_| ApiError::ServiceUnavailable("Invalid GitHub response".into()))?;
@@ -299,7 +301,9 @@ async fn finish_callback(
     params: CallbackParams,
 ) -> Result<Response, ApiError> {
     if params.error.is_some() {
-        return Err(ApiError::Unauthorized("GitHub sign-in was cancelled".into()));
+        return Err(ApiError::Unauthorized(
+            "GitHub sign-in was cancelled".into(),
+        ));
     }
     let code = params
         .code
@@ -333,7 +337,10 @@ async fn finish_callback(
         path: "/login/oauth/access_token".into(),
         headers: vec![
             ("Accept".into(), "application/json".into()),
-            ("Content-Type".into(), "application/x-www-form-urlencoded".into()),
+            (
+                "Content-Type".into(),
+                "application/x-www-form-urlencoded".into(),
+            ),
             ("User-Agent".into(), "ComicPile-Rotisserie".into()),
         ],
         body: HttpBytes::from(form),
@@ -361,13 +368,17 @@ async fn finish_callback(
     );
     let (status, user_body) = provider_json(&state, "api.github.com", request).await?;
     if !status.is_success() {
-        return Err(ApiError::Unauthorized("Could not verify GitHub identity".into()));
+        return Err(ApiError::Unauthorized(
+            "Could not verify GitHub identity".into(),
+        ));
     }
     let user: GitHubUser = serde_json::from_value(user_body)
         .map_err(|_| ApiError::Unauthorized("Could not verify GitHub identity".into()))?;
     if !is_admin(user.id) {
         tracing::warn!(github_user_id = user.id, "Rotisserie OAuth admin denied");
-        return Err(ApiError::Forbidden("GitHub user is not a Rotisserie administrator".into()));
+        return Err(ApiError::Forbidden(
+            "GitHub user is not a Rotisserie administrator".into(),
+        ));
     }
     let now = seconds();
     let session = AdminSession {
@@ -400,14 +411,15 @@ pub async fn callback(
     match result {
         Ok(response) => clear_cookie(response),
         Err(error) => {
-            tracing::warn!(error_kind = "github_oauth_rejected", "Rotisserie OAuth sign-in failed");
+            tracing::warn!(
+                error_kind = "github_oauth_rejected",
+                "Rotisserie OAuth sign-in failed"
+            );
             let code = match error {
                 ApiError::Forbidden(_) => "not_admin",
                 _ => "sign_in_failed",
             };
-            clear_cookie(redirect(&format!(
-                "{PAGES_URL}#rotisserie_error={code}"
-            )))
+            clear_cookie(redirect(&format!("{PAGES_URL}#rotisserie_error={code}")))
         }
     }
 }
@@ -430,8 +442,10 @@ pub async fn session(State(state): State<Arc<AppState>>, headers: HeaderMap) -> 
             return Err(ApiError::Forbidden("Invalid dashboard origin".into()));
         }
         let session = session_from_headers(&state, &headers)?;
-        Ok(json!({"authenticated": true, "login": session.login, "github_id": session.sub,
-            "expires_at": session.exp}))
+        Ok(
+            json!({"authenticated": true, "login": session.login, "github_id": session.sub,
+            "expires_at": session.exp}),
+        )
     })();
     cors(match result {
         Ok(payload) => Json(payload).into_response(),
@@ -468,8 +482,14 @@ async fn dispatch_inner(
         .unwrap_or("");
     if !matches!(
         operation,
-        "run" | "unstick" | "cancel" | "sync" | "doctor_fix"
-            | "release_expired" | "settings" | "prioritize"
+        "run"
+            | "unstick"
+            | "cancel"
+            | "sync"
+            | "doctor_fix"
+            | "release_expired"
+            | "settings"
+            | "prioritize"
     ) {
         return Err(ApiError::BadRequest("Unsupported factory operation".into()));
     }
@@ -481,7 +501,9 @@ async fn dispatch_inner(
     let token = std::env::var("GITHUB_TOKEN")
         .ok()
         .filter(|token| !token.is_empty())
-        .ok_or_else(|| ApiError::ServiceUnavailable("GitHub workflow dispatch unavailable".into()))?;
+        .ok_or_else(|| {
+            ApiError::ServiceUnavailable("GitHub workflow dispatch unavailable".into())
+        })?;
     let request = OutboundRequest {
         method: Method::POST,
         path: format!("/repos/{REPO}/actions/workflows/rotisserie-operator.yml/dispatches"),
