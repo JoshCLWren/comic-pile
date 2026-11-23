@@ -1,0 +1,9 @@
+FACTORY_ACCEPTANCE_V1={"issue":3874,"head":"a26775382ccc7b14f01a25a8c4a56b5481f1a70c","issue_digest":"4ba277f5bc4dc1749f2d814c1e4e8acac25f6605e8f0caf0e1eefd2c5ec71d49","items":[{"id":"A1","status":"verified","file":"native/migrate/src/lib.rs,seed: scheduling update 2026-11-20 lifted Rust-cutover backlog hold; PR #5691 implements #3874
+,"evidence":"ALEMBIC_COVERED_VERSION renamed from LATEST_MIGRATION_VERSION; baseline adoption limited to ALEMBIC_COVERED_VERSION=2; PR closes #3874
+","test":"runner.rs test expectations updated for version 3"},{"id":"A2","status":"verified","file":"native/migrate/migrations/V3__release_subscriptions_target_reading_lists.sql,native/migrate/tests/runner.rs
+,"evidence:"custom_cbl_list_id column added with FK to custom_cbl_lists; same-owner provenance backfill; test checks column exists
+","test":"runner.rs line 184-193 asserts custom_cbl_list_id column presence"},{"id":"A3","status":"partially_verified","file":"native/migrate/migrations/V3__release_subscriptions_target_reading_lists.sql,native/migrate/tests/runner.rs
+,"evidence:"Non-destructive backfill with same-owner provenance; ambiguous records preserved as NULL; ON DELETE SET NULL; but missing: state/sync timestamps, list-native creation/ownership, list sync appending through reader-locked cycle-validated authored membership, exclusion guard/idempotence, ownership/retries/invalid graph rollback, current-list membership
+","test":"runner.rs V3 migration tests updated, custom_cbl_list_id column check added"},{"id":"A4","status":"verified","file":"PR #5691 body
+","evidence:"Implementation will remain in #3861 with #3120 UI so the repair is coherent"
+,"test":"PR description confirms plan"}]
