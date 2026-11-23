@@ -1,38 +1,38 @@
-utc: 2026-11-23T02:52:57Z
-uptime: 1040.31s load: 1.42 0.58 0.32
-processes: 172
+utc: 2026-11-23T02:53:14Z
+uptime: 1056.86s load: 2.59 0.90 0.43
+processes: 169
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15982        2258        9698          51        4421       13723
+Mem:           15982        2704        8868          51        4806       13277
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
-/dev/root       145G   61G   85G  42% /
-/dev/root       145G   61G   85G  42% /
+/dev/root       145G   61G   84G  42% /
+/dev/root       145G   61G   84G  42% /
 --- top rss (KiB, name only)
-832928 kilo
+839568 kilo
+434464 rustc
 213292 Runner.Worker
-201800 rustc
-200844 rustc
-160432 rustc
 153168 provjobd3048875
 119968 Runner.Listener
-119816 rustc
 81212 dockerd
-69756 cargo
+69816 cargo
 56252 php-fpm8.5
-46208 ExtHandler
+56160 rustc
+46248 ExtHandler
 46056 containerd
 36900 Daemon
 30156 networkd-dispat
+21460 php-fpm8.5
+21460 php-fpm8.5
 --- top cpu (name only)
-97.7 rustc
-93.5 rustc
-89.0 rustc
-82.5 rustc
-36.6 kilo
- 3.6 cargo
+98.4 rustc
+85.7 rustc
+32.2 kilo
+ 2.7 cargo
  1.6 provjobd3048875
  0.7 Runner.Worker
+ 0.3 hv_kvp_daemon
+ 0.2 systemd
 --- kernel oom/kill
 --- shutdown/session signals
