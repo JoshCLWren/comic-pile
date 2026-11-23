@@ -1185,15 +1185,24 @@ async fn enqueue_import_hydration_if_needed(
 }
 
 /// Set-based hydration enqueue for confirmed imported issue identities (#5592).
-/// For each identity whose metadata still needs a deep provider fetch, this
-/// reopens a finished unlocked refresh row or inserts a pending row. Locked
-/// request rows (a worker claiming/persisting them) are skipped with
-/// `SKIP LOCKED`, preserving the same deadlock-avoidance contract as the
-/// single-identity enqueue. Idempotent: pending/running/deferred rows and
-/// fresh complete metadata are left alone.
 async fn enqueue_hydration_for_identities(
     tx: &Transaction<'_>,
     identity_ids: &[i32],
+) -> Result<(), ApiError> {
+    enqueue_hydration_for_identities_with_policy(tx, identity_ids, HydrationEnqueuePolicy::Import)
+        .await
+}
+
+/// For each identity whose metadata still needs a deep provider fetch, reopen
+/// an eligible unlocked refresh row or insert a pending row. Locked request
+/// rows are skipped with `SKIP LOCKED`, preserving the deadlock-avoidance
+/// contract. Automatic imports leave active work, cooling failures, and recent
+/// terminal rows untouched; only explicit confirmation forces a finished row
+/// to reopen immediately.
+async fn enqueue_hydration_for_identities_with_policy(
+    tx: &Transaction<'_>,
+    identity_ids: &[i32],
+    policy: HydrationEnqueuePolicy,
 ) -> Result<(), ApiError> {
     if identity_ids.is_empty() {
         return Ok(());
