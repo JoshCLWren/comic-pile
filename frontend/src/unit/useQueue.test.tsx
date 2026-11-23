@@ -437,6 +437,7 @@ listThreads.mockImplementation(
         filtered_count: 5,
       })
       .mockResolvedValueOnce({
+        // SAFETY: the stubbed page supplies only the thread fields the pager reads
         threads: [{ id: 2 } as never],
         next_page_token: null,
         active_count: 5,
