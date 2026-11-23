@@ -38,7 +38,7 @@ function issueList(id: number | null): IssueListResponse {
     // and status fields consumed by QueueNextIssueCard; other issue fields are
     // irrelevant to the on-demand resolver assertion below.
     issues: id == null ? [] : [{
-      id, issue_number: id === 37 ? '9' : '10', status: 'unread',
+      id, thread_id: 42, issue_number: id === 37 ? '9' : '10', status: 'unread',
     }] as IssueListResponse['issues'],
     total_count: id == null ? 0 : 1,
     page_size: 1,
@@ -69,19 +69,31 @@ describe('Queue exact-issue shared actions', () => {
     expect(screen.getByTestId('shared-queue-card')).toHaveTextContent('Hellboy #9')
     await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([37]))
     expect(list).toHaveBeenCalledExactlyOnceWith(42, { status: 'unread', page_size: 1 })
-    expect(screen.getByText(/Direct reading does not change/)).toBeVisible()
+    expect(screen.getByText(/pending Roll and die are preserved/)).toBeVisible()
   })
 
-  it('advances to the next canonical issue after a direct read without mutating Roll', async () => {
-    list.mockResolvedValueOnce(issueList(37)).mockResolvedValueOnce(issueList(38))
+  it('chooses an alternate owned issue without altering the pending automatic Roll offer', async () => {
+    list.mockImplementation(async (_threadId, options) => {
+      if (options?.status === 'unread') return issueList(37)
+      return {
+        ...issueList(37),
+        issues: [
+          { id: 37, thread_id: 42, issue_number: '9', status: 'unread' },
+          { id: 38, thread_id: 42, issue_number: '10', status: 'unread' },
+        ],
+        page_size: 50,
+        total_count: 2,
+      } as IssueListResponse
+    })
     fetchCards.mockImplementation(async (ids) => [ids[0] === 37 ? card : {
       ...card, issue_id: 38, issue_number: '10',
     }])
     setup()
-    await screen.findByTestId('shared-queue-card')
-    fireEvent.click(screen.getByRole('button', { name: 'Simulate direct save' }))
+    expect(await screen.findByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '37')
+    fireEvent.click(screen.getByRole('button', { name: 'Choose another owned issue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Hellboy #10 (unread)' }))
     await waitFor(() => expect(screen.getByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '38'))
-    expect(list).toHaveBeenCalledTimes(2)
+    expect(list).toHaveBeenCalledWith(42, { page_size: 50, page_token: undefined })
   })
 
   it('reports lookup failure with a retry and never fabricates an issue card', async () => {
@@ -101,6 +113,6 @@ describe('Queue exact-issue shared actions', () => {
     view.unmount()
     list.mockResolvedValue(issueList(null))
     setup()
-    expect(await screen.findByText('No tracked unread issues remain for this series.')).toBeVisible()
+    expect(await screen.findByText('No unread tracked issue remains.')).toBeVisible()
   })
 })
