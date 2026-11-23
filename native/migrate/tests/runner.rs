@@ -243,7 +243,8 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
 }
 
 #[tokio::test]
-async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_same_owner_provenance() {
+async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_same_owner_provenance(
+) {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     alembic_managed_at_head(&client).await;

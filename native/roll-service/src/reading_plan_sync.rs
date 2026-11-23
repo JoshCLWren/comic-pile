@@ -2104,7 +2104,9 @@ mod tests {
         assert_eq!(report.created_issues, 1);
         assert_eq!(report.reused_issues, 1);
 
-        let connection = crate::db::checkout(&state).await.expect("verify connection");
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("verify connection");
         let entries = connection
             .query(
                 "SELECT issue_id, position, gate, skipped FROM custom_cbl_entries \
@@ -2150,7 +2152,10 @@ mod tests {
             .await
             .expect("existing read progress")
             .get(0);
-        assert!(preserved_read, "sync must not change existing read progress");
+        assert!(
+            preserved_read,
+            "sync must not change existing read progress"
+        );
         drop(connection);
 
         let retry = sync_released_issues_for_user_with_rosters(
@@ -2205,7 +2210,9 @@ mod tests {
         assert_eq!(report.successful_sources, 0);
         assert!(report.failures[0].error.contains("cycle validation failed"));
 
-        let connection = crate::db::checkout(&state).await.expect("verify connection");
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("verify connection");
         let entries = connection
             .query(
                 "SELECT issue_id, position, gate, skipped FROM custom_cbl_entries \
@@ -2235,7 +2242,10 @@ mod tests {
             .await
             .expect("rollback sync timestamp")
             .get(0);
-        assert!(unsynced, "a rolled-back source must not record a successful sync");
+        assert!(
+            unsynced,
+            "a rolled-back source must not record a successful sync"
+        );
     }
 
     #[tokio::test]

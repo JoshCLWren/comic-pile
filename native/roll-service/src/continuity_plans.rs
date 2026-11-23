@@ -4477,13 +4477,10 @@ mod tests {
             external_identity_id: 483810,
             custom_cbl_list_id,
         };
-        let (_, Json(ambiguous)) = create_release_source(
-            State(state.clone()),
-            user,
-            Json(payload(483881, None)),
-        )
-        .await
-        .expect("ambiguous provenance remains unlinked");
+        let (_, Json(ambiguous)) =
+            create_release_source(State(state.clone()), user, Json(payload(483881, None)))
+                .await
+                .expect("ambiguous provenance remains unlinked");
         assert_eq!(ambiguous.custom_cbl_list_id, None);
 
         let connection = db::checkout(&state).await.expect("disable connection");
@@ -4533,13 +4530,10 @@ mod tests {
         .expect_err("another reader's list must not be associated");
         assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
 
-        let (_, Json(inferred)) = create_release_source(
-            State(state.clone()),
-            user,
-            Json(payload(483882, None)),
-        )
-        .await
-        .expect("single same-owner provenance");
+        let (_, Json(inferred)) =
+            create_release_source(State(state.clone()), user, Json(payload(483882, None)))
+                .await
+                .expect("single same-owner provenance");
         assert_eq!(inferred.custom_cbl_list_id, Some(483832));
         let (_, Json(explicit)) = create_release_source(
             State(state.clone()),
