@@ -397,6 +397,7 @@ listThreads.mockImplementation(
         () => new Promise((resolve) => { resolveAlpha = resolve }),
       )
       .mockResolvedValueOnce({
+        // SAFETY: the stubbed page supplies only the thread fields this search reads
         threads: [{ id: 2, title: 'Beta' } as never],
         next_page_token: null,
         active_count: 5,
