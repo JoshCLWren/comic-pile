@@ -1875,6 +1875,8 @@ pub async fn import_issue(
     // #5592: single-issue adoption is an import commit too — durable hydration
     // work is part of that commit, not best-effort follow-up. If enqueue fails,
     // abort the whole import rather than returning success without repair work.
+    // Unlike `link_confirmed`, this is a new import, so no pre-existing user
+    // mapping is lost when the transaction rolls back.
     enqueue_hydration_if_needed(&tx, external_identity_id).await?;
 
     let mut response = ImportIssueResponse {
