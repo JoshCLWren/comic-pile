@@ -224,6 +224,16 @@ fn app() -> Router {
         .route("/api/v2/health", get(native_health))
         .route("/api/metrics", get(native_metrics))
         .route("/api/v1/metrics", get(native_metrics))
+        .route("/api/v2/factory/github/start", get(native_dispatch))
+        .route("/api/v2/factory/github/callback", get(native_dispatch))
+        .route(
+            "/api/v2/factory/github/session",
+            get(native_dispatch).options(native_dispatch),
+        )
+        .route(
+            "/api/v2/factory/github/dispatch",
+            post(native_dispatch).options(native_dispatch),
+        )
         .route("/api/v2/identity-inbox", get(native_dispatch))
         .route("/api/v2/identity-inbox/issue-matches", get(native_dispatch))
         .route("/api/v2/identity-inbox/{mapping_id}", get(native_dispatch))
