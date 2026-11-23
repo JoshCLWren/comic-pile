@@ -6888,6 +6888,11 @@ export interface components {
              * @default 0
              */
             active_count: number;
+            /**
+             * Format: int32
+             * @description Total active Queue rows matching the applied search, independent of the bounded page.
+             */
+            filtered_count?: number | null;
             /** Next Page Token */
             next_page_token?: string | null;
             /** Threads */
