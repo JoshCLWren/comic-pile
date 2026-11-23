@@ -238,6 +238,108 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
 }
 
 #[tokio::test]
+async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_provenance() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    alembic_managed_at_head(&client).await;
+    client
+        .batch_execute(
+            "INSERT INTO public.users (id, username) VALUES
+                 (1, 'release-owner'), (2, 'foreign-owner');
+             INSERT INTO public.continuity_plans
+                 (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+             VALUES
+                 (101, 1, 'Single', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),
+                 (102, 1, 'Ambiguous', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),
+                 (103, 1, 'Foreign', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),
+                 (104, 1, 'Unpaired', 'informational', '[]'::json, '[]'::json, NOW(), NOW());
+             INSERT INTO public.threads
+                 (id, title, format, issues_remaining, queue_position, status, user_id)
+             VALUES
+                 (1001, 'One', 'Comic', 0, 1, 'active', 1),
+                 (1002, 'Two', 'Comic', 0, 2, 'active', 1),
+                 (1003, 'Three', 'Comic', 0, 3, 'active', 1),
+                 (1004, 'Four', 'Comic', 0, 4, 'active', 1);
+             INSERT INTO public.external_identities
+                 (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+             VALUES (9001, 'comicvine', 'series', '4050-9001', '{}'::json, NOW(), NOW());
+             INSERT INTO public.custom_cbl_lists
+                 (id, user_id, name, mode, created_at, updated_at)
+             VALUES
+                 (201, 1, 'Owned A', 'loose', NOW(), NOW()),
+                 (202, 1, 'Owned B', 'loose', NOW(), NOW()),
+                 (203, 2, 'Foreign', 'loose', NOW(), NOW());
+             INSERT INTO public.reading_plan_sources
+                 (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+             VALUES
+                 (101, 'fixture://single', 201, NOW()),
+                 (102, 'fixture://ambiguous-a', 201, NOW()),
+                 (102, 'fixture://ambiguous-b', 202, NOW()),
+                 (103, 'fixture://foreign', 203, NOW());
+             INSERT INTO public.reading_plan_release_sources
+                 (id, plan_id, thread_id, external_identity_id, enabled,
+                  last_synced_at, created_at, updated_at)
+             VALUES
+                 (1001, 101, 1001, 9001, FALSE,
+                  '2024-01-02T03:04:05+00', '2023-01-01T00:00:00+00', '2024-01-02T03:04:05+00'),
+                 (1002, 102, 1002, 9001, TRUE,
+                  '2024-02-03T04:05:06+00', '2023-01-02T00:00:00+00', '2024-02-03T04:05:06+00'),
+                 (1003, 103, 1003, 9001, FALSE,
+                  NULL, '2023-01-03T00:00:00+00', '2023-01-03T00:00:00+00'),
+                 (1004, 104, 1004, 9001, TRUE,
+                  '2024-03-04T05:06:07+00', '2023-01-04T00:00:00+00', '2024-03-04T05:06:07+00');",
+        )
+        .await
+        .unwrap();
+
+    let snapshot = |client: &Client| async move {
+        client
+            .query(
+                "SELECT id, enabled, last_synced_at::text, created_at::text, updated_at::text \
+                 FROM public.reading_plan_release_sources ORDER BY id",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|row| {
+                (
+                    row.get::<_, i32>(0),
+                    row.get::<_, bool>(1),
+                    row.get::<_, Option<String>>(2),
+                    row.get::<_, String>(3),
+                    row.get::<_, String>(4),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let before = snapshot(&client).await;
+
+    let report = run(&mut client).await.unwrap();
+    assert_eq!((report.applied, report.adopted), (vec![3], vec![1, 2]));
+
+    let after = snapshot(&client).await;
+    assert_eq!(after, before, "subscription identity/state/timestamps must survive");
+    let links: Vec<Option<i32>> = client
+        .query(
+            "SELECT custom_cbl_list_id FROM public.reading_plan_release_sources ORDER BY id",
+            &[],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(links, vec![Some(201), None, None, None]);
+
+    let again = run(&mut client).await.unwrap();
+    assert_eq!((again.applied, again.adopted), (vec![], vec![]));
+    assert_eq!(snapshot(&client).await, before);
+    drop(client);
+    db.drop_database().await;
+}
+
+#[tokio::test]
 async fn alembic_database_at_baseline_head_adopts_baseline_and_runs_pending() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
