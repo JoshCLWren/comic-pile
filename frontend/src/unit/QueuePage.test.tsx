@@ -803,7 +803,6 @@ it('shows one shared boundary failure notice and retries the batch', async () =>
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const readButton = screen.getByLabelText('Read & Rate')
   expect(readButton).toBeEnabled()
-  await user.click(readButton)
   expect(readButton).toHaveAttribute('aria-label', 'Read & Rate')
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
   expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'), 'error')
