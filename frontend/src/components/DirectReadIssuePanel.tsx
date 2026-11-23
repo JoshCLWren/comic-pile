@@ -76,6 +76,11 @@ export function DirectReadIssuePanel({
   const cards = useIssueCards(issue ? [issue.id] : [], { enabled: issue != null })
   const card = cards.data?.find((item) => item.issue_id === issue?.id) ?? null
   const wrongThread = issue != null && issue.thread_id !== threadId
+  // A previously read issue's rating is only available in the authoritative
+  // card projection. Opening Edit rating before that fetch resolves would
+  // default to 3.5 and silently overwrite a saved rating. Unread issue cards
+  // remain usable when optional metadata/cover lookups fail.
+  const canShowEditor = issue?.status !== 'read' || card != null
   const lookup = preferredIssueId == null ? nextUnread : preferredIssue
   const choices = browse.data?.pages.flatMap((page) => page.issues) ?? []
 
@@ -111,7 +116,14 @@ export function DirectReadIssuePanel({
               </button>
             </p>
           )}
-          <ComicIssueCard
+          {!canShowEditor && (
+            <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+              {cards.isPending
+                ? 'Loading the saved rating before editing…'
+                : 'Saved rating details are unavailable. Retry details before editing.'}
+            </p>
+          )}
+          {canShowEditor && <ComicIssueCard
             key={issue.id}
             issueId={issue.id}
             card={card}
@@ -119,7 +131,7 @@ export function DirectReadIssuePanel({
             issueNumber={String(issue.issue_number)}
             status={issue.status}
             variant="compact"
-          />
+          />}
         </>
       )}
       {!lookup.isPending && !lookup.isError && !issue && (
