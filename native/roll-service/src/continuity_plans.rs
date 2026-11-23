@@ -3445,12 +3445,16 @@ pub async fn create_release_source(
         let existing_list: Option<i32> = source_row.get(4);
         // Non-destructive association: fill list link if missing.
         if existing_list.is_none() && resolved_list_id.is_some() {
-            tx.execute(
-                "UPDATE reading_plan_release_sources SET custom_cbl_list_id = $1, updated_at = NOW() WHERE id = $2",
-                &[&resolved_list_id, &source_id],
-            )
-            .await
-            .map_err(db::query_error)?;
+            let associated = tx
+                .query_one(
+                    "UPDATE reading_plan_release_sources \
+                     SET custom_cbl_list_id = $1, updated_at = NOW() WHERE id = $2 \
+                     RETURNING updated_at::text",
+                    &[&resolved_list_id, &source_id],
+                )
+                .await
+                .map_err(db::query_error)?;
+            updated_at = associated.get(0);
             final_list_id = resolved_list_id;
         } else {
             final_list_id = existing_list.or(resolved_list_id);
