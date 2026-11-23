@@ -806,14 +806,6 @@ describe('RollPage parent handlers', () => {
 
   it('completes simple migration of a pool thread without a page-level refetch', async () => {
     const user = userEvent.setup()
-<<<<<<< HEAD
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
-    renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'skip migration' }))
-=======
     // The real pending Roll response, not the retired setPending endpoint,
     // marks a series without a known total and triggers simple migration.
     bootstrapData.active_thread = {
@@ -822,9 +814,8 @@ describe('RollPage parent handlers', () => {
       issue_number: '2', next_issue_id: 12, next_issue_number: '3',
       result: 3,
     }
-    render(<RollPage />)
+    renderRollPage()
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'save rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'complete simple' })).toBeInTheDocument())
