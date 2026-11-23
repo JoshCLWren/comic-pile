@@ -901,7 +901,9 @@ async fn extend_adopted_issue_to_following_plans(
                 continue;
             }
             // Append at end without changing existing positions/gates/progress.
-            let max_pos: i64 = tx
+            // `custom_cbl_entries.position` is INTEGER, so decode it as i32 and
+            // refuse overflow rather than panicking or wrapping the position.
+            let max_pos: i32 = tx
                 .query_one(
                     "SELECT COALESCE(MAX(position), -1) FROM custom_cbl_entries WHERE list_id = $1",
                     &[&lid],
@@ -909,7 +911,9 @@ async fn extend_adopted_issue_to_following_plans(
                 .await
                 .map_err(db::query_error)?
                 .get(0);
-            let new_pos = (max_pos + 1) as i32;
+            let new_pos = max_pos.checked_add(1).ok_or_else(|| {
+                ApiError::Unprocessable(format!("Reading List {lid} has no append position"))
+            })?;
             // Cycle validation: run graph preflight on a projected snapshot.
             // We attempt insert then validate; rollback handled by caller tx.
             tx.execute(
