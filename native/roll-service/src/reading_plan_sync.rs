@@ -905,13 +905,15 @@ async fn extend_adopted_issue_to_following_plans(
             // Append at end without changing existing positions/gates/progress.
             let max_pos: i64 = tx
                 .query_one(
-                    "SELECT COALESCE(MAX(position), -1) FROM custom_cbl_entries WHERE list_id = $1",
+                    "SELECT COALESCE(MAX(position)::bigint, -1) FROM custom_cbl_entries WHERE list_id = $1",
                     &[&lid],
                 )
                 .await
                 .map_err(db::query_error)?
                 .get(0);
-            let new_pos = (max_pos + 1) as i32;
+            let new_pos = i32::try_from(max_pos + 1).map_err(|_| {
+                ApiError::Unprocessable(format!("Reading List {lid} has no remaining positions"))
+            })?;
             // Cycle validation: run graph preflight on a projected snapshot.
             // We attempt insert then validate; rollback handled by caller tx.
             tx.execute(
