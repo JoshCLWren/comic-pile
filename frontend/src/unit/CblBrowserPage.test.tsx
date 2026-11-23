@@ -611,6 +611,25 @@ describe('CblBrowserPage source list result count (#3614)', () => {
     })
   })
 
+  it('switches from a folder denominator to the whole catalog on global search', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(
+      browsePage({ folder: 'Marvel', total: 2, catalog_total: 8 }),
+    )
+    renderPage('/cbl-sources?folder=Marvel')
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('2 of 2 source lists')
+    })
+
+    mockBrowse.mockResolvedValue({ ...searchPage('x-men', [source]), catalog_total: 8 })
+    await user.type(screen.getByLabelText('Search source lists'), 'x-men')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('1 of 8 source lists')
+    })
+  })
+
   it('shows N of M for a submitted search against the whole shared catalog', async () => {
     const user = userEvent.setup()
     mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
@@ -788,6 +807,26 @@ describe('CblBrowserPage source list result count (#3614)', () => {
     await waitFor(() => {
       expect(countLine()).toHaveTextContent('Source list count unavailable.')
     })
+  })
+
+  it('does not retain a previous successful count when a later search fails', async () => {
+    const user = userEvent.setup()
+    mockBrowse
+      .mockResolvedValueOnce(browsePage({ total: 13, catalog_total: 13 }))
+      .mockRejectedValueOnce(new Error('Network error'))
+    renderPage()
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+
+    await user.type(screen.getByLabelText('Search source lists'), 'x-men')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('Source list count unavailable.')
+    })
+    expect(countLine()).not.toHaveTextContent('13 of 13 source lists')
+    expect(screen.queryByText(/^Showing \d+–\d+ of /)).not.toBeInTheDocument()
   })
 
   it('exposes the count as a polite live status for assistive tech', async () => {
