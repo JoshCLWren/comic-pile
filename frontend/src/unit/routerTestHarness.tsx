@@ -1,5 +1,6 @@
-import { useEffect, type ReactNode } from 'react'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { useEffect, useLayoutEffect, type ReactNode } from 'react'
+import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from 'react-router-dom'
+import type { Mock } from 'vitest'
 
 /**
  * Records every pathname the wrapped tree navigates to.

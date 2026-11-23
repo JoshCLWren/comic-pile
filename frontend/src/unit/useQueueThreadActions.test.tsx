@@ -11,7 +11,7 @@ import { queryClient as sharedQueryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import type { RollResponse, Thread } from '../types'
 import { cast } from '../utils/cast'
-import { injectModuleDoubles } from './injectModuleDoubles'
+import { NavigationSpy } from './routerTestHarness'
 
 const toastSpy = vi.fn()
 const setPending = vi.fn()
@@ -63,16 +63,6 @@ function buildDeps(overrides: Partial<UseQueueThreadActionsDeps> = {}): UseQueue
   }
 }
 
-await injectModuleDoubles(await import('react-router-dom'), async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
-  return {
-    ...actual,
-    useNavigate: () => navigateSpy,
-    useLocation: () => ({ state: null, pathname: '/', search: '', hash: '', key: 'test' }),
-    Navigate: () => null,
-  }
-})
-
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 })
@@ -80,6 +70,7 @@ const queryClient = new QueryClient({
 function wrapper({ children }: { children: ReactNode }) {
   return (
     <MemoryRouter>
+      <NavigationSpy navigate={navigateSpy} />
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </MemoryRouter>
   )
