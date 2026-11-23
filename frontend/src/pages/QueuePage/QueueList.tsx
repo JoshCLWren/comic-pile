@@ -38,6 +38,7 @@ interface QueueListProps {
 export function QueueList({
   activeThreads,
   filteredThreads,
+  activeCount = activeThreads.length,
   reorderError,
   renderItem,
   isSearching,

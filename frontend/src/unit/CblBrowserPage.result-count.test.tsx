@@ -17,6 +17,26 @@ async function expectInitialCatalogCount(): Promise<void> {
 }
 
 describe('CblBrowserPage source list result count (#3614)', () => {
+  it('includes direct and nested folder sources in the initial M of M count', async () => {
+    mockBrowse.mockResolvedValue(browsePage({
+      folders: [
+        { name: 'DC', path: 'DC', direct_list_count: 4, total_list_count: 40 },
+        { name: 'Marvel', path: 'Marvel', direct_list_count: 5, total_list_count: 97 },
+      ],
+      items: [source],
+      total: 1,
+      catalog_total: 138,
+      total_pages: 1,
+    }))
+    renderPage()
+
+    await waitFor(() => expect(countLine()).toHaveTextContent('138 of 138 source lists'))
+    expect(screen.getByTestId('cbl-catalog-total')).toHaveTextContent(
+      '138 sources in the shared CBL catalog across 2 folders',
+    )
+    expect(screen.getByText('Showing 1–1 of 1 source')).toBeInTheDocument()
+  })
+
   it('shows M of M initially, keeps it while typing, and restores it on Clear', async () => {
     const user = userEvent.setup()
     mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))

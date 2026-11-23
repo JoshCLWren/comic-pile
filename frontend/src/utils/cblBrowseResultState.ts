@@ -31,13 +31,20 @@ export function cblBrowseResultState({
     : 0
   const resultCountPending =
     !hasCatalogError && (isPending || (isPlaceholderData && isFetching))
+  // Folder pages paginate only their direct sources, while each child folder
+  // already carries its recursive total. The applicable folder collection is
+  // therefore direct sources plus all child-folder sources, not just this
+  // page's direct-source total (#3614/#4171). Searches span the whole catalog.
+  const catalogTotal = settledBrowsePage
+    ? catalogSourceCount(settledBrowsePage.folders, settledBrowsePage.total)
+    : 0
   const resultCountText = hasCatalogError
     ? 'Source list count unavailable.'
     : resultCountPending
       ? 'Updating source list count…'
       : settledBrowsePage
-        ? `${settledBrowsePage.total} of ${settledBrowsePage.scope === 'search' ? settledBrowsePage.catalog_total : settledBrowsePage.total} source lists`
+        ? `${settledBrowsePage.scope === 'search' ? settledBrowsePage.total : catalogTotal} of ${settledBrowsePage.scope === 'search' ? settledBrowsePage.catalog_total : catalogTotal} source lists`
         : 'Source list count unavailable.'
 
-  return { settledBrowsePage, firstShown, lastShown, resultCountPending, resultCountText }
+  return { settledBrowsePage, firstShown, lastShown, resultCountPending, resultCountText, catalogTotal }
 }
