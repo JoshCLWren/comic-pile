@@ -17,7 +17,7 @@ export default defineConfig({
       deps: {
         // Transform these ESM dependencies so tests can inject explicit doubles
         // through their exported interfaces instead of replacing whole modules.
-        inline: ['react-router-dom', 'three'],
+        inline: ['react-router', 'react-router-dom', 'three'],
       },
     },
     include: ['src/unit/**/*.{test,spec}.{ts,tsx}', 'src/test/network-budget/**/*.test.{ts,tsx}'],
