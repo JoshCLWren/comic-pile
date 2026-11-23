@@ -117,6 +117,7 @@ function mockQueue(resultCountText: string): void {
     isPlaceholderData: false,
     isFetchNextPageError: false,
     resultCountText,
+    // SAFETY: QueuePage consumes only this explicitly mocked loader surface.
   } as never)
 }
 

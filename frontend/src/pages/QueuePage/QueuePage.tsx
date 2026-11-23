@@ -213,6 +213,7 @@ export default function QueuePage() {
         <QueueList
           activeThreads={activeThreads}
           filteredThreads={filteredThreads}
+          activeCount={authoritativeActiveCount}
           reorderError={actions.reorderError}
           renderItem={renderThreadCard}
           isSearching={isSearching}

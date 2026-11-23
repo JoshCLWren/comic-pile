@@ -8,6 +8,8 @@ import VirtualizedThreadList, {
 interface QueueListProps {
   activeThreads: ThreadListItem[]
   filteredThreads: ThreadListItem[]
+  /** Whole-queue active total, including rows outside the loaded result pages. */
+  activeCount?: number
   reorderError: string | null
   renderItem: (thread: ThreadListItem, index: number) => ReactNode
   isSearching: boolean
