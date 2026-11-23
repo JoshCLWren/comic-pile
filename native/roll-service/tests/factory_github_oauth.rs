@@ -226,18 +226,18 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
         header_text(&authenticated, header::ACCESS_CONTROL_ALLOW_ORIGIN),
         PAGES_ORIGIN
     );
-    let payload: Value = serde_json::from_slice(
-        &to_bytes(authenticated.into_body(), 4096)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
+    let payload: Value =
+        serde_json::from_slice(&to_bytes(authenticated.into_body(), 4096).await.unwrap()).unwrap();
     assert_eq!(payload["authenticated"], true);
     assert_eq!(payload["login"], "JoshCLWren");
     assert_eq!(payload["github_id"], OWNER_ID.to_string());
 
     for (token, origin, expected) in [
-        (session_token.as_str(), "https://attacker.example", StatusCode::FORBIDDEN),
+        (
+            session_token.as_str(),
+            "https://attacker.example",
+            StatusCode::FORBIDDEN,
+        ),
         ("forged-session", PAGES_ORIGIN, StatusCode::UNAUTHORIZED),
         (
             signed_session(&OWNER_ID.to_string(), seconds().saturating_sub(1)).as_str(),
@@ -289,16 +289,10 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
     assert_eq!(fake.calls().len(), 2, "rejected requests reached GitHub");
 
     fake.push_ok(StatusCode::NO_CONTENT, HeaderMap::new(), Bytes::new());
-    let accepted = send(
-        &state,
-        dispatch(&session_token, PAGES_ORIGIN, "doctor_fix"),
-    )
-    .await;
+    let accepted = send(&state, dispatch(&session_token, PAGES_ORIGIN, "doctor_fix")).await;
     assert_eq!(accepted.status(), StatusCode::ACCEPTED);
-    let payload: Value = serde_json::from_slice(
-        &to_bytes(accepted.into_body(), 4096).await.unwrap(),
-    )
-    .unwrap();
+    let payload: Value =
+        serde_json::from_slice(&to_bytes(accepted.into_body(), 4096).await.unwrap()).unwrap();
     assert_eq!(payload["result"], "submitted");
     let calls = fake.calls();
     assert_eq!(calls.len(), 3);
@@ -308,11 +302,13 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
         workflow.path,
         "/repos/JoshCLWren/comic-pile/actions/workflows/rotisserie-operator.yml/dispatches"
     );
-    assert!(workflow
-        .headers
-        .iter()
-        .any(|(name, value)| name == "Authorization"
-            && value == "Bearer synthetic-workflow-token"));
+    assert!(
+        workflow
+            .headers
+            .iter()
+            .any(|(name, value)| name == "Authorization"
+                && value == "Bearer synthetic-workflow-token")
+    );
     assert!(!workflow
         .headers
         .iter()
@@ -336,11 +332,7 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
         HeaderMap::new(),
         Bytes::from_static(br#"{"id":77,"login":"not-an-admin"}"#),
     );
-    let denied = send(
-        &state,
-        callback(&denied_params["state"], &denied_cookie),
-    )
-    .await;
+    let denied = send(&state, callback(&denied_params["state"], &denied_cookie)).await;
     assert_eq!(denied.status(), StatusCode::SEE_OTHER);
     assert_eq!(
         header_text(&denied, header::LOCATION),
