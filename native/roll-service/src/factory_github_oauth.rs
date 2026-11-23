@@ -96,10 +96,9 @@ fn allowed(id: u64, extra: &str) -> bool {
     if extra.is_empty() {
         return false;
     }
-    if !extra
-        .bytes()
-        .all(|byte| byte.is_ascii_digit() || byte == b',')
-    {
+    if extra.split(',').any(|value| {
+        value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit())
+    }) {
         return false;
     }
     extra
