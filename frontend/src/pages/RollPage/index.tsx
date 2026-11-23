@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../query/queryKeys'
@@ -25,6 +25,7 @@ import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi } from '../../services/api-threads'
 import { readRollSnoozes } from '../../services/api-roll'
+import type { Thread } from '../../types'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
 import { useRollBootstrapSync } from './useRollBootstrapSync'
@@ -66,6 +67,9 @@ export default function RollPage() {
   const state = useRollPageState()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  // Manual issue-tracking setup is not a random Roll offer migration.
+  // Keep its completion in the direct issue card, not the Roll rating workspace.
+  const directMigrationRef = useRef(false)
 
   const {
     data: bootstrap,
@@ -564,9 +568,38 @@ export default function RollPage() {
         <RollModals
           showMigrationDialog={state.showMigrationDialog}
           threadToMigrate={state.threadToMigrate}
-          onMigrationComplete={rating.handleMigrationComplete}
-          onMigrationSkip={rating.handleMigrationSkip}
-          onMigrationClose={rating.handleMigrationClose}
+          onMigrationComplete={(thread: Thread) => {
+            if (!directMigrationRef.current) {
+              rating.handleMigrationComplete(thread)
+              return
+            }
+            directMigrationRef.current = false
+            state.setShowMigrationDialog(false)
+            state.setThreadToMigrate(null)
+            void queryClient.invalidateQueries({ queryKey: queryKeys.thread.nextUnreadIssue(thread.id) })
+            void queryClient.invalidateQueries({ queryKey: queryKeys.thread.directReadBrowse(thread.id) })
+            state.setIsDirectReadOpen(true)
+          }}
+          onMigrationSkip={() => {
+            if (!directMigrationRef.current) {
+              rating.handleMigrationSkip()
+              return
+            }
+            directMigrationRef.current = false
+            state.setShowMigrationDialog(false)
+            state.setThreadToMigrate(null)
+            state.setIsDirectReadOpen(true)
+          }}
+          onMigrationClose={() => {
+            if (!directMigrationRef.current) {
+              rating.handleMigrationClose()
+              return
+            }
+            directMigrationRef.current = false
+            state.setShowMigrationDialog(false)
+            state.setThreadToMigrate(null)
+            state.setIsDirectReadOpen(true)
+          }}
           showSimpleMigration={state.showSimpleMigration}
           activeRatingThread={state.activeRatingThread}
           onSimpleMigrationComplete={rating.handleSimpleMigrationComplete}
@@ -592,7 +625,23 @@ export default function RollPage() {
           onCloseDirectRead={() => state.setIsDirectReadOpen(false)}
           onMigrateDirectRead={() => {
             if (!state.selectedThread) return
-            state.setThreadToMigrate({ id: state.selectedThread.id, title: state.selectedThread.title })
+            directMigrationRef.current = true
+            // MigrationDialog reads only id/title. These other RatingThread
+            // fields are placeholders, never handed to the Roll rating flow.
+            state.setThreadToMigrate({
+              id: state.selectedThread.id,
+              title: state.selectedThread.title,
+              format: state.selectedThread.format,
+              issues_remaining: 0,
+              queue_position: 0,
+              total_issues: null,
+              reading_progress: null,
+              issue_id: state.selectedThread.issue_id ?? null,
+              issue_number: state.selectedThread.issue_number ?? null,
+              next_issue_id: null,
+              next_issue_number: null,
+              last_rolled_result: null,
+            })
             state.setIsDirectReadOpen(false)
             state.setShowMigrationDialog(true)
           }}
