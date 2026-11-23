@@ -42,7 +42,7 @@ import { LastReadStrip } from './components/LastReadStrip'
 import { useRollLastRead } from '../../hooks/useRollLastRead'
 import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
-import { invalidateAfterUndo, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
+import { invalidateAfterUndo, invalidateDirectReadIssueSelection, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
 import { resolveRollSelectedDie } from './selectedDie'
 import { ThreadPool } from './components/ThreadPool'
 import { resolveSnoozedSeriesCovers } from './resolveSnoozedSeriesCovers'
@@ -576,8 +576,7 @@ export default function RollPage() {
             directMigrationRef.current = false
             state.setShowMigrationDialog(false)
             state.setThreadToMigrate(null)
-            void queryClient.invalidateQueries({ queryKey: queryKeys.thread.nextUnreadIssue(thread.id) })
-            void queryClient.invalidateQueries({ queryKey: queryKeys.thread.directReadBrowse(thread.id) })
+            void invalidateDirectReadIssueSelection(queryClient, thread.id)
             state.setIsDirectReadOpen(true)
           }}
           onMigrationSkip={() => {
