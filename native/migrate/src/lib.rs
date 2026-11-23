@@ -219,9 +219,7 @@ async fn run_locked(client: &mut Client) -> Result<Report, MigrateError> {
                     .set_target(Target::FakeVersion(ALEMBIC_COVERED_VERSION))
                     .run_async(client)
                     .await?;
-                report
-                    .adopted
-                    .extend(1..=ALEMBIC_COVERED_VERSION);
+                report.adopted.extend(1..=ALEMBIC_COVERED_VERSION);
             }
             Some(AlembicState::BaselineHead) => {
                 // Alembic at the baseline schema head already has the V1 schema:
