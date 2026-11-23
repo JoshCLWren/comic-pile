@@ -41,7 +41,7 @@ jobs:
 
           actor = os.environ["ACTOR_ID"]
           extra = os.environ.get("EXTRA_ADMIN_IDS", "").strip()
-          if extra and not re.fullmatch(r"[0-9]+(?:\\s*,\\s*[0-9]+)*", extra):
+          if extra and not re.fullmatch(r"[0-9]+(?:\s*,\s*[0-9]+)*", extra):
               raise SystemExit("Invalid ROTISSERIE_ADMIN_GITHUB_IDS. Expected comma-separated numeric GitHub user IDs.")
           allowed = {"4014199"} | {item.strip() for item in extra.split(",") if item.strip()}
           if actor not in allowed:
