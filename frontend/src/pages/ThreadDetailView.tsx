@@ -115,7 +115,8 @@ export default function ThreadDetailView() {
     threadId !== null &&
     !boundaryQuery.isPending &&
     !boundaryQuery.isError &&
-    boundaryQuery.data?.threads[threadId]?.state === 'unavailable'
+    (boundaryQuery.data?.evaluator === 'unavailable' ||
+      boundaryQuery.data?.threads[threadId]?.state === 'unavailable')
   const legacyBlockingInfo = useThreadBlockingInfo(canonicalBoundaryUnavailable ? threadId : null)
   const { data: thread, error: threadError, refetch } = useThread(threadId)
   const {

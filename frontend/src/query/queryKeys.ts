@@ -298,6 +298,7 @@ export const queryKeys = {
     readingBoundaries: (threadIds: number[]) =>
       ['dependencies', 'reading-boundaries', [...new Set(threadIds)].sort((a, b) => a - b)] as const,
     readingBoundariesAll: () => ['dependencies', 'reading-boundaries'] as const,
+    readingBoundaryEvaluator: () => ['dependencies', 'reading-boundary-evaluator'] as const,
     blockingBatchAll: () => ['dependencies', 'blocking-batch'] as const,
     list: () => ['dependencies', 'list'] as const,
     forThread: (threadId: number) => ['dependencies', 'thread', threadId] as const,
