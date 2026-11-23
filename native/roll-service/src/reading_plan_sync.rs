@@ -2145,7 +2145,9 @@ mod tests {
         const IDENTITY_ID: i32 = 910501;
         const SOURCE_ID: i32 = 910601;
         let list_owner = if foreign_list { OTHER_USER_ID } else { USER_ID };
-        let connection = crate::db::checkout(state).await.expect("fixture connection");
+        let connection = crate::db::checkout(state)
+            .await
+            .expect("fixture connection");
         connection
             .batch_execute(&format!(
                 "INSERT INTO users (id, username) VALUES
@@ -2281,9 +2283,13 @@ mod tests {
         let rejected = run_release_list_sync(&state, fixture.user_id).await;
         assert_eq!(rejected.failed_sources, 1);
         assert_eq!(rejected.successful_sources, 0);
-        assert!(rejected.failures[0].error.contains("Reading constraint cycle"));
+        assert!(rejected.failures[0]
+            .error
+            .contains("Reading constraint cycle"));
 
-        let connection = crate::db::checkout(&state).await.expect("rollback connection");
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("rollback connection");
         let entries_after_failure: i64 = connection
             .query_one(
                 "SELECT count(*) FROM custom_cbl_entries WHERE list_id = $1",
@@ -2314,7 +2320,10 @@ mod tests {
             .await
             .expect("rolled back identity mapping")
             .get(0);
-        assert_eq!(identity_mappings, 0, "the whole source transaction must roll back");
+        assert_eq!(
+            identity_mappings, 0,
+            "the whole source transaction must roll back"
+        );
         assert_plan_unchanged(
             &connection,
             fixture.plan_id,
@@ -2395,7 +2404,9 @@ mod tests {
         let repeated = run_release_list_sync(&state, fixture.user_id).await;
         assert_eq!(repeated.failed_sources, 0);
         assert_eq!(repeated.successful_sources, 1);
-        let connection = crate::db::checkout(&state).await.expect("idempotence connection");
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("idempotence connection");
         let membership: Vec<(i32, String, String, bool)> = connection
             .query(
                 "SELECT position, gate, created_at::text, skipped
@@ -2429,7 +2440,9 @@ mod tests {
         let state = test_state().await;
         crate::test_support::reset(&state).await;
         let fixture = seed_release_list_fixture(&state, true).await;
-        let connection = crate::db::checkout(&state).await.expect("exclusion connection");
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("exclusion connection");
         connection
             .execute(
                 "INSERT INTO collection_exclusions (user_id, thread_id, created_at)
@@ -2445,7 +2458,9 @@ mod tests {
         assert_eq!(excluded.excluded_sources, 1);
         assert_eq!(excluded.skipped_sources, 1);
 
-        let connection = crate::db::checkout(&state).await.expect("ownership connection");
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("ownership connection");
         connection
             .execute(
                 "DELETE FROM collection_exclusions WHERE user_id = $1 AND thread_id = $2",
@@ -2458,7 +2473,9 @@ mod tests {
         assert_eq!(rejected.failed_sources, 1);
         assert!(rejected.failures[0].error.contains("not owned"));
 
-        let connection = crate::db::checkout(&state).await.expect("verification connection");
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("verification connection");
         let source = connection
             .query_one(
                 "SELECT enabled, last_synced_at::text FROM reading_plan_release_sources

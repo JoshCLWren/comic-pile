@@ -1242,7 +1242,9 @@ async fn release_source_association_preserves_existing_subscription_state() {
     assert_eq!(persisted.get::<_, String>(3), before_created);
     assert_eq!(
         persisted.get::<_, String>(4),
-        associated["updated_at"].as_str().expect("updated timestamp")
+        associated["updated_at"]
+            .as_str()
+            .expect("updated timestamp")
     );
 }
 
@@ -1329,7 +1331,11 @@ async fn release_source_ambiguity_stays_unpaired_until_valid_explicit_associatio
         )
         .await
         .expect("one preserved source");
-    assert_eq!(rows.len(), 1, "failed ownership checks must not create sources");
+    assert_eq!(
+        rows.len(),
+        1,
+        "failed ownership checks must not create sources"
+    );
     assert_eq!(rows[0].get::<_, i32>(0) as i64, source_id);
     assert_eq!(rows[0].get::<_, Option<i32>>(1), Some(820202));
 }

@@ -186,7 +186,10 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .await
         .unwrap()
         .get(0);
-    assert!(release_list_link, "V3 must add the Reading List association");
+    assert!(
+        release_list_link,
+        "V3 must add the Reading List association"
+    );
 
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
@@ -319,7 +322,10 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
     assert_eq!((report.applied, report.adopted), (vec![3], vec![1, 2]));
 
     let after = snapshot(&client).await;
-    assert_eq!(after, before, "subscription identity/state/timestamps must survive");
+    assert_eq!(
+        after, before,
+        "subscription identity/state/timestamps must survive"
+    );
     let links: Vec<Option<i32>> = client
         .query(
             "SELECT custom_cbl_list_id FROM public.reading_plan_release_sources ORDER BY id",
