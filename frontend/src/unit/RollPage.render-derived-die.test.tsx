@@ -167,14 +167,12 @@ function renderRollPage() {
 }
 
 beforeEach(() => {
-  console.log('BEFORE EACH')
   vi.clearAllMocks()
   headerCurrentDieProps.length = 0
   writeRollSnoozes([])
   mockedUseRollDieState.mockReturnValue({ data: undefined })
   mockedUseRollEligibleIssueIds.mockReturnValue({ data: undefined })
   mockedUseRollIssueCards.mockReturnValue({ data: undefined })
-  console.log('SETTING BOOTSTRAP')
   mockedUseRollBootstrap.mockReturnValue({
     data: bootstrap,
     refetch: vi.fn().mockResolvedValue(bootstrap),
@@ -204,7 +202,9 @@ describe('Roll die is render-derived from scoped die-state (#4768)', () => {
   it('passes the scoped die on the very first render pass, never a fallback (#4768)', () => {
     mockedUseRollDieState.mockReturnValue({ data: SCOPED_DIE_20, isError: false })
 
+    console.log('ABOUT TO RENDER')
     renderRollPage()
+    console.log('RENDERED', headerCurrentDieProps.length)
 
     // The spy saw at least one header render, and every single one carried
     // the scoped d20. An effect syncing server data into state would record
