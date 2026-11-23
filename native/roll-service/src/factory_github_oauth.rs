@@ -129,6 +129,9 @@ fn jwt_validation(audience: &str) -> Validation {
     let mut validation = Validation::new(Algorithm::HS256);
     validation.set_audience(&[audience]);
     validation.required_spec_claims.insert("exp".into());
+    // OAuth state and administrator sessions have exact short lifetimes; the
+    // jsonwebtoken default leeway would otherwise accept them after expiry.
+    validation.leeway = 0;
     validation
 }
 
