@@ -785,11 +785,11 @@ async fn process(
 ) -> Result<(&'static str, bool), ApiError> {
     if job.provider.as_deref() != Some("comicvine") || job.entity_type.as_deref() != Some("issue") {
         settle(state, job, "failed", 21600, Some("identity_ineligible")).await?;
-        return Ok("failed");
+        return Ok(("failed", false));
     }
     let Some(id) = job.external_id.as_deref().and_then(issue_id) else {
         settle(state, job, "failed", 21600, Some("invalid_external_id")).await?;
-        return Ok("failed");
+        return Ok(("failed", false));
     };
     let cached: Option<Value> = job
         .metadata
@@ -806,7 +806,7 @@ async fn process(
                 None,
             )
             .await?;
-            return Ok(if has { "completed" } else { "no_credits" });
+            return Ok((if has { "completed" } else { "no_credits" }, false));
         }
     }
     let Some(key) = key else {
@@ -818,7 +818,7 @@ async fn process(
             Some("provider_not_configured"),
         )
         .await?;
-        return Ok("deferred");
+        return Ok(("deferred", false));
     };
     match provider_issue(&state.outbound, id, key)
         .await
@@ -857,16 +857,17 @@ async fn process(
             }
             let effective = cached_has_credits(&patch) || has;
             if persist(state, job, &patch, effective, &url, &updated).await? {
-                Ok(if effective { "completed" } else { "no_credits" })
+                Ok((if effective { "completed" } else { "no_credits" }, false))
             } else {
                 // Another worker reclaimed the expired lease; its result is authoritative.
-                Ok("deferred")
+                Ok(("deferred", false))
             }
         }
         Err(error) => {
+            let rate_limited = matches!(&error, ProviderFailure::RateLimited(_));
             let (status, delay, code) = failure_transition(&error, job.attempt);
             settle(state, job, status, delay, Some(code)).await?;
-            Ok(status)
+            Ok((status, rate_limited))
         }
     }
 }
