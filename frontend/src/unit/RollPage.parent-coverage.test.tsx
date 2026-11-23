@@ -1000,6 +1000,14 @@ describe('RollPage parent handlers', () => {
     render(<RollPage />)
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'snooze rating' })).toBeInTheDocument())
+    // The native snooze completes the pending offer and publishes an idle
+    // bootstrap. Without this response transition the pending-session hook
+    // correctly reopens the supposedly dismissed rating view.
+    spies.snooze.mockImplementationOnce(async () => {
+      bootstrapData.pending_thread_id = null
+      bootstrapData.active_thread = null
+      return { refreshed: true }
+    })
     await user.click(screen.getByRole('button', { name: 'snooze rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
