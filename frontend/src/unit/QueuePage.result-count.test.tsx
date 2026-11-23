@@ -162,10 +162,16 @@ describe('Queue search result count display (#3614)', () => {
     expect(screen.getByTestId('queue-result-count')).toHaveTextContent('2 of 5 series')
   })
 
-  it('renders the updating and unavailable states from the loader', () => {
+  it('renders the updating state from the loader', () => {
     mockQueue('Updating series count…')
     renderQueue()
     expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Updating series count…')
+  })
+
+  it('renders the unavailable state from the loader', () => {
+    mockQueue('Series count unavailable.')
+    renderQueue()
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Series count unavailable.')
   })
 
   it('exposes the count as a polite live status for assistive tech', () => {
