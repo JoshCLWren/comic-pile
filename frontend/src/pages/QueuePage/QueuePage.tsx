@@ -55,6 +55,8 @@ export default function QueuePage() {
     nextPageToken,
     loadMore,
     activeCount,
+    filteredCount,
+    isCountStale,
   } = queueLoader
 
   // Series that show the per-row `Map series` repair action (everything except
@@ -79,6 +81,15 @@ export default function QueuePage() {
     searchQuery,
   )
   const authoritativeActiveCount = activeCount ?? activeThreads.length
+  // Visible match count for the applied search (issue #3614). Never render a
+  // count from a superseded query or invent one when the authoritative total
+  // is unavailable; loading and error states say so explicitly.
+  const resultCountText =
+    isError || filteredCount == null
+      ? 'Series count unavailable.'
+      : isCountStale || (isPending && !threads?.length)
+        ? 'Updating series count…'
+        : `${filteredCount} of ${authoritativeActiveCount} series`
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
@@ -181,6 +192,7 @@ export default function QueuePage() {
       <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
         <QueueControls
           activeCount={authoritativeActiveCount}
+          resultCountText={resultCountText}
           shuffleDisabled={shuffleDisabled}
           shufflePending={shuffleQueueMutation.isPending}
           onShuffle={actions.requestShuffle}

@@ -5,6 +5,8 @@ const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
   activeCount: number
+  /** Authoritative, announced `N of M series` text for the applied search. */
+  resultCountText: string
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
@@ -34,6 +36,7 @@ interface QueueControlsProps {
  */
 function QueueControlsInner({
   activeCount,
+  resultCountText,
   shuffleDisabled,
   shufflePending,
   onShuffle,
@@ -198,6 +201,14 @@ function QueueControlsInner({
           )}
         </div>
       </div>
+      <p
+        role="status"
+        aria-live="polite"
+        className="text-xs text-[var(--theme-text-muted)]"
+        data-testid="queue-result-count"
+      >
+        {resultCountText}
+      </p>
       <span className="sr-only" data-testid="queue-active-count">{activeCount}</span>
     </header>
   )
