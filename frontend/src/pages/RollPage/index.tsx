@@ -590,6 +590,12 @@ export default function RollPage() {
           isActionSheetOpen={state.isActionSheetOpen}
           isDirectReadOpen={state.isDirectReadOpen}
           onCloseDirectRead={() => state.setIsDirectReadOpen(false)}
+          onMigrateDirectRead={() => {
+            if (!state.selectedThread) return
+            state.setThreadToMigrate({ id: state.selectedThread.id, title: state.selectedThread.title })
+            state.setIsDirectReadOpen(false)
+            state.setShowMigrationDialog(true)
+          }}
           selectedThread={state.selectedThread}
           pendingThreadId={bootstrap.pending_thread_id}
           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
