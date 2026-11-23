@@ -13778,6 +13778,13 @@
           "created_at": {
             "type": "string"
           },
+          "custom_cbl_list_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
           "enabled": {
             "type": "boolean"
           },
