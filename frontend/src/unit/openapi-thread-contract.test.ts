@@ -27,13 +27,12 @@ describe('OpenAPI Thread contract adoption (#2781)', () => {
   })
 
   it('exports the paginated queue thread list response from OpenAPI plus the native filtered count', () => {
-    // #3614 adds the native-only whole-collection match total; the checked-in
-    // generated OpenAPI schema is bot-owned and may lag runtime fields until
-    // regenerated.
     expectTypeOf<
       Omit<ThreadListResponse, 'filtered_count'>
     >().toEqualTypeOf<QueueThreadListResponse>()
-    expectTypeOf<ThreadListResponse['filtered_count']>().toEqualTypeOf<number | null | undefined>()
+    expectTypeOf<ThreadListResponse['filtered_count']>().toEqualTypeOf<
+      NativeThreadListResponse['filtered_count']
+    >()
     expectTypeOf<ThreadListResponse['threads']>().toEqualTypeOf<QueueThreadListItem[]>()
   })
 

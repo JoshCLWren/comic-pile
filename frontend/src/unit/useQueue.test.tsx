@@ -366,6 +366,31 @@ listThreads.mockImplementation(
     expect(result.current.resultCountText).toBe('Updating series count…')
   })
 
+  it('marks a sort-key transition as placeholder so counts stay unset (#3614)', async () => {
+    listThreads
+      .mockResolvedValueOnce({
+        // SAFETY: the stubbed page supplies only the fields the pager reads
+        threads: [{ id: 1, title: 'Saga' } as never],
+        next_page_token: null,
+        active_count: 5,
+        filtered_count: 5,
+      })
+      .mockImplementationOnce(() => new Promise(() => {})) // never resolves: sort still in flight
+
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(
+      ({ sort }: { sort: QueueSortBy }) => useQueueThreads('', sort, threadsApi),
+      { wrapper, initialProps: { sort: 'position' as QueueSortBy } },
+    )
+
+    await waitFor(() => expect(result.current.resultCountText).toBe('5 of 5 series'))
+
+    rerender({ sort: 'alphabetical' })
+
+    expect(result.current.isPlaceholderData).toBe(true)
+    expect(result.current.resultCountText).toBe('Updating series count…')
+  })
+
   it('keeps the newest search count when an older request settles late (#3614)', async () => {
     let resolveAlpha: (page: Awaited<ReturnType<typeof realThreadsApi.list>>) => void = () => undefined
     listThreads
@@ -507,11 +532,49 @@ describe('useQueueThreads result count text (#3614)', () => {
     expect(result.current.resultCountText).toBe('Series count unavailable.')
   })
 
+  it('shows 0 of 0 for an empty unfiltered queue', async () => {
+    listThreads.mockResolvedValue({
+      threads: [],
+      next_page_token: null,
+      active_count: 0,
+      filtered_count: 0,
+    })
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(result.current.resultCountText).toBe('0 of 0 series')
+  })
+
   it('shows an unavailable count when the first page fails', async () => {
     listThreads.mockRejectedValue(new Error('Network error'))
 
     const wrapper = createWrapper()
     const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.resultCountText).toBe('Series count unavailable.')
+  })
+
+  it('does not retain an old count when a new search fails', async () => {
+    listThreads
+      .mockResolvedValueOnce({
+        threads: [],
+        next_page_token: null,
+        active_count: 5,
+        filtered_count: 5,
+      })
+      .mockRejectedValueOnce(new Error('Search unavailable'))
+
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(
+      ({ search }: { search: string }) => useQueueThreads(search, 'position', threadsApi),
+      { wrapper, initialProps: { search: '' } },
+    )
+
+    await waitFor(() => expect(result.current.resultCountText).toBe('5 of 5 series'))
+    rerender({ search: 'alpha' })
 
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.resultCountText).toBe('Series count unavailable.')
