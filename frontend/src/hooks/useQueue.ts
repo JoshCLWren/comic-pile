@@ -162,16 +162,39 @@ export function useQueueThreads(
   // the canonical source. Falls back to null so callers can decide how to
   // degrade when a cached/older response omits the field.
   const activeCount = query.pages[0]?.active_count ?? null
+  // Authoritative whole-collection match total for the applied search exposed
+  // by the first page (issue #3614). Every page re-states it for the same
+  // cursor key, so the first page stays canonical. Null when the response is
+  // a completed/excluded read or a stale cached page that omits the field.
+  const filteredCount = query.pages[0]?.filtered_count ?? null
   // Initial load OR an in-flight next-page append both keep already-rendered
   // rows visible: `isPending` drives the full-screen loader only before any
   // data exists, while `isNextPageLoading` drives the inline loading indicator.
   const isPending = query.isPending || query.isNextPageLoading
+  // True while the rendered rows are placeholder data from the previous
+  // search/sort key (see `placeholderData` above). Count displays must treat
+  // that window as unsettled instead of restating the old key's numbers
+  // (#3614).
+  const isPlaceholderData = query.isPlaceholderData
   // The append alone, so a consumer can read the Queue cursor to completion
   // without being confused by the combined "anything is loading" flag
   // (issue #3922).
   const isLoadingMore = query.isNextPageLoading
   const isError = query.isError
   const nextPageToken = query.nextPageToken
+  // Reader-facing `N of M series` state for the applied search (#3614). The
+  // first page's `filtered_count` is the authoritative match total for the
+  // applied search and `active_count` the pre-filter denominator, so both must
+  // come from a settled first page. Placeholder rows from the previous key (or
+  // either total missing) keep the count explicitly unsettled, and a failed
+  // first page says so instead of inventing numbers; a next-page-only failure
+  // leaves the settled first-page counts valid.
+  const resultCountText =
+    isError && !query.isFetchNextPageError
+      ? 'Series count unavailable.'
+      : !isPlaceholderData && filteredCount != null && activeCount != null
+        ? `${filteredCount} of ${activeCount} series`
+        : 'Updating series count…'
 
   const refetch = useCallback(async (): Promise<void> => {
     await query.refetch()
@@ -190,6 +213,10 @@ export function useQueueThreads(
     nextPageToken,
     loadMore,
     activeCount,
+    filteredCount,
+    isPlaceholderData,
+    isFetchNextPageError: query.isFetchNextPageError,
+    resultCountText,
   }
 }
 

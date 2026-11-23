@@ -597,3 +597,203 @@ describe('CblBrowserPage catalog', () => {
   })
 
 })
+
+describe('CblBrowserPage source list result count (#3614)', () => {
+  const secondSource = { ...source, id: 8, name: 'Second Universe' }
+  const countLine = () => screen.getByTestId('cbl-result-count')
+
+  it('shows M of M on the initial unfiltered catalog list', async () => {
+    mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+    renderPage()
+
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+  })
+
+  it('shows N of M for a submitted search against the whole shared catalog', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+    renderPage()
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+
+    mockBrowse.mockResolvedValue({
+      ...searchPage('x-men', [source, secondSource]),
+      catalog_total: 13,
+    })
+    await user.type(screen.getByLabelText('Search source lists'), 'x-men')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('2 of 13 source lists')
+    })
+    expect(screen.getByRole('button', { name: /Ultimate Universe/ })).toBeInTheDocument()
+  })
+
+  it('shows 0 of M next to the empty state when nothing matches', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+    renderPage()
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+
+    mockBrowse.mockResolvedValue({
+      ...searchPage('nothing', []),
+      catalog_total: 13,
+    })
+    await user.type(screen.getByLabelText('Search source lists'), 'nothing')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('No matching source lists found.')).toBeInTheDocument()
+    })
+    expect(countLine()).toHaveTextContent('0 of 13 source lists')
+  })
+
+  it('keeps describing the applied results while a new search is only typed', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+    renderPage()
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+
+    // The CBL search submits through Search/Enter (#3684): typing alone must
+    // not restate an unsubmitted query's numbers.
+    await user.type(screen.getByLabelText('Search source lists'), 'x-men')
+
+    expect(countLine()).toHaveTextContent('13 of 13 source lists')
+  })
+
+  it('returns to M of M after clearing a search', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+    renderPage()
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+
+    mockBrowse.mockResolvedValue({
+      ...searchPage('x-men', [source]),
+      catalog_total: 13,
+    })
+    await user.type(screen.getByLabelText('Search source lists'), 'x-men')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('1 of 13 source lists')
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+
+    // Clearing re-applies the unfiltered catalog scope, whose settled page is
+    // the M of M view.
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+  })
+
+  it('reports the whole match total on a deep-linked page, not the visible page size', async () => {
+    // A bounded 50-per-page result page can hold far fewer rows than the
+    // match total; the count must never collapse to the visible rows.
+    mockBrowse.mockResolvedValue({
+      ...searchPage('marvel', [source, secondSource]),
+      page: 1,
+      page_size: 50,
+      total: 13,
+      total_pages: 7,
+      has_next: true,
+      catalog_total: 13,
+    })
+    renderPage('/cbl-sources?q=marvel')
+
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+    expect(screen.getByRole('button', { name: /Ultimate Universe/ })).toBeInTheDocument()
+  })
+
+  it('does not restate the previous count while the next browse request is in flight', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+    renderPage()
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+
+    let resolveSearch: (page: ReturnType<typeof searchPage>) => void = () => undefined
+    mockBrowse.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSearch = resolve
+        }),
+    )
+    await user.type(screen.getByLabelText('Search source lists'), 'x-men')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('Updating source list count…')
+    })
+    expect(countLine()).not.toHaveTextContent('13 of 13 source lists')
+
+    resolveSearch({ ...searchPage('x-men', [source]), catalog_total: 13 } as never)
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('1 of 13 source lists')
+    })
+  })
+
+  it('keeps the newest query count when an older request settles late', async () => {
+    const user = userEvent.setup()
+    let resolveAlpha: (page: ReturnType<typeof searchPage>) => void = () => undefined
+    mockBrowse
+      .mockResolvedValueOnce(browsePage({ total: 13, catalog_total: 13 }))
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveAlpha = resolve
+          }),
+      )
+      .mockResolvedValueOnce({ ...searchPage('beta', [source]), catalog_total: 13 })
+
+    renderPage()
+    await user.type(screen.getByLabelText('Search source lists'), 'alpha')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    // The alpha request is still pending when the reader immediately submits
+    // a different search.
+    await user.clear(screen.getByLabelText('Search source lists'))
+    await user.type(screen.getByLabelText('Search source lists'), 'beta')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('1 of 13 source lists')
+    })
+
+    // The stale alpha response settles after beta's; it must not overwrite
+    // the count that describes the currently applied query.
+    resolveAlpha({ ...searchPage('alpha', [source, secondSource]), catalog_total: 13 } as never)
+    await act(async () => {})
+
+    expect(countLine()).toHaveTextContent('1 of 13 source lists')
+  })
+
+  it('shows an unavailable count when the catalog cannot be read', async () => {
+    mockBrowse.mockRejectedValue(new Error('Network error'))
+    renderPage()
+
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('Source list count unavailable.')
+    })
+  })
+
+  it('exposes the count as a polite live status for assistive tech', async () => {
+    mockBrowse.mockResolvedValue(browsePage({ total: 13, catalog_total: 13 }))
+    renderPage()
+
+    await waitFor(() => {
+      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+    })
+    expect(countLine()).toHaveAttribute('role', 'status')
+    expect(countLine()).toHaveAttribute('aria-live', 'polite')
+  })
+})
