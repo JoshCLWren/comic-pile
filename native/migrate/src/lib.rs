@@ -43,9 +43,6 @@ const QUEUE_EXCLUSION_HEAD: &str = "s54350000001";
 /// Current Alembic head: the merge of the deferred repair and queue-exclusion heads.
 pub const BASELINE_ALEMBIC_HEAD: &str = "m54i537800001";
 
-/// Latest refinery migration version embedded in this binary.
-const LATEST_MIGRATION_VERSION: i32 = 3;
-
 /// Latest migration version covered by the current Alembic head stamp.
 /// Migrations above this are Rust-only and must be applied, not adopted,
 /// when adopting an Alembic-managed database at a supported head.
