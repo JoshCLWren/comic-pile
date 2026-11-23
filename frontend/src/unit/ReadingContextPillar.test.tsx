@@ -5,9 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { ReadingContextPillar } from '../pages/RollPage/components/ReadingContextPillar'
 import type { ReaderContextResponse } from '../types'
 import { injectModuleDoubles } from './injectModuleDoubles'
-import { NavigationSpy } from './routerTestHarness'
-
-const navigateSpy = vi.fn()
+import { createRouterHarness, type RouterHarness } from './routerTestHarness'
 
 await injectModuleDoubles(await import('../pages/RollPage/components/ReadingOrderGroups'), () => ({
   ReadingOrderGroups: () => null,
