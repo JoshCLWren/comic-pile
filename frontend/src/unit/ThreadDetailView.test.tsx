@@ -167,27 +167,27 @@ function setVisibilityState(state: DocumentVisibilityState): void {
 }
 
 it('renders a thread without legacy rating content', async () => {
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(screen.queryByText(/Reviews/)).not.toBeInTheDocument()
 })
 
 it('caches the thread detail under the canonical thread-detail query key', async () => {
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(queryClient.getQueryData(queryKeys.thread.detail(1))).toMatchObject({ id: 1, title: 'Saga' })
 })
 
 it('auto-opens the edit modal when arriving with openEditModal state', async () => {
   locationState.state = { openEditModal: true }
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByRole('heading', { name: /edit series/i })).toBeInTheDocument())
   expect(screen.getByDisplayValue('Saga')).toBeInTheDocument()
 })
 
 it('opens the thread tag editor from an inherited-source link (issue #4332)', async () => {
   locationState.search = '?tagEditor=thread'
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
 
   // A Thread-inherited source on this page resolves to `?tagEditor=thread`, so
   // the thread's own editor opens instead of the link re-entering the page.
@@ -203,7 +203,7 @@ it('does not fetch issues before the Issues section expands', async () => {
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
   } as never)
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(mockedIssuesApiList).not.toHaveBeenCalled()
   expect(screen.getByText('Issues (10)')).toBeInTheDocument()
@@ -244,7 +244,7 @@ it('loads the next issue cover before expansion and shares its card batch with I
     ],
     next_page_token: null, total_count: 2, page_size: 100,
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
 
   const nextCover = await screen.findByRole('img', { name: 'Cover for Saga #3' })
   expect(nextCover).toHaveAttribute('src', cover)
@@ -291,7 +291,7 @@ it('updates the Next issue title immediately after a same-tab rename and rename 
     async () => [canonicalNextCard(currentTitle)],
   )
   const user = userEvent.setup()
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
 
   await screen.findByText('Superman #1 is available next.')
   const rename = async (nextTitle: string) => {
@@ -336,7 +336,7 @@ it('refreshes the Next issue title on tab visibility and focus after another-tab
   const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockImplementation(
     async () => [canonicalNextCard(currentTitle)],
   )
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await screen.findByText('Superman #1 is available next.')
 
   // Another tab commits the rename while this one is hidden. No reload,
@@ -379,7 +379,7 @@ it('fetches one bounded page when the Issues section expands', async () => {
     issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
     next_page_token: 'next', total_count: 2, page_size: 100,
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -399,7 +399,7 @@ it('caches loaded issues under the canonical issue-pages query key', async () =>
     issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
     next_page_token: null, total_count: 1, page_size: 100,
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -427,7 +427,7 @@ it('loads the next page without duplicates or gaps', async () => {
       issues: [{ id: 2, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' }],
       next_page_token: null, total_count: 2, page_size: 100,
     })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -447,7 +447,7 @@ it('shows an empty state when the thread has no issues', async () => {
   mockedIssuesApiList.mockResolvedValueOnce({
     issues: [], next_page_token: null, total_count: 0, page_size: 100,
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -466,7 +466,7 @@ it('shows a retry action when loading issues fails', async () => {
       issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
       next_page_token: null, total_count: 1, page_size: 100,
     })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -491,7 +491,7 @@ it('renders migrated progress, paginated issues, and saves edits', async () => {
   const mutate = vi.fn().mockResolvedValue({})
   // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate, isPending: false } as never)
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('80%')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -511,7 +511,7 @@ it('replaces an impossible negative progress percentage with an inconsistent-cou
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 36, queue_position: 1,
     status: 'active', total_issues: 1, next_unread_issue_number: '8', notes: null,
   } as never)
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
 
   expect(screen.getByText('Unknown/inconsistent progress')).toBeInTheDocument()
@@ -529,7 +529,7 @@ it('flags a negative remaining count instead of rendering a negative percentage 
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: -4, queue_position: 1,
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
   } as never)
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
 
   expect(screen.getByText('Unknown/inconsistent progress')).toBeInTheDocument()
@@ -547,7 +547,7 @@ it('renders the read count beside a valid progress percentage (#3595)', async ()
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
   } as never)
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
 
   expect(screen.getByText('80%')).toBeInTheDocument()
@@ -557,14 +557,14 @@ it('renders the read count beside a valid progress percentage (#3595)', async ()
 
 it('stops loading when the route has no thread id', async () => {
   routeParams.id = ''
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
 })
 
 it('disables the save action while an edit is pending', async () => {
   // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: true } as never)
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Edit' }))
@@ -573,7 +573,7 @@ it('disables the save action while an edit is pending', async () => {
 
 it('shows the error detail when fetching the thread fails', async () => {
   mockedThreadsApiGet.mockRejectedValueOnce(new Error('missing'))
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('missing')).toBeInTheDocument())
 })
 
@@ -582,7 +582,7 @@ it('shows Thread not found when the thread detail is unavailable', async () => {
   mockedThreadsApiGet.mockRejectedValueOnce({
     response: { status: 404, data: { detail: 'Thread not found' } },
   } as never)
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Thread not found')).toBeInTheDocument())
 })
 
@@ -631,7 +631,7 @@ it('edits migrated threads and displays the all-read boundary', async () => {
   // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate, isPending: false } as never)
 
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('All issues read')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -651,7 +651,7 @@ it('renders named blocked-by dependencies and an empty blocking list as links', 
       { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11, is_circular: false },
     ],
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(screen.getByText('Dependencies')).toBeInTheDocument()
   await waitFor(() =>
@@ -667,7 +667,7 @@ it('renders blocker issue number on thread detail when known', async () => {
       { thread_id: 9, title: 'Starman', connection_type: 'blocked_by', dependency_id: 11, issue_number: '42', is_circular: false },
     ],
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await waitFor(() => expect(screen.getByText('Starman: #42')).toBeInTheDocument())
   expect(screen.getByRole('link', { name: 'Open Starman' })).toHaveAttribute('href', '/thread/9')
@@ -680,7 +680,7 @@ it('omits issue number suffix when issue_number is absent', async () => {
       { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11, is_circular: false },
     ],
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await waitFor(() => expect(screen.getByText('Prequel')).toBeInTheDocument())
   expect(screen.queryByText(/Prequel: #/)).not.toBeInTheDocument()
@@ -693,7 +693,7 @@ it('renders blocking dependency issue number on thread detail when known', async
       { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, issue_number: '7', is_circular: false },
     ],
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await waitFor(() => expect(screen.getByText('Sequel: #7')).toBeInTheDocument())
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
@@ -706,7 +706,7 @@ it('renders named blocking dependencies when nothing blocks this thread', async 
       { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, is_circular: false },
     ],
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await waitFor(() => expect(screen.getByText('No recorded incoming prerequisites')).toBeInTheDocument())
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
@@ -721,7 +721,7 @@ it('lists a circular dependency once instead of under both directions (#3239)', 
       { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, is_circular: false },
     ],
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
 
   expect(screen.getByRole('heading', { name: /Circular Dependencies/ })).toBeInTheDocument()
@@ -753,7 +753,7 @@ it('passes onIssueChanged callback to IssueToggleList', async () => {
     next_page_token: null,
   })
   
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   
   // The component should render IssueToggleList with the callback
@@ -763,7 +763,7 @@ it('passes onIssueChanged callback to IssueToggleList', async () => {
 
 it('reports dependency load failures without hiding the section', async () => {
   mockedConnectedThreads.mockRejectedValue(new Error('dependencies unavailable'))
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() =>
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to load dependencies.'),
   )
@@ -807,7 +807,7 @@ it('shows direct and inherited tag chips on issue rows without opening an editor
       },
     ],
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -840,7 +840,7 @@ it('offers per-issue tag editing directly without enabling Select mode (#3424)',
     ],
     next_page_token: null, total_count: 1, page_size: 100,
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -859,7 +859,7 @@ it('offers per-issue tag editing directly without enabling Select mode (#3424)',
 
 it('retries canonical requirements without claiming a failed load means available', async () => {
   vi.mocked(readingBoundariesApi.batch).mockRejectedValueOnce(new Error('offline'))
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   expect(await screen.findByText('Reading boundaries could not be loaded.')).toBeVisible()
   expect(screen.queryByText('Available now')).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Retry reading boundaries' }))
@@ -875,7 +875,7 @@ it('uses canonical list blockers even when explicit connected prerequisites are 
       editor: { kind: 'reading_list', list_id: 9, label: 'Ultimate' },
     }],
   } } })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   expect(await screen.findByText('Waiting')).toBeVisible()
   expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toHaveAttribute('href', '/thread/2?issue=9#issue-9')
   expect(screen.queryByText('Available now')).not.toBeInTheDocument()
@@ -903,7 +903,7 @@ it('falls back to the legacy availability explanation when canonical boundaries 
       },
     },
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
 
   expect(await screen.findByTestId('eligibility-explanation')).toBeVisible()
   expect(screen.getByText('Waiting')).toBeVisible()
@@ -916,7 +916,7 @@ it('falls back to the legacy availability explanation when canonical boundaries 
 })
 
 it('does not request legacy availability while canonical boundaries answer', async () => {
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
 
   expect(await screen.findByText('Available now')).toBeVisible()
   expect(dependenciesApi.getBatchBlockingInfo).not.toHaveBeenCalled()
@@ -934,7 +934,7 @@ it('opens the exact required issue after loading its later page', async () => {
     issues: [{ id: 101, thread_id: 1, issue_number: '101', status: 'unread', read_at: null, created_at: 'now' }],
     next_page_token: null, total_count: 2, page_size: 100,
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(document.getElementById('issue-101')).toHaveFocus())
   // #3626: the deep link lands on the exact issue without animating past a long
   // list, and marks that row as the arrival target.
@@ -956,7 +956,7 @@ it('clears the deep-link highlight once focus leaves the target issue', async ()
     ],
     next_page_token: null, total_count: 2, page_size: 100,
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   const target = await waitFor(() => {
     const row = document.getElementById('issue-11')
     expect(row).not.toBeNull()
@@ -980,7 +980,7 @@ it('leaves ordinary thread navigation unfocused and unhighlighted', async () => 
     ],
     next_page_token: null, total_count: 1, page_size: 100,
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await userEvent.click(screen.getByRole('button', { name: 'Expand' }))
   await waitFor(() => expect(screen.getByText('#1')).toBeVisible())
@@ -1002,7 +1002,7 @@ it('does not retarget an unknown deep-linked issue to another row', async () => 
     ],
     next_page_token: null, total_count: 2, page_size: 100,
   })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('#1')).toBeVisible())
   // Missing/unowned targets fail safely: no arbitrary first or same-number issue
   // gets focused or highlighted, and no extra page is requested past the end.
@@ -1017,7 +1017,7 @@ it('does not retarget an unknown deep-linked issue to another row', async () => 
 it('treats a malformed issue deep link as plain thread navigation', async () => {
   locationState.search = '?issue=abc'
   const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView')
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   // A malformed target is not a row id: the issue list stays collapsed, no page
   // is requested to hunt for an impossible row, and nothing is focused.
@@ -1043,14 +1043,14 @@ it('shows deep-link notice when issue param references a missing issue', async (
     ],
     next_page_token: null, total_count: 2, page_size: 100,
   } as never)
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await waitFor(() => expect(screen.getByText("That issue isn't in this thread.")).toBeInTheDocument())
 })
 
 it('does not show deep-link notice when no issue param present', async () => {
   locationState.search = ''
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(screen.queryByText("That issue isn't in this thread.")).not.toBeInTheDocument()
 })
@@ -1086,7 +1086,7 @@ it("renders each issue's own provider creators instead of shared series credits 
       { issueId: 22, creators: [{ name: 'Dave Gibbons', roles: ['Artist'] }] },
     ]),
   )
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -1112,7 +1112,7 @@ it('falls back to the series manual creator credits when an issue has no provide
   // The bulk read omits issues without stored credits, so the row falls back
   // to the series' manual creator credits.
   mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] })
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -1129,7 +1129,7 @@ it('loads and saves the series manual creator credits from the thread edit form 
   const mutate = vi.fn().mockResolvedValue({})
   // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate, isPending: false } as never)
-  renderPage()
+  try { renderPage() } catch (e) { console.error('RENDER ERROR', e); throw e }
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Edit' }))
