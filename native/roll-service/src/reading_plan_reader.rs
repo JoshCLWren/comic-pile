@@ -161,7 +161,7 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
 
     if !lower_series.is_empty() && lower_candidate.starts_with(&lower_series) {
         candidate = candidate[series_title.trim().len()..]
-            .trim_start_matches(|c: char| c == ' ' || c == '-' || c == ':' || c == '#')
+            .trim_start_matches([' ', '-', ':', '#'])
             .trim()
             .to_string();
     } else if !lower_series.is_empty() {
@@ -198,7 +198,7 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
             candidate = orig_chars[i..]
                 .iter()
                 .collect::<String>()
-                .trim_start_matches(|c: char| c == ' ' || c == '-' || c == ':' || c == '#')
+                .trim_start_matches([' ', '-', ':', '#'])
                 .trim()
                 .to_string();
         }
@@ -218,7 +218,7 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
         let rest = lower.strip_prefix(prefix).unwrap_or("");
         if !rest.is_empty() {
             let rest_trimmed = rest
-                .trim_start_matches(|c: char| c == ' ' || c == '#' || c == '-' || c == ':')
+                .trim_start_matches([' ', '#', '-', ':'])
                 .trim();
             if !rest_trimmed.is_empty()
                 && rest_trimmed
