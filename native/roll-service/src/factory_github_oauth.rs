@@ -349,7 +349,12 @@ async fn finish_callback(
     headers: HeaderMap,
     params: CallbackParams,
 ) -> Result<Response, ApiError> {
-    if params.error.is_some() {
+    if let Some(provider_error) = params.error.as_deref() {
+        tracing::warn!(
+            oauth_stage = "github_authorization",
+            provider_error = github_provider_error_code(provider_error),
+            "Rotisserie OAuth authorization rejected before callback exchange"
+        );
         return Err(ApiError::Unauthorized(
             "GitHub sign-in was cancelled".into(),
         ));
