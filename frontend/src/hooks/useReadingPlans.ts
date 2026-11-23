@@ -94,8 +94,9 @@ export function useDeleteReadingPlan() {
   return useMutation({
     mutationFn: continuityPlansApi.delete,
     onSuccess: async () => {
-      await invalidateReadingPlans(client)
+      // Do not make other tabs wait for this tab's local refetches to finish.
       notifyReadingPlansChanged()
+      await invalidateReadingPlans(client)
     },
   })
 }

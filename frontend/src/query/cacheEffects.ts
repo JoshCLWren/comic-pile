@@ -533,6 +533,9 @@ export async function invalidateReadingPlans(client: QueryClient): Promise<void>
 export async function invalidateReadingPlansAfterCrossTabChange(
   client: QueryClient,
 ): Promise<void> {
+  // Invalidation alone can reuse a data-less initial request that started before
+  // the remote commit. Cancel it first so every notice causes a fresh request.
+  await client.cancelQueries({ queryKey: queryKeys.readingPlans.all })
   await client.invalidateQueries({ queryKey: queryKeys.readingPlans.all })
 }
 
@@ -573,6 +576,9 @@ export async function applyCommittedReadingPlan(
   plan: ContinuityPlan,
 ): Promise<void> {
   client.setQueryData(queryKeys.readingPlans.detail(plan.id), plan)
+  // Other open tabs hold their own plan-list cache. Publish before awaiting
+  // local refetches so a slow request cannot delay their reconciliation.
+  notifyReadingPlansChanged()
   await client.invalidateQueries({
     queryKey: queryKeys.readingPlans.list(),
     exact: true,
@@ -581,9 +587,6 @@ export async function applyCommittedReadingPlan(
     queryKey: queryKeys.readingPlans.reader(plan.id),
   })
   await invalidateAfterQueueMovement(client)
-  // Other open tabs hold their own plan-list cache; announce the committed
-  // write so they reconcile without a manual reload (#5686, Greptile G1).
-  notifyReadingPlansChanged()
 }
 
 /**
