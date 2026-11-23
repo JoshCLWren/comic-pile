@@ -75,14 +75,7 @@ await injectModuleDoubles(await import('../hooks/useRollResources'), () => ({
   useRollIssueCards: vi.fn(),
 }))
 await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({ useBugReportRestore: vi.fn() }))
-await injectModuleDoubles(await import('../hooks/useRoll'), () => ({
-  useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
-  useSetDie: vi.fn(),
-  useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
-  useRoll: vi.fn(),
-  useOverrideRoll: vi.fn(),
-  useDismissPending: vi.fn(),
-}))
+await injectModuleDoubles(await import('../hooks/useRoll'), () => ({}))
 await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({ useSnooze: vi.fn() }))
 await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useMoveToFront: vi.fn(),
@@ -94,24 +87,9 @@ await injectModuleDoubles(await import('../hooks'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks')>()
   return { ...actual, useRate: vi.fn() }
 })
-await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
-  readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
-}))
+await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({}))
 await injectModuleDoubles(await import('../services/api-threads'), () => ({}))
-await injectModuleDoubles(await import('../services/api'), async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../services/api')>()
-  return {
-    ...actual,
-    threadsApi: {
-      list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
-      setPending: vi.fn(),
-    },
-    dependenciesApi: {
-      getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
-      getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
-    },
-  }
-})
+await injectModuleDoubles(await import('../services/api'), () => ({}))
 
 // SAFETY: vi.mocked returns a typed mock whose mockReturnValue surface matches the hook; cast preserves the mock call API.
 const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
