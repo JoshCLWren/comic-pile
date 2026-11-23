@@ -855,15 +855,8 @@ describe('RollPage parent handlers', () => {
   })
 
   it('issues no optional detail fetches on rating entry while rating stays usable (#2764)', async () => {
-<<<<<<< HEAD
-    const user = userEvent.setup()
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     // This page mock stands in for the rating view, so the collapsed optional
     // cards themselves are asserted at the RatingView level. The page-level
@@ -1242,15 +1235,8 @@ describe('RollPage parent handlers', () => {
   })
 
   it('issues no optional detail fetches on rating entry while rating stays usable (#2764)', async () => {
-<<<<<<< HEAD
-    const user = userEvent.setup()
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     // This page mock stands in for the rating view, so the collapsed optional
     // cards themselves are asserted at the RatingView level. The page-level
