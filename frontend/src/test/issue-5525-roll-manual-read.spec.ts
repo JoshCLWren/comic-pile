@@ -40,7 +40,7 @@ test.describe('P0 #5525 Roll manual selection', () => {
     await expect(page).toHaveURL(/\/$/)
   })
 
-  test('Pick manually offers a series outside automatic Roll without generating an offer', async ({
+  test('Pick manually opens any selected owned issue without generating an automatic offer', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
