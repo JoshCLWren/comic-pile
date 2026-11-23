@@ -368,6 +368,13 @@ pub(crate) async fn provider_exchange(
             || status == StatusCode::FORBIDDEN
             || status.as_u16() == 420
         {
+            // Retain only a redacted status/resource category: never log the
+            // credential-bearing URL, response body, or provider headers.
+            tracing::warn!(
+                status = status.as_u16(),
+                resource,
+                "comicvine provider returned throttled or forbidden status"
+            );
             return Ok(Exchange::Throttled {
                 status: status.as_u16(),
                 retry_after: response
