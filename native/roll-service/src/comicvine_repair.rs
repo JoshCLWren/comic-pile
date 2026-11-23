@@ -737,7 +737,52 @@ pub(crate) fn needs_provider_fetch(metadata: &Value, now: chrono::DateTime<chron
     age >= window
 }
 
-async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'static str, ApiError> {
+/// Freshness for import/backfill scans, including legacy rows that predate the
+/// explicit deep-fetch marker. Like the retired Python policy, a newer identity
+/// revision than the stored deep payload forces hydration; otherwise the
+/// provider revision, then the identity update time, supplies the legacy age.
+pub(crate) fn needs_provider_fetch_with_legacy_fallback(
+    metadata: &Value,
+    provider_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    if !has_complete_provider_payload(metadata) {
+        return true;
+    }
+    let deep_refreshed_at = metadata["deep_metadata_refreshed_at"]
+        .as_str()
+        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok());
+    if deep_refreshed_at.is_some() {
+        return needs_provider_fetch(metadata, now);
+    }
+    if let Some(provider_updated_at) = provider_updated_at {
+        let raw_revision = metadata
+            .get("raw_provider_payload")
+            .and_then(|raw| raw.get("date_last_updated"))
+            .and_then(Value::as_str)
+            .and_then(|stamp| {
+                let normalized = provider_timestamp(&Value::String(stamp.to_owned()))?;
+                chrono::DateTime::parse_from_rfc3339(&normalized).ok()
+            });
+        if raw_revision.is_some_and(|revision| revision.with_timezone(&chrono::Utc) < provider_updated_at) {
+            return true;
+        }
+    }
+    let fetched_at = provider_updated_at.unwrap_or(updated_at);
+    let window = if cached_has_credits(metadata) {
+        chrono::Duration::days(COMPLETE_FRESH_DAYS)
+    } else {
+        chrono::Duration::days(EMPTY_CREDIT_RECHECK_DAYS)
+    };
+    now.signed_duration_since(fetched_at) >= window
+}
+
+async fn process(
+    state: &AppState,
+    job: &Job,
+    key: Option<&str>,
+) -> Result<(&'static str, bool), ApiError> {
     if job.provider.as_deref() != Some("comicvine") || job.entity_type.as_deref() != Some("issue") {
         settle(state, job, "failed", 21600, Some("identity_ineligible")).await?;
         return Ok("failed");
