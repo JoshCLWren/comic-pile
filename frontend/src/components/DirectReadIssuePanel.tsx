@@ -12,6 +12,9 @@ interface DirectReadIssuePanelProps {
   threadTitle: string
   /** Exact issue already presented by Roll, when one is known. */
   preferredIssueId?: number | null
+  /** Counter-based legacy series can have unread comics but no Issue rows. */
+  issuesRemaining?: number | null
+  onMigrate?: () => void
 }
 
 /**
@@ -27,6 +30,8 @@ export function DirectReadIssuePanel({
   threadId,
   threadTitle,
   preferredIssueId,
+  issuesRemaining,
+  onMigrate,
 }: DirectReadIssuePanelProps) {
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
   const [browseOpen, setBrowseOpen] = useState(false)
@@ -135,9 +140,25 @@ export function DirectReadIssuePanel({
         </>
       )}
       {!lookup.isPending && !lookup.isError && !issue && (
-        <p role="status" className="text-sm text-[var(--theme-text-muted)]">
-          No unread tracked issue remains. You can browse previously read issues below.
-        </p>
+        issuesRemaining != null && issuesRemaining > 0 && onMigrate ? (
+          <div role="status" className="space-y-2 text-sm text-[var(--theme-text-muted)]">
+            <p>
+              This series has {issuesRemaining} unread {issuesRemaining === 1 ? 'comic' : 'comics'}
+              {' '}but no individually tracked unread issue. Set up issue tracking to read it directly.
+            </p>
+            <button
+              type="button"
+              onClick={onMigrate}
+              className="min-h-11 rounded-lg px-3 font-bold text-[var(--theme-primary-action)] hover:underline"
+            >
+              Set up issue tracking
+            </button>
+          </div>
+        ) : (
+          <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+            No unread tracked issue remains. You can browse previously read issues below.
+          </p>
+        )
       )}
       <button
         type="button"
