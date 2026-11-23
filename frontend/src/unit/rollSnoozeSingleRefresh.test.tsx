@@ -136,7 +136,6 @@ function renderSnoozeFlow(apis: Apis) {
       },
       refetchBootstrap: bootstrap.refetch,
       enterRatingView: vi.fn().mockResolvedValue(undefined),
-      threadsApi,
       onSnoozeRefreshFailed,
     })
 
