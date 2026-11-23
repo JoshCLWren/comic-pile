@@ -55,6 +55,9 @@ export default function QueuePage() {
     nextPageToken,
     loadMore,
     activeCount,
+    filteredCount,
+    isPlaceholderData,
+    isLoading,
   } = queueLoader
 
   // Series that show the per-row `Map series` repair action (everything except
