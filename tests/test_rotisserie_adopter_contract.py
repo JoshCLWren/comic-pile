@@ -162,3 +162,32 @@ def test_adopter_config_names_this_repository() -> None:
         "name": "comic-pile",
     }
     assert config["markers"]["namespace"] == "comic-pile-factory"
+
+
+def test_hosted_control_room_uses_shared_rotisserie_ui_and_public_data() -> None:
+    """Hosted Pages publishes a sanitized shared UI instead of a forked control room."""
+    pages = (WORKFLOWS / "factory-status-pages.yml").read_text(encoding="utf-8")
+    assert ".rotisserie/runtime/src/rotisserie/public_web.py" in pages
+    assert "site/legacy.html" in pages
+    assert "site/factory-control-room.json" in pages
+    assert "legacy ? 'legacy.html' : 'index.html'" in pages
+    assert "Rotisserie Control Room" in pages
+    assert "factory-status-live" in pages
+
+
+def test_github_operator_workflow_checks_immutable_actor_before_code_or_secrets() -> None:
+    """GitHub—not a public Pages button—authorizes every privileged operation."""
+    workflow = (WORKFLOWS / "rotisserie-admin-command.yml").read_text(encoding="utf-8")
+    assert workflow.index("Authorize immutable GitHub user ID") < workflow.index(
+        "Check out trusted ComicPile main"
+    )
+    assert "github.actor_id" in workflow
+    assert '"4014199"' in workflow
+    assert "ROTISSERIE_ADMIN_GITHUB_IDS" in workflow
+    assert "from rotisserie.web import InvalidRequest, write_command" in workflow
+    assert "subprocess.run(command, check=False" in workflow
+    assert "ref: main" in workflow
+    assert "persist-credentials: false" in workflow
+    assert "REQUEST_JSON: ${{ inputs.command_json }}" in workflow
+    assert 'os.environ["REQUEST_JSON"]' in workflow
+    assert "eval " not in workflow
