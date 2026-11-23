@@ -42,7 +42,10 @@ export function DirectReadIssuePanel({
   })
   const preferredIssue = useQuery({
     queryKey: queryKeys.thread.manualIssue(preferredIssueId ?? 0),
-    queryFn: () => issuesApi.get(preferredIssueId!),
+    queryFn: () => {
+      if (preferredIssueId == null) throw new Error('An exact issue ID is required')
+      return issuesApi.get(preferredIssueId)
+    },
     enabled: preferredIssueId != null,
     retry: false,
   })
@@ -59,6 +62,7 @@ export function DirectReadIssuePanel({
   // fetch a whole library or start one request per owned issue.
   const browse = useInfiniteQuery({
     queryKey: queryKeys.thread.directReadBrowse(threadId),
+    // SAFETY: the issue cursor is a nullable string; the first page has no cursor.
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => issuesApi.list(threadId, {
       page_size: 50,
