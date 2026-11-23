@@ -1,9 +1,9 @@
-utc: 2026-11-23T11:50:49Z
-uptime: 4229.50s load: 0.10 0.03 0.01
+utc: 2026-11-23T11:51:06Z
+uptime: 4246.10s load: 0.07 0.03 0.01
 processes: 188
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700         977       12018          53        3068       14723
+Mem:           15700         974       12020          53        3068       14726
 Swap:           3071           0        3071
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
@@ -21,7 +21,7 @@ Filesystem            Size  Used Avail Use% Mounted on
 21452 php-fpm8.5
 21452 php-fpm8.5
 18396 systemd-journal
-16144 hosted-compute-
+16168 hosted-compute-
 16116 systemd
 14940 udisksd
 14092 systemd-resolve
@@ -32,7 +32,7 @@ Filesystem            Size  Used Avail Use% Mounted on
  0.0 Runner.Listener
  0.0 systemd
  0.0 pr/ttyS0
- 0.0 kworker/u16:4-events_power_efficient
+ 0.0 kworker/u16:4-writeback
  0.0 dockerd
 --- kernel oom/kill
 --- shutdown/session signals
