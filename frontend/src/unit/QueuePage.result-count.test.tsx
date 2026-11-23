@@ -105,6 +105,7 @@ const queueThread = (id: number, title: string, position: number) => ({
 })
 
 function mockQueue(resultCountText: string): void {
+  // SAFETY: the page mock supplies the loader fields consumed by this presentation test
   mockedUseQueueThreads.mockReturnValue({
     data: [queueThread(1, 'Saga', 1), queueThread(2, 'Spawn', 2)],
     isPending: false,
