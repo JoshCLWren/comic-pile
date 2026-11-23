@@ -2001,13 +2001,19 @@ mod tests {
     const LIST_SYNC_FIRST_ISSUE_ID: i32 = 387_401;
     const LIST_SYNC_SECOND_ISSUE_ID: i32 = 387_402;
 
-    fn list_sync_rosters() -> Value {
-        serde_json::json!({
-            "3874": [
-                {"id": "9001", "issue_number": "1", "store_date": "2024-01-01"},
-                {"id": "9002", "issue_number": "2", "store_date": "2024-01-02"}
-            ]
-        })
+    fn list_sync_rosters(cycle: bool) -> Value {
+        let mut rows = vec![
+            serde_json::json!({"id": "9001", "issue_number": "1", "store_date": "2024-01-01"}),
+            serde_json::json!({"id": "9002", "issue_number": "2", "store_date": "2024-01-02"}),
+        ];
+        if cycle {
+            // This issue is absent from the fixture. Sync creates its row and
+            // external identity before the projected cycle rejects the source.
+            rows.push(
+                serde_json::json!({"id": "9003", "issue_number": "3", "store_date": "2024-01-03"}),
+            );
+        }
+        serde_json::json!({"3874": rows})
     }
 
     fn list_sync_as_of() -> DateTime<Utc> {

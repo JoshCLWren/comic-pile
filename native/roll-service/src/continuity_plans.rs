@@ -4576,6 +4576,79 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn release_source_association_waits_for_release_sync_reader_lock() {
+        let (state, user, _guard) = plan_db_fixture().await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO continuity_plans
+                   (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+                 VALUES (483884, 4838, 'Lock race', 'informational', '[]'::json, '[]'::json, NOW(), NOW());
+                 INSERT INTO custom_cbl_lists
+                   (id, user_id, name, description, mode, created_at, updated_at)
+                 VALUES (483834, 4838, 'Linked during retry', NULL, 'loose', NOW(), NOW());
+                 INSERT INTO external_identities
+                   (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                 VALUES (483811, 'comicvine', 'series', '4050-lock-race', '{}'::json, NOW(), NOW());
+                 INSERT INTO thread_external_series_mappings
+                   (thread_id, external_identity_id, status, created_at, updated_at)
+                 VALUES (4838, 483811, 'confirmed', NOW(), NOW());
+                 INSERT INTO reading_plan_release_sources
+                   (id, plan_id, thread_id, external_identity_id, enabled, created_at, updated_at)
+                 VALUES (483892, 483884, 4838, 483811, TRUE, NOW(), NOW());",
+            )
+            .await
+            .expect("seed unlinked release source");
+        drop(connection);
+
+        let mut holder = db::checkout(&state).await.expect("lock-holder connection");
+        let holder_tx = holder
+            .build_transaction()
+            .start()
+            .await
+            .expect("lock-holder transaction");
+        crate::issue_mutation::lock_reader(&holder_tx, user.id())
+            .await
+            .expect("holder takes the release-sync reader lock");
+
+        let create_state = state.clone();
+        let mut create = tokio::spawn(async move {
+            create_release_source(
+                State(create_state),
+                user,
+                Json(ReleaseSourceCreate {
+                    plan_id: 483884,
+                    thread_id: 4838,
+                    external_identity_id: 483811,
+                    custom_cbl_list_id: Some(483834),
+                }),
+            )
+            .await
+        });
+
+        // Without the shared lock, the NULL -> linked retry completes while a
+        // sync transaction can still hold and act on its earlier NULL snapshot.
+        let still_blocked =
+            tokio::time::timeout(std::time::Duration::from_millis(400), &mut create)
+                .await
+                .is_err();
+        holder_tx
+            .commit()
+            .await
+            .expect("release the reader lock");
+        let (_, Json(associated)) = create
+            .await
+            .expect("association task joined")
+            .expect("association completes after lock release");
+        assert!(
+            still_blocked,
+            "association must wait for the same reader lock held by release sync"
+        );
+        assert_eq!(associated.id, 483892);
+        assert_eq!(associated.custom_cbl_list_id, Some(483834));
+    }
+
+    #[tokio::test]
     async fn continuity_graph_advisory_lock_is_taken_in_a_transaction() {
         // Python `lock_continuity_graph` serializes plan writes with this
         // namespace; the native writer must take the identical transaction lock.
