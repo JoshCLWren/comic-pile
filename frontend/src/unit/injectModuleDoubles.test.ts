@@ -1,17 +1,18 @@
 import { expect, it, vi } from 'vitest'
-import { isFunction } from '../utils/runtimeChecks'
 import { injectModuleDoubles } from './injectModuleDoubles'
 
-await injectModuleDoubles(await import('../utils/runtimeChecks'), async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../utils/runtimeChecks')>()
+const moduleExports = {
+  double: (value: number) => value * 2,
+}
+
+await injectModuleDoubles(moduleExports, async (importOriginal) => {
+  const actual = await importOriginal<typeof moduleExports>()
   return {
-    isFunction: (value: unknown) => actual.isFunction(value),
+    double: (value: number) => actual.double(value),
   }
 })
 
 it('keeps original exports stable when a replacement wraps them', () => {
-  const callback = () => undefined
-
-  expect(isFunction(callback)).toBe(true)
-  expect(vi.mocked(isFunction)).toHaveBeenCalledTimes(1)
+  expect(moduleExports.double(2)).toBe(4)
+  expect(vi.mocked(moduleExports.double)).toHaveBeenCalledWith(2)
 })
