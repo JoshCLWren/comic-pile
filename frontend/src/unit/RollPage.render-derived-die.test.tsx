@@ -53,7 +53,9 @@ await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({
   default: ({ sides }: { sides: number }) => <div data-testid="lazy-dice" data-sides={sides} />,
 }))
 
-await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({}))
+await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({
+  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
 
 await injectModuleDoubles(await import('../pages/RollPage/components/RollHeader'), async (importOriginal) => {
   // SAFETY: importOriginal generic only types the mocked module's shape so the spy wrapper can spread the real component's props; no runtime assertion occurs.
@@ -92,9 +94,7 @@ await injectModuleDoubles(await import('../hooks'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks')>()
   return { ...actual, useRate: vi.fn() }
 })
-await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
-  readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
-}))
+await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({}))
 await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: {
     list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
