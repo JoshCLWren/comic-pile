@@ -202,6 +202,7 @@ describe('Queue exact-issue shared actions', () => {
     setup(37)
     expect(await screen.findByText(/Loading the saved rating before editing/)).toBeVisible()
     expect(screen.queryByTestId('shared-queue-card')).not.toBeInTheDocument()
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([37]))
     await act(async () => publishCards([{ ...card, status: 'read', rating: 4.5 }]))
     expect(await screen.findByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '37')
   })
