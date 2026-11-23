@@ -6443,6 +6443,18 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        /** @description Paginated reader threads collection. */
+        NativeThreadListResponse: {
+            /** Format: int32 */
+            active_count: number;
+            /**
+             * Format: int32
+             * @description Total active Queue rows matching the applied search, independent of the bounded page.
+             */
+            filtered_count?: number | null;
+            next_page_token?: string | null;
+            threads: components["schemas"]["ThreadListItem"][];
+        };
         /** @description Python `ThreadResponse`. */
         NativeThreadResponse: {
             blocking_reasons: string[];
@@ -6873,8 +6885,6 @@ export interface components {
          *     ``active_count`` is the authoritative total number of active threads in the
          *     user's queue. It is computed from the whole queue, never from the loaded
          *     page, and is independent of any search or sort filter (see issue #2568).
-         *     ``filtered_count`` is the authoritative total of active threads matching
-         *     the applied search, independent of pagination.
          */
         QueueThreadListResponse: {
             /**
@@ -6882,8 +6892,6 @@ export interface components {
              * @default 0
              */
             active_count: number;
-            /** Filtered Count */
-            filtered_count?: number;
             /** Next Page Token */
             next_page_token?: string | null;
             /** Threads */
@@ -17926,7 +17934,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadListResponse"];
+                    "application/json": components["schemas"]["NativeThreadListResponse"];
                 };
             };
             /** @description Invalid sort or page token */
