@@ -13,6 +13,7 @@ const thread = { id: 7, title: 'Saga' }
 describe('MigrationDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // SAFETY: the migration double is installed only for this suite and restored after each test.
     migrationApi.migrateThread = migrateThreadMock as typeof migrationApi.migrateThread
   })
 

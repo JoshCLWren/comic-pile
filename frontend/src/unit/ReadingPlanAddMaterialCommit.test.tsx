@@ -9,10 +9,10 @@ import {
 
 const originalCBLSourcesApi = { ...cblSourcesApi }
 const mocks = {
-  discover: vi.fn<typeof cblSourcesApi.discover>(),
-  preview: vi.fn<typeof cblSourcesApi.preview>(),
-  plan: vi.fn<typeof cblSourcesApi.plan>(),
-  commit: vi.fn<typeof cblSourcesApi.commit>(),
+  discover: vi.fn(),
+  preview: vi.fn(),
+  plan: vi.fn(),
+  commit: vi.fn(),
 }
 
 afterEach(() => {

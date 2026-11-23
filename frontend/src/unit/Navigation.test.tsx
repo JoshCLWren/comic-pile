@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from './testingLibrary'
-import { expect, test, afterEach, beforeEach, vi } from 'vitest'
+import { expect, test, beforeEach, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'

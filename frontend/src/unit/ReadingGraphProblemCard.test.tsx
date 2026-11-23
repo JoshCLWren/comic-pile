@@ -77,7 +77,9 @@ function renderCard() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: the graph double is installed only for this suite and restored after each test.
   readingGraphProblemApi.getGraph = vi.fn() as typeof readingGraphProblemApi.getGraph
+  // SAFETY: the repair double is installed only for this suite and restored after each test.
   readingGraphProblemApi.repair = vi.fn() as typeof readingGraphProblemApi.repair
 })
 

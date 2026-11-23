@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider, useAuth } from '../App'
 import Navigation from '../components/Navigation'

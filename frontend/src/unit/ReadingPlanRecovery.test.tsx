@@ -72,7 +72,9 @@ function renderRecovery(onRecovered = vi.fn()) {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  // SAFETY: the test doubles are installed only for this suite and restored after each test.
   readingPlanRecoveryApi.preview = previewApi as typeof readingPlanRecoveryApi.preview
+  // SAFETY: the test doubles are installed only for this suite and restored after each test.
   readingPlanRecoveryApi.relink = relinkApi as typeof readingPlanRecoveryApi.relink
   previewApi.mockResolvedValue(preview)
   relinkApi.mockResolvedValue({ plan_id: 1000096, list_id: 1000109, status: 'relinked' })

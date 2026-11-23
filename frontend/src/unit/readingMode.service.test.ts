@@ -17,8 +17,11 @@ const originalPut = api.put
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: the transport doubles are installed only for this suite and restored after each test.
   api.get = vi.fn() as typeof api.get
+  // SAFETY: the transport doubles are installed only for this suite and restored after each test.
   api.post = vi.fn() as typeof api.post
+  // SAFETY: the transport doubles are installed only for this suite and restored after each test.
   api.put = vi.fn() as typeof api.put
 })
 

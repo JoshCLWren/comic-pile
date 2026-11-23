@@ -46,6 +46,7 @@ function release(overrides: Partial<Release> = {}): Release {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: the list double is installed only for this suite and restored after each test.
   releasesApi.list = api.list as typeof releasesApi.list
 })
 
