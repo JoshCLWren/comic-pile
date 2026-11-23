@@ -4440,6 +4440,146 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn release_source_list_association_is_owner_scoped_unambiguous_and_retry_safe() {
+        let (state, user, _guard) = plan_db_fixture().await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (4839, 'other-list-owner');
+                 INSERT INTO continuity_plans
+                   (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+                 VALUES (483881, 4838, 'Ambiguous provenance', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),
+                        (483882, 4838, 'Single provenance', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),
+                        (483883, 4838, 'Explicit list', 'informational', '[]'::json, '[]'::json, NOW(), NOW());
+                 INSERT INTO custom_cbl_lists
+                   (id, user_id, name, description, mode, created_at, updated_at)
+                 VALUES (483831, 4838, 'List A', NULL, 'loose', NOW(), NOW()),
+                        (483832, 4838, 'List B', NULL, 'loose', NOW(), NOW()),
+                        (483833, 4839, 'Foreign list', NULL, 'loose', NOW(), NOW());
+                 INSERT INTO reading_plan_sources (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+                 VALUES (483881, 'custom-cbl:a', 483831, NOW()),
+                        (483881, 'custom-cbl:b', 483832, NOW()),
+                        (483882, 'custom-cbl:b', 483832, NOW());
+                 INSERT INTO external_identities
+                   (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                 VALUES (483810, 'comicvine', 'series', '4050-4838', '{}'::json, NOW(), NOW());
+                 INSERT INTO thread_external_series_mappings
+                   (thread_id, external_identity_id, status, created_at, updated_at)
+                 VALUES (4838, 483810, 'confirmed', NOW(), NOW());",
+            )
+            .await
+            .expect("seed release-source list fixtures");
+        drop(connection);
+
+        let payload = |plan_id, custom_cbl_list_id| ReleaseSourceCreate {
+            plan_id,
+            thread_id: 4838,
+            external_identity_id: 483810,
+            custom_cbl_list_id,
+        };
+        let (_, Json(ambiguous)) = create_release_source(
+            State(state.clone()),
+            user,
+            Json(payload(483881, None)),
+        )
+        .await
+        .expect("ambiguous provenance remains unlinked");
+        assert_eq!(ambiguous.custom_cbl_list_id, None);
+
+        let connection = db::checkout(&state).await.expect("disable connection");
+        connection
+            .execute(
+                "UPDATE reading_plan_release_sources \
+                 SET enabled = FALSE, last_synced_at = '2024-01-02T03:04:05Z' WHERE id = $1",
+                &[&ambiguous.id],
+            )
+            .await
+            .expect("preserve existing subscription state");
+        drop(connection);
+
+        let (_, Json(associated)) = create_release_source(
+            State(state.clone()),
+            user,
+            Json(payload(483881, Some(483831))),
+        )
+        .await
+        .expect("explicit reassociation");
+        assert_eq!(associated.id, ambiguous.id);
+        assert_eq!(associated.custom_cbl_list_id, Some(483831));
+        assert_eq!(associated.created_at, ambiguous.created_at);
+        assert!(!associated.enabled, "retry must preserve disabled state");
+        assert!(associated
+            .last_synced_at
+            .as_deref()
+            .is_some_and(|value| value.starts_with("2024-01-02T03:04:05")));
+
+        let (_, Json(retry)) = create_release_source(
+            State(state.clone()),
+            user,
+            Json(payload(483881, Some(483832))),
+        )
+        .await
+        .expect("retry keeps established association");
+        assert_eq!(retry.id, ambiguous.id);
+        assert_eq!(retry.custom_cbl_list_id, Some(483831));
+        assert!(!retry.enabled);
+
+        let foreign = create_release_source(
+            State(state.clone()),
+            user,
+            Json(payload(483881, Some(483833))),
+        )
+        .await
+        .expect_err("another reader's list must not be associated");
+        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
+
+        let (_, Json(inferred)) = create_release_source(
+            State(state.clone()),
+            user,
+            Json(payload(483882, None)),
+        )
+        .await
+        .expect("single same-owner provenance");
+        assert_eq!(inferred.custom_cbl_list_id, Some(483832));
+        let (_, Json(explicit)) = create_release_source(
+            State(state.clone()),
+            user,
+            Json(payload(483883, Some(483831))),
+        )
+        .await
+        .expect("explicit list-native creation");
+        assert_eq!(explicit.custom_cbl_list_id, Some(483831));
+
+        let connection = db::checkout(&state).await.expect("verify connection");
+        let source_count: i64 = connection
+            .query_one("SELECT count(*) FROM reading_plan_release_sources", &[])
+            .await
+            .expect("retry-safe source count")
+            .get(0);
+        assert_eq!(source_count, 3);
+        let persisted_updated_at: String = connection
+            .query_one(
+                "SELECT updated_at::text FROM reading_plan_release_sources WHERE id = $1",
+                &[&ambiguous.id],
+            )
+            .await
+            .expect("association timestamp")
+            .get(0);
+        assert_eq!(associated.updated_at, persisted_updated_at);
+        let preserved: bool = connection
+            .query_one(
+                "SELECT enabled = FALSE AND last_synced_at = '2024-01-02T03:04:05Z' \
+                   AND custom_cbl_list_id = 483831 \
+                 FROM reading_plan_release_sources WHERE id = $1",
+                &[&ambiguous.id],
+            )
+            .await
+            .expect("preserved subscription")
+            .get(0);
+        assert!(preserved);
+    }
+
+    #[tokio::test]
     async fn continuity_graph_advisory_lock_is_taken_in_a_transaction() {
         // Python `lock_continuity_graph` serializes plan writes with this
         // namespace; the native writer must take the identical transaction lock.
