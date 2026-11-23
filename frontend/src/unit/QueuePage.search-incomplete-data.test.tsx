@@ -161,11 +161,15 @@ describe('Queue search with incomplete data', () => {
       nextPageToken: 'next-page-token',
       loadMore: vi.fn().mockResolvedValue(undefined),
       activeCount: 10, // Total count is higher than what's loaded
+      filteredCount: 10,
+      isPlaceholderData: true,
+      resultCountText: 'Updating series count…',
     })
 
     renderQueue()
 
-    // Trigger a search to enter the searching state
+    // These are previous-key placeholder rows. QueuePage must hide them rather
+    // than presenting them as matches for the new server-applied search.
     const searchInput = screen.getByPlaceholderText('Search...')
     await user.type(searchInput, 'NonExistent')
 
