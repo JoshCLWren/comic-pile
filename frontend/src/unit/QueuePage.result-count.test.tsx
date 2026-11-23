@@ -123,19 +123,30 @@ function mockQueue(resultCountText: string): void {
 
 beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver)
+  // SAFETY: the mocked mutation exposes only the fields consumed by QueuePage
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: the mocked mutation exposes only the fields consumed by QueuePage
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: the mocked mutation exposes only the fields consumed by QueuePage
   vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: the mocked mutation exposes only the fields consumed by QueuePage
   vi.mocked(useReactivateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: the mocked mutation exposes only the fields consumed by QueuePage
   vi.mocked(useMoveToFront).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: the mocked mutation exposes only the fields consumed by QueuePage
   vi.mocked(useMoveToBack).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: the mocked mutation exposes only the fields consumed by QueuePage
   vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: the mocked mutation exposes only the fields consumed by QueuePage
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: the mocked mutation exposes only the fields consumed by QueuePage
   vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: the bootstrap mock supplies only the fields consumed by QueuePage
   vi.mocked(useRollBootstrap).mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: vi.fn(),
   } as never)
+  // SAFETY: the restore mock supplies only the fields consumed by QueuePage
   vi.mocked(useBugReportRestore).mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
