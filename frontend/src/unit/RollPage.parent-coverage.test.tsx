@@ -225,6 +225,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.snoozed_threads = sessionData.snoozed_threads
     bootstrapData.snoozed_count = 0
     bootstrapData.pool_reason = 'ready'
+    spies.refetch.mockResolvedValue({})
     for (const mutation of [spies.setDie, spies.roll, spies.dismissPending, spies.override, spies.snooze, spies.unsnooze, spies.moveFront, spies.moveBack, spies.shuffle]) mutation.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
     // Rate publishes its authoritative bootstrap snapshot to the page; the mock
     // mirrors that contract so no page-level bootstrap refetch is expected.
