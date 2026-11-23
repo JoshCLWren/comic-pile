@@ -108,6 +108,15 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     })
   })
 
+  it('discloses that selected material does not change crossover event labels', async () => {
+    render(<ReadingPlanAddMaterialImpl planId={77} planName="B.P.R.D." />)
+    await openSource()
+
+    expect(await screen.findByText(
+      'Adding selected material changes only this Reading Plan. It does not create or change crossover event labels or their memberships.',
+    )).toBeVisible()
+  })
+
   it('requires an explicit missing-comic choice and commits the exact reviewed preview', async () => {
     const onCommitted = vi.fn()
     render(<ReadingPlanAddMaterialImpl planId={77} planName="B.P.R.D." onCommitted={onCommitted} />)

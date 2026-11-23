@@ -427,6 +427,9 @@ export default function ReadingPlanAddMaterial({
                 <span className="font-medium text-[var(--theme-warning)]">Unresolved</span> – needs identity resolution first
               </p>
 
+              <p className="text-xs text-[var(--theme-text-dim)]">
+                Adding selected material changes only this Reading Plan. It does not create or change crossover event labels or their memberships.
+              </p>
               <button
                 type="button"
                 onClick={commit}
