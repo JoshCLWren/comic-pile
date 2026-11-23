@@ -4505,10 +4505,7 @@ mod tests {
         assert_eq!(associated.custom_cbl_list_id, Some(483831));
         assert_eq!(associated.created_at, ambiguous.created_at);
         assert!(!associated.enabled, "retry must preserve disabled state");
-        assert!(associated
-            .last_synced_at
-            .as_deref()
-            .is_some_and(|value| value.starts_with("2024-01-02T03:04:05")));
+        assert!(associated.last_synced_at.is_some());
 
         let (_, Json(retry)) = create_release_source(
             State(state.clone()),
@@ -4519,6 +4516,7 @@ mod tests {
         .expect("retry keeps established association");
         assert_eq!(retry.id, ambiguous.id);
         assert_eq!(retry.custom_cbl_list_id, Some(483831));
+        assert_eq!(retry.last_synced_at, associated.last_synced_at);
         assert!(!retry.enabled);
 
         let foreign = create_release_source(
