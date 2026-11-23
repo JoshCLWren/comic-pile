@@ -87,7 +87,7 @@ function SetCurrentIssueModal({ onSubmit, onClose }: SetCurrentIssueModalProps) 
 
 interface RollModalsProps {
   showMigrationDialog: boolean
-  threadToMigrate: RatingThread | null
+  threadToMigrate: Pick<RatingThread, 'id' | 'title'> | null
   onMigrationComplete: (thread: Thread) => void
   onMigrationSkip: () => void
   onMigrationClose: () => void
@@ -114,6 +114,7 @@ interface RollModalsProps {
   isActionSheetOpen: boolean
   isDirectReadOpen: boolean
   onCloseDirectRead: () => void
+  onMigrateDirectRead?: () => void
   selectedThread: RollBootstrapThread | null
   /**
    * The reading session's pending thread. The native Roll offer acts on this
@@ -168,6 +169,7 @@ export function RollModals({
   isActionSheetOpen,
   isDirectReadOpen,
   onCloseDirectRead,
+  onMigrateDirectRead,
   selectedThread,
   pendingThreadId,
   onCloseActionSheet,
@@ -270,6 +272,7 @@ export function RollModals({
             threadId={selectedThread.id}
             threadTitle={selectedThread.title}
             preferredIssueId={selectedThread.issue_id}
+            onMigrate={onMigrateDirectRead}
           />
         </Modal>
       )}
