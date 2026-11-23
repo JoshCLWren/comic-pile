@@ -147,16 +147,9 @@ describe('CblBrowserPage catalog', () => {
       ).toBeInTheDocument()
     })
     // The path is provenance: it survives only inside the collapsed disclosure.
-    // Scope to the adoption preview: the source detail header has its own
-    // disclosure now (#4171), so the label appears twice on this page.
-    const previewSection = screen
-      .getByRole('heading', { name: 'The New Marvel Ultimate Universe 2.0 (CBH)' })
-      .closest('section')
-    expect(previewSection).not.toBeNull()
-    if (!previewSection) return
-    const details = within(previewSection).getByText('Source details').closest('details')
+    const details = screen.getByText('Source details').closest('details')
     expect(details).not.toBeNull()
-    expect(details).toContainElement(within(previewSection).getByText(rawPath))
+    expect(details).toContainElement(screen.getByText(rawPath))
   })
 
   it('shows the add button disabled with a reason while the preview loads (#3939)', async () => {
