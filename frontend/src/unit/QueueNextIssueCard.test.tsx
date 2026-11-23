@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueNextIssueCard from '../pages/QueuePage/QueueNextIssueCard'
@@ -48,14 +48,14 @@ function issueList(id: number | null): IssueListResponse {
   }
 }
 
-function setup(preferredIssueId?: number) {
+function setup(preferredIssueId?: number, issuesRemaining?: number, onMigrate?: () => void) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   const Wrapper = ({ children }: { children: ReactNode }) =>
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   const ui = preferredIssueId == null
-    ? <QueueNextIssueCard threadId={42} threadTitle="Hellboy" />
+    ? <QueueNextIssueCard threadId={42} threadTitle="Hellboy" issuesRemaining={issuesRemaining} onMigrate={onMigrate} />
     : <DirectReadIssuePanel threadId={42} threadTitle="Hellboy" preferredIssueId={preferredIssueId} />
   return render(ui, { wrapper: Wrapper })
 }
@@ -188,5 +188,41 @@ describe('Queue exact-issue shared actions', () => {
     fireEvent.click(await within(picker).findByRole('button', { name: 'Hellboy #11 (unread)' }))
     await waitFor(() => expect(screen.getByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '39'))
     expect(list).toHaveBeenCalledWith(42, { page_size: 50, page_token: 'next-owned-page' })
+  })
+
+  it('keeps a previously read rating editor closed until its saved rating is loaded', async () => {
+    const saved = { ...issueList(37).issues[0]!, status: 'read' as const }
+    get.mockResolvedValue(saved)
+    let publishCards: (cards: IssueCard[]) => void = () => {
+      throw new Error('Card request not initialized')
+    }
+    fetchCards.mockImplementation(() => new Promise<IssueCard[]>((resolve) => {
+      publishCards = resolve
+    }))
+    setup(37)
+    expect(await screen.findByText(/Loading the saved rating before editing/)).toBeVisible()
+    expect(screen.queryByTestId('shared-queue-card')).not.toBeInTheDocument()
+    await act(async () => publishCards([{ ...card, status: 'read', rating: 4.5 }]))
+    expect(await screen.findByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '37')
+  })
+
+  it('never opens Edit rating with a guessed value when saved details fail', async () => {
+    get.mockResolvedValue({ ...issueList(37).issues[0]!, status: 'read' })
+    fetchCards.mockRejectedValueOnce(new Error('details offline'))
+    setup(37)
+    expect(await screen.findByRole('alert')).toHaveTextContent('details offline')
+    expect(screen.queryByTestId('shared-queue-card')).not.toBeInTheDocument()
+    expect(screen.getByText(/Retry details before editing/)).toBeVisible()
+  })
+
+  it('offers counter-only series with unread comics an explicit migration action', async () => {
+    list.mockResolvedValue(issueList(null))
+    const onMigrate = vi.fn()
+    setup(undefined, 3, onMigrate)
+    expect(await screen.findByText(/This series has 3 unread comics/)).toBeVisible()
+    expect(screen.queryByText(/No unread tracked issue remains/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Set up issue tracking' }))
+    expect(onMigrate).toHaveBeenCalledExactlyOnceWith()
+    expect(fetchCards).not.toHaveBeenCalled()
   })
 })
