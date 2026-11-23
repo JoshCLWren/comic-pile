@@ -403,7 +403,6 @@ describe('RollPage parent handlers', () => {
   })
 
   it('keeps the rating workspace out of a generic full-workspace panel', async () => {
-    const user = userEvent.setup()
     render(<RollPage />)
 
     // The die view keeps its ordinary panel chrome.
@@ -773,7 +772,6 @@ describe('RollPage parent handlers', () => {
   })
 
   it('issues no optional detail fetches on rating entry while rating stays usable (#2764)', async () => {
-    const user = userEvent.setup()
     render(<RollPage />)
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
@@ -1054,7 +1052,6 @@ describe('RollPage parent handlers', () => {
   })
 
   it('handles sparse roll metadata and pending-thread fallback selection', async () => {
-    const user = userEvent.setup()
     sessionData.current_die = 0
     sessionData.last_rolled_result = null
     spies.setPending.mockResolvedValueOnce({
@@ -1117,7 +1114,6 @@ describe('RollPage parent handlers', () => {
   })
 
   it('issues no optional detail fetches on rating entry while rating stays usable (#2764)', async () => {
-    const user = userEvent.setup()
     render(<RollPage />)
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
