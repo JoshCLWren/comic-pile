@@ -1,0 +1,22 @@
+{
+  "family": "maintenance",
+  "owned_path_patterns": [
+    "^/api/v2/maintenance/comicvine-metadata-backfill$",
+    "^/api/v2/maintenance/comicvine-metadata-repairs$"
+  ],
+  "defaults": {
+    "runtime": "native-rust",
+    "status": "target",
+    "consumers": []
+  },
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/maintenance/comicvine-metadata-backfill",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/maintenance/comicvine\\-metadata\\-backfill$",
+      "owning_issue": 5592
+    }
+  ]
+}
