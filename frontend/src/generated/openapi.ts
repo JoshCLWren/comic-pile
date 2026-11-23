@@ -4554,6 +4554,8 @@ export interface components {
         };
         ContinuityReleaseSourceResponse: {
             created_at: string;
+            /** Format: int32 */
+            custom_cbl_list_id?: number | null;
             enabled: boolean;
             /** Format: int32 */
             external_identity_id: number;
@@ -6165,25 +6167,6 @@ export interface components {
             /** Format: int32 */
             tracked_issue_count: number;
         };
-        NativeContinuityReleaseSourceResponse: {
-            created_at: string;
-            /** Format: int32 */
-            custom_cbl_list_id?: number | null;
-            enabled: boolean;
-            /** Format: int32 */
-            external_identity_id: number;
-            /** Format: int32 */
-            id: number;
-            last_synced_at?: string | null;
-            /** Format: int32 */
-            plan_id: number;
-            provider: string;
-            provider_title?: string | null;
-            provider_volume_id: string;
-            /** Format: int32 */
-            thread_id: number;
-            updated_at: string;
-        };
         /** @description Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`. */
         NativeDependencyGroupDetailMemberResponse: {
             issue?: components["schemas"]["IssueDetailResponse"] | null;
@@ -6401,16 +6384,6 @@ export interface components {
         NativeReadingOrderProjectionRequest: {
             /** Format: int32 */
             reading_order_id: number;
-        };
-        NativeReleaseSourceCreate: {
-            /** Format: int32 */
-            custom_cbl_list_id?: number | null;
-            /** Format: int32 */
-            external_identity_id: number;
-            /** Format: int32 */
-            plan_id: number;
-            /** Format: int32 */
-            thread_id: number;
         };
         /** @description Response body: the Python `RollResponse` projection for a manual pick. */
         NativeRollResponse: {
@@ -7856,6 +7829,8 @@ export interface components {
             visibility: string;
         };
         ReleaseSourceCreate: {
+            /** Format: int32 */
+            custom_cbl_list_id?: number | null;
             /** Format: int32 */
             external_identity_id: number;
             /** Format: int32 */
@@ -13854,7 +13829,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeReleaseSourceCreate"];
+                "application/json": components["schemas"]["ReleaseSourceCreate"];
             };
         };
         responses: {
@@ -13863,7 +13838,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeContinuityReleaseSourceResponse"];
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
                 };
             };
         };
@@ -13908,7 +13883,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeContinuityReleaseSourceResponse"];
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
                 };
             };
         };
@@ -14232,7 +14207,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeContinuityReleaseSourceResponse"][];
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"][];
                 };
             };
         };
