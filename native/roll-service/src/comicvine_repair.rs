@@ -2210,10 +2210,10 @@ mod tests {
         .await
         .expect("write backfill")
         .0;
-        assert_eq!(written.scanned, 4);
+        assert_eq!(written.scanned, 5);
         assert_eq!(written.needs_enqueue, 2);
-        assert_eq!(written.enqueued, 2, "one insert plus one reopen");
-        assert_eq!(written.already_queued_or_fresh, 2);
+        assert_eq!(written.enqueued, 2, "one insert plus one due reopen");
+        assert_eq!(written.already_queued_or_fresh, 3);
         let rows = connection
             .query(
                 "SELECT external_identity_id, state, attempts, last_error \
