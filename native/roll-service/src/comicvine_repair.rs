@@ -1077,7 +1077,7 @@ async fn backfill_authorized(
     let tx = connection.transaction().await.map_err(db::query_error)?;
     let rows = tx
         .query(
-            "SELECT e.id, e.metadata_json::text \
+            "SELECT e.id, e.metadata_json::text, e.provider_updated_at, e.updated_at \
              FROM external_identities e \
              WHERE e.provider = 'comicvine' \
                AND e.entity_type = 'issue' \
