@@ -113,6 +113,7 @@ export function useQueueThreadCards({
           onReposition={() => modals.openRepositionModal(thread)}
           onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
+          onMigrate={() => modals.openMigrationDialog(thread)}
           onDelete={() => actions.requestDelete(thread)}
           onRemoveFromQueue={() => actions.requestRemove(thread)}
           positionActionsAvailable={positionActionsAvailable}
