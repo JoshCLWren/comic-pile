@@ -925,7 +925,7 @@ describe('RollPage parent handlers', () => {
 
   it('manual Read Now avoids all migration and automatic Roll eligibility prerequisites', async () => {
     const user = userEvent.setup()
-    bootstrapData.roll_pool = [{ id: 1, title: 'Saga', format: 'Comic', total_issues: null }]
+    bootstrapData.roll_pool = [{ id: 1, title: 'Saga', format: 'Comic' }]
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
