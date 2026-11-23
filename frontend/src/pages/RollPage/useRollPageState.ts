@@ -14,6 +14,7 @@ export interface RollPageState {
   isSetCurrentIssueOpen: boolean
   selectedThread: RollBootstrapThread | null
   isActionSheetOpen: boolean
+  isDirectReadOpen: boolean
   activeRatingThread: RatingThread | null
   showMigrationDialog: boolean
   threadToMigrate: RatingThread | null
@@ -41,6 +42,7 @@ export interface RollPageStateSetters {
   setIsSetCurrentIssueOpen: (value: boolean) => void
   setSelectedThread: (value: RollBootstrapThread | null) => void
   setIsActionSheetOpen: (value: boolean) => void
+  setIsDirectReadOpen: (value: boolean) => void
   setActiveRatingThread: (value: RatingThread | null) => void
   setShowMigrationDialog: (value: boolean) => void
   setThreadToMigrate: (value: RatingThread | null) => void
@@ -64,6 +66,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [isSetCurrentIssueOpen, setIsSetCurrentIssueOpen] = useState(false)
   const [selectedThread, setSelectedThread] = useState<RollBootstrapThread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
+  const [isDirectReadOpen, setIsDirectReadOpen] = useState(false)
   const [activeRatingThread, setActiveRatingThread] = useState<RatingThread | null>(null)
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [threadToMigrate, setThreadToMigrate] = useState<RatingThread | null>(null)
@@ -101,6 +104,8 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setSelectedThread,
     isActionSheetOpen,
     setIsActionSheetOpen,
+    isDirectReadOpen,
+    setIsDirectReadOpen,
     activeRatingThread,
     setActiveRatingThread,
     showMigrationDialog,

@@ -208,7 +208,6 @@ function RollMoveBudgetProbe() {
     },
     refetchBootstrap,
     enterRatingView: budgetEnterRatingView,
-    threadsApi,
   })
 
   useEffect(() => {
@@ -234,7 +233,6 @@ function QueueSnoozeBudgetProbe() {
   useQueueThreads()
   useExcludedThreads(true)
   const actions = useQueueThreadActions({
-    navigateToRoll: budgetNavigate,
     // The default restore depends on requestAnimationFrame; this budget only
     // counts HTTP work, so the focus restore is a no-op here.
     restoreSeriesActionsFocus: () => undefined,
