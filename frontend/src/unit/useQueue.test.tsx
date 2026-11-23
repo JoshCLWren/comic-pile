@@ -343,6 +343,7 @@ listThreads.mockImplementation(
   it('marks a search-key transition as placeholder instead of showing old counts', async () => {
     listThreads
       .mockResolvedValueOnce({
+        // SAFETY: the stubbed page supplies only the thread fields this transition reads
         threads: [{ id: 1, title: 'Saga' } as never],
         next_page_token: null,
         active_count: 5,
@@ -367,6 +368,7 @@ listThreads.mockImplementation(
   it('marks a sort-key transition as placeholder instead of showing old counts', async () => {
     listThreads
       .mockResolvedValueOnce({
+        // SAFETY: the stubbed page supplies only the thread fields this transition reads
         threads: [{ id: 1, title: 'Saga' } as never],
         next_page_token: null,
         active_count: 5,
