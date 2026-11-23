@@ -6,6 +6,7 @@ import { useDeleteReadingPlan, useSaveReadingPlan } from '../hooks/useReadingPla
 import ContinuityPlansIndexPage from '../pages/ContinuityPlansIndexPage'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { notifyReadingPlansChanged, subscribeToCrossTabChanges } from '../query/crossTabDataSync'
+import { queryClient } from '../query/queryClient'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
 import { isObject } from '../utils/runtimeChecks'
@@ -106,6 +107,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -128,6 +130,35 @@ it('refreshes the plans list when another tab renames a plan (#5686)', async () 
   expect(await screen.findByText('QA-F-Order-TwoTab')).toBeInTheDocument()
   expect(screen.queryByText('QA-F-Order')).not.toBeInTheDocument()
   expect(mockList).toHaveBeenCalledTimes(2)
+})
+
+it('supersedes an initial list request when another tab changes a plan (#5686)', async () => {
+  let finishInitial: (plans: Array<typeof plan>) => void = () => undefined
+  const initialRequest = new Promise<Array<typeof plan>>((resolve) => {
+    finishInitial = resolve
+  })
+  mockList.mockReturnValueOnce(initialRequest)
+  mockList.mockResolvedValue([{ ...plan, name: 'QA-F-Order-Fresh' }])
+  renderPlansIndex()
+  await waitFor(() => expect(mockList).toHaveBeenCalledTimes(1))
+
+  await act(async () => {
+    const otherTab = new BroadcastChannel('comic-pile-data')
+    otherTab.postMessage({ type: 'reading-plans-changed', senderId: 'other-tab' })
+    otherTab.close()
+    await Promise.resolve()
+  })
+
+  // The fresh request must start before the stale initial request settles.
+  await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2))
+  expect(await screen.findByText('QA-F-Order-Fresh')).toBeInTheDocument()
+
+  await act(async () => {
+    finishInitial([plan])
+    await initialRequest
+  })
+  expect(screen.getByText('QA-F-Order-Fresh')).toBeInTheDocument()
+  expect(screen.queryByText('QA-F-Order')).not.toBeInTheDocument()
 })
 
 it('reconciles the plans list when another tab creates a plan (#5686)', async () => {
@@ -196,13 +227,28 @@ it('announces a committed plan delete to other tabs (#5686)', async () => {
       changes.push(String((data as { type: unknown }).type))
     }
   })
+  let finishLocalRefresh: () => void = () => undefined
+  const localRefresh = new Promise<void>((resolve) => {
+    finishLocalRefresh = resolve
+  })
+  const invalidateSpy = vi
+    .spyOn(queryClient, 'invalidateQueries')
+    .mockReturnValueOnce(localRefresh)
   const { result } = renderHook(() => useDeleteReadingPlan())
+  let deletion: Promise<void> = Promise.resolve()
 
   await act(async () => {
-    await result.current.mutateAsync(1)
+    deletion = result.current.mutateAsync(1)
+    await Promise.resolve()
   })
+  await waitFor(() => expect(invalidateSpy).toHaveBeenCalled())
 
+  // The other tab is notified while this tab's local refresh is still pending.
   expect(changes).toEqual(['reading-plans-changed'])
+  await act(async () => {
+    finishLocalRefresh()
+    await deletion
+  })
   observer.close()
 })
 
@@ -258,9 +304,15 @@ it('announces a committed plan adoption to other tabs (#5686 G1)', async () => {
     }
   })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  let finishLocalRefresh: () => void = () => undefined
+  const localRefresh = new Promise<void>((resolve) => {
+    finishLocalRefresh = resolve
+  })
+  const invalidateSpy = vi.spyOn(client, 'invalidateQueries').mockReturnValueOnce(localRefresh)
+  let commit: Promise<void> = Promise.resolve()
 
   await act(async () => {
-    await applyCommittedReadingPlan(
+    commit = applyCommittedReadingPlan(
       client,
       cast<Parameters<typeof applyCommittedReadingPlan>[1]>({
         id: 1,
@@ -272,9 +324,16 @@ it('announces a committed plan adoption to other tabs (#5686 G1)', async () => {
         updated_at: plan.updated_at,
       }),
     )
+    await Promise.resolve()
   })
+  await waitFor(() => expect(invalidateSpy).toHaveBeenCalled())
 
+  // Save/adoption publishes before awaiting potentially slow local refetches.
   expect(changes).toEqual(['reading-plans-changed'])
+  await act(async () => {
+    finishLocalRefresh()
+    await commit
+  })
   observer.close()
   client.clear()
 })
