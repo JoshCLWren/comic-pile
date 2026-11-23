@@ -224,6 +224,16 @@ fn app() -> Router {
         .route("/api/v2/health", get(native_health))
         .route("/api/metrics", get(native_metrics))
         .route("/api/v1/metrics", get(native_metrics))
+        .route("/api/v2/factory/github/start", get(native_dispatch))
+        .route("/api/v2/factory/github/callback", get(native_dispatch))
+        .route(
+            "/api/v2/factory/github/session",
+            get(native_dispatch).options(native_dispatch),
+        )
+        .route(
+            "/api/v2/factory/github/dispatch",
+            post(native_dispatch).options(native_dispatch),
+        )
         .route("/api/v2/identity-inbox", get(native_dispatch))
         .route("/api/v2/identity-inbox/issue-matches", get(native_dispatch))
         .route("/api/v2/identity-inbox/{mapping_id}", get(native_dispatch))
@@ -822,6 +832,38 @@ mod tests {
                 assert_eq!(&body, previous);
             }
             first = Some(body);
+        }
+    }
+
+    #[tokio::test]
+    async fn github_oauth_routes_are_registered_in_production_ingress() {
+        // The inner router tests authorization. This test catches routes
+        // missing from the separate Vercel entrypoint (404/405).
+        for (method, path) in [
+            ("GET", "/api/v2/factory/github/start"),
+            ("GET", "/api/v2/factory/github/callback"),
+            ("GET", "/api/v2/factory/github/session"),
+            ("OPTIONS", "/api/v2/factory/github/session"),
+            ("POST", "/api/v2/factory/github/dispatch"),
+            ("OPTIONS", "/api/v2/factory/github/dispatch"),
+        ] {
+            let response = app()
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("factory ingress response");
+            assert_ne!(response.status(), StatusCode::NOT_FOUND, "{method} {path}");
+            assert_ne!(
+                response.status(),
+                StatusCode::METHOD_NOT_ALLOWED,
+                "{method} {path}"
+            );
+            assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
         }
     }
 
