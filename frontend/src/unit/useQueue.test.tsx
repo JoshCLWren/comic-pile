@@ -306,7 +306,7 @@ listThreads.mockImplementation(
     listThreads.mockClear()
 
     // SAFETY: the sort literal is one of the values the sort type allows
-    rerender({ sort: 'created' as QueueSortBy })
+    rerender({ sort: 'created' })
 
     await waitFor(() =>
       expect(listThreads).toHaveBeenCalledWith(
