@@ -759,14 +759,20 @@ export default function CblBrowserPage() {
     preview && summary
       ? `${countPhraseWithArticle(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhraseWithArticle(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
       : null
-  const { settledBrowsePage, firstShown, lastShown, resultCountPending, resultCountText } =
-    cblBrowseResultState({
-      browsePage,
-      isPlaceholderData: browseQuery.isPlaceholderData,
-      isPending: browseQuery.isPending,
-      isFetching: browseQuery.isFetching,
-      hasCatalogError: catalogError !== null,
-    })
+  const {
+    settledBrowsePage,
+    firstShown,
+    lastShown,
+    resultCountPending,
+    resultCountText,
+    catalogTotal,
+  } = cblBrowseResultState({
+    browsePage,
+    isPlaceholderData: browseQuery.isPlaceholderData || browseStale,
+    isPending: browseQuery.isPending,
+    isFetching: browseQuery.isFetching,
+    hasCatalogError: catalogError !== null,
+  })
 
   const openConfirm = () => {
     if (!selectedSource || !preview || commitBlocked) return
