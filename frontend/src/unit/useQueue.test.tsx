@@ -299,7 +299,7 @@ listThreads.mockImplementation(
     const { result, rerender } = renderHook(
       ({ sort }: { sort: QueueSortBy }) => useQueueThreads('', sort, threadsApi),
       // SAFETY: the sort literal is one of the values the sort type allows
-      { wrapper, initialProps: { sort: 'position' as QueueSortBy } },
+      { wrapper, initialProps: { sort: 'position' } },
     )
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
@@ -366,6 +366,7 @@ listThreads.mockImplementation(
   })
 
   it('marks a sort-key transition as placeholder instead of showing old counts', async () => {
+    // SAFETY: the paginator reads only id and title from this partial row fixture.
     listThreads
       .mockResolvedValueOnce({
         threads: [{ id: 1, title: 'Saga' } as never],
@@ -378,7 +379,7 @@ listThreads.mockImplementation(
     const wrapper = createWrapper()
     const { result, rerender } = renderHook(
       ({ sort }: { sort: QueueSortBy }) => useQueueThreads('', sort, threadsApi),
-      { wrapper, initialProps: { sort: 'position' as QueueSortBy } },
+      { wrapper, initialProps: { sort: 'position' } },
     )
 
     await waitFor(() => expect(result.current.resultCountText).toBe('5 of 5 series'))
@@ -396,6 +397,7 @@ listThreads.mockImplementation(
         () => new Promise((resolve) => { resolveAlpha = resolve }),
       )
       .mockResolvedValueOnce({
+        // SAFETY: the paginator reads only id and title from this partial row fixture.
         threads: [{ id: 2, title: 'Beta' } as never],
         next_page_token: null,
         active_count: 5,
@@ -415,6 +417,7 @@ listThreads.mockImplementation(
     await waitFor(() => expect(result.current.resultCountText).toBe('1 of 5 series'))
 
     resolveAlpha({
+      // SAFETY: the paginator reads only id and title from these partial row fixtures.
       threads: [{ id: 1, title: 'Alpha One' } as never, { id: 3, title: 'Alpha Two' } as never],
       next_page_token: null,
       active_count: 5,
@@ -425,6 +428,7 @@ listThreads.mockImplementation(
   })
 
   it('restates whole-queue totals on cursor pages, not the visible page size', async () => {
+    // SAFETY: this pagination regression needs only stable row ids.
     listThreads
       .mockResolvedValueOnce({
         threads: [{ id: 1 } as never],
@@ -488,6 +492,7 @@ listThreads.mockImplementation(
   })
 
   it('keeps settled first-page counts when only a next-page fetch fails', async () => {
+    // SAFETY: this pagination regression needs only a stable row id.
     listThreads
       .mockResolvedValueOnce({
         threads: [{ id: 1 } as never],
