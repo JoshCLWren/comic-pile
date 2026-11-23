@@ -1595,6 +1595,98 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     assert_eq!(reason.as_deref(), Some("replaced by user"));
 }
 
+/// Owner direction: map/remap must fetch creator credits synchronously. Confirm
+/// and replace each invoke inline hydration after their mapping commits, so the
+/// provider is called for both operations and the confirmed identity's credits
+/// are visible immediately (no background worker).
+#[tokio::test]
+async fn confirm_and_replace_hydrate_creator_credits_inline() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-inline-credits").await;
+    set_key(true);
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Saga").await;
+    let i = issue(&conn, t, "1", 1).await;
+    let base = format!("/api/v2/comicvine/issues/{i}");
+
+    let deep = |id: u32| {
+        json!({
+            "status_code": 1,
+            "results": {
+                "id": id,
+                "name": "Going For It",
+                "issue_number": "1",
+                "cover_date": "1988-03-01",
+                "store_date": "1988-03-24",
+                "image": {"medium_url": "https://img.example/medium.jpg"},
+                "volume": {"id": 4001, "name": "Hellblazer"},
+                "person_credits": [{"id": 1, "name": "Writer", "role": "writer"}],
+                "character_credits": [],
+                "team_credits": [],
+                "story_arc_credits": [],
+                "date_last_updated": "2026-11-01 17:33:53",
+            }
+        })
+        .to_string()
+    };
+    let recorder = fake(&state);
+    for id in [1111, 2222] {
+        recorder.push_ok(
+            StatusCode::OK,
+            header::HeaderMap::new(),
+            Bytes::from(deep(id)),
+        );
+    }
+
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 1111})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["has_confirmed_identity"], true);
+
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/identity:replace"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 2222})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+
+    let calls = fake(&state).calls();
+    assert_eq!(
+        calls.len(),
+        2,
+        "confirm and replace each fetch credits inline"
+    );
+    assert!(calls[0].path.starts_with("/api/issue/4000-1111?"));
+    assert!(calls[1].path.starts_with("/api/issue/4000-2222?"));
+
+    let metadata: Value = serde_json::from_str(
+        conn.query_one(
+            "SELECT metadata_json::text FROM external_identities WHERE external_id = '2222'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0),
+    )
+    .unwrap();
+    assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+    assert_eq!(metadata["creator_credits"][0]["role"], "writer");
+}
+
 #[tokio::test]
 async fn identity_mutations_are_owner_scoped() {
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-owner").await;
