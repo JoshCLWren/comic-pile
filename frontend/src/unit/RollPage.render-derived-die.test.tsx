@@ -90,10 +90,6 @@ await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useShuffleQueue: vi.fn(),
   useActiveSeriesCount: () => null,
 }))
-await injectModuleDoubles(await import('../hooks'), async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../hooks')>()
-  return { ...actual, useRate: vi.fn() }
-})
 await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
 }))
@@ -158,6 +154,7 @@ const SCOPED_DIE_20 = {
 function renderRollPage() {
   return render(
     <MemoryRouter>
+      <NavigationSpy navigate={navigateSpy} />
       <ToastProvider>
         <RollPage />
       </ToastProvider>
@@ -194,7 +191,6 @@ beforeEach(() => {
   vi.mocked(useMoveToFront).mockReturnValue(cast<ReturnType<typeof useMoveToFront>>({ mutate: vi.fn(), isPending: false }))
   vi.mocked(useMoveToBack).mockReturnValue(cast<ReturnType<typeof useMoveToBack>>({ mutate: vi.fn(), isPending: false }))
   vi.mocked(useShuffleQueue).mockReturnValue(cast<ReturnType<typeof useShuffleQueue>>({ mutate: vi.fn(), isPending: false }))
-  vi.mocked(useRate).mockReturnValue(cast<ReturnType<typeof useRate>>({ mutate: vi.fn(), isPending: false }))
 })
 
 describe('Roll die is render-derived from scoped die-state (#4768)', () => {
