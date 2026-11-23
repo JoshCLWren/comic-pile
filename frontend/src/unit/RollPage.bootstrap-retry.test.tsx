@@ -5,6 +5,8 @@ import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
 import { injectModuleDoubles } from './injectModuleDoubles'
+import { MemoryRouter } from 'react-router-dom'
+import { NavigationSpy } from './routerTestHarness'
 
 const spies = vi.hoisted(() => ({
   refetch: vi.fn(), navigate: vi.fn(), list: vi.fn(),

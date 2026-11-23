@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { injectModuleDoubles } from './injectModuleDoubles'
+import { MemoryRouter } from 'react-router-dom'
+import { NavigationSpy } from './routerTestHarness'
 
 // SAFETY: Hoisted bootstrap modal state holds nullable manualDie; null represents automatic die mode in the fixture.
 const state = vi.hoisted(() => ({ overridePending: false, setDiePending: false, manualDie: null as number | null }))

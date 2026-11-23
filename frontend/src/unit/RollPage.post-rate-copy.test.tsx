@@ -6,6 +6,8 @@ import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import type { RateResponsePayload } from '../types'
 import { injectModuleDoubles } from './injectModuleDoubles'
+import { MemoryRouter } from 'react-router-dom'
+import { NavigationSpy } from './routerTestHarness'
 
 const undoSpies = vi.hoisted(() => ({
   undo: vi.fn(),

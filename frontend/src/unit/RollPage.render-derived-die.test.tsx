@@ -38,6 +38,8 @@ import { useRate } from '../hooks'
 import { writeRollSnoozes } from '../services/api-roll'
 import { cast } from '../utils/cast'
 import { injectModuleDoubles } from './injectModuleDoubles'
+import { MemoryRouter } from 'react-router-dom'
+import { NavigationSpy } from './routerTestHarness'
 
 // Records the `currentDie` prop RollPage passes to RollHeader on every render
 // pass, so an effect-synced die (fallback on first pass) is distinguishable

@@ -17,6 +17,8 @@ import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { injectModuleDoubles } from './injectModuleDoubles'
+import { MemoryRouter } from 'react-router-dom'
+import { NavigationSpy } from './routerTestHarness'
 
 const navigateSpy = vi.fn()
 
