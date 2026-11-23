@@ -389,7 +389,7 @@ export interface SessionDetails {
   events: SessionEvent[];
 }
 
-export type ThreadListResponse = components['schemas']['QueueThreadListResponse']
+export type ThreadListResponse = components['schemas']['QueueThreadListResponse'] & { filtered_count?: number | null }
 
 export interface SessionListResponse {
   sessions: SessionSummary[];
