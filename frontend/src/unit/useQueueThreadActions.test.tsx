@@ -9,13 +9,8 @@ import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
 import type { UseQueueThreadActionsDeps } from '../pages/QueuePage/useQueueThreadActions'
 import { queryClient as sharedQueryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
-<<<<<<< HEAD
-import type { RollResponse, Thread } from '../types'
-import { cast } from '../utils/cast'
-import { NavigationSpy } from './routerTestHarness'
-=======
 import type { Thread } from '../types'
->>>>>>> origin/main
+import { NavigationSpy } from './routerTestHarness'
 
 const toastSpy = vi.fn()
 

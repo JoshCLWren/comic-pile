@@ -1,9 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-<<<<<<< HEAD
-import { fireEvent, render, screen, waitFor } from './testingLibrary'
-=======
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
->>>>>>> origin/main
+import { act, fireEvent, render, screen, waitFor, within } from './testingLibrary'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueNextIssueCard from '../pages/QueuePage/QueueNextIssueCard'

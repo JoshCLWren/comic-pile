@@ -88,7 +88,9 @@ await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({ isOpen, title, children, onClose }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void }) =>
     isOpen ? <section><h2>{title}</h2><button type="button" onClick={onClose}>close modal</button>{children}</section> : null,
 }))
-<<<<<<< HEAD
+await injectModuleDoubles(await import('../components/DirectReadIssuePanel'), () => ({
+  DirectReadIssuePanel: ({ threadTitle }: { threadTitle: string }) => <div>Direct issue card for {threadTitle}</div>,
+}))
 await injectModuleDoubles(await import('../components/MigrationDialog'), () => ({ default: () => null }))
 await injectModuleDoubles(await import('../components/SimpleMigrationDialog'), () => ({ default: () => null }))
 await injectModuleDoubles(await import('../pages/RollPage/components/ThreadPool'), () => ({ ThreadPool: () => <div>pool</div> }))
@@ -104,15 +106,6 @@ function renderRollPage() {
     </MemoryRouter>,
   )
 }
-=======
-vi.mock('../components/DirectReadIssuePanel', () => ({
-  DirectReadIssuePanel: ({ threadTitle }: { threadTitle: string }) => <div>Direct issue card for {threadTitle}</div>,
-}))
-vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
-vi.mock('../components/SimpleMigrationDialog', () => ({ default: () => null }))
-vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: () => <div>pool</div> }))
-vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: () => <div>rating</div> }))
->>>>>>> origin/main
 
 describe('RollPage bootstrap modal coverage', () => {
   beforeEach(() => {

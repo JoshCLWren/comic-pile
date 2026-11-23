@@ -2,15 +2,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from './test
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
-<<<<<<< HEAD
 import { injectModuleDoubles } from './injectModuleDoubles'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { NavigationSpy } from './routerTestHarness'
-await injectModuleDoubles(await import('../contexts/useToast'), () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
-=======
 import { threadsApi } from '../services/api-threads'
-vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
->>>>>>> origin/main
+await injectModuleDoubles(await import('../contexts/useToast'), () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 const spies = vi.hoisted(() => ({
   navigate: vi.fn(),
