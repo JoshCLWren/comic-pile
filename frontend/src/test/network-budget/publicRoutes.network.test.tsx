@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, test } from 'vitest'
 import { screen, fireEvent } from '../../unit/testingLibrary'
 
 // The authenticated redirect target is the Roll home, which is peer-owned and

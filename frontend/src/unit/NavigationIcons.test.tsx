@@ -19,6 +19,12 @@ const mockRefreshSession = vi.fn<typeof authTransport.refreshSession>()
 const mockIsSessionRefreshRejected = vi.fn<typeof authTransport.isSessionRefreshRejected>()
 
 beforeEach(() => {
+  Object.assign(api, { get: mockApiGet, post: mockApiPost })
+  vi.spyOn(authTransport, 'setAccessToken').mockImplementation(mockSetAccessToken)
+  vi.spyOn(authTransport, 'clearAccessToken').mockImplementation(mockClearAccessToken)
+  vi.spyOn(authTransport, 'getAccessToken').mockImplementation(mockGetAccessToken)
+  vi.spyOn(authTransport, 'refreshSession').mockImplementation(mockRefreshSession)
+  vi.spyOn(authTransport, 'isSessionRefreshRejected').mockImplementation(mockIsSessionRefreshRejected)
   Object.defineProperty(window, 'innerWidth', {
     configurable: true,
     value: 390,
@@ -34,8 +40,18 @@ beforeEach(() => {
   mockApiPost.mockReset()
   mockSetAccessToken.mockReset()
   mockClearAccessToken.mockReset()
+  mockGetAccessToken.mockReset()
+  mockRefreshSession.mockReset()
+  mockIsSessionRefreshRejected.mockReset()
+  mockGetAccessToken.mockReturnValue('test-token')
+  mockIsSessionRefreshRejected.mockReturnValue(false)
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   mockSetAccessToken.mockImplementation(() => undefined)
+})
+
+afterEach(() => {
+  Object.assign(api, originalApiMethods)
+  vi.restoreAllMocks()
 })
 
 test('renders recognizable icon primitives in the mobile footer', async () => {

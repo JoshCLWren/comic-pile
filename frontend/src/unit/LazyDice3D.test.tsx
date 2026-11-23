@@ -1,5 +1,5 @@
 import { render, screen } from './testingLibrary'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import LazyDice3D from '../components/LazyDice3D'
 import { injectModuleDoubles } from './injectModuleDoubles'
 
