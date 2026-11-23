@@ -63,7 +63,6 @@ interface StaleTestThread {
 let staleData: StaleTestThread[] = []
 let threadsValue: typeof threadData | undefined = threadData
 
-await injectModuleDoubles(await import('react-router-dom'), () => ({ useNavigate: () => spies.navigate }))
 await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: () => ({
     setRestoreAction: vi.fn((restore: () => void) => restore()),

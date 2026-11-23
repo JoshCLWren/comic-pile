@@ -13,7 +13,6 @@ const spies = vi.hoisted(() => ({
   list: vi.fn(), override: vi.fn(), refetch: vi.fn(), navigate: vi.fn(), setDie: vi.fn(), clearDie: vi.fn(),
 }))
 
-await injectModuleDoubles(await import('react-router-dom'), () => ({ useNavigate: () => spies.navigate }))
 await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }),
 }))

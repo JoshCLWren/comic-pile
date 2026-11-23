@@ -47,10 +47,7 @@ import { NavigationSpy } from './routerTestHarness'
 // SAFETY: `as number[]` only types the hoisted accumulator that the RollHeader spy pushes `currentDie` into; the array starts empty and only numbers are pushed.
 const headerCurrentDieProps = vi.hoisted(() => [] as number[])
 
-await injectModuleDoubles(await import('react-router-dom'), async () => {
-  const actual = await vi.importActual('react-router-dom')
-  return { ...actual, useNavigate: () => vi.fn() }
-})
+const navigateSpy = vi.fn()
 
 await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({
   default: ({ sides }: { sides: number }) => <div data-testid="lazy-dice" data-sides={sides} />,
