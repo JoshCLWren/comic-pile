@@ -886,7 +886,9 @@ async fn extend_adopted_issue_to_following_plans(
                 .await
                 .map_err(db::query_error)?;
             if list_row.is_none() {
-                continue;
+                return Err(ApiError::Unprocessable(format!(
+                    "Reading List {lid} is not owned by the release source's user"
+                )));
             }
             // Idempotence: skip if issue already in list.
             let exists = tx
