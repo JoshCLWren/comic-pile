@@ -49,6 +49,7 @@ interface QueueThreadCardProps {
   onReposition: () => void
   onEdit: () => void
   onDependencies: () => void
+  onMigrate?: () => void
   onDelete: () => void
   onRemoveFromQueue?: () => void
   positionActionsAvailable?: boolean
@@ -114,6 +115,7 @@ export default function QueueThreadCard({
   onReposition,
   onEdit,
   onDependencies,
+  onMigrate,
   onDelete,
   onRemoveFromQueue,
   positionActionsAvailable = true,
@@ -390,7 +392,7 @@ export default function QueueThreadCard({
         aria-label={`Exact issue actions for ${thread.title}`}
         className="mx-3 mb-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3"
       >
-        <QueueNextIssueCard threadId={thread.id} threadTitle={thread.title} />
+        <QueueNextIssueCard threadId={thread.id} threadTitle={thread.title} issuesRemaining={thread.issues_remaining} onMigrate={onMigrate} />
       </section>
     )}
     <QueueMapSeriesDialog
