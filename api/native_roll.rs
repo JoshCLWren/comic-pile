@@ -247,6 +247,10 @@ fn app() -> Router {
             "/api/v2/maintenance/comicvine-metadata-repairs",
             get(native_dispatch),
         )
+        .route(
+            "/api/v2/maintenance/comicvine-metadata-backfill",
+            get(native_dispatch),
+        )
         .route("/api/v2/activity", get(native_dispatch))
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
