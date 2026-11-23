@@ -1,4 +1,4 @@
-import { act, render, renderHook, screen } from '@testing-library/react'
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -128,6 +128,46 @@ it('refreshes the plans list when another tab renames a plan (#5686)', async () 
   expect(await screen.findByText('QA-F-Order-TwoTab')).toBeInTheDocument()
   expect(screen.queryByText('QA-F-Order')).not.toBeInTheDocument()
   expect(mockList).toHaveBeenCalledTimes(2)
+})
+
+it('reconciles the plans list when another tab creates a plan (#5686)', async () => {
+  const created = { ...plan, id: 2, name: 'QA-F-Order-New' }
+  mockList.mockResolvedValueOnce([plan])
+  mockList.mockResolvedValue([plan, created])
+  renderPlansIndex()
+  expect(await screen.findByText('QA-F-Order')).toBeInTheDocument()
+  expect(screen.queryByText('QA-F-Order-New')).not.toBeInTheDocument()
+
+  // The add happens in another tab; the list must gain the new plan without a
+  // manual reload (issue #5686 acceptance: "Same for adding ... a plan").
+  await act(async () => {
+    const otherTab = new BroadcastChannel('comic-pile-data')
+    otherTab.postMessage({ type: 'reading-plans-changed', senderId: 'other-tab' })
+    otherTab.close()
+    await Promise.resolve()
+  })
+
+  expect(await screen.findByText('QA-F-Order-New')).toBeInTheDocument()
+  expect(mockList).toHaveBeenCalledTimes(2)
+})
+
+it('reconciles the plans list when another tab deletes a plan (#5686)', async () => {
+  mockList.mockResolvedValueOnce([plan])
+  mockList.mockResolvedValue([])
+  renderPlansIndex()
+  expect(await screen.findByText('QA-F-Order')).toBeInTheDocument()
+
+  // The delete happens in another tab; the list must drop the plan without a
+  // manual reload (issue #5686 acceptance: "Same for ... deleting a plan").
+  await act(async () => {
+    const otherTab = new BroadcastChannel('comic-pile-data')
+    otherTab.postMessage({ type: 'reading-plans-changed', senderId: 'other-tab' })
+    otherTab.close()
+    await Promise.resolve()
+  })
+
+  await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2))
+  expect(screen.queryByText('QA-F-Order')).not.toBeInTheDocument()
 })
 
 it('refreshes the plans list when the tab regains focus (#5686)', async () => {
