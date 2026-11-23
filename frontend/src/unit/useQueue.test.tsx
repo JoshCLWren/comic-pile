@@ -427,6 +427,7 @@ listThreads.mockImplementation(
   })
 
   it('restates whole-queue totals on cursor pages, not the visible page size', async () => {
+    // SAFETY: this pagination regression needs only stable row ids.
     listThreads
       .mockResolvedValueOnce({
         threads: [{ id: 1 } as never],
