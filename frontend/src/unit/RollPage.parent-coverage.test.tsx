@@ -151,6 +151,15 @@ await injectModuleDoubles(await import('../pages/RollPage/components/RatingView'
   </div>
 } }))
 
+function renderRollPage() {
+  return render(
+    <MemoryRouter>
+      <NavigationSpy navigate={spies.navigate} />
+      <RollPage />
+    </MemoryRouter>,
+  )
+}
+
 describe('RollPage parent handlers', () => {
   afterEach(() => vi.useRealTimers())
 

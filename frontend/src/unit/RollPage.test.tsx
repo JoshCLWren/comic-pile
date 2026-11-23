@@ -116,9 +116,12 @@ const bootstrap = {
 
 function renderRollPage() {
   return render(
-    <ToastProvider>
-      <RollPage />
-    </ToastProvider>
+    <MemoryRouter>
+      <NavigationSpy navigate={navigateSpy} />
+      <ToastProvider>
+        <RollPage />
+      </ToastProvider>
+    </MemoryRouter>
   )
 }
 

@@ -114,9 +114,12 @@ const mockedUseRollDieState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollDi
 
 function renderRollPage() {
   return render(
-    <ToastProvider>
-      <RollPage />
-    </ToastProvider>,
+    <MemoryRouter>
+      <NavigationSpy navigate={spies.navigate} />
+      <ToastProvider>
+        <RollPage />
+      </ToastProvider>
+    </MemoryRouter>,
   )
 }
 

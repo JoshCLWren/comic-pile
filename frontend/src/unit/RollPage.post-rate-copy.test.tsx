@@ -203,6 +203,15 @@ await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
+function renderRollPage() {
+  return render(
+    <MemoryRouter>
+      <NavigationSpy navigate={spies.navigate} />
+      <RollPage />
+    </MemoryRouter>,
+  )
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   bootstrapHook.value = null

@@ -124,6 +124,19 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+function renderRollPage() {
+  return render(
+    <MemoryRouter>
+      <NavigationSpy navigate={navigateSpy} />
+      <ToastProvider>
+        <BugReportRestoreProvider>
+          <RollPage />
+        </BugReportRestoreProvider>
+      </ToastProvider>
+    </MemoryRouter>
+  )
+}
+
 it('renders tooltip for offset indicator when snoozed threads exist', async () => {
   render(
     <ToastProvider>

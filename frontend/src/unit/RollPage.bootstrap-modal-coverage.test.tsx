@@ -93,6 +93,17 @@ await injectModuleDoubles(await import('../components/SimpleMigrationDialog'), (
 await injectModuleDoubles(await import('../pages/RollPage/components/ThreadPool'), () => ({ ThreadPool: () => <div>pool</div> }))
 await injectModuleDoubles(await import('../pages/RollPage/components/RatingView'), () => ({ RatingView: () => <div>rating</div> }))
 
+function renderRollPage() {
+  return render(
+    <MemoryRouter>
+      <NavigationSpy navigate={spies.navigate} />
+      <ToastProvider>
+        <RollPage />
+      </ToastProvider>
+    </MemoryRouter>,
+  )
+}
+
 describe('RollPage bootstrap modal coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks()

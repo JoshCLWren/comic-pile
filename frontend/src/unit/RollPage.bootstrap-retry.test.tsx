@@ -76,9 +76,12 @@ const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollB
 
 function renderRollPage() {
   return render(
-    <ToastProvider>
-      <RollPage />
-    </ToastProvider>,
+    <MemoryRouter>
+      <NavigationSpy navigate={spies.navigate} />
+      <ToastProvider>
+        <RollPage />
+      </ToastProvider>
+    </MemoryRouter>,
   )
 }
 
