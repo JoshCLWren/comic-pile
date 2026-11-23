@@ -41,24 +41,6 @@ export async function injectModuleDoubles<ModuleExports extends object>(
       continue
     }
 
-    // Mutate object-valued service namespaces in place instead of replacing the
-    // whole export. Dependent modules capture the original object reference, so
-    // replacing it breaks live bindings; mutating preserves the reference while
-    // installing the supplied spies.
-    if (
-      descriptor?.value !== null &&
-      typeof descriptor?.value === 'object' &&
-      replacement !== null &&
-      typeof replacement === 'object' &&
-      !Array.isArray(descriptor.value) &&
-      !Array.isArray(replacement)
-    ) {
-      for (const [key, value] of Object.entries(replacement)) {
-        ;(descriptor.value as Record<string, unknown>)[key] = value
-      }
-      continue
-    }
-
     Object.defineProperty(moduleExports, exportName, {
       configurable: true,
       enumerable: true,
