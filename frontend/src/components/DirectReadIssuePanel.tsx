@@ -123,7 +123,7 @@ export function DirectReadIssuePanel({
           )}
           {!canShowEditor && (
             <p role="status" className="text-sm text-[var(--theme-text-muted)]">
-              {cards.isPending
+              {cards.isFetching
                 ? 'Loading the saved rating before editing…'
                 : 'Saved rating details are unavailable. Retry details before editing.'}
             </p>
@@ -150,7 +150,7 @@ export function DirectReadIssuePanel({
             </p>
             <button
               type="button"
-              onClick={onMigrate}
+              onClick={() => onMigrate()}
               className="min-h-11 rounded-lg px-3 font-bold text-[var(--theme-primary-action)] hover:underline"
             >
               Set up issue tracking
