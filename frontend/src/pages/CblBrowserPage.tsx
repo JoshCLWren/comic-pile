@@ -1231,7 +1231,15 @@ export default function CblBrowserPage() {
             </p>
           )}
 
-          {browseStale && <p role="status" className="text-sm text-[var(--theme-text-muted)]">{submittedQuery ? `Searching every shared CBL for “${submittedQuery}”…` : 'Loading the shared CBL catalog…'}</p>}
+          {/*
+           * The search banner above already names the query; repeating it here
+           * showed (and announced) the same sentence twice while loading.
+           */}
+          {browseStale && (
+            <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+              {submittedQuery ? 'Loading matching source lists…' : 'Loading the shared CBL catalog…'}
+            </p>
+          )}
 
           {browsePage && !catalogError && !browseStale && (
             <div className="space-y-4" data-testid="cbl-browse-results">

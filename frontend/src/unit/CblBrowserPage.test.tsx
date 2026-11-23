@@ -301,9 +301,9 @@ describe('CblBrowserPage catalog', () => {
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /DC/ })).not.toBeInTheDocument()
     })
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Searching every shared CBL for “Batman”…',
-    )
+    expect(screen.getByRole('status')).toHaveTextContent('Loading matching source lists…')
+    // The banner names the query once; the loading line does not repeat it.
+    expect(screen.getAllByText(/Searching every shared CBL for “Batman”/)).toHaveLength(1)
     expect(screen.queryByTestId('cbl-browse-results')).not.toBeInTheDocument()
 
     await act(async () => {
