@@ -8072,6 +8072,14 @@
           }
         }
       },
+      "BoundaryEvaluator": {
+        "type": "string",
+        "description": "Deployment-level capability for the canonical evaluator behind this batch.\n\nIt mirrors the same `AppState::option_e` switch every handler resolves, so\na client that has already observed one batch can skip the canonical read\nentirely on later loads when the evaluator cannot answer (`unavailable`)\nand consult the legacy blocking authority directly.",
+        "enum": [
+          "enabled",
+          "unavailable"
+        ]
+      },
       "BoundaryIssue": {
         "type": "object",
         "required": [
@@ -14699,9 +14707,13 @@
       "ReadingBoundaryBatchResponseV2": {
         "type": "object",
         "required": [
-          "threads"
+          "threads",
+          "evaluator"
         ],
         "properties": {
+          "evaluator": {
+            "$ref": "#/components/schemas/BoundaryEvaluator"
+          },
           "threads": {
             "type": "object",
             "additionalProperties": {

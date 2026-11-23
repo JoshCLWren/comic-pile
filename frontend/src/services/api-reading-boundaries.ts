@@ -18,7 +18,19 @@ export function createReadingBoundariesApi(client: HttpClient) {
         ))
       }
       const responses = await Promise.all(pages)
-      return { threads: Object.assign({}, ...responses.map((page) => page.threads)) }
+      // A rollout can change the authority between concurrent page requests.
+      // Preserve every successful projection but conservatively select the
+      // legacy authority for the combined batch; a later discovery can recover
+      // the canonical evaluator after the deployment settles. Missing fields
+      // from an older function revision also take the safe legacy path.
+      const evaluator = responses.length > 0 &&
+        responses.every((page) => page.evaluator === 'enabled')
+        ? 'enabled'
+        : 'unavailable'
+      return {
+        threads: Object.assign({}, ...responses.map((page) => page.threads)),
+        evaluator,
+      }
     },
   }
 }

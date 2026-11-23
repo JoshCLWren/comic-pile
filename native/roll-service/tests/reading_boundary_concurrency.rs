@@ -35,13 +35,13 @@ use tower::ServiceExt;
 
 const PASSWORD: &str = "correct-horse-battery";
 
-fn state(url: &str) -> Arc<AppState> {
+fn state(url: &str, option_e: bool) -> Arc<AppState> {
     Arc::new(test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.into()),
             "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
             "RUST_ROLL_POOL_SIZE" => Some("4".into()),
-            "OPTION_E_ENABLED" => Some("true".into()),
+            "OPTION_E_ENABLED" => option_e.then(|| "true".into()),
             "OPTION_E_APPROVED_PREVIEW" => Some("injected-by-test".into()),
             _ => None,
         })
@@ -49,9 +49,9 @@ fn state(url: &str) -> Arc<AppState> {
     ))
 }
 
-async fn database() -> Option<(Arc<AppState>, tokio::sync::MutexGuard<'static, ()>)> {
+async fn database(option_e: bool) -> Option<(Arc<AppState>, tokio::sync::MutexGuard<'static, ()>)> {
     let url = test_support::database_url().await;
-    let state = state(&url);
+    let state = state(&url, option_e);
     let guard = test_support::reset_for_test(&state).await;
     Some((state, guard))
 }
@@ -235,11 +235,39 @@ async fn seed_strict_wait(state: &Arc<AppState>, owner: i32) -> (i32, i32, i32) 
     (waiting, waiting_frontier, list)
 }
 
+/// Legacy execution must not leak canonical eligibility into a batch whose
+/// deployment-level evaluator signal tells the client to use stored blocking.
+#[tokio::test]
+async fn option_e_off_marks_every_boundary_unavailable() {
+    let Some((state, _db)) = database(false).await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "boundary-legacy-reader").await;
+    let (thread, _, _) = seed_strict_wait(&state, owner).await;
+
+    let (status, body) = send(
+        &state,
+        (&token, &csrf),
+        "POST",
+        "/api/v2/reading-boundaries",
+        Some(json!({"thread_ids": [thread]})),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["evaluator"], "unavailable", "{body}");
+    let explanation = &body["threads"][thread.to_string()];
+    assert_eq!(explanation["state"], "unavailable", "{body}");
+    assert_eq!(explanation["summary"], "Option E is not active for JLI.");
+    assert_eq!(explanation["next"], Value::Null, "{body}");
+    assert_eq!(explanation["blockers"], json!([]), "{body}");
+}
+
 /// A concurrent reading-list mutation committed while the boundaries request
 /// is in flight must not split labels and eligibility across two snapshots.
 #[tokio::test]
 async fn concurrent_list_mutation_cannot_split_boundary_snapshot() {
-    let Some((state, _db)) = database().await else {
+    let Some((state, _db)) = database(true).await else {
         return;
     };
     let (token, csrf, owner) = register(&state, "boundary-g5-reader").await;

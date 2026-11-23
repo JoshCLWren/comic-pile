@@ -7,7 +7,7 @@ overlays, tabs, and the shared authenticated shell. The CI inventory guard
 `App.tsx` and the audited route table diverge, or when any inventoried route
 does not name an existing request-budget spec.
 
-Child delivery: #4501 authenticated core (PR #4508), #4502 creator/discovery
+Child delivery: #4501 authenticated core (PR #4508, #5656), #4502 creator/discovery
 (PR #4511, #4609), #4503 reading/continuity/identity (PR #4506), #4504
 public/auxiliary + CI guard (PR #4509, #4619). PR #4500 (deferred eager team
 chemistry) is one narrow fix, not completion of this parent.
@@ -22,13 +22,16 @@ and mutation-refresh behavior are covered by the specs listed per row.
 | --- | --- | --- | --- | --- | --- |
 | `/` (Roll) | Cold load | 1 bootstrap read | 1 (required) | — | #4501 budget preserved |
 | `/queue` | Cold load | 6 reads | 6 (each feeds rendered row/count/state) | — | #4501 budget preserved |
+| `/queue` → `/thread/:id` | New thread key after evaluator reports unavailable | `POST /v2/reading-boundaries` x2 + `POST /v1/threads:getBlockingInfo` x2 | **canonical x1 + legacy x2**; warm remount x0; invalidation inside the 30-second freshness window adds only the active legacy read | repeated canonical probes cannot add information while capability discovery is fresh; expiry permits rollout recovery | #5656: native `evaluator` signal + shared query cache |
 | `/queue` | Search `r→ro→…→robert` | intermediate requests | 1 final-value request | debounce commits once | #4501 |
 | `/thread/:id` | Cold load, canonical evaluator available | 6 reads | **5** | closed `TagEditor` fetched tag catalog before its open gate | #4508: `useTags` enabled scope |
 | `/thread/:id` | Cold load, evaluator unavailable | 7 reads | **6** | same | #4508 |
 | `/thread/:id` | Crossover groups | serial after thread detail | parallel with detail | keyed on loaded record | #4508: keyed on route id |
+| `/thread/:id` | Issues collapsed → expand → next cursor → collapse/reopen | 0 while collapsed; one `GET /v1/threads/:id/issues` per cursor | unchanged; warm reopen adds **0** issue-page reads | disclosure owns the historical QA hot path; each cursor is distinct required breadth | #4501 `ThreadDetailView.request-budget` regression |
 | `/history` | Cold load | 1 session-list page | 1 (required) | — | #4501 budget preserved |
 | `/sessions/:id` | Cold load | details + snapshots | 2 (required) | — | #4501 budget preserved |
 | Auth shell | Mount | prefs + identity-inbox badge | 1 each (required) | — | #4501 |
+| Auth shell | Logout/login after unavailable discovery | capability cache did not exist | capability and private rows cleared; next account sends one new canonical discovery | session-owned query cache must not cross accounts | #5656 `useReadingBoundaries.request-budget` + `session-cache-isolation` |
 
 ## Creator / discovery / crossovers / CBL
 
@@ -66,18 +69,13 @@ and mutation-refresh behavior are covered by the specs listed per row.
 | `/glossary`, `/help` → `/glossary` | Cold load | shell only | 3 (required) | redirect does not duplicate shell reads | #4509 budget |
 | Cross-account | Logout/login | — | releases refetched; no cross-account cache leakage | session cache cleared | #4509 `authTransitions` spec |
 
-## Remaining before parent closure
+## Remaining verification and parent follow-ups
 
 - **Production-path verification** after deploy for representative journeys
   (Roll, Queue, Thread, creator, continuity, public/auth). Local and CI
   evidence above does not substitute for deployed proof.
-- **Queue canonical + legacy blocking double batch** in Option-E-off
-  deployments: needs a server capability signal; tracked under #4501.
 - **Authenticated shell remount on navigation**: an `App.tsx` layout change;
   allocated to the coordinator, not claimed here.
-- **Owner pause**: #4501 is parked `blocked` pending owner instruction for
-  the review/merge/deploy path. This parent stays open until the items
-  above are verified; no child merge closes it.
 
 No broad private-data HTTP caching, feature flags, shadow modes, or disabled
 tests were introduced to make any budget pass.
