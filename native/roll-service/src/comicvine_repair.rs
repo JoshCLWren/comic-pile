@@ -1133,7 +1133,14 @@ async fn backfill_authorized(
                 "SELECT external_identity_id \
                  FROM comicvine_metadata_refresh_requests \
                  WHERE external_identity_id = ANY($1::int[]) \
-                   AND state IN ('pending', 'running', 'deferred')",
+                   AND ( \
+                     state IN ('pending', 'running', 'deferred') OR \
+                     (state = 'failed' AND next_attempt_at > now()) OR \
+                     (state = 'completed' AND completed_at IS NOT NULL \
+                       AND completed_at > now() - interval '30 days') OR \
+                     (state = 'no_credits' AND completed_at IS NOT NULL \
+                       AND completed_at > now() - interval '7 days') \
+                   )",
                 &[&needs_fetch],
             )
             .await
