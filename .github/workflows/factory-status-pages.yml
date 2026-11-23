@@ -103,6 +103,15 @@ jobs:
           OMNIROUTE_BASE_URL: ${{ vars.OMNIROUTE_BASE_URL }}
         run: python3 .github/scripts/generate_factory_status_dashboard.py
 
+      - name: Render canonical Rotisserie control room for public Pages
+        run: |
+          set -euo pipefail
+          mv site/index.html site/legacy.html
+          python3 .rotisserie/runtime/src/rotisserie/public_web.py \
+            --source site/legacy.html \
+            --output site/index.html \
+            --snapshot site/factory-control-room.json
+
       - name: Export provider and model reliability counts
         continue-on-error: true
         env:
@@ -156,6 +165,13 @@ jobs:
           existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/index.html?ref=${branch}" --jq '.sha' 2>/dev/null || true)"
           publish_snapshot site/index.html index.html 'chore: refresh factory dashboard' "$existing_sha"
 
+          # Keep the detailed historical telemetry accessible from ?legacy=1.
+          legacy_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/legacy.html?ref=${branch}" --jq '.sha' 2>/dev/null || true)"
+          publish_snapshot site/legacy.html legacy.html 'chore: refresh detailed factory telemetry' "$legacy_sha"
+
+          control_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/factory-control-room.json?ref=${branch}" --jq '.sha' 2>/dev/null || true)"
+          publish_snapshot site/factory-control-room.json factory-control-room.json 'chore: refresh public control room snapshot' "$control_sha"
+
           # Public normalized counts keyed by immutable merged SHA, never logs
           # or credentials. Update only when attribution changed.
           if [[ -f site/funnel-cache.json ]]; then
@@ -195,14 +211,16 @@ jobs:
               <main id="status">Loading the live factory dashboard…</main>
               <script>
                 (() => {
-                  const source = 'https://raw.githubusercontent.com/${{ github.repository }}/factory-status-live/index.html';
+                  const legacy = new URLSearchParams(location.search).get('legacy') === '1';
+                  const file = legacy ? 'legacy.html' : 'index.html';
+                  const source = 'https://raw.githubusercontent.com/${{ github.repository }}/factory-status-live/' + file;
                   const status = document.querySelector('#status');
                   const load = async () => {
                     try {
                       const response = await fetch(`${source}?v=${Date.now()}`, { cache: 'no-store' });
                       if (!response.ok) throw new Error(`live snapshot returned ${response.status}`);
                       const html = await response.text();
-                      const marker = 'Can the fleet move work, and which factories are actually useful?';
+                      const marker = legacy ? 'Can the fleet move work, and which factories are actually useful?' : 'Rotisserie Control Room';
                       if (!html.includes(marker)) throw new Error('live snapshot is not the factory dashboard');
                       const refreshingHtml = html.replace(
                         '</head>',
