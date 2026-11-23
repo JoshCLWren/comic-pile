@@ -1,6 +1,7 @@
 //! Bounded, awaited ComicVine metadata-repair worker.
 //! A Vercel request is the lifetime of the work: never spawn and forget a task.
 use crate::{
+    comicvine_limits::{parse_retry_after, python_envelope_ok},
     db,
     outbound::{OutboundHttp, OutboundRequest},
     ApiError, AppState,
