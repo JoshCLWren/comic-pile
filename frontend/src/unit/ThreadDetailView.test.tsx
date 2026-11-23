@@ -15,7 +15,6 @@ import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import { tagsApi } from '../services/api-tags'
 import { injectModuleDoubles } from './injectModuleDoubles'
 
-const navigateSpy = vi.fn()
 const routeParams = { id: '1' }
 
 interface LocationState {
@@ -24,15 +23,6 @@ interface LocationState {
 }
 
 const locationState: LocationState = { state: undefined }
-await injectModuleDoubles(await import('react-router-dom'), async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
-  return {
-    ...actual,
-    useNavigate: () => navigateSpy,
-    useParams: () => routeParams,
-    useLocation: () => locationState,
-  }
-})
 await injectModuleDoubles(await import('../hooks/useThread'), async () => {
   const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
   return { ...actual, useUpdateThread: vi.fn() }

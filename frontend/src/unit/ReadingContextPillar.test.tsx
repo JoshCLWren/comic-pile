@@ -8,11 +8,6 @@ import { injectModuleDoubles } from './injectModuleDoubles'
 
 const navigateSpy = vi.fn()
 
-await injectModuleDoubles(await import('react-router-dom'), async () => {
-  const actual = await vi.importActual('react-router-dom')
-  return { ...actual, useNavigate: () => navigateSpy }
-})
-
 await injectModuleDoubles(await import('../pages/RollPage/components/ReadingOrderGroups'), () => ({
   ReadingOrderGroups: () => null,
 }))

@@ -12,17 +12,7 @@ import { issuesApi } from '../services/api-issues'
 import type { IssueListResponse, Thread } from '../types'
 import { injectModuleDoubles } from './injectModuleDoubles'
 
-const routeParams = { id: '1' }
-
-await injectModuleDoubles(await import('react-router-dom'), async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
-  return {
-    ...actual,
-    useNavigate: () => vi.fn(),
-    useParams: () => routeParams,
-    useLocation: () => ({ state: undefined }),
-  }
-})
+const navigateSpy = vi.fn()
 await injectModuleDoubles(await import('../hooks/useThread'), async () => {
   const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
   return { ...actual, useUpdateThread: vi.fn() }

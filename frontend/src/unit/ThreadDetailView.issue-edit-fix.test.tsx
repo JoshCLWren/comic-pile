@@ -44,16 +44,6 @@ await injectModuleDoubles(await import('../pages/QueuePage/IssueToggleList'), ()
   }),
 }))
 
-const routeParams = { id: '1' }
-
-await injectModuleDoubles(await import('react-router-dom'), async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
-  return {
-    ...actual,
-    useParams: () => routeParams,
-  }
-})
-
 await injectModuleDoubles(await import('../hooks/useThread'), async () => {
   const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
   return { ...actual, useUpdateThread: vi.fn() }
