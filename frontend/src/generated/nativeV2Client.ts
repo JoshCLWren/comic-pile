@@ -835,10 +835,10 @@ export interface RejectRequest {
 export type RejectResponse = components['schemas']['IdentityInboxActionResponse']
 
 export interface ReleaseSourcesCreateRequest {
-  body: components['schemas']['ReleaseSourceCreate']
+  body: components['schemas']['NativeReleaseSourceCreate']
 }
 
-export type ReleaseSourcesCreateResponse = components['schemas']['ContinuityReleaseSourceResponse']
+export type ReleaseSourcesCreateResponse = components['schemas']['NativeContinuityReleaseSourceResponse']
 
 export interface ReleaseSourcesDeleteRequest {
   path: {
@@ -854,7 +854,7 @@ export interface ReleaseSourcesListRequest {
   }
 }
 
-export type ReleaseSourcesListResponse = Array<components['schemas']['ContinuityReleaseSourceResponse']>
+export type ReleaseSourcesListResponse = Array<components['schemas']['NativeContinuityReleaseSourceResponse']>
 
 export interface ReleaseSourcesListReaderRequest {
   path: {
@@ -871,7 +871,7 @@ export interface ReleaseSourcesUpdateRequest {
   body: components['schemas']['ReleaseSourceUpdate']
 }
 
-export type ReleaseSourcesUpdateResponse = components['schemas']['ContinuityReleaseSourceResponse']
+export type ReleaseSourcesUpdateResponse = components['schemas']['NativeContinuityReleaseSourceResponse']
 
 export interface ReleasesGetRequest {
   path: {
