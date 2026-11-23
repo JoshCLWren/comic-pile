@@ -1,9 +1,9 @@
-utc: 2026-11-23T11:03:41Z
-uptime: 1401.73s load: 0.00 0.00 0.00
+utc: 2026-11-23T11:03:58Z
+uptime: 1418.34s load: 0.00 0.00 0.00
 processes: 188
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700         964       12036          52        3060       14736
+Mem:           15700         961       12039          52        3060       14739
 Swap:           3071           0        3071
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
@@ -32,7 +32,7 @@ Filesystem            Size  Used Avail Use% Mounted on
  0.1 Runner.Listener
  0.0 containerd
  0.0 pr/ttyS0
- 0.0 kworker/u16:4-events_power_efficient
+ 0.0 kworker/u16:4-events_unbound
  0.0 snapd
 --- kernel oom/kill
 --- shutdown/session signals
