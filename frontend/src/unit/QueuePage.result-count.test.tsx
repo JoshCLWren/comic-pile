@@ -123,19 +123,30 @@ function mockQueue(resultCountText: string): void {
 
 beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver)
+  // SAFETY: QueuePage needs only mutate/isPending from these mutation mocks.
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: QueuePage needs only mutate/isPending from these mutation mocks.
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: QueuePage needs only mutate/isPending from these mutation mocks.
   vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: QueuePage needs only mutate/isPending from these mutation mocks.
   vi.mocked(useReactivateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: QueuePage needs only mutate/isPending from these mutation mocks.
   vi.mocked(useMoveToFront).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: QueuePage needs only mutate/isPending from these mutation mocks.
   vi.mocked(useMoveToBack).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: QueuePage needs only mutate/isPending from these mutation mocks.
   vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: QueuePage needs only mutate/isPending from these mutation mocks.
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: QueuePage needs only mutate/isPending from this snooze mock.
   vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: QueuePage reads only pending/snoozed data and refetch here.
   vi.mocked(useRollBootstrap).mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: vi.fn(),
   } as never)
+  // SAFETY: QueuePage's restore flow uses only these three mocked methods.
   vi.mocked(useBugReportRestore).mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
