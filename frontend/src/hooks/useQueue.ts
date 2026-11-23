@@ -157,15 +157,14 @@ export function useQueueThreads(
 
   const hasData = query.pages.length > 0
   const data = hasData ? query.items : null
-  // Authoritative whole-queue total exposed by the first page (issue #2568).
-  // Every page carries the same search-independent total; the first page is
-  // the canonical source. Falls back to null so callers can decide how to
-  // degrade when a cached/older response omits the field.
-  const activeCount = query.pages[0]?.active_count ?? null
-  // The server restates the whole-collection match total on every cursor page.
+  // Every response restates the authoritative whole-collection totals. Use the
+  // newest successful cursor response so an append also reconciles membership
+  // changes made by another tab/device since the first page (#3614).
+  const newestPage = query.pages[query.pages.length - 1]
+  const activeCount = newestPage?.active_count ?? null
+  const filteredCount = newestPage?.filtered_count ?? null
   // Placeholder pages belong to the previous search/sort key, so never expose
-  // their counts as the answer for the currently applied key (#3614).
-  const filteredCount = query.pages[0]?.filtered_count ?? null
+  // their counts as the answer for the currently applied key.
   const isPlaceholderData = query.isPlaceholderData
   // Initial load OR an in-flight next-page append both keep already-rendered
   // rows visible: `isPending` drives the full-screen loader only before any
@@ -177,11 +176,12 @@ export function useQueueThreads(
   const isLoadingMore = query.isNextPageLoading
   const isError = query.isError
   const nextPageToken = query.nextPageToken
-  // A settled first page owns both numbers. A failed later cursor fetch does
-  // not invalidate them, but a failed or pending replacement first page must
-  // never leave the previous search's count on screen.
+  // Settled responses own both numbers. A next-page append/failure does not
+  // invalidate them, but a same-key refresh or replacement key must not leave
+  // the previous response's count on screen while new totals are pending.
+  const isReplacingCounts = query.isLoading && !query.isNextPageLoading
   const hasCurrentCounts =
-    !isPlaceholderData && filteredCount != null && activeCount != null
+    !isPlaceholderData && !isReplacingCounts && filteredCount != null && activeCount != null
   const resultCountText =
     isError && !query.isFetchNextPageError
       ? 'Series count unavailable.'
