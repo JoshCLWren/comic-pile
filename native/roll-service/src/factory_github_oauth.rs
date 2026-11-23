@@ -115,7 +115,6 @@ fn is_admin(id: u64) -> bool {
     )
 }
 
-
 fn oauth_encoding_key(state: &AppState) -> Result<EncodingKey, ApiError> {
     EncodingKey::from_secret(state.jwt_secret.as_bytes())
         .map_err(|_| ApiError::Internal("GitHub sign-in unavailable".into()))
@@ -244,11 +243,7 @@ pub async fn start(State(state): State<Arc<AppState>>) -> Response {
         Ok(value) => value,
         Err(error) => return secure_response(error.into_response()),
     };
-    let cookie_value = match encode(
-        &Header::new(Algorithm::HS256),
-        &pending,
-        &key,
-    ) {
+    let cookie_value = match encode(&Header::new(Algorithm::HS256), &pending, &key) {
         Ok(value) => value,
         Err(_) => {
             return secure_response(
@@ -404,12 +399,8 @@ async fn finish_callback(
         exp: now + SESSION_TTL_SECONDS,
     };
     let key = oauth_encoding_key(&state)?;
-    let signed = encode(
-        &Header::new(Algorithm::HS256),
-        &session,
-        &key,
-    )
-    .map_err(|_| ApiError::Internal("Sign-in unavailable".into()))?;
+    let signed = encode(&Header::new(Algorithm::HS256), &session, &key)
+        .map_err(|_| ApiError::Internal("Sign-in unavailable".into()))?;
     tracing::info!(github_user_id = user.id, "Rotisserie OAuth admin signed in");
     Ok(redirect(&format!(
         "{PAGES_URL}#rotisserie_session={signed}"
