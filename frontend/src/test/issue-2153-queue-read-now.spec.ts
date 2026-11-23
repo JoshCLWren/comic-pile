@@ -49,7 +49,11 @@ test.describe('P0 #5525: Queue manual issue reading', () => {
     await card.getByRole('button', { name: 'Cancel', exact: true }).click()
 
     await card.getByRole('button', { name: 'Read now', exact: true }).click()
-    await card.getByRole('slider').fill('4')
+    const slider = card.getByRole('slider')
+    await slider.press('End')
+    await slider.press('ArrowLeft')
+    await slider.press('ArrowLeft')
+    await expect(slider).toHaveValue('4')
     const saveResponse = page.waitForResponse(
       (response) => response.url().includes('/api/v2/issues/') && response.request().method() === 'PATCH',
     )
