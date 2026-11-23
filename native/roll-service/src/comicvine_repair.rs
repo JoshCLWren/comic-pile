@@ -2067,7 +2067,7 @@ mod tests {
                 "INSERT INTO threads \
                  (title, format, issues_remaining, total_issues, queue_position, status, \
                   user_id, last_rating, reading_progress) \
-                 VALUES ('Backfill', 'Comic', 3, 4, 7, 'active', $1, 4.5, 'in_progress') \
+                 VALUES ('Backfill', 'Comic', 4, 5, 7, 'active', $1, 4.5, 'in_progress') \
                  RETURNING id",
                 &[&user_id],
             )
@@ -2110,8 +2110,17 @@ mod tests {
             &fresh_metadata,
         )
         .await;
+        let cooling = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "5",
+            "4000-30005",
+            &json!({}),
+        )
+        .await;
         seed_request(&state, active, "pending", 4, "1 hour", None).await;
-        seed_request(&state, terminal, "failed", 3, "1 hour", None).await;
+        seed_request(&state, terminal, "failed", 3, "-1 second", None).await;
+        seed_request(&state, cooling, "failed", 3, "1 hour", None).await;
         connection
             .execute(
                 "UPDATE issues SET status = 'read', read_at = now() \
@@ -2143,10 +2152,13 @@ mod tests {
         .await
         .expect("dry backfill")
         .0;
-        assert_eq!(dry.scanned, 4);
-        assert_eq!(dry.needs_enqueue, 2, "missing and terminal rows need work");
+        assert_eq!(dry.scanned, 5);
+        assert_eq!(dry.needs_enqueue, 2, "missing and due terminal rows need work");
         assert_eq!(dry.enqueued, 0);
-        assert_eq!(dry.already_queued_or_fresh, 2, "active and fresh rows");
+        assert_eq!(
+            dry.already_queued_or_fresh, 3,
+            "active, fresh, and cooling-down rows"
+        );
         assert_eq!(dry.next_after_id, None);
         let unchanged: i64 = connection
             .query_one(
@@ -2156,7 +2168,7 @@ mod tests {
             .await
             .expect("dry-run ledger")
             .get(0);
-        assert_eq!(unchanged, 2, "dry-run must not insert or reopen rows");
+        assert_eq!(unchanged, 3, "dry-run must not insert or reopen rows");
 
         let written = backfill_authorized(
             &state,
@@ -2171,10 +2183,10 @@ mod tests {
         .await
         .expect("write backfill")
         .0;
-        assert_eq!(written.scanned, 4);
+        assert_eq!(written.scanned, 5);
         assert_eq!(written.needs_enqueue, 2);
-        assert_eq!(written.enqueued, 2, "one insert plus one reopen");
-        assert_eq!(written.already_queued_or_fresh, 2);
+        assert_eq!(written.enqueued, 2, "one insert plus one due reopen");
+        assert_eq!(written.already_queued_or_fresh, 3);
         let rows = connection
             .query(
                 "SELECT external_identity_id, state, attempts, last_error \
