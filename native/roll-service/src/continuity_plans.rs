@@ -3325,6 +3325,10 @@ pub async fn create_release_source(
         .start()
         .await
         .map_err(db::query_error)?;
+    // Serialize association changes with release sync before reading the source.
+    // Otherwise sync can select the legacy NULL branch, a retry can link a list,
+    // and the same transaction can then write retired plan JSON for a linked source.
+    crate::issue_mutation::lock_reader(&tx, user.id()).await?;
     lock_continuity_graph(&tx, user.id()).await?;
 
     // Check plan ownership
