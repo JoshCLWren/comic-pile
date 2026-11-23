@@ -402,7 +402,7 @@ listThreads.mockImplementation(
     await waitFor(() => expect(result.current.resultCountText).toBe('1 of 5 series'))
 
     resolveAlpha({
-      threads: [{ id: 1, title: 'Alpha One' }, { id: 3, title: 'Alpha Two' }],
+      threads: [{ id: 1, title: 'Alpha One' } as never, { id: 3, title: 'Alpha Two' } as never],
       next_page_token: null,
       active_count: 5,
       filtered_count: 2,
