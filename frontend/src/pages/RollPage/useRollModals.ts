@@ -20,6 +20,7 @@ interface UseRollModalsParams {
  */
 export function useRollModals({
   state,
+  bootstrap,
   setRestoreAction,
   clearRestoreAction,
 }: UseRollModalsParams) {
@@ -134,7 +135,10 @@ export function useRollModals({
     event.preventDefault()
     // A manual series choice opens the exact-issue editor, not an automatic
     // Roll override. No persistent state changes on this path before Save.
+    // The picker also displays owner-scoped snoozed entries from bootstrap.
+    // Resolve those even when the paginated thread-list read has failed.
     const selected = overrideThreads?.find((thread) => String(thread.id) === overrideThreadId)
+      ?? bootstrap?.snoozed_threads?.find((thread) => String(thread.id) === overrideThreadId)
     if (!selected) {
       setOverrideErrorMessage('Choose an owned series first.')
       return
