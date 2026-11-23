@@ -2,16 +2,18 @@
 //!
 //! The schema history starts at a baseline migration (`V1__baseline.sql`) that
 //! reproduces the schema of Alembic revision [`BASELINE_SCHEMA_ALEMBIC_HEAD`].
-//! A subsequent incremental migration (`V2__queue_exclusion_groups.sql`) advances
-//! it to the current Alembic head [`BASELINE_ALEMBIC_HEAD`]. When [`run`] is called:
+//! Incremental migrations advance it to the current Alembic head
+//! [`BASELINE_ALEMBIC_HEAD`], then apply Rust-only non-destructive additions.
+//! When [`run`] is called:
 //!
 //! * A database already managed by refinery: only pending migrations apply.
 //! * An empty database: all migrations apply, and `alembic_version` is stamped
 //!   with the current head so Alembic and Rust agree while both exist.
 //! * A database managed by Alembic (production): when `alembic_version` is at
-//!   the baseline schema head, V1 is adopted and V2 runs; when it is already at
-//!   the queue-exclusion or merged head, both migrations are adopted without
-//!   executing. Any other revision, or any unmanaged schema, is refused.
+//!   the baseline schema head, V1 is adopted and later migrations run; when it
+//!   is already at the queue-exclusion or merged head, V1/V2 are adopted without
+//!   executing and later migrations run. Any other revision, or any unmanaged
+//!   schema, is refused.
 //!
 //! Adoption uses refinery's own fake-target facility (`Target::FakeVersion`)
 //! guarded by `alembic_version`, so the recorded checksums/names come from the
@@ -43,8 +45,9 @@ const QUEUE_EXCLUSION_HEAD: &str = "s54350000001";
 /// Current Alembic head: the merge of the deferred repair and queue-exclusion heads.
 pub const BASELINE_ALEMBIC_HEAD: &str = "m54i537800001";
 
-/// Latest refinery migration version embedded in this binary.
-const LATEST_MIGRATION_VERSION: i32 = 2;
+/// Latest migration already reflected in the current Alembic head. Later
+/// Rust-only migrations must execute rather than being adopted by this target.
+const LATEST_ALEMBIC_MIGRATION_VERSION: i32 = 2;
 
 /// Advisory-lock key serializing concurrent runners.
 const MIGRATE_LOCK: i64 = 5_554_000_001;
