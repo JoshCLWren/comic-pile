@@ -316,6 +316,195 @@ listThreads.mockImplementation(
     )
     expect(listThreads).toHaveBeenCalledTimes(1)
   })
+
+  it.each([
+    { name: 'unfiltered M of M', search: undefined, active: 5, filtered: 5, expected: '5 of 5 series' },
+    { name: 'filtered N of M', search: 'alpha', active: 5, filtered: 2, expected: '2 of 5 series' },
+    { name: 'zero matches', search: 'zzz', active: 5, filtered: 0, expected: '0 of 5 series' },
+    { name: 'empty queue', search: undefined, active: 0, filtered: 0, expected: '0 of 0 series' },
+  ])('derives $name from the settled first page (#3614)', async ({ search, active, filtered, expected }) => {
+    listThreads.mockResolvedValue({
+      threads: [],
+      next_page_token: null,
+      active_count: active,
+      filtered_count: filtered,
+    })
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(search, 'position', threadsApi), { wrapper })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(result.current.activeCount).toBe(active)
+    expect(result.current.filteredCount).toBe(filtered)
+    expect(result.current.isPlaceholderData).toBe(false)
+    expect(result.current.resultCountText).toBe(expected)
+  })
+
+  it('marks a search-key transition as placeholder instead of showing old counts', async () => {
+    listThreads
+      .mockResolvedValueOnce({
+        threads: [{ id: 1, title: 'Saga' } as never],
+        next_page_token: null,
+        active_count: 5,
+        filtered_count: 5,
+      })
+      .mockImplementationOnce(() => new Promise(() => {}))
+
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(
+      ({ search }: { search: string }) => useQueueThreads(search, 'position', threadsApi),
+      { wrapper, initialProps: { search: '' } },
+    )
+
+    await waitFor(() => expect(result.current.resultCountText).toBe('5 of 5 series'))
+    rerender({ search: 'bat' })
+
+    expect(result.current.isPlaceholderData).toBe(true)
+    expect(result.current.data).toEqual([{ id: 1, title: 'Saga' }])
+    expect(result.current.resultCountText).toBe('Updating series count…')
+  })
+
+  it('marks a sort-key transition as placeholder instead of showing old counts', async () => {
+    listThreads
+      .mockResolvedValueOnce({
+        threads: [{ id: 1, title: 'Saga' } as never],
+        next_page_token: null,
+        active_count: 5,
+        filtered_count: 5,
+      })
+      .mockImplementationOnce(() => new Promise(() => {}))
+
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(
+      ({ sort }: { sort: QueueSortBy }) => useQueueThreads('', sort, threadsApi),
+      { wrapper, initialProps: { sort: 'position' as QueueSortBy } },
+    )
+
+    await waitFor(() => expect(result.current.resultCountText).toBe('5 of 5 series'))
+    rerender({ sort: 'alphabetical' })
+
+    expect(result.current.isPlaceholderData).toBe(true)
+    expect(result.current.resultCountText).toBe('Updating series count…')
+  })
+
+  it('keeps the newest search count when an older request settles late', async () => {
+    let resolveAlpha: (page: Awaited<ReturnType<typeof realThreadsApi.list>>) => void = () => undefined
+    listThreads
+      .mockResolvedValueOnce({ threads: [], next_page_token: null, active_count: 5, filtered_count: 5 })
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { resolveAlpha = resolve }),
+      )
+      .mockResolvedValueOnce({
+        threads: [{ id: 2, title: 'Beta' } as never],
+        next_page_token: null,
+        active_count: 5,
+        filtered_count: 1,
+      })
+
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(
+      ({ search }: { search: string }) => useQueueThreads(search, 'position', threadsApi),
+      { wrapper, initialProps: { search: '' } },
+    )
+
+    await waitFor(() => expect(result.current.resultCountText).toBe('5 of 5 series'))
+    rerender({ search: 'alpha' })
+    await waitFor(() => expect(result.current.resultCountText).toBe('Updating series count…'))
+    rerender({ search: 'beta' })
+    await waitFor(() => expect(result.current.resultCountText).toBe('1 of 5 series'))
+
+    resolveAlpha({
+      threads: [{ id: 1, title: 'Alpha One' } as never, { id: 3, title: 'Alpha Two' } as never],
+      next_page_token: null,
+      active_count: 5,
+      filtered_count: 2,
+    })
+    await act(async () => {})
+    expect(result.current.resultCountText).toBe('1 of 5 series')
+  })
+
+  it('restates whole-queue totals on cursor pages, not the visible page size', async () => {
+    listThreads
+      .mockResolvedValueOnce({
+        threads: [{ id: 1 } as never],
+        next_page_token: 'tok-2',
+        active_count: 5,
+        filtered_count: 5,
+      })
+      .mockResolvedValueOnce({
+        threads: [{ id: 2 } as never],
+        next_page_token: null,
+        active_count: 5,
+        filtered_count: 5,
+      })
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    await act(async () => { await result.current.loadMore() })
+
+    await waitFor(() => expect(result.current.data).toHaveLength(2))
+    expect(result.current.resultCountText).toBe('5 of 5 series')
+  })
+
+  it('does not invent a count when the settled response omits filtered_count', async () => {
+    listThreads.mockResolvedValue({ threads: [], next_page_token: null, active_count: 5 })
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(result.current.resultCountText).toBe('Series count unavailable.')
+  })
+
+  it('shows an unavailable count when the first page fails', async () => {
+    listThreads.mockRejectedValue(new Error('Network error'))
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.resultCountText).toBe('Series count unavailable.')
+  })
+
+  it('does not retain an old count when a new search fails', async () => {
+    listThreads
+      .mockResolvedValueOnce({ threads: [], next_page_token: null, active_count: 5, filtered_count: 5 })
+      .mockRejectedValueOnce(new Error('Search unavailable'))
+
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(
+      ({ search }: { search: string }) => useQueueThreads(search, 'position', threadsApi),
+      { wrapper, initialProps: { search: '' } },
+    )
+
+    await waitFor(() => expect(result.current.resultCountText).toBe('5 of 5 series'))
+    rerender({ search: 'alpha' })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.resultCountText).toBe('Series count unavailable.')
+  })
+
+  it('keeps settled first-page counts when only a next-page fetch fails', async () => {
+    listThreads
+      .mockResolvedValueOnce({
+        threads: [{ id: 1 } as never],
+        next_page_token: 'tok-2',
+        active_count: 5,
+        filtered_count: 5,
+      })
+      .mockRejectedValueOnce(new Error('page_token error'))
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    await act(async () => { await result.current.loadMore() })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.resultCountText).toBe('5 of 5 series')
+  })
 })
 
 it('moves queue position and reconciles only queue-owned read models', async () => {
