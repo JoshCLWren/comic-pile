@@ -90,16 +90,14 @@ await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useShuffleQueue: vi.fn(),
   useActiveSeriesCount: () => null,
 }))
-await injectModuleDoubles(await import('../hooks'), () => ({ useRate: vi.fn() }))
+await injectModuleDoubles(await import('../hooks'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks')>()
+  return { ...actual, useRate: vi.fn() }
+})
 await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
 }))
-await injectModuleDoubles(await import('../services/api-threads'), () => ({
-  threadsApi: {
-    list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
-    setPending: vi.fn(),
-  },
-}))
+await injectModuleDoubles(await import('../services/api-threads'), () => ({}))
 await injectModuleDoubles(await import('../services/api'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api')>()
   return {
