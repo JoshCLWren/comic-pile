@@ -8610,6 +8610,72 @@
         ],
         "type": "object"
       },
+      "NativeContinuityReleaseSourceResponse": {
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "custom_cbl_list_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider",
+          "provider_volume_id",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
       "NativeDependencyGroupDetailMemberResponse": {
         "description": "Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`.",
         "properties": {
@@ -9440,6 +9506,36 @@
         },
         "required": [
           "reading_order_id"
+        ],
+        "type": "object"
+      },
+      "NativeReleaseSourceCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "custom_cbl_list_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "thread_id",
+          "external_identity_id"
         ],
         "type": "object"
       },
@@ -23157,7 +23253,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReleaseSourceCreate"
+                "$ref": "#/components/schemas/NativeReleaseSourceCreate"
               }
             }
           },
@@ -23168,7 +23264,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                  "$ref": "#/components/schemas/NativeContinuityReleaseSourceResponse"
                 }
               }
             }
@@ -23240,7 +23336,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                  "$ref": "#/components/schemas/NativeContinuityReleaseSourceResponse"
                 }
               }
             }
@@ -23701,7 +23797,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                    "$ref": "#/components/schemas/NativeContinuityReleaseSourceResponse"
                   },
                   "type": "array"
                 }
