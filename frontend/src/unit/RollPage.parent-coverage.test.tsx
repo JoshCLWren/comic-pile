@@ -682,15 +682,11 @@ describe('RollPage parent handlers', () => {
     sessionData.snoozed_threads = []
     bootstrapData.snoozed_threads = []
     bootstrapData.snoozed_count = 0
-<<<<<<< HEAD
-    renderRollPage()
-=======
     // The first pending offer belongs to the previous unmounted component.
     // The second render starts with an idle Roll die, as a fresh server state.
     bootstrapData.pending_thread_id = null
     bootstrapData.active_thread = null
-    render(<RollPage />)
->>>>>>> origin/main
+    renderRollPage()
     await user.click(screen.getAllByRole('button', { name: 'd20' })[0]!)
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'update low rating' })).toBeInTheDocument())
