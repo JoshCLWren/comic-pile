@@ -38,6 +38,10 @@ import { useRate } from '../hooks'
 import { writeRollSnoozes } from '../services/api-roll'
 import { cast } from '../utils/cast'
 import { injectModuleDoubles } from './injectModuleDoubles'
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom')
+  return { ...actual, useNavigate: () => vi.fn() }
+})
 import { MemoryRouter } from 'react-router-dom'
 import { NavigationSpy } from './routerTestHarness'
 
@@ -157,12 +161,9 @@ const SCOPED_DIE_20 = {
 
 function renderRollPage() {
   return render(
-    <MemoryRouter>
-      <NavigationSpy navigate={navigateSpy} />
-      <ToastProvider>
-        <RollPage />
-      </ToastProvider>
-    </MemoryRouter>,
+    <ToastProvider>
+      <RollPage />
+    </ToastProvider>,
   )
 }
 
@@ -180,7 +181,6 @@ beforeEach(() => {
     isError: false,
     error: null,
   })
-  require('node:fs').appendFileSync('/tmp/mockcheck.log', JSON.stringify(mockedUseRollBootstrap()) + '\n')
   mockedUseBugReportRestore.mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
