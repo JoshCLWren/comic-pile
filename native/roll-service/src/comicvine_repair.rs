@@ -1154,7 +1154,7 @@ async fn backfill_authorized(
         let claimable_rows = tx
             .query(
                 "WITH claimable AS ( \
-                    SELECT id, external_identity_id, state \
+                    SELECT id, external_identity_id, state, next_attempt_at, completed_at \
                     FROM comicvine_metadata_refresh_requests \
                     WHERE external_identity_id = ANY($1::int[]) \
                     FOR UPDATE SKIP LOCKED \
@@ -1164,10 +1164,19 @@ async fn backfill_authorized(
                         lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
                         updated_at = now() \
                     FROM claimable c \
-                    WHERE r.id = c.id AND r.state NOT IN ('pending', 'running', 'deferred') \
+                    WHERE r.id = c.id AND ( \
+                       (r.state = 'completed' AND (r.completed_at IS NULL OR \
+                         r.completed_at <= now() - interval '30 days')) OR \
+                       (r.state = 'no_credits' AND (r.completed_at IS NULL OR \
+                         r.completed_at <= now() - interval '7 days')) OR \
+                       (r.state = 'failed' AND r.next_attempt_at <= now()) \
+                    ) \
                     RETURNING r.external_identity_id \
                  ) \
-                 SELECT external_identity_id, state FROM claimable",
+                 SELECT c.external_identity_id, \
+                        EXISTS (SELECT 1 FROM reopened r \
+                                WHERE r.external_identity_id = c.external_identity_id) \
+                 FROM claimable c",
                 &[&needs_fetch],
             )
             .await
