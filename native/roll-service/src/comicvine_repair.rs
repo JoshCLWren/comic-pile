@@ -2189,7 +2189,8 @@ mod tests {
         assert_eq!(written.already_queued_or_fresh, 3);
         let rows = connection
             .query(
-                "SELECT external_identity_id, state, attempts, last_error \
+                "SELECT external_identity_id, state, attempts, last_error, \
+                        next_attempt_at > now() AS retry_in_future \
                  FROM comicvine_metadata_refresh_requests ORDER BY external_identity_id",
                 &[],
             )
