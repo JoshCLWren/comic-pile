@@ -292,7 +292,7 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
         .await
         .unwrap();
 
-    let snapshot = |client: &Client| async move {
+    async fn snapshot(client: &Client) -> Vec<(i32, bool, Option<String>, String, String)> {
         client
             .query(
                 "SELECT id, enabled, last_synced_at::text, created_at::text, updated_at::text \
@@ -311,8 +311,8 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
                     row.get::<_, String>(4),
                 )
             })
-            .collect::<Vec<_>>()
-    };
+            .collect()
+    }
     let before = snapshot(&client).await;
 
     let report = run(&mut client).await.unwrap();
