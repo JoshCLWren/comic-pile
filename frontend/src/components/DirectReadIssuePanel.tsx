@@ -140,11 +140,13 @@ export function DirectReadIssuePanel({
         </>
       )}
       {!lookup.isPending && !lookup.isError && !issue && (
-        issuesRemaining != null && issuesRemaining > 0 && onMigrate ? (
+        onMigrate && (issuesRemaining == null || issuesRemaining > 0) ? (
           <div role="status" className="space-y-2 text-sm text-[var(--theme-text-muted)]">
             <p>
-              This series has {issuesRemaining} unread {issuesRemaining === 1 ? 'comic' : 'comics'}
-              {' '}but no individually tracked unread issue. Set up issue tracking to read it directly.
+              {issuesRemaining != null
+                ? `This series has ${issuesRemaining} unread ${issuesRemaining === 1 ? 'comic' : 'comics'} but no individually tracked unread issue.`
+                : 'No unread issue is individually tracked for this series.'}
+              {' '}Set up issue tracking to read it directly.
             </p>
             <button
               type="button"
