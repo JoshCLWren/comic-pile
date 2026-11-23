@@ -676,12 +676,12 @@ it('uses canonical boundary blockers for queue rows instead of legacy dependenci
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
 
   const readButton = screen.getByLabelText('Read & Rate')
-  expect(readButton).toBeDisabled()
-  expect(readButton).toHaveAttribute('title', expect.stringContaining('Read One Year In #1 first'))
+  expect(readButton).toBeEnabled()
+  expect(readButton).not.toHaveAttribute('title')
   expect(screen.getByTestId('canonical-reading-boundary')).toBeInTheDocument()
   // A canonical answer suppresses the legacy batch read, so rows never pay for
   // two sources of blocking truth.
-  expect(mockedUseQueueBlockingInfo).toHaveBeenLastCalledWith([])
+  expect(mockedUseQueueBlockingInfo).not.toHaveBeenCalled()
 })
 
 it.each([
@@ -696,7 +696,6 @@ it.each([
         waiting_on: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1' }],
       },
     ],
-    expectedTitle: 'Read One Year In #1 first',
   },
   {
     caseName: 'strict predecessor takes priority over an earlier hold',
@@ -714,19 +713,16 @@ it.each([
         waiting_on: [{ issue_id: 117305, thread_id: 18847, thread_title: 'B.P.R.D.: Casualties', issue_number: '1', label: 'B.P.R.D.: Casualties #1' }],
       },
     ],
-    expectedTitle: 'Read B.P.R.D.: Casualties #1 first',
   },
   {
     caseName: 'blocker reason is retained when no actionable issue is available',
     blockers: [{ kind: 'prerequisite', origin: 'reader_prerequisite', reason: 'Finish the previous series before reading Saga.' }],
-    expectedTitle: 'Finish the previous series before reading Saga.',
   },
   {
     caseName: 'no blockers means a neutral disabled read reason',
     blockers: [],
-    expectedTitle: 'Waiting for reading requirements',
   },
-])('uses the immediate Queue read-blocker explanation when $caseName', ({ blockers, expectedTitle }) => {
+])('preserves the manual read action despite automatic requirements when $caseName', ({ blockers }) => {
   mockedUseQueueThreads.mockReturnValue({
     data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] }],
     isPending: false,
@@ -748,7 +744,8 @@ it.each([
     refetch: vi.fn(),
   })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  expect(screen.getByLabelText('Read & Rate')).toHaveAttribute('title', expect.stringContaining(expectedTitle))
+  expect(screen.getByLabelText('Read & Rate')).toBeEnabled()
+  expect(screen.getByLabelText('Read & Rate')).not.toHaveAttribute('title')
 })
 
 it('follows canonical availability over a stale legacy blocked flag', () => {
@@ -771,7 +768,7 @@ it('follows canonical availability over a stale legacy blocked flag', () => {
 
   expect(screen.getByLabelText('Read & Rate')).not.toBeDisabled()
   expect(screen.queryByLabelText('Blocked series')).not.toBeInTheDocument()
-  expect(mockedUseQueueBlockingInfo).toHaveBeenLastCalledWith([])
+  expect(mockedUseQueueBlockingInfo).not.toHaveBeenCalled()
 })
 
 it('shows one shared boundary failure notice and retries the batch', async () => {
@@ -795,7 +792,7 @@ it('shows one shared boundary failure notice and retries the batch', async () =>
   expect(refetch).toHaveBeenCalledTimes(1)
 })
 
-  it('prevents reading blocked threads and reports delete failures', async () => {
+  it('allows manual reading in blocked threads and reports delete failures', async () => {
   const user = userEvent.setup()
   const deleteMutation = { mutate: vi.fn().mockRejectedValue(new Error('delete failed')), isPending: false }
   mockedUseDeleteThread.mockReturnValue(deleteMutation)
@@ -805,8 +802,9 @@ it('shows one shared boundary failure notice and retries the batch', async () =>
   vi.mocked(useToast).mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const readButton = screen.getByLabelText('Read & Rate')
-  expect(readButton).toBeDisabled()
-  expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
+  expect(readButton).toBeEnabled()
+  await user.click(readButton)
+  expect(readButton).toHaveAttribute('aria-label', 'Read & Rate')
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
   expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'), 'error')
   await user.click(screen.getByRole('button', { name: /series actions/i }))
