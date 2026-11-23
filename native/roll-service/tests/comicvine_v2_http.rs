@@ -594,7 +594,7 @@ async fn resolve_classifies_input_and_resolves_issue_links() {
     );
     let call = fake(&state).calls().last().unwrap().clone();
     assert!(
-        call.path.starts_with("/api/issue/4000-123/?")
+        call.path.starts_with("/api/issue/4000-123?")
             && call.path.contains("field_list=id,name,issue_number"),
         "{}",
         call.path

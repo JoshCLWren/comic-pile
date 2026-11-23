@@ -281,7 +281,7 @@ impl ComicVineLimits {
 /// Python `_request_async` envelope rule: the body must be an object whose
 /// `status_code` is absent, `null` or equal to `1` (`status_code not in
 /// (None, 1)` raises).
-fn python_envelope_ok(payload: &Value) -> bool {
+pub(crate) fn python_envelope_ok(payload: &Value) -> bool {
     let Some(object) = payload.as_object() else {
         return false;
     };
