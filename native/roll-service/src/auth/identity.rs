@@ -20,6 +20,10 @@ impl AuthenticatedUser {
     pub(crate) fn for_test(id: i32) -> Self {
         Self { id }
     }
+
+    pub(crate) fn from_id(id: i32) -> Self {
+        Self { id }
+    }
 }
 
 fn unauthorized(detail: &'static str) -> ApiError {

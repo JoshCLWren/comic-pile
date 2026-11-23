@@ -232,6 +232,7 @@ fn parse_store_date(value: Option<&Value>) -> Option<DateTime<Utc>> {
 struct EnabledSourceRow {
     source_id: i32,
     plan_id: i32,
+    custom_cbl_list_id: Option<i32>,
     thread_id: i32,
     external_identity_id: i32,
     provider_volume_id: String,
@@ -846,12 +847,13 @@ async fn extend_adopted_issue_to_following_plans(
     external_identity_id: i32,
     issue_id: i32,
 ) -> Result<(), ApiError> {
-    // Extend enabled sibling plans following the same thread+volume for this user.
-    // This is a minimal parity step; full rebuild_plan_membership/source-placement
-    // parity remains pending.
-    let plan_rows = tx
+    // Extend enabled sibling sources following the same thread+volume for this user.
+    // For sources linked to an authoritative Reading List, append the adopted issue
+    // to that list (reader-locked, cycle-validated, non-destructive) and do NOT
+    // write plan JSON. Unlinked (legacy) sources keep the plan-JSON append.
+    let source_rows = tx
         .query(
-            "SELECT DISTINCT rps.plan_id \
+            "SELECT DISTINCT rps.plan_id, rps.custom_cbl_list_id \
              FROM reading_plan_release_sources rps \
              JOIN continuity_plans cp ON cp.id = rps.plan_id \
              WHERE rps.thread_id = $1 AND rps.external_identity_id = $2 \
@@ -862,9 +864,69 @@ async fn extend_adopted_issue_to_following_plans(
         .await
         .map_err(db::query_error)?;
 
-    for row in &plan_rows {
+    // Track lists already handled to avoid duplicate appends.
+    let mut handled_lists: std::collections::BTreeSet<i32> = std::collections::BTreeSet::new();
+
+    for row in &source_rows {
         let plan_id: i32 = row.get(0);
-        // Lock plan row.
+        let list_id: Option<i32> = row.get(1);
+
+        if let Some(lid) = list_id {
+            if handled_lists.contains(&lid) {
+                continue;
+            }
+            handled_lists.insert(lid);
+            // Reader-lock the list.
+            let list_row = tx
+                .query_opt(
+                    "SELECT id FROM custom_cbl_lists WHERE id = $1 AND user_id = $2 FOR UPDATE",
+                    &[&lid, &user_id],
+                )
+                .await
+                .map_err(db::query_error)?;
+            if list_row.is_none() {
+                continue;
+            }
+            // Idempotence: skip if issue already in list.
+            let exists = tx
+                .query_opt(
+                    "SELECT 1 FROM custom_cbl_entries WHERE list_id = $1 AND issue_id = $2 LIMIT 1",
+                    &[&lid, &issue_id],
+                )
+                .await
+                .map_err(db::query_error)?
+                .is_some();
+            if exists {
+                continue;
+            }
+            // Append at end without changing existing positions/gates/progress.
+            let max_pos: i64 = tx
+                .query_one(
+                    "SELECT COALESCE(MAX(position), -1) FROM custom_cbl_entries WHERE list_id = $1",
+                    &[&lid],
+                )
+                .await
+                .map_err(db::query_error)?
+                .get(0);
+            let new_pos = (max_pos + 1) as i32;
+            // Cycle validation: run graph preflight on a projected snapshot.
+            // We attempt insert then validate; rollback handled by caller tx.
+            tx.execute(
+                "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at, is_checkpoint, gate, skipped) \
+                 VALUES ($1, $2, $3, NOW(), FALSE, 'none', FALSE)",
+                &[&lid, &issue_id, &new_pos],
+            )
+            .await
+            .map_err(db::query_error)?;
+            // Validate cycle constraints; on failure the caller transaction rolls back.
+            let inputs = crate::option_inputs::load_inputs_in_transaction(tx, AuthenticatedUser::from_id(user_id)).await?;
+            let list_names: std::collections::BTreeMap<i32, String> = inputs.lists.iter().map(|l| (l.list_id, l.name.clone())).collect();
+            crate::ValidatedReadingInputs::new(inputs.clone(), &list_names)
+                .map_err(|e| ApiError::Unprocessable(format!("cycle validation failed: {e:?}")))?;
+            continue;
+        }
+
+        // Legacy plan-JSON append (unlinked).
         let plan = tx
             .query_opt(
                 "SELECT nodes_json FROM continuity_plans WHERE id = $1 AND user_id = $2 FOR UPDATE",
@@ -962,7 +1024,7 @@ pub async fn sync_released_issues_for_user(
 
     let all_rows = connection
         .query(
-            "SELECT rps.id, rps.plan_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled \
+            "SELECT rps.id, rps.plan_id, rps.custom_cbl_list_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled \
              FROM reading_plan_release_sources rps \
              JOIN continuity_plans cp ON cp.id = rps.plan_id \
              JOIN external_identities ei ON ei.id = rps.external_identity_id \
@@ -976,14 +1038,15 @@ pub async fn sync_released_issues_for_user(
 
     let mut enabled_rows = Vec::new();
     for row in &all_rows {
-        let enabled: bool = row.get(5);
+        let enabled: bool = row.get(6);
         if enabled {
             enabled_rows.push(EnabledSourceRow {
                 source_id: row.get(0),
                 plan_id: row.get(1),
-                thread_id: row.get(2),
-                external_identity_id: row.get(3),
-                provider_volume_id: row.get(4),
+                custom_cbl_list_id: row.get(2),
+                thread_id: row.get(3),
+                external_identity_id: row.get(4),
+                provider_volume_id: row.get(5),
             });
         }
     }
