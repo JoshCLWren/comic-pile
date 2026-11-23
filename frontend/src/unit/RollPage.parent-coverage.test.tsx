@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
+import { threadsApi } from '../services/api-threads'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 const spies = vi.hoisted(() => ({
@@ -166,8 +167,11 @@ function enterPendingRollRating() {
 }
 
 vi.mock('../components/DirectReadIssuePanel', () => ({
-  DirectReadIssuePanel: ({ threadTitle }: { threadTitle: string }) =>
-    <div data-testid="direct-read-issue-panel">Manual issue card for {threadTitle}</div>,
+  DirectReadIssuePanel: ({ threadTitle, onMigrate }: { threadTitle: string; onMigrate?: () => void }) =>
+    <div data-testid="direct-read-issue-panel">
+      Manual issue card for {threadTitle}
+      {onMigrate && <button type="button" onClick={onMigrate}>Set up issue tracking</button>}
+    </div>,
 }))
 
 describe('RollPage parent handlers', () => {
@@ -230,6 +234,34 @@ describe('RollPage parent handlers', () => {
     fireEvent.click(screen.getByRole('button', { name: 'toggle snoozed' }))
     fireEvent.click(screen.getByTestId('confirm-shuffle-queue'))
     await waitFor(() => expect(spies.shuffle).toHaveBeenCalled())
+  })
+
+  it('offers the existing migration dialog for a counter-only manual Roll selection', async () => {
+    render(<RollPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'thread' }))
+    fireEvent.click(screen.getByRole('button', { name: /Read Now/ }))
+    expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Set up issue tracking' }))
+    expect(screen.queryByTestId('direct-read-issue-panel')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument()
+    expect(spies.setPending).not.toHaveBeenCalled()
+  })
+
+  it('allows a visible snoozed manual pick when the whole-series list fails', async () => {
+    const user = userEvent.setup()
+    bootstrapData.snoozed_threads = [
+      { id: 99, title: 'Snoozed Saga', format: 'Comic' },
+    ]
+    bootstrapData.snoozed_count = 1
+    vi.mocked(threadsApi.list).mockRejectedValueOnce(new Error('series list offline'))
+    render(<RollPage />)
+    await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
+    const picker = screen.getAllByRole('combobox').at(-1)!
+    await user.click(picker)
+    await user.click(await screen.findByRole('option', { name: /Snoozed Saga/ }))
+    await user.click(screen.getByRole('button', { name: 'Open issue card' }))
+    expect(screen.getByTestId('direct-read-issue-panel')).toHaveTextContent('Snoozed Saga')
+    expect(spies.setPending).not.toHaveBeenCalled()
   })
 
   it('gates the whole-queue shuffle behind a cancelable confirmation (#3261)', async () => {
