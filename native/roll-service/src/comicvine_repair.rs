@@ -275,10 +275,20 @@ pub(crate) enum Exchange {
     },
 }
 
+/// Parse Python-compatible delta-seconds or an HTTP-date, then apply the
+/// repair worker's 60..=3600 second bound. Fractional values round up so
+/// integer persistence never retries before the provider's requested deadline.
+fn repair_retry_after_seconds(raw: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> u32 {
+    raw.and_then(|header| parse_retry_after(header, now))
+        .filter(|seconds| seconds.is_finite())
+        .map(|seconds| seconds.clamp(60.0, 3600.0).ceil() as u32)
+        .unwrap_or(60)
+}
+
 /// One repair-worker provider call, matching Python `ComicVineClient`
 /// throttle rules: 420/429 are throttles whose `Retry-After` is clamped to
 /// 60..=3600 s; any other non-2xx status (403 included) is a plain provider
-/// error. The envelope must carry `status_code: 1`.
+/// error. Success envelopes use the same status-code rule as the Python fetch.
 pub(crate) async fn provider_response(
     outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
@@ -289,25 +299,20 @@ pub(crate) async fn provider_response(
         Exchange::Throttled {
             status: 420 | 429,
             retry_after,
-        } => Err(ProviderFailure::RateLimited(
-            retry_after
-                .and_then(|h| h.parse::<u32>().ok())
-                .unwrap_or(60)
-                .clamp(60, 3600),
-        )),
+        } => Err(ProviderFailure::RateLimited(repair_retry_after_seconds(
+            retry_after.as_deref(),
+            chrono::Utc::now(),
+        ))),
         Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
         Exchange::Payload(payload) => {
             let status_code = payload.get("status_code").and_then(Value::as_i64);
-            if status_code == Some(1) {
+            if python_envelope_ok(&payload) {
                 Ok(payload)
             } else {
-                let error = payload
-                    .get("error")
-                    .and_then(Value::as_str)
-                    .unwrap_or("unknown");
+                // Never log provider-controlled error text: it can reflect the
+                // credential-bearing request URL. Keep only typed categories.
                 tracing::warn!(
                     comicvine_status_code = ?status_code,
-                    comicvine_error = error,
                     resource,
                     "comicvine provider returned non-success envelope"
                 );
