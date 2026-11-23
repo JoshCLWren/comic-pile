@@ -2230,6 +2230,37 @@ mod tests {
         assert_eq!(entries.len(), 1, "the cyclic append must roll back");
         assert_eq!(entries[0].get::<_, i32>(0), LIST_SYNC_FIRST_ISSUE_ID);
         assert_eq!(entries[0].get::<_, i32>(1), 7);
+        let rolled_back_writes: i64 = connection
+            .query_one(
+                "SELECT \
+                   (SELECT count(*) FROM issues \
+                    WHERE thread_id = $1 AND issue_number = '3') + \
+                   (SELECT count(*) FROM external_identities \
+                    WHERE provider = 'comicvine' AND entity_type = 'issue' AND external_id = '9003') + \
+                   (SELECT count(*) FROM issue_external_identity_mappings m \
+                    JOIN external_identities e ON e.id = m.external_identity_id \
+                    WHERE e.provider = 'comicvine' AND e.entity_type = 'issue' \
+                      AND e.external_id = '9003') + \
+                   (SELECT count(*) FROM events WHERE user_id = $2)",
+                &[&LIST_SYNC_THREAD_ID, &LIST_SYNC_USER_ID],
+            )
+            .await
+            .expect("rolled-back issue, identity, mapping, and event writes")
+            .get(0);
+        assert_eq!(
+            rolled_back_writes, 0,
+            "the projected cycle must roll back every write from the source transaction"
+        );
+        let tracking_preserved: bool = connection
+            .query_one(
+                "SELECT total_issues = 1 AND next_unread_issue_id IS NULL \
+                    AND reading_progress = 'completed' FROM threads WHERE id = $1",
+                &[&LIST_SYNC_THREAD_ID],
+            )
+            .await
+            .expect("rolled-back thread tracking")
+            .get(0);
+        assert!(tracking_preserved);
         let nodes_json: Value = connection
             .query_one(
                 "SELECT nodes_json FROM continuity_plans WHERE id = $1",
