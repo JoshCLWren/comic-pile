@@ -119,5 +119,169 @@ await injectModuleDoubles(await import('../services/api'), async (importOriginal
 })
 
 // SAFETY: vi.mocked returns a typed mock whose mockReturnValue surface matches the hook; cast preserves the mock call API.
+const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
+// SAFETY: Same mock-shape widening for the scoped resource hooks; safe because the test only reads their return objects.
+const mockedUseRollEligibleIssueIds = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollEligibleIssueIds))
+const mockedUseRollIssueCards = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollIssueCards))
+const mockedUseRollDieState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollDieState))
+// SAFETY: Same mock-shape widening for the restore hook; safe because the test only reads the mocked return object.
+const mockedUseBugReportRestore = cast<ReturnType<typeof vi.fn>>(vi.mocked(useBugReportRestore))
 
-export {}
+// Legacy wire fields (`current_die`, `manual_die`) are deliberately present
+// with values that disagree with the scoped die: the retired bootstrap die
+// projection must never reach the page (#4820), so these values are inert.
+const bootstrap = {
+  session_id: 1,
+  user_id: 1,
+  current_die: 8,
+  manual_die: 20,
+  pending_thread_id: null,
+  last_rolled_result: null,
+  active_thread: null,
+  roll_pool: [
+    { id: 1, title: 'Saga', format: 'Comic' },
+    { id: 2, title: 'X-Men', format: 'Comic' },
+  ],
+  snoozed_threads: [],
+  snoozed_count: 0,
+  skipped_thread_ids: [],
+  skipped_threads: [],
+}
+
+const SCOPED_DIE_20 = {
+  die: 20,
+  ladder: [2, 4, 6, 8, 10, 12, 20],
+  default_die: 6,
+  last_roll: null,
+}
+
+function renderRollPage() {
+  return render(
+    <MemoryRouter>
+      <NavigationSpy navigate={navigateSpy} />
+      <ToastProvider>
+        <RollPage />
+      </ToastProvider>
+    </MemoryRouter>,
+  )
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  headerCurrentDieProps.length = 0
+  writeRollSnoozes([])
+  mockedUseRollDieState.mockReturnValue({ data: undefined })
+  mockedUseRollEligibleIssueIds.mockReturnValue({ data: undefined })
+  mockedUseRollIssueCards.mockReturnValue({ data: undefined })
+  mockedUseRollBootstrap.mockReturnValue({
+    data: bootstrap,
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  mockedUseBugReportRestore.mockReturnValue({
+    setRestoreAction: vi.fn(),
+    clearRestoreAction: vi.fn(),
+    restoreLastView: vi.fn(),
+  })
+
+  // SAFETY: Test stubs for the mutation hooks; stub shapes match the mutation returns and are only read for isPending/mutate.
+  vi.mocked(useSetDie).mockReturnValue(cast<ReturnType<typeof useSetDie>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useRoll).mockReturnValue(cast<ReturnType<typeof useRoll>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useOverrideRoll).mockReturnValue(cast<ReturnType<typeof useOverrideRoll>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useDismissPending).mockReturnValue(cast<ReturnType<typeof useDismissPending>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useSnooze).mockReturnValue(cast<ReturnType<typeof useSnooze>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useMoveToFront).mockReturnValue(cast<ReturnType<typeof useMoveToFront>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useMoveToBack).mockReturnValue(cast<ReturnType<typeof useMoveToBack>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useShuffleQueue).mockReturnValue(cast<ReturnType<typeof useShuffleQueue>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useRate).mockReturnValue(cast<ReturnType<typeof useRate>>({ mutate: vi.fn(), isPending: false }))
+})
+
+describe('Roll die is render-derived from scoped die-state (#4768)', () => {
+  it('passes the scoped die on the very first render pass, never a fallback (#4768)', () => {
+    mockedUseRollDieState.mockReturnValue({ data: SCOPED_DIE_20, isError: false })
+
+    console.log('ABOUT TO RENDER')
+    renderRollPage()
+    console.log('RENDERED', headerCurrentDieProps.length)
+
+    // The spy saw at least one header render, and every single one carried
+    // the scoped d20. An effect syncing server data into state would record
+    // the d6 fallback on the first pass before the effect fires.
+    expect(headerCurrentDieProps.length).toBeGreaterThan(0)
+    expect(headerCurrentDieProps).toEqual(
+      headerCurrentDieProps.map(() => 20),
+    )
+    expect(screen.getByRole('button', { name: 'd20' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: /^current die d20$/i })).toBeInTheDocument()
+    for (const die of screen.getAllByTestId('lazy-dice')) {
+      expect(die).toHaveAttribute('data-sides', '20')
+    }
+  })
+
+  it('never reads the retired bootstrap current_die/manual_die wire fields (#4768)', () => {
+    // Bootstrap claims d8/d20 via the retired projection; the scoped die (d12)
+    // is the only value allowed to reach the header on any render pass.
+    mockedUseRollDieState.mockReturnValue({
+      data: { die: 12, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+      isError: false,
+    })
+
+    renderRollPage()
+
+    expect(headerCurrentDieProps.length).toBeGreaterThan(0)
+    for (const die of headerCurrentDieProps) {
+      expect(die).toBe(12)
+    }
+    expect(screen.getByRole('button', { name: 'd12' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('derives the d6 default on the first render while the scoped query is unsettled (#4768)', () => {
+    mockedUseRollDieState.mockReturnValue({ data: undefined, isError: false })
+
+    renderRollPage()
+
+    expect(headerCurrentDieProps.length).toBeGreaterThan(0)
+    for (const die of headerCurrentDieProps) {
+      expect(die).toBe(6)
+    }
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('falls back to d6 on the first render when the scoped query errored (#4768)', () => {
+    // RollPage maps a failed scoped refresh to `undefined` (stale-data guard),
+    // so the derivation default applies immediately, not after an effect.
+    mockedUseRollDieState.mockReturnValue({ data: SCOPED_DIE_20, isError: true })
+
+    renderRollPage()
+
+    expect(headerCurrentDieProps.length).toBeGreaterThan(0)
+    for (const die of headerCurrentDieProps) {
+      expect(die).toBe(6)
+    }
+  })
+})
+
+describe('Roll page state carries no server-die copy (#4768 audit)', () => {
+  const SOURCE_ROOT = join(import.meta.dirname, '..')
+
+  // `useRollPageState` may hold only client-owned values (UI toggles, in-flight
+  // mutation state, pending-roll hydration). No die state or die setter may
+  // exist there, and the bootstrap sync hook must stay redirect-only.
+  const FORBIDDEN_IN_PAGE_STATE = ['currentDie', 'setCurrentDie', 'diceState', 'setDiceState', 'manual_die', 'current_die']
+  const FORBIDDEN_IN_BOOTSTRAP_SYNC = ['setCurrentDie', 'manual_die', 'current_die', 'useState']
+
+  it('useRollPageState declares no die state (#4768)', () => {
+    const source = readFileSync(join(SOURCE_ROOT, 'pages/RollPage/useRollPageState.ts'), 'utf-8')
+    const found = FORBIDDEN_IN_PAGE_STATE.filter((pattern) => source.includes(pattern))
+    expect(found).toEqual([])
+  })
+
+  it('useRollBootstrapSync stays redirect-only with no die projection (#4768)', () => {
+    const source = readFileSync(join(SOURCE_ROOT, 'pages/RollPage/useRollBootstrapSync.ts'), 'utf-8')
+    const found = FORBIDDEN_IN_BOOTSTRAP_SYNC.filter((pattern) => source.includes(pattern))
+    expect(found).toEqual([])
+  })
+})
