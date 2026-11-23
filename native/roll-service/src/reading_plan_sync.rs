@@ -578,8 +578,8 @@ async fn create_issues_in_natural_order_tx(
             if let Some(&pos) = target_positions.get(number) {
                 let row = tx
                     .query_one(
-                        "INSERT INTO issues (thread_id, issue_number, position, status, read_at) \
-                         VALUES ($1, $2, $3, 'unread', NULL) RETURNING id",
+                        "INSERT INTO issues (thread_id, issue_number, position, status, read_at, created_at) \
+                         VALUES ($1, $2, $3, 'unread', NULL, NOW()) RETURNING id",
                         &[&thread_id, number, &pos],
                     )
                     .await
@@ -598,8 +598,8 @@ async fn create_issues_in_natural_order_tx(
         let pos = max_pos + (idx as i32) + 1;
         let row = tx
             .query_one(
-                "INSERT INTO issues (thread_id, issue_number, position, status, read_at) \
-                 VALUES ($1, $2, $3, 'unread', NULL) RETURNING id",
+                "INSERT INTO issues (thread_id, issue_number, position, status, read_at, created_at) \
+                 VALUES ($1, $2, $3, 'unread', NULL, NOW()) RETURNING id",
                 &[&thread_id, number, &pos],
             )
             .await
