@@ -192,6 +192,9 @@ describe('Queue search with incomplete data', () => {
       nextPageToken: null,
       loadMore: vi.fn().mockResolvedValue(undefined),
       activeCount: 0,
+      filteredCount: 0,
+      isPlaceholderData: false,
+      resultCountText: '0 of 0 series',
     })
 
     renderQueue()
