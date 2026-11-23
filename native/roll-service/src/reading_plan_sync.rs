@@ -1036,6 +1036,20 @@ pub async fn sync_released_issues_for_user(
     user_id: i32,
     as_of: DateTime<Utc>,
 ) -> Result<SyncReport, ApiError> {
+    // Test-only roster injection remains an explicit test-environment hook;
+    // production requests never perform network access through the test path.
+    let mock_rosters = std::env::var("RUST_ROLL_SYNC_MOCK_ROSTER_JSON")
+        .ok()
+        .and_then(|value| serde_json::from_str(&value).ok());
+    sync_released_issues_for_user_with_rosters(state, user_id, as_of, mock_rosters).await
+}
+
+async fn sync_released_issues_for_user_with_rosters(
+    state: &Arc<AppState>,
+    user_id: i32,
+    as_of: DateTime<Utc>,
+    mock_rosters: Option<Value>,
+) -> Result<SyncReport, ApiError> {
     let mut connection = db::checkout(state).await?;
 
     let all_rows = connection
