@@ -152,13 +152,7 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
 })
 
   it('renders tooltips for snoozed offset active text', async () => {
-    render(
-      <ToastProvider>
-        <BugReportRestoreProvider>
-          <RollPage />
-        </BugReportRestoreProvider>
-      </ToastProvider>
-    )
+    renderRollPage()
 
     const snoozedIndicator = screen.getByText('+2')
     expect(snoozedIndicator).toBeInTheDocument()
