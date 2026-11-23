@@ -1,5 +1,6 @@
 import { render, screen, within } from './testingLibrary'
 import { describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import { ReadingContextPillar } from '../pages/RollPage/components/ReadingContextPillar'
 import {
   READING_CONTEXT_TYPE,

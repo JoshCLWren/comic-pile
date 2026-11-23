@@ -254,7 +254,7 @@ describe('RollPage post-rate copy prompt', () => {
     const user = userEvent.setup()
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
 
-    render(<RollPage />)
+    renderRollPage()
     await waitFor(() => expect(screen.getByTestId('save-and-continue')).toBeInTheDocument())
 
     fireEvent.change(screen.getByLabelText('Rating from 0.5 to 5.0 in steps of 0.5'), {
@@ -279,7 +279,7 @@ describe('RollPage post-rate copy prompt', () => {
     const user = userEvent.setup()
     queryClient.setQueryData(queryKeys.roll.lastRead(), cachedLastRead)
 
-    render(<RollPage />)
+    renderRollPage()
     await waitFor(() => expect(screen.getByTestId('save-and-continue')).toBeInTheDocument())
 
     await user.click(screen.getByTestId('save-and-continue'))
@@ -291,7 +291,7 @@ describe('RollPage post-rate copy prompt', () => {
 
   it('keeps die and roll flow reachable while the prompt is visible', async () => {
     const user = userEvent.setup()
-    render(<RollPage />)
+    renderRollPage()
     await waitFor(() => expect(screen.getByTestId('save-and-continue')).toBeInTheDocument())
 
     await user.click(screen.getByTestId('save-and-continue'))
@@ -303,7 +303,7 @@ describe('RollPage post-rate copy prompt', () => {
 
   it('dismissing the prompt removes it without blocking the next roll', async () => {
     const user = userEvent.setup()
-    render(<RollPage />)
+    renderRollPage()
     await waitFor(() => expect(screen.getByTestId('save-and-continue')).toBeInTheDocument())
 
     await user.click(screen.getByTestId('save-and-continue'))
@@ -318,7 +318,7 @@ describe('RollPage post-rate copy prompt', () => {
     const user = userEvent.setup()
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('clipboard denied'))
 
-    render(<RollPage />)
+    renderRollPage()
     await waitFor(() => expect(screen.getByTestId('save-and-continue')).toBeInTheDocument())
 
     await user.click(screen.getByTestId('save-and-continue'))
@@ -332,7 +332,7 @@ describe('RollPage post-rate copy prompt', () => {
   it('undoes the rating straight from the notice and confirms it', async () => {
     const user = userEvent.setup()
 
-    render(<RollPage />)
+    renderRollPage()
     await waitFor(() => expect(screen.getByTestId('save-and-continue')).toBeInTheDocument())
 
     await user.click(screen.getByTestId('save-and-continue'))

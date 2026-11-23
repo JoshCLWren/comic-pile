@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from './testingLibrary'
+import { act, render, screen, waitFor } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
@@ -11,6 +11,7 @@ import { threadsApi } from '../services/api-threads'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListResponse, Thread } from '../types'
 import { injectModuleDoubles } from './injectModuleDoubles'
+import { NavigationSpy } from './routerTestHarness'
 
 const navigateSpy = vi.fn()
 await injectModuleDoubles(await import('../hooks/useThread'), async () => {

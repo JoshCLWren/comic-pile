@@ -138,13 +138,7 @@ function renderRollPage() {
 }
 
 it('renders tooltip for offset indicator when snoozed threads exist', async () => {
-  render(
-    <ToastProvider>
-      <BugReportRestoreProvider>
-        <RollPage />
-      </BugReportRestoreProvider>
-    </ToastProvider>
-  )
+  renderRollPage()
 
    // Check that the offset indicator is rendered with tooltip
    expect(screen.getByText('+2')).toBeInTheDocument()
@@ -182,13 +176,7 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
   })
 
 it('renders tooltip for die indicator', async () => {
-  render(
-    <ToastProvider>
-      <BugReportRestoreProvider>
-        <RollPage />
-      </BugReportRestoreProvider>
-    </ToastProvider>
-  )
+  renderRollPage()
 
  // Check that the Die indicator is rendered with tooltip
  expect(screen.getByText('Die')).toBeInTheDocument()
@@ -227,13 +215,7 @@ it('does not render snoozed indicators when no snoozed threads', async () => {
     error: null,
   })
 
-  render(
-    <ToastProvider>
-      <BugReportRestoreProvider>
-        <RollPage />
-      </BugReportRestoreProvider>
-    </ToastProvider>
-  )
+  renderRollPage()
 
   // Should not show the offset indicator or snoozed text
   expect(screen.queryByText('+0')).not.toBeInTheDocument()

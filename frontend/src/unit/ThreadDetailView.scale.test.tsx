@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from './testingLibrary'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
