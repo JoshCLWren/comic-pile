@@ -1152,11 +1152,36 @@ async fn link_confirmed(
 /// row is only ever taken with `SKIP LOCKED`: a row some other transaction
 /// holds is being claimed or persisted right now, so this best-effort
 /// enqueue skips it instead of waiting.
+#[derive(Clone, Copy)]
+enum HydrationEnqueuePolicy {
+    /// An explicit user confirmation/remap deliberately reopens finished work.
+    ExplicitConfirmation,
+    /// Automatic import/backfill work respects retry and terminal freshness windows.
+    Import,
+}
+
 async fn enqueue_hydration_if_needed(
     tx: &Transaction<'_>,
     identity_id: i32,
 ) -> Result<(), ApiError> {
-    enqueue_hydration_for_identities(tx, &[identity_id]).await
+    enqueue_hydration_for_identities_with_policy(
+        tx,
+        &[identity_id],
+        HydrationEnqueuePolicy::ExplicitConfirmation,
+    )
+    .await
+}
+
+async fn enqueue_import_hydration_if_needed(
+    tx: &Transaction<'_>,
+    identity_id: i32,
+) -> Result<(), ApiError> {
+    enqueue_hydration_for_identities_with_policy(
+        tx,
+        &[identity_id],
+        HydrationEnqueuePolicy::Import,
+    )
+    .await
 }
 
 /// Set-based hydration enqueue for confirmed imported issue identities (#5592).
