@@ -112,18 +112,29 @@ beforeEach(() => {
   mockedIssuesApiList.mockImplementation(async (threadId: number) => issueResult(threadId))
 })
 
-function threadDetailHarness() {
+function threadDetailHarness(threadId = '1') {
+  const initialPath = threadId ? `/thread/${threadId}` : '/thread'
   return (
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialPath]}>
+      <NavigationSpy navigate={navigateSpy} />
       <ToastProvider>
-        <ThreadDetailView />
+        <Routes>
+          <Route path="/thread/:id" element={<ThreadDetailView />} />
+          <Route path="/thread" element={<ThreadDetailView />} />
+        </Routes>
       </ToastProvider>
     </MemoryRouter>
   )
 }
 
-function renderView() {
-  return render(threadDetailHarness())
+function renderView(threadId = '1') {
+  return render(threadDetailHarness(threadId))
+}
+
+function navigateToThread(threadId: string) {
+  act(() => {
+    navigateSpy(`/thread/${threadId}`)
+  })
 }
 
 it('clears loaded issues and fetches the new thread after a route change', async () => {

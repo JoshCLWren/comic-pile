@@ -138,9 +138,11 @@ beforeEach(() => {
 
 function renderPage() {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={['/thread/1']}>
       <ToastProvider>
-        <ThreadDetailView />
+        <Routes>
+          <Route path="/thread/:id" element={<ThreadDetailView />} />
+        </Routes>
       </ToastProvider>
     </MemoryRouter>,
   )

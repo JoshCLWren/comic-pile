@@ -70,6 +70,7 @@ const baseContext: ReaderContextResponse = {
 function renderPillar(context: ReaderContextResponse) {
   return render(
     <MemoryRouter>
+      <NavigationSpy navigate={navigateSpy} />
       <ReadingContextPillar
         activeRatingThread={ratingThread}
         readingOrders={[]}

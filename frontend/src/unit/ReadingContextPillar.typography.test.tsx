@@ -124,17 +124,19 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
 
     const context = buildContext()
     const { container } = render(
-      <ReadingContextPillar
-        activeRatingThread={activeRatingThread}
-        readingOrders={[]}
-        connectedThreads={[]}
-        onRefreshThread={vi.fn()}
-        rolledResult={7}
-        currentDie={20}
-        readerContext={context}
-        isReaderContextLoading={false}
-        readerContextError={null}
-      />,
+      <MemoryRouter>
+        <ReadingContextPillar
+          activeRatingThread={activeRatingThread}
+          readingOrders={[]}
+          connectedThreads={[]}
+          onRefreshThread={vi.fn()}
+          rolledResult={7}
+          currentDie={20}
+          readerContext={context}
+          isReaderContextLoading={false}
+          readerContextError={null}
+        />
+      </MemoryRouter>,
     )
 
     await screen.findByText('Where you are in Ultimate Black Panther')

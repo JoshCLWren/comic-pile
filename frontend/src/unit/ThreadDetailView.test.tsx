@@ -108,10 +108,20 @@ beforeEach(() => {
 })
 
 function renderPage() {
+  const pathname = routeParams.id ? `/thread/${routeParams.id}` : '/thread'
   return render(
-    <MemoryRouter>
+    <MemoryRouter
+      initialEntries={[{
+        pathname,
+        search: locationState.search,
+        state: locationState.state,
+      }]}
+    >
       <ToastProvider>
-        <ThreadDetailView />
+        <Routes>
+          <Route path="/thread/:id" element={<ThreadDetailView />} />
+          <Route path="/thread" element={<ThreadDetailView />} />
+        </Routes>
       </ToastProvider>
     </MemoryRouter>,
   )
