@@ -139,14 +139,13 @@ function navigateToThread(threadId: string) {
 
 it('clears loaded issues and fetches the new thread after a route change', async () => {
   const user = userEvent.setup()
-  const view = renderView()
+  renderView()
 
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await user.click(screen.getByRole('button', { name: 'Expand' }))
   await waitFor(() => expect(screen.getByText('#Saga 1')).toBeInTheDocument())
 
-  routeParams.id = '2'
-  view.rerender(threadDetailHarness())
+  navigateToThread('2')
 
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
   expect(screen.queryByText('#Saga 1')).not.toBeInTheDocument()
@@ -163,12 +162,11 @@ it('keys thread and issue caches per thread so stale issue responses never leak'
   mockedIssuesApiList.mockImplementation((threadId: number) => (
     threadId === 1 ? firstIssues.promise : Promise.resolve(issueResult(threadId))
   ))
-  const view = renderView()
+  renderView()
 
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await user.click(screen.getByRole('button', { name: 'Expand' }))
-  routeParams.id = '2'
-  view.rerender(threadDetailHarness())
+  navigateToThread('2')
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
   await user.click(screen.getByRole('button', { name: 'Expand' }))
   await waitFor(() => expect(screen.getByText('#Monstress 1')).toBeInTheDocument())
@@ -193,20 +191,17 @@ it('keys thread detail caches per thread so stale thread failures never leak', a
   mockedThreadsApiGet.mockImplementation((id: number) => (
     id === 1 ? firstRequest.promise : Promise.resolve(threadResult(id))
   ))
-  const view = renderView()
+  renderView()
 
-  routeParams.id = '2'
-  view.rerender(threadDetailHarness())
+  navigateToThread('2')
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
 
   const rejectedRequest = deferred<Thread>()
   mockedThreadsApiGet.mockImplementation((id: number) => (
     id === 1 ? rejectedRequest.promise : Promise.resolve(threadResult(id))
   ))
-  routeParams.id = '1'
-  view.rerender(threadDetailHarness())
-  routeParams.id = '2'
-  view.rerender(threadDetailHarness())
+  navigateToThread('1')
+  navigateToThread('2')
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
   firstRequest.resolve(threadResult(1))
   rejectedRequest.reject(new Error('stale failure'))
@@ -221,8 +216,7 @@ it('keys thread detail caches per thread so stale thread failures never leak', a
 })
 
 it('handles a route without a thread id without making requests', async () => {
-  routeParams.id = ''
-  renderView()
+  renderView('')
 
   await waitFor(() => expect(screen.getByText('Thread not found')).toBeInTheDocument())
   expect(mockedThreadsApiGet).not.toHaveBeenCalled()
@@ -230,8 +224,7 @@ it('handles a route without a thread id without making requests', async () => {
 })
 
 it('handles a non-numeric thread id without making requests', async () => {
-  routeParams.id = 'abc'
-  renderView()
+  renderView('abc')
 
   await waitFor(() => expect(screen.getByText('Thread not found')).toBeInTheDocument())
   expect(mockedThreadsApiGet).not.toHaveBeenCalled()
