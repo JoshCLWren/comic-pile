@@ -81,6 +81,11 @@ export default function QueuePage() {
     searchQuery,
   )
   const authoritativeActiveCount = activeCount ?? activeThreads.length
+  const authoritativeFilteredCount = filteredCount ?? activeThreads.length
+  // Count is unreliable during search transitions (placeholder data) or when
+  // the query failed / has not produced authoritative totals yet (#3614).
+  const queueCountPending = isPlaceholderData || (activeCount === null && filteredCount === null && !isError)
+  const queueCountError = isError
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
@@ -183,6 +188,9 @@ export default function QueuePage() {
       <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
         <QueueControls
           activeCount={authoritativeActiveCount}
+          filteredCount={authoritativeFilteredCount}
+          countPending={queueCountPending}
+          countError={queueCountError}
           shuffleDisabled={shuffleDisabled}
           shufflePending={shuffleQueueMutation.isPending}
           onShuffle={actions.requestShuffle}
