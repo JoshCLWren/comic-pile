@@ -212,31 +212,39 @@ describe('Queue search with incomplete data', () => {
 
   it('shows search results when search has matches', async () => {
     const user = userEvent.setup()
-    mockedUseQueueThreads.mockReturnValue({
-      data: [
-        {
-          id: 1,
-          title: 'Saga',
-          format: 'Comic',
-          status: 'active',
-          queue_position: 1,
-          issues_remaining: 5,
-        },
-        {
-          id: 2,
-          title: 'Spawn',
-          format: 'Comic',
-          status: 'active',
-          queue_position: 2,
-          issues_remaining: 5,
-        },
-      ],
-      isPending: false,
-      isError: false,
-      refetch: vi.fn(),
-      nextPageToken: null,
-      loadMore: vi.fn().mockResolvedValue(undefined),
-      activeCount: 2,
+    const saga = {
+      id: 1,
+      title: 'Saga',
+      format: 'Comic',
+      status: 'active',
+      queue_position: 1,
+      issues_remaining: 5,
+    }
+    const spawn = {
+      id: 2,
+      title: 'Spawn',
+      format: 'Comic',
+      status: 'active',
+      queue_position: 2,
+      issues_remaining: 5,
+    }
+    // Emulate the server-owned filter: the applied key returns only matching
+    // rows and their whole-collection count, rather than relying on a second
+    // client-side title filter.
+    mockedUseQueueThreads.mockImplementation((search?: string) => {
+      const isSearching = (search?.trim() ?? '') !== ''
+      return {
+        data: isSearching ? [saga] : [saga, spawn],
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+        nextPageToken: null,
+        loadMore: vi.fn().mockResolvedValue(undefined),
+        activeCount: 2,
+        filteredCount: isSearching ? 1 : 2,
+        isPlaceholderData: false,
+        resultCountText: isSearching ? '1 of 2 series' : '2 of 2 series',
+      }
     })
 
     renderQueue()
