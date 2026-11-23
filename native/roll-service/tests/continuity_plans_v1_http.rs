@@ -132,6 +132,32 @@ async fn seed_thread_issue(
     .expect("seed thread and issue");
 }
 
+async fn seed_release_mapping(state: &Arc<AppState>, thread_id: i32, identity_id: i32) {
+    let conn = db::checkout(state).await.expect("mapping connection");
+    conn.batch_execute(&format!(
+        "INSERT INTO external_identities
+             (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+         VALUES ({identity_id}, 'comicvine', 'series', '4050-{identity_id}',
+                 '{{\"name\":\"Release series\"}}'::json, NOW(), NOW());
+         INSERT INTO thread_external_series_mappings
+             (thread_id, external_identity_id, status, created_at, updated_at)
+         VALUES ({thread_id}, {identity_id}, 'confirmed', NOW(), NOW());"
+    ))
+    .await
+    .expect("seed confirmed release mapping");
+}
+
+async fn seed_owned_list(state: &Arc<AppState>, user_id: i32, list_id: i32, name: &str) {
+    let conn = db::checkout(state).await.expect("list connection");
+    conn.execute(
+        "INSERT INTO custom_cbl_lists (id, user_id, name, mode, created_at, updated_at)
+         VALUES ($1, $2, $3, 'loose', NOW(), NOW())",
+        &[&list_id, &user_id, &name],
+    )
+    .await
+    .expect("seed owned list");
+}
+
 async fn create_plan(
     state: &Arc<AppState>,
     token: &str,
