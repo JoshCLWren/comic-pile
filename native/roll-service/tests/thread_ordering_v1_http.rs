@@ -360,6 +360,62 @@ async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
 }
 
 #[tokio::test]
+async fn blocking_info_contains_option_e_cycles_and_preserves_healthy_threads() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("tord-cycle", true).await;
+    let conn = state.pool.get().await.unwrap();
+    let a = thread(&conn, user_id, "Series A").await;
+    let b = thread(&conn, user_id, "Series B").await;
+    let healthy = thread(&conn, user_id, "Healthy Series").await;
+    let a1 = issue(&conn, a, "1", 1, "unread").await;
+    let a2 = issue(&conn, a, "2", 2, "unread").await;
+    let b1 = issue(&conn, b, "1", 1, "unread").await;
+    let healthy1 = issue(&conn, healthy, "1", 1, "unread").await;
+    frontier(&conn, a, a1).await;
+    frontier(&conn, b, b1).await;
+    frontier(&conn, healthy, healthy1).await;
+    // A#2 -> B#1 -> A#1 closes a loop with the required A#1 -> A#2 order.
+    dependency(&conn, a2, b1, None).await;
+    dependency(&conn, b1, a1, None).await;
+
+    let (status, body) = send(
+        &state,
+        post(
+            &format!("/api/v1/threads/{a}:getBlockingInfo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["is_blocked"], true, "{body:?}");
+    assert_eq!(
+        body["blocking_reasons"],
+        json!([
+            "Reading constraint cycle: waiting on Series A #1",
+            "Reading constraint cycle: waiting on Series A #2"
+        ]),
+        "{body:?}"
+    );
+
+    let (status, body) = send(
+        &state,
+        post(
+            &format!("/api/v1/threads/{healthy}:getBlockingInfo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body,
+        json!({"is_blocked": false, "blocking_reasons": [], "blocking_dependencies": []})
+    );
+}
+
+#[tokio::test]
 async fn batch_blocking_info_preserves_request_order_and_validates() {
     let (state, token, csrf, user_id, _guard) = setup_user("tord-batch").await;
     let (token2, csrf2, user2) = register_extra_user(&state, "tord-batch2").await;

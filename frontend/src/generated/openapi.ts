@@ -3621,7 +3621,7 @@ export interface components {
             threads: components["schemas"]["OrderedExplanations"];
         };
         /** @enum {string} */
-        BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite";
+        BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite" | "reading_cycle";
         /** @enum {string} */
         BlockerOrigin: "reading_list" | "reader_prerequisite";
         /** @description One blocking issue (Python `BlockingDependency`). */
