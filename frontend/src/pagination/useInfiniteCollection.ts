@@ -54,6 +54,13 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
   /** True while any fetch is in flight (initial, refetch, or next page). */
   isLoading: boolean
   /**
+   * True when the rendered pages are placeholder data kept from the previous
+   * query key by `keepPreviousData` while the new key's first page loads.
+   * Surfaces must not present placeholder-derived numbers (totals, counts) as
+   * the answer for the current filter state (#3614).
+   */
+  isPlaceholderData: boolean
+  /**
    * Convenience flag matching the previous Queue semantics: loading the first
    * page OR appending another page while already-rendered rows stay visible.
    */
