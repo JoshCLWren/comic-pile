@@ -226,4 +226,31 @@ describe('Queue exact-issue shared actions', () => {
     expect(onMigrate).toHaveBeenCalledExactlyOnceWith()
     expect(fetchCards).not.toHaveBeenCalled()
   })
+
+  it('offers manual tracking when a Roll series has no issue rows and no known count', async () => {
+    list.mockResolvedValue(issueList(null))
+    const onMigrate = vi.fn()
+    setup(undefined, undefined, onMigrate)
+    expect(await screen.findByText(/No unread issue is individually tracked for this series/)).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Set up issue tracking' }))
+    expect(onMigrate).toHaveBeenCalledExactlyOnceWith()
+    expect(fetchCards).not.toHaveBeenCalled()
+  })
+
+  it('describes one remaining untracked comic accurately before migration', async () => {
+    list.mockResolvedValue(issueList(null))
+    setup(undefined, 1, vi.fn())
+    expect(await screen.findByText(/This series has 1 unread comic but no individually tracked unread issue/)).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Set up issue tracking' })).toBeEnabled()
+    expect(fetchCards).not.toHaveBeenCalled()
+  })
+
+  it('does not imply more unread comics for a completed counter-only series', async () => {
+    list.mockResolvedValue(issueList(null))
+    const onMigrate = vi.fn()
+    setup(undefined, 0, onMigrate)
+    expect(await screen.findByText(/No unread tracked issue remains/)).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Set up issue tracking' })).not.toBeInTheDocument()
+    expect(onMigrate).not.toHaveBeenCalled()
+  })
 })
