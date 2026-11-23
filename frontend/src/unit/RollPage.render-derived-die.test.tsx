@@ -68,9 +68,13 @@ await injectModuleDoubles(await import('../pages/RollPage/components/RollHeader'
   }
 })
 
-await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({}))
-await injectModuleDoubles(await import('../hooks/useRollResources'), () => ({}))
-await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({}))
+await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({ useRollBootstrap: vi.fn() }))
+await injectModuleDoubles(await import('../hooks/useRollResources'), () => ({
+  useRollDieState: vi.fn(),
+  useRollEligibleIssueIds: vi.fn(),
+  useRollIssueCards: vi.fn(),
+}))
+await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({ useBugReportRestore: vi.fn() }))
 await injectModuleDoubles(await import('../hooks/useRoll'), () => ({
   useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: vi.fn(),
@@ -80,11 +84,39 @@ await injectModuleDoubles(await import('../hooks/useRoll'), () => ({
   useDismissPending: vi.fn(),
 }))
 await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({ useSnooze: vi.fn() }))
-await injectModuleDoubles(await import('../hooks/useQueue'), () => ({}))
-await injectModuleDoubles(await import('../hooks'), () => ({}))
-await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({}))
-await injectModuleDoubles(await import('../services/api-threads'), () => ({}))
-await injectModuleDoubles(await import('../services/api'), () => ({}))
+await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
+  useMoveToFront: vi.fn(),
+  useMoveToBack: vi.fn(),
+  useShuffleQueue: vi.fn(),
+  useActiveSeriesCount: () => null,
+}))
+await injectModuleDoubles(await import('../hooks'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks')>()
+  return { ...actual, useRate: vi.fn() }
+})
+await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
+  readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
+}))
+await injectModuleDoubles(await import('../services/api-threads'), () => ({
+  threadsApi: {
+    list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
+    setPending: vi.fn(),
+  },
+}))
+await injectModuleDoubles(await import('../services/api'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api')>()
+  return {
+    ...actual,
+    threadsApi: {
+      list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
+      setPending: vi.fn(),
+    },
+    dependenciesApi: {
+      getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
+      getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
+    },
+  }
+})
 
 // SAFETY: vi.mocked returns a typed mock whose mockReturnValue surface matches the hook; cast preserves the mock call API.
 const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
@@ -126,7 +158,6 @@ const SCOPED_DIE_20 = {
 function renderRollPage() {
   return render(
     <MemoryRouter>
-      <NavigationSpy navigate={navigateSpy} />
       <ToastProvider>
         <RollPage />
       </ToastProvider>
