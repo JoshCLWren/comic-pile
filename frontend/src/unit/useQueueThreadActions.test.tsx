@@ -8,6 +8,7 @@ const navigateSpy = vi.fn()
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
 import type { UseQueueThreadActionsDeps } from '../pages/QueuePage/useQueueThreadActions'
 import { queryClient as sharedQueryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
 import type { Thread } from '../types'
 
 const toastSpy = vi.fn()
