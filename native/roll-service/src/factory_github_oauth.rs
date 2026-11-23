@@ -541,7 +541,7 @@ async fn dispatch_inner(
     .await
     .map_err(|_| ApiError::ServiceUnavailable("GitHub dispatch timed out".into()))?
     .map_err(|_| ApiError::ServiceUnavailable("GitHub dispatch unavailable".into()))?;
-    if result.status != StatusCode::NO_CONTENT {
+    if !matches!(result.status, StatusCode::OK | StatusCode::NO_CONTENT) {
         tracing::warn!(
             github_user_id = signed.sub.as_str(),
             status = result.status.as_u16(),
