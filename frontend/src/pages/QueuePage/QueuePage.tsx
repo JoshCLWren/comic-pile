@@ -55,10 +55,10 @@ export default function QueuePage() {
     nextPageToken,
     loadMore,
     activeCount,
-    filteredCount,
-    isPlaceholderData,
-    isLoading,
   } = queueLoader
+  const filteredCount = queueLoader.filteredCount ?? null
+  const isPlaceholderData = queueLoader.isPlaceholderData ?? false
+  const isLoading = queueLoader.isLoading ?? false
 
   // Series that show the per-row `Map series` repair action (everything except
   // fully mapped or non-issue-tracked rows) are the bulk action's scope, and an
@@ -82,6 +82,15 @@ export default function QueuePage() {
     searchQuery,
   )
   const authoritativeActiveCount = activeCount ?? activeThreads.length
+  const queueResultCountPending =
+    !isError && (isPending || (isPlaceholderData && isLoading))
+  const queueResultCountText = isError
+    ? 'Series count unavailable.'
+    : queueResultCountPending
+      ? 'Updating series count…'
+      : filteredCount == null || activeCount == null
+        ? 'Series count unavailable.'
+        : `${filteredCount} of ${activeCount} series`
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
@@ -195,6 +204,7 @@ export default function QueuePage() {
           onSortChange={setSortBy}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          resultCountText={queueResultCountText}
         />
 
         {mobileAddEnabled && (

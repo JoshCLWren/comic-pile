@@ -20,6 +20,8 @@ interface QueueControlsProps {
   onSortChange: (next: QueueSortBy) => void
   searchQuery: string
   onSearchChange: (next: string) => void
+  /** Optional authoritative result-count text (e.g. "N of M series"). */
+  resultCountText?: string | null
 }
 
 /**
@@ -45,6 +47,7 @@ function QueueControlsInner({
   onSortChange,
   searchQuery,
   onSearchChange,
+  resultCountText,
 }: QueueControlsProps) {
   const [localValue, setLocalValue] = useState(searchQuery)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -199,6 +202,16 @@ function QueueControlsInner({
         </div>
       </div>
       <span className="sr-only" data-testid="queue-active-count">{activeCount}</span>
+      {resultCountText != null && resultCountText !== '' && (
+        <p
+          role="status"
+          aria-live="polite"
+          className="min-h-4 text-xs text-[var(--theme-text-muted)]"
+          data-testid="queue-result-count"
+        >
+          {resultCountText}
+        </p>
+      )}
     </header>
   )
 }
