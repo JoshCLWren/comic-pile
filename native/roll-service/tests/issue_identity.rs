@@ -9,14 +9,14 @@
 //! 422 validation envelopes.
 
 use axum::{
-    body::{to_bytes, Body},
-    http::{header, Request, StatusCode},
+    body::{Body, to_bytes},
+    http::{Request, StatusCode, header},
 };
-use comicpile_roll_service::{config::Config, router, test_support, AppState};
-use serde_json::{json, Value};
+use comicpile_roll_service::{AppState, config::Config, router, test_support};
+use serde_json::{Value, json};
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
     Arc,
+    atomic::{AtomicUsize, Ordering},
 };
 use tower::ServiceExt;
 
@@ -725,7 +725,11 @@ fn assert_one_selected_adoption(body: &Value, plan_id: i64) {
     assert_eq!(body["excluded_positions"], json!([1]), "{body}");
     assert_eq!(body["unresolved_positions"], json!([]), "{body}");
     let nodes = body["nodes"].as_array().unwrap();
-    assert_eq!(nodes.len(), 1, "only the selected entry belongs in the plan: {body}");
+    assert_eq!(
+        nodes.len(),
+        1,
+        "only the selected entry belongs in the plan: {body}"
+    );
     assert_eq!(nodes[0]["node_type"], "issue", "{body}");
     assert_eq!(nodes[0]["label"], "Mister Miracle #1", "{body}");
     assert!(nodes[0]["ref_id"].as_i64().unwrap() > 0, "{body}");
@@ -739,7 +743,11 @@ async fn adoption_commit_does_not_create_crossover_event_label_issue_3517() {
     let user_id = me["id"].as_i64().unwrap() as i32;
     seed_crossover_sentinel(&state, user_id).await;
     let before = crossover_snapshot(&state).await;
-    assert_eq!(before.len(), 1, "the sentinel must make this a non-empty check");
+    assert_eq!(
+        before.len(),
+        1,
+        "the sentinel must make this a non-empty check"
+    );
 
     let (status, body) = post_json(
         &state,
@@ -781,7 +789,11 @@ async fn targeted_adoption_commit_does_not_create_crossover_event_label_issue_35
     .unwrap();
     drop(conn);
     let before = crossover_snapshot(&state).await;
-    assert_eq!(before.len(), 1, "the sentinel must make this a non-empty check");
+    assert_eq!(
+        before.len(),
+        1,
+        "the sentinel must make this a non-empty check"
+    );
 
     let (status, body) = post_json(
         &state,
@@ -2051,10 +2063,12 @@ async fn reading_graph_preview_projects_overlap_with_both_choice_effects() {
     let overlaps = body["overlaps"].as_array().unwrap();
     assert_eq!(overlaps.len(), 1, "{body}");
     let overlap = &overlaps[0];
-    assert!(overlap["overlap_id"]
-        .as_str()
-        .unwrap()
-        .starts_with("overlap-"));
+    assert!(
+        overlap["overlap_id"]
+            .as_str()
+            .unwrap()
+            .starts_with("overlap-")
+    );
     assert_eq!(
         overlap["continuing_series"]["comicvine_volume_id"],
         "comicvine:1000"
