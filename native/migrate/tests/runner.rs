@@ -142,7 +142,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![1, 2], vec![]));
+    assert_eq!((report.applied, report.adopted), (vec![1, 2, 3], vec![]));
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
@@ -156,7 +156,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(recorded, 2);
+    assert_eq!(recorded, 3);
 
     let threads: bool = client
         .query_one("SELECT to_regclass('public.threads') IS NOT NULL", &[])
@@ -174,6 +174,24 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .unwrap()
         .get(0);
     assert!(queue_groups, "V2 must create the queue-exclusion schema");
+
+    let release_list_col: bool = client
+        .query_one(
+            "SELECT EXISTS (\
+               SELECT 1 FROM information_schema.columns \
+               WHERE table_schema = 'public' \
+                 AND table_name = 'reading_plan_release_sources' \
+                 AND column_name = 'custom_cbl_list_id'\
+             )",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(
+        release_list_col,
+        "V3 must add custom_cbl_list_id to reading_plan_release_sources"
+    );
 
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
@@ -199,7 +217,7 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![], vec![1, 2]));
+    assert_eq!((report.applied, report.adopted), (vec![3], vec![1, 2]));
 
     let recorded: bool = client
         .query_one(
@@ -231,7 +249,7 @@ async fn alembic_database_at_baseline_head_adopts_baseline_and_runs_pending() {
     alembic_managed_at_baseline(&client).await;
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![2], vec![1]));
+    assert_eq!((report.applied, report.adopted), (vec![2, 3], vec![1]));
 
     let queue_groups: bool = client
         .query_one(
@@ -388,7 +406,7 @@ async fn alembic_baseline_with_stale_deferred_checks_is_repaired_before_stamp() 
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![2], vec![1]));
+    assert_eq!((report.applied, report.adopted), (vec![2, 3], vec![1]));
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
