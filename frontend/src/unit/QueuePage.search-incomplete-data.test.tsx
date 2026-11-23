@@ -208,48 +208,53 @@ describe('Queue search with incomplete data', () => {
     })
   })
 
-  it('shows search results when search has matches', async () => {
+  it('renders only the server rows returned for the applied search', async () => {
     const user = userEvent.setup()
-    mockedUseQueueThreads.mockReturnValue({
-      data: [
-        {
-          id: 1,
-          title: 'Saga',
-          format: 'Comic',
-          status: 'active',
-          queue_position: 1,
-          issues_remaining: 5,
-        },
-        {
-          id: 2,
-          title: 'Spawn',
-          format: 'Comic',
-          status: 'active',
-          queue_position: 2,
-          issues_remaining: 5,
-        },
-      ],
-      isPending: false,
-      isError: false,
-      refetch: vi.fn(),
-      nextPageToken: null,
-      loadMore: vi.fn().mockResolvedValue(undefined),
-      activeCount: 2,
+    const serverRows = [
+      {
+        id: 1,
+        title: 'Saga',
+        format: 'Comic',
+        status: 'active',
+        queue_position: 1,
+        issues_remaining: 5,
+      },
+      {
+        id: 2,
+        title: 'Spawn',
+        format: 'Comic',
+        status: 'active',
+        queue_position: 2,
+        issues_remaining: 5,
+      },
+    ]
+    mockedUseQueueThreads.mockImplementation((search?: string) => {
+      const term = search?.trim().toLowerCase() ?? ''
+      const rows = serverRows.filter((thread) => thread.title.toLowerCase().includes(term))
+      // SAFETY: QueuePage consumes only this explicitly mocked loader surface.
+      return {
+        data: rows,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+        nextPageToken: null,
+        loadMore: vi.fn().mockResolvedValue(undefined),
+        activeCount: 2,
+        filteredCount: rows.length,
+        resultCountText: `${rows.length} of 2 series`,
+      } as never
     })
 
     renderQueue()
 
-    // Simulate a search that matches "Saga"
     const searchInput = screen.getByPlaceholderText('Search...')
     await user.type(searchInput, 'Saga')
 
-    // Wait for the debounce delay to ensure the search state is properly entered
     await vi.waitFor(() => {
-      // Should show the Saga result
+      expect(mockedUseQueueThreads).toHaveBeenCalledWith('Saga', 'position')
       expect(screen.getByText('Saga')).toBeInTheDocument()
       expect(screen.queryByText('Loading series...')).not.toBeInTheDocument()
       expect(screen.queryByText('No active series match your search')).not.toBeInTheDocument()
-      // Verify that Spawn is filtered out
       expect(screen.queryByText('Spawn')).not.toBeInTheDocument()
     })
   })
