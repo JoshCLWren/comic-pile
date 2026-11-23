@@ -365,6 +365,52 @@ listThreads.mockImplementation(
     expect(result.current.data).toEqual([{ id: 1, title: 'Saga' }])
     expect(result.current.resultCountText).toBe('Updating series count…')
   })
+
+  it('keeps the newest search count when an older request settles late (#3614)', async () => {
+    let resolveAlpha: (page: Awaited<ReturnType<typeof realThreadsApi.list>>) => void = () => undefined
+    listThreads
+      .mockResolvedValueOnce({
+        threads: [],
+        next_page_token: null,
+        active_count: 5,
+        filtered_count: 5,
+      })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveAlpha = resolve
+          }),
+      )
+      .mockResolvedValueOnce({
+        threads: [{ id: 2, title: 'Beta' } as never],
+        next_page_token: null,
+        active_count: 5,
+        filtered_count: 1,
+      })
+
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(({ search }: { search: string }) => useQueueThreads(search, 'position', threadsApi), {
+      wrapper,
+      initialProps: { search: '' },
+    })
+
+    await waitFor(() => expect(result.current.resultCountText).toBe('5 of 5 series'))
+    rerender({ search: 'alpha' })
+    await waitFor(() => expect(result.current.resultCountText).toBe('Updating series count…'))
+
+    rerender({ search: 'beta' })
+    await waitFor(() => expect(result.current.resultCountText).toBe('1 of 5 series'))
+
+    resolveAlpha({
+      threads: [{ id: 1, title: 'Alpha One' }, { id: 3, title: 'Alpha Two' }],
+      next_page_token: null,
+      active_count: 5,
+      filtered_count: 2,
+    })
+    await act(async () => {})
+
+    expect(result.current.resultCountText).toBe('1 of 5 series')
+  })
 })
 
 describe('useQueueThreads result count text (#3614)', () => {
