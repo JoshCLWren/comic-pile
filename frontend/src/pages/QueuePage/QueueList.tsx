@@ -14,6 +14,8 @@ interface QueueListProps {
   sentinelRef: React.Ref<HTMLDivElement>
   hasNextPage: boolean
   isLoading?: boolean
+  /** Authoritative whole-Queue total, including rows not on the loaded page. */
+  totalActiveCount?: number
   /**
    * Opens the existing series-create flow. The Queue page wires this to the
    * create modal; direct list consumers (tests, regression harnesses) may
