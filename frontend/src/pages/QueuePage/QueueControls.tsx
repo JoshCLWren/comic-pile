@@ -6,7 +6,7 @@ const SEARCH_DEBOUNCE_MS = 400
 interface QueueControlsProps {
   activeCount: number
   /** Authoritative, announced `N of M series` text for the applied search. */
-  resultCountText: string
+  resultCountText?: string
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
@@ -36,7 +36,7 @@ interface QueueControlsProps {
  */
 function QueueControlsInner({
   activeCount,
-  resultCountText,
+  resultCountText = 'Series count unavailable.',
   shuffleDisabled,
   shufflePending,
   onShuffle,
