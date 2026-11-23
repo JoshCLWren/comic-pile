@@ -44,6 +44,7 @@ import { identityResolutionReason } from '../utils/cblResolutionReason'
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
 import { isObject, isString } from '../utils/runtimeChecks'
 import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
+import { cblBrowseResultState } from '../utils/cblBrowseResultState'
 
 /** Shown when a source list declares neither a readable title nor a usable path. */
 const FALLBACK_SOURCE_TITLE = 'CBL source'
@@ -756,25 +757,19 @@ export default function CblBrowserPage() {
     preview && summary
       ? `${countPhraseWithArticle(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhraseWithArticle(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
       : null
-  // keepPreviousData retains rows during a folder/search/page transition, but
-  // their totals and page numbers belong to the previous applied state. Every
-  // count-like readout must therefore use only the settled response (#3614).
-  const settledBrowsePage = browseQuery.isPlaceholderData ? null : browsePage
-  const firstShown =
-    settledBrowsePage && settledBrowsePage.items.length > 0
-      ? (settledBrowsePage.page - 1) * settledBrowsePage.page_size + 1
-      : 0
-  const lastShown = settledBrowsePage
-    ? (settledBrowsePage.page - 1) * settledBrowsePage.page_size + settledBrowsePage.items.length
-    : 0
-  const resultCountPending = !catalogError && (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
-  const resultCountText = catalogError
-    ? 'Source list count unavailable.'
-    : resultCountPending
-      ? 'Updating source list count…'
-      : settledBrowsePage
-        ? `${settledBrowsePage.total} of ${settledBrowsePage.scope === 'search' ? settledBrowsePage.catalog_total : settledBrowsePage.total} source lists`
-        : 'Source list count unavailable.'
+  const {
+    settledBrowsePage,
+    firstShown,
+    lastShown,
+    resultCountPending,
+    resultCountText,
+  } = cblBrowseResultState({
+    browsePage,
+    isPlaceholderData: browseQuery.isPlaceholderData,
+    isPending: browseQuery.isPending,
+    isFetching: browseQuery.isFetching,
+    hasCatalogError: catalogError !== null,
+  })
 
   const openConfirm = () => {
     if (!selectedSource || !preview || commitBlocked) return
