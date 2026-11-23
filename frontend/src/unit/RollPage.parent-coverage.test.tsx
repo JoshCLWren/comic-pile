@@ -318,33 +318,22 @@ describe('RollPage parent handlers', () => {
     sessionData.last_rolled_result = undefined
   })
 
-  it('opens override, submits it, and handles a pending migration flow', async () => {
+  it('manual picker opens an issue card without overriding Roll and a pending Roll still rates normally', async () => {
     const user = userEvent.setup()
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
     const picker = screen.getAllByRole('combobox').at(-1)!
     await user.click(picker)
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
-    await user.click(screen.getByRole('button', { name: /Pick this series/ }))
-    await waitFor(() => expect(spies.override).toHaveBeenCalled())
-
-    // Submitting an override enters the rating view, where the header offers the
-    // queue action instead of the die-view controls (issue #2712). The remaining
-    // picker and migration coverage still belongs to the die view. "Back to
-    // queue" now only navigates and preserves the pending read (issue #3761), so
-    // returning here goes through the rating view's explicit cancel action.
-    await waitFor(() => expect(screen.getByTestId('roll-back-to-queue')).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'cancel rating' }))
-    await waitFor(() => expect(screen.queryByTestId('roll-back-to-queue')).not.toBeInTheDocument())
-
-    await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
-    fireEvent.submit(screen.getByRole('button', { name: /Pick this series/ }).closest('form')!)
+    await user.click(screen.getByRole('button', { name: 'Open issue card' }))
+    expect(screen.getByTestId('direct-read-issue-panel')).toHaveTextContent('Saga')
+    expect(spies.override).not.toHaveBeenCalled()
+    expect(spies.setPending).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'close modal' }))
-
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
     enterPendingRollRating()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'skip migration' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'cancel rating' }))
+    expect(spies.override).not.toHaveBeenCalled()
   })
 
   it('leaves for the queue from the header chrome without dropping the pending read', async () => {
@@ -460,11 +449,10 @@ describe('RollPage parent handlers', () => {
     errorSpy.mockRestore()
   })
 
-  it('handles pending cancellation, refresh failure, override failure, and simple migration', async () => {
+  it('handles pending rating cancellation and refresh failure without using legacy manual overrides', async () => {
     const user = userEvent.setup()
     const error = new Error('failed')
     render(<RollPage />)
-
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'cancel rating' })).toBeInTheDocument())
     spies.refetch.mockRejectedValueOnce(error)
@@ -473,24 +461,14 @@ describe('RollPage parent handlers', () => {
     spies.refetch.mockResolvedValue({})
     await user.click(screen.getByRole('button', { name: 'cancel rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
-
-    spies.override.mockRejectedValueOnce(error)
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
     const picker = screen.getAllByRole('combobox').at(-1)!
     await user.click(picker)
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
-    await user.click(screen.getByRole('button', { name: /Pick this series/ }))
-    await waitFor(() => expect(screen.getByText('failed')).toBeInTheDocument())
-
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
-    await user.click(screen.getByRole('button', { name: 'close modal' }))
-    enterPendingRollRating()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'skip migration' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'save rating' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'complete simple' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'close simple' }))
+    await user.click(screen.getByRole('button', { name: 'Open issue card' }))
+    expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
+    expect(spies.override).not.toHaveBeenCalled()
+    expect(spies.setPending).not.toHaveBeenCalled()
   })
 
   it('handles normal roll failures and unresolved pending conflicts', async () => {
@@ -646,11 +624,14 @@ describe('RollPage parent handlers', () => {
     expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument()
   })
 
-  it('reports an invalid rating-thread response without entering rating mode', async () => {
-    spies.setPending.mockResolvedValueOnce({ thread_id: null, title: '', format: 'Comic', issues_remaining: 1, queue_position: 1, total_issues: 2, result: null })
+  it('manual Read Now never calls legacy setPending or enters automatic rating mode', async () => {
     render(<RollPage />)
-    enterPendingRollRating()
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'thread' }))
+    fireEvent.click(screen.getByRole('button', { name: /Read Now/ }))
+    expect(screen.getByTestId('direct-read-issue-panel')).toHaveTextContent('Saga')
+    expect(spies.setPending).not.toHaveBeenCalled()
+    expect(spies.rate).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument()
   })
 
   it('hydrates a pending id from the queue when session metadata belongs elsewhere', async () => {
@@ -898,53 +879,39 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
   })
 
-  it('falls back to the active session metadata when a pending response lacks thread identity', async () => {
-    bootstrapData.active_thread = { id: 1, title: 'Session fallback', format: 'Graphic Novel', issues_remaining: null, queue_position: null, total_issues: null, last_rolled_result: null }
+  it('uses the active pending Roll metadata without calling legacy setPending', async () => {
+    bootstrapData.active_thread = { id: 1, title: 'Session fallback', format: 'Graphic Novel', issues_remaining: 2, queue_position: 1, total_issues: 5, issue_id: 11, issue_number: '2' }
     bootstrapData.roll_pool = [{ id: 1, title: 'Session fallback', format: 'Graphic Novel' }]
-    spies.setPending.mockResolvedValueOnce({ thread_id: null, title: undefined, format: undefined, issues_remaining: null, queue_position: null, total_issues: null, result: null })
-    const user = userEvent.setup()
     render(<RollPage />)
     enterPendingRollRating()
-    await user.click(screen.getByRole('button', { name: 'skip migration' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('rating-thread-metadata')).toHaveTextContent('Session fallback:2'))
+    expect(spies.setPending).not.toHaveBeenCalled()
   })
 
-  it('keeps simple migration open when saving the selected issue fails', async () => {
+  it('keeps the real Roll rating workspace available after an unsuccessful Save', async () => {
     const user = userEvent.setup()
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
-    spies.rate.mockRejectedValueOnce(new Error('simple migration save failed'))
+    spies.rate.mockRejectedValueOnce(new Error('rating save failed'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     render(<RollPage />)
     enterPendingRollRating()
-    await user.click(screen.getByRole('button', { name: 'skip migration' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'save rating' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'complete simple' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'complete simple' }))
-    await waitFor(() => expect(screen.getByText('simple migration save failed')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    expect(spies.setPending).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
   })
 
-  it('completes migration and simple migration flows', async () => {
+  it('manual Read Now avoids all migration and automatic Roll eligibility prerequisites', async () => {
     const user = userEvent.setup()
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
+    bootstrapData.roll_pool = [{ id: 1, title: 'Saga', format: 'Comic', total_issues: null }]
     render(<RollPage />)
-    enterPendingRollRating()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'complete migration' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'complete migration' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'save rating' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
-
-    cleanup()
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
-    render(<RollPage />)
-    enterPendingRollRating()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'skip migration' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'save rating' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'complete simple' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'complete simple' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'thread' }))
+    await user.click(screen.getByRole('button', { name: /Read Now/ }))
+    expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'skip migration' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'complete migration' })).not.toBeInTheDocument()
+    expect(spies.setPending).not.toHaveBeenCalled()
+    expect(spies.override).not.toHaveBeenCalled()
   })
 
   it('refreshes matching active metadata and reopens pending rolls', async () => {
