@@ -105,6 +105,7 @@ const queueThread = (id: number, title: string, position: number) => ({
 })
 
 function mockQueue(resultCountText: string): void {
+  // SAFETY: QueuePage consumes only this explicitly mocked loader surface.
   mockedUseQueueThreads.mockReturnValue({
     data: [queueThread(1, 'Saga', 1), queueThread(2, 'Spawn', 2)],
     isPending: false,
@@ -117,7 +118,6 @@ function mockQueue(resultCountText: string): void {
     isPlaceholderData: false,
     isFetchNextPageError: false,
     resultCountText,
-    // SAFETY: QueuePage consumes only this explicitly mocked loader surface.
   } as never)
 }
 
@@ -141,16 +141,16 @@ beforeEach(() => {
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   // SAFETY: QueuePage needs only mutate/isPending from this snooze mock.
   vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: QueuePage reads only pending/snoozed data and refetch here.
   vi.mocked(useRollBootstrap).mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: vi.fn(),
-    // SAFETY: QueuePage reads only pending/snoozed data and refetch here.
   } as never)
+  // SAFETY: QueuePage's restore flow uses only these three mocked methods.
   vi.mocked(useBugReportRestore).mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
     restoreLastView: vi.fn(),
-    // SAFETY: QueuePage's restore flow uses only these three mocked methods.
   } as never)
 })
 
