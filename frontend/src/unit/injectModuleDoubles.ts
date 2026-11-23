@@ -20,9 +20,10 @@ export async function injectModuleDoubles<ModuleExports extends object>(
   factory: ModuleDoubleFactory,
 ): Promise<void> {
   // SAFETY: this is the same generic actual-module boundary exposed by Vitest.
-  // The captured namespace contains the real exports before this factory's
-  // doubles are installed, and each caller supplies its own module type.
-  const importOriginal = cast<ImportOriginal>(async () => moduleExports)
+  // Snapshot the values before spyOn replaces live ES-module bindings, so a
+  // wrapper can safely close over an original export without calling itself.
+  const actualExports = { ...moduleExports }
+  const importOriginal = cast<ImportOriginal>(async () => actualExports)
   const doubles = await factory(importOriginal)
   for (const [exportName, replacement] of Object.entries(doubles)) {
     const descriptor = Object.getOwnPropertyDescriptor(moduleExports, exportName)
