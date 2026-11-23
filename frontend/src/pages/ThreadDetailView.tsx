@@ -621,8 +621,8 @@ export default function ThreadDetailView() {
                 // lists.
                 const circular = connectedThreads.filter((t) => t.is_circular)
                 const oneWay = connectedThreads.filter((t) => !t.is_circular)
-                const blockedBy = oneWay.filter((t) => t.connection_type.includes('blocked_by'))
-                const blocking = oneWay.filter((t) => t.connection_type.includes('blocks'))
+                const blockedBy = connectedThreads.filter((t) => t.connection_type.includes('blocked_by'))
+                const blocking = connectedThreads.filter((t) => t.connection_type.includes('blocks'))
 
                 return (
                   <>
