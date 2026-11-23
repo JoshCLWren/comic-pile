@@ -389,7 +389,14 @@ export interface SessionDetails {
   events: SessionEvent[];
 }
 
-export type ThreadListResponse = components['schemas']['QueueThreadListResponse']
+/**
+ * Queue list envelope. The legacy queue item shape stays the client contract,
+ * while the native v2 collection read also carries the authoritative filtered
+ * row total used by the visible `N of M series` count (#3614).
+ */
+export type ThreadListResponse = components['schemas']['QueueThreadListResponse'] & {
+  filtered_count?: number | null
+}
 
 export interface SessionListResponse {
   sessions: SessionSummary[];

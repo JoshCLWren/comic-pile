@@ -516,6 +516,107 @@ describe('Keyboard Accessibility', () => {
   })
 })
 
+describe('Search result counts (#3614)', () => {
+  const alpha: ThreadListItem = {
+    id: 1,
+    title: 'Alpha',
+    format: 'Comic',
+    status: 'active',
+    queue_position: 1,
+    issues_remaining: 2,
+    total_issues: null,
+    created_at: '2025-01-01',
+    is_blocked: false,
+    blocking_reasons: [],
+    last_activity_at: null,
+  }
+  const beta: ThreadListItem = {
+    id: 2,
+    title: 'Beta',
+    format: 'Comic',
+    status: 'active',
+    queue_position: 2,
+    issues_remaining: 3,
+    total_issues: null,
+    created_at: '2024-01-01',
+    is_blocked: false,
+    blocking_reasons: [],
+    last_activity_at: null,
+  }
+
+  it('shows M of M, then N of M and 0 of M for applied searches', async () => {
+    const user = userEvent.setup()
+    mockedUseQueueThreads.mockImplementation((searchTerm: string) => {
+      const data = searchTerm === 'none' ? [] : searchTerm === 'alpha' ? [alpha] : [alpha, beta]
+      return {
+        data,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+        nextPageToken: null,
+        loadMore: vi.fn(),
+        activeCount: 2,
+        filteredCount: searchTerm === 'none' ? 0 : searchTerm === 'alpha' ? 1 : 2,
+        isCountStale: false,
+      }
+    })
+    render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('2 of 2 series')
+
+    await user.type(screen.getByPlaceholderText('Search...'), 'alpha')
+    await waitFor(
+      () => expect(screen.getByTestId('queue-result-count')).toHaveTextContent('1 of 2 series'),
+      { timeout: 3000 },
+    )
+
+    await user.clear(screen.getByPlaceholderText('Search...'))
+    await user.type(screen.getByPlaceholderText('Search...'), 'none')
+    await waitFor(
+      () => expect(screen.getByTestId('queue-result-count')).toHaveTextContent('0 of 2 series'),
+      { timeout: 3000 },
+    )
+    expect(screen.getByText('No active series match your search')).toBeInTheDocument()
+  })
+
+  it('shows an updating state instead of a stale count while a search settles', async () => {
+    const user = userEvent.setup()
+    mockedUseQueueThreads.mockImplementation((searchTerm: string) => ({
+      data: searchTerm === 'alpha' ? [alpha] : [alpha, beta],
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+      nextPageToken: null,
+      loadMore: vi.fn(),
+      activeCount: 2,
+      filteredCount: searchTerm === 'alpha' ? 1 : 2,
+      isCountStale: searchTerm === 'alpha',
+    }))
+    render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('2 of 2 series')
+    await user.type(screen.getByPlaceholderText('Search...'), 'alpha')
+    await waitFor(
+      () => expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Updating series count…'),
+      { timeout: 3000 },
+    )
+  })
+
+  it('does not invent a count when the list fails to load', () => {
+    mockedUseQueueThreads.mockReturnValue({
+      data: [],
+      isPending: false,
+      isError: true,
+      refetch: vi.fn(),
+      nextPageToken: null,
+      loadMore: vi.fn(),
+      activeCount: null,
+      filteredCount: null,
+      isCountStale: false,
+    })
+    render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Series count unavailable.')
+  })
+})
+
   it('filters and sorts active threads while preserving completed threads', async () => {
     const user = userEvent.setup()
     mockedUseQueueThreads.mockImplementation((searchTerm: string, _sort: string) => {
