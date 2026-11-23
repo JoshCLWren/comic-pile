@@ -103,6 +103,20 @@ await injectModuleDoubles(await import('../services/api-threads'), () => ({
     setPending: vi.fn(),
   },
 }))
+await injectModuleDoubles(await import('../services/api'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api')>()
+  return {
+    ...actual,
+    threadsApi: {
+      list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
+      setPending: vi.fn(),
+    },
+    dependenciesApi: {
+      getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
+      getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
+    },
+  }
+})
 
 // SAFETY: vi.mocked returns a typed mock whose mockReturnValue surface matches the hook; cast preserves the mock call API.
 const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
