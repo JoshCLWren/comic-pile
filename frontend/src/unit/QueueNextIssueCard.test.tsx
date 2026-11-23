@@ -83,8 +83,7 @@ describe('Queue exact-issue shared actions', () => {
         ],
         page_size: 50,
         total_count: 2,
-      // SAFETY: this test supplies only the issue fields exercised by the
-      // direct-read chooser; other projection fields are intentionally omitted.
+        // SAFETY: this fixture includes all the fields consumed by the direct-read chooser.
       } as IssueListResponse
     })
     fetchCards.mockImplementation(async (ids) => [ids[0] === 37 ? card : {
