@@ -48,17 +48,7 @@ export default function QueuePage() {
   const isSearching = searchQuery.trim() !== ''
 
   const queueLoader = useQueueThreads(searchQuery, sortBy)
-  const {
-    data: threads,
-    isPending,
-    isError,
-    isFetching,
-    isPlaceholderData,
-    nextPageToken,
-    loadMore,
-    activeCount,
-    filteredCount,
-  } = queueLoader
+  const { data: threads, isPending, isError, isFetching, isPlaceholderData, nextPageToken, loadMore, activeCount, filteredCount } = queueLoader
 
   // Series that show the per-row `Map series` repair action (everything except
   // fully mapped or non-issue-tracked rows) are the bulk action's scope, and an
@@ -85,19 +75,16 @@ export default function QueuePage() {
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
-
   const totalSeriesCount = activeCount
   const matchedSeriesCount = isSearching ? filteredCount : activeCount
-  const countIsPlaceholder = isPlaceholderData && isFetching
+  const countStale = isPlaceholderData && isFetching
   const resultCountError = isError
-  const resultCountPending =
-    !resultCountError &&
-    (totalSeriesCount === null || matchedSeriesCount === null || countIsPlaceholder)
+  const resultCountPending = !resultCountError && (totalSeriesCount === null || matchedSeriesCount === null || countStale)
   const resultCountText = resultCountError
     ? 'Series count unavailable.'
-    : !resultCountPending && totalSeriesCount !== null && matchedSeriesCount !== null
-      ? `${matchedSeriesCount} of ${totalSeriesCount} series`
-      : 'Updating series count…'
+    : resultCountPending || totalSeriesCount === null || matchedSeriesCount === null
+      ? 'Updating series count…'
+      : `${matchedSeriesCount} of ${totalSeriesCount} series`
 
   const navigateToRoll = useCallback(
     (_thread: ThreadListItem, response: unknown) => {
