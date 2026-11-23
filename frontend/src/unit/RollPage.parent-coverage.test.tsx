@@ -1005,32 +1005,8 @@ describe('RollPage parent handlers', () => {
 
   it('manual Read Now avoids all migration and automatic Roll eligibility prerequisites', async () => {
     const user = userEvent.setup()
-<<<<<<< HEAD
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
-    renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'complete migration' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'complete migration' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'save rating' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
-
-    cleanup()
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
-    renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'skip migration' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'save rating' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'complete simple' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'complete simple' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
-=======
     bootstrapData.roll_pool = [{ id: 1, title: 'Saga', format: 'Comic' }]
-    render(<RollPage />)
+    renderRollPage()
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
@@ -1038,7 +1014,6 @@ describe('RollPage parent handlers', () => {
     expect(screen.queryByRole('button', { name: 'complete migration' })).not.toBeInTheDocument()
     expect(spies.setPending).not.toHaveBeenCalled()
     expect(spies.override).not.toHaveBeenCalled()
->>>>>>> origin/main
   })
 
   it('refreshes matching active metadata and reopens pending rolls', async () => {
