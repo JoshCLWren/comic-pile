@@ -3420,13 +3420,14 @@ pub async fn create_release_source(
     let updated_at: String;
     let mut last_synced_at: Option<String> = None;
     let mut enabled = true;
+    let mut final_list_id: Option<i32> = resolved_list_id;
 
     if let Some(row) = existing {
         source_id = row.get(0);
         // Fetch the existing source details
         let source_row = tx
             .query_one(
-                "SELECT created_at::text, updated_at::text, last_synced_at::text, enabled FROM reading_plan_release_sources WHERE id = $1",
+                "SELECT created_at::text, updated_at::text, last_synced_at::text, enabled, custom_cbl_list_id FROM reading_plan_release_sources WHERE id = $1",
                 &[&source_id],
             )
             .await
@@ -3435,16 +3436,29 @@ pub async fn create_release_source(
         updated_at = source_row.get(1);
         last_synced_at = source_row.get(2);
         enabled = source_row.get(3);
+        let existing_list: Option<i32> = source_row.get(4);
+        // Non-destructive association: fill list link if missing.
+        if existing_list.is_none() && resolved_list_id.is_some() {
+            tx.execute(
+                "UPDATE reading_plan_release_sources SET custom_cbl_list_id = $1, updated_at = NOW() WHERE id = $2",
+                &[&resolved_list_id, &source_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+            final_list_id = resolved_list_id;
+        } else {
+            final_list_id = existing_list.or(resolved_list_id);
+        }
     } else {
         // Create new release source
         let row = tx
             .query_one(
                 r#"
-                INSERT INTO reading_plan_release_sources (plan_id, thread_id, external_identity_id, enabled, created_at, updated_at)
-                VALUES ($1, $2, $3, TRUE, NOW(), NOW())
+                INSERT INTO reading_plan_release_sources (plan_id, thread_id, external_identity_id, enabled, custom_cbl_list_id, created_at, updated_at)
+                VALUES ($1, $2, $3, TRUE, $4, NOW(), NOW())
                 RETURNING id, created_at::text, updated_at::text
                 "#,
-                &[&payload.plan_id, &payload.thread_id, &payload.external_identity_id],
+                &[&payload.plan_id, &payload.thread_id, &payload.external_identity_id, &resolved_list_id],
             )
             .await
             .map_err(db::query_error)?;
@@ -3465,6 +3479,7 @@ pub async fn create_release_source(
     let response = ReleaseSourceResponse {
         id: source_id,
         plan_id: payload.plan_id,
+        custom_cbl_list_id: final_list_id,
         thread_id: payload.thread_id,
         external_identity_id: payload.external_identity_id,
         provider,
@@ -3522,7 +3537,7 @@ pub async fn list_release_sources(
     let rows = conn
         .query(
             r#"
-            SELECT rprs.id, rprs.plan_id, rprs.thread_id, rprs.external_identity_id,
+            SELECT rprs.id, rprs.plan_id, rprs.custom_cbl_list_id, rprs.thread_id, rprs.external_identity_id,
                    rprs.enabled, rprs.last_synced_at::text, rprs.created_at::text, rprs.updated_at::text,
                    ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
             FROM reading_plan_release_sources rprs
@@ -3539,7 +3554,7 @@ pub async fn list_release_sources(
     let sources: Vec<ReleaseSourceResponse> = rows
         .iter()
         .map(|row| {
-            let metadata_json: Option<serde_json::Value> = row.get(11);
+            let metadata_json: Option<serde_json::Value> = row.get(12);
             let provider_title = metadata_json.as_ref().and_then(|m| {
                 let name_str = m.get("name").and_then(|v| v.as_str());
                 let title_str = m.get("title").and_then(|v| v.as_str());
@@ -3549,15 +3564,16 @@ pub async fn list_release_sources(
             ReleaseSourceResponse {
                 id: row.get(0),
                 plan_id: row.get(1),
-                thread_id: row.get(2),
-                external_identity_id: row.get(3),
-                provider: row.get(8),
-                provider_volume_id: row.get(10),
+                custom_cbl_list_id: row.get(2),
+                thread_id: row.get(3),
+                external_identity_id: row.get(4),
+                provider: row.get(9),
+                provider_volume_id: row.get(11),
                 provider_title,
-                enabled: row.get(4),
-                last_synced_at: row.get(5),
-                created_at: row.get(6),
-                updated_at: row.get(7),
+                enabled: row.get(5),
+                last_synced_at: row.get(6),
+                created_at: row.get(7),
+                updated_at: row.get(8),
             }
         })
         .collect();
@@ -3696,7 +3712,7 @@ pub async fn update_release_source(
     let source_row = tx
         .query_opt(
             r#"
-            SELECT rprs.id, rprs.plan_id, rprs.thread_id, rprs.external_identity_id,
+            SELECT rprs.id, rprs.plan_id, rprs.custom_cbl_list_id, rprs.thread_id, rprs.external_identity_id,
                    rprs.enabled, rprs.last_synced_at::text, rprs.created_at::text, rprs.updated_at::text,
                    ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
             FROM reading_plan_release_sources rprs
@@ -3710,9 +3726,10 @@ pub async fn update_release_source(
         .map_err(db::query_error)?
         .ok_or_else(|| not_found(format!("Release source {source_id} not found")))?;
 
-    let thread_id: i32 = source_row.get(2);
-    let external_identity_id: i32 = source_row.get(3);
-    let currently_enabled: bool = source_row.get(4);
+    let custom_cbl_list_id: Option<i32> = source_row.get(2);
+    let thread_id: i32 = source_row.get(3);
+    let external_identity_id: i32 = source_row.get(4);
+    let currently_enabled: bool = source_row.get(5);
 
     // If enabling, revalidate the mapping is still confirmed
     if payload.enabled && !currently_enabled {
@@ -3755,7 +3772,7 @@ pub async fn update_release_source(
     let updated_row = conn
         .query_one(
             r#"
-            SELECT rprs.id, rprs.plan_id, rprs.thread_id, rprs.external_identity_id,
+            SELECT rprs.id, rprs.plan_id, rprs.custom_cbl_list_id, rprs.thread_id, rprs.external_identity_id,
                    rprs.enabled, rprs.last_synced_at::text, rprs.created_at::text, rprs.updated_at::text,
                    ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
             FROM reading_plan_release_sources rprs
@@ -3768,7 +3785,7 @@ pub async fn update_release_source(
         .await
         .map_err(db::query_error)?;
 
-    let metadata_json: Option<serde_json::Value> = updated_row.get(11);
+    let metadata_json: Option<serde_json::Value> = updated_row.get(12);
     let provider_title = metadata_json.as_ref().and_then(|m| {
         let name_str = m.get("name").and_then(|v| v.as_str());
         let title_str = m.get("title").and_then(|v| v.as_str());
@@ -3778,15 +3795,16 @@ pub async fn update_release_source(
     let response = ReleaseSourceResponse {
         id: updated_row.get(0),
         plan_id: updated_row.get(1),
-        thread_id: updated_row.get(2),
-        external_identity_id: updated_row.get(3),
-        provider: updated_row.get(8),
-        provider_volume_id: updated_row.get(10),
+        custom_cbl_list_id: updated_row.get(2),
+        thread_id: updated_row.get(3),
+        external_identity_id: updated_row.get(4),
+        provider: updated_row.get(9),
+        provider_volume_id: updated_row.get(11),
         provider_title,
-        enabled: updated_row.get(4),
-        last_synced_at: updated_row.get(5),
-        created_at: updated_row.get(6),
-        updated_at: updated_row.get(7),
+        enabled: updated_row.get(5),
+        last_synced_at: updated_row.get(6),
+        created_at: updated_row.get(7),
+        updated_at: updated_row.get(8),
     };
 
     Ok(Json(response))
