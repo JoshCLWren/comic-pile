@@ -298,7 +298,6 @@ listThreads.mockImplementation(
     const wrapper = createWrapper()
     const { result, rerender } = renderHook(
       ({ sort }: { sort: QueueSortBy }) => useQueueThreads('', sort, threadsApi),
-      // SAFETY: the sort literal is one of the values the sort type allows
       { wrapper, initialProps: { sort: 'position' } },
     )
 
