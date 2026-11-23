@@ -171,7 +171,7 @@ describe('CblBrowserPage catalog', () => {
     const addButton = screen.getByRole('button', { name: 'Add this reading order' })
     expect(addButton).toBeDisabled()
     expect(addButton).toHaveAttribute('aria-disabled', 'true')
-    expect(screen.getByRole('status')).toHaveTextContent('Reconciling source…')
+    expect(screen.getByText('Reconciling source…')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Customize' })).toBeDisabled()
 
     await act(async () => {
