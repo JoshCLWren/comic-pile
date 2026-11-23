@@ -1226,7 +1226,12 @@ async fn enqueue_hydration_for_identities_with_policy(
             .get::<_, Option<String>>(1)
             .and_then(|text| serde_json::from_str(&text).ok())
             .unwrap_or(Value::Null);
-        if crate::comicvine_repair::needs_provider_fetch(&metadata, now) {
+        if crate::comicvine_repair::needs_provider_fetch_with_legacy_fallback(
+            &metadata,
+            row.get(2),
+            row.get(3),
+            now,
+        ) {
             needs_fetch.push(id);
         }
     }
