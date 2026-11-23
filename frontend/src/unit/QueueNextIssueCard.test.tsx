@@ -75,6 +75,8 @@ describe('Queue exact-issue shared actions', () => {
   it('chooses an alternate owned issue without altering the pending automatic Roll offer', async () => {
     list.mockImplementation(async (_threadId, options) => {
       if (options?.status === 'unread') return issueList(37)
+      // SAFETY: the abbreviated owned-issue fixtures contain the exact fields
+      // consumed by DirectReadIssuePanel and intentionally omit unrelated metadata.
       return {
         ...issueList(37),
         issues: [
@@ -83,7 +85,6 @@ describe('Queue exact-issue shared actions', () => {
         ],
         page_size: 50,
         total_count: 2,
-        // SAFETY: this fixture includes all the fields consumed by the direct-read chooser.
       } as IssueListResponse
     })
     fetchCards.mockImplementation(async (ids) => [ids[0] === 37 ? card : {
@@ -114,6 +115,6 @@ describe('Queue exact-issue shared actions', () => {
     view.unmount()
     list.mockResolvedValue(issueList(null))
     setup()
-    expect(await screen.findByText('No unread tracked issue remains.')).toBeVisible()
+    expect(await screen.findByText(/No unread tracked issue remains\./)).toBeVisible()
   })
 })
