@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueNextIssueCard from '../pages/QueuePage/QueueNextIssueCard'
+import { DirectReadIssuePanel } from '../components/DirectReadIssuePanel'
 import { issuesApi } from '../services/api-issues'
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import type { IssueListResponse } from '../types'
@@ -25,6 +26,7 @@ vi.mock('../components/ComicIssueCard', () => ({
 }))
 
 const list = vi.spyOn(issuesApi, 'list')
+const get = vi.spyOn(issuesApi, 'get')
 const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
 const card: IssueCard = {
   issue_id: 37, thread_id: 42, thread_title: 'Hellboy', issue_number: '9',
@@ -46,17 +48,21 @@ function issueList(id: number | null): IssueListResponse {
   }
 }
 
-function setup() {
+function setup(preferredIssueId?: number) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   const Wrapper = ({ children }: { children: ReactNode }) =>
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  return render(<QueueNextIssueCard threadId={42} threadTitle="Hellboy" />, { wrapper: Wrapper })
+  const ui = preferredIssueId == null
+    ? <QueueNextIssueCard threadId={42} threadTitle="Hellboy" />
+    : <DirectReadIssuePanel threadId={42} threadTitle="Hellboy" preferredIssueId={preferredIssueId} />
+  return render(ui, { wrapper: Wrapper })
 }
 
 beforeEach(() => {
   list.mockReset()
+  get.mockReset()
   fetchCards.mockReset()
   list.mockResolvedValue(issueList(37))
   fetchCards.mockResolvedValue([card])
@@ -116,5 +122,71 @@ describe('Queue exact-issue shared actions', () => {
     list.mockResolvedValue(issueList(null))
     setup()
     expect(await screen.findByText(/No unread tracked issue remains\./)).toBeVisible()
+  })
+
+
+  it('uses the exact Roll-offered issue without consulting the Queue frontier', async () => {
+    get.mockResolvedValue(issueList(37).issues[0]!)
+    setup(37)
+    expect(await screen.findByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '37')
+    expect(get).toHaveBeenCalledExactlyOnceWith(37)
+    expect(list).not.toHaveBeenCalled()
+  })
+
+  it('refuses a preferred issue that does not belong to the selected series', async () => {
+    get.mockResolvedValue({ ...issueList(37).issues[0]!, thread_id: 999 })
+    setup(37)
+    expect(await screen.findByRole('alert')).toHaveTextContent('does not belong to the selected series')
+    expect(screen.queryByTestId('shared-queue-card')).not.toBeInTheDocument()
+    expect(list).not.toHaveBeenCalled()
+    expect(fetchCards).toHaveBeenCalledExactlyOnceWith([37])
+  })
+
+  it('reports a failed optional issue browse and retries without losing the current card', async () => {
+    let attempts = 0
+    list.mockImplementation(async (_threadId, options) => {
+      if (options?.status === 'unread') return issueList(37)
+      if (attempts++ === 0) throw new Error('browse temporarily unavailable')
+      return { ...issueList(37), page_size: 50 }
+    })
+    setup()
+    expect(await screen.findByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '37')
+    fireEvent.click(screen.getByRole('button', { name: 'Choose another owned issue' }))
+    const picker = await screen.findByTestId('direct-read-issue-picker')
+    expect(await within(picker).findByRole('alert')).toHaveTextContent('browse temporarily unavailable')
+    expect(screen.getByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '37')
+    fireEvent.click(within(picker).getByRole('button', { name: 'Retry' }))
+    expect(await within(picker).findByRole('button', { name: 'Hellboy #9 (unread)' })).toBeVisible()
+    expect(attempts).toBe(2)
+  })
+
+  it('paginates the manual owned-issue picker without falling back to automatic eligibility', async () => {
+    const first = issueList(37).issues[0]!
+    const second = { ...first, id: 38, issue_number: '10' }
+    const third = { ...first, id: 39, issue_number: '11' }
+    list.mockImplementation(async (_threadId, options) => {
+      if (options?.status === 'unread') return issueList(37)
+      if (options?.page_token === 'next-owned-page') {
+        return { ...issueList(39), issues: [third], total_count: 3, page_size: 50 }
+      }
+      return {
+        ...issueList(37),
+        issues: [first, second],
+        total_count: 3,
+        page_size: 50,
+        next_page_token: 'next-owned-page',
+      }
+    })
+    fetchCards.mockImplementation(async (ids) => [ids[0] === 39
+      ? { ...card, issue_id: 39, issue_number: '11' }
+      : card])
+    setup()
+    expect(await screen.findByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '37')
+    fireEvent.click(screen.getByRole('button', { name: 'Choose another owned issue' }))
+    const picker = await screen.findByTestId('direct-read-issue-picker')
+    fireEvent.click(await within(picker).findByRole('button', { name: 'Load more issues' }))
+    fireEvent.click(await within(picker).findByRole('button', { name: 'Hellboy #11 (unread)' }))
+    await waitFor(() => expect(screen.getByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '39'))
+    expect(list).toHaveBeenCalledWith(42, { page_size: 50, page_token: 'next-owned-page' })
   })
 })
