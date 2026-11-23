@@ -645,10 +645,20 @@ async fn adoption_commit_creates_plan_with_valid_fingerprint() {
 
 async fn crossover_snapshot(
     state: &Arc<AppState>,
-) -> Vec<(i32, String, Option<i32>, Option<i32>, Option<i32>)> {
+) -> Vec<(
+    i32,
+    i32,
+    String,
+    Option<i32>,
+    Option<i32>,
+    Option<i32>,
+    Option<i32>,
+    Option<i32>,
+)> {
     let conn = state.pool.get().await.unwrap();
     conn.query(
-        "SELECT g.id, g.name, m.id, m.thread_id, m.issue_id
+        "SELECT g.id, g.user_id, g.name,
+                m.id, m.group_id, m.thread_id, m.issue_id, m.sequence_order
          FROM dependency_groups g
          LEFT JOIN dependency_group_memberships m ON m.group_id = g.id
          ORDER BY g.id, m.id",
@@ -664,6 +674,9 @@ async fn crossover_snapshot(
             row.get(2),
             row.get(3),
             row.get(4),
+            row.get(5),
+            row.get(6),
+            row.get(7),
         )
     })
     .collect()
