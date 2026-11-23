@@ -335,14 +335,8 @@ describe('RollPage parent handlers', () => {
 
   it('refreshes an active rating thread with complete and partial metadata', async () => {
     const user = userEvent.setup()
-<<<<<<< HEAD
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'refresh rating' })).toBeInTheDocument())
     spies.refetch.mockResolvedValue({ active_thread: {
       id: 1, issues_remaining: null, queue_position: null, total_issues: null,
@@ -424,14 +418,8 @@ describe('RollPage parent handlers', () => {
 
   it('leaves for the queue from the header chrome without dropping the pending read', async () => {
     const user = userEvent.setup()
-<<<<<<< HEAD
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
 
     await user.click(screen.getByTestId('roll-back-to-queue'))
@@ -837,14 +825,8 @@ describe('RollPage parent handlers', () => {
 
   it('keeps a completed rating when the authoritative snapshot is unavailable', async () => {
     const user = userEvent.setup()
-<<<<<<< HEAD
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'finish rating' })).toBeInTheDocument())
     spies.rate.mockResolvedValueOnce({ rate: { thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 }, bootstrap: null })
     await user.click(screen.getByRole('button', { name: 'finish rating' }))
@@ -887,14 +869,8 @@ describe('RollPage parent handlers', () => {
 
   it('never refetches bootstrap for a successful rating', async () => {
     const user = userEvent.setup()
-<<<<<<< HEAD
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     spies.refetch.mockClear()
     await user.click(screen.getByRole('button', { name: 'save rating' }))
@@ -1134,14 +1110,8 @@ describe('RollPage parent handlers', () => {
   it('refreshes matching active metadata and reopens pending rolls', async () => {
     const user = userEvent.setup()
     spies.refetch.mockResolvedValue({ active_thread: { id: 1, issues_remaining: 1, total_issues: 5, queue_position: 2, issue_id: 8, issue_number: '2', next_issue_id: 9, next_issue_number: '3', reading_progress: 0.4, last_rolled_result: 4 } })
-<<<<<<< HEAD
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'refresh rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'refresh rating' }))
   })
@@ -1164,14 +1134,8 @@ describe('RollPage parent handlers', () => {
       last_rolled_result: 3,
     }
     spies.setPending.mockResolvedValueOnce(completeResponse)
-<<<<<<< HEAD
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'refresh rating' }))
   })
@@ -1180,14 +1144,8 @@ describe('RollPage parent handlers', () => {
     const vibrate = vi.fn()
     Object.defineProperty(navigator, 'vibrate', { configurable: true, value: vibrate })
     const user = userEvent.setup()
-<<<<<<< HEAD
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'update rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'threshold rating' }))
     await user.click(screen.getByRole('button', { name: 'save rating' }))
@@ -1198,14 +1156,8 @@ describe('RollPage parent handlers', () => {
   it('scrolls the dice into view when saving a rating and returning to the idle roll state', async () => {
     const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
     const user = userEvent.setup()
-<<<<<<< HEAD
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'save rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
@@ -1216,14 +1168,8 @@ describe('RollPage parent handlers', () => {
   it('scrolls the dice into view when snoozing from the rating view', async () => {
     const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
     const user = userEvent.setup()
-<<<<<<< HEAD
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'snooze rating' })).toBeInTheDocument())
     // The native snooze completes the pending offer and publishes an idle
     // bootstrap. Without this response transition the pending-session hook
@@ -1242,14 +1188,8 @@ describe('RollPage parent handlers', () => {
   it('scrolls the dice into view when cancelling a pending rating', async () => {
     const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
     const user = userEvent.setup()
-<<<<<<< HEAD
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'cancel rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'cancel rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
