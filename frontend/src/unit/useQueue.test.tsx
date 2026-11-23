@@ -491,6 +491,7 @@ listThreads.mockImplementation(
   })
 
   it('keeps settled first-page counts when only a next-page fetch fails', async () => {
+    // SAFETY: this pagination regression needs only a stable row id.
     listThreads
       .mockResolvedValueOnce({
         threads: [{ id: 1 } as never],
