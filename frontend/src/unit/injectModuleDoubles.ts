@@ -20,9 +20,10 @@ export async function injectModuleDoubles<ModuleExports extends object>(
   factory: ModuleDoubleFactory,
 ): Promise<void> {
   // SAFETY: this is the same generic actual-module boundary exposed by Vitest.
-  // The captured namespace contains the real exports before this factory's
-  // doubles are installed, and each caller supplies its own module type.
-  const importOriginal = cast<ImportOriginal>(async () => moduleExports)
+  // Snapshot the exports before installing doubles so wrappers retain the real
+  // implementation instead of recursively reading their own replacement.
+  const originalExports = { ...moduleExports }
+  const importOriginal = cast<ImportOriginal>(async () => originalExports)
   const doubles = await factory(importOriginal)
   for (const [exportName, replacement] of Object.entries(doubles)) {
     const descriptor = Object.getOwnPropertyDescriptor(moduleExports, exportName)
