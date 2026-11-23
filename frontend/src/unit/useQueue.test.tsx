@@ -416,6 +416,7 @@ listThreads.mockImplementation(
     rerender({ search: 'beta' })
     await waitFor(() => expect(result.current.resultCountText).toBe('1 of 5 series'))
 
+    // SAFETY: the late stubbed page supplies only the thread fields the pager reads
     resolveAlpha({
       threads: [{ id: 1, title: 'Alpha One' } as never, { id: 3, title: 'Alpha Two' } as never],
       next_page_token: null,
