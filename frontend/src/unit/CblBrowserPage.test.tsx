@@ -701,16 +701,16 @@ describe('CblBrowserPage source list result count (#3614)', () => {
     mockBrowse.mockResolvedValue({
       ...searchPage('marvel', [source, secondSource]),
       page: 2,
-      page_size: 2,
-      total: 13,
-      total_pages: 7,
+      page_size: 50,
+      total: 133,
+      total_pages: 3,
       has_next: true,
-      catalog_total: 13,
+      catalog_total: 200,
     })
-    renderPage('/cbl-sources?q=marvel&page=2&page_size=2')
+    renderPage('/cbl-sources?q=marvel&page=2')
 
     await waitFor(() => {
-      expect(countLine()).toHaveTextContent('13 of 13 source lists')
+      expect(countLine()).toHaveTextContent('133 of 200 source lists')
     })
     expect(screen.getByRole('button', { name: /Ultimate Universe/ })).toBeInTheDocument()
   })
