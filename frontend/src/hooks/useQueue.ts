@@ -162,6 +162,9 @@ export function useQueueThreads(
   // the canonical source. Falls back to null so callers can decide how to
   // degrade when a cached/older response omits the field.
   const activeCount = query.pages[0]?.active_count ?? null
+  // Filtered match total for the applied search, independent of pagination.
+  // Present on the active Queue list response; older/cached pages may omit it.
+  const filteredCount = (query.pages[0] as { filtered_count?: number } | undefined)?.filtered_count ?? null
   // Initial load OR an in-flight next-page append both keep already-rendered
   // rows visible: `isPending` drives the full-screen loader only before any
   // data exists, while `isNextPageLoading` drives the inline loading indicator.
@@ -186,10 +189,13 @@ export function useQueueThreads(
     isPending,
     isLoadingMore,
     isError,
+    isPlaceholderData: query.isPlaceholderData,
+    isFetching: query.isLoading,
     refetch,
     nextPageToken,
     loadMore,
     activeCount,
+    filteredCount,
   }
 }
 
