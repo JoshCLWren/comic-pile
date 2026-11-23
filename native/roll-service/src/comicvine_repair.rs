@@ -2137,8 +2137,17 @@ mod tests {
             &fresh_metadata,
         )
         .await;
+        let cooling = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "5",
+            "4000-30005",
+            &json!({}),
+        )
+        .await;
         seed_request(&state, active, "pending", 4, "1 hour", None).await;
-        seed_request(&state, terminal, "failed", 3, "1 hour", None).await;
+        seed_request(&state, terminal, "failed", 3, "-1 second", None).await;
+        seed_request(&state, cooling, "failed", 3, "1 hour", None).await;
         connection
             .execute(
                 "UPDATE issues SET status = 'read', read_at = now() \
