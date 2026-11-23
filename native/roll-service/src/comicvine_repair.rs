@@ -1935,11 +1935,59 @@ mod tests {
             failure_transition(&ProviderFailure::Timeout, 3),
             ("failed", 21600, "provider_timeout")
         );
-        // Rate limiting stays distinct and never reported as empty credits.
+        // Rate limiting stays distinct, honors provider/local backoff, and
+        // enters the same six-hour failed cooldown as other exhausted retries.
         assert_eq!(
             failure_transition(&ProviderFailure::RateLimited(120), 1),
             ("deferred", 120, "rate_limit")
         );
+        assert_eq!(
+            failure_transition(&ProviderFailure::RateLimited(60), 2),
+            ("deferred", 300, "rate_limit")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::RateLimited(120), 3),
+            ("failed", 21600, "rate_limit")
+        );
+    }
+
+    #[test]
+    fn repair_retry_after_accepts_python_delta_seconds_and_http_dates() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-11-23T00:00:00Z")
+            .expect("test timestamp")
+            .with_timezone(&chrono::Utc);
+        assert_eq!(repair_retry_after_seconds(Some("60.1"), now), 61);
+        assert_eq!(repair_retry_after_seconds(Some("0"), now), 60);
+        assert_eq!(repair_retry_after_seconds(Some("7200"), now), 3600);
+        assert_eq!(repair_retry_after_seconds(Some("not-a-date"), now), 60);
+        assert_eq!(repair_retry_after_seconds(Some("NaN"), now), 60);
+        let http_date = (now + chrono::Duration::seconds(120)).to_rfc2822();
+        assert_eq!(
+            repair_retry_after_seconds(Some(&http_date), now),
+            120,
+            "HTTP-date Retry-After must not fall back to the 60-second default"
+        );
+    }
+
+    #[tokio::test]
+    async fn provider_response_uses_python_envelope_semantics() {
+        for (payload, accepted) in [
+            (json!({"results": {"id": 1}}), true),
+            (json!({"status_code": null, "results": {"id": 1}}), true),
+            (json!({"status_code": true, "results": {"id": 1}}), true),
+            (json!({"status_code": 1.0, "results": {"id": 1}}), true),
+            (json!({"status_code": "1", "results": {"id": 1}}), false),
+        ] {
+            let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+            fake.push_ok(
+                StatusCode::OK,
+                HeaderMap::new(),
+                Bytes::from(payload.to_string()),
+            );
+            let outbound: Arc<dyn crate::outbound::OutboundHttp> = fake;
+            let result = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123").await;
+            assert_eq!(result.is_ok(), accepted, "{payload}");
+        }
     }
 
     #[test]
