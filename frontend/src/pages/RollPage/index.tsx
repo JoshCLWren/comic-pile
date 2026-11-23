@@ -13,7 +13,6 @@ import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useResetDice,
   useDismissPending,
-  useOverrideRoll,
   useRoll,
   useUnsnooze,
   useSetDie,
@@ -127,7 +126,6 @@ export default function RollPage() {
   const resetDiceMutation = useResetDice()
   const rollMutation = useRoll()
   const dismissPendingMutation = useDismissPending()
-  const overrideMutation = useOverrideRoll()
   const snoozeMutation = useSnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
@@ -246,15 +244,12 @@ export default function RollPage() {
     },
     refetchBootstrap,
     enterRatingView: rating.enterRatingView,
-    threadsApi,
     onSnoozeRefreshFailed: reportSnoozeRefreshFailed,
   })
 
   const modals = useRollModals({
     state,
     bootstrap,
-    overrideMutation,
-    enterRatingView: rating.enterRatingView,
     setRestoreAction,
     clearRestoreAction,
   })
@@ -582,7 +577,6 @@ export default function RollPage() {
           onOverrideThreadIdChange={state.setOverrideThreadId}
           overrideErrorMessage={state.overrideErrorMessage}
           onSubmitOverride={modals.handleOverrideSubmit}
-          overridePending={overrideMutation.isPending}
           snoozedThreads={snoozedThreads}
           onCloseOverride={modals.closeOverrideModal}
           isDieModalOpen={state.isDieModalOpen}
@@ -594,6 +588,8 @@ export default function RollPage() {
           resetDiceError={resetDiceError}
           setDiePending={setDieMutation.isPending}
           isActionSheetOpen={state.isActionSheetOpen}
+          isDirectReadOpen={state.isDirectReadOpen}
+          onCloseDirectRead={() => state.setIsDirectReadOpen(false)}
           selectedThread={state.selectedThread}
           pendingThreadId={bootstrap.pending_thread_id}
           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
