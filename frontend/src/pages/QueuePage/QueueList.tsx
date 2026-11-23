@@ -46,10 +46,13 @@ export function QueueList({
   useVirtualizer,
   onAddSeries,
   isLoading = false,
+  totalActiveCount = 0,
 }: QueueListProps) {
-  // If we're searching and have no results, but there are active threads in the queue
-  // and the current search is still loading, show a loading state instead of "No match".
-  if (isSearching && filteredThreads.length === 0 && activeThreads.length > 0 && isLoading) {
+  // Server-filtered placeholder rows are hidden by QueuePage, so an empty
+  // loaded page cannot stand in for the collection size. Use the authoritative
+  // total to distinguish a pending search from a settled empty Queue (#3912).
+  const queueHasActiveThreads = activeThreads.length > 0 || totalActiveCount > 0
+  if (isSearching && filteredThreads.length === 0 && queueHasActiveThreads && isLoading) {
     return (
       <div
         role="status"
