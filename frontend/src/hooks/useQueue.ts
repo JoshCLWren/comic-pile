@@ -185,16 +185,21 @@ export function useQueueThreads(
   // Reader-facing `N of M series` state for the applied search (#3614). The
   // first page's `filtered_count` is the authoritative match total for the
   // applied search and `active_count` the pre-filter denominator, so both must
-  // come from a settled first page. Placeholder rows from the previous key (or
-  // either total missing) keep the count explicitly unsettled, and a failed
-  // first page says so instead of inventing numbers; a next-page-only failure
+  // come from a settled first page. Placeholder rows from the previous key
+  // show an updating state only while their replacement is in flight; settled
+  // data missing either total is explicitly unavailable. A failed first page
+  // says so instead of inventing numbers, while a next-page-only failure
   // leaves the settled first-page counts valid.
+  const hasCurrentCounts =
+    !isPlaceholderData && filteredCount != null && activeCount != null
   const resultCountText =
     isError && !query.isFetchNextPageError
       ? 'Series count unavailable.'
-      : !isPlaceholderData && filteredCount != null && activeCount != null
+      : hasCurrentCounts
         ? `${filteredCount} of ${activeCount} series`
-        : 'Updating series count…'
+        : query.isLoading
+          ? 'Updating series count…'
+          : 'Series count unavailable.'
 
   const refetch = useCallback(async (): Promise<void> => {
     await query.refetch()

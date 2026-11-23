@@ -504,7 +504,7 @@ describe('useQueueThreads result count text (#3614)', () => {
     const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
-    expect(result.current.resultCountText).toBe('Updating series count…')
+    expect(result.current.resultCountText).toBe('Series count unavailable.')
   })
 
   it('shows an unavailable count when the first page fails', async () => {

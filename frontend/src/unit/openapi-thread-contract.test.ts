@@ -6,6 +6,7 @@ import type { Thread, ThreadListItem, ThreadListResponse, ThreadQueueExclusionGr
 type ThreadDetail = components['schemas']['ThreadResponse']
 type QueueThreadListItem = components['schemas']['QueueThreadListItem']
 type QueueThreadListResponse = components['schemas']['QueueThreadListResponse']
+type NativeThreadListResponse = components['schemas']['ThreadListResponse']
 
 describe('OpenAPI Thread contract adoption (#2781)', () => {
   it('exports the thread detail response from OpenAPI', () => {

@@ -389,15 +389,11 @@ export interface SessionDetails {
   events: SessionEvent[];
 }
 
-export type ThreadListResponse = components['schemas']['QueueThreadListResponse'] & {
-  /**
-   * Total active Queue rows matching the applied search across the whole
-   * collection (#3614), independent of the bounded page. Always present on the
-   * native active Queue read; absent from the completed/excluded reads and from
-   * the frozen Python list schema, so it stays optional here.
-   */
-  filtered_count?: number | null
-}
+// Preserve the Queue's established item projection while adopting the native
+// response's generated whole-collection match total (#3614). The field is
+// optional because completed/excluded reads and the frozen Python schema omit it.
+export type ThreadListResponse = components['schemas']['QueueThreadListResponse'] &
+  Pick<components['schemas']['ThreadListResponse'], 'filtered_count'>
 
 export interface SessionListResponse {
   sessions: SessionSummary[];
