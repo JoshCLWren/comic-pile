@@ -249,6 +249,11 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
             PAGES_ORIGIN,
             StatusCode::FORBIDDEN,
         ),
+        (
+            signed_session(&OWNER_ID.to_string(), seconds() + 1201).as_str(),
+            PAGES_ORIGIN,
+            StatusCode::FORBIDDEN,
+        ),
     ] {
         let rejected = send(&state, session(token, origin)).await;
         assert_eq!(rejected.status(), expected);
