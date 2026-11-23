@@ -389,7 +389,15 @@ export interface SessionDetails {
   events: SessionEvent[];
 }
 
-export type ThreadListResponse = components['schemas']['QueueThreadListResponse']
+export type ThreadListResponse = components['schemas']['QueueThreadListResponse'] & {
+  /**
+   * Total active Queue rows matching the applied search across the whole
+   * collection (#3614), independent of the bounded page. Always present on the
+   * native active Queue read; absent from the completed/excluded reads and from
+   * the frozen Python list schema, so it stays optional here.
+   */
+  filtered_count?: number | null
+}
 
 export interface SessionListResponse {
   sessions: SessionSummary[];
