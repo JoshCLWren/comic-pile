@@ -3,10 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import ReadingModeQuiz from '../components/ReadingModeQuiz'
-import type { ReadingModeState } from '../types'
+import type { QuizQuestion, ReadingModeState } from '../types'
 import * as readingMode from '../services/readingMode'
 
-const QUIZ_QUESTIONS = [
+const QUIZ_QUESTIONS: QuizQuestion[] = [
   {
     id: 'brainpower',
     prompt: 'How much brain do you have right now?',
