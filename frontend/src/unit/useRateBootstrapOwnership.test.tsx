@@ -20,9 +20,7 @@ const mock_protectedRollMutationApi = { rate: vi.fn(), snooze: vi.fn(), bootstra
 const original_rollBootstrapApi = { ...rollBootstrapApi }
 const mock_rollBootstrapApi = { get: vi.fn() }
 
-// SAFETY: Test-only mock seam cast.
 const mockedRate = (mock_protectedRollMutationApi.rate as any)
-// SAFETY: Test-only mock seam cast.
 const mockedBootstrapGet = (mock_rollBootstrapApi.get as any)
 
 const thread: Thread = {

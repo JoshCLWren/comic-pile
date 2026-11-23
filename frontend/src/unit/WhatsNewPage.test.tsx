@@ -46,7 +46,6 @@ function release(overrides: Partial<Release> = {}): Release {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: Test-only mock seam cast.
   releasesApi.list = api.list as typeof releasesApi.list
 })
 

@@ -18,7 +18,6 @@ import { queryKeys } from '../query/queryKeys'
 const original_identityInboxApi = { ...identityInboxApi }
 const mock_identityInboxApi = { list: vi.fn(), confirm: vi.fn(), reject: vi.fn(), defer: vi.fn(), skip: vi.fn() }
 
-// SAFETY: Test-only mock seam cast.
 const mockedInboxApi = (mock_identityInboxApi as any)
 
 function createWrapper(path = '/queue') {

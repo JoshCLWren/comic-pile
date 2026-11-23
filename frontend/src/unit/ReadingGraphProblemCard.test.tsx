@@ -77,9 +77,7 @@ function renderCard() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: Test-only mock seam cast.
   readingGraphProblemApi.getGraph = vi.fn() as typeof readingGraphProblemApi.getGraph
-  // SAFETY: Test-only mock seam cast.
   readingGraphProblemApi.repair = vi.fn() as typeof readingGraphProblemApi.repair
 })
 

@@ -61,13 +61,9 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // SAFETY: Test-only mock seam cast.
   realThreadsApi.listExcluded = mockListExcluded as typeof realThreadsApi.listExcluded
-  // SAFETY: Test-only mock seam cast.
   realThreadsApi.restore = mockRestore as typeof realThreadsApi.restore
-  // SAFETY: Test-only mock seam cast.
   realThreadsApi.restoreExclusionGroup = mockRestoreGroup as typeof realThreadsApi.restoreExclusionGroup
-  // SAFETY: Test-only mock seam cast.
   realThreadsApi.exclude = mockExclude as typeof realThreadsApi.exclude
   mockListExcluded.mockResolvedValue({
     active_count: 1,

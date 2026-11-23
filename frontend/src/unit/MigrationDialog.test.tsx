@@ -13,7 +13,6 @@ const thread = { id: 7, title: 'Saga' }
 describe('MigrationDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // SAFETY: Test-only mock seam cast.
     migrationApi.migrateThread = migrateThreadMock as typeof migrationApi.migrateThread
   })
 

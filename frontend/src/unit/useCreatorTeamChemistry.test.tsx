@@ -9,7 +9,6 @@ import type { CreatorTeamChemistryResponse } from '../types/index'
 const original_creatorTeamChemistryApi = { ...creatorTeamChemistryApi }
 const mock_creatorTeamChemistryApi = { getChemistry: vi.fn() }
 
-// SAFETY: Test-only mock seam cast.
 const mockedGetChemistry = (mock_creatorTeamChemistryApi.getChemistry as any)
 
 function makeResponse(): CreatorTeamChemistryResponse {

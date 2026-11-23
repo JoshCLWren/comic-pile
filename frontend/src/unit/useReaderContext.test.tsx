@@ -9,7 +9,6 @@ import type { ReaderContextResponse } from '../types'
 const original_readerContextApi = { ...readerContextApi }
 const mock_readerContextApi = { get: vi.fn() }
 
-// SAFETY: Test-only mock seam cast.
 const mockedGet = (mock_readerContextApi.get as any)
 
 function createWrapper() {

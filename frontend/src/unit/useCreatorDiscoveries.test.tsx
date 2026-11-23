@@ -9,7 +9,6 @@ import type { CreatorDiscoveryResponse } from '../types/index'
 const original_creatorDiscoveryApi = { ...creatorDiscoveryApi }
 const mock_creatorDiscoveryApi = { getDiscoveries: vi.fn() }
 
-// SAFETY: Test-only mock seam cast.
 const mockedGetDiscoveries = (mock_creatorDiscoveryApi.getDiscoveries as any)
 
 function makeResponse(): CreatorDiscoveryResponse {

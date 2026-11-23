@@ -72,9 +72,7 @@ function renderRecovery(onRecovered = vi.fn()) {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  // SAFETY: Test-only mock seam cast.
   readingPlanRecoveryApi.preview = previewApi as typeof readingPlanRecoveryApi.preview
-  // SAFETY: Test-only mock seam cast.
   readingPlanRecoveryApi.relink = relinkApi as typeof readingPlanRecoveryApi.relink
   previewApi.mockResolvedValue(preview)
   relinkApi.mockResolvedValue({ plan_id: 1000096, list_id: 1000109, status: 'relinked' })

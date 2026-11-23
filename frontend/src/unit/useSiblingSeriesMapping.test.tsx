@@ -11,7 +11,6 @@ import { seriesMappingApi } from '../services/api-series-mapping'
 const original_seriesMappingApi = { ...seriesMappingApi }
 const mock_seriesMappingApi = { preview: vi.fn(), commit: vi.fn() }
 
-// SAFETY: Test-only mock seam cast.
 const mockedSeriesMappingApi = (mock_seriesMappingApi as any)
 
 function wrapper({ children }: { children: ReactNode }) {
