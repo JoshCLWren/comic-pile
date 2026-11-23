@@ -442,14 +442,8 @@ describe('RollPage parent handlers', () => {
 
   it('resumes the same pending read when the reader returns to Roll from the queue', async () => {
     const user = userEvent.setup()
-<<<<<<< HEAD
     const { unmount } = renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    const { unmount } = render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
 
     await user.click(screen.getByTestId('roll-back-to-queue'))
