@@ -2011,14 +2011,8 @@ mod tests {
                 "volume/4050-2",
                 "/api/volume/4050-2?api_key=TESTKEY123&format=json",
             ),
-            (
-                "issues",
-                "/api/issues/?api_key=TESTKEY123&format=json",
-            ),
-            (
-                "search",
-                "/api/search/?api_key=TESTKEY123&format=json",
-            ),
+            ("issues", "/api/issues/?api_key=TESTKEY123&format=json"),
+            ("search", "/api/search/?api_key=TESTKEY123&format=json"),
         ] {
             let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
             fake.push_ok(
