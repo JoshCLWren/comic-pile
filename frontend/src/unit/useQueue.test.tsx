@@ -430,6 +430,7 @@ listThreads.mockImplementation(
   it('restates whole-queue totals on cursor pages, not the visible page size', async () => {
     listThreads
       .mockResolvedValueOnce({
+        // SAFETY: the stubbed page supplies only the thread fields the pager reads
         threads: [{ id: 1 } as never],
         next_page_token: 'tok-2',
         active_count: 5,
