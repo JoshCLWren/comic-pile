@@ -166,6 +166,40 @@ function renderRollPage() {
   )
 }
 
+beforeEach(() => {
+  console.log('BEFORE EACH')
+  vi.clearAllMocks()
+  headerCurrentDieProps.length = 0
+  writeRollSnoozes([])
+  mockedUseRollDieState.mockReturnValue({ data: undefined })
+  mockedUseRollEligibleIssueIds.mockReturnValue({ data: undefined })
+  mockedUseRollIssueCards.mockReturnValue({ data: undefined })
+  console.log('SETTING BOOTSTRAP')
+  mockedUseRollBootstrap.mockReturnValue({
+    data: bootstrap,
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  mockedUseBugReportRestore.mockReturnValue({
+    setRestoreAction: vi.fn(),
+    clearRestoreAction: vi.fn(),
+    restoreLastView: vi.fn(),
+  })
+
+  // SAFETY: Test stubs for the mutation hooks; stub shapes match the mutation returns and are only read for isPending/mutate.
+  vi.mocked(useSetDie).mockReturnValue(cast<ReturnType<typeof useSetDie>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useRoll).mockReturnValue(cast<ReturnType<typeof useRoll>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useOverrideRoll).mockReturnValue(cast<ReturnType<typeof useOverrideRoll>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useDismissPending).mockReturnValue(cast<ReturnType<typeof useDismissPending>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useSnooze).mockReturnValue(cast<ReturnType<typeof useSnooze>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useMoveToFront).mockReturnValue(cast<ReturnType<typeof useMoveToFront>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useMoveToBack).mockReturnValue(cast<ReturnType<typeof useMoveToBack>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useShuffleQueue).mockReturnValue(cast<ReturnType<typeof useShuffleQueue>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useRate).mockReturnValue(cast<ReturnType<typeof useRate>>({ mutate: vi.fn(), isPending: false }))
+})
+
 describe('Roll die is render-derived from scoped die-state (#4768)', () => {
   it('passes the scoped die on the very first render pass, never a fallback (#4768)', () => {
     mockedUseRollDieState.mockReturnValue({ data: SCOPED_DIE_20, isError: false })
