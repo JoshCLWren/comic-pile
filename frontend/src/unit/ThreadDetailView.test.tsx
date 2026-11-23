@@ -23,6 +23,7 @@ interface LocationState {
 }
 
 const locationState: LocationState = { state: undefined }
+const actualUseUpdateThread = useUpdateThread
 await injectModuleDoubles(await import('../hooks/useThread'), async () => {
   const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
   return { ...actual, useUpdateThread: vi.fn() }
