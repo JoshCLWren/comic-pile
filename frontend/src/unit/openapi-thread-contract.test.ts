@@ -26,8 +26,11 @@ describe('OpenAPI Thread contract adoption (#2781)', () => {
   })
 
   it('exports the paginated queue thread list response from OpenAPI', () => {
-    expectTypeOf<ThreadListResponse>().toEqualTypeOf<QueueThreadListResponse>()
+    expectTypeOf<ThreadListResponse>().toEqualTypeOf<
+      QueueThreadListResponse & { filtered_count?: number | null }
+    >()
     expectTypeOf<ThreadListResponse['threads']>().toEqualTypeOf<QueueThreadListItem[]>()
+    expectTypeOf<ThreadListResponse['filtered_count']>().toEqualTypeOf<number | null | undefined>()
   })
 
   it('keeps the list item and the detail response distinct', () => {
