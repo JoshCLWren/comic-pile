@@ -640,8 +640,14 @@ async fn persist(
 
 fn failure_transition(error: &ProviderFailure, attempt: i32) -> (&'static str, i32, &'static str) {
     match error {
+        ProviderFailure::RateLimited(_) if attempt >= 3 => ("failed", 21600, "rate_limit"),
         ProviderFailure::RateLimited(delay) => {
-            ("deferred", (*delay).min(3600) as i32, "rate_limit")
+            let local_backoff = if attempt <= 1 { 60 } else { 300 };
+            (
+                "deferred",
+                (*delay).max(local_backoff).min(3600) as i32,
+                "rate_limit",
+            )
         }
         ProviderFailure::InvalidPayload if attempt >= 3 => {
             ("failed", 21600, "invalid_provider_payload")
