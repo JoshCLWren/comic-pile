@@ -5,6 +5,8 @@ const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
   activeCount: number
+  filteredCount?: number | null
+  isCountLoading?: boolean
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
@@ -34,6 +36,8 @@ interface QueueControlsProps {
  */
 function QueueControlsInner({
   activeCount,
+  filteredCount = null,
+  isCountLoading = false,
   shuffleDisabled,
   shufflePending,
   onShuffle,
@@ -198,6 +202,13 @@ function QueueControlsInner({
           )}
         </div>
       </div>
+      <p role="status" aria-live="polite" className="min-h-4 text-xs text-[var(--theme-text-muted)]" data-testid="queue-result-count">
+        {isCountLoading
+          ? 'Updating series count…'
+          : filteredCount === null
+            ? 'Series count unavailable.'
+            : `${filteredCount} of ${activeCount} series`}
+      </p>
       <span className="sr-only" data-testid="queue-active-count">{activeCount}</span>
     </header>
   )
