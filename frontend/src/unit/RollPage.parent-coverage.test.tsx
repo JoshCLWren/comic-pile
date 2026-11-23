@@ -472,12 +472,7 @@ describe('RollPage parent handlers', () => {
   })
 
   it('keeps the rating workspace out of a generic full-workspace panel', async () => {
-<<<<<<< HEAD
-    const user = userEvent.setup()
     renderRollPage()
-=======
-    render(<RollPage />)
->>>>>>> origin/main
 
     // The die view keeps its ordinary panel chrome.
     expect(screen.getByTestId('roll-workspace').className).toContain('surface-panel')
