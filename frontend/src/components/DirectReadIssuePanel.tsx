@@ -32,7 +32,7 @@ export function DirectReadIssuePanel({
   const [browseOpen, setBrowseOpen] = useState(false)
 
   const nextUnread = useQuery({
-    queryKey: queryKeys.thread.issuePage(threadId, { pageToken: null, pageSize: 1, status: 'unread' }),
+    queryKey: queryKeys.thread.nextUnreadIssue(threadId),
     queryFn: async () => {
       const response = await issuesApi.list(threadId, { status: 'unread', page_size: 1 })
       return response.issues[0] ?? null
