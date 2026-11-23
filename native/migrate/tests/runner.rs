@@ -212,7 +212,7 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![], vec![1, 2]));
+    assert_eq!((report.applied, report.adopted), (vec![3], vec![1, 2]));
 
     let recorded: bool = client
         .query_one(
