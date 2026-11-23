@@ -3,6 +3,7 @@ import { FormEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useSt
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CblAdoptionConfirmModal } from '../components/CblAdoptionConfirmModal'
+import { CblBrowsePagination } from '../components/CblBrowsePagination'
 import ReadingGraphOverlapDialog from '../components/ReadingGraphOverlapDialog'
 import ReadingGraphSummary from '../components/ReadingGraphSummary'
 import TriStateCheckbox from '../components/TriStateCheckbox'
