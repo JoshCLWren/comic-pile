@@ -2196,16 +2196,22 @@ mod tests {
             )
             .await
             .expect("written ledger");
-        assert_eq!(rows.len(), 3, "fresh metadata must not be enqueued");
+        assert_eq!(rows.len(), 4, "fresh metadata must not be enqueued");
         assert!(rows.iter().all(|row| row.get::<_, i32>(0) != fresh));
         for row in &rows {
             let identity_id: i32 = row.get(0);
-            assert_eq!(row.get::<_, String>(1), "pending");
-            if identity_id == active {
-                assert_eq!(row.get::<_, i32>(2), 4, "active work is untouched");
+            if identity_id == cooling {
+                assert_eq!(row.get::<_, String>(1), "failed");
+                assert_eq!(row.get::<_, i32>(2), 3, "cooldown is untouched");
+                assert!(row.get::<_, bool>(4), "retry deadline is preserved");
             } else {
-                assert_eq!(row.get::<_, i32>(2), 0);
-                assert!(identity_id == missing || identity_id == terminal);
+                assert_eq!(row.get::<_, String>(1), "pending");
+                if identity_id == active {
+                    assert_eq!(row.get::<_, i32>(2), 4, "active work is untouched");
+                } else {
+                    assert_eq!(row.get::<_, i32>(2), 0);
+                    assert!(identity_id == missing || identity_id == terminal);
+                }
             }
         }
 
