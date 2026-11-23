@@ -250,6 +250,29 @@ describe('RollPage parent handlers', () => {
     expect(spies.setPending).not.toHaveBeenCalled()
   })
 
+  it('returns to the direct issue card after successfully setting up tracking', async () => {
+    render(<RollPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'thread' }))
+    fireEvent.click(screen.getByRole('button', { name: /Read Now/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Set up issue tracking' }))
+    expect(screen.getByRole('button', { name: 'complete migration' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'complete migration' }))
+    await waitFor(() => expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument()
+    expect(spies.setPending).not.toHaveBeenCalled()
+  })
+
+  it('closes manual issue tracking without starting an automatic Roll rating', async () => {
+    render(<RollPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'thread' }))
+    fireEvent.click(screen.getByRole('button', { name: /Read Now/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Set up issue tracking' }))
+    fireEvent.click(screen.getByRole('button', { name: 'close migration' }))
+    await waitFor(() => expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument()
+    expect(spies.setPending).not.toHaveBeenCalled()
+  })
+
   it('allows a visible snoozed manual pick when the whole-series list fails', async () => {
     const user = userEvent.setup()
     bootstrapData.snoozed_threads = [
