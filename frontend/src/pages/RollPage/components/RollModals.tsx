@@ -87,7 +87,7 @@ function SetCurrentIssueModal({ onSubmit, onClose }: SetCurrentIssueModalProps) 
 
 interface RollModalsProps {
   showMigrationDialog: boolean
-  threadToMigrate: Pick<RatingThread, 'id' | 'title'> | null
+  threadToMigrate: RatingThread | null
   onMigrationComplete: (thread: Thread) => void
   onMigrationSkip: () => void
   onMigrationClose: () => void
