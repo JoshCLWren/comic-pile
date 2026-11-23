@@ -112,7 +112,6 @@ beforeEach(() => {
   pendingAvailable = true
   flushError = null
   mutateMock.mockClear()
-  routeParams.id = '1'
   // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate: mutateMock, isPending: false } as never)
   mockedThreadsApiGet.mockReset()

@@ -86,7 +86,6 @@ const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
 
 beforeEach(() => {
-  routeParams.id = '1'
   // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({
     mutate: vi.fn().mockResolvedValue({}),

@@ -103,7 +103,7 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
-  routeParams.id = '1'
+  navigateSpy.mockReset()
   // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   mockedThreadsApiGet.mockReset()
