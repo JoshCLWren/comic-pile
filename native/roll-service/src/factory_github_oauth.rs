@@ -135,7 +135,7 @@ fn jwt_validation(audience: &str) -> Validation {
 fn verified_session(state: &AppState, token: &str) -> Result<AdminSession, ApiError> {
     let claims = decode::<AdminSession>(
         token,
-        &oauth_decoding_key(&state)?,
+        &oauth_decoding_key(state)?,
         &jwt_validation(SESSION_AUDIENCE),
     )
     .map_err(|_| ApiError::Unauthorized("GitHub sign-in expired or invalid".into()))?
