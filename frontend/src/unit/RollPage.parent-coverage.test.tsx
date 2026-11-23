@@ -984,20 +984,10 @@ describe('RollPage parent handlers', () => {
   it('uses the active pending Roll metadata without calling legacy setPending', async () => {
     bootstrapData.active_thread = { id: 1, title: 'Session fallback', format: 'Graphic Novel', issues_remaining: 2, queue_position: 1, total_issues: 5, issue_id: 11, issue_number: '2' }
     bootstrapData.roll_pool = [{ id: 1, title: 'Session fallback', format: 'Graphic Novel' }]
-<<<<<<< HEAD
-    spies.setPending.mockResolvedValueOnce({ thread_id: null, title: undefined, format: undefined, issues_remaining: null, queue_position: null, total_issues: null, result: null })
-    const user = userEvent.setup()
     renderRollPage()
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-    await user.click(screen.getByRole('button', { name: 'skip migration' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-=======
-    render(<RollPage />)
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByTestId('rating-thread-metadata')).toHaveTextContent('Session fallback:2'))
     expect(spies.setPending).not.toHaveBeenCalled()
->>>>>>> origin/main
   })
 
   it('keeps the real Roll rating workspace available after an unsuccessful Save', async () => {
