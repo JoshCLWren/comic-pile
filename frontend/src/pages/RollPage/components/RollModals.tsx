@@ -1,6 +1,7 @@
 import type { ChangeEvent, FormEvent } from 'react'
 import { useMemo, useState } from 'react'
 import Modal from '../../../components/Modal'
+import { DirectReadIssuePanel } from '../../../components/DirectReadIssuePanel'
 import MigrationDialog from '../../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../../components/SimpleMigrationDialog'
 import ShuffleQueueDialog from '../../QueuePage/ShuffleQueueDialog'
@@ -100,7 +101,6 @@ interface RollModalsProps {
   onOverrideThreadIdChange: (value: string) => void
   overrideErrorMessage: string
   onSubmitOverride: (event: FormEvent<HTMLFormElement>) => void
-  overridePending: boolean
   snoozedThreads: RollBootstrapThread[]
   onCloseOverride: () => void
   isDieModalOpen: boolean
@@ -112,6 +112,8 @@ interface RollModalsProps {
   resetDiceError: string
   setDiePending: boolean
   isActionSheetOpen: boolean
+  isDirectReadOpen: boolean
+  onCloseDirectRead: () => void
   selectedThread: RollBootstrapThread | null
   /**
    * The reading session's pending thread. The native Roll offer acts on this
@@ -153,7 +155,6 @@ export function RollModals({
   onOverrideThreadIdChange,
   overrideErrorMessage,
   onSubmitOverride,
-  overridePending,
   snoozedThreads,
   onCloseOverride,
   isDieModalOpen,
@@ -165,6 +166,8 @@ export function RollModals({
   resetDiceError,
   setDiePending,
   isActionSheetOpen,
+  isDirectReadOpen,
+  onCloseDirectRead,
   selectedThread,
   pendingThreadId,
   onCloseActionSheet,
@@ -231,7 +234,7 @@ export function RollModals({
       >
         <form className="space-y-4" onSubmit={onSubmitOverride}>
           <p className="text-xs text-stone-400">
-            Choose the series you want to read next.
+            Choose a series to read directly. This does not replace a pending Roll offer.
           </p>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
@@ -242,19 +245,33 @@ export function RollModals({
               snoozedOptions={pickerOptions.snoozedOptions}
               value={overrideThreadId}
               onChange={onOverrideThreadIdChange}
-              pending={overridePending}
             />
           </div>
           {overrideErrorMessage && <p className="text-xs text-red-400">{overrideErrorMessage}</p>}
           <button
             type="submit"
-            disabled={overridePending || !overrideThreadId}
+            disabled={!overrideThreadId}
             className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
-            {overridePending ? 'Selecting...' : 'Pick this series'}
+            Open issue card
           </button>
         </form>
       </Modal>
+
+      {isDirectReadOpen && selectedThread && (
+        <Modal
+          isOpen={isDirectReadOpen}
+          title={`Read ${selectedThread.title}`}
+          onClose={onCloseDirectRead}
+        >
+          <DirectReadIssuePanel
+            key={selectedThread.id}
+            threadId={selectedThread.id}
+            threadTitle={selectedThread.title}
+            preferredIssueId={selectedThread.issue_id}
+          />
+        </Modal>
+      )}
 
       <Modal isOpen={isDieModalOpen} title="Select Die" onClose={onCloseDieModal}>
         <p className="mb-3 text-xs text-stone-400">
