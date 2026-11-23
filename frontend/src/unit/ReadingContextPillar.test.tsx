@@ -65,9 +65,10 @@ const baseContext: ReaderContextResponse = {
 }
 
 function renderPillar(context: ReaderContextResponse) {
-  return render(
-    <MemoryRouter>
-      <NavigationSpy navigate={navigateSpy} />
+  const router = createRouterHarness()
+  const RouterWrapper = router.wrapper
+  const result = render(
+    <RouterWrapper>
       <ReadingContextPillar
         activeRatingThread={ratingThread}
         readingOrders={[]}
@@ -79,8 +80,9 @@ function renderPillar(context: ReaderContextResponse) {
         isReaderContextLoading={false}
         readerContextError={null}
       />
-    </MemoryRouter>,
+    </RouterWrapper>,
   )
+  return { ...result, router }
 }
 
 describe('ReadingContextPillar dependency and continuity edges', () => {
@@ -457,8 +459,7 @@ describe('ReadingContextPillar crossover membership chips', () => {
       },
     }
 
-    renderPillar(context)
-    console.log('navigate implementation', navigateSpy.getMockImplementation())
+    const { router } = renderPillar(context)
 
     const button = await screen.findByRole('button', { name: /Show context for Animal Man issue 2/ })
     await userEvent.setup().click(button)
