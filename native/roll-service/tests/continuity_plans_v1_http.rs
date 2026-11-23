@@ -1141,3 +1141,195 @@ async fn repeated_authoring_saves_do_not_duplicate_preserved_placements() {
     drop(conn);
     assert_eq!(placements, 1, "repeated save duplicated a placement row");
 }
+
+#[tokio::test]
+async fn release_source_association_preserves_existing_subscription_state() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "release-existing").await;
+    let user_id = user_id_for(&state, "release-existing").await;
+    seed_thread_issue(&state, user_id, 810001, 810011, "Release Existing", "1").await;
+    seed_release_mapping(&state, 810001, 810101).await;
+    seed_owned_list(&state, user_id, 810201, "First authority").await;
+    seed_owned_list(&state, user_id, 810202, "Other authority").await;
+
+    let (status, plan) = create_plan(&state, &token, &csrf, simple_plan(json!([]))).await;
+    assert_eq!(status, StatusCode::CREATED, "{plan}");
+    let plan_id = i32::try_from(plan["id"].as_i64().expect("plan id")).expect("int4 plan id");
+    let conn = db::checkout(&state).await.expect("source seed connection");
+    conn.execute(
+        "INSERT INTO reading_plan_sources
+            (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+         VALUES ($1, 'fixture://release-existing', 810201, NOW())",
+        &[&plan_id],
+    )
+    .await
+    .expect("seed immutable list provenance");
+    conn.execute(
+        "INSERT INTO reading_plan_release_sources
+            (id, plan_id, thread_id, external_identity_id, enabled,
+             last_synced_at, created_at, updated_at)
+         VALUES (810301, $1, 810001, 810101, FALSE,
+                 '2024-01-02T03:04:05+00', '2023-01-01T00:00:00+00',
+                 '2024-01-02T03:04:05+00')",
+        &[&plan_id],
+    )
+    .await
+    .expect("seed existing disabled subscription");
+    let before = conn
+        .query_one(
+            "SELECT id, enabled, last_synced_at::text, created_at::text
+             FROM reading_plan_release_sources WHERE id = 810301",
+            &[],
+        )
+        .await
+        .expect("existing source snapshot");
+    let before_id: i32 = before.get(0);
+    let before_enabled: bool = before.get(1);
+    let before_synced: Option<String> = before.get(2);
+    let before_created: String = before.get(3);
+    drop(conn);
+
+    let payload = json!({
+        "plan_id": plan_id,
+        "thread_id": 810001,
+        "external_identity_id": 810101
+    });
+    let (status, associated) = authed_json(
+        &state,
+        "POST",
+        "/api/v2/continuity-plans/release-sources/",
+        &token,
+        &csrf,
+        Some(payload.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{associated}");
+    assert_eq!(associated["id"], before_id);
+    assert_eq!(associated["custom_cbl_list_id"], 810201);
+    assert_eq!(associated["enabled"], before_enabled);
+    assert_eq!(associated["last_synced_at"], json!(before_synced));
+    assert_eq!(associated["created_at"], json!(before_created));
+
+    // An idempotent create never overwrites an established association.
+    let mut other_list = payload;
+    other_list["custom_cbl_list_id"] = json!(810202);
+    let (status, repeated) = authed_json(
+        &state,
+        "POST",
+        "/api/v2/continuity-plans/release-sources/",
+        &token,
+        &csrf,
+        Some(other_list),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{repeated}");
+    assert_eq!(repeated["id"], before_id);
+    assert_eq!(repeated["custom_cbl_list_id"], 810201);
+
+    let conn = db::checkout(&state).await.expect("verification connection");
+    let persisted = conn
+        .query_one(
+            "SELECT custom_cbl_list_id, enabled, last_synced_at::text,
+                    created_at::text, updated_at::text
+             FROM reading_plan_release_sources WHERE id = 810301",
+            &[],
+        )
+        .await
+        .expect("persisted source");
+    assert_eq!(persisted.get::<_, Option<i32>>(0), Some(810201));
+    assert_eq!(persisted.get::<_, bool>(1), before_enabled);
+    assert_eq!(persisted.get::<_, Option<String>>(2), before_synced);
+    assert_eq!(persisted.get::<_, String>(3), before_created);
+    assert_eq!(
+        persisted.get::<_, String>(4),
+        associated["updated_at"].as_str().expect("updated timestamp")
+    );
+}
+
+#[tokio::test]
+async fn release_source_ambiguity_stays_unpaired_until_valid_explicit_association() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "release-ambiguous").await;
+    let user_id = user_id_for(&state, "release-ambiguous").await;
+    register_and_login(&state, "release-foreign").await;
+    let foreign_user_id = user_id_for(&state, "release-foreign").await;
+    seed_thread_issue(&state, user_id, 820001, 820011, "Release Ambiguous", "1").await;
+    seed_release_mapping(&state, 820001, 820101).await;
+    seed_owned_list(&state, user_id, 820201, "Authority A").await;
+    seed_owned_list(&state, user_id, 820202, "Authority B").await;
+    seed_owned_list(&state, foreign_user_id, 820203, "Foreign authority").await;
+
+    let (status, plan) = create_plan(&state, &token, &csrf, simple_plan(json!([]))).await;
+    assert_eq!(status, StatusCode::CREATED, "{plan}");
+    let plan_id = i32::try_from(plan["id"].as_i64().expect("plan id")).expect("int4 plan id");
+    let conn = db::checkout(&state).await.expect("provenance connection");
+    conn.batch_execute(&format!(
+        "INSERT INTO reading_plan_sources
+            (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+         VALUES
+            ({plan_id}, 'fixture://ambiguous-a', 820201, NOW()),
+            ({plan_id}, 'fixture://ambiguous-b', 820202, NOW());"
+    ))
+    .await
+    .expect("seed ambiguous provenance");
+    drop(conn);
+
+    let payload = json!({
+        "plan_id": plan_id,
+        "thread_id": 820001,
+        "external_identity_id": 820101
+    });
+    let (status, unpaired) = authed_json(
+        &state,
+        "POST",
+        "/api/v2/continuity-plans/release-sources/",
+        &token,
+        &csrf,
+        Some(payload.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{unpaired}");
+    assert_eq!(unpaired["custom_cbl_list_id"], Value::Null);
+    let source_id = unpaired["id"].as_i64().expect("source id");
+
+    let mut foreign = payload.clone();
+    foreign["custom_cbl_list_id"] = json!(820203);
+    let (status, rejected) = authed_json(
+        &state,
+        "POST",
+        "/api/v2/continuity-plans/release-sources/",
+        &token,
+        &csrf,
+        Some(foreign),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{rejected}");
+
+    let mut explicit = payload;
+    explicit["custom_cbl_list_id"] = json!(820202);
+    let (status, associated) = authed_json(
+        &state,
+        "POST",
+        "/api/v2/continuity-plans/release-sources/",
+        &token,
+        &csrf,
+        Some(explicit),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{associated}");
+    assert_eq!(associated["id"].as_i64(), Some(source_id));
+    assert_eq!(associated["custom_cbl_list_id"], 820202);
+
+    let conn = db::checkout(&state).await.expect("verification connection");
+    let rows = conn
+        .query(
+            "SELECT id, custom_cbl_list_id FROM reading_plan_release_sources
+             WHERE plan_id = $1",
+            &[&plan_id],
+        )
+        .await
+        .expect("one preserved source");
+    assert_eq!(rows.len(), 1, "failed ownership checks must not create sources");
+    assert_eq!(rows[0].get::<_, i32>(0) as i64, source_id);
+    assert_eq!(rows[0].get::<_, Option<i32>>(1), Some(820202));
+}
