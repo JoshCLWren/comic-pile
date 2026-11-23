@@ -68,25 +68,20 @@ await injectModuleDoubles(await import('../pages/RollPage/components/RollHeader'
   }
 })
 
-await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({ useRollBootstrap: vi.fn() }))
-await injectModuleDoubles(await import('../hooks/useRollResources'), () => ({
-  useRollDieState: vi.fn(),
-  useRollEligibleIssueIds: vi.fn(),
-  useRollIssueCards: vi.fn(),
+await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({}))
+await injectModuleDoubles(await import('../hooks/useRollResources'), () => ({}))
+await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({}))
+await injectModuleDoubles(await import('../hooks/useRoll'), () => ({
+  useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
+  useSetDie: vi.fn(),
+  useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
+  useRoll: vi.fn(),
+  useOverrideRoll: vi.fn(),
+  useDismissPending: vi.fn(),
 }))
-await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({ useBugReportRestore: vi.fn() }))
-await injectModuleDoubles(await import('../hooks/useRoll'), () => ({}))
 await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({ useSnooze: vi.fn() }))
-await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
-  useMoveToFront: vi.fn(),
-  useMoveToBack: vi.fn(),
-  useShuffleQueue: vi.fn(),
-  useActiveSeriesCount: () => null,
-}))
-await injectModuleDoubles(await import('../hooks'), async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../hooks')>()
-  return { ...actual, useRate: vi.fn() }
-})
+await injectModuleDoubles(await import('../hooks/useQueue'), () => ({}))
+await injectModuleDoubles(await import('../hooks'), () => ({}))
 await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({}))
 await injectModuleDoubles(await import('../services/api-threads'), () => ({}))
 await injectModuleDoubles(await import('../services/api'), () => ({}))
