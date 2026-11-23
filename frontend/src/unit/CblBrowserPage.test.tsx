@@ -737,6 +737,10 @@ describe('CblBrowserPage source list result count (#3614)', () => {
       expect(countLine()).toHaveTextContent('Updating source list count…')
     })
     expect(countLine()).not.toHaveTextContent('13 of 13 source lists')
+    expect(screen.queryByText(/^Showing \d+–\d+ of /)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Page \d+ of \d+$/)).not.toBeInTheDocument()
+    expect(screen.getByText('Updating page results…')).toBeInTheDocument()
+    expect(screen.getByText('Updating page…')).toBeInTheDocument()
 
     resolveSearch({ ...searchPage('x-men', [source]), catalog_total: 13 } as never)
     await waitFor(() => {

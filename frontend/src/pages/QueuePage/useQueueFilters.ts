@@ -23,7 +23,7 @@ export type QueueSortBy = 'position' | 'alphabetical' | 'created'
 export function useQueueFilters(
   threads: ThreadListItem[] | null | undefined,
   _sortBy: QueueSortBy,
-  searchQuery: string = '',
+  _searchQuery: string = '',
 ) {
   const activeThreads = useMemo(
     () => threads?.filter((thread) => thread.status === 'active') ?? [],
