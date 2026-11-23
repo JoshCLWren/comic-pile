@@ -75,6 +75,11 @@ async function waitForApplicationState(page: Page, viewport: AuditViewport): Pro
   })
 }
 
+async function openManualPicker(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Pick manually' }).click()
+  await expect(page.getByRole('dialog', { name: 'Pick manually' })).toBeVisible()
+}
+
 async function enterDeterministicRatingState(page: Page): Promise<void> {
   // The Roll rating workspace belongs exclusively to an actual random offer.
   // Pick manually now opens the shared direct issue card, not that workspace.
