@@ -383,11 +383,9 @@ describe('QueueThreadCard', () => {
     expect(detail.className).not.toMatch(/theme-danger/)
   })
 
-  it('communicates available vs disabled actions on blocked rows only', () => {
+  it('preserves automatic blocker guidance without disabling direct actions', () => {
     renderCard(createMockThread(), {
       isBlocked: true,
-      readDisabled: true,
-      readDisabledReason: 'Blocked by a prerequisite',
       snoozeDisabled: true,
       snoozeLabel: 'Snooze',
       snoozeIcon: '😴',
@@ -403,7 +401,7 @@ describe('QueueThreadCard', () => {
 
     const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
     const readButton = within(actionsGroup).getByRole('button', { name: 'Read & Rate' })
-    expect(readButton).toBeDisabled()
+    expect(readButton).toBeEnabled()
 
     expect(screen.getByRole('link', { name: 'Open Prequel Thread' })).toHaveAttribute(
       'href',
@@ -414,8 +412,6 @@ describe('QueueThreadCard', () => {
   it('includes Snooze in blocked-row guidance when snooze is available', () => {
     renderCard(createMockThread(), {
       isBlocked: true,
-      readDisabled: true,
-      readDisabledReason: 'Blocked by a prerequisite',
       snoozeDisabled: false,
       snoozeLabel: 'Snooze',
       snoozeIcon: '😴',
@@ -433,7 +429,6 @@ describe('QueueThreadCard', () => {
   it('does not show blocked-row action guidance on unblocked rows', () => {
     renderCard(createMockThread(), {
       isBlocked: false,
-      readDisabled: false,
       snoozeDisabled: false,
       snoozeLabel: 'Snooze',
       snoozeIcon: '😴',
@@ -455,14 +450,12 @@ describe('QueueThreadCard', () => {
     expect(screen.getByText('Crossovers unavailable')).toHaveClass('text-red-300/80')
   })
 
-  it('still disables Read & Rate when the thread is blocked', () => {
+  it('keeps manual Read & Rate enabled when the thread is blocked', () => {
     renderCard(createMockThread(), {
       isBlocked: true,
-      readDisabled: true,
-      readDisabledReason: 'Blocked by a prerequisite',
     })
 
-    expect(screen.getByRole('button', { name: 'Read & Rate' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Read & Rate' })).toBeEnabled()
   })
 
   it('composes hover with the drag-over tint instead of overriding it on the shared row', () => {
