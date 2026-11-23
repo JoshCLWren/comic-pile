@@ -885,6 +885,29 @@ pub(crate) async fn persist(
     let rating_changed = requested_rating.is_some_and(|rating| Some(rating) != old_rating);
     let final_rating = requested_rating.or(old_rating);
 
+    // If a direct Save already read the pending issue with this same rating,
+    // completing its preserved Roll offer is still a real Roll command. A
+    // second command with a fresh key after that offer has been retired is not:
+    // otherwise it could step the die twice without any pending offer.
+    if source == ROLL_OFFER_SOURCE && !status_changed && !rating_changed {
+        let pending = tx
+            .query_opt(
+                "SELECT 1 FROM sessions
+                 WHERE user_id=$1 AND ended_at IS NULL
+                   AND (pending_issue_id=$2
+                        OR (pending_issue_id IS NULL AND pending_thread_id=$3))
+                 FOR UPDATE",
+                &[&user.id(), &issue_id, &thread_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        if pending.is_none() {
+            return Err(ApiError::Conflict(
+                "This Roll offer is no longer pending. Refresh Roll and try again.".into(),
+            ));
+        }
+    }
+
     // Track die_after and source_roll_event_id for roll_offer source
     let mut die_after: Option<i32> = None;
     let mut source_roll_event_id: Option<i32> = None;
@@ -1903,6 +1926,19 @@ mod tests {
         tx.commit().await.unwrap();
         assert!(replay.replayed);
         assert_eq!(replay.die_after, Some(6));
+        assert_eq!(current_die(&client, 1).await, 6);
+
+        let tx = client.transaction().await.unwrap();
+        let second_completion = persist(
+            &tx,
+            user,
+            101,
+            &roll_offer(Some(4.5), "roll-after-direct-again-001"),
+        )
+        .await
+        .unwrap_err();
+        tx.rollback().await.unwrap();
+        assert_eq!(second_completion.status(), StatusCode::CONFLICT);
         assert_eq!(current_die(&client, 1).await, 6);
     }
 
