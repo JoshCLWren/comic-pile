@@ -245,4 +245,25 @@ describe('QueueControls', () => {
     expect(baseProps.onSearchChange).not.toHaveBeenCalled()
   })
 
+  it('shows the applied result count as accessible status text', () => {
+    render(<QueueControls {...baseProps} resultCountText="2 of 5 series" />)
+
+    const count = screen.getByTestId('queue-result-count')
+    expect(count).toHaveTextContent('2 of 5 series')
+    expect(count).toHaveAttribute('role', 'status')
+    expect(count).toHaveAttribute('aria-live', 'polite')
+  })
+
+  it('shows an updating state while a result count is pending', () => {
+    render(<QueueControls {...baseProps} resultCountText="2 of 5 series" resultCountPending />)
+
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Updating series count…')
+  })
+
+  it('shows an unavailable state when the result count has errored', () => {
+    render(<QueueControls {...baseProps} resultCountText="Series count unavailable." resultCountError />)
+
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Series count unavailable.')
+  })
+
 })
