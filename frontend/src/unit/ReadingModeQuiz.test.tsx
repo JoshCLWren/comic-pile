@@ -30,10 +30,13 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
 
 beforeEach(() => {
   vi.restoreAllMocks()
-  // SAFETY: the local fixture has the same question shape consumed by the quiz component.
-  vi.spyOn(readingMode, 'getQuizQuestions').mockReturnValue(QUIZ_QUESTIONS as never)
-  // SAFETY: this suite models a successful mutation with no response payload.
-  vi.spyOn(readingMode, 'setReadingModeFromQuiz').mockResolvedValue(undefined as never)
+  vi.spyOn(readingMode, 'getQuizQuestions').mockReturnValue(QUIZ_QUESTIONS)
+  vi.spyOn(readingMode, 'setReadingModeFromQuiz').mockResolvedValue({
+    bandwidth: 'balanced',
+    intent: 'momentum',
+    source: 'quiz',
+    suggested: false,
+  })
 })
 
 afterEach(() => {
