@@ -3,6 +3,7 @@ import { FormEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useSt
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CblAdoptionConfirmModal } from '../components/CblAdoptionConfirmModal'
+import { CblSearchForm } from '../components/CblSearchForm'
 import ReadingGraphOverlapDialog from '../components/ReadingGraphOverlapDialog'
 import ReadingGraphSummary from '../components/ReadingGraphSummary'
 import TriStateCheckbox from '../components/TriStateCheckbox'
@@ -802,27 +803,12 @@ export default function CblBrowserPage() {
         </p>
       </header>
 
-      <form onSubmit={search} className="flex flex-col gap-2 sm:flex-row">
-        <label className="sr-only" htmlFor="cbl-browser-search">
-          Search source lists
-        </label>
-        <input
-          id="cbl-browser-search"
-          value={queryDraft}
-          onChange={(event) => setQueryDraft(event.target.value)}
-          placeholder="Search source lists"
-          maxLength={200}
-          disabled={isCommitting}
-          className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-[var(--theme-text-primary)] disabled:opacity-50"
-        />
-        <button
-          type="submit"
-          disabled={isCommitting}
-          className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
-        >
-          Search
-        </button>
-      </form>
+      <CblSearchForm
+        queryDraft={queryDraft}
+        isCommitting={isCommitting}
+        onQueryDraftChange={setQueryDraft}
+        onSearch={search}
+      />
 
       {deepLinkedListId !== null ? (
         <div className="space-y-4">
