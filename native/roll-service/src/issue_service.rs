@@ -1049,19 +1049,21 @@ pub(crate) async fn persist(
     )
     .await
     .map_err(db::query_error)?;
-    // Q17: retire the pending Roll selection when its exact pinned issue is read.
-    // Legacy manual picks can pin only the thread, without an issue identity;
-    // completing an issue from that same thread must retire that pending pick,
-    // while a read from another thread must leave it alone.
-    tx.execute(
-        "UPDATE sessions SET pending_thread_id=NULL, pending_issue_id=NULL,
-             pending_thread_updated_at=NULL
-         WHERE user_id=$1 AND ended_at IS NULL
-           AND (pending_issue_id=$2 OR (pending_issue_id IS NULL AND pending_thread_id=$3))",
-        &[&user.id(), &issue_id, &thread_id],
-    )
-    .await
-    .map_err(db::query_error)?;
+    // Only an explicit Roll-offer completion may retire the pending offer.
+    // A direct read/rate is an independent manual intent, even when it targets
+    // the same exact issue currently offered by Roll. Do not change the user's
+    // pending selection, die, or queue state as a side effect of a manual Save.
+    if source == ROLL_OFFER_SOURCE {
+        tx.execute(
+            "UPDATE sessions SET pending_thread_id=NULL, pending_issue_id=NULL,
+                 pending_thread_updated_at=NULL
+             WHERE user_id=$1 AND ended_at IS NULL
+               AND (pending_issue_id=$2 OR (pending_issue_id IS NULL AND pending_thread_id=$3))",
+            &[&user.id(), &issue_id, &thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
 
     if let (Some((session_id, session_state)), Some(pre_positions), Some(pre_die)) =
         (pre_session, pre_positions, pre_die)
@@ -1617,21 +1619,26 @@ mod tests {
         assert_eq!(unmapped.issue.mapping_state, "unmapped");
         assert_eq!(unmapped.issue.cover_image_url, None);
         assert_eq!(unmapped.thread.next_unread_issue_id, Some(102));
-        // Reading the exact pending issue retires that offer (Q17); the earlier
-        // different manual read above left it untouched.
-        let cleared = first
+        // A manual read of the exact pending issue must also preserve the
+        // existing Roll offer. Only an actual Roll-offer completion clears it.
+        let unchanged = first
             .query_one(
-                "SELECT pending_thread_id,pending_issue_id FROM sessions WHERE id=1",
+                "SELECT pending_thread_id,pending_issue_id,manual_die FROM sessions WHERE id=1",
                 &[],
             )
             .await
             .unwrap();
         assert_eq!(
-            cleared.get::<_, Option<i32>>(0),
-            None,
-            "pending thread must clear with its selected issue"
+            unchanged.get::<_, Option<i32>>(0),
+            Some(10),
+            "a direct Save cannot replace or clear the pending Roll thread"
         );
-        assert_eq!(cleared.get::<_, Option<i32>>(1), None);
+        assert_eq!(
+            unchanged.get::<_, Option<i32>>(1),
+            Some(101),
+            "a direct Save cannot replace or clear the pending Roll issue"
+        );
+        assert_eq!(unchanged.get::<_, Option<i32>>(2), Some(12));
 
         let bounded = cards(&first, user, &[110, 999_999, 110, 201, 101])
             .await
