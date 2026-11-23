@@ -299,7 +299,7 @@ listThreads.mockImplementation(
     const { result, rerender } = renderHook(
       ({ sort }: { sort: QueueSortBy }) => useQueueThreads('', sort, threadsApi),
       // SAFETY: the sort literal is one of the values the sort type allows
-      { wrapper, initialProps: { sort: 'position' as QueueSortBy } },
+      { wrapper, initialProps: { sort: 'position' } },
     )
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
@@ -379,7 +379,7 @@ listThreads.mockImplementation(
     const wrapper = createWrapper()
     const { result, rerender } = renderHook(
       ({ sort }: { sort: QueueSortBy }) => useQueueThreads('', sort, threadsApi),
-      { wrapper, initialProps: { sort: 'position' as QueueSortBy } },
+      { wrapper, initialProps: { sort: 'position' } },
     )
 
     await waitFor(() => expect(result.current.resultCountText).toBe('5 of 5 series'))
