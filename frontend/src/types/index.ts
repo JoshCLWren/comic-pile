@@ -389,7 +389,10 @@ export interface SessionDetails {
   events: SessionEvent[];
 }
 
-export type ThreadListResponse = components['schemas']['QueueThreadListResponse']
+export type ThreadListResponse = components['schemas']['QueueThreadListResponse'] & {
+  /** Total active rows matching the applied search/filter state (#3614). */
+  filtered_count?: number | null
+}
 
 export interface SessionListResponse {
   sessions: SessionSummary[];
