@@ -1402,7 +1402,7 @@ mod tests {
             process(&state, &job, Some("TESTKEY123"))
                 .await
                 .expect("hydrate naive provider revision"),
-            "completed"
+            ("completed", false)
         );
 
         let connection = db::checkout(&state).await.expect("assert connection");
