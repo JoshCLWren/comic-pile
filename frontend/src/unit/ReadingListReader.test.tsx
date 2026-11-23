@@ -140,7 +140,7 @@ function entryFixture() {
 }
 
 it('shows read, later, excluded and inactive states with manual reading available', async () => {
-  const entry: NonNullable<ReaderView['entries']>[number] = entryFixture()
+  const entry: NonNullable<ReaderView['entries']>[number] = entryFixture();
   // SAFETY: Test-only mock seam cast.
   (mock_customCBLApi.getReader as any).mockResolvedValue({ ...view, mode: 'loose', entries: [
     { ...entry, availability: 'read', status: 'read' },
@@ -213,7 +213,7 @@ it('keeps progress usable when tags fail to load', async () => {
 })
 
 it('shows inherited tags and lets readers inspect their source', async () => {
-  const tag: { id: number; name: string; normalized_name: string; scope: 'private'; owner_user_id: number; color: string; created_at: string; updated_at: string } = { id: 9, name: 'Physical', normalized_name: 'physical', scope: 'private', owner_user_id: 1, color: '#3B82F6', created_at: '', updated_at: '' }
+  const tag: { id: number; name: string; normalized_name: string; scope: 'private'; owner_user_id: number; color: string; created_at: string; updated_at: string } = { id: 9, name: 'Physical', normalized_name: 'physical', scope: 'private', owner_user_id: 1, color: '#3B82F6', created_at: '', updated_at: '' };
   // SAFETY: Test-only mock seam cast.
   (mock_tagsApi.threadIssuesEffective as any).mockResolvedValue({ thread_id: 1, issues: [{
     target_type: 'Issue', target_id: 10, direct_tags: [], effective_tags: [{
@@ -298,7 +298,7 @@ it('does not guess an issue ID or fetch an issue cover for thread-only prerequis
 it('renders a safe empty list when a stale reader response omits entries', async () => {
   // Preserve the generated response type while modeling a stale server
   // payload that omitted `entries`. Do not weaken the runtime boundary.
-  const missingEntries = Object.assign({}, view, { entries: undefined }) as unknown as ReaderView
+  const missingEntries = Object.assign({}, view, { entries: undefined }) as unknown as ReaderView;
   // SAFETY: Test-only mock seam cast.
   (mock_customCBLApi.getReader as any).mockResolvedValue(missingEntries)
   mount()
