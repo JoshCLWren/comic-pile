@@ -372,6 +372,13 @@ pub(crate) async fn provider_exchange(
             || status == StatusCode::FORBIDDEN
             || status.as_u16() == 420
         {
+            // Retain only a redacted status/resource category: never log the
+            // credential-bearing URL, response body, or provider headers.
+            tracing::warn!(
+                status = status.as_u16(),
+                resource,
+                "comicvine provider returned throttled or forbidden status"
+            );
             return Ok(Exchange::Throttled {
                 status: status.as_u16(),
                 retry_after: response
@@ -1101,7 +1108,12 @@ async fn backfill_authorized(
                     WHERE r.id = c.id AND r.state NOT IN ('pending', 'running', 'deferred') \
                     RETURNING r.external_identity_id \
                  ) \
-                 SELECT external_identity_id, state FROM claimable",
+                 SELECT external_identity_id, \
+                         state IN ('pending', 'running', 'deferred') OR \
+                           (state = 'failed' AND next_attempt_at > now()) AS already_scheduled, \
+                         state IN ('completed', 'no_credits') OR \
+                           (state = 'failed' AND next_attempt_at <= now()) AS reopenable \
+                  FROM claimable",
                 &[&needs_fetch],
             )
             .await
