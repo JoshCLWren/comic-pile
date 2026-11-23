@@ -365,6 +365,7 @@ listThreads.mockImplementation(
   })
 
   it('marks a sort-key transition as placeholder instead of showing old counts', async () => {
+    // SAFETY: the paginator reads only id and title from this partial row fixture.
     listThreads
       .mockResolvedValueOnce({
         threads: [{ id: 1, title: 'Saga' } as never],
