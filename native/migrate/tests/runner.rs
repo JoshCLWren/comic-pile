@@ -175,6 +175,19 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .get(0);
     assert!(queue_groups, "V2 must create the queue-exclusion schema");
 
+    let release_list_link: bool = client
+        .query_one(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+             WHERE table_schema = 'public' \
+               AND table_name = 'reading_plan_release_sources' \
+               AND column_name = 'custom_cbl_list_id')",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(release_list_link, "V3 must add the Reading List association");
+
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
     drop(client);
