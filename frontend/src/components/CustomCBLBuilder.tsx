@@ -231,8 +231,10 @@ export default function CustomCBLBuilder({
       return customCBLApi.apply(selectedId, planId)
     },
     onSuccess: async (result) => {
-      await applyCommittedReadingPlan(queryClient, result)
+      // The response already contains the authoritative committed plan. Let the
+      // editor adopt it before waiting for unrelated dependent-query refreshes.
       onApplied?.(result)
+      await applyCommittedReadingPlan(queryClient, result)
       const added = result.added_issue_ids.length
       const skipped = result.skipped_existing_issue_ids.length
       setMessage(`Applied to Reading Plan: ${added} added${skipped ? `, ${skipped} already present` : ''}.`)

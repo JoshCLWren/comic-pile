@@ -18,7 +18,6 @@ import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import { useRollSnooze } from '../pages/RollPage/useRollSnooze'
 import { useRollActions } from '../pages/RollPage/useRollActions'
-import { threadsApi } from '../services/api-threads'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
 import type { RatingThread } from '../pages/RollPage/types'
 
@@ -136,7 +135,6 @@ function renderSnoozeFlow(apis: Apis) {
       },
       refetchBootstrap: bootstrap.refetch,
       enterRatingView: vi.fn().mockResolvedValue(undefined),
-      threadsApi,
       onSnoozeRefreshFailed,
     })
 

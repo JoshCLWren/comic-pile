@@ -1,18 +1,19 @@
 //! Bounded, awaited ComicVine metadata-repair worker.
 //! A Vercel request is the lifetime of the work: never spawn and forget a task.
 use crate::{
+    comicvine_limits::{parse_retry_after, python_envelope_ok},
     db,
     outbound::{OutboundHttp, OutboundRequest},
     ApiError, AppState,
 };
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::{HeaderMap, StatusCode},
     Json,
 };
 use bytes::Bytes;
 use http_body_util::BodyExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::{sync::Arc, time::Duration};
 
@@ -274,9 +275,20 @@ pub(crate) enum Exchange {
     },
 }
 
-/// One repair-worker provider call: 429/403 are throttles whose
-/// `Retry-After` is clamped to 60..=3600 s, other non-2xx statuses (420
-/// included) are unavailable, and the envelope must carry `status_code: 1`.
+/// Parse Python-compatible delta-seconds or an HTTP-date, then apply the
+/// repair worker's 60..=3600 second bound. Fractional values round up so
+/// integer persistence never retries before the provider's requested deadline.
+fn repair_retry_after_seconds(raw: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> u32 {
+    raw.and_then(|header| parse_retry_after(header, now))
+        .filter(|seconds| seconds.is_finite())
+        .map(|seconds| seconds.clamp(60.0, 3600.0).ceil() as u32)
+        .unwrap_or(60)
+}
+
+/// One repair-worker provider call, matching Python `ComicVineClient`
+/// throttle rules: 420/429 are throttles whose `Retry-After` is clamped to
+/// 60..=3600 s; any other non-2xx status (403 included) is a plain provider
+/// error. Success envelopes use the same status-code rule as the Python fetch.
 pub(crate) async fn provider_response(
     outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
@@ -285,17 +297,28 @@ pub(crate) async fn provider_response(
 ) -> Result<Value, ProviderFailure> {
     match provider_exchange(outbound, resource, extra_query, api_key).await? {
         Exchange::Throttled {
-            status: 429 | 403,
+            status: 420 | 429,
             retry_after,
-        } => Err(ProviderFailure::RateLimited(
-            retry_after
-                .and_then(|h| h.parse::<u32>().ok())
-                .unwrap_or(60)
-                .clamp(60, 3600),
-        )),
+        } => Err(ProviderFailure::RateLimited(repair_retry_after_seconds(
+            retry_after.as_deref(),
+            chrono::Utc::now(),
+        ))),
         Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
-        Exchange::Payload(payload) if payload["status_code"].as_i64() == Some(1) => Ok(payload),
-        Exchange::Payload(_) => Err(ProviderFailure::Unavailable),
+        Exchange::Payload(payload) => {
+            let status_code = payload.get("status_code").and_then(Value::as_i64);
+            if python_envelope_ok(&payload) {
+                Ok(payload)
+            } else {
+                // Never log provider-controlled error text: it can reflect the
+                // credential-bearing request URL. Keep only typed categories.
+                tracing::warn!(
+                    comicvine_status_code = ?status_code,
+                    resource,
+                    "comicvine provider returned non-success envelope"
+                );
+                Err(ProviderFailure::Unavailable)
+            }
+        }
     }
 }
 
@@ -310,9 +333,19 @@ pub(crate) async fn provider_exchange(
     if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
         return Err(ProviderFailure::Unavailable);
     }
+    // Python `_provider_url`: only collection endpoints use a trailing slash.
+    // Singular issue/volume requests must not redirect with credentials in the
+    // URL; the native transport intentionally does not follow redirects.
+    let collection_slash = if matches!(resource, "issues" | "search") {
+        "/"
+    } else {
+        ""
+    };
     let request = OutboundRequest {
         method: http::Method::GET,
-        path: format!("/api/{resource}/?api_key={api_key}&format=json{extra_query}"),
+        path: format!(
+            "/api/{resource}{collection_slash}?api_key={api_key}&format=json{extra_query}"
+        ),
         headers: vec![
             ("accept".to_string(), "application/json".to_string()),
             (
@@ -335,6 +368,13 @@ pub(crate) async fn provider_exchange(
             || status == StatusCode::FORBIDDEN
             || status.as_u16() == 420
         {
+            // Retain only a redacted status/resource category: never log the
+            // credential-bearing URL, response body, or provider headers.
+            tracing::warn!(
+                status = status.as_u16(),
+                resource,
+                "comicvine provider returned throttled or forbidden status"
+            );
             return Ok(Exchange::Throttled {
                 status: status.as_u16(),
                 retry_after: response
@@ -345,6 +385,11 @@ pub(crate) async fn provider_exchange(
             });
         }
         if !status.is_success() {
+            tracing::warn!(
+                status = status.as_u16(),
+                resource,
+                "comicvine provider returned non-success status"
+            );
             return Err(ProviderFailure::Unavailable);
         }
         if response
@@ -595,8 +640,14 @@ async fn persist(
 
 fn failure_transition(error: &ProviderFailure, attempt: i32) -> (&'static str, i32, &'static str) {
     match error {
+        ProviderFailure::RateLimited(_) if attempt >= 3 => ("failed", 21600, "rate_limit"),
         ProviderFailure::RateLimited(delay) => {
-            ("deferred", (*delay).min(3600) as i32, "rate_limit")
+            let local_backoff = if attempt <= 1 { 60 } else { 300 };
+            (
+                "deferred",
+                (*delay).max(local_backoff).min(3600) as i32,
+                "rate_limit",
+            )
         }
         ProviderFailure::InvalidPayload if attempt >= 3 => {
             ("failed", 21600, "invalid_provider_payload")
@@ -877,6 +928,200 @@ async fn hydrate_catalog_commit_with_key(
     }
 }
 
+/// Resolve the just-confirmed ComicVine issue identity for an owned issue.
+/// One set-based query: no per-row round trips and no N+1. Returns the identity
+/// id, its external id and the already-cached metadata used to preserve credits
+/// when the fresh roster is empty.
+async fn confirmed_identity_for_issue(
+    conn: &deadpool_postgres::Object,
+    user_id: i32,
+    issue_id: i32,
+) -> Option<(i32, String, Option<Value>)> {
+    let row = conn
+        .query_opt(
+            "SELECT e.id, e.external_id, e.metadata_json::text
+             FROM issue_external_identity_mappings m
+             JOIN external_identities e ON e.id = m.external_identity_id
+             JOIN issues i ON i.id = m.issue_id
+             JOIN threads t ON t.id = i.thread_id
+             WHERE m.issue_id = $1
+               AND t.user_id = $2
+               AND m.status = 'confirmed'
+               AND m.evidence_source = 'user_confirmed'
+               AND e.provider = 'comicvine'
+               AND e.entity_type = 'issue'
+             ORDER BY e.id
+             LIMIT 1",
+            &[&issue_id, &user_id],
+        )
+        .await
+        .ok()
+        .flatten()?;
+    let id: i32 = row.get(0);
+    let external_id: String = row.get(1);
+    let metadata = row
+        .get::<_, Option<String>>(2)
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok());
+    Some((id, external_id, metadata))
+}
+
+/// Settle the enqueued fallback refresh row after a successful inline fetch.
+/// Marks the row `completed` (credits present) or `no_credits` (genuine empty
+/// roster) with `completed_at = now()`, so `comicvine_issue::status` reports a
+/// truthful terminal state instead of `refresh_pending`. Only rows that are not
+/// currently leased by a repair worker are touched (fenced, no lock inversion).
+async fn settle_inline_refresh(
+    conn: &deadpool_postgres::Object,
+    identity_id: i32,
+    terminal_state: &str,
+) {
+    if let Err(err) = conn
+        .execute(
+            "UPDATE comicvine_metadata_refresh_requests
+             SET state = $2, lease_expires_at = NULL, last_error = NULL,
+                 completed_at = now(), next_attempt_at = now(), updated_at = now()
+             WHERE external_identity_id = $1
+               AND state IN ('pending', 'deferred', 'failed')",
+            &[&identity_id, &terminal_state],
+        )
+        .await
+    {
+        tracing::warn!(
+            error_kind = crate::error_kind(&err),
+            "inline identity refresh settle failed"
+        );
+    }
+}
+
+/// Synchronous, bounded creator-credit hydration for identity confirm/replace.
+///
+/// Runs *after* the mapping transaction commits: a provider failure, timeout or
+/// unconfigured key never rolls back the confirmation. On success the fetched
+/// credits (names + roles) and deep metadata are merged into the identity's
+/// `metadata_json`, so the immediately-following `getIssueIntelligence` refetch
+/// shows them without waiting on a background worker. The enqueued refresh row
+/// remains the fallback when this work cannot complete: nothing is persisted on
+/// failure, leaving the row `pending`. The whole operation is enclosed in a
+/// single `timeout(budget, ...)` that covers the DB and provider calls.
+pub(crate) async fn hydrate_confirmed_identity_inline(
+    state: &AppState,
+    user_id: i32,
+    issue_id: i32,
+    budget: Duration,
+    api_key: &str,
+) {
+    if budget.is_zero() || api_key.is_empty() {
+        return;
+    }
+    let run = async {
+        let conn = match db::checkout(state).await {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let Some((identity_id, external_id, cached)) =
+            confirmed_identity_for_issue(&conn, user_id, issue_id).await
+        else {
+            return;
+        };
+        let Some(comicvine_id) = issue_id_from_external(&external_id) else {
+            return;
+        };
+        let provider_data = match provider_issue(&state.outbound, comicvine_id, api_key).await {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::info!(
+                    ?error,
+                    "inline identity hydration provider call failed; refresh row kept"
+                );
+                return;
+            }
+        };
+        let (mut patch, has, url, updated) = match normalized_metadata(&provider_data, comicvine_id)
+        {
+            Ok(ok) => ok,
+            Err(error) => {
+                tracing::info!(
+                    ?error,
+                    "inline identity hydration normalization failed; refresh row kept"
+                );
+                return;
+            }
+        };
+        // A sparser fresh roster must never erase cached creator credits.
+        if !has {
+            preserve_cached_credits(&mut patch, cached.as_ref());
+        }
+        let effective = has
+            || patch["creator_credits"]
+                .as_array()
+                .is_some_and(|v| !v.is_empty());
+        let Ok(json_patch) = serde_json::to_string(&patch) else {
+            return;
+        };
+        if let Err(err) = conn
+            .execute(
+                "UPDATE external_identities
+                 SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb)
+                                      || ($2::text)::jsonb)::json,
+                     external_url = COALESCE($3, external_url),
+                     provider_updated_at = COALESCE(($4::text)::timestamptz, provider_updated_at),
+                     updated_at = now()
+                 WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'issue'",
+                &[&identity_id, &json_patch, &url, &updated],
+            )
+            .await
+        {
+            tracing::warn!(
+                error_kind = crate::error_kind(&err),
+                "inline identity hydration metadata write failed"
+            );
+            return;
+        }
+        settle_inline_refresh(
+            &conn,
+            identity_id,
+            if effective { "completed" } else { "no_credits" },
+        )
+        .await;
+    };
+    if tokio::time::timeout(budget, run).await.is_err() {
+        tracing::info!("inline identity creator-credit hydration budget exhausted");
+    }
+}
+
+/// Extract the numeric ComicVine issue id from an external identity id.
+fn issue_id_from_external(external_id: &str) -> Option<u32> {
+    issue_id(external_id)
+}
+
+/// Keep cached creator credits when a fresh fetch did not include a roster.
+fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
+    let Some(existing) = cached else {
+        return;
+    };
+    if existing["creator_credits"]
+        .as_array()
+        .is_some_and(|v| !v.is_empty())
+    {
+        if let Some(obj) = patch.as_object_mut() {
+            obj.insert(
+                "creator_credits".to_owned(),
+                existing["creator_credits"].clone(),
+            );
+        }
+    } else if existing["raw_provider_payload"]["person_credits"]
+        .as_array()
+        .is_some_and(|v| !v.is_empty())
+    {
+        if let Some(obj) = patch.as_object_mut() {
+            obj.insert(
+                "creator_credits".to_owned(),
+                compact_refs(&existing["raw_provider_payload"]["person_credits"]),
+            );
+        }
+    }
+}
+
 /// CRON_SECRET authenticated, awaited Rust repair batch. No detached task or silent success.
 pub async fn drain(
     State(state): State<Arc<AppState>>,
@@ -917,6 +1162,189 @@ async fn drain_authorized(
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }
+    Ok(Json(report))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BackfillQuery {
+    #[serde(default = "default_backfill_dry_run")]
+    pub dry_run: bool,
+    #[serde(default = "default_backfill_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub after_id: i32,
+}
+
+fn default_backfill_dry_run() -> bool {
+    true
+}
+
+fn default_backfill_limit() -> i64 {
+    500
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct BackfillReport {
+    pub dry_run: bool,
+    pub scanned: u32,
+    pub needs_enqueue: u32,
+    pub enqueued: u32,
+    pub already_queued_or_fresh: u32,
+    pub next_after_id: Option<i32>,
+}
+
+/// CRON_SECRET authenticated backfill for confirmed ComicVine issue identities
+/// that lack deep metadata (#5592). Bounded and resumable: scan by identity id
+/// cursor, dry-run by default, set-based enqueue when `dry_run=false`.
+pub async fn backfill(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<BackfillQuery>,
+) -> Result<Json<BackfillReport>, ApiError> {
+    let secret = std::env::var("CRON_SECRET").ok();
+    backfill_authorized(&state, &headers, secret.as_deref(), query).await
+}
+
+/// Handler body with the expected secret injected for deterministic route and
+/// accounting regressions without mutating process-global cron configuration.
+async fn backfill_authorized(
+    state: &AppState,
+    headers: &HeaderMap,
+    expected: Option<&str>,
+    query: BackfillQuery,
+) -> Result<Json<BackfillReport>, ApiError> {
+    authorize(headers, expected)?;
+    let limit = query.limit.clamp(1, 2000);
+    let mut connection = db::checkout(state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    let rows = tx
+        .query(
+            "SELECT e.id, e.metadata_json::text \
+             FROM external_identities e \
+             WHERE e.provider = 'comicvine' \
+               AND e.entity_type = 'issue' \
+               AND e.id > $1 \
+               AND EXISTS ( \
+                 SELECT 1 FROM issue_external_identity_mappings m \
+                 WHERE m.external_identity_id = e.id \
+                   AND m.status = 'confirmed' \
+               ) \
+             ORDER BY e.id \
+             LIMIT $2",
+            &[&query.after_id, &limit],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut report = BackfillReport {
+        dry_run: query.dry_run,
+        ..Default::default()
+    };
+    let now = chrono::Utc::now();
+    let mut needs_fetch: Vec<i32> = Vec::new();
+    let mut last_id: Option<i32> = None;
+    for row in &rows {
+        report.scanned += 1;
+        let id: i32 = row.get(0);
+        last_id = Some(id);
+        let metadata: Value = row
+            .get::<_, Option<String>>(1)
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or(Value::Null);
+        if needs_provider_fetch(&metadata, now) {
+            report.needs_enqueue += 1;
+            needs_fetch.push(id);
+        } else {
+            report.already_queued_or_fresh += 1;
+        }
+    }
+    report.next_after_id = if rows.len() as i64 == limit {
+        last_id
+    } else {
+        None
+    };
+
+    if query.dry_run && !needs_fetch.is_empty() {
+        // Dry-run classifies existing active work without locking or writing.
+        let active_rows = tx
+            .query(
+                "SELECT external_identity_id \
+                 FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = ANY($1::int[]) \
+                   AND state IN ('pending', 'running', 'deferred')",
+                &[&needs_fetch],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let already_active = active_rows.len() as u32;
+        report.already_queued_or_fresh += already_active;
+        report.needs_enqueue = report.needs_enqueue.saturating_sub(already_active);
+    }
+
+    if !query.dry_run && !needs_fetch.is_empty() {
+        let claimable_rows = tx
+            .query(
+                "WITH claimable AS ( \
+                    SELECT id, external_identity_id, state \
+                    FROM comicvine_metadata_refresh_requests \
+                    WHERE external_identity_id = ANY($1::int[]) \
+                    FOR UPDATE SKIP LOCKED \
+                 ), reopened AS ( \
+                    UPDATE comicvine_metadata_refresh_requests r \
+                    SET state = 'pending', attempts = 0, next_attempt_at = now(), \
+                        lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
+                        updated_at = now() \
+                    FROM claimable c \
+                    WHERE r.id = c.id AND r.state NOT IN ('pending', 'running', 'deferred') \
+                    RETURNING r.external_identity_id \
+                 ) \
+                 SELECT external_identity_id, state FROM claimable",
+                &[&needs_fetch],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let claimable: std::collections::HashMap<i32, String> = claimable_rows
+            .iter()
+            .map(|row| (row.get::<_, i32>(0), row.get::<_, String>(1)))
+            .collect();
+        let already_active = claimable
+            .values()
+            .filter(|state| matches!(state.as_str(), "pending" | "running" | "deferred"))
+            .count() as u32;
+        let reopened = claimable.len() as u32 - already_active;
+        let missing: Vec<i32> = needs_fetch
+            .iter()
+            .copied()
+            .filter(|id| !claimable.contains_key(id))
+            .collect();
+        let mut inserted = 0_u32;
+        if !missing.is_empty() {
+            inserted = tx.execute(
+                "INSERT INTO comicvine_metadata_refresh_requests \
+                    (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
+                 SELECT v, 'pending', 0, now(), now(), now() \
+                 FROM unnest($1::int[]) AS v \
+                 WHERE NOT EXISTS ( \
+                     SELECT 1 FROM comicvine_metadata_refresh_requests \
+                     WHERE external_identity_id = v \
+                 ) \
+                 ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
+                &[&missing],
+            )
+            .await
+            .map_err(db::query_error)? as u32;
+        }
+        // Only inserts and reopened terminal rows are new work. Active rows,
+        // plus rows concurrently locked or inserted by another worker, were
+        // already queued and must not inflate the operator-facing audit.
+        let unresolved = missing.len() as u32 - inserted;
+        report.enqueued = reopened + inserted;
+        report.already_queued_or_fresh += already_active + unresolved;
+        report.needs_enqueue = report
+            .needs_enqueue
+            .saturating_sub(already_active + unresolved);
+    }
+
+    tx.commit().await.map_err(db::query_error)?;
     Ok(Json(report))
 }
 
@@ -973,6 +1401,50 @@ mod tests {
         drop(Object::take(connection));
     }
 
+    async fn seed_confirmed_identity_for_thread(
+        connection: &Object,
+        thread_id: i32,
+        issue_number: &str,
+        external_id: &str,
+        metadata: &Value,
+    ) -> i32 {
+        let identity_id: i32 = connection
+            .query_one(
+                "INSERT INTO external_identities \
+                 (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'issue', $1, ($2::text)::json, now(), now()) \
+                 RETURNING id",
+                &[&external_id, &metadata.to_string()],
+            )
+            .await
+            .expect("backfill identity")
+            .get(0);
+        // Bind position as its own typed parameter: reusing $2 for the varchar
+        // issue_number column and a text-to-int cast makes Postgres deduce
+        // inconsistent parameter types (E42P08).
+        let position: i32 = issue_number.parse().expect("numeric issue number");
+        let issue_id: i32 = connection
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, status, position, created_at) \
+                 VALUES ($1, $2, 'unread', $3, now()) RETURNING id",
+                &[&thread_id, &issue_number, &position],
+            )
+            .await
+            .expect("backfill issue")
+            .get(0);
+        connection
+            .execute(
+                "INSERT INTO issue_external_identity_mappings \
+                 (issue_id, external_identity_id, status, evidence_source, confidence, \
+                  evidence_json, created_at, updated_at) \
+                 VALUES ($1, $2, 'confirmed', 'seed', 1.0, '{}'::json, now(), now())",
+                &[&issue_id, &identity_id],
+            )
+            .await
+            .expect("confirmed backfill mapping");
+        identity_id
+    }
+
     fn deep_provider_result(issue_id: u32, date_last_updated: &str) -> Value {
         json!({
             "id": issue_id,
@@ -1001,6 +1473,22 @@ mod tests {
             HeaderMap::new(),
             Bytes::from(body),
         );
+    }
+
+    async fn drain_for_test(state: &AppState) -> DrainReport {
+        std::env::set_var("COMICVINE_API_KEY", "TESTKEY123");
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer test-secret".parse().unwrap());
+        drain_authorized(state, &headers, Some("test-secret"))
+            .await
+            .expect("authorized drain")
+            .0
+    }
+
+    fn cron_headers() -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer test-secret".parse().unwrap());
+        headers
     }
 
     /// #4516 legacy oracle: `_provider_timestamp` returned a naive datetime
@@ -1075,7 +1563,7 @@ mod tests {
         let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].host, HOST);
-        assert!(calls[0].path.starts_with("/api/issue/4000-29319/"));
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
     }
 
     /// The inline catalog path runs only after its identity transaction has
@@ -1183,7 +1671,244 @@ mod tests {
 
         let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1, "cross-owner ids must not be fetched");
-        assert!(calls[0].path.starts_with("/api/issue/4000-29319/"));
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
+    }
+
+    /// Seed an owned issue with a freshly `user_confirmed` ComicVine identity
+    /// and the pending fallback refresh row written by the enqueue savepoint.
+    async fn seed_confirmed_identity(state: &AppState, external_id: &str, metadata: &Value) -> i32 {
+        let connection = db::checkout(state).await.expect("seed connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username, is_admin, created_at) \
+                 VALUES (1, 'confirm-owner', false, now()); \
+                 INSERT INTO threads \
+                   (id, title, format, issues_remaining, queue_position, status, user_id) \
+                 VALUES (1, 'Owned', 'Series', 1, 1, 'active', 1); \
+                 INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) \
+                 VALUES (1, 1, '3', 'unread', 1, now());",
+            )
+            .await
+            .expect("seed owner");
+        let identity_id: i32 = connection
+            .query_one(
+                "INSERT INTO external_identities \
+                   (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'issue', $1, ($2::text)::json, now(), now()) \
+                 RETURNING id",
+                &[&external_id, &metadata.to_string()],
+            )
+            .await
+            .expect("seed identity")
+            .get(0);
+        connection
+            .execute(
+                "INSERT INTO issue_external_identity_mappings \
+                   (issue_id, external_identity_id, status, evidence_source, confidence, \
+                    evidence_json, created_at, updated_at) \
+                 VALUES (1, $1, 'confirmed', 'user_confirmed', 1.0, '{}'::json, now(), now())",
+                &[&identity_id],
+            )
+            .await
+            .expect("seed mapping");
+        connection
+            .execute(
+                "INSERT INTO comicvine_metadata_refresh_requests \
+                   (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
+                 VALUES ($1, 'pending', 0, now(), now(), now())",
+                &[&identity_id],
+            )
+            .await
+            .expect("seed pending refresh");
+        drop(Object::take(connection));
+        identity_id
+    }
+
+    #[tokio::test]
+    async fn inline_hydration_persists_creator_names_and_roles_after_confirm() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("read hydrated metadata")
+                .get(0),
+        )
+        .expect("metadata JSON");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+        assert_eq!(metadata["creator_credits"][0]["role"], "writer");
+        assert_eq!(metadata["story_arcs"][0]["name"], "Arc");
+        let request_state: String = connection
+            .query_one(
+                "SELECT state FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("read refresh state")
+            .get(0);
+        assert_eq!(request_state, "completed");
+        drop(Object::take(connection));
+        let calls = state.recording_fake().expect("recording provider").calls();
+        assert_eq!(calls.len(), 1);
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
+    }
+
+    #[tokio::test]
+    async fn inline_hydration_failure_keeps_mapping_and_pending_refresh() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
+        // No canned provider response: the recording fake fails closed.
+
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let mapping_status: String = connection
+            .query_one(
+                "SELECT m.status FROM issue_external_identity_mappings m \
+                 WHERE m.external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("mapping kept")
+            .get(0);
+        assert_eq!(mapping_status, "confirmed");
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("read metadata")
+                .get(0),
+        )
+        .expect("metadata JSON");
+        assert_eq!(
+            metadata,
+            json!({}),
+            "provider failure must not fabricate credits"
+        );
+        let request_state: String = connection
+            .query_one(
+                "SELECT state FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("read refresh state")
+            .get(0);
+        assert_eq!(request_state, "pending", "fallback refresh row must remain");
+        drop(Object::take(connection));
+    }
+
+    #[tokio::test]
+    async fn inline_hydration_zero_credits_persists_truthful_terminal_marker() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
+        let mut empty = deep_provider_result(29319, "2026-11-01 17:33:53");
+        empty["person_credits"] = json!([]);
+        let body = json!({"status_code": 1, "results": empty}).to_string();
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(body),
+        );
+
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let request_state: String = connection
+            .query_one(
+                "SELECT state FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("read refresh state")
+            .get(0);
+        assert_eq!(request_state, "no_credits");
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("read metadata")
+                .get(0),
+        )
+        .expect("metadata JSON");
+        assert_eq!(metadata["creator_credits"], json!([]));
+        assert!(metadata["raw_provider_payload"].is_object());
+        drop(Object::take(connection));
+    }
+
+    #[tokio::test]
+    async fn inline_hydration_empty_roster_preserves_cached_credits() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_confirmed_identity(
+            &state,
+            "4000-29319",
+            &json!({"creator_credits": [{"id": 9, "name": "Cached Writer", "role": "writer"}]}),
+        )
+        .await;
+        let mut empty = deep_provider_result(29319, "2026-11-01 17:33:53");
+        empty["person_credits"] = json!([]);
+        let body = json!({"status_code": 1, "results": empty}).to_string();
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(body),
+        );
+
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("read metadata")
+                .get(0),
+        )
+        .expect("metadata JSON");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Cached Writer");
+        let request_state: String = connection
+            .query_one(
+                "SELECT state FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("read refresh state")
+            .get(0);
+        assert_eq!(request_state, "completed");
+        drop(Object::take(connection));
     }
 
     #[tokio::test]
@@ -1678,5 +2403,499 @@ mod tests {
             120
         );
         assert_eq!(issue_id("4000-29319"), Some(29319));
+    }
+
+    /// #5592: backfill dry-run and write reports share truthful accounting,
+    /// resume by identity cursor, and leave user reading state untouched.
+    #[tokio::test]
+    async fn backfill_is_bounded_idempotent_and_preserves_reading_state() {
+        let Some(state) = crate::test_support::test_state(4).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        let user_id: i32 = connection
+            .query_one(
+                "INSERT INTO users (username) VALUES ('backfill-owner') RETURNING id",
+                &[],
+            )
+            .await
+            .expect("backfill user")
+            .get(0);
+        let thread_id: i32 = connection
+            .query_one(
+                "INSERT INTO threads \
+                 (title, format, issues_remaining, total_issues, queue_position, status, \
+                  user_id, last_rating, reading_progress) \
+                 VALUES ('Backfill', 'Comic', 3, 4, 7, 'active', $1, 4.5, 'in_progress') \
+                 RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .expect("backfill thread")
+            .get(0);
+        let missing = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "1",
+            "4000-30001",
+            &json!({}),
+        )
+        .await;
+        let active = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "2",
+            "4000-30002",
+            &json!({}),
+        )
+        .await;
+        let terminal = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "3",
+            "4000-30003",
+            &json!({}),
+        )
+        .await;
+        let fresh_metadata =
+            normalized_metadata(&deep_provider_result(30004, "2026-11-01 17:33:53"), 30004)
+                .expect("fresh metadata")
+                .0;
+        let fresh = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "4",
+            "4000-30004",
+            &fresh_metadata,
+        )
+        .await;
+        seed_request(&state, active, "pending", 4, "1 hour", None).await;
+        seed_request(&state, terminal, "failed", 3, "1 hour", None).await;
+        connection
+            .execute(
+                "UPDATE issues SET status = 'read', read_at = now() \
+                 WHERE thread_id = $1 AND issue_number = '1'",
+                &[&thread_id],
+            )
+            .await
+            .expect("reading state");
+        connection
+            .execute(
+                "INSERT INTO events (type, thread_id, issue_id, user_id) \
+                 SELECT 'item_read', thread_id, id, $2 FROM issues \
+                 WHERE thread_id = $1 AND issue_number = '1'",
+                &[&thread_id, &user_id],
+            )
+            .await
+            .expect("reading history");
+
+        let dry = backfill_authorized(
+            &state,
+            &cron_headers(),
+            Some("test-secret"),
+            BackfillQuery {
+                dry_run: true,
+                limit: 500,
+                after_id: 0,
+            },
+        )
+        .await
+        .expect("dry backfill")
+        .0;
+        assert_eq!(dry.scanned, 4);
+        assert_eq!(dry.needs_enqueue, 2, "missing and terminal rows need work");
+        assert_eq!(dry.enqueued, 0);
+        assert_eq!(dry.already_queued_or_fresh, 2, "active and fresh rows");
+        assert_eq!(dry.next_after_id, None);
+        let unchanged: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM comicvine_metadata_refresh_requests",
+                &[],
+            )
+            .await
+            .expect("dry-run ledger")
+            .get(0);
+        assert_eq!(unchanged, 2, "dry-run must not insert or reopen rows");
+
+        let written = backfill_authorized(
+            &state,
+            &cron_headers(),
+            Some("test-secret"),
+            BackfillQuery {
+                dry_run: false,
+                limit: 500,
+                after_id: 0,
+            },
+        )
+        .await
+        .expect("write backfill")
+        .0;
+        assert_eq!(written.scanned, 4);
+        assert_eq!(written.needs_enqueue, 2);
+        assert_eq!(written.enqueued, 2, "one insert plus one reopen");
+        assert_eq!(written.already_queued_or_fresh, 2);
+        let rows = connection
+            .query(
+                "SELECT external_identity_id, state, attempts, last_error \
+                 FROM comicvine_metadata_refresh_requests ORDER BY external_identity_id",
+                &[],
+            )
+            .await
+            .expect("written ledger");
+        assert_eq!(rows.len(), 3, "fresh metadata must not be enqueued");
+        assert!(rows.iter().all(|row| row.get::<_, i32>(0) != fresh));
+        for row in &rows {
+            let identity_id: i32 = row.get(0);
+            assert_eq!(row.get::<_, String>(1), "pending");
+            if identity_id == active {
+                assert_eq!(row.get::<_, i32>(2), 4, "active work is untouched");
+            } else {
+                assert_eq!(row.get::<_, i32>(2), 0);
+                assert!(identity_id == missing || identity_id == terminal);
+            }
+        }
+
+        let rerun = backfill_authorized(
+            &state,
+            &cron_headers(),
+            Some("test-secret"),
+            BackfillQuery {
+                dry_run: false,
+                limit: 500,
+                after_id: 0,
+            },
+        )
+        .await
+        .expect("idempotent backfill")
+        .0;
+        assert_eq!(rerun.scanned, 4);
+        assert_eq!(rerun.needs_enqueue, 0);
+        assert_eq!(rerun.enqueued, 0, "active rows are not new work");
+        assert_eq!(rerun.already_queued_or_fresh, 4);
+
+        let first_page = backfill_authorized(
+            &state,
+            &cron_headers(),
+            Some("test-secret"),
+            BackfillQuery {
+                dry_run: true,
+                limit: 2,
+                after_id: 0,
+            },
+        )
+        .await
+        .expect("first cursor page")
+        .0;
+        assert_eq!(first_page.scanned, 2);
+        assert_eq!(first_page.next_after_id, Some(active));
+        let second_page = backfill_authorized(
+            &state,
+            &cron_headers(),
+            Some("test-secret"),
+            BackfillQuery {
+                dry_run: true,
+                limit: 3,
+                after_id: first_page.next_after_id.expect("cursor"),
+            },
+        )
+        .await
+        .expect("second cursor page")
+        .0;
+        assert_eq!(second_page.scanned, 2);
+        assert_eq!(second_page.next_after_id, None);
+
+        let thread = connection
+            .query_one(
+                "SELECT queue_position, last_rating, reading_progress FROM threads WHERE id = $1",
+                &[&thread_id],
+            )
+            .await
+            .expect("preserved thread");
+        assert_eq!(thread.get::<_, i32>(0), 7);
+        assert_eq!(thread.get::<_, Option<f64>>(1), Some(4.5));
+        assert_eq!(
+            thread.get::<_, Option<String>>(2).as_deref(),
+            Some("in_progress")
+        );
+        let reading = connection
+            .query_one(
+                "SELECT \
+                   (SELECT count(*) FROM issues WHERE thread_id = $1 AND status = 'read'), \
+                   (SELECT count(*) FROM events WHERE thread_id = $1 AND type = 'item_read'), \
+                   (SELECT count(*) FROM issue_external_identity_mappings m \
+                    JOIN issues i ON i.id = m.issue_id \
+                    WHERE i.thread_id = $1 AND m.status = 'confirmed')",
+                &[&thread_id],
+            )
+            .await
+            .expect("preserved reading and mappings");
+        assert_eq!(reading.get::<_, i64>(0), 1);
+        assert_eq!(reading.get::<_, i64>(1), 1);
+        assert_eq!(reading.get::<_, i64>(2), 4);
+    }
+
+    /// #5592: ComicVine 420 is a rate limit (Python parity), not provider_unavailable.
+    #[tokio::test]
+    async fn provider_response_treats_420_as_rate_limited() {
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let mut headers = HeaderMap::new();
+        headers.insert("retry-after", "120".parse().unwrap());
+        fake.push_ok(StatusCode::from_u16(420).unwrap(), headers, Bytes::new());
+        let outbound: Arc<dyn crate::outbound::OutboundHttp> = fake;
+        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
+            .await
+            .expect_err("420 must be rate limited");
+        assert!(matches!(err, ProviderFailure::RateLimited(120)));
+    }
+
+    /// #5592: 403 is a plain provider error (Python parity), not a throttle.
+    #[tokio::test]
+    async fn provider_response_treats_403_as_unavailable() {
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        fake.push_ok(StatusCode::FORBIDDEN, HeaderMap::new(), Bytes::new());
+        let outbound: Arc<dyn crate::outbound::OutboundHttp> = fake;
+        let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
+            .await
+            .expect_err("403 must be unavailable");
+        assert!(matches!(err, ProviderFailure::Unavailable));
+    }
+
+    /// #5592: worker fetches a singular issue and persists creator credits.
+    #[tokio::test]
+    async fn drain_persists_creator_credits_for_pending_identity() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+
+        let report = drain_for_test(&state).await;
+        assert_eq!(report.claimed, 1);
+        assert_eq!(report.completed, 1);
+        assert_eq!(report.deferred, 0);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let row = connection
+            .query_one(
+                "SELECT e.metadata_json::text, r.state \
+                 FROM external_identities e \
+                 JOIN comicvine_metadata_refresh_requests r ON r.external_identity_id = e.id \
+                 WHERE e.id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("row");
+        let metadata: Value = serde_json::from_str(row.get(0)).expect("json");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+        assert_eq!(row.get::<_, String>(1), "completed");
+    }
+
+    /// #5592: legitimate empty credits remain distinct from transient failure.
+    #[tokio::test]
+    async fn drain_marks_explicit_empty_credits_as_no_credits() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        let body = json!({
+            "status_code": 1,
+            "results": {
+                "id": 29319,
+                "name": "Issue",
+                "issue_number": "1",
+                "cover_date": "2020-01-01",
+                "store_date": "2020-01-01",
+                "image": {"medium_url": "https://img.example/m.jpg"},
+                "volume": {"id": 1, "name": "V"},
+                "person_credits": [],
+                "character_credits": [],
+                "team_credits": [],
+                "story_arc_credits": [],
+                "date_last_updated": "2026-11-01 17:33:53",
+            }
+        })
+        .to_string();
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(body),
+        );
+
+        let report = drain_for_test(&state).await;
+        assert_eq!(report.claimed, 1);
+        assert_eq!(report.no_credits, 1);
+        assert_eq!(report.deferred, 0);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let state_value: String = connection
+            .query_one(
+                "SELECT state FROM comicvine_metadata_refresh_requests WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("row")
+            .get(0);
+        assert_eq!(state_value, "no_credits");
+    }
+
+    /// #5592: a transient provider failure stays durable, observes its
+    /// cooldown, and succeeds on a later worker invocation without reopening
+    /// the issue or creating another request.
+    #[tokio::test]
+    async fn drain_retries_a_transient_failure_after_its_cooldown() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::SERVICE_UNAVAILABLE,
+            HeaderMap::new(),
+            Bytes::new(),
+        );
+
+        let first = drain_for_test(&state).await;
+        assert_eq!(first.claimed, 1);
+        assert_eq!(first.deferred, 1);
+        assert_eq!(first.failed, 0);
+        let connection = db::checkout(&state).await.expect("request connection");
+        let row = connection
+            .query_one(
+                "SELECT state, attempts, last_error, next_attempt_at > now() \
+                 FROM comicvine_metadata_refresh_requests WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("deferred request");
+        assert_eq!(row.get::<_, String>(0), "deferred");
+        assert_eq!(row.get::<_, i32>(1), 1);
+        assert_eq!(
+            row.get::<_, Option<String>>(2).as_deref(),
+            Some("provider_unavailable")
+        );
+        assert!(row.get::<_, bool>(3));
+
+        let cooled = drain_for_test(&state).await;
+        assert_eq!(cooled.claimed, 0, "backoff must suppress immediate retries");
+        connection
+            .execute(
+                "UPDATE comicvine_metadata_refresh_requests \
+                 SET next_attempt_at = now() - interval '1 second' \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("make retry due");
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+
+        let retry = drain_for_test(&state).await;
+        assert_eq!(retry.claimed, 1);
+        assert_eq!(retry.completed, 1);
+        let row = connection
+            .query_one(
+                "SELECT r.state, r.attempts, r.last_error, e.metadata_json::text \
+                 FROM comicvine_metadata_refresh_requests r \
+                 JOIN external_identities e ON e.id = r.external_identity_id \
+                 WHERE r.external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("completed retry");
+        assert_eq!(row.get::<_, String>(0), "completed");
+        assert_eq!(row.get::<_, i32>(1), 2);
+        assert_eq!(row.get::<_, Option<String>>(2), None);
+        let metadata: Value = serde_json::from_str(row.get(3)).expect("hydrated metadata");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+        let count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("single durable request")
+            .get(0);
+        assert_eq!(count, 1);
+        assert_eq!(
+            state
+                .recording_fake()
+                .expect("recording provider")
+                .calls()
+                .len(),
+            2
+        );
+    }
+
+    /// #5592: a sparse/empty fresh roster must not overwrite previously hydrated credits.
+    #[tokio::test]
+    async fn drain_preserves_previously_hydrated_credits_on_sparse_refresh() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        connection
+            .execute(
+                "UPDATE external_identities SET metadata_json = ($2::text)::json, updated_at = now() WHERE id = $1",
+                &[
+                    &identity_id,
+                    &json!({
+                        "creator_credits": [{"id": 7, "name": "Existing Writer"}],
+                        "raw_provider_payload": {
+                            "id": 29319, "name": "Old", "issue_number": "1",
+                            "cover_date": null, "store_date": null, "image": null,
+                            "volume": {"id": 1}, "person_credits": [{"id": 7, "name": "Existing Writer"}],
+                            "character_credits": [], "team_credits": [], "story_arc_credits": [],
+                            "date_last_updated": "2020-01-01 00:00:00"
+                        },
+                        "deep_metadata_refreshed_at": "2020-01-01T00:00:00+00:00"
+                    }).to_string(),
+                ],
+            )
+            .await
+            .expect("seed metadata");
+        drop(Object::take(connection));
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        let body = json!({
+            "status_code": 1,
+            "results": {
+                "id": 29319, "name": "Issue", "issue_number": "1",
+                "cover_date": "2020-01-01", "store_date": "2020-01-01",
+                "image": {"medium_url": "https://img.example/m.jpg"},
+                "volume": {"id": 1, "name": "V"},
+                "person_credits": [], "character_credits": [], "team_credits": [],
+                "story_arc_credits": [], "date_last_updated": "2026-11-01 17:33:53",
+            }
+        })
+        .to_string();
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(body),
+        );
+
+        let report = drain_for_test(&state).await;
+        assert_eq!(report.claimed, 1);
+        assert_eq!(report.completed, 1);
+        assert_eq!(report.deferred, 0);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let metadata_text: String = connection
+            .query_one(
+                "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("row")
+            .get(0);
+        let metadata: Value = serde_json::from_str(&metadata_text).expect("json");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Existing Writer");
     }
 }

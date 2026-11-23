@@ -104,6 +104,33 @@ describe('CblSourceDetailPanel', () => {
     )
   })
 
+  it('keeps the raw path and revision inside collapsed Source details (#4171)', async () => {
+    const user = userEvent.setup()
+    mocks.detail.mockResolvedValue(pageAt(0))
+    renderPanel()
+
+    const detail = await screen.findByTestId('cbl-source-detail')
+    // Reader-friendly identity and stable counts stay in the default view.
+    expect(detail).toHaveTextContent('Ultimate Reading Order')
+    expect(detail).toHaveTextContent('JoshCLWren/CBL-ReadingLists')
+    expect(detail).toHaveTextContent('2210 positions')
+
+    const disclosure = screen.getByText('Source details').closest('details')
+    expect(disclosure).not.toBeNull()
+    expect(disclosure).not.toHaveAttribute('open')
+    // The path and revision are present, but only inside the closed disclosure.
+    expect(disclosure).toContainElement(screen.getByText('Marvel/Ultimate.cbl'))
+    expect(disclosure).toContainElement(screen.getByText('Revision abcdef12'))
+    for (const text of ['Marvel/Ultimate.cbl', 'Revision abcdef12']) {
+      expect(
+        screen.queryAllByText(text).filter((node) => !disclosure?.contains(node)),
+      ).toHaveLength(0)
+    }
+
+    await user.click(screen.getByText('Source details'))
+    expect(disclosure).toHaveAttribute('open')
+  })
+
   it('returns to the surface recorded in router state', async () => {
     mocks.detail.mockResolvedValue(pageAt(0))
     renderPanel({ from: '/thread/3', label: 'Series' })

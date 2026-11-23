@@ -262,6 +262,10 @@ export const queryKeys = {
     details: () => ['thread', 'detail'] as const,
     detail: (threadId: number) => ['thread', 'detail', threadId] as const,
     issuePages: (threadId: number) => ['thread', threadId, 'issues'] as const,
+    /** Read-only, exact owned-issue entry points shared by Queue and Roll. */
+    nextUnreadIssue: (threadId: number) => ['thread', threadId, 'issues', 'next-unread'] as const,
+    manualIssue: (issueId: number) => ['thread', 'manual-issue', issueId] as const,
+    directReadBrowse: (threadId: number) => ['thread', threadId, 'issues', 'manual-browse'] as const,
     /**
      * Canonical prefix for status-filtered paged issue reads. The filter is
      * appended as `{ status }` so each filter owns a distinct page cursor.
