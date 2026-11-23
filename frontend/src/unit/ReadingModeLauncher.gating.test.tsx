@@ -3,20 +3,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as readingMode from '../services/readingMode'
 import { FEATURES } from '../config/features'
 import ReadingModeLauncher from '../components/ReadingModeLauncher'
+import type { ReadingModeState } from '../types'
 
 const originalReadingModeQuiz = FEATURES.readingModeQuiz
+const inactiveReadingMode: ReadingModeState = {
+  bandwidth: null,
+  intent: null,
+  source: null,
+  suggested: false,
+}
 
 describe('ReadingModeLauncher production gating (issue #1945)', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    // SAFETY: this suite models the production no-suggestion response.
-    vi.spyOn(readingMode, 'getReadingMode').mockResolvedValue(null as never)
-    // SAFETY: this suite models a successful dismissal with no response payload.
-    vi.spyOn(readingMode, 'dismissReadingModeSuggestion').mockResolvedValue(null as never)
-    // SAFETY: the disabled-feature path must not require any quiz questions.
-    vi.spyOn(readingMode, 'getQuizQuestions').mockReturnValue([] as never)
-    // SAFETY: this suite models a successful selection with no response payload.
-    vi.spyOn(readingMode, 'setReadingModeFromQuiz').mockResolvedValue(null as never)
+    vi.spyOn(readingMode, 'getReadingMode').mockResolvedValue(inactiveReadingMode)
+    vi.spyOn(readingMode, 'dismissReadingModeSuggestion').mockResolvedValue(inactiveReadingMode)
+    vi.spyOn(readingMode, 'getQuizQuestions').mockReturnValue([])
+    vi.spyOn(readingMode, 'setReadingModeFromQuiz').mockResolvedValue(inactiveReadingMode)
   })
 
   afterEach(() => {
