@@ -1232,6 +1232,9 @@ pub async fn sync_released_issues_for_user(
                 .map_err(db::query_error)?;
 
             let source_result: SourceTxOutcome = async {
+                // All authored membership writers take this advisory lock before
+                // any thread, issue, plan, or list row lock.
+                crate::issue_mutation::lock_reader(&tx, user_id).await?;
                 tx.execute(
                     "SELECT id FROM users WHERE id = $1 FOR UPDATE",
                     &[&user_id],
