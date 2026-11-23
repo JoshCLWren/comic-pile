@@ -4,7 +4,12 @@ import type { QueueSortBy } from './useQueueFilters'
 const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
-  activeCount: number
+  /** Visible count text describing the current applied search/filter result. */
+  resultCountText: string
+  /** When true, the count is not yet reliable for the current applied state. */
+  resultCountPending?: boolean
+  /** When true, a reliable count cannot be shown due to an error. */
+  resultCountError?: boolean
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
@@ -33,7 +38,9 @@ interface QueueControlsProps {
  * receives the committed value after {@link SEARCH_DEBOUNCE_MS}.
  */
 function QueueControlsInner({
-  activeCount,
+  resultCountText,
+  resultCountPending = false,
+  resultCountError = false,
   shuffleDisabled,
   shufflePending,
   onShuffle,
@@ -198,7 +205,14 @@ function QueueControlsInner({
           )}
         </div>
       </div>
-      <span className="sr-only" data-testid="queue-active-count">{activeCount}</span>
+      <p
+        role="status"
+        aria-live="polite"
+        className={`min-h-4 text-xs ${resultCountError ? 'text-red-400' : 'text-[var(--theme-text-muted)]'}`}
+        data-testid="queue-result-count"
+      >
+        {resultCountPending ? 'Updating series count…' : resultCountText}
+      </p>
     </header>
   )
 }
