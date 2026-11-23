@@ -194,13 +194,14 @@ export function RollModals({
   // Issue #3704: same-named series need disambiguating progress detail in the
   // manual pick, and each eligible unique thread renders exactly once.
   const pickerOptions = useMemo(() => {
-    // The modal fetch includes all queue threads. Keep snoozed items in their
-    // own group while using the same representative-cover projection as Queue.
+    // A manual choice is owner-scoped, not auto-Roll-eligibility-scoped. Do
+    // not filter blocked, excluded or otherwise non-active owned series here.
+    // Keep snoozed items in their own group for a single disambiguated choice.
     const byId = new Map((overrideThreads ?? []).map((thread) => [thread.id, thread]))
     const snoozedIds = new Set(snoozedThreads.map((thread) => thread.id))
     return buildManualPickerOptions({
       activeThreads: (overrideThreads ?? []).filter(
-        (thread) => thread.status === 'active' && !snoozedIds.has(thread.id),
+        (thread) => !snoozedIds.has(thread.id),
       ),
       snoozedThreads: snoozedThreads.map((thread) => ({
         ...thread,
