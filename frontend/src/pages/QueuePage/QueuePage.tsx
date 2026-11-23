@@ -57,6 +57,7 @@ export default function QueuePage() {
     activeCount,
     filteredCount,
     isPlaceholderData,
+    isInitialLoading,
   } = queueLoader
 
   // Series that show the per-row `Map series` repair action (everything except
@@ -185,7 +186,7 @@ export default function QueuePage() {
         <QueueControls
           activeCount={authoritativeActiveCount}
           filteredCount={isError ? null : authoritativeFilteredCount}
-          isCountLoading={(!isError && (isPlaceholderData || (isPending && !threads?.length))) as boolean}
+          isCountLoading={(!isError && (isInitialLoading || isPlaceholderData)) as boolean}
           shuffleDisabled={shuffleDisabled}
           shufflePending={shuffleQueueMutation.isPending}
           onShuffle={actions.requestShuffle}
