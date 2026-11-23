@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from './testingLibrary'
 import { describe, expect, it, vi } from 'vitest'
 
 import { RollRecoveryCard } from '../pages/RollPage/components/RollRecoveryCard'

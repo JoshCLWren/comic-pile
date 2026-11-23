@@ -8,10 +8,10 @@
  * - the brand and user blocks share one horizontal gutter, expanded and
  *   collapsed, and never sit flush against the viewport edge.
  */
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
@@ -19,6 +19,7 @@ import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
 import { queryClient } from '../query/queryClient'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -28,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   readStoredAccessToken: vi.fn<() => string | null>(),
 }))
 
-vi.mock('../services/api', () => {
+await injectModuleDoubles(await import('../services/api'), () => {
   const apiMock = { get: mocks.get, post: mocks.post, patch: mocks.patch }
   return {
     default: apiMock,
@@ -42,7 +43,7 @@ vi.mock('../services/api', () => {
   }
 })
 
-vi.mock('../services/api-preferences', () => ({
+await injectModuleDoubles(await import('../services/api-preferences'), () => ({
   preferencesApi: {
     get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
       mocks.get('/v2/users/me/preferences', options),

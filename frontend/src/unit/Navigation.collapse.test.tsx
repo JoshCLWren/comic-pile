@@ -1,6 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
@@ -8,30 +8,20 @@ import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
+import api, * as authTransport from '../services/api'
 
-const mocks = vi.hoisted(() => ({
-  get: vi.fn(),
-  post: vi.fn(),
-  patch: vi.fn(),
-  clearAccessToken: vi.fn(),
-  setAccessToken: vi.fn(),
-  getAccessToken: vi.fn<() => string | null>(),
-  readStoredAccessToken: vi.fn<() => string | null>(),
-}))
-
-vi.mock('../services/api', () => ({
-  default: {
-    get: mocks.get,
-    post: mocks.post,
-    patch: mocks.patch,
-  },
-  clearAccessToken: mocks.clearAccessToken,
-  setAccessToken: mocks.setAccessToken,
-  getAccessToken: mocks.getAccessToken,
-  readStoredAccessToken: mocks.readStoredAccessToken,
-  refreshSession: vi.fn(),
-  isSessionRefreshRejected: () => false,
-}))
+const originalApiMethods = { get: api.get, post: api.post, patch: api.patch }
+const mocks = {
+  get: vi.fn<typeof api.get>(),
+  post: vi.fn<typeof api.post>(),
+  patch: vi.fn<typeof api.patch>(),
+  clearAccessToken: vi.fn<typeof authTransport.clearAccessToken>(),
+  setAccessToken: vi.fn<typeof authTransport.setAccessToken>(),
+  getAccessToken: vi.fn<typeof authTransport.getAccessToken>(),
+  readStoredAccessToken: vi.fn<typeof authTransport.readStoredAccessToken>(),
+  refreshSession: vi.fn<typeof authTransport.refreshSession>(),
+  isSessionRefreshRejected: vi.fn<typeof authTransport.isSessionRefreshRejected>(),
+}
 
 const STORAGE_KEY = 'comic-pile-nav-collapsed'
 
@@ -72,6 +62,13 @@ function renderNavigation(initialEntry = '/') {
 
 describe('navigation collapse behavior (#2285)', () => {
   beforeEach(() => {
+    Object.assign(api, { get: mocks.get, post: mocks.post, patch: mocks.patch })
+    vi.spyOn(authTransport, 'clearAccessToken').mockImplementation(mocks.clearAccessToken)
+    vi.spyOn(authTransport, 'setAccessToken').mockImplementation(mocks.setAccessToken)
+    vi.spyOn(authTransport, 'getAccessToken').mockImplementation(mocks.getAccessToken)
+    vi.spyOn(authTransport, 'readStoredAccessToken').mockImplementation(mocks.readStoredAccessToken)
+    vi.spyOn(authTransport, 'refreshSession').mockImplementation(mocks.refreshSession)
+    vi.spyOn(authTransport, 'isSessionRefreshRejected').mockImplementation(mocks.isSessionRefreshRejected)
     document.documentElement.removeAttribute('data-theme')
     localStorage.clear()
     mocks.get.mockReset()
@@ -83,7 +80,13 @@ describe('navigation collapse behavior (#2285)', () => {
     mocks.readStoredAccessToken.mockReset()
     mocks.getAccessToken.mockReturnValue('test-token')
     mocks.readStoredAccessToken.mockReturnValue(null)
+    mocks.isSessionRefreshRejected.mockReturnValue(false)
     mocks.get.mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+  })
+
+  afterEach(() => {
+    Object.assign(api, originalApiMethods)
+    vi.restoreAllMocks()
   })
 
   it('defaults to the collapsed rail on tablet portrait widths', async () => {

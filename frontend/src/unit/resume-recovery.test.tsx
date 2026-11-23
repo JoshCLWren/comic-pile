@@ -1,5 +1,6 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from './testingLibrary'
 import ResumeRecovery from '../components/ResumeRecovery'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const { revalidateSession, recoverSession, invalidateSessionRecoveryCache, invalidateAfterResumeRecovery } = vi.hoisted(() => ({
   revalidateSession: vi.fn(),
@@ -8,7 +9,7 @@ const { revalidateSession, recoverSession, invalidateSessionRecoveryCache, inval
   invalidateAfterResumeRecovery: vi.fn(),
 }))
 
-vi.mock('../query/cacheEffects', () => ({
+await injectModuleDoubles(await import('../query/cacheEffects'), () => ({
   invalidateSessionRecoveryCache,
   invalidateAfterResumeRecovery,
 }))

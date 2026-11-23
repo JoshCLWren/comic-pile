@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,17 +6,18 @@ import { RatingView } from '../pages/RollPage/components/RatingView'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
-vi.mock('../components/Tooltip', () => ({
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({ default: () => <div data-testid="dice" /> }))
+await injectModuleDoubles(await import('../components/Tooltip'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
-vi.mock('../components/IssueCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
+await injectModuleDoubles(await import('../components/IssueCorrectionDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../pages/RollPage/components/ReadingOrderGroups'), () => ({
   ReadingOrderGroups: () => null,
 }))
 
-vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+await injectModuleDoubles(await import('../hooks/useReaderContext'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
   return {
     ...actual,

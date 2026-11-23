@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from 'react'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { validateIssueRangeForStaging } from '../utils/issueParser'
@@ -45,9 +45,9 @@ describe('#3631 Add Series save enforcement (handleCreateSubmit)', () => {
   beforeEach(() => {
     toastSpy = vi.fn()
     modalsDeps = { toastHook: () => ({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] }) }
-    issuesApi.migrateThread = vi.fn(async () => undefined) as typeof issuesApi.migrateThread
-    issuesApi.create = vi.fn(async () => ({ issues: [] })) as typeof issuesApi.create
-    issuesApi.bulkMarkRead = vi.fn(async () => undefined) as typeof issuesApi.bulkMarkRead
+    issuesApi.migrateThread = vi.fn<typeof issuesApi.migrateThread>()
+    issuesApi.create = vi.fn<typeof issuesApi.create>()
+    issuesApi.bulkMarkRead = vi.fn<typeof issuesApi.bulkMarkRead>()
   })
 
   afterEach(() => {

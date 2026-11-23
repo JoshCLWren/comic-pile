@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useRollRating } from '../pages/RollPage/useRollRating'
@@ -6,11 +6,12 @@ import { readingOrdersApi } from '../services/api-reading-orders'
 import { dependenciesApi } from '../services/api-dependencies'
 import type { RollPageState, RollPageStateSetters } from '../pages/RollPage/useRollPageState'
 import type { RatingThread, ThreadMetadata } from '../pages/RollPage/types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../services/api-reading-orders', () => ({
+await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
   readingOrdersApi: { getForThread: vi.fn() },
 }))
-vi.mock('../services/api-dependencies', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-dependencies'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-dependencies')>()
   return {
     ...actual,

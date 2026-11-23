@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useRatingView } from '../pages/RollPage/useRatingView'
@@ -9,14 +9,14 @@ import type { RatingThread } from '../pages/RollPage/types'
 import type { ReaderContextResponse } from '../services/api-reader-context'
 
 const original_readerContextApi = { ...readerContextApi }
-const mock_readerContextApi = { get: vi.fn() }
+const mock_readerContextApi = { get: vi.fn<typeof readerContextApi.get>() }
 
 const original_readingBoundariesApi = { ...readingBoundariesApi }
-const mock_readingBoundariesApi = { batch: vi.fn() }
+const mock_readingBoundariesApi = { batch: vi.fn<typeof readingBoundariesApi.batch>() }
 
-const getBoundaries = (mock_readingBoundariesApi.batch as any)
+const getBoundaries = mock_readingBoundariesApi.batch
 
-const getReaderContext = (mock_readerContextApi.get as any)
+const getReaderContext = mock_readerContextApi.get
 
 const ACTIVE_THREAD: RatingThread = {
   id: 1,

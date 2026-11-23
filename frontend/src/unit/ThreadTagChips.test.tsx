@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { describe, expect, it } from 'vitest'
 
 import { ThreadTagChips } from '../components/Tags/ThreadTagChips'

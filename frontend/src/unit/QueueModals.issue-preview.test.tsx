@@ -1,12 +1,13 @@
 import { useEffect } from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { QueueModals } from '../pages/QueuePage/QueueModals'
 import { useQueueModals } from '../pages/QueuePage/useQueueModals'
 import { DEFAULT_CREATE_STATE } from '../pages/QueuePage/types'
-vi.mock('../components/Modal', () => ({
+import { injectModuleDoubles } from './injectModuleDoubles'
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({
     isOpen,
     title,
@@ -18,19 +19,19 @@ vi.mock('../components/Modal', () => ({
   }) => (isOpen ? <section aria-label={title}>{children}</section> : null),
 }))
 
-vi.mock('../components/PositionSlider', () => ({
+await injectModuleDoubles(await import('../components/PositionSlider'), () => ({
   default: () => null,
 }))
 
-vi.mock('../components/DependencyBuilder', () => ({
+await injectModuleDoubles(await import('../components/DependencyBuilder'), () => ({
   default: () => null,
 }))
 
-vi.mock('../components/MigrationDialog', () => ({
+await injectModuleDoubles(await import('../components/MigrationDialog'), () => ({
   default: () => null,
 }))
 
-vi.mock('../pages/QueuePage/IssueToggleList', () => ({
+await injectModuleDoubles(await import('../pages/QueuePage/IssueToggleList'), () => ({
   IssueToggleList: () => null,
 }))
 
@@ -41,11 +42,11 @@ const restoreActionMocks = vi.hoisted(() => ({
   clearRestoreAction: vi.fn(),
 }))
 
-vi.mock('../contexts/useBugReportRestore', () => ({
+await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: () => restoreActionMocks,
 }))
 
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
+await injectModuleDoubles(await import('../pages/QueuePage/FormatSelect'), () => ({
   FormatSelect: ({
     id,
     value,

@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,9 +7,9 @@ import { creatorsApi } from '../services/api-creators'
 import type { CreatorListItem, CreatorListResponse } from '../services/api-creators'
 
 const original_creatorsApi = { ...creatorsApi }
-const mock_creatorsApi = { getList: vi.fn() }
+const mock_creatorsApi = { getList: vi.fn<typeof creatorsApi.getList>() }
 
-const mockedGetList = (mock_creatorsApi.getList as any)
+const mockedGetList = mock_creatorsApi.getList
 
 const COMPLETE_COVERAGE = {
   rated_issues_total: 4,

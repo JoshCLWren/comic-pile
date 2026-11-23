@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -10,19 +10,20 @@ import {
 import { useUndo } from '../hooks/useUndo'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../hooks/useSession', () => ({
+await injectModuleDoubles(await import('../hooks/useSession'), () => ({
   useSessionDetails: vi.fn(),
   useSessionSnapshots: vi.fn(),
 }))
 
-vi.mock('../hooks/useUndo', () => ({
+await injectModuleDoubles(await import('../hooks/useUndo'), () => ({
   useUndo: vi.fn(),
 }))
 
 const showToastSpy = vi.hoisted(() => vi.fn())
 
-vi.mock('../contexts/useToast', () => ({
+await injectModuleDoubles(await import('../contexts/useToast'), () => ({
   useToast: () => ({ toasts: [], showToast: showToastSpy, removeToast: vi.fn() }),
 }))
 

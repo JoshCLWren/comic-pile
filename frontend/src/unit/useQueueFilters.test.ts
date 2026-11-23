@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react'
+import { renderHook } from './testingLibrary'
 import { describe, expect, it } from 'vitest'
 import { useQueueFilters } from '../pages/QueuePage/useQueueFilters'
 import type { Thread } from '../types'

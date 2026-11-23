@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent } from './testingLibrary'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorDetailPage from '../pages/CreatorDetailPage'
@@ -6,12 +6,13 @@ import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import type { CreatorDetailState } from '../hooks/useCreatorDetail'
 import { useCreatorSeriesIssues } from '../hooks/useCreatorSeriesIssues'
 import type { CreatorIssueInsight } from '../services/api-creators'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../hooks/useCreatorDetail', () => ({
+await injectModuleDoubles(await import('../hooks/useCreatorDetail'), () => ({
   useCreatorDetail: vi.fn(),
 }))
 
-vi.mock('../hooks/useCreatorSeriesIssues', () => ({
+await injectModuleDoubles(await import('../hooks/useCreatorSeriesIssues'), () => ({
   useCreatorSeriesIssues: vi.fn(),
 }))
 

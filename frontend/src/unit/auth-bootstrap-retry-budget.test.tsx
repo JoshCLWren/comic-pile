@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { act, render } from '@testing-library/react'
+import { act, render } from './testingLibrary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { AuthContextValue } from '../contexts/AuthContext'
@@ -39,35 +39,20 @@ import type { AuthContextValue } from '../contexts/AuthContext'
  * Active CPU and fewer cold-start opportunities per page load; this harness
  * does not measure Vercel-attributed CPU directly.
  */
-const mocks = vi.hoisted(() => ({
-  get: vi.fn(),
-  post: vi.fn(),
-  patch: vi.fn(),
-  clearAccessToken: vi.fn(),
-  setAccessToken: vi.fn(),
-  getAccessToken: vi.fn<() => string | null>(),
-  readStoredAccessToken: vi.fn<() => string | null>(),
-  refreshSession: vi.fn(),
-  isSessionRefreshRejected: vi.fn(() => false),
-}))
+import api, * as authTransport from '../services/api'
 
-vi.mock('../services/api', () => {
-  const apiMock = {
-    get: mocks.get,
-    post: mocks.post,
-    patch: mocks.patch,
-  }
-  return {
-    default: apiMock,
-    api: apiMock,
-    clearAccessToken: mocks.clearAccessToken,
-    setAccessToken: mocks.setAccessToken,
-    getAccessToken: mocks.getAccessToken,
-    readStoredAccessToken: mocks.readStoredAccessToken,
-    refreshSession: mocks.refreshSession,
-    isSessionRefreshRejected: mocks.isSessionRefreshRejected,
-  }
-})
+const originalApiMethods = { get: api.get, post: api.post, patch: api.patch }
+const mocks = {
+  get: vi.fn<typeof api.get>(),
+  post: vi.fn<typeof api.post>(),
+  patch: vi.fn<typeof api.patch>(),
+  clearAccessToken: vi.fn<typeof authTransport.clearAccessToken>(),
+  setAccessToken: vi.fn<typeof authTransport.setAccessToken>(),
+  getAccessToken: vi.fn<typeof authTransport.getAccessToken>(),
+  readStoredAccessToken: vi.fn<typeof authTransport.readStoredAccessToken>(),
+  refreshSession: vi.fn<typeof authTransport.refreshSession>(),
+  isSessionRefreshRejected: vi.fn<typeof authTransport.isSessionRefreshRejected>(),
+}
 
 import { AuthProvider, useAuth } from '../App'
 
@@ -133,6 +118,13 @@ async function flushTimers(milliseconds = 0): Promise<void> {
 
 describe('auth bootstrap retry budget (#4269)', () => {
   beforeEach(() => {
+    Object.assign(api, { get: mocks.get, post: mocks.post, patch: mocks.patch })
+    vi.spyOn(authTransport, 'clearAccessToken').mockImplementation(mocks.clearAccessToken)
+    vi.spyOn(authTransport, 'setAccessToken').mockImplementation(mocks.setAccessToken)
+    vi.spyOn(authTransport, 'getAccessToken').mockImplementation(mocks.getAccessToken)
+    vi.spyOn(authTransport, 'readStoredAccessToken').mockImplementation(mocks.readStoredAccessToken)
+    vi.spyOn(authTransport, 'refreshSession').mockImplementation(mocks.refreshSession)
+    vi.spyOn(authTransport, 'isSessionRefreshRejected').mockImplementation(mocks.isSessionRefreshRejected)
     auth = null
     mocks.get.mockReset()
     mocks.post.mockReset()
@@ -149,6 +141,7 @@ describe('auth bootstrap retry budget (#4269)', () => {
   })
 
   afterEach(() => {
+    Object.assign(api, originalApiMethods)
     vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()

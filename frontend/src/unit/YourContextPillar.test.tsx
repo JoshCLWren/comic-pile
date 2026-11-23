@@ -1,16 +1,17 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { describe, expect, it, vi } from 'vitest'
 import { YourContextPillar } from '../pages/RollPage/components/YourContextPillar'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/Tooltip', () => ({
+await injectModuleDoubles(await import('../components/Tooltip'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
-vi.mock('../components/GlossaryLink', () => ({
+await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
-vi.mock('../pages/RollPage/components/SeriesPanel', () => ({
+await injectModuleDoubles(await import('../pages/RollPage/components/SeriesPanel'), () => ({
   SeriesPanel: ({ series }: { series: { identity_source: string; series_name?: string; ratings_count?: number } }) => (
     <div data-testid="series-panel">
       {series.identity_source === 'unavailable'
@@ -20,7 +21,7 @@ vi.mock('../pages/RollPage/components/SeriesPanel', () => ({
   ),
 }))
 
-vi.mock('../pages/RollPage/components/CrossoverAnalytics', () => ({
+await injectModuleDoubles(await import('../pages/RollPage/components/CrossoverAnalytics'), () => ({
   CrossoverAnalytics: ({ crossovers }: { crossovers: { name: string }[] }) => (
     <div data-testid="crossover-analytics">
       {crossovers.length > 0

@@ -4,25 +4,24 @@
  * guessed issue, never a thread-only detour. Items without a canonical
  * `issue_id` (legacy/deleted events) render no issue action at all.
  */
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import HistoryPage from '../pages/HistoryPage'
-import type { ActivityItem } from '../services/api-activity'
+import { activityApi, type ActivityItem } from '../services/api-activity'
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 
-const listMock = vi.hoisted(() => vi.fn())
+const originalActivityApi = { ...activityApi }
+const originalIssueCardsApi = { ...issueCardsApi }
+const listMock = vi.fn<typeof activityApi.list>()
+const fetchCards = vi.fn<typeof issueCardsApi.fetchCards>()
 
-vi.mock('../services/api-activity', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../services/api-activity')>()
-  return { ...actual, activityApi: { list: listMock } }
+afterEach(() => {
+  Object.assign(activityApi, originalActivityApi)
+  Object.assign(issueCardsApi, originalIssueCardsApi)
 })
-
-vi.mock('../components/ComicIssueMappingAction', () => ({
-  default: ({ issueId }: { issueId: number | null }) => <span data-testid="shared-map-action">{issueId}</span>,
-}))
 
 const sagaCard: IssueCard = {
   issue_id: 1121330,
@@ -37,8 +36,6 @@ const sagaCard: IssueCard = {
   comicvine_issue_id: '4000-4',
   cover_image_url: 'https://comicvine.gamespot.com/a/uploads/original/saga4.jpg',
 }
-const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
-
 function item(overrides: Partial<ActivityItem> & Pick<ActivityItem, 'event_id' | 'type' | 'timestamp'>): ActivityItem {
   return {
     die_before: null,
@@ -66,6 +63,8 @@ function renderHistory() {
 }
 
 beforeEach(() => {
+  Object.assign(activityApi, { list: listMock })
+  Object.assign(issueCardsApi, { fetchCards })
   listMock.mockReset()
   fetchCards.mockReset()
   fetchCards.mockResolvedValue([sagaCard])

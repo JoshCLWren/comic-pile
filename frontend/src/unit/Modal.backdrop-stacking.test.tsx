@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { render } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import Modal from '../components/Modal'

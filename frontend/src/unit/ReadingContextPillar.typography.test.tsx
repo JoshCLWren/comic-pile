@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within } from './testingLibrary'
 import { describe, expect, it, vi } from 'vitest'
 import { ReadingContextPillar } from '../pages/RollPage/components/ReadingContextPillar'
 import {
@@ -7,22 +7,23 @@ import {
   type ReadingContextTypeRole,
 } from '../pages/RollPage/readingContextTypography'
 import type { ReaderContextResponse } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const navigateSpy = vi.fn()
 
-vi.mock('react-router-dom', async () => {
+await injectModuleDoubles(await import('react-router-dom'), async () => {
   const actual = await vi.importActual('react-router-dom')
   return { ...actual, useNavigate: () => navigateSpy }
 })
 
-vi.mock('../components/ContinuityCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
+await injectModuleDoubles(await import('../components/ContinuityCorrectionDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../pages/RollPage/components/ReadingOrderGroups'), () => ({
   ReadingOrderGroups: () => <div data-testid="series-progress-stub">2 / 5</div>,
 }))
-vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
+await injectModuleDoubles(await import('../pages/RollPage/components/ReadingRouteExplanation'), () => ({
   ReadingRouteExplanation: () => null,
 }))
-vi.mock('../pages/RollPage/components/ReadingPathPanel', () => ({
+await injectModuleDoubles(await import('../pages/RollPage/components/ReadingPathPanel'), () => ({
   ReadingPathPanel: () => null,
 }))
 

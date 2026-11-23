@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from './testingLibrary'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorComparisonPage from '../pages/CreatorComparisonPage'
@@ -9,12 +9,13 @@ import type {
   CreatorComparisonResponse,
   CreatorMetricDrilldown,
 } from '../types/index'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../hooks/useCreatorComparison', () => ({
+await injectModuleDoubles(await import('../hooks/useCreatorComparison'), () => ({
   useCreatorComparison: vi.fn(),
 }))
 
-vi.mock('../services/creatorMetricDrilldownApi', () => ({
+await injectModuleDoubles(await import('../services/creatorMetricDrilldownApi'), () => ({
   creatorMetricDrilldownApi: {
     getMetricDrilldown: vi.fn(),
     getRatingDistributionDrilldown: vi.fn(),

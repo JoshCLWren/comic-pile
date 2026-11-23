@@ -1,55 +1,18 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NewReleasesSection } from '../components/NewReleasesSection'
-import { cast } from '../utils/cast'
+import { continuityPlansApi } from '../services/api-continuity-plans'
 
-const mocks = vi.hoisted(() => ({
-  updateReleaseSourceEnabled: vi.fn(),
-  createReleaseSource: vi.fn(),
-  // SAFETY: the hoisted mock starts with no mutation error; the assertion widens the never-assigned null so tests can inject an Error before render.
-  enableError: null as Error | null,
-  // SAFETY: the hoisted mock starts with no mutation error; the assertion widens the never-assigned null so tests can inject an Error before render.
-  followError: null as Error | null,
-}))
+const originalContinuityPlansApi = { ...continuityPlansApi }
+const mockUpdate = vi.fn<typeof continuityPlansApi.updateReleaseSourceEnabled>()
+const mockCreate = vi.fn<typeof continuityPlansApi.createReleaseSource>()
 
-vi.mock('../services/api-continuity-plans', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
-    '../services/api-continuity-plans',
-  )
-  return {
-    ...actual,
-    continuityPlansApi: {
-      ...actual.continuityPlansApi,
-      updateReleaseSourceEnabled: mocks.updateReleaseSourceEnabled,
-      createReleaseSource: mocks.createReleaseSource,
-    },
-  }
+afterEach(() => {
+  Object.assign(continuityPlansApi, originalContinuityPlansApi)
 })
-
-vi.mock('../hooks/useReleaseSources', async () => {
-  const actual = await vi.importActual<typeof import('../hooks/useReleaseSources')>(
-    '../hooks/useReleaseSources',
-  )
-  return {
-    ...actual,
-    useEnableReleaseSource: () => ({
-      isPending: false,
-      error: mocks.enableError,
-      mutate: mocks.updateReleaseSourceEnabled,
-    }),
-    useCreateReleaseSource: () => ({
-      isPending: false,
-      error: mocks.followError,
-      mutate: mocks.createReleaseSource,
-    }),
-  }
-})
-
-const mockUpdate = cast<ReturnType<typeof vi.fn>>(mocks.updateReleaseSourceEnabled)
-const mockCreate = cast<ReturnType<typeof vi.fn>>(mocks.createReleaseSource)
 
 function createWrapper() {
   const client = new QueryClient({
@@ -153,9 +116,11 @@ const unmappedCandidate = {
 
 describe('NewReleasesSection', () => {
   beforeEach(() => {
+    Object.assign(continuityPlansApi, {
+      updateReleaseSourceEnabled: mockUpdate,
+      createReleaseSource: mockCreate,
+    })
     vi.clearAllMocks()
-    mocks.enableError = null
-    mocks.followError = null
     mockUpdate.mockResolvedValue({ ...enabledSource, enabled: false })
     mockCreate.mockResolvedValue({ id: 1, plan_id: 12 })
   })
@@ -300,23 +265,23 @@ describe('NewReleasesSection', () => {
     expect(repairLink).toHaveAttribute('href', '/queue')
   })
 
-  it('shows a visible error when following a candidate fails', () => {
-    mocks.followError = new Error('Could not follow this volume.')
+  it('shows a visible error when following a candidate fails', async () => {
+    mockCreate.mockRejectedValueOnce(new Error('Could not follow this volume.'))
     render(
       <NewReleasesSection planId={12} sources={[]} candidates={[confirmedCandidate]} />,
       { wrapper: createWrapper() },
     )
-    const alert = screen.getByRole('alert')
-    expect(alert).toHaveTextContent('Could not follow this volume.')
+    screen.getByRole('button', { name: 'Follow Ultimate Spider-Man (2024)' }).click()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not follow this volume.')
   })
 
-  it('shows a visible error when toggling a followed source fails', () => {
-    mocks.enableError = new Error('Could not update this volume.')
+  it('shows a visible error when toggling a followed source fails', async () => {
+    mockUpdate.mockRejectedValueOnce(new Error('Could not update this volume.'))
     render(<NewReleasesSection planId={12} sources={[enabledSource]} candidates={[]} />, {
       wrapper: createWrapper(),
     })
-    const alert = screen.getByRole('alert')
-    expect(alert).toHaveTextContent('Could not update this volume.')
+    screen.getByRole('button', { name: 'Stop following X-Men' }).click()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not update this volume.')
   })
 
   it('falls back to provider_volume_id when provider_title is empty', () => {

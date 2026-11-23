@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from './testingLibrary'
 import { focusManager, QueryClientProvider, useMutation, useQuery } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

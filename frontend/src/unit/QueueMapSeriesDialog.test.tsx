@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { PropsWithChildren, ReactNode } from 'react'
@@ -23,15 +23,15 @@ const { invalidateQueueSpy, invalidateIntelligenceManySpy } = vi.hoisted(() => (
   invalidateIntelligenceManySpy: vi.fn(),
 }))
 
-vi.mock('../services/api-comicvine', () => ({
+await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   comicVineApi: { searchSeries: searchSeriesSpy },
 }))
 
-vi.mock('../services/api-issues', () => ({
+await injectModuleDoubles(await import('../services/api-issues'), () => ({
   issuesApi: { list: listIssuesSpy },
 }))
 
-vi.mock('../services/api-series-mapping', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-series-mapping'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-series-mapping')>()
   return {
     ...actual,
@@ -39,7 +39,7 @@ vi.mock('../services/api-series-mapping', async (importOriginal) => {
   }
 })
 
-vi.mock('../query/cacheEffects', async (importOriginal) => {
+await injectModuleDoubles(await import('../query/cacheEffects'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../query/cacheEffects')>()
   return {
     ...actual,
@@ -48,7 +48,7 @@ vi.mock('../query/cacheEffects', async (importOriginal) => {
   }
 })
 
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({
     isOpen,
     title,
@@ -67,6 +67,7 @@ vi.mock('../components/Modal', () => ({
 
 import QueueMapSeriesDialog from '../components/QueueMapSeriesDialog'
 import type { SeriesBatchProgress, SeriesMappingFailure } from '../components/QueueMapSeriesDialog'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mockedSearchSeries = vi.mocked(comicVineApi.searchSeries)
 const mockedListIssues = vi.mocked(issuesApi.list)

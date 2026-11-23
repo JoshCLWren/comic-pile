@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent } from './testingLibrary'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorsPage from '../pages/CreatorsPage'
@@ -7,20 +7,21 @@ import type { CreatorsListState } from '../hooks/useCreatorsList'
 import { useCreatorDiscoveries } from '../hooks/useCreatorDiscoveries'
 import { useCreatorTeamChemistry } from '../hooks/useCreatorTeamChemistry'
 import type { CreatorDiscoveryResponse } from '../types/index'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../hooks/useCreatorsList', () => ({
+await injectModuleDoubles(await import('../hooks/useCreatorsList'), () => ({
   useCreatorsList: vi.fn(),
 }))
 
-vi.mock('../hooks/useDebounce', () => ({
+await injectModuleDoubles(await import('../hooks/useDebounce'), () => ({
   useDebounce: <T,>(value: T) => value,
 }))
 
-vi.mock('../hooks/useCreatorDiscoveries', () => ({
+await injectModuleDoubles(await import('../hooks/useCreatorDiscoveries'), () => ({
   useCreatorDiscoveries: vi.fn(),
 }))
 
-vi.mock('../hooks/useCreatorTeamChemistry', () => ({
+await injectModuleDoubles(await import('../hooks/useCreatorTeamChemistry'), () => ({
   useCreatorTeamChemistry: vi.fn(),
 }))
 

@@ -1,20 +1,21 @@
 import { useState } from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { QueueModals } from '../pages/QueuePage/QueueModals'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({ isOpen, title, children }: { isOpen: boolean; title: string; children: React.ReactNode }) =>
     isOpen ? <section aria-label={title}>{children}</section> : null,
 }))
-vi.mock('../components/PositionSlider', () => ({ default: () => null }))
-vi.mock('../components/DependencyBuilder', () => ({ default: () => null }))
-vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
-vi.mock('../components/AddSeriesFromComicVineDialog', () => ({ default: () => null }))
-vi.mock('../pages/QueuePage/IssueToggleList', () => ({ IssueToggleList: () => null }))
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
+await injectModuleDoubles(await import('../components/PositionSlider'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/DependencyBuilder'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/MigrationDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/AddSeriesFromComicVineDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../pages/QueuePage/IssueToggleList'), () => ({ IssueToggleList: () => null }))
+await injectModuleDoubles(await import('../pages/QueuePage/FormatSelect'), () => ({
   FormatSelect: ({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) => (
     <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
       <option value="Comic">Comic</option>

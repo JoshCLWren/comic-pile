@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from './testingLibrary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -11,6 +11,7 @@ import { queryClient as sharedQueryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import type { RollResponse, Thread } from '../types'
 import { cast } from '../utils/cast'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const toastSpy = vi.fn()
 const setPending = vi.fn()
@@ -62,7 +63,7 @@ function buildDeps(overrides: Partial<UseQueueThreadActionsDeps> = {}): UseQueue
   }
 }
 
-vi.mock('react-router-dom', async () => {
+await injectModuleDoubles(await import('react-router-dom'), async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return {
     ...actual,

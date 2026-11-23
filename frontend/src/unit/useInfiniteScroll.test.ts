@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react'
+import { renderHook } from './testingLibrary'
 import { describe, expect, it, vi } from 'vitest'
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
 

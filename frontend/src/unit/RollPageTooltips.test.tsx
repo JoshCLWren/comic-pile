@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
@@ -16,10 +16,11 @@ import { useRate } from '../hooks'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const navigateSpy = vi.fn()
 
-vi.mock('react-router-dom', async () => {
+await injectModuleDoubles(await import('react-router-dom'), async () => {
   const actual = await vi.importActual('react-router-dom')
   return {
     ...actual,
@@ -27,19 +28,19 @@ vi.mock('react-router-dom', async () => {
   }
 })
 
-vi.mock('../components/LazyDice3D', () => ({
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({
   default: ({ sides, value }: { sides: number; value: number }) => (
     <div data-testid="lazy-dice" data-sides={String(sides)} data-value={String(value)} />
   ),
 }))
 
-vi.mock('../components/GlossaryLink', () => ({
+await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 
-vi.mock('../hooks/useThread', () => ({ useStaleThreads: vi.fn() }))
-vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
-vi.mock('../hooks/useRoll', () => ({
+await injectModuleDoubles(await import('../hooks/useThread'), () => ({ useStaleThreads: vi.fn() }))
+await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({ useRollBootstrap: vi.fn() }))
+await injectModuleDoubles(await import('../hooks/useRoll'), () => ({
   useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: vi.fn(),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
@@ -47,14 +48,14 @@ vi.mock('../hooks/useRoll', () => ({
   useOverrideRoll: vi.fn(),
   useDismissPending: vi.fn(),
 }))
-vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
-vi.mock('../hooks/useQueue', () => ({
+await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({ useSnooze: vi.fn() }))
+await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useShuffleQueue: vi.fn(),
   useActiveSeriesCount: () => null,
 }))
-vi.mock('../hooks', async (importOriginal) => {
+await injectModuleDoubles(await import('../hooks'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks')>()
   return {
     ...actual,

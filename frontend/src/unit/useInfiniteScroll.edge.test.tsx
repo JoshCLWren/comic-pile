@@ -1,4 +1,4 @@
-import { act, render, waitFor } from '@testing-library/react'
+import { act, render, waitFor } from './testingLibrary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
 import { cast } from '../utils/cast'

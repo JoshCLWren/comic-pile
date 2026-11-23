@@ -1,4 +1,4 @@
-import { render, renderHook, screen } from '@testing-library/react'
+import { render, renderHook, screen } from './testingLibrary'
 import { describe, expect, it, vi } from 'vitest'
 import { useRollBootstrapSync } from '../pages/RollPage/useRollBootstrapSync'
 import { useRollPendingSession } from '../pages/RollPage/useRollPendingSession'

@@ -1,4 +1,4 @@
-import { act, cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, render, waitFor } from './testingLibrary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import axios, { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios'
 import { AuthProvider, useAuth } from '../App'

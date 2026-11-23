@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from './testingLibrary'
 import { expect, it, vi } from 'vitest'
 import PositionSlider from '../components/PositionSlider'
 

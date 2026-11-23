@@ -1,4 +1,4 @@
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act } from './testingLibrary'
 import { describe, expect, it, vi } from 'vitest'
 import { useRollSnooze } from '../pages/RollPage/useRollSnooze'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'

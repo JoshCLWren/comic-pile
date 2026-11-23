@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -10,6 +10,7 @@ import type {
   CBLReadingListCandidatesResponse,
   CBLSourceComparisonMatch,
 } from '../services/api-cbl-sources'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mocks = vi.hoisted(() => ({
   compare: vi.fn(),
@@ -18,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   getIssueIdentity: vi.fn(),
 }))
 
-vi.mock('../services/api-cbl-sources', () => ({
+await injectModuleDoubles(await import('../services/api-cbl-sources'), () => ({
   cblSourcesApi: {
     compare: mocks.compare,
     findByComicvineIssue: mocks.findByComicvineIssue,
@@ -26,7 +27,7 @@ vi.mock('../services/api-cbl-sources', () => ({
   },
 }))
 
-vi.mock('../services/api-comicvine', () => ({
+await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   comicVineApi: {
     getIssueIdentity: mocks.getIssueIdentity,
   },

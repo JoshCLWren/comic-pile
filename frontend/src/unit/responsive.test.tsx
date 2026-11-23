@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { renderHook } from '@testing-library/react'
+import { renderHook } from './testingLibrary'
 import {
   BREAKPOINTS,
   MOBILE_MAX_WIDTH,

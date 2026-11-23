@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as readingMode from '../services/readingMode'
 import { FEATURES } from '../config/features'

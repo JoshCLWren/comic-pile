@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from './testingLibrary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
@@ -22,7 +22,7 @@ const {
   },
 }))
 
-vi.mock('../services/api-comicvine', () => ({
+await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     importSeries: importSeriesSpy,
@@ -30,22 +30,23 @@ vi.mock('../services/api-comicvine', () => ({
   },
 }))
 
-vi.mock('../query/cacheEffects', () => ({
+await injectModuleDoubles(await import('../query/cacheEffects'), () => ({
   invalidateAfterQueueMutation: invalidateSpy,
   invalidateComicVineImportStatus: invalidateImportStatusSpy,
 }))
 
-vi.mock('../contexts/useToast', () => ({
+await injectModuleDoubles(await import('../contexts/useToast'), () => ({
   useToast: () => toastSpy,
 }))
 
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({ isOpen, title, children, size }: { isOpen: boolean; title: string; children: ReactNode; size?: string }) =>
     isOpen ? <div role="dialog" data-modal-size={size}><h2>{title}</h2>{children}</div> : null,
 }))
 
 import AddSeriesFromComicVineDialog from '../components/AddSeriesFromComicVineDialog'
 import type { ComicVineSeriesResult } from '../services/api-comicvine'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const stormwatch: ComicVineSeriesResult = {
   comicvine_volume_id: 42,

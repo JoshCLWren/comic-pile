@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from './testingLibrary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCrossoverGroups, type CrossoverGroupsApi } from '../hooks/useCrossoverGroups'
 

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from './testingLibrary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy } from './toastSpy'
@@ -6,6 +6,7 @@ import { ToastContextSpy } from './toastTestHarness'
 import { comicVineApi } from '../services/api-comicvine'
 import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const toast = createToastSpy()
 
@@ -18,12 +19,12 @@ function renderWithToast(ui: ReactElement) {
 }
 
 
-vi.mock('../services/api-comicvine', async () => {
+await injectModuleDoubles(await import('../services/api-comicvine'), async () => {
   const actual = await vi.importActual<typeof import('../services/api-comicvine')>('../services/api-comicvine')
   return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn(), importIssue: vi.fn() } }
 })
 
-vi.mock('../services/api-reading-orders', () => ({
+await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
   readingOrdersApi: {
     list: vi.fn().mockResolvedValue({ reading_orders: [] }),
   },

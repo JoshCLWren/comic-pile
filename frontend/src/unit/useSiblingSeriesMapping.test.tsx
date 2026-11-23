@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,9 +9,12 @@ import {
 import { seriesMappingApi } from '../services/api-series-mapping'
 
 const original_seriesMappingApi = { ...seriesMappingApi }
-const mock_seriesMappingApi = { preview: vi.fn(), commit: vi.fn() }
+const mock_seriesMappingApi = {
+  preview: vi.fn<typeof seriesMappingApi.preview>(),
+  commit: vi.fn<typeof seriesMappingApi.commit>(),
+}
 
-const mockedSeriesMappingApi = (mock_seriesMappingApi as any)
+const mockedSeriesMappingApi = mock_seriesMappingApi
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })

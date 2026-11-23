@@ -1,4 +1,4 @@
-import { renderHook, waitFor, act } from '@testing-library/react'
+import { renderHook, waitFor, act } from './testingLibrary'
 import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -28,16 +28,16 @@ const api = vi.hoisted(() => ({
 }))
 const protectedApi = vi.hoisted(() => ({ rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() }))
 const bootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
-vi.mock('../services/api-migration', () => ({ migrationApi: api.migrationApi }))
-vi.mock('../services/api-bug-reports', () => ({ bugReportsApi: api.bugReportsApi }))
-vi.mock('../services/api-threads', () => ({ threadsApi: api.threadsApi }))
-vi.mock('../services/api-roll', () => ({ rollApi: api.rollApi }))
-vi.mock('../services/api-queue', () => ({ queueApi: api.queueApi }))
-vi.mock('../services/api-undo', () => ({ undoApi: api.undoApi }))
-vi.mock('../services/api-sessions', () => ({ sessionApi: api.sessionApi }))
-vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn(), create: vi.fn(), get: vi.fn(), markRead: vi.fn(), markUnread: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn(), move: vi.fn(), reorder: vi.fn(), delete: vi.fn(), migrateThread: vi.fn(), setCurrentIssue: vi.fn(), getReaderContext: vi.fn() } }))
-vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi: protectedApi }))
-vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi: bootstrapApi }))
+await injectModuleDoubles(await import('../services/api-migration'), () => ({ migrationApi: api.migrationApi }))
+await injectModuleDoubles(await import('../services/api-bug-reports'), () => ({ bugReportsApi: api.bugReportsApi }))
+await injectModuleDoubles(await import('../services/api-threads'), () => ({ threadsApi: api.threadsApi }))
+await injectModuleDoubles(await import('../services/api-roll'), () => ({ rollApi: api.rollApi }))
+await injectModuleDoubles(await import('../services/api-queue'), () => ({ queueApi: api.queueApi }))
+await injectModuleDoubles(await import('../services/api-undo'), () => ({ undoApi: api.undoApi }))
+await injectModuleDoubles(await import('../services/api-sessions'), () => ({ sessionApi: api.sessionApi }))
+await injectModuleDoubles(await import('../services/api-issues'), () => ({ issuesApi: { list: vi.fn(), create: vi.fn(), get: vi.fn(), markRead: vi.fn(), markUnread: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn(), move: vi.fn(), reorder: vi.fn(), delete: vi.fn(), migrateThread: vi.fn(), setCurrentIssue: vi.fn(), getReaderContext: vi.fn() } }))
+await injectModuleDoubles(await import('../services/protectedRollMutationApi'), () => ({ protectedRollMutationApi: protectedApi }))
+await injectModuleDoubles(await import('../services/rollBootstrapApi'), () => ({ rollBootstrapApi: bootstrapApi }))
 const toast = createToastSpy()
 
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
@@ -47,6 +47,7 @@ import { useSessions, useSessionDetails, useSessionSnapshots } from '../hooks/us
 import { useSnapshots, useUndo } from '../hooks/useUndo'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useStaleThreads } from '../hooks/useThread'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 beforeEach(() => {
   vi.clearAllMocks()

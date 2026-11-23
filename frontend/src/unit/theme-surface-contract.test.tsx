@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import type { AuthContextValue } from '../App'
 import { AuthProvider, useAuth } from '../App'
@@ -12,6 +12,7 @@ import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -23,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   readStoredAccessToken: vi.fn<() => string | null>(),
 }))
 
-vi.mock('../services/api', () => ({
+await injectModuleDoubles(await import('../services/api'), () => ({
   default: {
     get: mocks.get,
     post: mocks.post,

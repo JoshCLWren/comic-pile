@@ -1,16 +1,17 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const auth = vi.hoisted(() => ({ login: vi.fn() }))
 const api = vi.hoisted(() => ({ post: vi.fn() }))
 
-vi.mock('../App', () => ({ useAuth: () => auth }))
-vi.mock('../services/api', () => ({ default: api }))
+await injectModuleDoubles(await import('../App'), () => ({ useAuth: () => auth }))
+await injectModuleDoubles(await import('../services/api'), () => ({ default: api }))
 
 import HelpPage from '../pages/HelpPage'
 import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 function renderRoute(ui: React.ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>)

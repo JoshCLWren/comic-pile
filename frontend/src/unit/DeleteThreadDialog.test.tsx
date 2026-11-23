@@ -1,10 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DeleteThreadDialog from '../pages/QueuePage/DeleteThreadDialog'
 import type { Thread } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({
     isOpen,
     title,

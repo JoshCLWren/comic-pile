@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -7,9 +7,9 @@ import { readerContextApi } from '../services/api-reader-context'
 import type { ReaderContextResponse } from '../types'
 
 const original_readerContextApi = { ...readerContextApi }
-const mock_readerContextApi = { get: vi.fn() }
+const mock_readerContextApi = { get: vi.fn<typeof readerContextApi.get>() }
 
-const mockedGet = (mock_readerContextApi.get as any)
+const mockedGet = mock_readerContextApi.get
 
 function createWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })

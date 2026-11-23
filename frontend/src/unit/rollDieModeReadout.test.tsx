@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,9 +12,9 @@ import type { RollPageState, RollPageStateSetters } from '../pages/RollPage/useR
 import type { RatingThread } from '../pages/RollPage/types'
 
 const original_readerContextApi = { ...readerContextApi }
-const mock_readerContextApi = { get: vi.fn() }
+const mock_readerContextApi = { get: vi.fn<typeof readerContextApi.get>() }
 
-const getReaderContext = (mock_readerContextApi.get as any)
+const getReaderContext = mock_readerContextApi.get
 
 const setDie = vi.fn<(die: number) => Promise<void>>().mockResolvedValue(undefined)
 

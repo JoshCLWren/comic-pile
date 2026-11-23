@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from './testingLibrary'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRate } from '../hooks/useRate'
@@ -15,14 +15,15 @@ import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import { useRollRating } from '../pages/RollPage/useRollRating'
 import type { ThreadMetadata } from '../pages/RollPage/types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../services/protectedRollMutationApi', () => ({
+await injectModuleDoubles(await import('../services/protectedRollMutationApi'), () => ({
   protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), skip: vi.fn(), bootstrap: vi.fn() },
 }))
-vi.mock('../services/rollBootstrapApi', () => ({
+await injectModuleDoubles(await import('../services/rollBootstrapApi'), () => ({
   rollBootstrapApi: { get: vi.fn(), switchPrerequisite: vi.fn() },
 }))
-vi.mock('../query/cacheEffects', () => ({
+await injectModuleDoubles(await import('../query/cacheEffects'), () => ({
   applyRatedThreadCache: vi.fn().mockResolvedValue(undefined),
 }))
 

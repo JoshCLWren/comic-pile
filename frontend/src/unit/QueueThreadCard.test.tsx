@@ -1,29 +1,30 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
 import type { BlockingDependency, ThreadListItem } from '../types'
 import type { components } from '../generated/openapi'
+import { injectModuleDoubles } from './injectModuleDoubles'
 type ComicVineMappingHealth = components['schemas']['ComicVineMappingHealth']
 
-vi.mock('../components/Tooltip', () => ({
+await injectModuleDoubles(await import('../components/Tooltip'), () => ({
   default: ({ children, content }: { children: React.ReactNode; content?: string }) => (
     <div data-testid="mock-tooltip" data-content={content}>{children}</div>
   ),
 }))
 
-vi.mock('../pages/QueuePage/QueueNextIssueCard', () => ({
+await injectModuleDoubles(await import('../pages/QueuePage/QueueNextIssueCard'), () => ({
   default: ({ threadId }: { threadId: number }) => (
     <div data-testid="mock-queue-next-issue">Canonical issue lookup for {threadId}</div>
   ),
 }))
 
-vi.mock('../components/MarqueeTitle', () => ({
+await injectModuleDoubles(await import('../components/MarqueeTitle'), () => ({
   MarqueeTitle: ({ title }: { title: string }) => <span data-testid="mock-marquee">{title}</span>,
 }))
 
-vi.mock('../components/PositionMenu', () => ({
+await injectModuleDoubles(await import('../components/PositionMenu'), () => ({
   default: ({
     onDependencies,
     onMoveToFront,
@@ -74,7 +75,7 @@ vi.mock('../components/PositionMenu', () => ({
   ),
 }))
 
-vi.mock('../components/QueueMapSeriesDialog', () => ({
+await injectModuleDoubles(await import('../components/QueueMapSeriesDialog'), () => ({
   default: ({
     isOpen,
     threadTitle,

@@ -1,24 +1,25 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
+import { customCBLApi } from '../services/api-custom-cbl'
 import { getReadingListProgressIndex } from '../utils/readingListProgress'
 
-const mocks = vi.hoisted(() => ({
-  list: vi.fn(),
-  get: vi.fn(),
-  create: vi.fn(),
-  update: vi.fn(),
-  delete: vi.fn(),
-  searchIssues: vi.fn(),
-  apply: vi.fn(),
-  exportXml: vi.fn(),
-}))
+const originalCustomCBLApi = { ...customCBLApi }
+const mocks = {
+  list: vi.fn<typeof customCBLApi.list>(),
+  get: vi.fn<typeof customCBLApi.get>(),
+  create: vi.fn<typeof customCBLApi.create>(),
+  update: vi.fn<typeof customCBLApi.update>(),
+  delete: vi.fn<typeof customCBLApi.delete>(),
+  searchIssues: vi.fn<typeof customCBLApi.searchIssues>(),
+  apply: vi.fn<typeof customCBLApi.apply>(),
+  exportXml: vi.fn<typeof customCBLApi.exportXml>(),
+}
 
-vi.mock('../services/api-custom-cbl', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-custom-cbl')>('../services/api-custom-cbl')
-  return { ...actual, customCBLApi: mocks }
+afterEach(() => {
+  Object.assign(customCBLApi, originalCustomCBLApi)
 })
 
 function entriesWithProgress(firstUnread: number, skippedPositions: number[] = []) {
@@ -58,6 +59,7 @@ function renderEditor(entries: ReturnType<typeof entriesWithProgress>) {
 
 describe('Reading List editing progress', () => {
   beforeEach(() => {
+    Object.assign(customCBLApi, mocks)
     vi.resetAllMocks()
     mocks.list.mockResolvedValue([{ id: 2, name: 'Mignolaverse', issue_count: 466, mode: 'strict' }])
   })

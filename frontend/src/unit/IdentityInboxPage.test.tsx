@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import IdentityInboxPage from '../pages/IdentityInboxPage'
 import type { IdentityInboxItem } from '../services/api-identity'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mockUseIdentityInbox = vi.fn()
 type MockMutationResult = {
@@ -25,7 +26,7 @@ const mockUseRejectInboxCandidate = vi.fn(() => mockRejectMutation)
 const mockUseDeferInboxItem = vi.fn(() => mockDeferMutation)
 const mockUseSkipInboxItem = vi.fn(() => mockSkipMutation)
 
-vi.mock('../hooks/useIdentityInbox', () => ({
+await injectModuleDoubles(await import('../hooks/useIdentityInbox'), () => ({
   useIdentityInbox: (offset: number) => mockUseIdentityInbox(offset),
   useConfirmInboxCandidate: () => mockUseConfirmInboxCandidate(),
   useRejectInboxCandidate: () => mockUseRejectInboxCandidate(),

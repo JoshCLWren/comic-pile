@@ -1,10 +1,11 @@
 import { vi } from 'vitest'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook } from './testingLibrary'
 import { useQueueRestore } from '../pages/QueuePage/useQueueRestore'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mutate = vi.fn()
 const mutateGroup = vi.fn()
-vi.mock('../hooks/useQueue', () => ({
+await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useRestoreThread: vi.fn(() => ({ mutate, isPending: false, isError: false })),
   useRestoreExclusionGroup: vi.fn(() => ({ mutate: mutateGroup, isPending: false, isError: false })),
 }))

@@ -1,23 +1,22 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from './testingLibrary'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanAddMaterialImpl from '../components/ReadingPlanAddMaterialImpl'
-import type {
-  CBLAdoptionPreview,
-  CBLAdoptionPreviewEntry,
+import {
+  cblSourcesApi,
+  type CBLAdoptionPreview,
+  type CBLAdoptionPreviewEntry,
 } from '../services/api-cbl-sources'
 
-const mocks = vi.hoisted(() => ({
-  discover: vi.fn(),
-  preview: vi.fn(),
-  plan: vi.fn(),
-  commit: vi.fn(),
-}))
+const originalCBLSourcesApi = { ...cblSourcesApi }
+const mocks = {
+  discover: vi.fn<typeof cblSourcesApi.discover>(),
+  preview: vi.fn<typeof cblSourcesApi.preview>(),
+  plan: vi.fn<typeof cblSourcesApi.plan>(),
+  commit: vi.fn<typeof cblSourcesApi.commit>(),
+}
 
-vi.mock('../services/api-cbl-sources', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-cbl-sources')>(
-    '../services/api-cbl-sources',
-  )
-  return { ...actual, cblSourcesApi: mocks }
+afterEach(() => {
+  Object.assign(cblSourcesApi, originalCBLSourcesApi)
 })
 
 const source = {
@@ -88,6 +87,7 @@ async function openSource(): Promise<void> {
 
 describe('ReadingPlanAddMaterial canonical commit', () => {
   beforeEach(() => {
+    Object.assign(cblSourcesApi, mocks)
     vi.resetAllMocks()
     mocks.discover.mockResolvedValue([source])
     mocks.preview.mockResolvedValue(preview())

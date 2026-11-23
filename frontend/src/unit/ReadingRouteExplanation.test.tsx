@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { describe, expect, it, vi } from 'vitest'
 import type { ReadingOrder } from '../services/api-reading-orders'
 import type { ConnectedThreadInfo } from '../types'

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,8 +7,8 @@ import { continuityPlansApi } from '../services/api-continuity-plans'
 
 const originalList = continuityPlansApi.list
 const originalDelete = continuityPlansApi.delete
-const mockList = vi.fn()
-const mockDelete = vi.fn()
+const mockList = vi.fn<typeof continuityPlansApi.list>()
+const mockDelete = vi.fn<typeof continuityPlansApi.delete>()
 const plan = {
   id: 1,
   name: 'My Plan',
@@ -22,8 +22,8 @@ const plan = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  continuityPlansApi.list = mockList as typeof continuityPlansApi.list
-  continuityPlansApi.delete = mockDelete as typeof continuityPlansApi.delete
+  continuityPlansApi.list = mockList
+  continuityPlansApi.delete = mockDelete
 })
 
 afterEach(() => {

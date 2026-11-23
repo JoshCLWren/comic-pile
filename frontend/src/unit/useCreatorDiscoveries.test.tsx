@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook, waitFor } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,9 +7,11 @@ import { creatorDiscoveryApi } from '../services/creatorDiscoveryApi'
 import type { CreatorDiscoveryResponse } from '../types/index'
 
 const original_creatorDiscoveryApi = { ...creatorDiscoveryApi }
-const mock_creatorDiscoveryApi = { getDiscoveries: vi.fn() }
+const mock_creatorDiscoveryApi = {
+  getDiscoveries: vi.fn<typeof creatorDiscoveryApi.getDiscoveries>(),
+}
 
-const mockedGetDiscoveries = (mock_creatorDiscoveryApi.getDiscoveries as any)
+const mockedGetDiscoveries = mock_creatorDiscoveryApi.getDiscoveries
 
 function makeResponse(): CreatorDiscoveryResponse {
   return {

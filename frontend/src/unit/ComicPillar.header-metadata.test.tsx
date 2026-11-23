@@ -8,7 +8,7 @@
  * - the story title reads as a subtitle of the main issue title instead of
  *   floating under the cover.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from './testingLibrary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import type { RatingThread } from '../pages/RollPage/types'
@@ -24,7 +24,7 @@ const { getIssueIntelligenceSpy, getIssueIdentitySpy } = vi.hoisted(() => ({
   }),
 }))
 
-vi.mock('../services/api-comicvine', () => ({
+await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   comicVineApi: {
     searchSeries: vi.fn().mockResolvedValue({ query: '', results: [], total_available: 0 }),
     getSeriesIssues: vi.fn().mockResolvedValue({ comicvine_volume_id: 42, series_name: '', issues: [] }),
@@ -39,7 +39,7 @@ vi.mock('../services/api-comicvine', () => ({
   },
 }))
 
-vi.mock('../services/api-tags', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
     ...actual,
@@ -67,11 +67,12 @@ vi.mock('../services/api-tags', async (importOriginal) => {
   }
 })
 
-vi.mock('../pages/RollPage/components/ComicIdentity', () => ({
+await injectModuleDoubles(await import('../pages/RollPage/components/ComicIdentity'), () => ({
   ComicIdentity: () => <div data-testid="comic-identity-stub" />,
 }))
 
 import { ComicPillar } from '../pages/RollPage/components/ComicPillar'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const STORE_DATE = '1993-06-15'
 

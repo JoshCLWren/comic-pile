@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
@@ -30,15 +30,16 @@ import { rollApi } from '../services/api-roll'
 import type { ThreadListItem } from '../types'
 import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../hooks/useCompletedThreads', () => ({
+await injectModuleDoubles(await import('../hooks/useCompletedThreads'), () => ({
   useCompletedThreads: vi.fn(() => ({
     threads: [], hasNextPage: false, isLoadingMore: false, isError: false,
     loadMore: vi.fn(), retry: vi.fn(),
   })),
 }))
 
-vi.mock('../hooks/useThread', () => ({
+await injectModuleDoubles(await import('../hooks/useThread'), () => ({
   useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useCreateThread: vi.fn(),
   useUpdateThread: vi.fn(),
@@ -46,7 +47,7 @@ vi.mock('../hooks/useThread', () => ({
   useReactivateThread: vi.fn(),
 }))
 
-vi.mock('../hooks/useQueue', () => ({
+await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
   useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
@@ -57,15 +58,15 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useRollBootstrap', () => ({
+await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({
   useRollBootstrap: vi.fn(),
 }))
 
-vi.mock('../hooks/useSnooze', () => ({
+await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({
   useSnooze: vi.fn(),
 }))
 
-vi.mock('../hooks/useQueueBlockingInfo', () => ({
+await injectModuleDoubles(await import('../hooks/useQueueBlockingInfo'), () => ({
   useQueueBlockingInfo: vi.fn(() => ({})),
 }))
 
@@ -73,24 +74,24 @@ vi.mock('../hooks/useQueueBlockingInfo', () => ({
 // page tests exercise queue behaviour, so the batch answer is stubbed instead of
 // reaching the network; the default mirrors a deployment without the canonical
 // evaluator, which keeps the legacy blocking fallback in play.
-vi.mock('../hooks/useReadingBoundaries', () => ({
+await injectModuleDoubles(await import('../hooks/useReadingBoundaries'), () => ({
   useReadingBoundaries: vi.fn(),
 }))
 
-vi.mock('../services/api-threads', () => ({
+await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: {
     setPending: vi.fn(),
   },
 }))
 
-vi.mock('../services/api-dependencies', () => ({
+await injectModuleDoubles(await import('../services/api-dependencies'), () => ({
   dependenciesApi: {
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
   },
 }))
 
-vi.mock('../services/api-issues', () => ({
+await injectModuleDoubles(await import('../services/api-issues'), () => ({
   issuesApi: {
     create: vi.fn().mockResolvedValue({ issues: [] }),
     markRead: vi.fn().mockResolvedValue(undefined),
@@ -100,7 +101,7 @@ vi.mock('../services/api-issues', () => ({
   },
 }))
 
-vi.mock('../services/api-roll', async (importOriginal) => ({
+await injectModuleDoubles(await import('../services/api-roll'), async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/api-roll')>()),
   rollApi: {
     reroll: vi.fn(),
@@ -109,11 +110,11 @@ vi.mock('../services/api-roll', async (importOriginal) => ({
   },
 }))
 
-vi.mock('../contexts/useBugReportRestore', () => ({
+await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: vi.fn(),
 }))
 
-vi.mock('../contexts/useToast', () => ({
+await injectModuleDoubles(await import('../contexts/useToast'), () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 

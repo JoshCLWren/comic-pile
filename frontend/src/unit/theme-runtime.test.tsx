@@ -1,7 +1,7 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import type { AuthContextValue } from '../App'
 import { AuthProvider, useAuth } from '../App'
@@ -25,6 +25,7 @@ import {
 } from '../services/themePreferenceSync'
 import { PreferencesSync } from '../hooks/usePreferences'
 import { queryClient } from '../query/queryClient'
+import { injectModuleDoubles } from './injectModuleDoubles'
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -37,7 +38,7 @@ const mocks = vi.hoisted(() => ({
   isSessionRefreshRejected: vi.fn(() => false),
 }))
 
-vi.mock('../services/api', () => {
+await injectModuleDoubles(await import('../services/api'), () => {
   const apiMock = {
     get: mocks.get,
     post: mocks.post,
@@ -55,7 +56,7 @@ vi.mock('../services/api', () => {
   }
 })
 
-vi.mock('../services/api-preferences', () => ({
+await injectModuleDoubles(await import('../services/api-preferences'), () => ({
   preferencesApi: {
     get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
       mocks.get('/v2/users/me/preferences', options),

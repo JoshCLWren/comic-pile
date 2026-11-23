@@ -1,31 +1,21 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from './testingLibrary'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { expect, test, vi } from 'vitest'
-
-const mockApiGet = vi.fn()
-
-vi.mock('../services/api', () => ({
-  default: {
-    get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
-  },
-  clearAccessToken: vi.fn(),
-  setAccessToken: vi.fn(),
-  getAccessToken: () => 'test-token',
-  refreshSession: vi.fn(),
-  isSessionRefreshRejected: () => false,
-}))
-
-vi.mock('../hooks/useBugReport', () => ({
-  useBugReport: () => ({ submit: vi.fn() }),
-}))
-
-vi.mock('../components/Navigation', () => ({ default: () => null }))
-vi.mock('../components/BugReportButton', () => ({ default: () => null }))
-vi.mock('../pages/RollPage', () => ({
-  default: () => <div data-testid="roll-page">Roll</div>,
-}))
-
+import { afterEach, expect, test, vi } from 'vitest'
+import api, { getAccessToken, setAccessToken } from '../services/api'
 import { AppRoutes, AuthProvider } from '../App'
+import { ToastProvider } from '../contexts/ToastProvider'
+import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { NavCollapseProvider } from '../contexts/NavCollapseContext'
+
+const originalApiGet = api.get
+const originalAccessToken = getAccessToken()
+const mockApiGet = vi.fn<typeof api.get>()
+
+afterEach(() => {
+  Object.assign(api, { get: originalApiGet })
+  setAccessToken(originalAccessToken)
+  mockApiGet.mockReset()
+})
 
 function LocationProbe() {
   const location = useLocation()
@@ -33,17 +23,32 @@ function LocationProbe() {
 }
 
 test('redirects the retired analytics route to the root path', async () => {
-  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  Object.assign(api, { get: mockApiGet })
+  setAccessToken('test-token')
+  mockApiGet.mockImplementation((url) => {
+    if (url === '/v2/auth/me') {
+      return Promise.resolve({ username: 'testuser', email: 'test@test.com' })
+    }
+    // Keep Roll's independent resource queries pending: this route regression
+    // needs the real root page to mount, not a complete library fixture.
+    return new Promise(() => undefined)
+  })
 
   render(
     <MemoryRouter initialEntries={['/analytics']}>
-      <AuthProvider>
-        <LocationProbe />
-        <AppRoutes />
-      </AuthProvider>
+      <BugReportRestoreProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <NavCollapseProvider>
+              <LocationProbe />
+              <AppRoutes />
+            </NavCollapseProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </BugReportRestoreProvider>
     </MemoryRouter>,
   )
 
-  await waitFor(() => expect(screen.getByTestId('roll-page')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('Loading...', { exact: true })).toBeInTheDocument())
   expect(screen.getByTestId('location-pathname')).toHaveTextContent('/')
 })

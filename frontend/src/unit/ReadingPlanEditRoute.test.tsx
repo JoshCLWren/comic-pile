@@ -1,39 +1,25 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ReadingPlanEditRoute from '../pages/ReadingPlanEditRoute'
-import { useReadingPlanReader, useReadingPlanRecoveryPreview } from '../hooks/useReadingPlans'
 import { continuityPlansApi, type ReadingPlanReaderView } from '../services/api-continuity-plans'
+import {
+  readingPlanRecoveryApi,
+  type PlanRecoveryPreview,
+} from '../services/api-reading-plan-recovery'
 import { cast } from '../utils/cast'
 
-vi.mock('../services/api-continuity-plans', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
-    '../services/api-continuity-plans',
-  )
-  return {
-    ...actual,
-    continuityPlansApi: {
-      ...actual.continuityPlansApi,
-      getReader: vi.fn(),
-    },
-  }
-})
+const originalContinuityPlansApi = { ...continuityPlansApi }
+const originalReadingPlanRecoveryApi = { ...readingPlanRecoveryApi }
+const getReader = vi.fn<typeof continuityPlansApi.getReader>()
+const getRecoveryPreview = vi.fn<typeof readingPlanRecoveryApi.preview>()
 
-// For error-state assertions, supply a settled query state directly. A rejected
-// mocked API promise can produce an unhandled rejection in the shared test
-// harness, even after React Query has rendered its error state.
-vi.mock('../hooks/useReadingPlans', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../hooks/useReadingPlans')>()
-  return {
-    ...actual,
-    useReadingPlanReader: vi.fn(actual.useReadingPlanReader),
-    useReadingPlanRecoveryPreview: vi.fn(actual.useReadingPlanRecoveryPreview),
-  }
+afterEach(() => {
+  Object.assign(continuityPlansApi, originalContinuityPlansApi)
+  Object.assign(readingPlanRecoveryApi, originalReadingPlanRecoveryApi)
 })
-
-const getReader = vi.mocked(continuityPlansApi.getReader)
 
 function ListEditor() {
   const { id } = useParams()
@@ -70,9 +56,10 @@ function response(
 }
 
 beforeEach(() => {
+  Object.assign(continuityPlansApi, { getReader })
+  Object.assign(readingPlanRecoveryApi, { preview: getRecoveryPreview })
   getReader.mockReset()
-  vi.mocked(useReadingPlanReader).mockRestore()
-  vi.mocked(useReadingPlanRecoveryPreview).mockRestore()
+  getRecoveryPreview.mockReset()
 })
 
 describe('ReadingPlanEditRoute', () => {
@@ -109,71 +96,39 @@ describe('ReadingPlanEditRoute', () => {
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 
-  it('fails closed on a reader request error', () => {
-    // SAFETY: Only isError, isPending, and data are read by the route in
-    // this test. The remaining React Query result properties are irrelevant.
-    vi.mocked(useReadingPlanReader).mockReturnValue({
-      isError: true,
-      isPending: false,
-      data: undefined,
-    } as ReturnType<typeof useReadingPlanReader>)
+  it('fails closed on a reader request error', async () => {
+    getReader.mockRejectedValue(new Error('reader unavailable'))
     renderEditRoute()
-    expect(screen.getByText(/Could not determine this Plan/)).toBeInTheDocument()
+    expect(await screen.findByText(/Could not determine this Plan/)).toBeInTheDocument()
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 
-  it('opens the saved Plan editor from the recovery authoring link when the plan is orphaned', () => {
+  it('opens the saved Plan editor from the recovery authoring link when the plan is orphaned', async () => {
     // An orphaned plan still returns 409 from the reader. The recovery screen
     // hands the owner an explicit opt-in link so the saved plan can be authored.
-    // SAFETY: Only isError, isPending, and data are read by the route here; the
-    // remaining React Query result properties are irrelevant to this branch.
-    vi.mocked(useReadingPlanReader).mockReturnValue({
-      isError: true,
-      isPending: false,
-      data: undefined,
-    } as ReturnType<typeof useReadingPlanReader>)
-    // SAFETY: Only isPending and data.status are read by the route in this
-    // branch; the remaining React Query result properties are irrelevant.
-    vi.mocked(useReadingPlanRecoveryPreview).mockReturnValue({
-      isPending: false,
-      data: { status: 'orphaned' },
-    } as ReturnType<typeof useReadingPlanRecoveryPreview>)
+    getReader.mockRejectedValue(new Error('reader unavailable'))
+    // SAFETY: The route reads only status from this recovery preview fixture.
+    getRecoveryPreview.mockResolvedValue(cast<PlanRecoveryPreview>({ status: 'orphaned' }))
     renderEditRoute('29', '?authoring=1')
-    expect(screen.getByText('Legacy Plan editor')).toBeInTheDocument()
+    expect(await screen.findByText('Legacy Plan editor')).toBeInTheDocument()
     expect(screen.queryByText(/Could not determine this Plan/)).not.toBeInTheDocument()
   })
 
-  it('does not unlock the editor for a relinked plan from a stale authoring link', () => {
-    // SAFETY: The route reads only isError, isPending, and data here.
-    vi.mocked(useReadingPlanReader).mockReturnValue({
-      isError: true,
-      isPending: false,
-      data: undefined,
-    } as ReturnType<typeof useReadingPlanReader>)
-    // SAFETY: The route reads only isPending and data.status here.
-    vi.mocked(useReadingPlanRecoveryPreview).mockReturnValue({
-      isPending: false,
-      data: { status: 'linked' },
-    } as ReturnType<typeof useReadingPlanRecoveryPreview>)
+  it('does not unlock the editor for a relinked plan from a stale authoring link', async () => {
+    getReader.mockRejectedValue(new Error('reader unavailable'))
+    // SAFETY: The route reads only status from this recovery preview fixture.
+    getRecoveryPreview.mockResolvedValue(cast<PlanRecoveryPreview>({ status: 'linked' }))
     renderEditRoute('29', '?authoring=1')
-    expect(screen.getByText(/Could not determine this Plan/)).toBeInTheDocument()
+    expect(await screen.findByText(/Could not determine this Plan/)).toBeInTheDocument()
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 
-  it('does not unlock the editor for an ambiguous authority from a stale authoring link', () => {
-    // SAFETY: The route reads only isError, isPending, and data here.
-    vi.mocked(useReadingPlanReader).mockReturnValue({
-      isError: true,
-      isPending: false,
-      data: undefined,
-    } as ReturnType<typeof useReadingPlanReader>)
-    // SAFETY: The route reads only isPending and data.status here.
-    vi.mocked(useReadingPlanRecoveryPreview).mockReturnValue({
-      isPending: false,
-      data: { status: 'ambiguous' },
-    } as ReturnType<typeof useReadingPlanRecoveryPreview>)
+  it('does not unlock the editor for an ambiguous authority from a stale authoring link', async () => {
+    getReader.mockRejectedValue(new Error('reader unavailable'))
+    // SAFETY: The route reads only status from this recovery preview fixture.
+    getRecoveryPreview.mockResolvedValue(cast<PlanRecoveryPreview>({ status: 'ambiguous' }))
     renderEditRoute('29', '?authoring=1')
-    expect(screen.getByText(/Could not determine this Plan/)).toBeInTheDocument()
+    expect(await screen.findByText(/Could not determine this Plan/)).toBeInTheDocument()
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { expect, it, vi } from 'vitest'
@@ -8,9 +8,10 @@ import { TagEditor } from '../components/Tags/TagEditor'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import ReadingPlanDetailPage from '../pages/ReadingPlanDetailPage'
 import { tagsApi } from '../services/api-tags'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/Tags/useAdminFlag', () => ({ useAdminFlag: () => false }))
-vi.mock('../services/api-tags', async (importOriginal) => {
+await injectModuleDoubles(await import('../components/Tags/useAdminFlag'), () => ({ useAdminFlag: () => false }))
+await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   const empty = { direct_tags: [], effective_tags: [] }
   return { ...actual, tagsApi: { ...actual.tagsApi,
@@ -19,20 +20,20 @@ vi.mock('../services/api-tags', async (importOriginal) => {
     effectiveForPlan: vi.fn().mockResolvedValue({ ...empty, target_type: 'ContinuityPlan', target_id: 9 }),
   } }
 })
-vi.mock('../hooks/useThread', () => ({
+await injectModuleDoubles(await import('../hooks/useThread'), () => ({
   useThread: () => ({ data: { id: 5, title: 'The Ultimates', format: 'Comics', issues_remaining: 0, total_issues: null, status: 'active', queue_position: 1 } }),
   useUpdateThread: () => ({ mutate: vi.fn(), isPending: false }),
 }))
-vi.mock('../hooks/useReadingBoundaries', () => ({ useReadingBoundaries: () => ({ data: { threads: {} } }) }))
-vi.mock('../hooks/useDependencies', async (importOriginal) => ({
+await injectModuleDoubles(await import('../hooks/useReadingBoundaries'), () => ({ useReadingBoundaries: () => ({ data: { threads: {} } }) }))
+await injectModuleDoubles(await import('../hooks/useDependencies'), async (importOriginal) => ({
   ...await importOriginal<typeof import('../hooks/useDependencies')>(),
   useThreadBlockingInfo: () => ({}),
 }))
-vi.mock('../hooks/useReaderContext', () => ({ useConnectedThreads: () => ({ connectedThreads: [] }) }))
-vi.mock('../hooks/useCrossoverGroups', () => ({ useCrossoverGroups: () => ({ groupsByThreadId: {} }) }))
-vi.mock('../hooks/useThreadIssues', () => ({ useThreadIssuePages: () => ({ issues: [], pages: [], totalCount: 0 }) }))
-vi.mock('../hooks/useThreadIssueCreators', () => ({ useThreadIssueCreators: () => ({ data: { issues: [] } }) }))
-vi.mock('../hooks/useReadingPlans', () => ({ useReadingPlanReader: () => ({ data: {
+await injectModuleDoubles(await import('../hooks/useReaderContext'), () => ({ useConnectedThreads: () => ({ connectedThreads: [] }) }))
+await injectModuleDoubles(await import('../hooks/useCrossoverGroups'), () => ({ useCrossoverGroups: () => ({ groupsByThreadId: {} }) }))
+await injectModuleDoubles(await import('../hooks/useThreadIssues'), () => ({ useThreadIssuePages: () => ({ issues: [], pages: [], totalCount: 0 }) }))
+await injectModuleDoubles(await import('../hooks/useThreadIssueCreators'), () => ({ useThreadIssueCreators: () => ({ data: { issues: [] } }) }))
+await injectModuleDoubles(await import('../hooks/useReadingPlans'), () => ({ useReadingPlanReader: () => ({ data: {
   plan_id: 9, name: 'Mignolaverse', ordering_mode: 'informational', execution_mode: 'option_e',
   progress: { total_issues: 0, read_issues: 0 }, available_now: [], blocked_next: [], lanes: [], sources: [],
 } }) }))

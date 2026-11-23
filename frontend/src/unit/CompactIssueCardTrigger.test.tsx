@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/ComicIssueMappingAction', () => ({
+await injectModuleDoubles(await import('../components/ComicIssueMappingAction'), () => ({
   default: ({ issueId }: { issueId: number | null }) => <span data-testid="shared-map-action">{issueId}</span>,
 }))
 

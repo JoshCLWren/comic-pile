@@ -1,5 +1,5 @@
 import { StrictMode, type ReactNode } from 'react'
-import { act, render } from '@testing-library/react'
+import { act, render } from '../../unit/testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AppRoutes, AuthProvider } from '../../App'

@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import type { RateResponsePayload } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const undoSpies = vi.hoisted(() => ({
   undo: vi.fn(),
@@ -12,7 +13,7 @@ const undoSpies = vi.hoisted(() => ({
   showToast: vi.fn(),
 }))
 
-vi.mock('../contexts/useToast', () => ({
+await injectModuleDoubles(await import('../contexts/useToast'), () => ({
   useToast: () => ({ toasts: [], showToast: undoSpies.showToast, removeToast: vi.fn() }),
 }))
 
@@ -21,7 +22,7 @@ const ratingSnapshots = {
 }
 
 // SAFETY: the module is mocked, so the test supplies the return shape directly.
-vi.mock('../hooks/useUndo', () => ({
+await injectModuleDoubles(await import('../hooks/useUndo'), () => ({
   useUndo: () => ({ mutate: undoSpies.undo, isPending: false, isError: false }),
   useSnapshots: () => ({
     data: ratingSnapshots,
@@ -124,20 +125,20 @@ const cachedLastRead: RateResponsePayload = {
   },
 }
 
-vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
-vi.mock('../contexts/useBugReportRestore', () => ({
+await injectModuleDoubles(await import('react-router-dom'), () => ({ useNavigate: () => spies.navigate }))
+await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: () => ({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
   }),
 }))
-vi.mock('../hooks/useRollBootstrap', () => ({
+await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({
   useRollBootstrap: () =>
     bootstrapHook.value ??
     ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }),
 }))
-vi.mock('../hooks/useThread', () => ({ useStaleThreads: () => ({ data: [], refetch: spies.refetch }) }))
-vi.mock('../hooks/useRoll', () => ({
+await injectModuleDoubles(await import('../hooks/useThread'), () => ({ useStaleThreads: () => ({ data: [], refetch: spies.refetch }) }))
+await injectModuleDoubles(await import('../hooks/useRoll'), () => ({
   useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: () => ({ mutate: spies.setDie, isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
@@ -145,35 +146,35 @@ vi.mock('../hooks/useRoll', () => ({
   useDismissPending: () => ({ mutate: spies.dismissPending, isPending: false }),
   useOverrideRoll: () => ({ mutate: spies.override, isPending: false }),
 }))
-vi.mock('../hooks/useSnooze', () => ({
+await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({
   useSnooze: () => ({ mutate: spies.snooze, isPending: false }),
   useUnsnooze: () => ({ mutate: spies.unsnooze, isPending: false }),
 }))
-vi.mock('../hooks/useQueue', () => ({
+await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }),
   useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }),
   useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }),
   useActiveSeriesCount: () => null,
   useRestoreExclusionGroup: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
 }))
-vi.mock('../hooks', () => ({
+await injectModuleDoubles(await import('../hooks'), () => ({
   useRate: () => ({ mutate: spies.rate, isPending: false }),
 }))
-vi.mock('../services/api-taste', () => ({
+await injectModuleDoubles(await import('../services/api-taste'), () => ({
   tasteApi: {
     getDiscoveries: vi.fn().mockResolvedValue({ discoveries: [], generated_at: new Date().toISOString() }),
     dismiss: vi.fn().mockResolvedValue({ dismissed: true }),
     submitVerdict: vi.fn().mockResolvedValue({}),
   },
 }))
-vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+await injectModuleDoubles(await import('../hooks/useReaderContext'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
   return {
     ...actual,
     useReaderContext: () => ({ context: null, isLoading: false, error: null, refetch: vi.fn() }),
   }
 })
-vi.mock('../services/api', () => ({
+await injectModuleDoubles(await import('../services/api'), () => ({
   default: {},
   threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }) },
   dependenciesApi: {
@@ -182,10 +183,10 @@ vi.mock('../services/api', () => ({
     getBatchBlockingInfo: relatedApi.batchBlockingInfo,
   },
 }))
-vi.mock('../services/api-reading-orders', () => ({
+await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
   readingOrdersApi: { getForThread: relatedApi.readingOrders },
 }))
-vi.mock('../components/LazyDice3D', () => ({
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({
   default: ({ onRollComplete }: { onRollComplete?: () => void }) => (
     <div data-testid="dice">
       <button type="button" onClick={onRollComplete}>
@@ -194,10 +195,10 @@ vi.mock('../components/LazyDice3D', () => ({
     </div>
   ),
 }))
-vi.mock('../components/Tooltip', () => ({
+await injectModuleDoubles(await import('../components/Tooltip'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
-vi.mock('../components/GlossaryLink', () => ({
+await injectModuleDoubles(await import('../components/GlossaryLink'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 

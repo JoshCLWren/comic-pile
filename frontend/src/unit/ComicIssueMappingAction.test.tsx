@@ -6,7 +6,7 @@
  * runs only on demand, and provider-only entries never hit the owner-scoped
  * mapping mutation.
  */
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from './testingLibrary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IssueIdentityResponse } from '../services/api-comicvine'
 
@@ -19,7 +19,7 @@ const { searchSeriesSpy, getIssueIdentitySpy, confirmIdentitySpy, replaceIdentit
     removeIdentitySpy: vi.fn(),
   }))
 
-vi.mock('../services/api-comicvine', () => ({
+await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     getSeriesIssues: vi.fn().mockResolvedValue({ comicvine_volume_id: 42, series_name: '', issues: [] }),
@@ -35,7 +35,7 @@ vi.mock('../services/api-comicvine', () => ({
   },
 }))
 
-vi.mock('../query/queryClient', () => ({
+await injectModuleDoubles(await import('../query/queryClient'), () => ({
   queryClient: {
     invalidateQueries: vi.fn().mockResolvedValue(undefined),
     setQueryData: vi.fn(),
@@ -44,6 +44,7 @@ vi.mock('../query/queryClient', () => ({
 }))
 
 import ComicIssueMappingAction from '../components/ComicIssueMappingAction'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const UNMAPPED: IssueIdentityResponse = {
   issue_id: 77,

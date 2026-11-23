@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
@@ -16,7 +16,7 @@ const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssues
     getIssueIntelligenceSpy: vi.fn().mockResolvedValue(null),
   }))
 
-vi.mock('../services/api-comicvine', () => ({
+await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     getSeriesIssues: getSeriesIssuesSpy,
@@ -31,17 +31,17 @@ vi.mock('../services/api-comicvine', () => ({
   },
 }))
 
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({ isOpen, title, children }: { isOpen: boolean; title: string; children: ReactNode }) =>
     isOpen ? <div role="dialog"><h2>{title}</h2>{children}</div> : null,
 }))
 
-vi.mock('../components/ComicVineSearchDialog', () => ({
+await injectModuleDoubles(await import('../components/ComicVineSearchDialog'), () => ({
   default: ({ isOpen }: { isOpen: boolean }) =>
     isOpen ? <div role="dialog"><h2>ComicVine search</h2></div> : null,
 }))
 
-vi.mock('../components/IssueCorrectionDialog', () => ({
+await injectModuleDoubles(await import('../components/IssueCorrectionDialog'), () => ({
   default: ({
     isOpen,
     threadTitle,
@@ -51,7 +51,7 @@ vi.mock('../components/IssueCorrectionDialog', () => ({
   }) => (isOpen ? <div role="dialog"><h2>Fix Issue Number</h2>{threadTitle}</div> : null),
 }))
 
-vi.mock('../components/QueueMapSeriesDialog', () => ({
+await injectModuleDoubles(await import('../components/QueueMapSeriesDialog'), () => ({
   default: ({ threadTitle, onClose, onMapped }: { threadTitle: string; onClose: () => void;
     onMapped: (ids: number[]) => void }) => (
     <div role="dialog" aria-label="Series mapping">
@@ -62,7 +62,7 @@ vi.mock('../components/QueueMapSeriesDialog', () => ({
   ),
 }))
 
-vi.mock('../services/api-tags', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
     ...actual,
@@ -90,11 +90,12 @@ vi.mock('../services/api-tags', async (importOriginal) => {
   }
 })
 
-vi.mock('../pages/RollPage/components/ComicIdentity', () => ({
+await injectModuleDoubles(await import('../pages/RollPage/components/ComicIdentity'), () => ({
   ComicIdentity: () => <div data-testid="comic-identity-stub" />,
 }))
 
 import { ComicPillar } from '../pages/RollPage/components/ComicPillar'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const linkedThread: RatingThread = {
   id: 7,

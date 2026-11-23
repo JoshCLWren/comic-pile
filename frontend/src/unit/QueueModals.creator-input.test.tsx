@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { QueueModals } from '../pages/QueuePage/QueueModals'
@@ -7,8 +7,9 @@ import {
   DEFAULT_CREATE_STATE,
   type QueueFormState,
 } from '../pages/QueuePage/types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/Modal', () => ({
+await injectModuleDoubles(await import('../components/Modal'), () => ({
   default: ({
     isOpen,
     title,
@@ -20,23 +21,23 @@ vi.mock('../components/Modal', () => ({
   }) => (isOpen ? <section aria-label={title}>{children}</section> : null),
 }))
 
-vi.mock('../components/PositionSlider', () => ({
+await injectModuleDoubles(await import('../components/PositionSlider'), () => ({
   default: () => null,
 }))
 
-vi.mock('../components/DependencyBuilder', () => ({
+await injectModuleDoubles(await import('../components/DependencyBuilder'), () => ({
   default: () => null,
 }))
 
-vi.mock('../components/MigrationDialog', () => ({
+await injectModuleDoubles(await import('../components/MigrationDialog'), () => ({
   default: () => null,
 }))
 
-vi.mock('../pages/QueuePage/IssueToggleList', () => ({
+await injectModuleDoubles(await import('../pages/QueuePage/IssueToggleList'), () => ({
   IssueToggleList: () => null,
 }))
 
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
+await injectModuleDoubles(await import('../pages/QueuePage/FormatSelect'), () => ({
   FormatSelect: ({
     id,
     value,

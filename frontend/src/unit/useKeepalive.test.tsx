@@ -1,8 +1,9 @@
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react'
+import { act, fireEvent, render, renderHook, screen } from './testingLibrary'
 import { MemoryRouter, Outlet, Route, Routes, useNavigate } from 'react-router-dom'
 import type { ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useKeepalive } from '../hooks/useKeepalive'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 // Regression coverage for the review fixes in PR #4068 (issue #3480): the
 // keepalive call must go to the corrected relative URL (never baking the
@@ -11,7 +12,7 @@ import { useKeepalive } from '../hooks/useKeepalive'
 // never keeping Neon warm when the tab is hidden or the user is idle.
 
 const { apiGet } = vi.hoisted(() => ({ apiGet: vi.fn() }))
-vi.mock('../services/api', () => ({ default: { get: apiGet } }))
+await injectModuleDoubles(await import('../services/api'), () => ({ default: { get: apiGet } }))
 
 const KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000
 const PREWARM_DEBOUNCE_MS = 1000

@@ -1,42 +1,19 @@
 import { useState } from 'react'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueueModals } from '../pages/QueuePage/QueueModals'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
 import { threadsApi } from '../services/api-threads'
 import type { PotentialDuplicateMatch, Thread } from '../types'
 
-vi.mock('../components/Modal', () => ({
-  default: ({ isOpen, title, children }: { isOpen: boolean; title: string; children: React.ReactNode }) =>
-    isOpen ? <section aria-label={title}>{children}</section> : null,
-}))
-vi.mock('../components/PositionSlider', () => ({ default: () => null }))
-vi.mock('../components/DependencyBuilder', () => ({ default: () => null }))
-vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
-vi.mock('../components/AddSeriesFromComicVineDialog', () => ({ default: () => null }))
-vi.mock('../pages/QueuePage/IssueToggleList', () => ({ IssueToggleList: () => null }))
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
-  FormatSelect: ({
-    id,
-    value,
-    onChange,
-  }: {
-    id: string
-    value: string
-    onChange: (value: string) => void
-  }) => (
-    <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="Comic">Comic</option>
-    </select>
-  ),
-}))
-vi.mock('../services/api-threads', () => ({
-  threadsApi: { checkPotentialDuplicates: vi.fn() },
-}))
+const originalThreadsApi = { ...threadsApi }
+const CHECK = vi.fn<typeof threadsApi.checkPotentialDuplicates>()
 
-const CHECK = vi.mocked(threadsApi.checkPotentialDuplicates)
+afterEach(() => {
+  Object.assign(threadsApi, originalThreadsApi)
+})
 
 const CONFIRMED_MATCH: PotentialDuplicateMatch = {
   thread_id: 42,
@@ -172,6 +149,7 @@ function renderInRouter(ui: React.ReactElement) {
 }
 
 beforeEach(() => {
+  Object.assign(threadsApi, { checkPotentialDuplicates: CHECK })
   CHECK.mockReset()
 })
 

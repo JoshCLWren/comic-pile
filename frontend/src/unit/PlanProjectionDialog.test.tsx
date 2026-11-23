@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
 import { readingOrdersApi } from '../services/api-reading-orders'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -11,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   confirmProjection: vi.fn(),
 }))
 
-vi.mock('../services/api-reading-orders', () => ({
+await injectModuleDoubles(await import('../services/api-reading-orders'), () => ({
   readingOrdersApi: {
     list: mocks.list,
     previewProjection: mocks.previewProjection,

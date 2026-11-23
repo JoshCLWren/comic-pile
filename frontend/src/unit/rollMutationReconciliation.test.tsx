@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from './testingLibrary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ToastProvider } from '../contexts/ToastProvider'
@@ -15,9 +15,9 @@ import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 const original_rollBootstrapApi = { ...rollBootstrapApi }
-const mock_rollBootstrapApi = { get: vi.fn() }
+const mock_rollBootstrapApi = { get: vi.fn<typeof rollBootstrapApi.get>() }
 
-const mockedBootstrap = (mock_rollBootstrapApi.get as any)
+const mockedBootstrap = mock_rollBootstrapApi.get
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={queryClient}>
     <ToastProvider>{children}</ToastProvider>

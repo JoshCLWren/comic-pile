@@ -1,12 +1,13 @@
 import { forwardRef, useImperativeHandle, useState } from 'react'
 import type { FormEvent } from 'react'
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { QueueModals } from '../pages/QueuePage/QueueModals'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
 import type { ThreadListItem } from '../types'
 import type { IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 /**
  * Regression coverage for #3309: adding several issue chips in the Edit Series
@@ -20,13 +21,13 @@ import type { IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
  * too late to stop the reload that aborted the queued requests.
  */
 
-vi.mock('../components/PositionSlider', () => ({ default: () => null }))
-vi.mock('../components/DependencyBuilder', () => ({ default: () => null }))
-vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/PositionSlider'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/DependencyBuilder'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/MigrationDialog'), () => ({ default: () => null }))
 
 const flushCalls: string[] = []
 
-vi.mock('../pages/QueuePage/IssueToggleList', () => ({
+await injectModuleDoubles(await import('../pages/QueuePage/IssueToggleList'), () => ({
   IssueToggleList: forwardRef<IssueToggleListHandle, { onPendingMutationsChange?: (pending: boolean) => void }>((props, ref) => {
     useImperativeHandle(ref, () => ({
       flush: async () => {
@@ -41,7 +42,7 @@ vi.mock('../pages/QueuePage/IssueToggleList', () => ({
   }),
 }))
 
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
+await injectModuleDoubles(await import('../pages/QueuePage/FormatSelect'), () => ({
   FormatSelect: ({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) => (
     <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
       <option value="Comic">Comic</option>

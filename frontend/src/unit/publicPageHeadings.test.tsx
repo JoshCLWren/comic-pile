@@ -1,18 +1,42 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const auth = vi.hoisted(() => ({ login: vi.fn() }))
-
-vi.mock('../App', () => ({ useAuth: () => auth }))
-
 import LandingPage from '../pages/LandingPage'
 import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
 import ForgotPasswordPage from '../pages/ForgotPasswordPage'
 import ResetPasswordPage from '../pages/ResetPasswordPage'
 import DemoRollPage from '../pages/DemoRollPage'
+import { AuthContext, type AuthContextValue } from '../contexts/AuthContext'
 import type { RollResponse } from '../types'
+
+const auth: AuthContextValue = {
+  authState: {
+    status: 'unauthenticated',
+    isLoading: false,
+    user: null,
+    error: null,
+    retryCount: 0,
+    lastRetryAt: null,
+  },
+  isAuthenticated: false,
+  isLoading: false,
+  user: null,
+  login: vi.fn<AuthContextValue['login']>(),
+  logout: vi.fn(),
+  revalidateSession: vi.fn<AuthContextValue['revalidateSession']>(),
+  recoverSession: vi.fn<AuthContextValue['recoverSession']>(),
+  retryAuth: vi.fn<AuthContextValue['retryAuth']>(),
+  clearAuthError: vi.fn(),
+}
+
+function renderPublicRoute(ui: React.ReactElement, initialEntry: string) {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <AuthContext.Provider value={auth}>{ui}</AuthContext.Provider>
+    </MemoryRouter>,
+  )
+}
 
 const seededDemoRoll: RollResponse = {
   thread_id: 999,
@@ -47,40 +71,19 @@ function expectSinglePrimaryH1(): void {
 function renderPublicPage(page: 'landing' | 'login' | 'register' | 'forgot' | 'reset' | 'demo') {
   switch (page) {
     case 'landing':
-      return render(
-        <MemoryRouter>
-          <LandingPage />
-        </MemoryRouter>,
-      )
+      return renderPublicRoute(<LandingPage />, '/')
     case 'login':
-      return render(
-        <MemoryRouter initialEntries={['/login']}>
-          <LoginPage />
-        </MemoryRouter>,
-      )
+      return renderPublicRoute(<LoginPage />, '/login')
     case 'register':
-      return render(
-        <MemoryRouter initialEntries={['/register']}>
-          <RegisterPage />
-        </MemoryRouter>,
-      )
+      return renderPublicRoute(<RegisterPage />, '/register')
     case 'forgot':
-      return render(
-        <MemoryRouter initialEntries={['/forgot-password']}>
-          <ForgotPasswordPage />
-        </MemoryRouter>,
-      )
+      return renderPublicRoute(<ForgotPasswordPage />, '/forgot-password')
     case 'reset':
-      return render(
-        <MemoryRouter initialEntries={['/reset-password']}>
-          <ResetPasswordPage />
-        </MemoryRouter>,
-      )
+      return renderPublicRoute(<ResetPasswordPage />, '/reset-password')
     case 'demo':
-      return render(
-        <MemoryRouter initialEntries={['/demo']}>
-          <DemoRollPage api={{ roll: () => Promise.resolve(seededDemoRoll) }} />
-        </MemoryRouter>,
+      return renderPublicRoute(
+        <DemoRollPage api={{ roll: () => Promise.resolve(seededDemoRoll) }} />,
+        '/demo',
       )
   }
 }

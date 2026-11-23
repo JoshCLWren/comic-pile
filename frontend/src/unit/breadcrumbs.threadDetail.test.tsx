@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
@@ -11,6 +11,7 @@ import {
   BREADCRUMB_STRUCTURED_DATA_SCRIPT_ID,
   removeStructuredDataScript,
 } from '../seo/structuredData'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 interface ListItemNode {
   '@type': string
@@ -27,16 +28,16 @@ interface BreadcrumbList {
 
 const routeParams = { id: '42' }
 
-vi.mock('react-router-dom', async () => {
+await injectModuleDoubles(await import('react-router-dom'), async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return { ...actual, useParams: () => routeParams }
 })
-vi.mock('../hooks/useThread', async () => {
+await injectModuleDoubles(await import('../hooks/useThread'), async () => {
   const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
   return { ...actual, useUpdateThread: vi.fn() }
 })
-vi.mock('../services/api-threads', () => ({ threadsApi: { get: vi.fn() } }))
-vi.mock('../services/api-dependencies', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-threads'), () => ({ threadsApi: { get: vi.fn() } }))
+await injectModuleDoubles(await import('../services/api-dependencies'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-dependencies')>()
   return {
     ...actual,
@@ -46,8 +47,8 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
     },
   }
 })
-vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn() } }))
-vi.mock('../services/api-tags', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-issues'), () => ({ issuesApi: { list: vi.fn() } }))
+await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
     ...actual,

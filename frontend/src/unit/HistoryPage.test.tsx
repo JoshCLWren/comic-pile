@@ -8,22 +8,23 @@
  * bounded-loading and recovery contracts (#3572, #3429) pointed at the real
  * page and service rather than a stale session mock.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import HistoryPage from '../pages/HistoryPage'
-import type { ActivityItem } from '../services/api-activity'
+import { activityApi, type ActivityItem } from '../services/api-activity'
 import { issueCardsApi } from '../services/issueCardsApi'
 
-const listMock = vi.hoisted(() => vi.fn())
+const originalActivityApi = { ...activityApi }
+const originalIssueCardsApi = { ...issueCardsApi }
+const listMock = vi.fn<typeof activityApi.list>()
+const fetchCards = vi.fn<typeof issueCardsApi.fetchCards>()
 
-vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
-
-vi.mock('../services/api-activity', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../services/api-activity')>()
-  return { ...actual, activityApi: { list: listMock } }
+afterEach(() => {
+  Object.assign(activityApi, originalActivityApi)
+  Object.assign(issueCardsApi, originalIssueCardsApi)
 })
 
 const rolled: ActivityItem = {
@@ -77,7 +78,11 @@ function expectNoExportSummary() {
 }
 
 beforeEach(() => {
+  Object.assign(activityApi, { list: listMock })
+  Object.assign(issueCardsApi, { fetchCards })
   listMock.mockReset()
+  fetchCards.mockReset()
+  fetchCards.mockResolvedValue([])
 })
 
 describe('History page contracts', () => {

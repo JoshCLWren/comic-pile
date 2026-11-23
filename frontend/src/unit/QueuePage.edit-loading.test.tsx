@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
@@ -26,15 +26,16 @@ import { issueDependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import type { IssueListResponse, ThreadListItem } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../hooks/useCompletedThreads', () => ({
+await injectModuleDoubles(await import('../hooks/useCompletedThreads'), () => ({
   useCompletedThreads: vi.fn(() => ({
     threads: [], hasNextPage: false, isLoadingMore: false, isError: false,
     loadMore: vi.fn(), retry: vi.fn(),
   })),
 }))
 
-vi.mock('../hooks/useThread', () => ({
+await injectModuleDoubles(await import('../hooks/useThread'), () => ({
   useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useCreateThread: vi.fn(),
   useUpdateThread: vi.fn(),
@@ -42,7 +43,7 @@ vi.mock('../hooks/useThread', () => ({
   useReactivateThread: vi.fn(),
 }))
 
-vi.mock('../hooks/useQueue', () => ({
+await injectModuleDoubles(await import('../hooks/useQueue'), () => ({
   useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
   useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
@@ -53,31 +54,31 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useRollBootstrap', () => ({
+await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({
   useRollBootstrap: vi.fn(),
 }))
 
-vi.mock('../hooks/useSnooze', () => ({
+await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({
   useSnooze: vi.fn(),
 }))
 
-vi.mock('../hooks/useQueueBlockingInfo', () => ({
+await injectModuleDoubles(await import('../hooks/useQueueBlockingInfo'), () => ({
   useQueueBlockingInfo: vi.fn(() => ({})),
 }))
 
 // The canonical boundary batch is the queue's primary blocking source; stub it so
 // these tests exercise the queue's legacy fallback path without real requests.
-vi.mock('../hooks/useReadingBoundaries', () => ({
+await injectModuleDoubles(await import('../hooks/useReadingBoundaries'), () => ({
   useReadingBoundaries: vi.fn(),
 }))
 
-vi.mock('../services/api-threads', () => ({
+await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: {
     setPending: vi.fn(),
   },
 }))
 
-vi.mock('../services/api-dependencies', () => ({
+await injectModuleDoubles(await import('../services/api-dependencies'), () => ({
   dependenciesApi: {
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
@@ -89,13 +90,13 @@ vi.mock('../services/api-dependencies', () => ({
 
 // The queue's batched crossover query is a separate service module; without this
 // stub the rendered page issues real requests and logs network errors.
-vi.mock('../services/api-dependency-groups', () => ({
+await injectModuleDoubles(await import('../services/api-dependency-groups'), () => ({
   dependencyGroupsApi: {
     listForThreads: vi.fn().mockResolvedValue({}),
   },
 }))
 
-vi.mock('../services/api-issues', () => ({
+await injectModuleDoubles(await import('../services/api-issues'), () => ({
   issuesApi: {
     list: vi.fn(),
     create: vi.fn().mockResolvedValue({ issues: [] }),
@@ -107,7 +108,7 @@ vi.mock('../services/api-issues', () => ({
   },
 }))
 
-vi.mock('../contexts/useBugReportRestore', () => ({
+await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: vi.fn(),
 }))
 

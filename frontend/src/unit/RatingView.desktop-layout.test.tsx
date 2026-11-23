@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
@@ -11,13 +11,14 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import type { RatingThread } from '../pages/RollPage/types'
 import type { ReaderContextResponse } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
-vi.mock('../components/Tooltip', () => ({
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({ default: () => <div data-testid="dice" /> }))
+await injectModuleDoubles(await import('../components/Tooltip'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
-vi.mock('../components/IssueCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../services/api-tags', async (importOriginal) => {
+await injectModuleDoubles(await import('../components/IssueCorrectionDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
     ...actual,
@@ -44,11 +45,11 @@ vi.mock('../services/api-tags', async (importOriginal) => {
     },
   }
 })
-vi.mock('../components/ContinuityCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
+await injectModuleDoubles(await import('../components/ContinuityCorrectionDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../pages/RollPage/components/ReadingOrderGroups'), () => ({
   ReadingOrderGroups: () => null,
 }))
-vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
+await injectModuleDoubles(await import('../pages/RollPage/components/ReadingRouteExplanation'), () => ({
   ReadingRouteExplanation: () => null,
 }))
 
@@ -61,7 +62,7 @@ interface HoistedComicVineModule {
 const { comicvineState } = vi.hoisted((): HoistedComicVineModule => ({
   comicvineState: { metadata: null },
 }))
-vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
+await injectModuleDoubles(await import('../hooks/useComicVineIssueIntelligence'), () => ({
   useComicVineIssueIntelligence: () => ({
     metadata: comicvineState.metadata,
     isLoading: false,

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -10,8 +10,9 @@ import { threadsApi } from '../services/api-threads'
 import { queueApi } from '../services/api-queue'
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import { cast } from '../utils/cast'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../services/api-continuity-plans', async () => {
+await injectModuleDoubles(await import('../services/api-continuity-plans'), async () => {
   const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
     '../services/api-continuity-plans',
   )
@@ -24,17 +25,17 @@ vi.mock('../services/api-continuity-plans', async () => {
   }
 })
 
-vi.mock('../services/api-threads', async () => {
+await injectModuleDoubles(await import('../services/api-threads'), async () => {
   const actual = await vi.importActual<typeof import('../services/api-threads')>('../services/api-threads')
   return { ...actual, threadsApi: { ...actual.threadsApi, setPending: vi.fn() } }
 })
 
-vi.mock('../services/api-queue', async () => {
+await injectModuleDoubles(await import('../services/api-queue'), async () => {
   const actual = await vi.importActual<typeof import('../services/api-queue')>('../services/api-queue')
   return { ...actual, queueApi: { ...actual.queueApi, moveToFront: vi.fn() } }
 })
 
-vi.mock('../services/api-tags', () => ({
+await injectModuleDoubles(await import('../services/api-tags'), () => ({
   tagsApi: {
     threadIssuesEffective: vi.fn().mockResolvedValue({ thread_id: 1, issues: [] }),
     effectiveForPlan: vi.fn(),
@@ -42,11 +43,11 @@ vi.mock('../services/api-tags', () => ({
   },
 }))
 
-vi.mock('../components/ReadingPlanAddMaterial', () => ({
+await injectModuleDoubles(await import('../components/ReadingPlanAddMaterial'), () => ({
   default: () => <div data-testid="add-from-cbl">Add from CBL</div>,
 }))
 
-vi.mock('../components/Tags/TagSection', () => ({
+await injectModuleDoubles(await import('../components/Tags/TagSection'), () => ({
   TagSection: () => <div data-testid="reading-plan-tags">Tags</div>,
 }))
 

@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from './testingLibrary'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoverDetailPage from '../pages/CrossoverDetailPage'
 import {
   dependencyGroupsApi,
@@ -13,31 +13,29 @@ import { issuesApi } from '../services/api-issues'
 import type { Issue, Thread } from '../types'
 import { issueCardsApi } from '../services/issueCardsApi'
 
-vi.mock('../services/api-dependency-groups', () => ({
-  dependencyGroupsApi: {
-    get: vi.fn(),
-    getDetail: vi.fn(),
-    listForThread: vi.fn(),
-    plansForGroup: vi.fn(),
-  },
-}))
+const originalGroups = { ...dependencyGroupsApi }
+const originalThreads = { ...threadsApi }
+const originalIssues = { ...issuesApi }
+const originalIssueCards = { ...issueCardsApi }
+const mockedGroups = {
+  get: vi.fn<typeof dependencyGroupsApi.get>(),
+  getDetail: vi.fn<typeof dependencyGroupsApi.getDetail>(),
+  listForThread: vi.fn<typeof dependencyGroupsApi.listForThread>(),
+  plansForGroup: vi.fn<typeof dependencyGroupsApi.plansForGroup>(),
+}
+const mockedThreads = {
+  get: vi.fn<typeof threadsApi.get>(),
+  checkExcludedStatus: vi.fn<typeof threadsApi.checkExcludedStatus>(),
+}
+const mockedIssues = { get: vi.fn<typeof issuesApi.get>() }
+const fetchCards = vi.fn<typeof issueCardsApi.fetchCards>()
 
-vi.mock('../services/api-threads', () => ({ threadsApi: { get: vi.fn() } }))
-vi.mock('../services/api', () => ({
-  threadsApi: { get: vi.fn() },
-}))
-
-vi.mock('../services/api-issues', () => ({
-  issuesApi: { get: vi.fn() },
-}))
-
-vi.mock('../components/ContainerQueueActions', () => ({
-  default: () => null,
-}))
-
-const mockedGroups = vi.mocked(dependencyGroupsApi)
-const mockedThreads = vi.mocked(threadsApi)
-const mockedIssues = vi.mocked(issuesApi)
+afterEach(() => {
+  Object.assign(dependencyGroupsApi, originalGroups)
+  Object.assign(threadsApi, originalThreads)
+  Object.assign(issuesApi, originalIssues)
+  Object.assign(issueCardsApi, originalIssueCards)
+})
 
 function makeThread(id: number, title: string): Thread {
   return {
@@ -131,10 +129,17 @@ function renderPage() {
   )
 }
 
-vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
-
 beforeEach(() => {
+  Object.assign(dependencyGroupsApi, mockedGroups)
+  Object.assign(threadsApi, mockedThreads)
+  Object.assign(issuesApi, mockedIssues)
+  Object.assign(issueCardsApi, { fetchCards })
   vi.clearAllMocks()
+  fetchCards.mockResolvedValue([])
+  mockedThreads.checkExcludedStatus.mockResolvedValue({
+    excluded_thread_ids: [],
+    active_thread_ids: [],
+  })
 })
 
 describe('CrossoverDetailPage', () => {

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +9,7 @@ import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import { tagsApi } from '../services/api-tags'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 /**
  * Regression coverage for #4356 / MQA-QUEUE-008: closing a dirty Edit Series
@@ -23,7 +24,7 @@ import { tagsApi } from '../services/api-tags'
 
 const routeParams = { id: '1' }
 
-vi.mock('react-router-dom', async () => {
+await injectModuleDoubles(await import('react-router-dom'), async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return {
     ...actual,
@@ -31,16 +32,16 @@ vi.mock('react-router-dom', async () => {
   }
 })
 
-vi.mock('../hooks/useThread', async () => {
+await injectModuleDoubles(await import('../hooks/useThread'), async () => {
   const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
   return { ...actual, useUpdateThread: vi.fn() }
 })
 
-vi.mock('../services/api-threads', () => ({
+await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: { get: vi.fn() },
 }))
 
-vi.mock('../services/api-dependencies', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-dependencies'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-dependencies')>()
   return {
     ...actual,
@@ -51,7 +52,7 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
   }
 })
 
-vi.mock('../services/api-issues', () => ({
+await injectModuleDoubles(await import('../services/api-issues'), () => ({
   issuesApi: {
     list: vi.fn(),
     create: vi.fn(),
@@ -62,7 +63,7 @@ vi.mock('../services/api-issues', () => ({
   },
 }))
 
-vi.mock('../services/api-tags', async (importOriginal) => {
+await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
     ...actual,

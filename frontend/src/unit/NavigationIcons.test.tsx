@@ -1,33 +1,22 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
+import api, * as authTransport from '../services/api'
 
-vi.mock('../contexts/useToast', () => ({
-  useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
-}))
-
-const mockApiGet = vi.fn()
-const mockApiPost = vi.fn()
-const mockSetAccessToken = vi.fn()
-const mockClearAccessToken = vi.fn()
-const mockGetAccessToken = vi.fn(() => 'test-token')
-
-vi.mock('../services/api', () => ({
-  default: {
-    get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
-    post: (...args: Parameters<typeof mockApiPost>) => mockApiPost(...args),
-  },
-  setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
-  clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
-  getAccessToken: () => mockGetAccessToken(),
-  refreshSession: vi.fn(),
-  isSessionRefreshRejected: () => false,
-}))
+const originalApiMethods = { get: api.get, post: api.post }
+const mockApiGet = vi.fn<typeof api.get>()
+const mockApiPost = vi.fn<typeof api.post>()
+const mockSetAccessToken = vi.fn<typeof authTransport.setAccessToken>()
+const mockClearAccessToken = vi.fn<typeof authTransport.clearAccessToken>()
+const mockGetAccessToken = vi.fn<typeof authTransport.getAccessToken>(() => 'test-token')
+const mockRefreshSession = vi.fn<typeof authTransport.refreshSession>()
+const mockIsSessionRefreshRejected = vi.fn<typeof authTransport.isSessionRefreshRejected>()
 
 beforeEach(() => {
   Object.defineProperty(window, 'innerWidth', {

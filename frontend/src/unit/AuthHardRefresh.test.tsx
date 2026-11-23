@@ -1,32 +1,20 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { act, render, waitFor } from '@testing-library/react'
+import { act, render, waitFor } from './testingLibrary'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import type { AuthContextValue } from '../App'
-
-const mockApiGet = vi.fn()
-const mockApiPost = vi.fn()
-const mockGetAccessToken = vi.fn<() => string | null>(() => null)
-const mockSetAccessToken = vi.fn()
-const mockClearAccessToken = vi.fn()
-const mockReadStoredAccessToken = vi.fn<() => string | null>(() => null)
-
-vi.mock('../services/api', () => ({
-  default: {
-    get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
-    post: (...args: Parameters<typeof mockApiPost>) => mockApiPost(...args),
-  },
-  getAccessToken: () => mockGetAccessToken(),
-  readStoredAccessToken: () => mockReadStoredAccessToken(),
-  setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
-  clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
-  refreshSession: vi.fn().mockRejectedValue(Object.assign(new Error('unauthenticated'), {
-    isAxiosError: true,
-    response: { status: 401 },
-  })),
-  isSessionRefreshRejected: () => false,
-}))
-
 import { AuthProvider, useAuth } from '../App'
+import api, * as authTransport from '../services/api'
+
+const originalApiMethods = { get: api.get, post: api.post }
+const mockApiGet = vi.fn<typeof api.get>()
+const mockApiPost = vi.fn<typeof api.post>()
+const mockGetAccessToken = vi.fn<typeof authTransport.getAccessToken>()
+const mockSetAccessToken = vi.fn<typeof authTransport.setAccessToken>()
+const mockClearAccessToken = vi.fn<typeof authTransport.clearAccessToken>()
+const mockReadStoredAccessToken = vi.fn<typeof authTransport.readStoredAccessToken>()
+const mockRefreshSession = vi.fn<typeof authTransport.refreshSession>()
+const mockIsSessionRefreshRejected = vi.fn<typeof authTransport.isSessionRefreshRejected>()
 
 let authState: AuthContextValue | null = null
 
@@ -40,8 +28,28 @@ function AuthStateProbe() {
   return null
 }
 
+function renderAuthProvider() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>
+    </QueryClientProvider>,
+  )
+}
+
 describe('hard refresh session bootstrap', () => {
   beforeEach(() => {
+    Object.assign(api, { get: mockApiGet, post: mockApiPost })
+    vi.spyOn(authTransport, 'getAccessToken').mockImplementation(mockGetAccessToken)
+    vi.spyOn(authTransport, 'readStoredAccessToken').mockImplementation(mockReadStoredAccessToken)
+    vi.spyOn(authTransport, 'setAccessToken').mockImplementation(mockSetAccessToken)
+    vi.spyOn(authTransport, 'clearAccessToken').mockImplementation(mockClearAccessToken)
+    vi.spyOn(authTransport, 'refreshSession').mockImplementation(mockRefreshSession)
+    vi.spyOn(authTransport, 'isSessionRefreshRejected').mockImplementation(mockIsSessionRefreshRejected)
     authState = null
     mockApiGet.mockReset()
     mockApiPost.mockReset()
@@ -51,11 +59,20 @@ describe('hard refresh session bootstrap', () => {
     mockReadStoredAccessToken.mockReturnValue(null)
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
+    mockRefreshSession.mockReset()
+    mockRefreshSession.mockRejectedValue(Object.assign(new Error('unauthenticated'), {
+      isAxiosError: true,
+      response: { status: 401 },
+    }))
+    mockIsSessionRefreshRejected.mockReset()
+    mockIsSessionRefreshRejected.mockReturnValue(false)
     delete window.__COMIC_PILE_ACCESS_TOKEN
     vi.stubGlobal('BroadcastChannel', undefined)
   })
 
   afterEach(() => {
+    Object.assign(api, originalApiMethods)
+    vi.restoreAllMocks()
     window.history.replaceState({}, '', '/')
     vi.unstubAllGlobals()
   })
@@ -64,11 +81,7 @@ describe('hard refresh session bootstrap', () => {
     window.history.replaceState({}, '', '/queue')
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@example.com' })
 
-    render(
-      <AuthProvider>
-        <AuthStateProbe />
-      </AuthProvider>,
-    )
+    renderAuthProvider()
 
     await waitFor(() => {
       expect(authState?.isAuthenticated).toBe(true)
@@ -86,11 +99,7 @@ describe('hard refresh session bootstrap', () => {
     mockGetAccessToken.mockReturnValue('preserved-access-token')
     mockApiGet.mockResolvedValueOnce({ username: 'testuser', email: 'test@example.com' })
 
-    render(
-      <AuthProvider>
-        <AuthStateProbe />
-      </AuthProvider>,
-    )
+    renderAuthProvider()
 
     await waitFor(() => {
       expect(authState?.isAuthenticated).toBe(true)
@@ -115,11 +124,7 @@ describe('hard refresh session bootstrap', () => {
   test('still skips the anonymous probe on the login page', async () => {
     window.history.replaceState({}, '', '/login')
 
-    render(
-      <AuthProvider>
-        <AuthStateProbe />
-      </AuthProvider>,
-    )
+    renderAuthProvider()
 
     await waitFor(() => {
       expect(authState?.isLoading).toBe(false)
@@ -131,11 +136,7 @@ describe('hard refresh session bootstrap', () => {
   test('still skips the anonymous probe on the register page', async () => {
     window.history.replaceState({}, '', '/register')
 
-    render(
-      <AuthProvider>
-        <AuthStateProbe />
-      </AuthProvider>,
-    )
+    renderAuthProvider()
 
     await waitFor(() => {
       expect(authState?.isLoading).toBe(false)

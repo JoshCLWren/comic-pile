@@ -1,16 +1,17 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
-vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
+import { injectModuleDoubles } from './injectModuleDoubles'
+await injectModuleDoubles(await import('../contexts/useToast'), () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
-vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
-vi.mock('../components/Tooltip', () => ({
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({ default: () => <div data-testid="dice" /> }))
+await injectModuleDoubles(await import('../components/Tooltip'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
-vi.mock('../components/IssueCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../services/api-tags', async (importOriginal) => {
+await injectModuleDoubles(await import('../components/IssueCorrectionDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../services/api-tags'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
     ...actual,
@@ -37,11 +38,11 @@ vi.mock('../services/api-tags', async (importOriginal) => {
     },
   }
 })
-vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
+await injectModuleDoubles(await import('../pages/RollPage/components/ReadingOrderGroups'), () => ({
   ReadingOrderGroups: () => null,
 }))
 
-vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+await injectModuleDoubles(await import('../hooks/useReaderContext'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
   return {
     ...actual,
@@ -53,7 +54,7 @@ vi.mock('../hooks/useReaderContext', async (importOriginal) => {
     }),
   }
 })
-vi.mock('../components/ContinuityCorrectionDialog', () => ({
+await injectModuleDoubles(await import('../components/ContinuityCorrectionDialog'), () => ({
   default: ({
     isOpen,
     onClose,

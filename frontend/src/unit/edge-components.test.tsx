@@ -1,14 +1,15 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MarqueeTitle } from '../components/MarqueeTitle'
 import IssueCorrectionDialog from '../components/IssueCorrectionDialog'
 import MigrationDialog from '../components/MigrationDialog'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const issuesApi = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), move: vi.fn(), markRead: vi.fn(), markUnread: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn() }))
-vi.mock('../services/api-issues', () => ({ issuesApi }))
+await injectModuleDoubles(await import('../services/api-issues'), () => ({ issuesApi }))
 const migration = vi.hoisted(() => ({ migrateThread: vi.fn() }))
-vi.mock('../services/api-migration', () => ({ migrationApi: migration }))
+await injectModuleDoubles(await import('../services/api-migration'), () => ({ migrationApi: migration }))
 
 describe('edge component behavior', () => {
   it('renders wrapped title without overflow clipping', () => {

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './testingLibrary'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -13,21 +13,22 @@ import {
 } from '../pages/RollPage/readingContextContent'
 import type { RatingThread } from '../pages/RollPage/types'
 import type { ReaderContextResponse } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
-vi.mock('../components/Tooltip', () => ({
+await injectModuleDoubles(await import('../components/LazyDice3D'), () => ({ default: () => <div data-testid="dice" /> }))
+await injectModuleDoubles(await import('../components/Tooltip'), () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
-vi.mock('../components/IssueCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../components/ContinuityCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
+await injectModuleDoubles(await import('../components/IssueCorrectionDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../components/ContinuityCorrectionDialog'), () => ({ default: () => null }))
+await injectModuleDoubles(await import('../pages/RollPage/components/ReadingOrderGroups'), () => ({
   ReadingOrderGroups: () => null,
 }))
-vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
+await injectModuleDoubles(await import('../pages/RollPage/components/ReadingRouteExplanation'), () => ({
   ReadingRouteExplanation: () => null,
 }))
 
-vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+await injectModuleDoubles(await import('../hooks/useReaderContext'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
   return {
     ...actual,

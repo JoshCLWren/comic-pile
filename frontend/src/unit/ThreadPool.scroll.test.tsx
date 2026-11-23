@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { render } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'

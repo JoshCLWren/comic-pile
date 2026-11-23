@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
@@ -13,15 +13,16 @@ import { rollApi } from '../services/api-roll'
 import type { OverrideRollPayload } from '../types'
 import { cast } from '../utils/cast'
 import { invalidateAfterRollDieModeUpdate } from '../query/cacheEffects'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../query/cacheEffects', () => ({ invalidateAfterRollDieModeUpdate: vi.fn().mockResolvedValue(undefined) }))
+await injectModuleDoubles(await import('../query/cacheEffects'), () => ({ invalidateAfterRollDieModeUpdate: vi.fn().mockResolvedValue(undefined) }))
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
-vi.mock('../services/api-roll', () => ({
+await injectModuleDoubles(await import('../services/api-roll'), () => ({
   rollApi: {
     roll: vi.fn(),
     override: vi.fn(),

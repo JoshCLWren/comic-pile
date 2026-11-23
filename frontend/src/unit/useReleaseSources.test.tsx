@@ -1,15 +1,16 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook, waitFor } from './testingLibrary'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useReleaseSources, useEnableReleaseSource } from '../hooks/useReleaseSources'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mocks = vi.hoisted(() => ({
   listReleaseSources: vi.fn(),
   updateReleaseSourceEnabled: vi.fn(),
 }))
 
-vi.mock('../services/api-continuity-plans', async () => {
+await injectModuleDoubles(await import('../services/api-continuity-plans'), async () => {
   const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
     '../services/api-continuity-plans',
   )
