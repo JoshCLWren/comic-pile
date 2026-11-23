@@ -396,7 +396,7 @@ pub async fn commit_series_mapping_handler(
     Ok(Json(response))
 }
 
-fn inline_hydration_budget(elapsed: Duration) -> Duration {
+pub(crate) fn inline_hydration_budget(elapsed: Duration) -> Duration {
     // 10s browser deadline minus 1.5s routing/response reserve; hydration
     // must not consume more than 3s or the remainder of that request.
     Duration::from_secs_f64((8.5_f64 - elapsed.as_secs_f64()).clamp(0.0, 3.0))

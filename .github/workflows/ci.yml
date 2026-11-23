@@ -362,6 +362,16 @@ jobs:
         run: go install actionlint.kjanat.dev/cmd/actionlint@v1.17.1
       - name: Validate all GitHub Actions workflows
         run: '"$(go env GOPATH)/bin/actionlint" -color'
+      # The installed factory workflows' contract with Rotisserie (track main,
+      # no secrets in runtime checkouts, no ticket-creating health checks).
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Rotisserie adopter contract
+        run: uv run --frozen python -m pytest -q --no-cov tests/test_rotisserie_adopter_contract.py
 
   factory-shellcheck:
     name: Factory Shell Scripts (shellcheck)

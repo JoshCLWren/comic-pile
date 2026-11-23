@@ -498,6 +498,152 @@ mod tests {
     }
 
     #[test]
+    fn julix_king_of_fear_waits_for_dead_remembered_and_all_intervening_unread_entries() {
+        // Production #3735: source Issue 117250 (The Dead Remembered #2) at
+        // Julix position 23 must be the sole eligible frontier. King of Fear #1
+        // (source Issue 117275) at position 54 has a satisfied Wild Hunt #8
+        // prerequisite, but that read node must not hide older unread entries.
+        let mut inputs = test_inputs();
+        inputs.core.threads[0].title = "B.P.R.D.: The Dead Remembered".into();
+        inputs.core.threads[1].title = "B.P.R.D.: King of Fear".into();
+        inputs.core.threads.extend([
+            ReadingThread {
+                id: 3,
+                status: "active".into(),
+                title: "B.P.R.D.: Killing Ground".into(),
+            },
+            ReadingThread {
+                id: 4,
+                status: "active".into(),
+                title: "B.P.R.D.: The Black Goddess".into(),
+            },
+            ReadingThread {
+                id: 5,
+                status: "completed".into(),
+                title: "Hellboy: The Wild Hunt".into(),
+            },
+        ]);
+        inputs.core.issues[0].issue_number = "1".into();
+        inputs.core.issues[1].issue_number = "2".into();
+        inputs.core.issues[2].issue_number = "1".into();
+        inputs.core.issues.extend([
+            ReadingIssue {
+                id: 12,
+                thread_id: 1,
+                position: 3,
+                status: "unread".into(),
+                issue_number: "3".into(),
+            },
+            ReadingIssue {
+                id: 30,
+                thread_id: 3,
+                position: 1,
+                status: "unread".into(),
+                issue_number: "1".into(),
+            },
+            ReadingIssue {
+                id: 40,
+                thread_id: 4,
+                position: 5,
+                status: "unread".into(),
+                issue_number: "5".into(),
+            },
+            ReadingIssue {
+                id: 50,
+                thread_id: 5,
+                position: 8,
+                status: "read".into(),
+                issue_number: "8".into(),
+            },
+        ]);
+        inputs.core.stored[1].queue_position = 320;
+        inputs.core.stored.extend([
+            StoredThreadEligibility {
+                thread_id: 3,
+                next_issue_id: Some(30),
+                is_blocked: false,
+                queue_position: 25,
+            },
+            StoredThreadEligibility {
+                thread_id: 4,
+                next_issue_id: Some(40),
+                is_blocked: false,
+                queue_position: 45,
+            },
+            StoredThreadEligibility {
+                thread_id: 5,
+                next_issue_id: None,
+                is_blocked: false,
+                queue_position: 0,
+            },
+        ]);
+        inputs.lists.push(crate::option_inputs::ReadingList {
+            list_id: 2,
+            mode: "strict".into(),
+            name: "Mignolaverse — Julix Comics (Unread)".into(),
+            // Positions 22, 23, 24, 25, 45, 53, 54 in the production list.
+            entries: [10, 11, 12, 30, 40, 50, 20]
+                .into_iter()
+                .map(|issue_id| crate::option_inputs::ReadingEntry {
+                    issue_id,
+                    gate: "none".into(),
+                    skipped: false,
+                })
+                .collect(),
+            overlap_decisions: vec![],
+        });
+        inputs
+            .prerequisites
+            .push(crate::option_inputs::Prerequisite {
+                prerequisite_id: 1_724_900,
+                source_issue_id: 50,
+                target_issue_id: 20,
+                origin: "reader".into(),
+                provenance: vec!["continuity-rule:1715697".into()],
+            });
+
+        let validated = ValidatedReadingInputs::new(inputs.clone(), &BTreeMap::new()).unwrap();
+        let states = evaluate(&validated).unwrap();
+        assert!(states[&1].eligible);
+        assert_eq!(states[&1].next_issue_id, Some(11));
+        for blocked_thread in [2, 3, 4] {
+            assert!(
+                !states[&blocked_thread].eligible,
+                "thread {blocked_thread} must wait for earlier Julix entries"
+            );
+        }
+        let king = &states[&2];
+        let strict = king
+            .blockers
+            .iter()
+            .find(|blocker| blocker.kind == "strict_order")
+            .unwrap();
+        assert_eq!(strict.waiting_on_issue_ids, vec![11, 12, 30, 40]);
+        assert!(
+            !king
+                .blockers
+                .iter()
+                .any(|blocker| blocker.kind == "prerequisite"),
+            "the already-read Wild Hunt prerequisite is satisfied"
+        );
+        let eligible = validated.eligible_frontiers().unwrap();
+        assert_eq!(eligible.len(), 1);
+        assert_eq!(eligible[0].issue_id, 11);
+        assert_eq!(eligible[0].thread_id, 1);
+
+        for issue in &mut inputs.core.issues {
+            if [11, 12, 30, 40].contains(&issue.id) {
+                issue.status = "read".into();
+            }
+        }
+        let validated = ValidatedReadingInputs::new(inputs, &BTreeMap::new()).unwrap();
+        assert!(evaluate(&validated).unwrap()[&2].eligible);
+        let eligible = validated.eligible_frontiers().unwrap();
+        assert_eq!(eligible.len(), 1);
+        assert_eq!(eligible[0].issue_id, 20);
+    }
+
+    #[test]
     fn approved_volume_overlap_still_exempts_only_its_waiting_volume() {
         let mut inputs = test_inputs();
         inputs.thread_volumes.insert(1, "comicvine:11".into());

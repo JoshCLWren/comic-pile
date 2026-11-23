@@ -143,6 +143,7 @@ function QueueBudgetProbe() {
     !boundaries.isPending &&
     (boundaries.isError ||
       boundaries.data == null ||
+      boundaries.data.evaluator === 'unavailable' ||
       threadIds.some(
         (id) =>
           boundaries.data?.threads[id] == null ||
@@ -369,31 +370,33 @@ function installAdapterRecorder(): void {
 
 function renderShell(): ReactNode {
   return (
-    <MemoryRouter initialEntries={['/queue']}>
-      <AuthContext.Provider
-        value={{
-          authState,
-          isAuthenticated: true,
-          isLoading: false,
-          user: authState.user,
-          login: async () => undefined,
-          logout: () => undefined,
-          revalidateSession: async () => undefined,
-          recoverSession: async () => undefined,
-          retryAuth: async () => undefined,
-          clearAuthError: () => undefined,
-        }}
-      >
-        <NavCollapseProvider>
-          <BugReportRestoreProvider>
-            <ToastProvider>
-              <Navigation onBugReportSubmit={async () => undefined} />
-              <PreferencesSync isAuthenticated />
-            </ToastProvider>
-          </BugReportRestoreProvider>
-        </NavCollapseProvider>
-      </AuthContext.Provider>
-    </MemoryRouter>
+    <QueryClientProvider client={routeQueryClient}>
+      <MemoryRouter initialEntries={['/queue']}>
+        <AuthContext.Provider
+          value={{
+            authState,
+            isAuthenticated: true,
+            isLoading: false,
+            user: authState.user,
+            login: async () => undefined,
+            logout: () => undefined,
+            revalidateSession: async () => undefined,
+            recoverSession: async () => undefined,
+            retryAuth: async () => undefined,
+            clearAuthError: () => undefined,
+          }}
+        >
+          <NavCollapseProvider>
+            <BugReportRestoreProvider>
+              <ToastProvider>
+                <Navigation onBugReportSubmit={async () => undefined} />
+                <PreferencesSync isAuthenticated />
+              </ToastProvider>
+            </BugReportRestoreProvider>
+          </NavCollapseProvider>
+        </AuthContext.Provider>
+      </MemoryRouter>
+    </QueryClientProvider>
   )
 }
 
@@ -446,7 +449,7 @@ afterEach(() => {
 })
 
 describe('core route request budgets', () => {
-  it('authenticated shell cold-loads preferences and inbox status exactly once each', async () => {
+  it('authenticated shell loads preferences and inbox once, then reuses them across remounts', async () => {
     installAdapterRecorder()
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v2/users/me/preferences') return { theme: 'classic', user_id: 1 }
@@ -454,12 +457,18 @@ describe('core route request budgets', () => {
     })
     setDefaultHttpClient(client)
 
-    render(renderShell())
+    const view = render(renderShell())
 
     await waitFor(() =>
       expect(calls.some((call) => call.url === '/v2/users/me/preferences')).toBe(true),
     )
     await waitFor(() => expect(adapterCalls.length).toBeGreaterThan(0))
+    await drainSettledWork()
+
+    // Route elements remount the shell, but TanStack's fresh cache entries must
+    // prevent another preferences read or inbox probe on warm navigation.
+    view.unmount()
+    render(renderShell())
     await drainSettledWork()
 
     expect(requestCounts(calls)).toEqual({

@@ -157,7 +157,7 @@ function renderRatingView(initialScopes: ScopeOverrides = {}) {
 
 beforeEach(() => {
   getBoundaries.mockReset()
-  getBoundaries.mockResolvedValue({ threads: { [ACTIVE_THREAD.id]: { thread_id: ACTIVE_THREAD.id, state: 'available', summary: 'Ready to read.', blockers: [] } } })
+  getBoundaries.mockResolvedValue({ evaluator: 'enabled', threads: { [ACTIVE_THREAD.id]: { thread_id: ACTIVE_THREAD.id, state: 'available', summary: 'Ready to read.', blockers: [] } } })
   getReaderContext.mockReset()
   getReaderContext.mockResolvedValue(READER_CONTEXT)
 })

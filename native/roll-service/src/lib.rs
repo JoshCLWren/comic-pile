@@ -29,6 +29,7 @@ pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
+pub mod frontier_audit;
 pub mod identity_inbox;
 pub mod issue_handler;
 pub mod issue_identity;
@@ -502,6 +503,7 @@ impl IntoResponse for ApiError {
 fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
     match path {
         "/api/v2/maintenance/comicvine-metadata-repairs" => Duration::from_secs(50),
+        "/api/v2/maintenance/comicvine-metadata-backfill" => Duration::from_secs(50),
         "/api/v1/cron/release-sync" => {
             reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
         }
@@ -679,6 +681,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/maintenance/comicvine-metadata-repairs",
             get(comicvine_repair::drain),
+        )
+        .route(
+            "/api/v2/maintenance/comicvine-metadata-backfill",
+            get(comicvine_repair::backfill),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/demo-roll", get(demo::read_demo_roll))
