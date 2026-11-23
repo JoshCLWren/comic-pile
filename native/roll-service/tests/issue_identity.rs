@@ -9,14 +9,14 @@
 //! 422 validation envelopes.
 
 use axum::{
-    body::{Body, to_bytes},
-    http::{Request, StatusCode, header},
+    body::{to_bytes, Body},
+    http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{AppState, config::Config, router, test_support};
-use serde_json::{Value, json};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
+use serde_json::{json, Value};
 use std::sync::{
-    Arc,
     atomic::{AtomicUsize, Ordering},
+    Arc,
 };
 use tower::ServiceExt;
 
@@ -2063,12 +2063,10 @@ async fn reading_graph_preview_projects_overlap_with_both_choice_effects() {
     let overlaps = body["overlaps"].as_array().unwrap();
     assert_eq!(overlaps.len(), 1, "{body}");
     let overlap = &overlaps[0];
-    assert!(
-        overlap["overlap_id"]
-            .as_str()
-            .unwrap()
-            .starts_with("overlap-")
-    );
+    assert!(overlap["overlap_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("overlap-"));
     assert_eq!(
         overlap["continuing_series"]["comicvine_volume_id"],
         "comicvine:1000"
