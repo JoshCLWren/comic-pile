@@ -38,14 +38,11 @@ interface QueueThreadCardProps {
   snoozeIcon: string
   snoozeLabel: string
   snoozeDisabled: boolean
-  readDisabled?: boolean
-  readDisabledReason?: string
   onCardClick: () => void
   onDragStart: React.DragEventHandler<HTMLElement>
   onDragEnd: React.DragEventHandler<HTMLElement>
   onDragOver: React.DragEventHandler<HTMLElement>
   onDrop: React.DragEventHandler<HTMLElement>
-  onRead: () => void
   onSnooze: () => void
   onMoveToFront: () => void
   onMoveToBack: () => void
@@ -106,14 +103,11 @@ export default function QueueThreadCard({
   snoozeIcon,
   snoozeLabel,
   snoozeDisabled,
-  readDisabled,
-  readDisabledReason,
   onCardClick,
   onDragStart,
   onDragEnd,
   onDragOver,
   onDrop,
-  onRead,
   onSnooze,
   onMoveToFront,
   onMoveToBack,
@@ -370,9 +364,7 @@ export default function QueueThreadCard({
       <div className="flex shrink-0 items-center gap-2 self-stretch pl-12 @2xl:pl-0 @2xl:self-center flex-wrap">
         <QueueThreadActions
           title={thread.title}
-          readDisabled={readDisabled}
-          readDisabledReason={readDisabledReason}
-          onRead={onRead}
+          onRead={() => setIssueCardOpen(true)}
         />
         <PositionMenu
           thread={thread}
