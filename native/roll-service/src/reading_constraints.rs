@@ -381,9 +381,7 @@ fn constraint_edges(snapshot: &Snapshot) -> Result<BTreeSet<ConstraintEdge>, Val
         }
     }
     for l in &snapshot.lists {
-        let entries: Vec<_> = l.entries.iter()
-            .filter(|e| !e.skipped && !snapshot.excluded_issue_ids.contains(&e.issue_id))
-            .collect();
+        let entries: Vec<_> = l.entries.iter().filter(|e| !e.skipped).collect();
         let name = label(&l.name, l.list_id);
         if l.mode == "strict" {
             let origin = format!("list {name} strict order");
