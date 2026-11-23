@@ -61,9 +61,13 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: the list double is installed only for this suite and restored after each test.
   realThreadsApi.listExcluded = mockListExcluded as typeof realThreadsApi.listExcluded
+  // SAFETY: the restore double is installed only for this suite and restored after each test.
   realThreadsApi.restore = mockRestore as typeof realThreadsApi.restore
+  // SAFETY: the group-restore double is installed only for this suite and restored after each test.
   realThreadsApi.restoreExclusionGroup = mockRestoreGroup as typeof realThreadsApi.restoreExclusionGroup
+  // SAFETY: the exclusion double is installed only for this suite and restored after each test.
   realThreadsApi.exclude = mockExclude as typeof realThreadsApi.exclude
   mockListExcluded.mockResolvedValue({
     active_count: 1,
