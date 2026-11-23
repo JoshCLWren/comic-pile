@@ -304,8 +304,8 @@ pub(crate) async fn provider_response(
         )),
         Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
         Exchange::Payload(payload) => {
-            let status_code = payload.get("status_code").and_then(Value::as_i64);
-            if status_code == Some(1) {
+            let status_code = payload.get("status_code");
+            if python_envelope_ok(&payload) {
                 Ok(payload)
             } else {
                 let error = payload
