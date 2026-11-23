@@ -1108,7 +1108,12 @@ async fn backfill_authorized(
             .get::<_, Option<String>>(1)
             .and_then(|text| serde_json::from_str(&text).ok())
             .unwrap_or(Value::Null);
-        if needs_provider_fetch(&metadata, now) {
+        if needs_provider_fetch_with_legacy_fallback(
+            &metadata,
+            row.get(2),
+            row.get(3),
+            now,
+        ) {
             report.needs_enqueue += 1;
             needs_fetch.push(id);
         } else {
