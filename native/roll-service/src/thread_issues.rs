@@ -486,7 +486,18 @@ pub(crate) fn natural_issue_order(existing: &[String], incoming: &[String]) -> O
         });
         match slot {
             Some(index) => result.insert(index, label.clone()),
-            None => result.push(label.clone()),
+            None => {
+                // Beyond the maximum, anchor after the last ordinary number rather
+                // than after any irregular labels saved at the tail.
+                let last_numbered = result
+                    .iter()
+                    .rposition(|current| ordinary_key(current).is_some());
+                if let Some(index) = last_numbered {
+                    result.insert(index + 1, label.clone());
+                } else {
+                    result.push(label.clone());
+                }
+            }
         }
     }
     Some(result)
@@ -1997,6 +2008,27 @@ mod tests {
         assert_eq!(python_int("1.5"), None);
         assert_eq!(python_int("Annual 1"), None);
         assert_eq!(python_int(""), None);
+    }
+
+    #[test]
+    fn natural_order_places_new_maximum_before_trailing_special() {
+        let existing = strings(&["1", "2", "5", "7", "8", "Annual 1", "9", "10", "Special 0"]);
+        let expected = strings(&[
+            "1",
+            "2",
+            "5",
+            "7",
+            "8",
+            "Annual 1",
+            "9",
+            "10",
+            "11",
+            "Special 0",
+        ]);
+        assert_eq!(
+            natural_issue_order(&existing, &strings(&["11"])),
+            Some(expected)
+        );
     }
 
     #[test]

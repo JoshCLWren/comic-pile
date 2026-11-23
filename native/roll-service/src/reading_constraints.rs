@@ -572,6 +572,17 @@ pub struct EligibleFrontier {
     pub queue_position: i32,
 }
 
+/// One active queued Thread's live frontier plus every unsatisfied Option E
+/// edge that targets it. Shared by [`ValidatedReadingInputs::eligible_frontiers`]
+/// and the read-only frontier audit (#4198) so both read one frontier authority.
+#[derive(Debug, Clone)]
+pub struct FrontierBlockers {
+    pub thread_id: i32,
+    pub issue_id: i32,
+    pub queue_position: i32,
+    pub unsatisfied: Vec<ConstraintEdge>,
+}
+
 /// Why the Roll pool has no in-play faces.
 ///
 /// Derived from the already-loaded Option E inputs and the eligible frontier
@@ -1144,22 +1155,26 @@ impl ValidatedReadingInputs {
     /// the validated dependency graph and issue statuses are authoritative.
     /// Exactly one next unread issue per active queue thread can be eligible.
     pub fn eligible_frontiers(&self) -> Result<Vec<EligibleFrontier>, ValidationError> {
+        Ok(self
+            .frontier_blockers()?
+            .into_iter()
+            .filter(|frontier| frontier.unsatisfied.is_empty())
+            .map(|frontier| EligibleFrontier {
+                thread_id: frontier.thread_id,
+                issue_id: frontier.issue_id,
+                queue_position: frontier.queue_position,
+            })
+            .collect())
+    }
+
+    /// Every active queued Thread's live frontier with the unsatisfied Option E
+    /// edges that target it. The frontier set, the edge set and the candidate
+    /// filters come from this evaluator — the one Option E authority — so the
+    /// read-only frontier audit (#4198) sees exactly what Roll, Queue and the
+    /// reading-boundary resources see, including which frontiers stay blocked.
+    pub fn frontier_blockers(&self) -> Result<Vec<FrontierBlockers>, ValidationError> {
         let edges = self.unsatisfied_edges()?;
         let excluded = &self.inputs.excluded_issue_ids;
-        let incomplete: HashSet<i32> = self
-            .inputs
-            .core
-            .issues
-            .iter()
-            .filter(|issue| issue.status != "read" && !excluded.contains(&issue.id))
-            .map(|issue| issue.id)
-            .collect();
-        let blocked: HashSet<i32> = edges
-            .iter()
-            .filter(|edge| incomplete.contains(&edge.source_issue_id))
-            .map(|edge| edge.target_issue_id)
-            .collect();
-
         let mut next_unread: BTreeMap<i32, (i32, i32)> = BTreeMap::new();
         for issue in &self.inputs.core.issues {
             if issue.status != "unread"
@@ -1183,7 +1198,7 @@ impl ValidatedReadingInputs {
             .map(|thread| thread.id)
             .collect();
 
-        let mut candidates: Vec<EligibleFrontier> = self
+        let mut frontiers: Vec<FrontierBlockers> = self
             .inputs
             .core
             .stored
@@ -1196,15 +1211,21 @@ impl ValidatedReadingInputs {
             })
             .filter_map(|stored| {
                 let (_, issue_id) = next_unread.get(&stored.thread_id)?;
-                (!blocked.contains(issue_id)).then_some(EligibleFrontier {
+                let unsatisfied = edges
+                    .iter()
+                    .filter(|edge| edge.target_issue_id == *issue_id)
+                    .cloned()
+                    .collect();
+                Some(FrontierBlockers {
                     thread_id: stored.thread_id,
                     issue_id: *issue_id,
                     queue_position: stored.queue_position,
+                    unsatisfied,
                 })
             })
             .collect();
-        candidates.sort_by_key(|candidate| (candidate.queue_position, candidate.thread_id));
-        Ok(candidates)
+        frontiers.sort_by_key(|frontier| (frontier.queue_position, frontier.thread_id));
+        Ok(frontiers)
     }
 }
 

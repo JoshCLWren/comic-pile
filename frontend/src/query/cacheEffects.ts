@@ -34,6 +34,14 @@ export function clearSessionCache(client: QueryClient): void {
   client.clear()
 }
 
+/** Remember the deployment-wide boundary authority for later route loads. */
+export function recordReadingBoundaryEvaluator(
+  client: QueryClient,
+  evaluator: 'enabled' | 'unavailable',
+): void {
+  client.setQueryData(queryKeys.dependencies.readingBoundaryEvaluator(), evaluator)
+}
+
 /**
  * Refetch active queries that failed during a recognized backend outage.
  *

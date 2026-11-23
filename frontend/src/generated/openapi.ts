@@ -2498,7 +2498,7 @@ export interface paths {
         };
         /**
          * Documentation-only operation for the mounted reading-graph read.
-         * @description Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin.
+         * @description Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin. The read-only frontier audit names current unread frontiers that Option E would offer while inert legacy or converted dependency evidence still records possible reader intent; the report is manual-review evidence only (#4198).
          */
         get: operations["reading_graph_documentation"];
         put?: never;
@@ -3579,6 +3579,39 @@ export interface components {
             target_id: number;
             target_type: string;
         };
+        /**
+         * @description One inert legacy/converted dependency row into the frontier.
+         *
+         *     Source metadata is included only for issues the reader owns; a foreign
+         *     source keeps its stable row and issue identifiers but never a title,
+         *     number or status.
+         */
+        AuditEvidenceEdge: {
+            classification?: string | null;
+            /** Format: int32 */
+            dependency_id: number;
+            evidence_class: string;
+            note?: string | null;
+            origin?: string | null;
+            provenance?: string | null;
+            /** Format: int32 */
+            source_issue_id: number;
+            source_issue_number?: string | null;
+            source_owned: boolean;
+            source_series_title?: string | null;
+            source_status?: string | null;
+            /** Format: int32 */
+            target_issue_id: number;
+        };
+        /** @description One owned Reading List placement of the frontier issue, with its gate. */
+        AuditListMembership: {
+            gate: string;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+            mode: string;
+            skipped: boolean;
+        };
         /** @description Python `BatchBlockingExplanationRequest` (documentation schema). */
         BatchBlockingExplanationRequest: {
             thread_ids: number[];
@@ -3817,6 +3850,16 @@ export interface components {
             /** Format: int32 */
             thread_id?: number | null;
         };
+        /**
+         * @description Deployment-level capability for the canonical evaluator behind this batch.
+         *
+         *     It mirrors the same `AppState::option_e` switch every handler resolves, so
+         *     a client that has already observed one batch can skip the canonical read
+         *     entirely on later loads when the evaluator cannot answer (`unavailable`)
+         *     and consult the legacy blocking authority directly.
+         * @enum {string}
+         */
+        BoundaryEvaluator: "enabled" | "unavailable";
         BoundaryIssue: {
             /** Format: int32 */
             issue_id: number;
@@ -5544,6 +5587,50 @@ export interface components {
         ForgotPasswordRequest: {
             email: string;
         };
+        /** @description One unprotected current unread frontier with its inert evidence. */
+        FrontierAuditFinding: {
+            /** Format: int32 */
+            frontier_issue_id: number;
+            frontier_issue_number: string;
+            frontier_status: string;
+            /** @description Inert dependency rows into this frontier from an incomplete source. */
+            legacy_evidence: components["schemas"]["AuditEvidenceEdge"][];
+            /** @description Owned Reading List placements of the frontier issue and their gates. */
+            list_memberships: components["schemas"]["AuditListMembership"][];
+            recommendation: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        /** @description The complete read-only audit response for one owner. */
+        FrontierAuditReport: {
+            /** @description Reader-authored prerequisites currently loaded with execution authority. */
+            actionable_reader_prerequisites: number;
+            /** @description The gap findings, bounded at [`MAX_REPORTED_FINDINGS`]. */
+            findings: components["schemas"]["FrontierAuditFinding"][];
+            /** @description Findings beyond [`MAX_REPORTED_FINDINGS`] omitted from `findings`. */
+            findings_omitted: number;
+            /** @description Live frontiers examined (active queued Threads, one next unread each). */
+            frontiers_examined: number;
+            /**
+             * @description Examined frontiers an actionable Option E constraint currently blocks
+             *     (reader prerequisite or list order).
+             */
+            frontiers_protected: number;
+            /** @description Those rows grouped by evidence class. */
+            inert_evidence_counts: {
+                [key: string]: number;
+            };
+            /** @description Inert dependency rows examined (owned unread target, incomplete source). */
+            inert_evidence_rows: number;
+            /** @description Report-only disclaimer; the audit is never an execution input. */
+            note: string;
+            /**
+             * @description Examined frontiers with no actionable Option E constraint while inert
+             *     legacy evidence records possible reader intent: the reported gaps.
+             */
+            unprotected_frontiers: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -7012,6 +7099,7 @@ export interface components {
             thread_ids: number[];
         };
         ReadingBoundaryBatchResponseV2: {
+            evaluator: components["schemas"]["BoundaryEvaluator"];
             threads: {
                 [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
             };
@@ -7238,8 +7326,10 @@ export interface components {
             affected_threads: components["schemas"]["ReadingGraphThread"][];
             cycles: components["schemas"]["ReadingGraphCycle"][];
             cyclic_issue_ids: number[];
+            frontier_audit?: components["schemas"]["FrontierAuditReport"] | null;
             repairs: components["schemas"]["ReadingGraphRepairOption"][];
             status: string;
+            /** @description Total count of unresolved references. */
             unresolved_reference_count: number;
         };
         /**

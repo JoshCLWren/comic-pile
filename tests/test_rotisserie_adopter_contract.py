@@ -85,8 +85,12 @@ def test_main_health_reporting_does_not_create_tickets() -> None:
     assert "Auto-close main-breakage" not in gate
     assert "gh issue create" not in dispatcher
     assert "main-breakage" not in dispatcher
-    assert "main_red=true" in dispatcher
-    assert "drain will pause merges" in dispatcher
+    # A red main pauses merges in the serialized merge drain (Rotisserie #171),
+    # not in the dispatcher: only the main-repair lane merges onto red main.
+    drain = (WORKFLOWS / "factory-ready-merge-drain.yml").read_text(encoding="utf-8")
+    assert "Check main health before merging" in drain
+    assert '"${MAIN_STATE:-}" == red' in drain
+    assert '*",main-breakage,"*' in drain
 
 
 def test_pr_ci_cancels_superseded_heads_without_canceling_main() -> None:

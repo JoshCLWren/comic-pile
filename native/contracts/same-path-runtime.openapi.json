@@ -7708,7 +7708,7 @@
           "reading-graph"
         ],
         "summary": "Documentation-only operation for the mounted reading-graph read.",
-        "description": "Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin.",
+        "description": "Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin. The read-only frontier audit names current unread frontiers that Option E would offer while inert legacy or converted dependency evidence still records possible reader intent; the report is manual-review evidence only (#4198).",
         "operationId": "reading_graph_documentation",
         "responses": {
           "200": {
@@ -10583,6 +10583,108 @@
           }
         }
       },
+      "AuditEvidenceEdge": {
+        "type": "object",
+        "description": "One inert legacy/converted dependency row into the frontier.\n\nSource metadata is included only for issues the reader owns; a foreign\nsource keeps its stable row and issue identifiers but never a title,\nnumber or status.",
+        "required": [
+          "dependency_id",
+          "source_issue_id",
+          "target_issue_id",
+          "source_owned",
+          "evidence_class"
+        ],
+        "properties": {
+          "classification": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dependency_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "evidence_class": {
+            "type": "string"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provenance": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_owned": {
+            "type": "boolean"
+          },
+          "source_series_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "AuditListMembership": {
+        "type": "object",
+        "description": "One owned Reading List placement of the frontier issue, with its gate.",
+        "required": [
+          "list_id",
+          "list_name",
+          "mode",
+          "gate",
+          "skipped"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "list_name": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          }
+        }
+      },
       "BatchBlockingExplanationRequest": {
         "type": "object",
         "description": "Python `BatchBlockingExplanationRequest` (documentation schema).",
@@ -11371,6 +11473,14 @@
             "format": "int32"
           }
         }
+      },
+      "BoundaryEvaluator": {
+        "type": "string",
+        "description": "Deployment-level capability for the canonical evaluator behind this batch.\n\nIt mirrors the same `AppState::option_e` switch every handler resolves, so\na client that has already observed one batch can skip the canonical read\nentirely on later loads when the evaluator cannot answer (`unavailable`)\nand consult the legacy blocking authority directly.",
+        "enum": [
+          "enabled",
+          "unavailable"
+        ]
       },
       "BoundaryIssue": {
         "type": "object",
@@ -16920,6 +17030,125 @@
           }
         }
       },
+      "FrontierAuditFinding": {
+        "type": "object",
+        "description": "One unprotected current unread frontier with its inert evidence.",
+        "required": [
+          "thread_id",
+          "thread_title",
+          "frontier_issue_id",
+          "frontier_issue_number",
+          "frontier_status",
+          "list_memberships",
+          "legacy_evidence",
+          "recommendation"
+        ],
+        "properties": {
+          "frontier_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "frontier_issue_number": {
+            "type": "string"
+          },
+          "frontier_status": {
+            "type": "string"
+          },
+          "legacy_evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvidenceEdge"
+            },
+            "description": "Inert dependency rows into this frontier from an incomplete source."
+          },
+          "list_memberships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditListMembership"
+            },
+            "description": "Owned Reading List placements of the frontier issue and their gates."
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "FrontierAuditReport": {
+        "type": "object",
+        "description": "The complete read-only audit response for one owner.",
+        "required": [
+          "frontiers_examined",
+          "frontiers_protected",
+          "unprotected_frontiers",
+          "findings",
+          "findings_omitted",
+          "actionable_reader_prerequisites",
+          "inert_evidence_rows",
+          "inert_evidence_counts",
+          "note"
+        ],
+        "properties": {
+          "actionable_reader_prerequisites": {
+            "type": "integer",
+            "description": "Reader-authored prerequisites currently loaded with execution authority.",
+            "minimum": 0
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FrontierAuditFinding"
+            },
+            "description": "The gap findings, bounded at [`MAX_REPORTED_FINDINGS`]."
+          },
+          "findings_omitted": {
+            "type": "integer",
+            "description": "Findings beyond [`MAX_REPORTED_FINDINGS`] omitted from `findings`.",
+            "minimum": 0
+          },
+          "frontiers_examined": {
+            "type": "integer",
+            "description": "Live frontiers examined (active queued Threads, one next unread each).",
+            "minimum": 0
+          },
+          "frontiers_protected": {
+            "type": "integer",
+            "description": "Examined frontiers an actionable Option E constraint currently blocks\n(reader prerequisite or list order).",
+            "minimum": 0
+          },
+          "inert_evidence_counts": {
+            "type": "object",
+            "description": "Those rows grouped by evidence class.",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "inert_evidence_rows": {
+            "type": "integer",
+            "description": "Inert dependency rows examined (owned unread target, incomplete source).",
+            "minimum": 0
+          },
+          "note": {
+            "type": "string",
+            "description": "Report-only disclaimer; the audit is never an execution input."
+          },
+          "unprotected_frontiers": {
+            "type": "integer",
+            "description": "Examined frontiers with no actionable Option E constraint while inert\nlegacy evidence records possible reader intent: the reported gaps.",
+            "minimum": 0
+          }
+        }
+      },
       "IdentityInboxActionResponse": {
         "type": "object",
         "required": [
@@ -19714,9 +19943,13 @@
       "ReadingBoundaryBatchResponseV2": {
         "type": "object",
         "required": [
-          "threads"
+          "threads",
+          "evaluator"
         ],
         "properties": {
+          "evaluator": {
+            "$ref": "#/components/schemas/BoundaryEvaluator"
+          },
           "threads": {
             "type": "object",
             "additionalProperties": {
@@ -20352,6 +20585,17 @@
               "format": "int32"
             }
           },
+          "frontier_audit": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FrontierAuditReport",
+                "description": "Read-only frontier audit (#4198): current unread frontiers that Option E\nwould offer while inert legacy/converted dependency evidence still\nrecords possible reader intent. `null` while the graph is invalid or in\nrepair previews, which project in-memory states rather than stored data."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "repairs": {
             "type": "array",
             "items": {
@@ -20363,6 +20607,7 @@
           },
           "unresolved_reference_count": {
             "type": "integer",
+            "description": "Total count of unresolved references.",
             "minimum": 0
           }
         }
