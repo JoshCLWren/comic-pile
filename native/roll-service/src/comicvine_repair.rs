@@ -2094,7 +2094,7 @@ mod tests {
                 "INSERT INTO threads \
                  (title, format, issues_remaining, total_issues, queue_position, status, \
                   user_id, last_rating, reading_progress) \
-                 VALUES ('Backfill', 'Comic', 3, 4, 7, 'active', $1, 4.5, 'in_progress') \
+                 VALUES ('Backfill', 'Comic', 4, 5, 7, 'active', $1, 4.5, 'in_progress') \
                  RETURNING id",
                 &[&user_id],
             )
