@@ -65,10 +65,10 @@ const baseContext: ReaderContextResponse = {
   },
 }
 
-function renderPillar(context: ReaderContextResponse) {
+function renderPillar(context: ReaderContextResponse, routerHarness?: RouterHarness) {
+  const RouterWrapper = routerHarness?.wrapper ?? MemoryRouter
   return render(
-    <MemoryRouter>
-      <NavigationSpy navigate={navigateSpy} />
+    <RouterWrapper>
       <ReadingContextPillar
         activeRatingThread={ratingThread}
         readingOrders={[]}
@@ -80,7 +80,7 @@ function renderPillar(context: ReaderContextResponse) {
         isReaderContextLoading={false}
         readerContextError={null}
       />
-    </MemoryRouter>,
+    </RouterWrapper>,
   )
 }
 
