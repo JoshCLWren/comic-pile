@@ -152,7 +152,14 @@ await injectModuleDoubles(await import('../pages/RollPage/components/RatingView'
   </div>
 } }))
 
-<<<<<<< HEAD
+await injectModuleDoubles(await import('../components/DirectReadIssuePanel'), () => ({
+  DirectReadIssuePanel: ({ threadTitle, onMigrate }: { threadTitle: string; onMigrate?: () => void }) =>
+    <div data-testid="direct-read-issue-panel">
+      Manual issue card for {threadTitle}
+      {onMigrate && <button type="button" onClick={onMigrate}>Set up issue tracking</button>}
+    </div>,
+}))
+
 function LocationProbe() {
   const location = useLocation()
   return (
@@ -172,7 +179,7 @@ function renderRollPage() {
     </MemoryRouter>,
   )
 }
-=======
+
 /**
  * A rating workspace is reachable from a real pending random Roll offer,
  * not from an intentional manual Read Now action (#5525).
@@ -187,15 +194,6 @@ function enterPendingRollRating() {
   }
   fireEvent.click(screen.getByRole('button', { name: 'Roll the dice' }))
 }
-
-vi.mock('../components/DirectReadIssuePanel', () => ({
-  DirectReadIssuePanel: ({ threadTitle, onMigrate }: { threadTitle: string; onMigrate?: () => void }) =>
-    <div data-testid="direct-read-issue-panel">
-      Manual issue card for {threadTitle}
-      {onMigrate && <button type="button" onClick={onMigrate}>Set up issue tracking</button>}
-    </div>,
-}))
->>>>>>> origin/main
 
 describe('RollPage parent handlers', () => {
   afterEach(() => vi.useRealTimers())
