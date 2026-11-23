@@ -2168,7 +2168,7 @@ mod tests {
             &state,
             LIST_SYNC_USER_ID,
             list_sync_as_of(),
-            Some(list_sync_rosters()),
+            Some(list_sync_rosters(false)),
         )
         .await
         .expect("idempotent retry");
