@@ -905,7 +905,10 @@ pub(crate) async fn persist(
         .map_err(db::query_error)?;
     }
 
-    if status_changed || rating_changed {
+    // Completing a preserved Roll offer must run its die and queue effects
+    // even when a previous independent direct Save read this exact issue with
+    // the same rating. Idempotency receipt replay is handled above.
+    if status_changed || rating_changed || source == ROLL_OFFER_SOURCE {
         let count_row = tx
             .query_one(
                 "SELECT count(*)::int,
@@ -1829,6 +1832,78 @@ mod tests {
                 .get::<_, i64>(0),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn roll_offer_completion_after_direct_read_still_steps_die_once() {
+        let Some((mut client, _db_guard)) = roll_offer_fixture().await else {
+            return;
+        };
+        let user = AuthenticatedUser::for_test(1);
+
+        let mut direct = request(Some("read"), Some(4.5));
+        direct.idempotency_key = "direct-while-offered-001".into();
+        let tx = client.transaction().await.unwrap();
+        let manually_read = persist(&tx, user, 101, &direct).await.unwrap();
+        tx.commit().await.unwrap();
+        assert!(manually_read.read_event_created);
+        assert_eq!(manually_read.die_after, None);
+        assert_eq!(current_die(&client, 1).await, 8);
+        let still_pending = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id FROM sessions WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(still_pending.get::<_, Option<i32>>(0), Some(10));
+        assert_eq!(still_pending.get::<_, Option<i32>>(1), Some(101));
+
+        // This is an actual Roll-offer completion with a different command key.
+        // No issue status or rating changes remain, but the completion still
+        // owns the die/queue action and retires the preserved offer.
+        let completion = roll_offer(Some(4.5), "roll-after-direct-001");
+        let tx = client.transaction().await.unwrap();
+        let rated = persist(&tx, user, 101, &completion).await.unwrap();
+        tx.commit().await.unwrap();
+        assert!(!rated.read_event_created);
+        assert!(!rated.rating_event_created);
+        assert_eq!(rated.final_rating, Some(4.5));
+        assert_eq!(rated.die_after, Some(6));
+        assert_eq!(current_die(&client, 1).await, 6);
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![1, 2, 3, 4]
+        );
+        let retired = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id FROM sessions WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(retired.get::<_, Option<i32>>(0), None);
+        assert_eq!(retired.get::<_, Option<i32>>(1), None);
+        assert_eq!(
+            client
+                .query_one(
+                    "SELECT COUNT(*) FROM events
+                     WHERE user_id=1 AND issue_id=101 AND issues_read=1",
+                    &[],
+                )
+                .await
+                .unwrap()
+                .get::<_, i64>(0),
+            1,
+            "Roll completion must never duplicate the direct read event"
+        );
+
+        let tx = client.transaction().await.unwrap();
+        let replay = persist(&tx, user, 101, &completion).await.unwrap();
+        tx.commit().await.unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.die_after, Some(6));
+        assert_eq!(current_die(&client, 1).await, 6);
     }
 
     #[tokio::test]
