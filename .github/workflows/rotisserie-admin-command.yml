@@ -1,0 +1,124 @@
+name: Rotisserie Admin Command
+
+# GitHub itself authenticates the operator. The hosted Pages console sends
+# operators here; it never accepts or stores a GitHub token in a public page.
+on:
+  workflow_dispatch:
+    inputs:
+      command_json:
+        description: 'Paste the command JSON copied from the Rotisserie control room'
+        type: string
+        required: true
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: rotisserie-operator-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  operate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authorize immutable GitHub user ID
+        env:
+          ACTOR_ID: ${{ github.actor_id }}
+          ACTOR_LOGIN: ${{ github.actor }}
+          EXTRA_ADMIN_IDS: ${{ vars.ROTISSERIE_ADMIN_GITHUB_IDS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Repository variables are administered through GitHub settings.
+          # The owner is always allowed; extra IDs must be explicitly added
+          # by an administrator. Logins can be renamed, IDs cannot.
+          python3 - <<'PY'
+          import os
+          import re
+
+          actor = os.environ["ACTOR_ID"]
+          extra = os.environ.get("EXTRA_ADMIN_IDS", "").strip()
+          if extra and not re.fullmatch(r"[0-9]+(?:\\s*,\\s*[0-9]+)*", extra):
+              raise SystemExit("Invalid ROTISSERIE_ADMIN_GITHUB_IDS. Expected comma-separated numeric GitHub user IDs.")
+          allowed = {"4014199"} | {item.strip() for item in extra.split(",") if item.strip()}
+          if actor not in allowed:
+              raise SystemExit(f"GitHub user {os.environ['ACTOR_LOGIN']} (ID {actor}) is not a Rotisserie administrator")
+          print(f"Authorized Rotisserie operator: {os.environ['ACTOR_LOGIN']} (GitHub user ID {actor})")
+          PY
+
+      - name: Check out trusted ComicPile main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Check out Rotisserie factory runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: main
+          path: .rotisserie/runtime
+          persist-credentials: false
+
+      - name: Overlay canonical Rotisserie runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Configure shared factory state
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
+      - name: Execute one allowlisted Rotisserie operation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_JSON: ${{ inputs.command_json }}
+          FACTORY_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --project .rotisserie/runtime --with 'asyncpg>=0.30,<1' python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          from rotisserie.web import InvalidRequest, write_command
+
+          try:
+              payload = json.loads(os.environ["REQUEST_JSON"])
+              if not isinstance(payload, dict):
+                  raise InvalidRequest("Expected a JSON object")
+              arguments = write_command(payload)
+          except (json.JSONDecodeError, InvalidRequest) as error:
+              print(f"::error::Invalid factory request: {error}", file=sys.stderr)
+              raise SystemExit(2)
+
+          command = [
+              sys.executable,
+              "-m",
+              "rotisserie",
+              "factory",
+              "--repo",
+              os.environ["FACTORY_REPO"],
+              *arguments,
+          ]
+          print(f"Executing an authorized {arguments[0]} operation via Rotisserie", flush=True)
+          try:
+              completed = subprocess.run(command, check=False, timeout=180, stdin=subprocess.DEVNULL)
+          except subprocess.TimeoutExpired:
+              print("::error::Rotisserie command exceeded 180 seconds", file=sys.stderr)
+              raise SystemExit(4)
+          raise SystemExit(completed.returncode)
+          PY
