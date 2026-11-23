@@ -1872,29 +1872,12 @@ pub async fn import_issue(
     // Python `confirm_comicvine_identity` (no post-commit hydration on import).
     let external_identity_id =
         link_with_source(&tx, issue_id, request.comicvine_issue_id, "user_confirmed").await?;
-    // #5592: single-issue adoption is an import commit too — durably enqueue
-    // deep-metadata work without waiting for a Roll read. Scheduling runs in a
-    // savepoint (same contract as `link_confirmed`): its failure never undoes
-    // the import, and the Roll intelligence read remains a fallback enqueuer.
-    tx.batch_execute("SAVEPOINT comicvine_hydration_enqueue")
-        .await
-        .map_err(db::query_error)?;
-    if enqueue_hydration_if_needed(&tx, external_identity_id)
-        .await
-        .is_ok()
-    {
-        tx.batch_execute("RELEASE SAVEPOINT comicvine_hydration_enqueue")
-            .await
-            .map_err(db::query_error)?;
-    } else {
-        tracing::warn!(
-            identity_id = external_identity_id,
-            "comicvine hydration scheduling failed; import kept"
-        );
-        tx.batch_execute("ROLLBACK TO SAVEPOINT comicvine_hydration_enqueue")
-            .await
-            .map_err(db::query_error)?;
-    }
+    // #5592: single-issue adoption is an import commit too — durable hydration
+    // work is part of that commit, not best-effort follow-up. If enqueue fails,
+    // abort the whole import rather than returning success without repair work.
+    // Unlike `link_confirmed`, this is a new import, so no pre-existing user
+    // mapping is lost when the transaction rolls back.
+    enqueue_hydration_if_needed(&tx, external_identity_id).await?;
 
     let mut response = ImportIssueResponse {
         thread_id,
