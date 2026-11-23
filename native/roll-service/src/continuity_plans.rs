@@ -184,6 +184,8 @@ pub struct ReleaseSourceCreate {
     pub thread_id: i32,
     #[serde(rename = "external_identity_id")]
     pub external_identity_id: i32,
+    #[serde(rename = "custom_cbl_list_id", default)]
+    pub custom_cbl_list_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
@@ -200,6 +202,8 @@ pub struct ReleaseSourceUpdate {
 pub struct ReleaseSourceResponse {
     pub id: i32,
     pub plan_id: i32,
+    #[serde(rename = "custom_cbl_list_id", default)]
+    pub custom_cbl_list_id: Option<i32>,
     pub thread_id: i32,
     #[serde(rename = "external_identity_id")]
     pub external_identity_id: i32,
@@ -3367,6 +3371,40 @@ pub async fn create_release_source(
     let provider: String = mapping.get(1);
     let provider_volume_id: String = mapping.get(3);
     let metadata_json: Option<serde_json::Value> = mapping.get(4);
+
+    // Resolve authoritative custom CBL list association (non-destructive).
+    // Explicit list wins after ownership validation; otherwise auto-associate
+    // from unambiguous same-owner ReadingPlanSource provenance.
+    let resolved_list_id: Option<i32> = if let Some(list_id) = payload.custom_cbl_list_id {
+        tx.query_opt(
+            "SELECT id FROM custom_cbl_lists WHERE id = $1 AND user_id = $2",
+            &[&list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| not_found(format!("Reading List {} not found", list_id)))?;
+        Some(list_id)
+    } else {
+        let rows = tx
+            .query(
+                "SELECT DISTINCT src.custom_cbl_list_id \
+                 FROM reading_plan_sources src \
+                 JOIN custom_cbl_lists l ON l.id = src.custom_cbl_list_id AND l.user_id = $2 \
+                 WHERE src.plan_id = $1 AND src.custom_cbl_list_id IS NOT NULL",
+                &[&payload.plan_id, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let ids: Vec<i32> = rows
+            .iter()
+            .filter_map(|r| r.get::<_, Option<i32>>(0))
+            .collect();
+        if ids.len() == 1 {
+            Some(ids[0])
+        } else {
+            None
+        }
+    };
 
     // Check for existing release source (idempotent create)
     let existing = tx
