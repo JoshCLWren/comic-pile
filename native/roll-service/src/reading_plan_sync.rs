@@ -1229,6 +1229,9 @@ pub async fn sync_released_issues_for_user(
                 .map_err(db::query_error)?;
 
             let source_result: SourceTxOutcome = async {
+                // Serialize with every authored Reading List/dependency/issue
+                // writer before taking any thread, issue, or list row lock.
+                crate::issue_mutation::lock_reader(&tx, user_id).await?;
                 tx.execute(
                     "SELECT id FROM users WHERE id = $1 FOR UPDATE",
                     &[&user_id],
