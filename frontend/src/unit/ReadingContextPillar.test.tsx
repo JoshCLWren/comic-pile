@@ -6,6 +6,7 @@ import { ReadingContextPillar } from '../pages/RollPage/components/ReadingContex
 import type { ReaderContextResponse } from '../types'
 import { injectModuleDoubles } from './injectModuleDoubles'
 import { NavigationSpy } from './routerTestHarness'
+import { createRouterHarness } from './routerTestHarness'
 
 const navigateSpy = vi.fn()
 
@@ -437,6 +438,8 @@ describe('ReadingContextPillar relation label variants', () => {
 })
 
 describe('ReadingContextPillar crossover membership chips', () => {
+  const router = createRouterHarness()
+  beforeEach(() => { router.reset() })
   it('renders crossover membership chips and navigates on click', async () => {
     const context: ReaderContextResponse = {
       ...baseContext,
@@ -460,8 +463,20 @@ describe('ReadingContextPillar crossover membership chips', () => {
       },
     }
 
-    renderPillar(context)
-    console.log('navigate implementation', navigateSpy.getMockImplementation())
+    render(
+      <ReadingContextPillar
+        activeRatingThread={ratingThread}
+        readingOrders={[]}
+        connectedThreads={[]}
+        onRefreshThread={vi.fn()}
+        rolledResult={null}
+        currentDie={6}
+        readerContext={context}
+        isReaderContextLoading={false}
+        readerContextError={null}
+      />,
+      { wrapper: router.wrapper },
+    )
 
     const button = await screen.findByRole('button', { name: /Show context for Animal Man issue 2/ })
     await userEvent.setup().click(button)
@@ -469,6 +484,6 @@ describe('ReadingContextPillar crossover membership chips', () => {
     const chip = screen.getByRole('button', { name: 'Open Annihilation crossover' })
     expect(chip).toBeVisible()
     await userEvent.setup().click(chip)
-    expect(navigateSpy).toHaveBeenCalledWith('/crossovers/3')
+    expect(router.navigations).toEqual(['/', '/crossovers/3'])
   })
 })
