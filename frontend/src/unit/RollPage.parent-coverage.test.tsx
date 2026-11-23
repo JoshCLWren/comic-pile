@@ -721,23 +721,14 @@ describe('RollPage parent handlers', () => {
     expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument()
   })
 
-<<<<<<< HEAD
-  it('reports an invalid rating-thread response without entering rating mode', async () => {
-    spies.setPending.mockResolvedValueOnce({ thread_id: null, title: '', format: 'Comic', issues_remaining: 1, queue_position: 1, total_issues: 2, result: null })
-    renderRollPage()
-    await userEvent.setup().click(screen.getByRole('button', { name: 'thread' }))
-    await userEvent.setup().click(screen.getByRole('button', { name: /Read Now/ }))
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument())
-=======
   it('manual Read Now never calls legacy setPending or enters automatic rating mode', async () => {
-    render(<RollPage />)
+    renderRollPage()
     fireEvent.click(screen.getByRole('button', { name: 'thread' }))
     fireEvent.click(screen.getByRole('button', { name: /Read Now/ }))
     expect(screen.getByTestId('direct-read-issue-panel')).toHaveTextContent('Saga')
     expect(spies.setPending).not.toHaveBeenCalled()
     expect(spies.rate).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument()
->>>>>>> origin/main
   })
 
   it('hydrates a pending id from the queue when session metadata belongs elsewhere', async () => {
