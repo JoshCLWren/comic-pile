@@ -217,9 +217,7 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
         }
         let rest = lower.strip_prefix(prefix).unwrap_or("");
         if !rest.is_empty() {
-            let rest_trimmed = rest
-                .trim_start_matches([' ', '#', '-', ':'])
-                .trim();
+            let rest_trimmed = rest.trim_start_matches([' ', '#', '-', ':']).trim();
             if !rest_trimmed.is_empty()
                 && rest_trimmed
                     .chars()
