@@ -139,7 +139,6 @@ function renderCard(thread: ThreadListItem, overrides: Partial<Parameters<typeof
     onDragEnd: vi.fn(),
     onDragOver: vi.fn(),
     onDrop: vi.fn(),
-    onRead: vi.fn(),
     onSnooze: vi.fn(),
     onMoveToFront: vi.fn(),
     onMoveToBack: vi.fn(),
@@ -836,11 +835,8 @@ describe('QueueThreadCard', () => {
     it('exercises QueueThreadActions descendants and confirms onCardClick is not invoked', async () => {
       const user = userEvent.setup()
       const onCardClick = vi.fn()
-      const onRead = vi.fn()
-
       renderCard(createMockThread(), {
         onCardClick,
-        onRead,
         snoozeLabel: 'Snooze',
         snoozeIcon: '😴',
       })
@@ -851,7 +847,7 @@ describe('QueueThreadCard', () => {
 
       // SAFETY: the queried node is the element the component rendered under test
       await user.click(readButton as HTMLElement)
-      expect(onRead).toHaveBeenCalledTimes(1)
+      expect(screen.getByTestId('mock-queue-next-issue')).toBeInTheDocument()
       expect(onCardClick).not.toHaveBeenCalled()
     })
 
