@@ -885,6 +885,29 @@ pub(crate) async fn persist(
     let rating_changed = requested_rating.is_some_and(|rating| Some(rating) != old_rating);
     let final_rating = requested_rating.or(old_rating);
 
+    // If a direct Save already read the pending issue with this same rating,
+    // completing its preserved Roll offer is still a real Roll command. A
+    // second command with a fresh key after that offer has been retired is not:
+    // otherwise it could step the die twice without any pending offer.
+    if source == ROLL_OFFER_SOURCE && !status_changed && !rating_changed {
+        let pending = tx
+            .query_opt(
+                "SELECT 1 FROM sessions
+                 WHERE user_id=$1 AND ended_at IS NULL
+                   AND (pending_issue_id=$2
+                        OR (pending_issue_id IS NULL AND pending_thread_id=$3))
+                 FOR UPDATE",
+                &[&user.id(), &issue_id, &thread_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        if pending.is_none() {
+            return Err(ApiError::Conflict(
+                "This Roll offer is no longer pending. Refresh Roll and try again.".into(),
+            ));
+        }
+    }
+
     // Track die_after and source_roll_event_id for roll_offer source
     let mut die_after: Option<i32> = None;
     let mut source_roll_event_id: Option<i32> = None;
@@ -905,7 +928,10 @@ pub(crate) async fn persist(
         .map_err(db::query_error)?;
     }
 
-    if status_changed || rating_changed {
+    // Completing a preserved Roll offer must run its die and queue effects
+    // even when a previous independent direct Save read this exact issue with
+    // the same rating. Idempotency receipt replay is handled above.
+    if status_changed || rating_changed || source == ROLL_OFFER_SOURCE {
         let count_row = tx
             .query_one(
                 "SELECT count(*)::int,
@@ -1049,19 +1075,21 @@ pub(crate) async fn persist(
     )
     .await
     .map_err(db::query_error)?;
-    // Q17: retire the pending Roll selection when its exact pinned issue is read.
-    // Legacy manual picks can pin only the thread, without an issue identity;
-    // completing an issue from that same thread must retire that pending pick,
-    // while a read from another thread must leave it alone.
-    tx.execute(
-        "UPDATE sessions SET pending_thread_id=NULL, pending_issue_id=NULL,
-             pending_thread_updated_at=NULL
-         WHERE user_id=$1 AND ended_at IS NULL
-           AND (pending_issue_id=$2 OR (pending_issue_id IS NULL AND pending_thread_id=$3))",
-        &[&user.id(), &issue_id, &thread_id],
-    )
-    .await
-    .map_err(db::query_error)?;
+    // Only an explicit Roll-offer completion may retire the pending offer.
+    // A direct read/rate is an independent manual intent, even when it targets
+    // the same exact issue currently offered by Roll. Do not change the user's
+    // pending selection, die, or queue state as a side effect of a manual Save.
+    if source == ROLL_OFFER_SOURCE {
+        tx.execute(
+            "UPDATE sessions SET pending_thread_id=NULL, pending_issue_id=NULL,
+                 pending_thread_updated_at=NULL
+             WHERE user_id=$1 AND ended_at IS NULL
+               AND (pending_issue_id=$2 OR (pending_issue_id IS NULL AND pending_thread_id=$3))",
+            &[&user.id(), &issue_id, &thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
 
     if let (Some((session_id, session_state)), Some(pre_positions), Some(pre_die)) =
         (pre_session, pre_positions, pre_die)
@@ -1457,6 +1485,21 @@ mod tests {
             2
         );
 
+        // #5525: an explicitly selected authorized issue from a blocked
+        // thread is not a random Roll candidate. Its prerequisites cannot
+        // veto a direct read, and the test rolls it back to keep the automatic
+        // eligibility fixtures unmodified for the following assertions.
+        let mut blocked_action = request(Some("read"), Some(4.0));
+        blocked_action.idempotency_key = "direct-blocked-owned-issue-01".into();
+        let tx = first.transaction().await.unwrap();
+        let blocked_owned = persist(&tx, user, 301, &blocked_action)
+            .await
+            .expect("manual reading of a blocked owned issue must succeed");
+        assert!(blocked_owned.read_event_created);
+        assert_eq!(blocked_owned.issue.status, "read");
+        assert_eq!(blocked_owned.die_after, None);
+        tx.rollback().await.unwrap();
+
         // The persisted derived `threads.is_blocked` flag is what native Skip
         // and the legacy queue filter on. A direct read must clear it for every
         // dependent thread; a direct unread must set it again.
@@ -1617,21 +1660,26 @@ mod tests {
         assert_eq!(unmapped.issue.mapping_state, "unmapped");
         assert_eq!(unmapped.issue.cover_image_url, None);
         assert_eq!(unmapped.thread.next_unread_issue_id, Some(102));
-        // Reading the exact pending issue retires that offer (Q17); the earlier
-        // different manual read above left it untouched.
-        let cleared = first
+        // A manual read of the exact pending issue must also preserve the
+        // existing Roll offer. Only an actual Roll-offer completion clears it.
+        let unchanged = first
             .query_one(
-                "SELECT pending_thread_id,pending_issue_id FROM sessions WHERE id=1",
+                "SELECT pending_thread_id,pending_issue_id,manual_die FROM sessions WHERE id=1",
                 &[],
             )
             .await
             .unwrap();
         assert_eq!(
-            cleared.get::<_, Option<i32>>(0),
-            None,
-            "pending thread must clear with its selected issue"
+            unchanged.get::<_, Option<i32>>(0),
+            Some(10),
+            "a direct Save cannot replace or clear the pending Roll thread"
         );
-        assert_eq!(cleared.get::<_, Option<i32>>(1), None);
+        assert_eq!(
+            unchanged.get::<_, Option<i32>>(1),
+            Some(101),
+            "a direct Save cannot replace or clear the pending Roll issue"
+        );
+        assert_eq!(unchanged.get::<_, Option<i32>>(2), Some(12));
 
         let bounded = cards(&first, user, &[110, 999_999, 110, 201, 101])
             .await
@@ -1807,6 +1855,91 @@ mod tests {
                 .get::<_, i64>(0),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn roll_offer_completion_after_direct_read_still_steps_die_once() {
+        let Some((mut client, _db_guard)) = roll_offer_fixture().await else {
+            return;
+        };
+        let user = AuthenticatedUser::for_test(1);
+
+        let mut direct = request(Some("read"), Some(4.5));
+        direct.idempotency_key = "direct-while-offered-001".into();
+        let tx = client.transaction().await.unwrap();
+        let manually_read = persist(&tx, user, 101, &direct).await.unwrap();
+        tx.commit().await.unwrap();
+        assert!(manually_read.read_event_created);
+        assert_eq!(manually_read.die_after, None);
+        assert_eq!(current_die(&client, 1).await, 8);
+        let still_pending = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id FROM sessions WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(still_pending.get::<_, Option<i32>>(0), Some(10));
+        assert_eq!(still_pending.get::<_, Option<i32>>(1), Some(101));
+
+        // This is an actual Roll-offer completion with a different command key.
+        // No issue status or rating changes remain, but the completion still
+        // owns the die/queue action and retires the preserved offer.
+        let completion = roll_offer(Some(4.5), "roll-after-direct-001");
+        let tx = client.transaction().await.unwrap();
+        let rated = persist(&tx, user, 101, &completion).await.unwrap();
+        tx.commit().await.unwrap();
+        assert!(!rated.read_event_created);
+        assert!(!rated.rating_event_created);
+        assert_eq!(rated.final_rating, Some(4.5));
+        assert_eq!(rated.die_after, Some(6));
+        assert_eq!(current_die(&client, 1).await, 6);
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![1, 2, 3, 4]
+        );
+        let retired = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id FROM sessions WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(retired.get::<_, Option<i32>>(0), None);
+        assert_eq!(retired.get::<_, Option<i32>>(1), None);
+        assert_eq!(
+            client
+                .query_one(
+                    "SELECT COUNT(*) FROM events
+                     WHERE user_id=1 AND issue_id=101 AND issues_read=1",
+                    &[],
+                )
+                .await
+                .unwrap()
+                .get::<_, i64>(0),
+            1,
+            "Roll completion must never duplicate the direct read event"
+        );
+
+        let tx = client.transaction().await.unwrap();
+        let replay = persist(&tx, user, 101, &completion).await.unwrap();
+        tx.commit().await.unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.die_after, Some(6));
+        assert_eq!(current_die(&client, 1).await, 6);
+
+        let tx = client.transaction().await.unwrap();
+        let second_completion = persist(
+            &tx,
+            user,
+            101,
+            &roll_offer(Some(4.5), "roll-after-direct-again-001"),
+        )
+        .await
+        .unwrap_err();
+        tx.rollback().await.unwrap();
+        assert_eq!(second_completion.status(), StatusCode::CONFLICT);
+        assert_eq!(current_die(&client, 1).await, 6);
     }
 
     #[tokio::test]
