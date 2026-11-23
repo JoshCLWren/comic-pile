@@ -337,9 +337,19 @@ pub(crate) async fn provider_exchange(
     if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
         return Err(ProviderFailure::Unavailable);
     }
+    // Python `_provider_url`: only collection endpoints use a trailing slash.
+    // Singular issue/volume requests must not redirect with credentials in the
+    // URL; the native transport intentionally does not follow redirects.
+    let collection_slash = if matches!(resource, "issues" | "search") {
+        "/"
+    } else {
+        ""
+    };
     let request = OutboundRequest {
         method: http::Method::GET,
-        path: format!("/api/{resource}/?api_key={api_key}&format=json{extra_query}"),
+        path: format!(
+            "/api/{resource}{collection_slash}?api_key={api_key}&format=json{extra_query}"
+        ),
         headers: vec![
             ("accept".to_string(), "application/json".to_string()),
             (
@@ -1356,7 +1366,7 @@ mod tests {
         let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].host, HOST);
-        assert!(calls[0].path.starts_with("/api/issue/4000-29319/"));
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
     }
 
     /// The inline catalog path runs only after its identity transaction has
@@ -1464,7 +1474,7 @@ mod tests {
 
         let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1, "cross-owner ids must not be fetched");
-        assert!(calls[0].path.starts_with("/api/issue/4000-29319/"));
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
     }
 
     #[tokio::test]

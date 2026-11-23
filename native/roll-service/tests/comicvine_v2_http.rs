@@ -594,7 +594,7 @@ async fn resolve_classifies_input_and_resolves_issue_links() {
     );
     let call = fake(&state).calls().last().unwrap().clone();
     assert!(
-        call.path.starts_with("/api/issue/4000-123/?")
+        call.path.starts_with("/api/issue/4000-123?")
             && call.path.contains("field_list=id,name,issue_number"),
         "{}",
         call.path
@@ -679,7 +679,7 @@ async fn resolve_volume_links_return_the_volume_and_its_roster() {
         .map(|c| c.path.clone())
         .collect();
     assert_eq!(paths.len(), 2, "{paths:?}");
-    assert!(paths[0].starts_with("/api/volume/4050-9/?"), "{paths:?}");
+    assert!(paths[0].starts_with("/api/volume/4050-9?"), "{paths:?}");
     assert!(
         paths[1].starts_with("/api/issues/?") && paths[1].contains("filter=volume:9"),
         "{paths:?}"
@@ -855,7 +855,7 @@ impl PagedComicVine {
     }
 
     fn payload(&self, path: &str) -> Value {
-        if path.starts_with(&format!("/api/volume/4050-{}/", self.volume)) {
+        if path.starts_with(&format!("/api/volume/4050-{}?", self.volume)) {
             return json!({"status_code": 1, "error": "OK", "results": {"id": self.volume, "name": "Paged"}});
         }
         let offset: usize = path
@@ -3222,7 +3222,7 @@ async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
     let singular_calls = fake(&state)
         .calls()
         .iter()
-        .filter(|call| call.path.starts_with("/api/issue/4000-92001/"))
+        .filter(|call| call.path.starts_with("/api/issue/4000-92001?"))
         .count();
     assert_eq!(
         singular_calls, 1,
