@@ -154,6 +154,9 @@ describe('QueuePage bulk mapping wiring', () => {
       nextPageToken: null,
       loadMore: vi.fn(),
       activeCount: 3,
+      filteredCount: 3,
+      isPlaceholderData: false,
+      isFetching: false,
     } as never)
 
     // SAFETY: QueuePage only reads mutate and isPending from these hooks; the full return type is irrelevant.
@@ -215,6 +218,9 @@ describe('QueuePage bulk mapping wiring', () => {
       nextPageToken: null,
       loadMore: vi.fn(),
       activeCount: 1,
+      filteredCount: 1,
+      isPlaceholderData: false,
+      isFetching: false,
     } as never)
 
     render(
@@ -243,6 +249,9 @@ describe('QueuePage bulk mapping wiring', () => {
       nextPageToken: 'page-2',
       loadMore: vi.fn(),
       activeCount: 164,
+      filteredCount: 164,
+      isPlaceholderData: false,
+      isFetching: false,
     } as never)
 
     render(
@@ -270,6 +279,9 @@ describe('QueuePage bulk mapping wiring', () => {
       nextPageToken: 'page-2',
       loadMore,
       activeCount: 164,
+      filteredCount: 164,
+      isPlaceholderData: false,
+      isFetching: false,
     } as never)
 
     const { rerender } = render(
@@ -298,6 +310,9 @@ describe('QueuePage bulk mapping wiring', () => {
       nextPageToken: null,
       loadMore,
       activeCount: 164,
+      filteredCount: 164,
+      isPlaceholderData: false,
+      isFetching: false,
     } as never)
     rerender(
       <BrowserRouter>
@@ -332,6 +347,9 @@ describe('QueuePage bulk mapping wiring', () => {
       nextPageToken: 'page-2',
       loadMore,
       activeCount: 164,
+      filteredCount: 164,
+      isPlaceholderData: false,
+      isFetching: false,
     } as never)
 
     const { rerender } = render(
@@ -360,6 +378,9 @@ describe('QueuePage bulk mapping wiring', () => {
       nextPageToken: null,
       loadMore,
       activeCount: 164,
+      filteredCount: 164,
+      isPlaceholderData: false,
+      isFetching: false,
     } as never)
     rerender(
       <BrowserRouter>
@@ -386,6 +407,9 @@ describe('QueuePage bulk mapping wiring', () => {
       nextPageToken: 'page-2',
       loadMore,
       activeCount: 164,
+      filteredCount: 164,
+      isPlaceholderData: false,
+      isFetching: false,
     } as never)
     rerender(
       <BrowserRouter>
@@ -413,6 +437,9 @@ describe('QueuePage bulk mapping wiring', () => {
       nextPageToken: 'page-2',
       loadMore,
       activeCount: 164,
+      filteredCount: 164,
+      isPlaceholderData: false,
+      isFetching: false,
     } as never)
 
     render(
@@ -453,6 +480,9 @@ describe('QueuePage bulk mapping wiring', () => {
       nextPageToken: 'page-2',
       loadMore: vi.fn().mockResolvedValue(undefined),
       activeCount: 164,
+      filteredCount: 164,
+      isPlaceholderData: false,
+      isFetching: false,
     } as never)
 
     render(

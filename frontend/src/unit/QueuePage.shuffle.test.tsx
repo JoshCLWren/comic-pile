@@ -160,6 +160,9 @@ describe('Queue shuffle availability', () => {
     mockedUseQueueThreads.mockReturnValue({
       data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 }],
       activeCount: 120,
+      filteredCount: 120,
+      isPlaceholderData: false,
+      isFetching: false,
       isLoading: false,
       refetch: vi.fn(),
     })
@@ -184,6 +187,9 @@ describe('Queue shuffle confirmation', () => {
         { id: 2, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 5 },
       ],
       activeCount: 2,
+      filteredCount: 2,
+      isPlaceholderData: false,
+      isFetching: false,
       isLoading: false,
       refetch: vi.fn(),
     })

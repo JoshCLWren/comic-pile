@@ -475,6 +475,9 @@ describe('QueuePage callback coverage', () => {
     vi.mocked(useQueueThreads).mockReturnValue({
       data: [thread, { ...thread, id: 3, title: 'Spawn' }] as never,
       activeCount: 2,
+      filteredCount: 2,
+      isPlaceholderData: false,
+      isFetching: false,
       isPending: false,
       isError: false,
       refetch: mocks.refetch,

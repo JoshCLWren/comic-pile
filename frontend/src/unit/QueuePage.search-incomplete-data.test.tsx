@@ -160,7 +160,10 @@ describe('Queue search with incomplete data', () => {
       refetch: vi.fn(),
       nextPageToken: 'next-page-token',
       loadMore: vi.fn().mockResolvedValue(undefined),
-      activeCount: 10, // Total count is higher than what's loaded
+      activeCount: 10,
+      filteredCount: 10,
+      isPlaceholderData: false,
+      isFetching: false, // Total count is higher than what's loaded
     })
 
     renderQueue()
@@ -188,6 +191,9 @@ describe('Queue search with incomplete data', () => {
       nextPageToken: null,
       loadMore: vi.fn().mockResolvedValue(undefined),
       activeCount: 0,
+      filteredCount: 0,
+      isPlaceholderData: false,
+      isFetching: false,
     })
 
     renderQueue()
@@ -230,6 +236,9 @@ describe('Queue search with incomplete data', () => {
       nextPageToken: null,
       loadMore: vi.fn().mockResolvedValue(undefined),
       activeCount: 2,
+      filteredCount: 2,
+      isPlaceholderData: false,
+      isFetching: false,
     })
 
     renderQueue()
