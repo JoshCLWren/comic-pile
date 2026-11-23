@@ -8,12 +8,9 @@ const navigateSpy = vi.fn()
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
 import type { UseQueueThreadActionsDeps } from '../pages/QueuePage/useQueueThreadActions'
 import { queryClient as sharedQueryClient } from '../query/queryClient'
-import { queryKeys } from '../query/queryKeys'
-import type { RollResponse, Thread } from '../types'
-import { cast } from '../utils/cast'
+import type { Thread } from '../types'
 
 const toastSpy = vi.fn()
-const setPending = vi.fn()
 
 function mutationStubs() {
   return {
@@ -57,7 +54,6 @@ function buildDeps(overrides: Partial<UseQueueThreadActionsDeps> = {}): UseQueue
     shuffleHook: () => mutationStubs(),
     reroll: vi.fn().mockResolvedValue({ thread_id: 5, title: 'Next Comic' }),
     toastHook: () => ({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] }),
-    setPending,
     ...overrides,
   }
 }
@@ -96,7 +92,6 @@ describe('useQueueThreadActions', () => {
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: vi.fn(),
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
@@ -123,7 +118,6 @@ describe('useQueueThreadActions', () => {
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: vi.fn(),
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
@@ -147,7 +141,6 @@ describe('useQueueThreadActions', () => {
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: vi.fn(),
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
@@ -167,111 +160,12 @@ describe('useQueueThreadActions', () => {
     await waitFor(() => expect(result.current.reorderError).toBe('reorder failed'))
   })
 
-  it('rejects read for blocked threads and routes allowed reads through setPending', async () => {
-    setPending.mockResolvedValue({
-      thread_id: 9,
-      title: 'Test Thread',
-      format: 'Comic',
-      issues_remaining: 5,
-      queue_position: 2,
-      die_size: 6,
-      result: 1,
-      offset: 0,
-      snoozed_count: 0,
-      issue_id: null,
-      issue_number: null,
-      next_issue_id: null,
-      next_issue_number: null,
-      total_issues: null,
-      reading_progress: null,
-    })
-    const navigate = vi.fn()
-    const { result } = renderHook(
-      () =>
-        useQueueThreadActions(
-          {
-            navigateToRoll: navigate,
-            restoreSeriesActionsFocus: vi.fn(),
-          },
-          buildDeps(),
-        ),
-      { wrapper },
-    )
-
-    await result.current.handleThreadRead(makeThread({ id: 7, is_blocked: true }))
-    expect(toastSpy).not.toHaveBeenCalled()
-    expect(navigate).not.toHaveBeenCalled()
-
-    await result.current.handleThreadRead(makeThread({ id: 8 }))
-    expect(setPending).toHaveBeenCalledWith(8)
-    expect(navigate).toHaveBeenCalled()
-  })
-
-  it('drops the cached roll bootstrap before handing off to Roll (#2153)', async () => {
-    const staleBootstrap = { session_id: 1, pending_thread_id: null, roll_pool: [] }
-    sharedQueryClient.setQueryData(queryKeys.roll.bootstrap(), staleBootstrap)
-    sharedQueryClient.setQueryData(queryKeys.session.current(), { id: 1, pending_thread_id: null })
-    // SAFETY: the queue only reads `thread_id`/`title` from the roll response
-    // before navigating; a minimal double keeps the assertion focused.
-    setPending.mockResolvedValue(cast<RollResponse>({ thread_id: 8, title: 'Saga' }))
-
-    const callOrder: string[] = []
-    const navigate = vi.fn(() => {
-      callOrder.push('navigate')
-      expect(sharedQueryClient.getQueryData(queryKeys.roll.bootstrap())).toBeUndefined()
-    })
-    const { result } = renderHook(
-      () =>
-        useQueueThreadActions(
-          {
-            navigateToRoll: navigate,
-            restoreSeriesActionsFocus: vi.fn(),
-          },
-          buildDeps(),
-        ),
-      { wrapper },
-    )
-
-    await result.current.handleThreadRead(makeThread({ id: 8 }))
-
-    expect(navigate).toHaveBeenCalledTimes(1)
-    expect(callOrder).toEqual(['navigate'])
-    expect(sharedQueryClient.getQueryData(queryKeys.roll.bootstrap())).toBeUndefined()
-    expect(
-      sharedQueryClient.getQueryState(queryKeys.session.current())?.isInvalidated,
-    ).toBe(true)
-  })
-
-  it('does not navigate to Roll when set-pending fails', async () => {
-    setPending.mockRejectedValue(new Error('Thread 8 has no issues remaining'))
-    const navigate = vi.fn()
-    const { result } = renderHook(
-      () =>
-        useQueueThreadActions(
-          {
-            navigateToRoll: navigate,
-            restoreSeriesActionsFocus: vi.fn(),
-          },
-          buildDeps(),
-        ),
-      { wrapper },
-    )
-
-    await result.current.handleThreadRead(makeThread({ id: 8 }))
-
-    expect(navigate).not.toHaveBeenCalled()
-    expect(toastSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Thread 8 has no issues remaining'),
-      'error',
-    )
-  })
-
   it('routes Queue snooze to the native Rust reroll and unsnooze is client-side only (#4589)', async () => {
     const reroll = vi.fn().mockResolvedValue({ thread_id: 5, title: 'Next Comic' })
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
-          { navigateToRoll: vi.fn(), restoreSeriesActionsFocus: vi.fn() },
+          { restoreSeriesActionsFocus: vi.fn() },
           buildDeps({ reroll }),
         ),
       { wrapper },
@@ -299,7 +193,7 @@ describe('useQueueThreadActions', () => {
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
-          { navigateToRoll: vi.fn(), restoreSeriesActionsFocus: vi.fn() },
+          { restoreSeriesActionsFocus: vi.fn() },
           buildDeps({ reroll }),
         ),
       { wrapper },
@@ -319,7 +213,7 @@ describe('useQueueThreadActions', () => {
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
-          { navigateToRoll: vi.fn(), restoreSeriesActionsFocus: vi.fn() },
+          { restoreSeriesActionsFocus: vi.fn() },
           buildDeps(),
         ),
       { wrapper },
@@ -335,7 +229,6 @@ describe('useQueueThreadActions', () => {
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: vi.fn(),
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({
@@ -359,7 +252,6 @@ describe('useQueueThreadActions', () => {
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: vi.fn(),
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({
@@ -383,12 +275,10 @@ describe('useQueueThreadActions', () => {
 
   it('gates the queue shuffle behind a confirmation that cancels without mutating', async () => {
     const shuffle = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
-    const navigateToRoll = vi.fn()
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: navigateToRoll,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ shuffleHook: () => shuffle }),
@@ -416,7 +306,6 @@ describe('useQueueThreadActions', () => {
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: vi.fn(),
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
@@ -436,7 +325,6 @@ describe('useQueueThreadActions', () => {
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: vi.fn(),
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),
@@ -459,7 +347,6 @@ describe('useQueueThreadActions', () => {
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: vi.fn(),
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),
@@ -486,7 +373,6 @@ describe('useQueueThreadActions', () => {
       () =>
         useQueueThreadActions(
           {
-            navigateToRoll: vi.fn(),
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),
