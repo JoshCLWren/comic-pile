@@ -11627,6 +11627,7 @@
           "page",
           "page_size",
           "total",
+          "catalog_total",
           "total_pages",
           "has_next",
           "has_previous"
@@ -11637,6 +11638,11 @@
             "items": {
               "$ref": "#/components/schemas/CBLBreadcrumb"
             }
+          },
+          "catalog_total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total active source lists in the whole shared catalog, independent of search and folder."
           },
           "folder": {
             "type": "string"
@@ -11679,7 +11685,8 @@
           },
           "total": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Total source lists matching the applied folder/search scope."
           },
           "total_pages": {
             "type": "integer",
@@ -24468,6 +24475,14 @@
           "active_count": {
             "type": "integer",
             "format": "int32"
+          },
+          "filtered_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total active Queue rows matching the applied search, independent of the bounded page."
           },
           "next_page_token": {
             "type": [
