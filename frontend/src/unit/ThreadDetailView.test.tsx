@@ -261,6 +261,7 @@ it('loads the next issue cover before expansion and shares its card batch with I
 
 it('updates the Next issue title immediately after a same-tab rename and rename back (#5616)', async () => {
   const actualUseThread = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
+  console.log('SAME?', actualUseThread.useUpdateThread === useUpdateThread)
   mockedUseUpdateThread.mockImplementation(actualUseThread.useUpdateThread)
   let currentTitle = 'Superman'
   const currentThread = () => ({
