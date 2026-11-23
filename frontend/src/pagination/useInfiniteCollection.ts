@@ -53,6 +53,10 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
   isNextPageLoading: boolean
   /** True while any fetch is in flight (initial, refetch, or next page). */
   isLoading: boolean
+  /** Alias of `isLoading` for consumers that need the raw TanStack fetch state. */
+  isFetching: boolean
+  /** True when `pages` are placeholder rows from the previous query key. */
+  isPlaceholderData: boolean
   /**
    * Convenience flag matching the previous Queue semantics: loading the first
    * page OR appending another page while already-rendered rows stay visible.
@@ -138,6 +142,8 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     isInitialLoading,
     isNextPageLoading,
     isLoading: query.isFetching,
+    isFetching: query.isFetching,
+    isPlaceholderData: query.isPlaceholderData,
     isPending: isInitialLoading || isNextPageLoading,
     hasNextPage,
     nextPageToken,
