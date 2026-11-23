@@ -8,7 +8,7 @@
 import {readFileSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
-const RUST = new Set(['/api/native_roll.rs', '/api/native_issue.rs']);
+const RUST = new Set(['/api/native_roll.rs']);
 // main's bot-owned vercel.json can still carry stale Python exceptions until
 // regenerate-routes.yml lands; they must be exercised as Rust 404s now.
 const RETIRED_PYTHON = '/api/index.py';
