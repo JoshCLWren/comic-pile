@@ -21,8 +21,12 @@
 //! v2 import-status read.
 
 use crate::{
-    auth::AuthenticatedUser, comicvine_repair::ProviderFailure,
-    comicvine_resolution::SeriesImportStatusResponse, db, thread_issues::natural_issue_order,
+    auth::AuthenticatedUser,
+    catalog_commit::inline_hydration_budget,
+    comicvine_repair::{hydrate_confirmed_identity_inline, ProviderFailure},
+    comicvine_resolution::SeriesImportStatusResponse,
+    db,
+    thread_issues::natural_issue_order,
     ApiError, AppState,
 };
 use axum::{
@@ -38,7 +42,7 @@ use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio_postgres::Transaction;
 
@@ -1433,6 +1437,7 @@ pub async fn confirm_identity(
     issue_id: Result<Path<String>, PathRejection>,
     request: Result<Json<ConfirmIdentityRequest>, JsonRejection>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let started = Instant::now();
     let issue_id = path_int(issue_id)?;
     let Json(request) = request.map_err(|_| validation_failed())?;
     let mut connection = db::checkout(&state).await?;
@@ -1442,7 +1447,33 @@ pub async fn confirm_identity(
     link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
+    // Release the pooled connection before inline hydration checks one out;
+    // on a small pool the handler holding it would starve the hydrator.
+    drop(connection);
+    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
     Ok(Json(response))
+}
+
+/// Best-effort synchronous creator-credit hydration after a confirmed mapping
+/// commits. The provider key lookup stays at the mutation boundary; the
+/// enqueued refresh row remains the fallback when this cannot complete.
+async fn hydrate_confirmed_identity_if_configured(
+    state: &AppState,
+    user_id: i32,
+    issue_id: i32,
+    started: Instant,
+) {
+    let Ok(api_key) = std::env::var("COMICVINE_API_KEY") else {
+        return;
+    };
+    hydrate_confirmed_identity_inline(
+        state,
+        user_id,
+        issue_id,
+        inline_hydration_budget(started.elapsed()),
+        &api_key,
+    )
+    .await;
 }
 
 /// `POST /api/v2/comicvine/issues/{issue_id}/identity:replace` (Python
@@ -1454,6 +1485,7 @@ pub async fn replace_identity(
     issue_id: Result<Path<String>, PathRejection>,
     request: Result<Json<ReplaceIdentityRequest>, JsonRejection>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let started = Instant::now();
     let issue_id = path_int(issue_id)?;
     let Json(request) = request.map_err(|_| validation_failed())?;
     if reason_too_long(request.reason.as_deref()) {
@@ -1481,6 +1513,8 @@ pub async fn replace_identity(
     link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
+    drop(connection);
+    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
     Ok(Json(response))
 }
 
