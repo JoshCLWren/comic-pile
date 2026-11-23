@@ -133,46 +133,51 @@ beforeEach(() => {
 })
 
 describe('Queue search with incomplete data', () => {
-  it('shows loading state when searching and there are active threads but filtered results are empty (likely still loading)', async () => {
+  it('shows loading state when a non-empty Queue search has no settled result rows yet', async () => {
     const user = userEvent.setup()
     vi.mocked(useQueueListLoading).mockReturnValue(true)
-    mockedUseQueueThreads.mockReturnValue({
-      data: [
-        {
-          id: 1,
-          title: 'Saga',
-          format: 'Comic',
-          status: 'active',
-          queue_position: 1,
-          issues_remaining: 5,
-        },
-        {
-          id: 2,
-          title: 'Spawn',
-          format: 'Comic',
-          status: 'active',
-          queue_position: 2,
-          issues_remaining: 5,
-        },
-      ],
-      isPending: false,
-      isError: false,
-      refetch: vi.fn(),
-      nextPageToken: 'next-page-token',
-      loadMore: vi.fn().mockResolvedValue(undefined),
-      activeCount: 10, // Total count is higher than what's loaded
+    mockedUseQueueThreads.mockImplementation((search?: string) => {
+      const searchPending = Boolean(search?.trim())
+      // SAFETY: QueuePage consumes only this explicitly mocked loader surface.
+      return {
+        data: searchPending
+          ? []
+          : [
+              {
+                id: 1,
+                title: 'Saga',
+                format: 'Comic',
+                status: 'active',
+                queue_position: 1,
+                issues_remaining: 5,
+              },
+              {
+                id: 2,
+                title: 'Spawn',
+                format: 'Comic',
+                status: 'active',
+                queue_position: 2,
+                issues_remaining: 5,
+              },
+            ],
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+        nextPageToken: 'next-page-token',
+        loadMore: vi.fn().mockResolvedValue(undefined),
+        activeCount: 10,
+        filteredCount: searchPending ? null : 10,
+        resultCountText: searchPending ? 'Updating series count…' : '10 of 10 series',
+      } as never
     })
 
     renderQueue()
 
-    // Trigger a search to enter the searching state
     const searchInput = screen.getByPlaceholderText('Search...')
     await user.type(searchInput, 'NonExistent')
 
-    // Wait for the debounce delay to ensure the search state is properly entered
     await vi.waitFor(() => {
-      // Since we're searching for something that doesn't exist and there are active threads,
-      // it should show "Loading series..." instead of "No active series match your search"
+      expect(mockedUseQueueThreads).toHaveBeenCalledWith('NonExistent', 'position')
       expect(screen.getByText('Loading series...')).toBeInTheDocument()
       expect(screen.queryByText('No active series match your search')).not.toBeInTheDocument()
     })
