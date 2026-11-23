@@ -396,6 +396,7 @@ listThreads.mockImplementation(
         () => new Promise((resolve) => { resolveAlpha = resolve }),
       )
       .mockResolvedValueOnce({
+        // SAFETY: the paginator reads only id and title from this partial row fixture.
         threads: [{ id: 2, title: 'Beta' } as never],
         next_page_token: null,
         active_count: 5,
@@ -415,6 +416,7 @@ listThreads.mockImplementation(
     await waitFor(() => expect(result.current.resultCountText).toBe('1 of 5 series'))
 
     resolveAlpha({
+      // SAFETY: the paginator reads only id and title from these partial row fixtures.
       threads: [{ id: 1, title: 'Alpha One' } as never, { id: 3, title: 'Alpha Two' } as never],
       next_page_token: null,
       active_count: 5,
