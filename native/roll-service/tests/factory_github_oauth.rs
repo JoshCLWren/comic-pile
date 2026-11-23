@@ -45,7 +45,7 @@ async fn database() -> (Arc<AppState>, tokio::sync::MutexGuard<'static, ()>) {
     (state, guard)
 }
 
-async fn send(state: &Arc<AppState>, request: Request<Body>) -> Response {
+async fn send(state: &Arc<AppState>, request: Request<Body>) -> Response<Body> {
     router(state.clone()).oneshot(request).await.unwrap()
 }
 
