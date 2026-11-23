@@ -310,12 +310,51 @@ async fn provider_json(
     Ok((status, data))
 }
 
+/// Stable, non-secret categories for callback failures. Do not log raw OAuth
+/// query parameters, cookies, provider bodies, or access tokens.
+fn oauth_failure_stage(error: &ApiError) -> &'static str {
+    match error {
+        ApiError::Unauthorized(message) => match message.as_str() {
+            "GitHub sign-in was cancelled" => "github_authorization_cancelled",
+            "Missing authorization code" => "authorization_code_missing",
+            "Missing OAuth state" => "oauth_state_missing",
+            "Missing OAuth state cookie" => "oauth_cookie_missing",
+            "OAuth state expired" => "oauth_cookie_invalid_or_expired",
+            "OAuth state mismatch" => "oauth_state_mismatch",
+            "GitHub authorization failed" => "github_token_exchange_failed",
+            "Could not verify GitHub identity" => "github_user_lookup_failed",
+            _ => "authorization_rejected",
+        },
+        ApiError::Forbidden(_) => "github_identity_not_authorized",
+        ApiError::ServiceUnavailable(_) => "github_provider_unavailable",
+        ApiError::Internal(_) => "oauth_internal_error",
+        _ => "oauth_other_error",
+    }
+}
+
+fn github_provider_error_code(error: &str) -> &'static str {
+    match error {
+        "incorrect_client_credentials" => "incorrect_client_credentials",
+        "redirect_uri_mismatch" => "redirect_uri_mismatch",
+        "bad_verification_code" => "bad_verification_code",
+        "unverified_user_email" => "unverified_user_email",
+        "application_suspended" => "application_suspended",
+        "access_denied" => "access_denied",
+        _ => "other_provider_error",
+    }
+}
+
 async fn finish_callback(
     state: Arc<AppState>,
     headers: HeaderMap,
     params: CallbackParams,
 ) -> Result<Response, ApiError> {
-    if params.error.is_some() {
+    if let Some(provider_error) = params.error.as_deref() {
+        tracing::warn!(
+            oauth_stage = "github_authorization",
+            provider_error = github_provider_error_code(provider_error),
+            "Rotisserie OAuth authorization rejected before callback exchange"
+        );
         return Err(ApiError::Unauthorized(
             "GitHub sign-in was cancelled".into(),
         ));
@@ -360,13 +399,33 @@ async fn finish_callback(
         ],
         body: HttpBytes::from(form),
     };
-    let (status, token_body) = provider_json(&state, "github.com", request).await?;
+    let (status, token_body) = match provider_json(&state, "github.com", request).await {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::warn!(
+                oauth_stage = "github_token_transport",
+                failure_stage = oauth_failure_stage(&error),
+                "Rotisserie OAuth token exchange unavailable"
+            );
+            return Err(error);
+        }
+    };
     if !status.is_success() {
+        tracing::warn!(
+            oauth_stage = "github_token_status",
+            github_status = status.as_u16(),
+            "Rotisserie OAuth token exchange rejected"
+        );
         return Err(ApiError::Unauthorized("GitHub authorization failed".into()));
     }
     let token: OAuthToken = serde_json::from_value(token_body)
         .map_err(|_| ApiError::Unauthorized("GitHub authorization failed".into()))?;
-    if token.error.is_some() {
+    if let Some(provider_error) = token.error {
+        tracing::warn!(
+            oauth_stage = "github_token_rejection",
+            provider_error = github_provider_error_code(&provider_error),
+            "Rotisserie OAuth token exchange rejected"
+        );
         return Err(ApiError::Unauthorized("GitHub authorization failed".into()));
     }
     let access_token = token
@@ -381,8 +440,23 @@ async fn finish_callback(
             ("User-Agent".into(), "ComicPile-Rotisserie".into()),
         ],
     );
-    let (status, user_body) = provider_json(&state, "api.github.com", request).await?;
+    let (status, user_body) = match provider_json(&state, "api.github.com", request).await {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::warn!(
+                oauth_stage = "github_user_transport",
+                failure_stage = oauth_failure_stage(&error),
+                "Rotisserie OAuth identity lookup unavailable"
+            );
+            return Err(error);
+        }
+    };
     if !status.is_success() {
+        tracing::warn!(
+            oauth_stage = "github_user_status",
+            github_status = status.as_u16(),
+            "Rotisserie OAuth identity lookup rejected"
+        );
         return Err(ApiError::Unauthorized(
             "Could not verify GitHub identity".into(),
         ));
@@ -425,6 +499,7 @@ pub async fn callback(
         Err(error) => {
             tracing::warn!(
                 error_kind = "github_oauth_rejected",
+                failure_stage = oauth_failure_stage(&error),
                 "Rotisserie OAuth sign-in failed"
             );
             let code = match error {
@@ -566,7 +641,30 @@ async fn dispatch_inner(
 
 #[cfg(test)]
 mod tests {
-    use super::{allowed, CALLBACK_URL, PAGES_ORIGIN};
+    use super::{
+        allowed, github_provider_error_code, oauth_failure_stage, ApiError, CALLBACK_URL,
+        PAGES_ORIGIN,
+    };
+
+    #[test]
+    fn callback_error_diagnostics_never_emit_untrusted_provider_text() {
+        assert_eq!(
+            oauth_failure_stage(&ApiError::Unauthorized("Missing OAuth state cookie".into())),
+            "oauth_cookie_missing"
+        );
+        assert_eq!(
+            oauth_failure_stage(&ApiError::Unauthorized("OAuth state mismatch".into())),
+            "oauth_state_mismatch"
+        );
+        assert_eq!(
+            github_provider_error_code("incorrect_client_credentials"),
+            "incorrect_client_credentials"
+        );
+        assert_eq!(
+            github_provider_error_code("untrusted_code_with_secret"),
+            "other_provider_error"
+        );
+    }
 
     #[test]
     fn admin_allowlist_uses_immutable_github_ids_and_fails_closed() {
