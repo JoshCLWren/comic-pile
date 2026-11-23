@@ -1105,7 +1105,10 @@ async fn backfill_authorized(
                         lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
                         updated_at = now() \
                     FROM claimable c \
-                    WHERE r.id = c.id AND r.state NOT IN ('pending', 'running', 'deferred') \
+                    WHERE r.id = c.id AND ( \
+                       r.state IN ('completed', 'no_credits') OR \
+                       (r.state = 'failed' AND r.next_attempt_at <= now()) \
+                    ) \
                     RETURNING r.external_identity_id \
                  ) \
                  SELECT external_identity_id, \
