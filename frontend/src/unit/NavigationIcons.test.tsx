@@ -59,9 +59,11 @@ test('renders recognizable icon primitives in the mobile footer', async () => {
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <NavCollapseProvider>
-            <Navigation onBugReportSubmit={vi.fn()} />
-          </NavCollapseProvider>
+          <ToastProvider>
+            <NavCollapseProvider>
+              <Navigation onBugReportSubmit={vi.fn()} />
+            </NavCollapseProvider>
+          </ToastProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>,

@@ -1,3 +1,5 @@
+import type { CustomCBL } from '../../services/api-custom-cbl'
+
 /** Reusable owned Reading List fixture for editor regression tests. */
 export const existingList = {
   id: 9,
@@ -34,4 +36,4 @@ export const existingList = {
       skipped: false,
     },
   ],
-}
+} satisfies CustomCBL
