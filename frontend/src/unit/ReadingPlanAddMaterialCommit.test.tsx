@@ -113,7 +113,7 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     await openSource()
 
     expect(await screen.findByText(
-      'Adding selected material changes only this Reading Plan. It does not create or change crossover event labels or their memberships.',
+      'Selected issues are added to this Reading Plan without creating or changing crossover event labels or their memberships.',
     )).toBeVisible()
   })
 

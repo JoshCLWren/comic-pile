@@ -428,7 +428,7 @@ export default function ReadingPlanAddMaterial({
               </p>
 
               <p className="text-xs text-[var(--theme-text-dim)]">
-                Adding selected material changes only this Reading Plan. It does not create or change crossover event labels or their memberships.
+                Selected issues are added to this Reading Plan without creating or changing crossover event labels or their memberships.
               </p>
               <button
                 type="button"
