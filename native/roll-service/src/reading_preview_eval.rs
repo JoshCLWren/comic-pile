@@ -352,4 +352,31 @@ mod tests {
         );
         assert!(found.is_empty());
     }
+
+    #[test]
+    fn after_previous_skips_excluded_predecessor_in_loose_list() {
+        // Issue #4199: named issue handoff should wait for immediately preceding
+        // included entry, skipping excluded/skipped entries.
+        let entries = vec![
+            entry(100, "none", false),
+            entry(101, "none", false),
+            entry(102, "after_previous", false),
+        ];
+        let unread: HashSet<i32> = [100, 101, 102].into();
+        let excluded: BTreeSet<i32> = [101].into();
+        let found = list_blockers(
+            42,
+            "loose",
+            &entries,
+            &[],
+            &unread,
+            &excluded,
+            &volumes(&[]),
+        );
+        // Entry 102 should wait for 100, not 101 (excluded)
+        let after = found.get(&102).expect("after_previous blocker expected");
+        let blocker = after.iter().find(|b| b.kind == "after_previous").expect("after_previous");
+        assert_eq!(blocker.waiting_on_issue_ids, vec![100]);
+        assert_eq!(blocker.gate_issue_id, Some(102));
+    }
 }
