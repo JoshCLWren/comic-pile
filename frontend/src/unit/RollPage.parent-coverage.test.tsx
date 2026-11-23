@@ -244,6 +244,9 @@ describe('RollPage parent handlers', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Set up issue tracking' }))
     expect(screen.queryByTestId('direct-read-issue-panel')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'skip migration' }))
+    expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument()
     expect(spies.setPending).not.toHaveBeenCalled()
   })
 
