@@ -459,6 +459,12 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'refresh rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'cancel rating' })).toBeInTheDocument())
     spies.refetch.mockResolvedValue({})
+    // The native dismiss removes the pending offer before bootstrap refresh.
+    // Keep this mock faithful so pending-session hydration cannot reopen it.
+    spies.dismissPending.mockImplementationOnce(async () => {
+      bootstrapData.pending_thread_id = null
+      bootstrapData.active_thread = null
+    })
     await user.click(screen.getByRole('button', { name: 'cancel rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
@@ -556,6 +562,13 @@ describe('RollPage parent handlers', () => {
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'update low rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'update low rating' }))
+    // A successful server snooze retires the pending offer in the refreshed
+    // bootstrap. The previous inert mock incorrectly kept it pending forever.
+    spies.snooze.mockImplementationOnce(async () => {
+      bootstrapData.pending_thread_id = null
+      bootstrapData.active_thread = null
+      return { refreshed: true }
+    })
     await user.click(screen.getByRole('button', { name: 'snooze rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
 
@@ -589,6 +602,10 @@ describe('RollPage parent handlers', () => {
     sessionData.snoozed_threads = []
     bootstrapData.snoozed_threads = []
     bootstrapData.snoozed_count = 0
+    // The first pending offer belongs to the previous unmounted component.
+    // The second render starts with an idle Roll die, as a fresh server state.
+    bootstrapData.pending_thread_id = null
+    bootstrapData.active_thread = null
     render(<RollPage />)
     await user.click(screen.getAllByRole('button', { name: 'd20' })[0]!)
     enterPendingRollRating()
@@ -709,11 +726,16 @@ describe('RollPage parent handlers', () => {
 
   it('completes simple migration of a pool thread without a page-level refetch', async () => {
     const user = userEvent.setup()
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
+    // The real pending Roll response, not the retired setPending endpoint,
+    // marks a series without a known total and triggers simple migration.
+    bootstrapData.active_thread = {
+      id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2,
+      queue_position: 1, total_issues: null, issue_id: 11,
+      issue_number: '2', next_issue_id: 12, next_issue_number: '3',
+      result: 3,
+    }
     render(<RollPage />)
     enterPendingRollRating()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'skip migration' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'save rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'complete simple' })).toBeInTheDocument())
