@@ -1253,11 +1253,20 @@ async fn enqueue_hydration_for_identities_with_policy(
                     lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
                     updated_at = now() \
                 FROM claimable c \
-                WHERE r.id = c.id AND r.state NOT IN ('pending', 'running', 'deferred') \
-                RETURNING r.external_identity_id \
+                WHERE r.id = c.id AND ( \
+                   (NOT $2::boolean AND r.state NOT IN ('pending', 'running', 'deferred')) OR \
+                   ($2::boolean AND ( \
+                     (r.state = 'completed' AND (r.completed_at IS NULL OR \
+                       r.completed_at <= now() - interval '30 days')) OR \
+                     (r.state = 'no_credits' AND (r.completed_at IS NULL OR \
+                       r.completed_at <= now() - interval '7 days')) OR \
+                     (r.state = 'failed' AND r.next_attempt_at <= now()) \
+                   )) \
+                 ) \
+                 RETURNING r.external_identity_id \
              ) \
              SELECT external_identity_id FROM claimable",
-            &[&needs_fetch],
+            &[&needs_fetch, &preserve_retry_windows],
         )
         .await
         .map_err(db::query_error)?;
