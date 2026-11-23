@@ -3,6 +3,18 @@ import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from 'r
 import type { Mock } from 'vitest'
 
 /**
+ * Connects a test spy to the real in-memory router navigation function.
+ * Render inside the same `MemoryRouter` as the component under test.
+ */
+export function NavigationSpy({ navigate }: { navigate: Mock<NavigateFunction> }) {
+  const actualNavigate = useNavigate()
+  useLayoutEffect(() => {
+    navigate.mockImplementation(actualNavigate)
+  }, [actualNavigate, navigate])
+  return null
+}
+
+/**
  * Records every pathname the wrapped tree navigates to.
  */
 export type RouterHarness = {
