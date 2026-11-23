@@ -1,21 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { threadsApi } from '../../services/api-threads'
-import { getApiErrorDetail } from '../../utils/apiError'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
-import type { RollResponse, ThreadListItem } from '../../types'
+import type { ThreadListItem } from '../../types'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
-import type { ThreadMetadata } from './types'
 
 interface UseRollModalsParams {
   state: RollPageState & RollPageStateSetters
   bootstrap?: RollBootstrapResponse | null
-  overrideMutation: { mutate: (payload: { thread_id: number }) => Promise<RollResponse> }
-  enterRatingView: (
-    threadId: number | null,
-    result?: number | null,
-    metadata?: ThreadMetadata | null,
-  ) => Promise<void>
   setRestoreAction: (action: () => void) => void
   clearRestoreAction: () => void
 }
@@ -28,8 +20,6 @@ interface UseRollModalsParams {
  */
 export function useRollModals({
   state,
-  overrideMutation,
-  enterRatingView,
   setRestoreAction,
   clearRestoreAction,
 }: UseRollModalsParams) {
@@ -47,14 +37,14 @@ export function useRollModals({
     isActionSheetOpen,
     selectedThread,
     setIsActionSheetOpen,
+    isDirectReadOpen,
+    setIsDirectReadOpen,
+    setSelectedThread,
     isShuffleOpen,
     setIsShuffleOpen,
   } = state
 
   const [overrideThreads, setOverrideThreads] = useState<ThreadListItem[] | null>(null)
-  // Issue #3467: a fast double-click dispatches two submits before React
-  // re-renders the disabled state, so drop the second request synchronously.
-  const overrideSubmitInFlight = useRef(false)
 
   useEffect(() => {
     if (!isOverrideOpen || overrideThreads) return
@@ -104,6 +94,10 @@ export function useRollModals({
       })
       return
     }
+    if (isDirectReadOpen && selectedThread) {
+      setRestoreAction(() => setIsDirectReadOpen(true))
+      return
+    }
     if (isActionSheetOpen && selectedThread) {
       setRestoreAction(() => {
         setIsActionSheetOpen(true)
@@ -120,10 +114,12 @@ export function useRollModals({
   }, [
     clearRestoreAction,
     isActionSheetOpen,
+    isDirectReadOpen,
     isOverrideOpen,
     isShuffleOpen,
     selectedThread,
     setIsActionSheetOpen,
+    setIsDirectReadOpen,
     setIsOverrideOpen,
     setIsShuffleOpen,
     setRestoreAction,
@@ -136,23 +132,18 @@ export function useRollModals({
 
   function handleOverrideSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!overrideThreadId) return
-    if (overrideSubmitInFlight.current) return
-    overrideSubmitInFlight.current = true
-    overrideMutation
-      .mutate({ thread_id: Number(overrideThreadId) })
-      .then((response) => {
-        setIsOverrideOpen(false)
-        setOverrideThreadId('')
-        setOverrideErrorMessage('')
-        enterRatingView(response.thread_id, response.result, response)
-      })
-      .catch((error: unknown) => {
-        setOverrideErrorMessage(getApiErrorDetail(error))
-      })
-      .finally(() => {
-        overrideSubmitInFlight.current = false
-      })
+    // A manual series choice opens the exact-issue editor, not an automatic
+    // Roll override. No persistent state changes on this path before Save.
+    const selected = overrideThreads?.find((thread) => String(thread.id) === overrideThreadId)
+    if (!selected) {
+      setOverrideErrorMessage('Choose an owned series first.')
+      return
+    }
+    setSelectedThread({ id: selected.id, title: selected.title, format: selected.format })
+    setIsOverrideOpen(false)
+    setOverrideThreadId('')
+    setOverrideErrorMessage('')
+    setIsDirectReadOpen(true)
   }
 
   function openOverrideModal() {
