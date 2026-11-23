@@ -44,7 +44,12 @@ const QUEUE_EXCLUSION_HEAD: &str = "s54350000001";
 pub const BASELINE_ALEMBIC_HEAD: &str = "m54i537800001";
 
 /// Latest refinery migration version embedded in this binary.
-const LATEST_MIGRATION_VERSION: i32 = 2;
+const LATEST_MIGRATION_VERSION: i32 = 3;
+
+/// Latest migration version covered by the current Alembic head stamp.
+/// Migrations above this are Rust-only and must be applied, not adopted,
+/// when adopting an Alembic-managed database at a supported head.
+const ALEMBIC_COVERED_VERSION: i32 = 2;
 
 /// Advisory-lock key serializing concurrent runners.
 const MIGRATE_LOCK: i64 = 5_554_000_001;
@@ -207,13 +212,16 @@ async fn run_locked(client: &mut Client) -> Result<Report, MigrateError> {
     if !baseline_recorded {
         match alembic_state {
             Some(AlembicState::CurrentHead) => {
-                // Alembic at the queue-exclusion/merged head already has both
-                // schemas: record both migrations as adopted without executing.
+                // Alembic at the queue-exclusion/merged head already has schemas
+                // through ALEMBIC_COVERED_VERSION: adopt those without executing.
+                // Rust-only migrations above that head are applied below.
                 runner()
-                    .set_target(Target::FakeVersion(LATEST_MIGRATION_VERSION))
+                    .set_target(Target::FakeVersion(ALEMBIC_COVERED_VERSION))
                     .run_async(client)
                     .await?;
-                report.adopted.extend([1, LATEST_MIGRATION_VERSION]);
+                report
+                    .adopted
+                    .extend(1..=ALEMBIC_COVERED_VERSION);
             }
             Some(AlembicState::BaselineHead) => {
                 // Alembic at the baseline schema head already has the V1 schema:
