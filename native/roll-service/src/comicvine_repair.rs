@@ -1440,7 +1440,7 @@ mod tests {
         let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].host, HOST);
-        assert!(calls[0].path.starts_with("/api/issue/4000-29319/"));
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
     }
 
     /// The inline catalog path runs only after its identity transaction has
@@ -1548,7 +1548,7 @@ mod tests {
 
         let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1, "cross-owner ids must not be fetched");
-        assert!(calls[0].path.starts_with("/api/issue/4000-29319/"));
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
     }
 
     #[tokio::test]
@@ -2228,10 +2228,10 @@ mod tests {
         .await
         .expect("idempotent backfill")
         .0;
-        assert_eq!(rerun.scanned, 4);
+        assert_eq!(rerun.scanned, 5);
         assert_eq!(rerun.needs_enqueue, 0);
         assert_eq!(rerun.enqueued, 0, "active rows are not new work");
-        assert_eq!(rerun.already_queued_or_fresh, 4);
+        assert_eq!(rerun.already_queued_or_fresh, 5);
 
         let first_page = backfill_authorized(
             &state,
@@ -2254,14 +2254,14 @@ mod tests {
             Some("test-secret"),
             BackfillQuery {
                 dry_run: true,
-                limit: 3,
+                limit: 4,
                 after_id: first_page.next_after_id.expect("cursor"),
             },
         )
         .await
         .expect("second cursor page")
         .0;
-        assert_eq!(second_page.scanned, 2);
+        assert_eq!(second_page.scanned, 3);
         assert_eq!(second_page.next_after_id, None);
 
         let thread = connection
@@ -2291,7 +2291,7 @@ mod tests {
             .expect("preserved reading and mappings");
         assert_eq!(reading.get::<_, i64>(0), 1);
         assert_eq!(reading.get::<_, i64>(1), 1);
-        assert_eq!(reading.get::<_, i64>(2), 4);
+        assert_eq!(reading.get::<_, i64>(2), 5);
     }
 
     /// #5592: ComicVine 420 is a rate limit (Python parity), not provider_unavailable.
