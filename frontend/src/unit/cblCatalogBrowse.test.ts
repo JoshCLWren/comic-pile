@@ -27,8 +27,8 @@ describe('catalogTotalLabel', () => {
 })
 
 describe('isStaleBrowsePosition', () => {
-  const root = { scope: 'folder', query: null, folder: '' }
-  const search = (query: string) => ({ scope: 'search', query, folder: '' })
+  const root = { scope: 'folder', query: null, folder: '', page: 1 }
+  const search = (query: string) => ({ scope: 'search', query, folder: '', page: 1 })
 
   it('never marks settled or not-yet-loaded data stale', () => {
     expect(isStaleBrowsePosition(root, false, '', 'Batman')).toBe(false)
