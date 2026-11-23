@@ -63,7 +63,6 @@ await injectModuleDoubles(await import('../pages/RollPage/components/RollHeader'
   return {
     RollHeader: (props: React.ComponentProps<typeof actual.RollHeader>) => {
       headerCurrentDieProps.push(props.currentDie)
-      if (headerCurrentDieProps.length % 100 === 0) require('node:fs').appendFileSync('/tmp/render.log', 'renders=' + headerCurrentDieProps.length + '\n')
       return <actual.RollHeader {...props} />
     },
   }
@@ -203,9 +202,7 @@ describe('Roll die is render-derived from scoped die-state (#4768)', () => {
   it('passes the scoped die on the very first render pass, never a fallback (#4768)', () => {
     mockedUseRollDieState.mockReturnValue({ data: SCOPED_DIE_20, isError: false })
 
-    require('node:fs').appendFileSync('/tmp/render.log', 'ABOUT TO RENDER\n')
     renderRollPage()
-    require('node:fs').appendFileSync('/tmp/render.log', 'RENDERED ' + headerCurrentDieProps.length + '\n')
 
     // The spy saw at least one header render, and every single one carried
     // the scoped d20. An effect syncing server data into state would record

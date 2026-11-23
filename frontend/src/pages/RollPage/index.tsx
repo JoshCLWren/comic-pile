@@ -76,6 +76,7 @@ export default function RollPage() {
     error: bootstrapError,
     isRetrying: isBootstrapRetrying,
   } = useRollBootstrap()
+  if (Math.random() < 0.0001) console.log('BOOTSTRAP IN RENDER', bootstrap?.session_id)
 
   // Die-header surface migration (#4719): the scoped die resource is
   // authoritative for the selected die, ladder readout, die size and 3D
