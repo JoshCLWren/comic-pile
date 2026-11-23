@@ -1993,6 +1993,251 @@ mod tests {
             .expect("seed cron owner");
     }
 
+    const LIST_SYNC_USER_ID: i32 = 3874;
+    const LIST_SYNC_THREAD_ID: i32 = 387_400;
+    const LIST_SYNC_PLAN_ID: i32 = 387_420;
+    const LIST_SYNC_LIST_ID: i32 = 387_430;
+    const LIST_SYNC_SOURCE_ID: i32 = 387_440;
+    const LIST_SYNC_FIRST_ISSUE_ID: i32 = 387_401;
+    const LIST_SYNC_SECOND_ISSUE_ID: i32 = 387_402;
+
+    fn list_sync_rosters() -> Value {
+        serde_json::json!({
+            "3874": [
+                {"id": "9001", "issue_number": "1", "store_date": "2024-01-01"},
+                {"id": "9002", "issue_number": "2", "store_date": "2024-01-02"}
+            ]
+        })
+    }
+
+    fn list_sync_as_of() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2024-02-01T00:00:00Z")
+            .expect("release boundary")
+            .with_timezone(&Utc)
+    }
+
+    async fn seed_list_sync_fixture(connection: &deadpool_postgres::Client, cycle: bool) {
+        let first_position = if cycle { 2 } else { 1 };
+        let first_gate = if cycle { "none" } else { "hold" };
+        let first_skipped = !cycle;
+        connection
+            .batch_execute(&format!(
+                "INSERT INTO users (id, username) VALUES ({LIST_SYNC_USER_ID}, 'list-sync-owner');
+                 INSERT INTO threads
+                   (id, user_id, title, format, issues_remaining, queue_position, status,
+                    total_issues, next_unread_issue_id, reading_progress)
+                 VALUES ({LIST_SYNC_THREAD_ID}, {LIST_SYNC_USER_ID}, 'List sync', 'Comic',
+                         0, 1, 'active', 1, NULL, 'completed');
+                 INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position)
+                 VALUES ({LIST_SYNC_FIRST_ISSUE_ID}, {LIST_SYNC_THREAD_ID}, '1', 'read',
+                         '2024-01-01T00:00:00Z', NOW(), {first_position});
+                 INSERT INTO continuity_plans
+                   (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+                 VALUES ({LIST_SYNC_PLAN_ID}, {LIST_SYNC_USER_ID}, 'Legacy plan', 'informational',
+                         '[{{\"id\":\"legacy-sentinel\",\"node_type\":\"thread\",\"ref_id\":{LIST_SYNC_THREAD_ID},\"lane_id\":\"legacy\",\"position\":0}}]'::json,
+                         '[]'::json, NOW(), NOW());
+                 INSERT INTO custom_cbl_lists
+                   (id, user_id, name, description, mode, created_at, updated_at)
+                 VALUES ({LIST_SYNC_LIST_ID}, {LIST_SYNC_USER_ID}, 'Authoritative list', NULL,
+                         'strict', NOW(), NOW());
+                 INSERT INTO custom_cbl_entries
+                   (list_id, issue_id, position, created_at, is_checkpoint, gate, skipped)
+                 VALUES ({LIST_SYNC_LIST_ID}, {LIST_SYNC_FIRST_ISSUE_ID}, 7, NOW(), FALSE,
+                         '{first_gate}', {first_skipped});
+                 INSERT INTO external_identities
+                   (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                 VALUES (387410, 'comicvine', 'series', '4050-3874', '{{}}'::json, NOW(), NOW()),
+                        (387411, 'comicvine', 'issue', '9001', '{{}}'::json, NOW(), NOW());
+                 INSERT INTO thread_external_series_mappings
+                   (thread_id, external_identity_id, status, created_at, updated_at)
+                 VALUES ({LIST_SYNC_THREAD_ID}, 387410, 'confirmed', NOW(), NOW());
+                 INSERT INTO issue_external_identity_mappings
+                   (issue_id, external_identity_id, status, evidence_json, created_at, updated_at)
+                 VALUES ({LIST_SYNC_FIRST_ISSUE_ID}, 387411, 'confirmed', '{{}}'::json, NOW(), NOW());
+                 INSERT INTO reading_plan_release_sources
+                   (id, plan_id, custom_cbl_list_id, thread_id, external_identity_id,
+                    enabled, created_at, updated_at)
+                 VALUES ({LIST_SYNC_SOURCE_ID}, {LIST_SYNC_PLAN_ID}, {LIST_SYNC_LIST_ID},
+                         {LIST_SYNC_THREAD_ID}, 387410, TRUE, NOW(), NOW());"
+            ))
+            .await
+            .expect("seed list-sync fixture");
+
+        if cycle {
+            connection
+                .batch_execute(&format!(
+                    "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+                     VALUES ({LIST_SYNC_SECOND_ISSUE_ID}, {LIST_SYNC_THREAD_ID}, '2', 'unread', NOW(), 1);
+                     INSERT INTO external_identities
+                       (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                     VALUES (387412, 'comicvine', 'issue', '9002', '{{}}'::json, NOW(), NOW());
+                     INSERT INTO issue_external_identity_mappings
+                       (issue_id, external_identity_id, status, evidence_json, created_at, updated_at)
+                     VALUES ({LIST_SYNC_SECOND_ISSUE_ID}, 387412, 'confirmed', '{{}}'::json, NOW(), NOW());
+                     INSERT INTO dependencies
+                       (source_issue_id, target_issue_id, origin, created_at)
+                     VALUES ({LIST_SYNC_SECOND_ISSUE_ID}, {LIST_SYNC_FIRST_ISSUE_ID}, 'reader', NOW());"
+                ))
+                .await
+                .expect("seed projected cycle");
+        }
+    }
+
+    #[tokio::test]
+    async fn linked_list_sync_appends_idempotently_without_rewriting_existing_membership() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        seed_list_sync_fixture(&connection, false).await;
+        drop(connection);
+
+        let report = sync_released_issues_for_user_with_rosters(
+            &state,
+            LIST_SYNC_USER_ID,
+            list_sync_as_of(),
+            Some(list_sync_rosters()),
+        )
+        .await
+        .expect("linked list sync");
+        assert_eq!(report.failed_sources, 0);
+        assert_eq!(report.created_issues, 1);
+        assert_eq!(report.reused_issues, 1);
+
+        let connection = crate::db::checkout(&state).await.expect("verify connection");
+        let entries = connection
+            .query(
+                "SELECT issue_id, position, gate, skipped FROM custom_cbl_entries \
+                 WHERE list_id = $1 ORDER BY position",
+                &[&LIST_SYNC_LIST_ID],
+            )
+            .await
+            .expect("list entries");
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].get::<_, i32>(0), LIST_SYNC_FIRST_ISSUE_ID);
+        assert_eq!(entries[0].get::<_, i32>(1), 7);
+        assert_eq!(entries[0].get::<_, String>(2), "hold");
+        assert!(entries[0].get::<_, bool>(3));
+        assert_eq!(entries[1].get::<_, i32>(1), 8);
+        assert_eq!(entries[1].get::<_, String>(2), "none");
+        assert!(!entries[1].get::<_, bool>(3));
+        let second_issue_id: i32 = connection
+            .query_one(
+                "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = '2'",
+                &[&LIST_SYNC_THREAD_ID],
+            )
+            .await
+            .expect("created issue")
+            .get(0);
+        assert_eq!(entries[1].get::<_, i32>(0), second_issue_id);
+
+        let nodes_json: Value = connection
+            .query_one(
+                "SELECT nodes_json FROM continuity_plans WHERE id = $1",
+                &[&LIST_SYNC_PLAN_ID],
+            )
+            .await
+            .expect("legacy plan JSON")
+            .get(0);
+        assert_eq!(nodes_json[0]["id"], "legacy-sentinel");
+        assert_eq!(nodes_json.as_array().expect("plan nodes").len(), 1);
+        let preserved_read: bool = connection
+            .query_one(
+                "SELECT status = 'read' AND read_at = '2024-01-01T00:00:00Z' \
+                 FROM issues WHERE id = $1",
+                &[&LIST_SYNC_FIRST_ISSUE_ID],
+            )
+            .await
+            .expect("existing read progress")
+            .get(0);
+        assert!(preserved_read, "sync must not change existing read progress");
+        drop(connection);
+
+        let retry = sync_released_issues_for_user_with_rosters(
+            &state,
+            LIST_SYNC_USER_ID,
+            list_sync_as_of(),
+            Some(list_sync_rosters()),
+        )
+        .await
+        .expect("idempotent retry");
+        assert_eq!(retry.failed_sources, 0);
+        assert_eq!(retry.created_issues, 0);
+        assert_eq!(retry.reused_issues, 2);
+        let connection = crate::db::checkout(&state).await.expect("retry connection");
+        let entry_count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM custom_cbl_entries WHERE list_id = $1",
+                &[&LIST_SYNC_LIST_ID],
+            )
+            .await
+            .expect("retry entries")
+            .get(0);
+        let issue_count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issues WHERE thread_id = $1",
+                &[&LIST_SYNC_THREAD_ID],
+            )
+            .await
+            .expect("retry issues")
+            .get(0);
+        assert_eq!((entry_count, issue_count), (2, 2));
+    }
+
+    #[tokio::test]
+    async fn linked_list_sync_rolls_back_a_projected_cycle_and_preserves_plan_json() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        seed_list_sync_fixture(&connection, true).await;
+        drop(connection);
+
+        let report = sync_released_issues_for_user_with_rosters(
+            &state,
+            LIST_SYNC_USER_ID,
+            list_sync_as_of(),
+            Some(list_sync_rosters()),
+        )
+        .await
+        .expect("cycle is isolated to its source");
+        assert_eq!(report.failed_sources, 1);
+        assert_eq!(report.successful_sources, 0);
+        assert!(report.failures[0].error.contains("cycle validation failed"));
+
+        let connection = crate::db::checkout(&state).await.expect("verify connection");
+        let entries = connection
+            .query(
+                "SELECT issue_id, position, gate, skipped FROM custom_cbl_entries \
+                 WHERE list_id = $1 ORDER BY position",
+                &[&LIST_SYNC_LIST_ID],
+            )
+            .await
+            .expect("rolled-back entries");
+        assert_eq!(entries.len(), 1, "the cyclic append must roll back");
+        assert_eq!(entries[0].get::<_, i32>(0), LIST_SYNC_FIRST_ISSUE_ID);
+        assert_eq!(entries[0].get::<_, i32>(1), 7);
+        let nodes_json: Value = connection
+            .query_one(
+                "SELECT nodes_json FROM continuity_plans WHERE id = $1",
+                &[&LIST_SYNC_PLAN_ID],
+            )
+            .await
+            .expect("legacy plan JSON")
+            .get(0);
+        assert_eq!(nodes_json[0]["id"], "legacy-sentinel");
+        assert_eq!(nodes_json.as_array().expect("plan nodes").len(), 1);
+        let unsynced: bool = connection
+            .query_one(
+                "SELECT last_synced_at IS NULL FROM reading_plan_release_sources WHERE id = $1",
+                &[&LIST_SYNC_SOURCE_ID],
+            )
+            .await
+            .expect("rollback sync timestamp")
+            .get(0);
+        assert!(unsynced, "a rolled-back source must not record a successful sync");
+    }
+
     #[tokio::test]
     async fn scheduled_sync_processes_every_enabled_owner() {
         let _guard = DB_LOCK.lock().await;
