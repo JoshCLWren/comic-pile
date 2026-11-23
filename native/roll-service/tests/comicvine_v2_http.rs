@@ -3222,7 +3222,7 @@ async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
     let singular_calls = fake(&state)
         .calls()
         .iter()
-        .filter(|call| call.path.starts_with("/api/issue/4000-92001/"))
+        .filter(|call| call.path.starts_with("/api/issue/4000-92001?"))
         .count();
     assert_eq!(
         singular_calls, 1,

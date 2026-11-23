@@ -294,7 +294,7 @@ pub(crate) fn python_envelope_ok(payload: &Value) -> bool {
 
 /// Python `_parse_retry_after`: delta-seconds (any float) or an HTTP date
 /// measured from `now`; anything else is `None` (a header-less throttle).
-fn parse_retry_after(raw: &str, now: DateTime<Utc>) -> Option<f64> {
+pub(crate) fn parse_retry_after(raw: &str, now: DateTime<Utc>) -> Option<f64> {
     let value = raw.trim();
     if value.is_empty() {
         return None;
