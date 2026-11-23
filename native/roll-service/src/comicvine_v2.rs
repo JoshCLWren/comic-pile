@@ -1239,6 +1239,7 @@ async fn enqueue_hydration_for_identities_with_policy(
         return Ok(());
     }
 
+    let preserve_retry_windows = matches!(policy, HydrationEnqueuePolicy::Import);
     let claimable_rows = tx
         .query(
             "WITH claimable AS ( \
