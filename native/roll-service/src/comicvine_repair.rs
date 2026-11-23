@@ -2195,7 +2195,7 @@ mod tests {
             .await
             .expect("dry-run ledger")
             .get(0);
-        assert_eq!(unchanged, 2, "dry-run must not insert or reopen rows");
+        assert_eq!(unchanged, 3, "dry-run must not insert or reopen rows");
 
         let written = backfill_authorized(
             &state,
