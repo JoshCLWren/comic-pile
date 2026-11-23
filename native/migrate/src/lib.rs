@@ -213,10 +213,10 @@ async fn run_locked(client: &mut Client) -> Result<Report, MigrateError> {
                 // Alembic at the queue-exclusion/merged head already has both
                 // schemas: record both migrations as adopted without executing.
                 runner()
-                    .set_target(Target::FakeVersion(LATEST_MIGRATION_VERSION))
+                    .set_target(Target::FakeVersion(LATEST_ALEMBIC_MIGRATION_VERSION))
                     .run_async(client)
                     .await?;
-                report.adopted.extend([1, LATEST_MIGRATION_VERSION]);
+                report.adopted.extend([1, LATEST_ALEMBIC_MIGRATION_VERSION]);
             }
             Some(AlembicState::BaselineHead) => {
                 // Alembic at the baseline schema head already has the V1 schema:
