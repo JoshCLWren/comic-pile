@@ -1106,11 +1106,6 @@ async fn sync_released_issues_for_user_with_rosters(
         return Ok(report);
     }
 
-    // Test-only roster injection: JSON object {"<volume_id>": [issue,...], "_fail_<volume_id>": "error"}
-    let mock_rosters: Option<Value> = std::env::var("RUST_ROLL_SYNC_MOCK_ROSTER_JSON")
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok());
-
     // Match Python: missing API key fails all enabled sources with the
     // client-construction error message (unless test mocks are injected).
     let api_key = match std::env::var("COMICVINE_API_KEY")
