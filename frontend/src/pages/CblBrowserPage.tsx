@@ -756,14 +756,17 @@ export default function CblBrowserPage() {
     preview && summary
       ? `${countPhraseWithArticle(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhraseWithArticle(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
       : null
-  const firstShown =
-    browsePage && browsePage.items.length > 0
-      ? (browsePage.page - 1) * browsePage.page_size + 1
-      : 0
-  const lastShown = browsePage
-    ? (browsePage.page - 1) * browsePage.page_size + browsePage.items.length
-    : 0
+  // keepPreviousData retains rows during a folder/search/page transition, but
+  // their totals and page numbers belong to the previous applied state. Every
+  // count-like readout must therefore use only the settled response (#3614).
   const settledBrowsePage = browseQuery.isPlaceholderData ? null : browsePage
+  const firstShown =
+    settledBrowsePage && settledBrowsePage.items.length > 0
+      ? (settledBrowsePage.page - 1) * settledBrowsePage.page_size + 1
+      : 0
+  const lastShown = settledBrowsePage
+    ? (settledBrowsePage.page - 1) * settledBrowsePage.page_size + settledBrowsePage.items.length
+    : 0
   const resultCountPending = !catalogError && (browseQuery.isPending || (browseQuery.isPlaceholderData && browseQuery.isFetching))
   const resultCountText = catalogError
     ? 'Source list count unavailable.'

@@ -162,6 +162,11 @@ export function useQueueThreads(
   // the canonical source. Falls back to null so callers can decide how to
   // degrade when a cached/older response omits the field.
   const activeCount = query.pages[0]?.active_count ?? null
+  // The server restates the whole-collection match total on every cursor page.
+  // Placeholder pages belong to the previous search/sort key, so never expose
+  // their counts as the answer for the currently applied key (#3614).
+  const filteredCount = query.pages[0]?.filtered_count ?? null
+  const isPlaceholderData = query.isPlaceholderData
   // Initial load OR an in-flight next-page append both keep already-rendered
   // rows visible: `isPending` drives the full-screen loader only before any
   // data exists, while `isNextPageLoading` drives the inline loading indicator.
@@ -172,6 +177,19 @@ export function useQueueThreads(
   const isLoadingMore = query.isNextPageLoading
   const isError = query.isError
   const nextPageToken = query.nextPageToken
+  // A settled first page owns both numbers. A failed later cursor fetch does
+  // not invalidate them, but a failed or pending replacement first page must
+  // never leave the previous search's count on screen.
+  const hasCurrentCounts =
+    !isPlaceholderData && filteredCount != null && activeCount != null
+  const resultCountText =
+    isError && !query.isFetchNextPageError
+      ? 'Series count unavailable.'
+      : hasCurrentCounts
+        ? `${filteredCount} of ${activeCount} series`
+        : query.isLoading
+          ? 'Updating series count…'
+          : 'Series count unavailable.'
 
   const refetch = useCallback(async (): Promise<void> => {
     await query.refetch()

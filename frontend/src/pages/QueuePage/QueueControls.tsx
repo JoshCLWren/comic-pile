@@ -5,6 +5,8 @@ const SEARCH_DEBOUNCE_MS = 400
 
 interface QueueControlsProps {
   activeCount: number
+  /** Settled N of M count, or the loader's explicit updating/error state. */
+  resultCountText: string
   shuffleDisabled: boolean
   shufflePending: boolean
   onShuffle: () => void
