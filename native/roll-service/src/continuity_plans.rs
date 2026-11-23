@@ -3389,18 +3389,24 @@ pub async fn create_release_source(
             .query(
                 "SELECT DISTINCT src.custom_cbl_list_id \
                  FROM reading_plan_sources src \
-                 JOIN custom_cbl_lists l ON l.id = src.custom_cbl_list_id AND l.user_id = $2 \
                  WHERE src.plan_id = $1 AND src.custom_cbl_list_id IS NOT NULL",
-                &[&payload.plan_id, &user.id()],
+                &[&payload.plan_id],
             )
             .await
             .map_err(db::query_error)?;
         let ids: Vec<i32> = rows
             .iter()
-            .filter_map(|r| r.get::<_, Option<i32>>(0))
+            .filter_map(|row| row.get::<_, Option<i32>>(0))
             .collect();
         if ids.len() == 1 {
-            Some(ids[0])
+            let list_id = ids[0];
+            tx.query_opt(
+                "SELECT id FROM custom_cbl_lists WHERE id = $1 AND user_id = $2",
+                &[&list_id, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?
+            .map(|_| list_id)
         } else {
             None
         }
