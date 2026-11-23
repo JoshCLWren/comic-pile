@@ -532,15 +532,8 @@ describe('RollPage parent handlers', () => {
   it('handles pending rating cancellation and refresh failure without using legacy manual overrides', async () => {
     const user = userEvent.setup()
     const error = new Error('failed')
-<<<<<<< HEAD
     renderRollPage()
-
-    await user.click(screen.getByRole('button', { name: 'thread' }))
-    await user.click(screen.getByRole('button', { name: /Read Now/ }))
-=======
-    render(<RollPage />)
     enterPendingRollRating()
->>>>>>> origin/main
     await waitFor(() => expect(screen.getByRole('button', { name: 'cancel rating' })).toBeInTheDocument())
     spies.refetch.mockRejectedValueOnce(error)
     await user.click(screen.getByRole('button', { name: 'refresh rating' }))
