@@ -1209,7 +1209,7 @@ async fn enqueue_hydration_for_identities_with_policy(
     }
     let metadata_rows = tx
         .query(
-            "SELECT id, metadata_json::text \
+            "SELECT id, metadata_json::text, provider_updated_at, updated_at \
              FROM external_identities \
              WHERE id = ANY($1::int[]) \
                AND provider = 'comicvine' \
