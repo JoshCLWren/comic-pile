@@ -31,24 +31,29 @@ describe('isStaleBrowsePosition', () => {
   const search = (query: string) => ({ scope: 'search', query, folder: '', page: 1 })
 
   it('never marks settled or not-yet-loaded data stale', () => {
-    expect(isStaleBrowsePosition(root, false, '', 'Batman')).toBe(false)
-    expect(isStaleBrowsePosition(null, true, '', 'Batman')).toBe(false)
+    expect(isStaleBrowsePosition(root, false, '', 'Batman', 1)).toBe(false)
+    expect(isStaleBrowsePosition(null, true, '', 'Batman', 1)).toBe(false)
   })
 
   it('hides root folders while a search loads', () => {
-    expect(isStaleBrowsePosition(root, true, '', 'Batman')).toBe(true)
+    expect(isStaleBrowsePosition(root, true, '', 'Batman', 1)).toBe(true)
   })
 
   it('hides an older search while a new one loads', () => {
-    expect(isStaleBrowsePosition(search('ultimate'), true, '', 'Batman')).toBe(true)
+    expect(isStaleBrowsePosition(search('ultimate'), true, '', 'Batman', 1)).toBe(true)
   })
 
   it('keeps a matching search or folder visible while fetching', () => {
-    expect(isStaleBrowsePosition(search('Batman'), true, '', 'Batman')).toBe(false)
-    expect(isStaleBrowsePosition({ ...root, folder: 'Marvel' }, true, 'Marvel', '')).toBe(false)
+    expect(isStaleBrowsePosition(search('Batman'), true, '', 'Batman', 1)).toBe(false)
+    expect(isStaleBrowsePosition({ ...root, folder: 'Marvel' }, true, 'Marvel', '', 1)).toBe(false)
   })
 
   it('hides an obsolete folder while a new one loads', () => {
-    expect(isStaleBrowsePosition(root, true, 'Marvel', '')).toBe(true)
+    expect(isStaleBrowsePosition(root, true, 'Marvel', '', 1)).toBe(true)
+  })
+
+  it('hides an obsolete page while a new page loads', () => {
+    expect(isStaleBrowsePosition({ ...root, page: 1 }, true, '', '', 2)).toBe(true)
+    expect(isStaleBrowsePosition({ ...root, page: 2 }, true, '', '', 2)).toBe(false)
   })
 })
