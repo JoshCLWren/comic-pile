@@ -86,6 +86,19 @@ export default function QueuePage() {
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
 
+  const totalSeriesCount = activeCount
+  const matchedSeriesCount = isSearching ? filteredCount : activeCount
+  const countIsPlaceholder = isPlaceholderData && isFetching
+  const resultCountError = isError
+  const resultCountPending =
+    !resultCountError &&
+    (totalSeriesCount === null || matchedSeriesCount === null || countIsPlaceholder)
+  const resultCountText = resultCountError
+    ? 'Series count unavailable.'
+    : !resultCountPending && totalSeriesCount !== null && matchedSeriesCount !== null
+      ? `${matchedSeriesCount} of ${totalSeriesCount} series`
+      : 'Updating series count…'
+
   const navigateToRoll = useCallback(
     (_thread: ThreadListItem, response: unknown) => {
       navigate('/', { state: { rollResponse: response } })
@@ -183,7 +196,9 @@ export default function QueuePage() {
     <PositionMenuProvider>
       <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
         <QueueControls
-          activeCount={authoritativeActiveCount}
+          resultCountText={resultCountText}
+          resultCountPending={resultCountPending}
+          resultCountError={resultCountError}
           shuffleDisabled={shuffleDisabled}
           shufflePending={shuffleQueueMutation.isPending}
           onShuffle={actions.requestShuffle}
