@@ -35,19 +35,14 @@ export function useQueueFilters(
     [threads],
   )
 
-  // The active list is the displayed order: filtering preserves the server's
-  // cursor order, and no client comparator may reshuffle it across pages.
+  // The active list is already the authoritative server-filtered sequence for
+  // the same applied search used by filtered_count. Applying String.includes()
+  // again here disagrees with SQL ILIKE for wildcard characters and Unicode
+  // case folding, which can render an empty list beside a non-zero count.
+  // Preserve the returned rows exactly; no client comparator or second filter
+  // may reshuffle or remove them across pages (#3614).
   const sortedThreads = activeThreads
-  const filteredThreads = useMemo(
-    () => {
-      if (!searchQuery || !searchQuery.trim()) return sortedThreads
-      const normalizedSearch = searchQuery.trim().toLowerCase()
-      return sortedThreads.filter((thread) =>
-        thread.title.toLowerCase().includes(normalizedSearch),
-      )
-    },
-    [sortedThreads, searchQuery],
-  )
+  const filteredThreads = sortedThreads
 
   return {
     activeThreads,

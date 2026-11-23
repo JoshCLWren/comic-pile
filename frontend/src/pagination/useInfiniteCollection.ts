@@ -145,6 +145,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     isInitialLoading,
     isNextPageLoading,
     isLoading: query.isFetching,
+    isPlaceholderData: query.isPlaceholderData,
     isPending: isInitialLoading || isNextPageLoading,
     hasNextPage,
     nextPageToken,
