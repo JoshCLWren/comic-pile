@@ -426,30 +426,65 @@ listThreads.mockImplementation(
     expect(result.current.resultCountText).toBe('1 of 5 series')
   })
 
-  it('restates whole-queue totals on cursor pages, not the visible page size', async () => {
+  it('uses the newest whole-queue totals returned by a cursor page', async () => {
     // SAFETY: this pagination regression needs only stable row ids.
     listThreads
       .mockResolvedValueOnce({
         threads: [{ id: 1 } as never],
         next_page_token: 'tok-2',
         active_count: 5,
-        filtered_count: 5,
+        filtered_count: 2,
       })
       .mockResolvedValueOnce({
         threads: [{ id: 2 } as never],
         next_page_token: null,
-        active_count: 5,
-        filtered_count: 5,
+        active_count: 6,
+        filtered_count: 3,
       })
 
     const wrapper = createWrapper()
-    const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
+    const { result } = renderHook(() => useQueueThreads('alpha', 'position', threadsApi), { wrapper })
 
-    await waitFor(() => expect(result.current.isPending).toBe(false))
+    await waitFor(() => expect(result.current.resultCountText).toBe('2 of 5 series'))
     await act(async () => { await result.current.loadMore() })
 
     await waitFor(() => expect(result.current.data).toHaveLength(2))
-    expect(result.current.resultCountText).toBe('5 of 5 series')
+    expect(result.current.activeCount).toBe(6)
+    expect(result.current.filteredCount).toBe(3)
+    expect(result.current.resultCountText).toBe('3 of 6 series')
+  })
+
+  it('hides old counts during a same-key refresh and adopts its changed totals', async () => {
+    let resolveRefresh: (page: Awaited<ReturnType<typeof realThreadsApi.list>>) => void = () => undefined
+    listThreads
+      .mockResolvedValueOnce({
+        threads: [],
+        next_page_token: null,
+        active_count: 5,
+        filtered_count: 1,
+      })
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { resolveRefresh = resolve }),
+      )
+
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useQueueThreads('alpha', 'position', threadsApi), { wrapper })
+    await waitFor(() => expect(result.current.resultCountText).toBe('1 of 5 series'))
+
+    let refresh: Promise<void> = Promise.resolve()
+    act(() => {
+      refresh = result.current.refetch()
+    })
+    await waitFor(() => expect(result.current.resultCountText).toBe('Updating series count…'))
+
+    resolveRefresh({
+      threads: [],
+      next_page_token: null,
+      active_count: 5,
+      filtered_count: 0,
+    })
+    await act(async () => { await refresh })
+    expect(result.current.resultCountText).toBe('0 of 5 series')
   })
 
   it('does not invent a count when the settled response omits filtered_count', async () => {
