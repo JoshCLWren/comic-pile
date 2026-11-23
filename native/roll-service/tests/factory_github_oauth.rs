@@ -49,7 +49,7 @@ async fn send(state: &Arc<AppState>, request: Request<Body>) -> Response<Body> {
     router(state.clone()).oneshot(request).await.unwrap()
 }
 
-fn header_text(response: &Response, name: header::HeaderName) -> &str {
+fn header_text(response: &Response<Body>, name: header::HeaderName) -> &str {
     response
         .headers()
         .get(name)

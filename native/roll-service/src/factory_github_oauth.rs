@@ -140,13 +140,15 @@ fn verified_session(state: &AppState, token: &str) -> Result<AdminSession, ApiEr
     )
     .map_err(|_| ApiError::Unauthorized("GitHub sign-in expired or invalid".into()))?
     .claims;
-    if claims.aud != SESSION_AUDIENCE
-        || claims
-            .sub
-            .parse::<u64>()
-            .ok()
-            .is_none_or(|id| !is_admin(id))
-        || claims.exp > seconds() + SESSION_TTL_SECONDS
+    // `decode` validates the audience and rejects expired tokens. Keep a
+    // separate upper bound so a valid signature cannot create an excessively
+    // long-lived administrator session.
+    if claims
+        .sub
+        .parse::<u64>()
+        .ok()
+        .is_none_or(|id| !is_admin(id))
+        || claims.exp > seconds().saturating_add(SESSION_TTL_SECONDS)
     {
         return Err(ApiError::Forbidden("Not a Rotisserie administrator".into()));
     }
