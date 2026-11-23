@@ -155,56 +155,22 @@ pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> S
         return trimmed.to_string();
     }
 
+    let raw_tokens: Vec<&str> = trimmed.split_whitespace().collect();
+    let series_tokens: Vec<&str> = series_title.split_whitespace().collect();
     let mut candidate = trimmed.to_string();
-    let lower_candidate = candidate.to_lowercase();
-    let lower_series = series_title.trim().to_lowercase();
-
-    if !lower_series.is_empty() && lower_candidate.starts_with(&lower_series) {
-        candidate = candidate[series_title.trim().len()..]
-            .trim_start_matches([' ', '-', ':', '#'])
-            .trim()
-            .to_string();
-    } else if !lower_series.is_empty() {
-        // Handle "Alpha Flight Annual 1" stored as issue number when the series
-        // title is "Alpha Flight Annual" or when the raw label contains the
-        // series title as a prefix with different casing/spacing.
-        let collapsed_candidate = lower_candidate
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
-        let collapsed_series = lower_series
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
-        if collapsed_candidate.starts_with(&collapsed_series) {
-            let prefix_len = collapsed_series.len();
-            // Map the prefix length back onto the original by counting chars in
-            // the collapsed form.
-            let mut collapsed_seen = 0;
-            let orig_chars: Vec<char> = candidate.chars().collect();
-            let mut i = 0;
-            while i < orig_chars.len() && collapsed_seen < prefix_len {
-                if orig_chars[i].is_whitespace() {
-                    // consume whitespace run as single space in collapsed
-                    while i < orig_chars.len() && orig_chars[i].is_whitespace() {
-                        i += 1;
-                    }
-                    collapsed_seen += 1; // space
-                } else {
-                    i += 1;
-                    collapsed_seen += 1;
-                }
-            }
-            candidate = orig_chars[i..]
-                .iter()
-                .collect::<String>()
-                .trim_start_matches([' ', '-', ':', '#'])
-                .trim()
-                .to_string();
+    if !series_tokens.is_empty() && raw_tokens.len() >= series_tokens.len() {
+        let prefix_matches = raw_tokens[..series_tokens.len()]
+            .iter()
+            .zip(series_tokens.iter())
+            .all(|(raw_token, series_token)| {
+                raw_token.to_lowercase() == series_token.to_lowercase()
+            });
+        if prefix_matches {
+            candidate = raw_tokens[series_tokens.len()..].join(" ");
         }
     }
 
-    if candidate.is_empty() {
+    if candidate.trim().is_empty() {
         return trimmed.to_string();
     }
 
