@@ -293,7 +293,12 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
     }
     assert_eq!(fake.calls().len(), 2, "rejected requests reached GitHub");
 
-    fake.push_ok(StatusCode::NO_CONTENT, HeaderMap::new(), Bytes::new());
+    // The configured GitHub API version returns 200 with workflow details.
+    fake.push_ok(
+        StatusCode::OK,
+        HeaderMap::new(),
+        Bytes::from_static(br#"{"id":1234}"#),
+    );
     let accepted = send(&state, dispatch(&session_token, PAGES_ORIGIN, "doctor_fix")).await;
     assert_eq!(accepted.status(), StatusCode::ACCEPTED);
     let payload: Value =
