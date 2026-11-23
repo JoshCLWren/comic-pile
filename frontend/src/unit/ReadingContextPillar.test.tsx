@@ -461,6 +461,7 @@ describe('ReadingContextPillar crossover membership chips', () => {
     }
 
     renderPillar(context)
+    console.log('navigate implementation', navigateSpy.getMockImplementation())
 
     const button = await screen.findByRole('button', { name: /Show context for Animal Man issue 2/ })
     await userEvent.setup().click(button)
