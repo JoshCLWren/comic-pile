@@ -1,3 +1,5 @@
+<!-- docs-path-check: historical -->
+
 # ComicVine hydrator
 
 The ComicVine hydrator inspects comics that already exist in ComicPile and writes a machine-readable JSON report. It does not modify threads, issues, reading progress, ratings, dependencies, continuity rules, or confirmed provider mappings.
