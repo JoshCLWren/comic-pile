@@ -954,8 +954,14 @@ describe('CustomCBLBuilder', () => {
     ).toBeInTheDocument()
   })
 
-  it('replaces only the selected Reading List from a global CBL and undoes list membership only', async () => {
+  it('replaces only the selected Reading List and preserves saved after_previous intent through undo', async () => {
     const user = userEvent.setup()
+    const gatedList = {
+      ...existingList,
+      entries: existingList.entries.map((entry) =>
+        entry.issue_id === 30001 ? { ...entry, gate: 'after_previous' as const } : entry,
+      ),
+    }
     cblMocks.discover.mockResolvedValue([
       {
         id: 101,
