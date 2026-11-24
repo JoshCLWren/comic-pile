@@ -1,5 +1,6 @@
 """Tests for Markdown documentation validation helpers."""
 
+import subprocess
 from pathlib import Path
 
 from scripts.check_markdown_docs import (

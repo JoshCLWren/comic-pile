@@ -25,12 +25,42 @@ ALLOWED_ROOT_MARKDOWN = {
 IGNORED_DIRECTORIES = {".git", ".venv", ".vercel", "node_modules", "archive"}
 
 
+def tracked_markdown_files(root: Path) -> list[Path] | None:
+    """Return Git-tracked Markdown paths, or ``None`` outside a Git checkout.
+
+    Args:
+        root: Repository root to inspect.
+
+    Returns:
+        Sorted tracked Markdown paths that exist in the checkout, or ``None`` when Git
+        is unavailable so callers can fall back to a directory walk.
+    """
+    try:
+        listing = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "--", "*.md"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return sorted(
+        candidate
+        for line in listing.splitlines()
+        if line.endswith(".md")
+        for candidate in [root / line]
+        if candidate.is_file()
+    )
+
+
 def iter_markdown_files(root: Path) -> list[Path]:
     """Return Markdown paths that should participate in documentation checks.
 
-    Historical archive documents are intentionally excluded because they preserve point-in-time
-    evidence and may contain dead links or machine-local paths that must not become current
-    repository contracts.
+    In a Git checkout only tracked files participate, so ignored Rotisserie overlay
+    documents and locally excluded files cannot invalidate PR validation. Outside a
+    checkout the directory walk applies. Historical archive documents are intentionally
+    excluded because they preserve point-in-time evidence and may contain dead links or
+    machine-local paths that must not become current repository contracts.
 
     Args:
         root: Repository root to inspect.
@@ -38,6 +68,9 @@ def iter_markdown_files(root: Path) -> list[Path]:
     Returns:
         Sorted Markdown paths included in validation.
     """
+    tracked = tracked_markdown_files(root)
+    if tracked is not None:
+        return tracked
     return sorted(
         path
         for path in root.rglob("*.md")
@@ -156,17 +189,22 @@ def find_broken_local_links(root: Path, markdown_files: list[Path]) -> list[str]
 def find_unapproved_root_markdown(root: Path) -> list[str]:
     """Find root Markdown files that bypass the documentation ownership model.
 
+    In a Git checkout only tracked files participate, matching
+    :func:`iter_markdown_files`; untracked working files are not repository content yet.
+
     Args:
         root: Repository root to inspect.
 
     Returns:
         Sorted names of unapproved root Markdown files.
     """
-    return sorted(
-        path.name
-        for path in root.glob("*.md")
-        if path.name not in ALLOWED_ROOT_MARKDOWN
+    tracked = tracked_markdown_files(root)
+    root_files = (
+        [path for path in tracked if path.parent == root]
+        if tracked is not None
+        else list(root.glob("*.md"))
     )
+    return sorted(path.name for path in root_files if path.name not in ALLOWED_ROOT_MARKDOWN)
 
 
 def main() -> int:
