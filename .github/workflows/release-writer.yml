@@ -195,6 +195,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: main
+          fetch-depth: 0
           persist-credentials: false
       - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
         uses: actions/checkout@v7
@@ -219,6 +220,17 @@ jobs:
         with:
           name: release-writer-candidate
           path: ${{ runner.temp }}/release-candidate
+
+      - name: Verify selected merge is live before publication
+        shell: bash
+        env:
+          INPUT_MERGE_SHA: ${{ needs.discover.outputs.merge_sha }}
+        run: |
+          set -Eeuo pipefail
+          # Generation can take long enough for a rollback or failed deployment.
+          # Recheck live production immediately before loading the Neon DSN.
+          python scripts/release_recovery.py verify-deployed \
+            --merge-sha "$INPUT_MERGE_SHA"
 
       - name: Validate and publish directly to Neon
         shell: bash
