@@ -54,6 +54,58 @@ def tracked_markdown_files() -> list[str]:
     )
 
 
+def _linked_markdown_targets(root: Path) -> set[str]:
+    """Return repository Markdown targets linked from canonical entry points."""
+    targets: set[str] = set()
+    for source in ("README.md", "AGENTS.md", "CONTRIBUTING.md", "LOCAL_TESTING.md", "docs/README.md"):
+        source_path = root / source
+        if not source_path.is_file():
+            continue
+        text = source_path.read_text(encoding="utf-8")
+        for target in re.findall(r"(?<!!)\[[^\]]+\]\(([^)]+)\)", text):
+            parsed = urlsplit(target.strip().split(maxsplit=1)[0].strip("<>"))
+            if parsed.scheme or parsed.netloc or not parsed.path.endswith(".md"):
+                continue
+            candidate = (source_path.parent / unquote(parsed.path)).resolve()
+            try:
+                relative = candidate.relative_to(root.resolve())
+            except ValueError:
+                continue
+            if candidate.is_file():
+                targets.add(relative.as_posix())
+    return targets
+
+
+def _content_disposition(path: str, text: str, default_action: str) -> tuple[str, str, str]:
+    """Apply explicit historical/superseded markers before path defaults."""
+    if "<!-- docs-path-check: historical -->" in text:
+        return (
+            "Point-in-time record; body is preserved for provenance, not current instructions.",
+            "historical — preserve",
+            "Git history / ComicPile Wiki historical decisions",
+        )
+    heading = "\n".join(text.splitlines()[:12]).casefold()
+    if "superseded" in heading or "status:** historical" in heading:
+        return (
+            "Superseded record; follow the document's current-replacement notice.",
+            "superseded — preserve with link",
+            "See supersession notice in document",
+        )
+    if path.startswith(("docs/recovery/", "docs/reports/", "docs/issue-plans/")):
+        return (
+            "Dated recovery/report evidence; preserve without treating it as active guidance.",
+            "historical — preserve",
+            "Git history / ComicPile Wiki historical decisions",
+        )
+    return (
+        "Linked from a canonical entry point; must change atomically with repository behavior."
+        if default_action == "keep"
+        else "Content audit required before changing ownership or moving this document.",
+        default_action,
+        "—" if default_action == "keep" else "Canonical docs hub / ComicPile Wiki",
+    )
+
+
 def last_meaningful_update(path: str) -> str:
     """Return the most recent commit date touching a tracked path.
 
@@ -92,7 +144,7 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
             "keep",
             "—",
         )
-    if path in {"CONTRIBUTING.md", "SECURITY.md"}:
+    if path in {"CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "LOCAL_TESTING.md", "SECURITY.md"}:
         return (
             "Repository contribution or security contract.",
             "GitHub-facing project policy that belongs beside the code.",
@@ -125,10 +177,10 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
         )
     if path == "docs/changelog.md" or path.startswith("docs/changelog.d/"):
         return (
-            "Product changelog history or generated changelog fragment.",
-            "Canonical What's New source; fragments are assembled into the product surface.",
-            "keep",
-            "—",
+            "Frozen historical changelog source retained only for provenance.",
+            "Release notes now publish through the database-backed release ledger.",
+            "historical — preserve",
+            "Database-backed release ledger",
         )
     code_coupled_docs = {
         "docs/API.md",
@@ -187,12 +239,9 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
     if path.startswith("docs/"):
         return (
             f"Repository documentation for {file_path.stem.replace('_', ' ').replace('-', ' ')}.",
-            (
-                "Human-facing narrative should move out of the active code-coupled documentation "
-                "set unless linked by the docs hub."
-            ),
-            "move to Wiki",
-            "ComicPile Wiki",
+            "No automatic Wiki disposition; classify from content and canonical incoming links.",
+            "review — classify",
+            "Canonical docs hub / ComicPile Wiki",
         )
     if name.lower() == "readme.md":
         return (
