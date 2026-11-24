@@ -34,8 +34,10 @@ cargo test --locked -p comicpile-roll-service <focused-filter>
 cargo build --release --locked -p comicpile-roll-service
 ```
 
-The `Native Rust Roll` GitHub Actions job runs these checks and publishes the
-Linux x86_64 release binary. It does not deploy previews or change ingress.
+The `Native Rust Roll` GitHub Actions job runs the full workspace CI equivalents and publishes the
+Linux x86_64 release binary. Local test runs should use the focused package/filter command above;
+full workspace suites remain a CI gate unless explicitly requested. CI does not deploy previews
+or change ingress.
 The workspace target directory is the repository root `target/`. The Rust Roll CI
 job uses an absolute `CARGO_TARGET_DIR`
 (`$GITHUB_WORKSPACE/native/roll-service/target`) so parity examples and artifact
