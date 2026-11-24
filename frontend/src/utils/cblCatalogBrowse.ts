@@ -17,7 +17,8 @@ export interface CatalogServedPosition {
   scope: string
   query: string | null
   folder: string
-  page: number | null
+  /** Echoed page number of the served page; the API always sends one. */
+  page: number
 }
 
 /**
