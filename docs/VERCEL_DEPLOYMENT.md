@@ -7,7 +7,7 @@ ComicPile uses Vercel for production only. The production branch is `main`.
 - A push or merge to `main` may create one production deployment for that exact commit SHA.
 - Pull requests and non-production branches must not create Vercel deployments.
 - Pull requests are validated locally and through GitHub Actions.
-- The React/Vite frontend is built as static output. Native `/api/v2` resources run in Rust, remaining transitional `/api/*` routes run in FastAPI, and bare production health/docs paths return 404 without invoking Python.
+- The React/Vite frontend is built as static output. Every deployed `/api/*` route — including the retained native v1/unversioned compatibility paths such as the release-sync cron — runs in the single native Rust function `api/native_roll.rs`, and bare production health/docs paths return 404 at the Rust catch-all without starting a database-backed runtime.
 - Neon is the production PostgreSQL provider.
 
 `vercel.json` disables Vercel Git deployments. The migration-aware
@@ -106,7 +106,7 @@ and expected metadata are visible, and the dashboard offers an eligible
 production promotion/rollback action. A promotion is **not** automatic:
 verify the older application remains compatible with the *current* Neon
 schema before deliberately restoring it. A READY deployment is not proof of
-schema rollback compatibility; no Alembic downgrade is run by this policy.
+schema rollback compatibility; no schema downgrade is run by this policy.
 
 For a non-destructive listing (requires `VERCEL_TOKEN`,
 `VERCEL_PROJECT_ID` and `VERCEL_ORG_ID`):
@@ -124,8 +124,8 @@ than falling back to a project-level remove operation.
 ## Daily release-source sync (Vercel Cron)
 
 ComicPile runs release-source synchronization once per day through Vercel Cron.
-The job uses the existing FastAPI function; it does not require another service,
-a long-running worker, or a GitHub Actions scheduler.
+The cron path is served by the native Rust function (`api/native_roll.rs`); it does
+not require another service, a long-running worker, or a GitHub Actions scheduler.
 
 ```json
 {
@@ -136,7 +136,8 @@ a long-running worker, or a GitHub Actions scheduler.
 ```
 
 On the Vercel Hobby tier the job may start at any point inside the `09:00` UTC
-hour. Do not add a more frequent schedule; once daily is the v1 contract.
+hour. Do not add a more frequent schedule; once daily is the retained v1 cron
+contract.
 
 ### Required `CRON_SECRET`
 
