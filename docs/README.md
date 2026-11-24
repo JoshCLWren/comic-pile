@@ -40,7 +40,7 @@ What’s New is backed by the release API and Neon release ledger. A dedicated p
 - [React architecture](REACT_ARCHITECTURE.md): frontend architecture, TanStack Query server-state layer, and build structure.
 - [Database save/load](DATABASE_SAVE_LOAD.md): backup, import/export, and recovery procedures.
 - [Historical comic dependencies guide](COMIC_DEPENDENCIES_GUIDE.md): Python-era dependency design retained as provenance; use [Reading List runtime](READING_LIST_RUNTIME.md) for current execution rules.
-- [Production-to-local clone workflow](prod-clone-workflow.md): production Neon export and safe local restore procedure.
+- [Historical production-to-local clone workflow](prod-clone-workflow.md): retired Python clone tooling; use [Database save/load](DATABASE_SAVE_LOAD.md) for the supported PostgreSQL-native backup and loopback-only restore procedure.
 - [Git hooks](GIT_HOOKS.md): repository quality hooks.
 - [GitHub Wiki handoff](WIKI_HANDOFF.md): the exact owner-only steps and required Wiki navigation for completing #879 when the Wiki remote cannot be managed by the factory connector.
 

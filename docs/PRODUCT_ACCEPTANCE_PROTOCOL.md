@@ -81,7 +81,7 @@ Integrated parent product acceptance is human/interactive controlled. Autonomous
 2. Acceptance must run against integrated current `main` or the exact release candidate state, not isolated child branches.
 3. Where the parent describes UI workflows, acceptance must include focused Chromium/E2E coverage or an equivalent reproducible browser verification.
 4. Acceptance output must identify each parent criterion as pass/fail/not-applicable with evidence.
-5. A failed criterion must reopen/retain the parent and create or reference an executable follow-up issue rather than silently accepting partial implementation.
+5. A failed criterion must reopen/retain the parent and reference an existing executable issue or record the gap in the parent. Creating a follow-up issue requires explicit owner authorization under the backlog freeze.
 6. Generated or factory metadata must not automatically close a parent solely because GitHub sub-issue completion reaches 100%.
 7. Duplicate factory PRs that attempt to close already-delivered child work must not satisfy product acceptance.
 8. The final integrated acceptance verdict and parent closure are performed by Josh or an interactive session acting on Josh's direct instruction.
@@ -157,7 +157,7 @@ Date: <UTC timestamp>
 ### Step 4: Closure or retention
 
 - If all criteria pass: label the parent `ralph-status:done` and close it with the acceptance report as the closing comment.
-- If any criterion fails: keep the parent open. The failed criteria become executable follow-up issues (or are linked to existing issues). The parent retains its current status labels.
+- If any criterion fails: keep the parent open and retain its current status labels. Link existing executable issues or record the failed criteria in the parent; create a follow-up issue only with explicit owner authorization.
 
 ## Regression targets
 

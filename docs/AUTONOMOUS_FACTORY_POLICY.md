@@ -128,7 +128,7 @@ Once one worker has a valid lease on the highest-priority issue, peers select th
 
 When fewer than four substantive implementation PRs are open and executable unclaimed issues exist, idle workers must prefer opening coherent implementations for separate issues over embellishing existing PRs.
 
-OmniRoute's shared free coding pool cannot absorb a full roster tick. Fixed-model Entry sessions that smoke or run `auto/coding:free` are limited to at most three concurrent in-flight units (active Entry runs plus equivalent fixed-model leases). Dispatcher, completion drain, and capacity refill must refuse new Entry assignments when that cap is exhausted. The four-PR throughput floor remains the selection preference; it does not override the free-pool cap.
+OmniRoute's shared free coding pool cannot absorb a full roster tick. Fixed-model Entry sessions that smoke or run `auto/coding:free` are limited by the configured `FACTORY_OMNIROUTE_FREE_ENTRY_CAP` (default three) concurrent in-flight units: active Entry runs plus equivalent fixed-model leases. Dispatcher, completion drain, and capacity refill must refuse new Entry assignments when that cap is exhausted. The four-PR throughput floor remains the selection preference; it does not override the free-pool cap.
 
 A substantive implementation PR changes product behavior, correctness, performance, architecture, deployment behavior, data, or meaningful automated coverage required by its issue. Comments, labels, reviews, PR metadata, help text, and optional test embellishment do not count toward this floor.
 
@@ -158,9 +158,10 @@ do not apply to local sessions. Detailed Codex routing lives in
 Factory ownership is a connection-pool lock around the next action, not a permanent assignment to the model or worker that first touched the issue or PR.
 
 - Exactly one active owner label may hold an issue or PR at a time.
-- **Inactivity is bounded.** A local `factory:local` lease expires after 60
-  minutes without GitHub-recorded target activity; a numbered fixed-model lease
-  uses a 15-minute TTL when there is no active workflow run. The controller
+- **Inactivity is bounded.** A local `factory:local` lease uses the configured local
+  TTL (default 60 minutes) without GitHub-recorded target activity; a numbered
+  fixed-model lease uses the configured fixed TTL (default 15 minutes) when there
+  is no active workflow run. The controller
   considers trusted lease markers and the target's `updatedAt` timestamp,
   so missing or untrusted marker comments cannot keep an otherwise inactive
   claim alive forever. Do not use the issue's `createdAt` as a lease clock,
