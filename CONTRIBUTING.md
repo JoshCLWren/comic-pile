@@ -1,83 +1,67 @@
 # Contributing
 
-Thanks for contributing to Comic Pile. This project values clear APIs, mobile-first UX, and approachable code. Please follow the checks below for any code change.
+Thanks for contributing to Comic Pile. This project values clear APIs,
+mobile-first UX and approachable code. Follow the checks below for any change.
 
-Participation in Comic Pile project spaces is also governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## Good first issues
-
-Looking for a small, well-scoped starter task? Browse open issues labeled
-[`good first issue`](https://github.com/JoshCLWren/comic-pile/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
-These issues are sized for a first contribution and follow the same review, CI, and
-merge flow described below.
+Participation is also governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Pull requests and the factory
 
 Open a ready-for-review PR from your fork or repository branch. Contributor,
-local, and factory PRs all enter the same automated review, repair, CI, and merge
-flow. You do not need to request factory enrollment or provide credentials.
-Your commits and contributor credit remain intact. Enable **Allow edits from
-maintainers** so the factory can push fixes to your PR branch.
-
-Factory labels show the current next action: review, changes requested, CI, or
-ready. Every new push requires review and checks for the new commit. Enrollment
-alone never approves or authorizes merging your code. Fork CI runs without
+local and factory PRs enter the same review, repair, CI and merge flow. Factory
+enrollment never approves or authorizes merging by itself. Fork CI runs without
 repository secrets or permission to publish container images.
 
-## Pre-commit hook
+See [`AGENTS.md`](AGENTS.md), [`docs/ISSUE_EXECUTION_PROTOCOL.md`](docs/ISSUE_EXECUTION_PROTOCOL.md)
+and [`docs/AUTONOMOUS_FACTORY_POLICY.md`](docs/AUTONOMOUS_FACTORY_POLICY.md) for
+ownership, review and delivery rules. The Rust-cutover backlog freeze prohibits
+new issues, sub-issues and work splits without explicit interactive owner
+authorization.
 
-A pre-commit hook is installed in `.git/hooks/pre-commit` that automatically runs:
-- Check for type/linter ignores in staged files
-- Run the shared lint script (`scripts/lint.sh`)
+## Development prerequisites
 
-The lint script runs:
-- Python compilation check
-- Full-repo ruff linting (`ruff check .`)
-- Any type usage check (ruff ANN401 rule)
-- Full-repo ty type checking (`ty check --error-on-warning`). Warnings fail this check, including `redundant-cast`. Do not recast a value after `isinstance` has already narrowed it.
+- Docker for local PostgreSQL.
+- Rust/Cargo for the native service and migration runner.
+- Node.js and pnpm for the frontend.
+- Python 3.14 and uv for repository tooling/checks. The application itself has no
+  Python runtime.
 
-Path-filtered ruff or ty is not a valid CI substitute. CI runs `ruff check .`
-and `ty check --error-on-warning` over the whole repository. Run both (or
-`bash scripts/lint.sh`) after your last Python edit and re-run after later
-edits.
+Install the Python tooling environment before using the shared lint script:
 
-The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: ignore`, or `# pylint: ignore`.
+```bash
+make sync                 # uv sync --all-extras
+# or: uv venv && uv sync --all-extras
+```
 
-To test the hook manually: `make githook` or `bash scripts/lint.sh`
+`make setup` installs frontend dependencies, starts PostgreSQL and applies
+migrations; it does not install the Python tooling environment.
 
-## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+## Pre-commit and lint gates
 
-**⚠️ THIS IS THE MOST IMPORTANT RULE IN THIS PROJECT.**
+Install hooks with `bash scripts/install-git-hooks.sh`. The pre-commit hook runs
+`bash scripts/lint.sh`, which currently checks Python syntax, prohibited
+ignore/`Any` patterns and frontend ESLint. It does **not** run Ruff or ty.
 
-**TESTS MUST NEVER BE SKIPPED - EVER.**
+Before every Python push, run the exact whole-repository CI pair directly:
 
-When a test fails:
-1. ✅ Fix the test
-2. ✅ Fix the code that breaks the test
-3. ✅ Investigate root cause
-4. ❌ **NEVER skip the test**
+```bash
+ruff check .
+ty check --error-on-warning
+```
 
-**This applies to:**
-- All automated tests (unit, integration, E2E)
-- All contributors (human and AI)
-- All situations (no exceptions)
+Path-filtered Ruff or ty is not a valid substitute. Re-run after every Python
+edit. Never use `--no-verify`, add ignore comments, skip tests or weaken a check
+to force green.
 
-**Consequences of skipping tests:**
-- Broken code gets merged
-- Technical debt accumulates
-- Confidence in the test suite is lost
-- Other developers waste time debugging
+For frontend changes, run the focused lint/typecheck/build and targeted tests
+described in `AGENTS.md`. Full suites and aggregate coverage run in CI.
 
-**If you're tempted to use `--no-verify`, skip a test, or disable a check, DON'T.**
+## Getting started
 
-Fix the problem instead.
-
-## Development workflow
-
-### Getting Started
-
-1. Copy `.env.example` to `.env` and replace `SECRET_KEY` with a long random value.
-2. Export the environment for the migration runner and native service (neither loads `.env`):
+1. Copy `.env.example` to `.env` and replace `SECRET_KEY` with a long random
+   value.
+2. Export the environment for the migration runner and standalone native
+   service; neither loads `.env` automatically:
 
    ```bash
    set -a; . ./.env; set +a
@@ -85,152 +69,111 @@ Fix the problem instead.
    export RUST_ROLL_JWT_SECRET="$SECRET_KEY"
    ```
 
-3. Run `make setup` to install frontend dependencies, start local PostgreSQL, and apply migrations.
-4. Run `make dev` and open the app at `http://localhost:5173`. The native Rust API serves `http://localhost:8010`.
-5. There is no seed command: register an account in the running app to create your first queue.
+3. Run `make setup` to install frontend dependencies, start PostgreSQL and apply
+   migrations.
+4. Run `make dev`; open Vite at `http://localhost:5173`. The native API is on
+   `http://127.0.0.1:8010`.
+5. Register an account in the app. There is no seed command.
 
-Production deploys run the same Rust migration runner (`native/migrate`) against
-Neon before the Vercel deployment. It reads `MIGRATE_DATABASE_URL`, falling back
-to `DATABASE_URL`, and accepts SQLAlchemy `+asyncpg`/`+psycopg` URL suffixes. The
-Production Runtime Migrations CI job tests that runner; there is no Python
-application runtime to install.
+See [`LOCAL_TESTING.md`](LOCAL_TESTING.md) for the exact test topology and
+[`README.md`](README.md) for self-hosting.
 
-### API Development
+## API development
 
-- HTTP handlers live in `native/roll-service/src/`, registered in
-  `native/roll-service/src/lib.rs` and reached through the Vercel entrypoint
+- Handlers live under `native/roll-service/src/` and are registered in
+  `native/roll-service/src/lib.rs`; Vercel enters through
   `api/native_roll.rs`.
-- Request/response types are Rust `serde`/`utoipa` DTOs; the generated contract
-  is checked in at `native/contracts/v2-runtime.openapi.json`.
-- Database access uses `deadpool-postgres`/`tokio-postgres`; shared pool and SQL
-  helpers live in `native/roll-service/src/db.rs`.
-- Add new client resources under `/api/v2/*`. Route ingress is bot-owned
-  (`docs/api/route-fragments/*.json`); never hand-edit `vercel.json`.
-- Verify the contract with `pnpm --filter frontend run check:api-types` and run
-  the Rust tests for the route module you changed.
+- Request/response types are Rust `serde`/`utoipa` DTOs. Generated contracts live
+  under `native/contracts/`; do not edit generated JSON or TypeScript directly.
+- Database access uses `deadpool-postgres` / `tokio-postgres`; shared helpers are
+  in `native/roll-service/src/db.rs`.
+- Add new client resources under `/api/v2/*`. API version is not implementation
+  language. Preserve retained same-path v1/unversioned contracts unless a
+  separate API change is explicitly approved.
+- Route ingress is bot-owned. Edit only source fragments under
+  `docs/api/route-fragments/`; never hand-edit `vercel.json`, the generated
+  inventory or the `AGENTS.md` route-burndown block.
+- Run the focused Rust route tests and
+  `pnpm --filter frontend run check:api-types` after contract changes.
 
-### Route fragments and generated routing files
+## Frontend development
 
-Contributors edit only `docs/api/route-fragments/*.json` source fragments
-(excluding `docs/api/route-fragments/vercel-rewrites.json`). Never hand-edit
-`vercel.json`, `docs/api/v2-route-inventory.json`, the `AGENTS.md`
-`<!-- route-burndown -->` section, or `docs/api/route-fragments/vercel-rewrites.json` in a PR.
-Those files are bot-owned and are regenerated post-merge by
-`.github/workflows/regenerate-routes.yml` (runs
-`node scripts/generate_route_burndown.mjs` then
-`node scripts/generate_vercel_routes.mjs`). The `route-fragment-guard`
-workflow fails PRs that include generated files. `vercel.json` stays on
-`main` for Vercel deploy (do not gitignore it); the previous `main` copy
-remains valid until the bot lands.
+- Install dependencies with `pnpm install --frozen-lockfile`.
+- `make dev` runs Vite on `:5173` and the native API on `:8010`.
+- Build with `pnpm --filter frontend run build` (output `static/react/`).
+- Run lint/typecheck and targeted Vitest files; use Playwright for browser
+  behavior.
+- Follow `frontend/AGENTS.md` and
+  [`docs/FRONTEND_VISUAL_GRAMMAR.md`](docs/FRONTEND_VISUAL_GRAMMAR.md) for visual
+  work.
 
-### Frontend Development
+## Database migrations
 
-- Install deps:    `pnpm install`
-- Dev server:      `make dev` (starts Vite on :5173 and the native Rust API on :8010)
-- Build:           `pnpm --filter frontend run build` (outputs to `static/react/`)
-- Lint:            `pnpm --filter frontend run lint`
-- Unit tests:      `pnpm --filter frontend test` (vitest, no server needed)
-- E2E tests:       `pnpm --filter frontend run test:e2e` (requires backend server)
-
-React components live in `frontend/src/` with JSX syntax. Style with Tailwind CSS (mobile-first, touch targets ≥44px).
-
-### Database Migrations
+Append-only SQL lives under `native/migrate/migrations/`. Never edit an applied
+migration.
 
 ```bash
-# Create a new migration: append native/migrate/migrations/V<n>__description.sql
-# (append-only; never edit an applied migration)
-
-# Run migrations (refinery runner, comicpile-migrate)
-make migrate  # or: cargo run --locked -p comicpile-migrate -- up
+make migrate
+# or: cargo run --locked -p comicpile-migrate -- up
 ```
 
-## Code quality standards
+The runner reads `MIGRATE_DATABASE_URL`, falling back to `DATABASE_URL`, and
+accepts historical SQLAlchemy driver suffixes. There is no downgrade path; use a
+new forward migration or a verified pre-migration backup. See
+[`docs/DATABASE_SAVE_LOAD.md`](docs/DATABASE_SAVE_LOAD.md).
 
-- Run linting after each change:
-  - `make lint` or `bash scripts/lint.sh` (ruff + ty + frontend ESLint)
-  - `pnpm --filter frontend run lint && pnpm --filter frontend run typecheck` (TypeScript)
-- Use specific types instead of `Any` in type annotations (ruff ANN401 rule)
-- Run tests when you touch logic or input handling:
-  - `cargo test --workspace` (Rust API)
-  - `pnpm --filter frontend test` (frontend)
-  - focused files under `tests/` with `pytest tests/test_<name>.py`
-- Always write a regression test when fixing a bug.
-- If you break something while fixing it, fix both in the same PR.
-- Do not check in sample data or proprietary content.
-- Do not use in-line comments to disable linting or type checks.
-- Do not narrate your code with comments; prefer clear code and commit messages.
+## Code quality and tests
 
-## Testing guidelines
+- Run `cargo check --workspace` and targeted Rust tests for backend changes.
+- Run targeted frontend Vitest/Playwright tests for changed behavior. Full Rust,
+  frontend and coverage suites run in CI.
+- Repository tooling tests live under `tests/`; run the affected files with
+  pytest after installing the Python environment.
+- Test success, validation, auth, ownership and failure paths. Add a regression
+  test for every fixed defect.
+- Never skip, disable or weaken a meaningful test.
 
-- Rust API behavior lives in `native/roll-service`; run `cargo test --workspace`, or `cargo test -p comicpile-roll-service <filter>` for one case.
-- Frontend unit tests use Vitest (`pnpm --filter frontend test`); browser coverage uses Playwright specs in `frontend/src/test/`.
-- Repository tooling tests live in `tests/` and run with focused `pytest tests/test_<name>.py`.
-- Test both success and error paths, including ownership and auth failures.
-- The frontend unit suite enforces the 94% coverage gate in CI; Python coverage thresholds are retired.
+## Python tooling style
 
-## Style guidelines
+- Standard-library, third-party, then local imports.
+- Precise public-function annotations; never `Any`.
+- Use `|` unions and avoid redundant `cast()` calls.
+- Use `snake_case`, `PascalCase`, `SCREAMING_SNAKE_CASE` and `_private` names.
+- Google-style docstrings, 4-space indentation, 100-character soft wrap and
+  trailing commas in multi-line structures.
+- Do not add `# type: ignore`, `# noqa`, `# ruff: ignore` or `# pylint: ignore`.
 
-- Keep helpers explicit and descriptive (snake_case), and annotate public
-  functions with precise types.
-- Use Pydantic schemas for API validation
-- Use SQLAlchemy models for database operations
-- Follow PEP 8 spacing (4 spaces, 100-character soft wrap)
+Do not recreate Pydantic/SQLAlchemy application modules. Python is tooling only;
+the QA mirror script's isolated SQLAlchemy use is not a deployed runtime.
 
-## Branch workflow
+## Branch and PR workflow
 
-- Branch from `main` with a descriptive name (`git checkout -b fix/queue-reorder`).
-- Open a ready-for-review PR against `main`; do not open draft PRs unless asked.
-- The `make create-phaseX` / `make merge-phaseX` targets are historical leftovers
-  from the original nine-phase build and are not part of the current flow.
+- Branch from `main` with a descriptive name, e.g. `fix/queue-reorder`.
+- Open ready-for-review PRs; use draft only when explicitly requested.
+- The old `make create-phaseX` / `make merge-phaseX` targets are historical and
+  not part of the current flow.
+- Do not add or repair changelog Markdown. Release notes are published after
+  merge by the dedicated release writer.
 
-## Pull request guidelines
+## Merge gate for agent-authored PRs
 
-- Use imperative, component-scoped commit messages (e.g., "Add thread creation API endpoint")
-- Bundle related changes per commit
-- PR summary should describe user impact and testing performed
-- Attach screenshots when UI is affected
-- Ensure all tests pass and coverage is maintained
-- Do not add or edit changelog Markdown as part of implementation delivery. User-facing release notes are published after merge by the dedicated release writer to the database-backed release ledger. Release-note publication or reconciliation delays do not block an otherwise-ready implementation PR.
+The exact current head must be green on required CI, mergeable, free of
+unresolved actionable review findings and complete for its declared scope.
 
-### Merge gate (agent-authored PRs)
+Current Rotisserie owner policy (2026-11-22) requires **one independent recorded
+review**:
 
-This is the only pre-merge process rule (#3561). Every agent-authored pull
-request — Cursor cloud agents and factory workers — may merge only when both
-are true for the **exact current head**:
+- A reviewer model known from trusted factory records to have authored any part
+  of the PR cannot approve it.
+- A reviewer's executed model must be recorded so self-review can be excluded.
+- When no factory author model is recorded (human, external or unattributed PR),
+  any recorded reviewer may approve. Missing provenance does not create a
+  two-review requirement.
+- A worker that switched to a model that authored none of the PR may review;
+  provider/route aliases are normalized by the controller.
 
-1. One thorough code review by a Cursor cloud agent running a **different
-   model** than the PR author. Same-model reviews do not count. A review
-   recorded against a previous SHA does not count after the head moves.
-2. CI is green on that head.
-
-There are no extra pre-merge QA, preview, smoke, or migration-rehearsal
-steps. Do not add a `factory:approved` label; controller provenance is the
-authority.
-
-The review controller writes those models as `github-actions[bot]` comments.
-It records the author model from the factory roster when the producing worker
-records the head, and the reviewer model when it launches and interprets an
-independent factory review. Cursor cloud-agent ids (`bc-…`) in a PR footer
-are a distinct identity token, not a substitute for the controller marker.
-
-Only `github-actions[bot]` model markers count. OWNER/MEMBER/COLLABORATOR
-comments — including Cursor agents posting as the repository owner — cannot
-satisfy the gate. A missing author marker, or two author markers that disagree,
-fails closed.
-
-Markers (entire comment body, written only by the controller):
-
-- Author:
-  `<!-- comic-pile-agent-model-author-v1:pr-<n>:head-<sha>:model-<model>:agent-<author-id> -->`
-- Reviewer:
-  `<!-- comic-pile-agent-model-review-v1:pr-<n>:head-<sha>:author-<author-model>:reviewer-<reviewer-model>:author-agent-<author-id>:reviewer-agent-<reviewer-id>:verdict-approve -->`
-
-The reviewer agent id must differ from the author agent id. Model comparison
-uses the model family: a leading `cursor-` prefix and effort/speed suffixes
-(`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `thinking`,
-`fast`) are stripped, so `cursor-grok-4.6-high-fast` and `cursor-grok-4.6-low`
-are the same model.
-
-The factory merge drain refuses the PR when those markers are missing, the
-author record is missing or conflicting, the models match, the reviewer is
-the authoring agent, the review SHA is stale, or required CI is red.
+The trusted controller writes exact-head contributor/review markers and applies
+this policy. Do not fabricate approvals or use a label as merge authority. See
+[`docs/AUTONOMOUS_FACTORY_POLICY.md`](docs/AUTONOMOUS_FACTORY_POLICY.md) and
+[`docs/FACTORY_GITHUB_VISIBILITY.md`](docs/FACTORY_GITHUB_VISIBILITY.md) for the
+canonical lifecycle and marker contract.

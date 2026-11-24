@@ -193,12 +193,21 @@ A worker App slug (e.g., `mark-cordova`) with `OWNER`/`MEMBER`/`COLLABORATOR` as
 
 ### Controller provenance remains authoritative
 
-The review controller writes `comic-pile-factory-semantic-review-v1` and `comic-pile-factory-head-contributor-v1` markers as **entire comment bodies**. These markers carry `provenance_complete` for the exact head.
+The review controller writes `comic-pile-factory-semantic-review-v1` and
+`comic-pile-factory-head-contributor-v1` markers as **entire comment bodies**.
+They carry exact-head provenance and the reviewer's executed model.
 
-A native-style GitHub `APPROVE` review **does not** satisfy `head_has_authorized_approval` / `approval_can_promote` without controller marker provenance:
-- When `provenance_complete == False` (no controller marker for the exact head), the head is fail-closed: **two distinct eligible reviewers** are required, and the producer cannot self-approve.
-- When `provenance_complete == True`, **one eligible reviewer** authorizes the head.
-- The producer (worker that opened the PR) is **always excluded** from the eligible reviewer set, regardless of provenance.
+Under the owner's 2026-11-22 policy, one recorded independent approval authorizes
+the head:
 
-This contract ensures that worker GitHub Apps can push and create PRs, but they cannot forge review authorization or trusted marker provenance.
+- A reviewer model known to have authored any part of the PR cannot approve it.
+- The reviewer's executed model must be recorded so self-review can be excluded.
+- When no factory author model is recorded (human, external or unattributed PR),
+  any recorded reviewer may approve. Missing provenance does not impose a
+  two-review requirement.
+- A worker that switched to a model that authored none of the PR may review.
+
+A native-style GitHub `APPROVE` without the controller's trusted marker is not
+merge authorization. Worker Apps can push and create PRs but cannot forge review
+markers or readiness.
 
