@@ -2,7 +2,6 @@
 set -e
 
 RED='\033[0;31m'
-GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
@@ -37,7 +36,7 @@ FORBIDDEN_STAGED=$(git diff --cached --name-only | grep -E "^node_modules|^front
 if [ -n "$FORBIDDEN_STAGED" ]; then
     echo ""
     echo "${RED}ERROR: Forbidden files staged for commit:${NC}"
-    echo "$FORBIDDEN_STAGED" | sed 's/^/  /'
+    while IFS= read -r file; do echo "  $file"; done <<< "$FORBIDDEN_STAGED"
     echo "${RED}Remove them with: git rm --cached <file>${NC}"
     exit 1
 fi
@@ -50,7 +49,7 @@ BACKUP_STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -Ei "$BAC
 if [ -n "$BACKUP_STAGED" ]; then
     echo ""
     echo "${RED}ERROR: Backup files staged for commit:${NC}"
-    echo "$BACKUP_STAGED" | sed 's/^/  /'
+    while IFS= read -r file; do echo "  $file"; done <<< "$BACKUP_STAGED"
     echo "${RED}Backup artifacts (*.bak, *.backup, *.orig, *~) are banned from this repository.${NC}"
     echo "${RED}Delete them locally instead of committing them.${NC}"
     exit 1
