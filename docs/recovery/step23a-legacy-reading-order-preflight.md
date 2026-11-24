@@ -1,5 +1,10 @@
 # Step 23A — Legacy Reading Order migration preflight
 
+> **Status: historical Python migration runbook.** Do not execute these commands in
+> the native runtime; current schema procedures are in
+> [DATABASE_SAVE_LOAD.md](../DATABASE_SAVE_LOAD.md).
+<!-- docs-path-check: historical -->
+
 Read-only production preflight for migrating the three surviving legacy
 Reading Orders into informational canonical Reading Plans.
 

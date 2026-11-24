@@ -1,5 +1,9 @@
 # Frontend Performance Optimizations
 
+> **Status: historical optimization notes.** Current frontend contracts live in
+> [REACT_ARCHITECTURE.md](../../../docs/REACT_ARCHITECTURE.md).
+<!-- docs-path-check: historical -->
+
 This document summarizes the performance optimizations implemented for the creator, crossover, and cbl-sources views to reduce unnecessary HTTP calls and improve caching efficiency.
 
 ## Optimizations Overview
