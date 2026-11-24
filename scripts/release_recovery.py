@@ -478,6 +478,14 @@ def _parser() -> argparse.ArgumentParser:
     verify = commands.add_parser("verify-deployed", help="require a merge SHA in live production")
     verify.add_argument("--merge-sha", required=True)
     verify.set_defaults(handler=_verify_deployed)
+    ground = commands.add_parser(
+        "ground-candidate",
+        help="classify a complete test-only merged diff as internal",
+    )
+    ground.add_argument("--candidate", required=True, type=Path)
+    ground.add_argument("--repository", required=True)
+    ground.add_argument("--pr", required=True, type=int)
+    ground.set_defaults(handler=_ground_candidate)
     return parser
 
 
