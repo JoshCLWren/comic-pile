@@ -190,13 +190,31 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
         )
     code_coupled_docs = {
         "docs/API.md",
+        "docs/API_V1_CANONICAL.md",
+        "docs/CBL_CATALOG_API.md",
+        "docs/CBL_COLLECTION_EXCLUSIONS.md",
+        "docs/CBL_COMICVINE_LOOKUP.md",
+        "docs/CBL_CREATE_CYCLE_FEEDBACK.md",
+        "docs/CHATGPT_FACTORY_PROMPT.md",
         "docs/DATABASE_SAVE_LOAD.md",
+        "docs/FRONTEND_OPENAPI_TYPES.md",
         "docs/GIT_HOOKS.md",
         "docs/ISSUE_EXECUTION_PROTOCOL.md",
+        "docs/NAVIGATION_ENTRY_POINTS.md",
+        "docs/PLAYWRIGHT_VERSION_POLICY.md",
+        "docs/PRODUCTION_PROFILE.md",
         "docs/PRODUCTION_STARTUP_DIAGNOSTICS.md",
+        "docs/PRODUCT_ACCEPTANCE_PROTOCOL.md",
         "docs/REACT_ARCHITECTURE.md",
+        "docs/REACT_INTERACTION_POLICY.md",
+        "docs/RELEASE_COLLECTION_EXCLUSIONS.md",
+        "docs/RUST_FACTORY_ENDPOINT_PATTERN.md",
+        "docs/VERCEL_DEPLOYMENT.md",
         "docs/WIKI_HANDOFF.md",
+        "docs/api/PASSWORD_POLICY.md",
+        "docs/api/READING_LIST_AUTHORING.md",
         "docs/prod-clone-workflow.md",
+        "docs/rate_limiting.md",
     }
     if path in code_coupled_docs:
         return (
@@ -208,6 +226,13 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
                 "Linked from the authoritative docs hub and must change atomically with "
                 "repository or operational behavior."
             ),
+            "keep",
+            "—",
+        )
+    if path.startswith(("docs/manual-qa/", "docs/testing/")):
+        return (
+            "Active QA or test-maintenance contract.",
+            "Code-coupled guidance that must change with product behavior and test tooling.",
             "keep",
             "—",
         )
