@@ -233,9 +233,9 @@ Repeat until the selected issue reaches closure or a valid blocker:
 
 `inspect contract -> implement closure-critical behavior -> focused validation -> commit -> push -> inspect exact SHA -> account for all review feedback -> repair blockers -> verify merge gates -> merge when eligible -> verify issue closure`
 
-Python focused validation must include the exact CI pair `ruff check .` and
-`ty check --error-on-warning` against the whole repo
-(`bash scripts/check-python-ci-lint.sh`). Path-filtered ruff or ty is not a valid CI substitute.
+Python tooling validation must include the exact CI pair `ruff check .` and
+`ty check --error-on-warning` against the whole repo, plus `bash scripts/lint.sh`
+and the focused tooling tests. Path-filtered ruff or ty is not a valid CI substitute.
 Re-run that pair after every later Python edit and before every Python push.
 A lint run from before the last edit does not count.
 
@@ -249,7 +249,7 @@ If no ordinary executable issue can be selected, release any stale active lease,
 
 Release notes are asynchronous post-merge infrastructure, not an implementation merge gate. The dedicated release-writer workflow inspects merged pull requests and publishes user-facing changes to the database-backed release ledger. Reconciliation owns missed or retried release records.
 
-Implementation workers must not create, repair, or require `docs/changelog.d` fragments, must not edit `docs/changelog.md` as routine delivery work, and must not block a product PR because release-note publication is delayed. A genuine release-writer or release-ledger defect may become its own executable issue, but fixing that infrastructure must not reintroduce Markdown release-note work into unrelated implementation branches.
+Implementation workers must not create, repair, or require `docs/changelog.d` fragments, must not edit `docs/changelog.md` as routine delivery work, and must not block a product PR because release-note publication is delayed. Record a genuine release-writer or release-ledger defect in the existing issue or PR handoff; creating a separate issue requires explicit owner authorization. Fixing that infrastructure must not reintroduce Markdown release-note work into unrelated implementation branches.
 
 `docs/changelog.md` and the existing files under `docs/changelog.d/` are frozen historical source retained only for provenance and auditability. They are not runtime truth, are not assembled by the frontend build, and ordinary new work must not append to them.
 
@@ -292,7 +292,7 @@ Josh directed on 2026-10-18 that Greptile (`greptile-apps[bot]`) findings be hel
 
 ### Pre-push fast checks
 
-A worker diff is pushed only after the trusted pre-push fast checks pass for the files it touches: `node --check` for `.mjs`/`.cjs`, CI-parity ruff and ty plus targeted pytest for `.py`, and the frontend typecheck plus eslint for `frontend/**/*.ts|tsx|mjs`. Backend Python changes, OpenAPI generator changes, and generated OpenAPI artifact changes also invoke `uv run --frozen python scripts/export_openapi_schema.py --check`. A stale schema or broken app import blocks the factory commit/push before CI. Changes to root or frontend package manifests, pnpm lockfiles, or the pnpm workspace manifest trigger the existing frozen pnpm install and frontend typecheck even if no `.ts` or `.tsx` file changed. On failure the wrapper does not push. It resets the tree and leaves a `comic-pile-factory-fast-checks-failed-v1` comment for the next worker (see `docs/FACTORY_GITHUB_VISIBILITY.md`). Agents should run the same checks themselves before ending a run.
+A worker diff is pushed only after the trusted pre-push fast checks pass for the files it touches: `node --check` for `.mjs`/`.cjs`, CI-parity ruff and ty plus targeted pytest for `.py`, and the frontend typecheck plus eslint for `frontend/**/*.ts|tsx|mjs`. OpenAPI generator changes and generated OpenAPI artifact changes also invoke `node scripts/export_openapi_schema.mjs --check`. A stale generated schema blocks the factory commit/push before CI. Changes to root or frontend package manifests, pnpm lockfiles, or the pnpm workspace manifest trigger the existing frozen pnpm install and frontend typecheck even if no `.ts` or `.tsx` file changed. On failure the wrapper does not push. It resets the tree and leaves a `comic-pile-factory-fast-checks-failed-v1` comment for the next worker (see `docs/FACTORY_GITHUB_VISIBILITY.md`). Agents should run the same checks themselves before ending a run.
 
 Every push invalidates prior review, readiness, and merge eligibility. Re-fetch the exact SHA, current review threads, mergeability, and CI after every push.
 
@@ -406,7 +406,10 @@ Apply these states exactly. Reconcile each target with one full label-set replac
 Rules:
 
 - The issue/PR state reconciler enrolls open, non-draft repository PRs missing
-  factory metadata on open/reopen/unlabel events and every 15 minutes. Contributor
+  factory metadata on open/reopen/unlabel events and by its scheduled sweep.
+  Policy requires a 15-minute sweep; the installed workflow currently runs hourly
+  at minute 31, which is a known automation gap rather than permission to claim
+  the faster cadence or mutate the schedule from documentation work. Contributor
   fork PRs participate in the same review, repair, CI, and merge lifecycle as
   factory and local PRs. Dependabot and Renovate are excluded. It preserves unrelated labels and an
   existing owner/stage, defaults missing ownership to `factory:unowned`, and uses
@@ -503,10 +506,11 @@ Rules:
   branch code and never execute the fork checkout with their write token.
   Enrollment does not attest provenance, approve code, or bypass exact-head gates.
 
-- Fixed-model PR creation must use `PR_REBASE_TOKEN`, like git pushes. Keep the
-  workflow token for controller comments and labels; creating the PR with that
-  token attributes it to `github-actions[bot]`, which can leave Actions awaiting
-  approval and delay independent review workflows.
+- Fixed-model push and PR creation use `PR_REBASE_TOKEN` unless that worker has a
+  fully configured provisioned App. Worker 48 currently uses its Mark Cordova App
+  installation token when all three App secrets exist; other workers keep using
+  `PR_REBASE_TOKEN`. Keep the workflow token for trusted controller comments and
+  labels. See [worker App identities](../.github/factory-worker-github-apps.md).
 - Never push directly to `main`.
 - Never create or convert a draft PR unless Josh explicitly requests a draft.
 - Never enable auto-merge.
@@ -658,8 +662,9 @@ Use the existing canonical marker schemas:
 - issue claim: `<!-- comic-pile-factory-implement-claim-v3:issue-<n>:<worker>:<epoch>:attempt-<n> -->`
 - issue progress: `<!-- comic-pile-factory-implement-progress-v3:issue-<n>:<worker>:<epoch> -->`
 - review claim: `<!-- comic-pile-factory-review-claim-v2:<sha>:<worker>:<epoch> -->`
-- review pass verdict: `<!-- comic-pile-factory-review-v2:<sha>:pass -->`
-- review changes-required verdict: `<!-- comic-pile-factory-review-v2:<sha>:changes-required -->`
+- current semantic review verdict: `<!-- comic-pile-factory-semantic-review-v1:pr-<pr>:head-<sha>:reviewer-<worker>:producer-<worker-or-unknown>:verdict-<pass-or-repair> -->`
+- legacy review pass verdict: `<!-- comic-pile-factory-review-v2:<sha>:pass -->`
+- legacy review changes-required verdict: `<!-- comic-pile-factory-review-v2:<sha>:changes-required -->`
 - repair claim: `<!-- comic-pile-factory-fix-claim-v3:<sha>:<worker>:<epoch>:attempt-<n> -->`
 - repair progress: `<!-- comic-pile-factory-fix-progress-v3:<sha>:<worker>:<epoch> -->`
 - ready: `<!-- comic-pile-factory-ready-v2:<sha> -->`
@@ -689,9 +694,14 @@ Updated by: <durable worker ID and UTC timestamp>
 
 Record observed facts, distinguish local checks from CI, include no secrets, and keep the packet short. A takeover worker reads the current packet before reconstructing context, verifies that its recorded head still matches, and updates or discards stale claims instead of trusting them blindly. The packet is operational state, not a substitute for commits, tests, review markers, issue acceptance criteria, or truthful labels. Completed and verified work does not require a packet.
 
-Review leases last 45 minutes. Repair and implementation leases last 60 minutes after the latest real progress. Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
+Review leases default to 45 minutes. Repair and implementation leases default to 60 minutes after the latest real progress; fixed-model and local TTLs are configurable through `FACTORY_FIXED_LEASE_TTL_SECONDS` and `FACTORY_LOCAL_LEASE_TTL_SECONDS`. Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
 
 ## Z.AI free account quota backoff
+
+> **Historical lane note:** the worker numbers, slots, and model IDs below are
+> retained as operating-history provenance. Current worker/model capacity is
+> registry/catalog driven; this section does not authorize a static roster or a
+> provider/model substitution.
 
 Worker 97 adds a second `z-ai` / `glm-4.5-flash` lane at :50, thirty minutes
 from worker 54 at :20, using the existing `Z_AI_API_KEY` and `PR_REBASE_TOKEN`.
@@ -743,7 +753,7 @@ separate non-quota evidence, such as model removal, revoked authentication or
 repeated invalid output, recorded in its PR. Catalog discovery already protects
 these runtime-only providers from catalog-absence retirement.
 
-The earlier retired identities 48 and 55 remain retired. Post-reset runs
+The earlier provider lanes for worker identities 48 and 55 remain retired; that does not retire worker 48's provisioned GitHub App identity. Post-reset runs
 [41774076436](https://github.com/JoshCLWren/comic-pile/actions/runs/41774076436)
 and [41774209074](https://github.com/JoshCLWren/comic-pile/actions/runs/41774209074)
 on November 4, before #4622 merged, still reported Mistral API budget exhaustion
@@ -803,11 +813,17 @@ duplicate creation; disjoint files remain eligible for separate PRs.
 
 ## Additional provider free-tier lanes (2026-11-15)
 
+> **Dated configuration snapshot:** the model IDs and provider list below are
+> historical provenance, not an authoritative runtime inventory. Current models
+> and capacity come from the provider registry/catalog and source-budget policy.
+
 This fleet uses free-only or evaluation-only credentials. The roster and source caps
 are not equivalent to a provider-side spending limit. API keys MUST belong to
 accounts/projects that cannot auto-bill beyond a free allowance. Missing keys
-skip execution; never substitute a paid model, silently switch to a billed plan,
-or copy a credential into source control.
+skip execution; never substitute a paid model or silently switch to a billed plan
+outside the configured provider-specific allowance, and never copy a credential
+into source control. The Aion free-allowance exception below permits configured
+paid-price inference only within that allowance; it is not a general paid fallback.
 
 - `gemini-free`: `GEMINI_API_KEY`, free-tier Google AI Studio project only;
   `gemini-3.8-flash` and `gemini-3.1-flash-lite`. On the Google free tier,
