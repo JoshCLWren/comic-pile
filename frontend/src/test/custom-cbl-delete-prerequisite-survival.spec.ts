@@ -214,7 +214,7 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   expect(await getReadingList(page, deletedList.id)).toEqual(beforeDeletedList)
 
   await page.goto(`/reading-lists/${deletedList.id}`)
-  await expect(page.getByLabel('Name')).toHaveValue(deletedList.name)
+  await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(deletedList.name)
   await page.getByRole('button', { name: 'Delete', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Delete custom CBL' })
   await expect(dialog).toBeVisible()
