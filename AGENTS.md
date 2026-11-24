@@ -272,7 +272,11 @@ cd frontend && pnpm run build && npx playwright test --headed  # Run with browse
 
 **Inventory-driven Chromium regression lane** (`make verify-e2e-regression`, `pnpm test:e2e:regression`, scheduled `e2e-chromium-regression` workflow): before running, fixing, or triaging it, load the `e2e-chromium-regression` skill (`.agents/skills/e2e-chromium-regression/SKILL.md`) — it documents the mandatory `TEST_ENVIRONMENT=true` backend contract, scope rules (P0 must stay green; P1/P2 reds reconcile into one canonical issue), and the verified failure-class triage table.
 
-## Python Code Style
+## Python tooling style
+
+Python remains in use for repository checks, operational utilities and factory
+tooling. It is not application code. Apply these rules to maintained Python
+tooling under `scripts/`, `tests/`, `.github/scripts/` and similar directories.
 
 ### Imports
 Order: standard library, third-party, local. Ruff auto-sorts with `ruff check --fix`.
@@ -280,7 +284,6 @@ Order: standard library, third-party, local. Ruff auto-sorts with `ruff check --
 ### Type Annotations
 - **Required** on all public functions with precise types
 - **Never use `Any`** - ruff ANN401 rule enforced
-- Use `Mapped[]` for SQLAlchemy model columns
 - Use `|` union syntax, not `Union[]` or `Optional[]`
 - **Never leave a redundant `cast()`.** `ty check --error-on-warning` fails CI on `redundant-cast`. After `isinstance(x, T)`, use `x` directly. Do not write `cast(object, x)` when `x` is already `object`. Narrow with `isinstance` instead of stacking casts.
 
@@ -305,45 +308,8 @@ The pre-commit hook blocks these comments:
 - `# ruff: ignore`
 - `# pylint: ignore`
 
-Fix the underlying issue instead of suppressing warnings.
-
-### CRITICAL: MissingGreenlet Errors After Database Commits
-
-**Symptom**: `sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called`
-
-**Root Cause**: Accessing SQLAlchemy model attributes after `await db.commit()` causes session expiration. SQLAlchemy lazy-loads attributes on access, but after commit the session is closed/expired.
-
-**Example of buggy code**:
-```python
-await db.commit()
-
-# This will FAIL - accessing thread.title after commit triggers lazy load
-return RollResponse(
-    title=thread.title,  # ❌ MissingGreenlet error
-    format=thread.format,
-)
-```
-
-**Required Fix Pattern**:
-```python
-# Extract all needed attributes BEFORE commit
-thread_title = thread.title
-thread_format = thread.format
-thread_issues = thread.issues_remaining
-thread_position = thread.queue_position
-
-await db.commit()
-
-# Use extracted values after commit - safe!
-return RollResponse(
-    title=thread_title,  # ✅ Works
-    format=thread_format,
-    issues_remaining=thread_issues,
-    queue_position=thread_position,
-)
-```
-
-**Rule**: If you need data from a SQLAlchemy model after `db.commit()`, extract it into variables BEFORE the commit.
+Fix the underlying issue instead of suppressing warnings. The retired SQLAlchemy
+session and MissingGreenlet rules do not apply to the native Rust runtime.
 
 ## API Patterns
 
