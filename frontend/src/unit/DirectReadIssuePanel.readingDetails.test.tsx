@@ -6,7 +6,7 @@ import { DirectReadIssuePanel } from '../components/DirectReadIssuePanel'
 import { issuesApi } from '../services/api-issues'
 import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
-import { tagsApi, type EffectiveTagsResponse } from '../services/api-tags'
+import { tagsApi, type EffectiveTagsResponse, type Tag } from '../services/api-tags'
 import type { Issue } from '../types'
 
 // The action card has its own suite; this suite proves the reading surface
