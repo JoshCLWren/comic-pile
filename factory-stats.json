@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T17:08:53.981272+00:00",
+  "generated_at": "2026-11-24T17:19:41.793603+00:00",
   "models": [
     {
       "health": {
@@ -3167,22 +3167,22 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 19,
+          "failed": 24,
           "failures": {
-            "control_plane_failure": 19
+            "control_plane_failure": 24
           },
           "idle": 4,
-          "runs": 23
+          "runs": 28
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 26,
+          "failed": 31,
           "failures": {
-            "control_plane_failure": 26
+            "control_plane_failure": 31
           },
           "idle": 30,
-          "runs": 56
+          "runs": 61
         }
       }
     },
@@ -4976,7 +4976,7 @@
     {
       "health": {
         "cooldown_until": null,
-        "last_outcome": "no_work",
+        "last_outcome": "work_failure",
         "status": "healthy"
       },
       "model": "iceman-contributor-free",
@@ -4985,29 +4985,29 @@
         "24h": {
           "completed": 7,
           "delivered": 7,
-          "failed": 37,
+          "failed": 38,
           "failures": {
             "control_plane_failure": 16,
             "provider_failure": 1,
             "unknown_failure": 1,
-            "work_failure": 19
+            "work_failure": 20
           },
-          "idle": 31,
-          "runs": 75
+          "idle": 32,
+          "runs": 77
         },
         "7d": {
           "completed": 23,
           "delivered": 23,
-          "failed": 106,
+          "failed": 107,
           "failures": {
             "control_plane_failure": 27,
             "provider_failure": 3,
             "provider_quota": 1,
             "unknown_failure": 1,
-            "work_failure": 74
+            "work_failure": 75
           },
-          "idle": 55,
-          "runs": 184
+          "idle": 56,
+          "runs": 186
         }
       }
     },
@@ -22609,16 +22609,16 @@
         "24h": {
           "completed": 18,
           "delivered": 17,
-          "failed": 99,
+          "failed": 104,
           "idle": 28,
-          "runs": 145
+          "runs": 150
         },
         "7d": {
           "completed": 55,
           "delivered": 53,
-          "failed": 595,
+          "failed": 600,
           "idle": 282,
-          "runs": 932
+          "runs": 937
         }
       }
     },
@@ -22647,16 +22647,16 @@
         "24h": {
           "completed": 12,
           "delivered": 12,
-          "failed": 64,
-          "idle": 32,
-          "runs": 108
+          "failed": 65,
+          "idle": 33,
+          "runs": 110
         },
         "7d": {
           "completed": 53,
           "delivered": 43,
-          "failed": 372,
-          "idle": 82,
-          "runs": 507
+          "failed": 373,
+          "idle": 83,
+          "runs": 509
         }
       }
     },
@@ -22786,10 +22786,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T17:08:54.110602+00:00",
-    "days_elapsed": 23.715,
+    "checked_at": "2026-11-24T17:19:41.964914+00:00",
+    "days_elapsed": 23.722,
     "days_in_month": 30.0,
-    "days_left": 6.29,
+    "days_left": 6.28,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
