@@ -1,5 +1,12 @@
 # Native Roll service
 
+> **Current status:** this is the deployed native Rust/Axum API service. It owns
+> authentication, Roll, Queue, Reading List, ComicVine, and the other registered
+> product routes. The #4302 foundation and #4304–#4307 Python parity narratives
+> below are retained as historical implementation provenance, not current rollout
+> instructions. See `docs/API.md`, `docs/ARCHITECTURE.md`, and
+> `docs/READING_LIST_RUNTIME.md` for current behavior.
+
 Independent Rust/Axum service foundation for #4302, part of #4299. It serves
 `GET /health`, stable JSON errors, and a bounded lazy PostgreSQL pool. The CPU
 spike at `experiment/native-rust-cpu-spike-20261029:scripts/rust_cpu_spike/`
@@ -23,7 +30,7 @@ From the repository root:
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --locked --all-targets -- -D warnings
-cargo test --workspace --locked --all-targets
+cargo test --locked -p comicpile-roll-service <focused-filter>
 cargo build --release --locked -p comicpile-roll-service
 ```
 
@@ -50,7 +57,7 @@ in command arguments, commits, logs, issue comments or fixtures.
 | RUST_ROLL_ENV | development | development or production |
 | RUST_ROLL_BIND | 127.0.0.1:8010 | Socket address; development rejects non-loopback binds |
 | RUST_ROLL_DATABASE_URL | required | Native postgres URI, **without** SQLAlchemy's `+asyncpg`; production requires `sslmode=require` |
-| RUST_ROLL_JWT_SECRET | required | Same signing secret as Python when authenticated handlers are enabled; no insecure default |
+| RUST_ROLL_JWT_SECRET | required | JWT signing secret; the Vercel entrypoint may fall back to `SECRET_KEY`, and no insecure default exists |
 | RUST_ROLL_LOG | info | Valid tracing filter; output is structured JSON |
 | RUST_ROLL_POOL_SIZE | 4 | Maximum concurrent PostgreSQL connections, range 1–32 |
 | RUST_ROLL_POOL_TIMEOUT_MS | 2000 | Wait/create/recycle timeout, range 1–30000 ms |
@@ -81,28 +88,13 @@ Additional network tests stall a real PostgreSQL handshake to prove the configur
 create timeout, finish an in-flight HTTP handler during drain, enforce the hard
 drain deadline for stuck work, and hold incomplete HTTP headers during SIGTERM.
 
-## Routing and rollout
+## Routing and authentication
 
-There is no public route switch, deployment environment, CORS policy, auth
-substitute or Python reverse proxy here. Existing Python routes continue serving
-Roll. The complete native bootstrap must pass JSON/status/state parity,
-performance, frontend/E2E, exact-head CI and Greptile 5/5 gates before #4313 can
-review deployment and exercise ingress rollback. Never route public bootstrap
-traffic to this foundation's 404.
+The standalone service mounts the same native router used by `api/native_roll.rs`. Production Vercel ingress sends `/api/*` to the Rust entrypoint; there is no Python fallback. Current auth routes publish v2, retained v1, and unversioned aliases. Registration/login issue bearer access tokens and refresh cookies; refresh rotates credentials, logout revokes them, and the access-token extractor rejects refresh tokens.
 
-## Authentication and owned reads
+`auth::AuthenticatedUser` verifies HS256 access credentials, expiry, string subject/jti, token type, revocation, user existence, and the password-change credential epoch. Reading-history `ReadingSession` rows are not login credentials. `db::require_owned_thread` and `db::require_owned_reading_session` scope SQL by `user_id`; missing and foreign rows both return 404.
 
-`auth::AuthenticatedUser` is an Axum extractor with an opaque identity. It
-verifies HS256 access credentials, optional NumericDate claims, JTI revocation,
-user existence and the password-change epoch using Python's current semantics.
-There is no disabled-user column in the canonical Python model. Refresh tokens
-are rejected; authentication neither rotates cookies nor creates reading history.
-The signing secret must match Python's `SECRET_KEY` before any future integration.
-
-`db::require_owned_thread` and `db::require_owned_reading_session` require that verified
-identity and scope SQL by `user_id`. Missing and foreign rows both return 404.
-These are foundations for later Roll handlers; no new public probe or partial
-bootstrap endpoint is mounted. Reading-history sessions do not authenticate users.
+See `docs/API.md` for route families and `docs/rate_limiting.md` for current auth throttling/lockout.
 
 Pool acquisition and query execution have bounded deadlines. Every checkout
 first proves the physical socket can carry a statement with a bounded read-only
@@ -254,7 +246,9 @@ cross-list graphs, corrupt inputs, and 20,000-entry acyclic and residual-cycle
 fixtures. Existing database loader parity verifies owner scoping and ignored
 historical dependencies before this pure validator runs.
 
-## Native reading-session bootstrap (#4307)
+## Historical native reading-session bootstrap foundation (#4307)
+
+> The Python parity commands and pre-cutover session behavior in this section are historical. Current session initialization is `POST /api/v2/reading-sessions`; `GET /api/v2/roll/bootstrap` is read-only. See `docs/RUST_ROLL_BOOTSTRAP_CONTRACT.md`.
 
 `reading_session::bootstrap` is an authenticated internal service entry point for
 response assembly. It is deliberately not mounted as a partial public bootstrap

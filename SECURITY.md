@@ -1,193 +1,98 @@
 # Security Documentation
 
-## Docker Security Configuration
+Comic Pile's maintained production deployment is Vercel static frontend output plus the native Rust API (`api/native_roll.rs`) and Neon PostgreSQL. Python is not an application runtime. The repository's Docker Compose files are for local development, disposable tests, CI, or rendered audits; they are not the production hosting architecture.
 
-### Non-Root User
-The application runs as a non-root user (`appuser`) for security:
+## Production trust boundaries
 
-```dockerfile
-RUN useradd --create-home --shell /bin/bash appuser
-USER appuser
+```text
+Internet → Vercel edge (TLS) → static React assets / native Rust API → Neon PostgreSQL
 ```
 
-**Benefits:**
-- If container is compromised, attacker has limited privileges
-- Prevents privilege escalation attacks
-- Follows security best practices
+- Vercel terminates public TLS. The native production configuration requires PostgreSQL `sslmode=require` and validates certificates/hostnames.
+- Browser API requests use bearer access tokens, an HttpOnly refresh cookie, and double-submit CSRF protection for authenticated state-changing requests.
+- Handlers enforce owner-scoped access and bounded input before database work. Missing and foreign-owned resources both return 404.
+- The standalone native service binds to loopback by default and refuses non-loopback development binds. Production binding and credentials are deployment configuration, not source defaults.
+- Neon is reachable only through the configured connection URL. Do not expose PostgreSQL directly to the public internet.
 
-### Secrets Management
+## Secrets
 
-#### Development Environment
-- `docker-compose.yml` contains hardcoded development passwords (acceptable for local development only)
-- `postgres_password` and `pgadmin_password` are placeholder credentials
+Production secrets belong in Vercel project environment variables and GitHub Actions secrets. Local `.env` files are ignored and must never be committed.
 
-#### Production Environment
-- Production runs on Vercel + Neon; secrets are configured as Vercel project environment variables and GitHub Actions secrets
-- `.env.production` remains in `.gitignore` to prevent committing secrets locally
-- Strong secrets must be generated with: `openssl rand -base64 32`
+- Generate strong random secrets (32+ bytes), for example with `openssl rand -base64 32`.
+- Use different credentials for development, CI, and production.
+- Rotate credentials after suspected exposure and redeploy so processes pick up the new values.
+- Never put secrets in command arguments, URLs committed to Git, logs, fixtures, issue comments, or PR text.
+- The local Compose passwords are disposable development placeholders, not production credentials.
 
-**Best Practices:**
-1. Never commit `.env.production` to version control
-2. Use different passwords for development and production
-3. Rotate secrets regularly
-4. Use strong, randomly generated secrets (32+ bytes)
+See `.env.example`, `native/roll-service/src/config.rs`, and `docs/DEPLOYMENT.md` for the supported variable names and production workflow.
 
-### Image Security
+## Browser security headers
 
-#### Base Image
-- Uses official `python:3.14-slim` image
-- Slim variants reduce attack surface by excluding unnecessary packages
+The built SPA's response headers are configured in `vercel.json`: Content Security Policy, HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, Referrer Policy, and Permissions Policy. These headers belong to the Vercel static-route contract; do not assume a function response inherits them.
 
-#### Dependencies
-- Minimal system packages installed (`libpq5`, `curl`)
-- `apt` cache cleaned after installation
-- Multi-stage build reduces final image size
+The native API adds its runtime marker and returns JSON errors without credentials, SQL, reset tokens, provider secrets, or raw upstream payloads. Authentication, CSRF, ownership checks, bounded parsing, and sanitized logging are enforced in Rust.
 
-### Network Security
+## Rate limiting and lockout
 
-#### Production Architecture
-```
-Internet → Vercel edge (TLS termination) → FastAPI API function → Neon PostgreSQL
-```
+There is no global SlowAPI/FastAPI middleware. Current native controls are scoped:
 
-**Security Features:**
-- TLS termination handled by the Vercel platform
-- Security headers applied by application middleware (`app/middleware/security_headers.py`) <!-- docs-path-check: ignore -->
-- Rate limiting enforced at the application layer (`app/middleware/rate_limit.py`) <!-- docs-path-check: ignore -->
-- Database reachable only through the configured Neon connection URL
+- process-local, bounded authentication throttles keyed by endpoint/client IP or refresh-token digest;
+- durable PostgreSQL failed-login lockout per username and client IP under advisory locks;
+- outbound GitHub issue-filing limits; and
+- ComicVine repair backoff/defer/fail behavior for provider throttling.
 
-### SSL/TLS Configuration
+See `docs/rate_limiting.md` and `native/roll-service/src/auth/handlers.rs` for exact limits and test-mode behavior.
 
-TLS certificates are provisioned and renewed automatically by the Vercel platform;
-no certificate files are stored in this repository. Application responses also declare
-HSTS via `SecurityHeadersMiddleware`
-(`max-age=63072000; includeSubDomains; preload` in production environments).
+## Health and operational evidence
 
-### Security Headers
+`GET /api/v2/health` is dependency-free process liveness. It does not prove database readiness. Production responses include Rust runtime/build/process identity, and deployment smoke checks verify the expected source revision. Verify database readiness with a real authenticated data request or the migration planner.
 
-The FastAPI application sets security headers through `SecurityHeadersMiddleware`
-(`app/middleware/security_headers.py`): <!-- docs-path-check: ignore -->
+See `docs/OPERATIONAL_HEALTH.md`, `docs/VERCEL_ARCHITECTURE.md`, and `docs/DEPLOYMENT.md`.
 
-```http
-Content-Security-Policy: default-src 'self'; ...
-Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
-X-Content-Type-Options: nosniff
-X-Frame-Options: DENY
-X-XSS-Protection: 1; mode=block
-Referrer-Policy: strict-origin-when-cross-origin
-Permissions-Policy: camera=(), microphone=(), geolocation=()
-```
+## Local and CI containers
 
-**Purpose:**
-- **CSP**: Restricts resource loading origins
-- **HSTS**: Forces HTTPS connections
-- **X-Frame-Options**: Prevents clickjacking
-- **X-Content-Type-Options**: Prevents MIME sniffing
-- **X-XSS-Protection**: XSS protection
-- **Referrer-Policy**: Controls referrer information
-- **Permissions-Policy**: Disables sensitive browser capabilities
+`docker-compose.yml` defines only PostgreSQL and pgAdmin for local development. Disposable test/audit topologies run the native Rust service and built frontend. `Dockerfile.ci` is a root-running CI tooling image, not a production application image. Do not reuse the retired Python application container or its `HEALTHCHECK` instructions.
 
-### Rate Limiting
+## Vulnerability and dependency review
 
-API endpoints are rate-limited in the application using slowapi
-(`app/middleware/rate_limit.py`, registered in `app/main.py`): <!-- docs-path-check: ignore -->
-
-**Configuration:**
-- Limits are applied per endpoint via the shared limiter
-- Requests are keyed by client IP address
-- Rate limiting responses return HTTP 429
-
-### Health Checks
-
-All services have health checks:
-
-**App Container:**
-```dockerfile
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-```
-
-**Database Container:**
-```yaml
-healthcheck:
-  test: ["CMD-SHELL", "pg_isready -U comicpile"]
-  interval: 10s
-  timeout: 5s
-  retries: 5
-```
-
-### Container Hardening Checklist
-
-✅ **Implemented:**
-- [x] Non-root user
-- [x] Minimal base image (slim)
-- [x] Multi-stage build
-- [x] Health checks on containers
-- [x] Secrets in environment variables (not code)
-- [x] .env.production in .gitignore
-- [x] TLS terminated by the Vercel platform
-- [x] Security headers in application middleware
-- [x] Rate limiting on API (slowapi)
-- [x] No direct database exposure
-- [x] Read-only file system where possible
-
-### Vulnerability Scanning
-
-Run vulnerability scans before deployment:
+Use the tools configured for the actual stack, for example:
 
 ```bash
-# Scan Docker image
-docker scout cves comic-pile:latest
-
-# Scan base image
-docker scout cves python:3.14-slim
-
-# Check for exposed secrets
+cargo audit
+pnpm audit
 git-secrets --scan
-
-# Check for dependencies with known vulnerabilities
-# (Requires setup of tools like Snyk or Dependabot)
 ```
 
-### Deployment Security Checklist
+Review Dependabot and repository CI failures before deployment. Do not treat a Python base-image scan as evidence for the deployed Rust function.
 
-Before deploying to production:
+## Deployment checklist
 
-- [ ] Generate strong secrets with `openssl rand -base64 32`
-- [ ] Update Vercel project environment variables with production values
-- [ ] Run vulnerability scan on Docker image
-- [ ] Test health checks locally
-- [ ] Verify no secrets in git history
-- [ ] Review .gitignore includes all sensitive files
-- [ ] Backup database before migration
-- [ ] Test rollback procedure
+- [ ] Production secrets are stored only in Vercel/GitHub secret stores.
+- [ ] The database URL requires TLS and the application and migration runner target the same database.
+- [ ] Required exact-head CI and independent review pass.
+- [ ] `/api/v2/health` reports the expected Rust source revision.
+- [ ] A real authenticated request succeeds; liveness alone is not database proof.
+- [ ] The previous READY production deployment remains available as the rollback candidate.
+- [ ] No credentials or reader data appear in logs, artifacts, or PR comments.
 
-### Incident Response
+## Incident response
 
-#### Compromised Secrets
-If secrets are leaked:
-1. Immediately rotate all secrets
-2. Rotate the affected Vercel project environment variables and GitHub Actions secrets
-3. Check audit logs for unauthorized access
-4. Redeploy so services pick up the new secrets
+### Compromised secrets
 
-#### Container Breach
-If container is compromised:
-1. Stop affected containers immediately
-2. Review container logs for indicators of compromise
-3. Rotate all secrets
-4. Update to latest base images with security patches
-5. Rebuild and redeploy containers
+1. Rotate the affected Vercel and GitHub Actions secrets.
+2. Revoke affected credentials/tokens and inspect audit logs.
+3. Redeploy the exact reviewed revision and verify health plus a real authenticated request.
+4. Record secret-free evidence in the existing incident/PR workflow.
 
-### Monitoring Recommendations
+### Database or deployment recovery
 
-- Monitor container logs for suspicious activity
-- Set up alerts for health check failures
-- Track rate limit violations
-- Regular security audits (quarterly)
+Use Neon's supported backup/restore or point-in-time recovery for production. Local restore tooling intentionally refuses non-loopback targets. A Vercel rollback also requires checking compatibility with the current Neon schema; application rollback does not downgrade the database.
 
-### Additional Resources
+See `docs/DATABASE_SAVE_LOAD.md` and `docs/VERCEL_DEPLOYMENT.md`.
 
-- [CIS Docker Benchmark](https://www.cisecurity.org/benchmark/docker)
-- [OWASP Docker Security](https://owasp.org/www-project-docker-security)
-- [Python Security](https://docs.python.org/3/security/index.html)
+## Additional resources
+
+- [OWASP Top Ten](https://owasp.org/www-project-top-ten/)
+- [Rust security guidance](https://doc.rust-lang.org/nomicon/)
+- [Vercel security](https://vercel.com/docs/security)
+- [Neon security](https://neon.tech/docs/introduction/security)
