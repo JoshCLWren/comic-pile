@@ -31,7 +31,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     const list = await listResponse.json() as { id: number }
 
     await page.goto(`/reading-lists/${list.id}`)
-    await expect(page.getByLabel('Name')).toHaveValue(`QA List Test 004P ${suffix}`)
+    await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(`QA List Test 004P ${suffix}`)
 
     // Delete confirms in-page, so automation can see and operate the dialog;
     // a native confirm would be auto-dismissed before any click could land.
