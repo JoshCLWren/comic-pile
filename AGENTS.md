@@ -143,7 +143,7 @@ ruff check .
 ty check --error-on-warning
 ```
 
-**Path-filtered ruff or ty is not a valid CI substitute.** Those two commands, with no path arguments, are the required lint/type pair. `bash scripts/lint.sh` runs that pair plus frontend ESLint; prefer it (or the two commands directly) as the local push gate.
+**Path-filtered ruff or ty is not a valid CI substitute.** Those two commands, with no path arguments, are the required lint/type pair. `bash scripts/lint.sh` runs additional repository static checks and frontend ESLint, but it does **not** invoke Ruff or ty; run the pair explicitly as well.
 
 **Forbidden as a push gate:**
 - `ruff check` or `ty check` limited to a file list
@@ -153,9 +153,9 @@ ty check --error-on-warning
 
 **Required:**
 1. Before the first Python commit of a session, run `bash scripts/install-git-hooks.sh` so Cursor's remapped `core.hooksPath` can still chain to `.git/hooks/pre-commit`.
-2. After the last Python edit, run `bash scripts/lint.sh` (or `ruff check .` and `ty check --error-on-warning`) against the whole repo.
+2. After the last Python edit, run `ruff check .` and `ty check --error-on-warning` against the whole repo, plus `bash scripts/lint.sh` for the other repository checks.
 3. Re-run after every later edit. A green run is invalid the moment sources change.
-4. Fix every ruff and ty finding locally. Do not use CI to discover them.
+4. Fix every Ruff, ty, lint, test, and build finding locally. Do not use CI to discover them.
 
 ## CORE PRINCIPLE: PR FEEDBACK TASKS ARE NOT DONE UNTIL PUSHED
 
@@ -194,8 +194,8 @@ For autonomous factory work, [docs/AUTONOMOUS_FACTORY_POLICY.md](docs/AUTONOMOUS
 Before pushing Python changes from a normal local checkout:
 1. Run `ruff check .` with no path arguments. Path-filtered ruff is not a valid CI substitute.
 2. Run `ty check --error-on-warning` with no path arguments. CI treats ty **warnings as failures**.
-3. Prefer `bash scripts/lint.sh` so ruff, ty, and frontend lint run as one gate.
-4. Run the focused Rust tests and frontend test files that cover the change.
+3. Run `bash scripts/lint.sh` for the additional repository static checks and frontend lint.
+4. Run the focused Python tooling tests that cover the change (`pytest tests/<affected>.py`) and any relevant contract checks.
 5. Fix every lint, type, test, and build failure before pushing.
 
 Before pushing frontend changes from a normal local checkout:
@@ -205,7 +205,11 @@ Before pushing frontend changes from a normal local checkout:
 4. Run focused Chromium Playwright coverage when the change affects browser behavior.
 5. Fix every failure caused or exposed by the change before pushing.
 
-**If E2E tests need a backend:** Run `make dev` first. The API runs on port 8000 and Vite runs on port 5173.
+**If E2E tests need the Vite development backend:** run `make dev` (native API on
+`:8010`, Vite on `:5173`) and set `BASE_URL=http://localhost:5173` for Playwright.
+The Docker test topology serves the same-origin app on `:8000`; use
+`BASE_URL=http://localhost:8000` with that topology. Playwright otherwise defaults
+to `:9000`.
 
 Never skip meaningful tests or use CI as a substitute for debugging a locally reproducible failure. Factory workers that cannot execute a local check in their runtime must state that limitation truthfully and rely only on the validation boundary permitted by the canonical factory policy.
 
@@ -243,7 +247,7 @@ Rust cutover. Do not recreate them or reintroduce Python application modules.
 
 ### Linting
 ```bash
-make lint                    # ruff + ty + frontend ESLint (scripts/lint.sh)
+make lint                    # repository static checks + frontend ESLint (scripts/lint.sh)
 ruff check .                 # Python tooling style; CI runs the whole repo
 ty check --error-on-warning  # Required Python tooling type check; warnings fail CI
 cd frontend && pnpm run lint  # Frontend ESLint
@@ -380,26 +384,27 @@ if thread.user_id != current_user.id {
 ```bash
 make setup
 make dev
-make verify-e2e
+BASE_URL=http://localhost:5173 make verify-e2e
 ```
 
-**Common Commands:** `npx playwright test --project=chromium` (all), `npx playwright test roll.spec.ts` (single file), `npx playwright test --ui` (interactive), `npx playwright test --headed` (browser visible), `npx playwright test --debug` (debug mode).
+For the Docker same-origin test topology, run `make docker-test-up` and use
+`BASE_URL=http://localhost:8000 make verify-e2e` instead.
+
+**Common Commands (from `frontend/`):** `pnpm exec playwright test --project=chromium` (all), `pnpm exec playwright test roll.spec.ts` (single file), `pnpm exec playwright test --ui` (interactive), `pnpm exec playwright test --headed` (browser visible), `pnpm exec playwright test --debug` (debug mode).
 
 ### API Tests
 
-API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Frontend coverage remains gated in CI; legacy Python product tests are no longer part of required CI during the Rust cutover.
+Rust API tests live in `native/roll-service/` and use async PostgreSQL test
+databases. DB-backed HTTP tests require `RUST_ROLL_TEST_DATABASE_URL` and fail
+with setup instructions when it is unset; never point them at production or a
+shared database. Run a focused module/filter, for example:
 
-**Key Fixtures (from `tests/conftest.py`)**: <!-- docs-path-check: ignore -->
-```python
-# Authenticated HTTP client
-async def test_example(auth_client, sample_data):
-    response = await auth_client.post("/api/roll/")
-    assert response.status_code == 200
-
-# Database session
-def test_db_example(db):
-    thread = db.get(Thread, 1)
+```bash
+cargo test -p comicpile-roll-service roll_offer
 ```
+
+Python tests under `tests/` cover repository tooling and contracts only. They do
+not provide API auth/database fixtures for a Python application.
 
 ### Docker Test Environment
 
@@ -509,10 +514,6 @@ conventions. Any query-key, cache-effect, or optimistic-update pattern must matc
 in `frontend/src/query/` (see `queryKeys.ts`, `queryClient.ts`, `cacheEffects.ts`) and the
 `frontend/src/hooks/` wrappers.
 
-## Cache Provider Selection
-
-
-
 ## Database Migrations
 
 ```bash
@@ -576,23 +577,21 @@ bash /path/to/rotisserie/factory/install/overlay.sh .
 GitHub Issues are the backlog and status source of truth. The former Markdown
 kanban is archived and must not be used to determine current status.
 
-Before choosing work, run:
-
-```bash
-make next-task
-```
+Before choosing work, inspect the open issue queue with GitHub and apply the
+selection priority in [docs/AUTONOMOUS_FACTORY_POLICY.md](docs/AUTONOMOUS_FACTORY_POLICY.md).
+This adopter checkout does not provide `make next-task` or `make start-task`
+targets; do not invent or depend on them.
 
 For a complete copy-paste execution prompt, read
 [prompts/agent-next-task.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/prompts/agent-next-task.md).
 
 **Local factory sessions**: load the [local-factory-next-task](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-next-task) skill
 ([local-factory-next-task](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-next-task/SKILL.md)) for the full startup flow — private
-worktree and port-slot claiming (so parallel local agents such as Codex never clobber each
-other's branches, artifacts, or ports), session bootstrap, how `make next-task` orders
-claimable work (priority, then oldest issue number), how to check factory leases (labels,
-claim markers) before claiming so a local session never interferes with the scheduled GitHub
-Action factories, the two-step atomic claim (`make start-task` + full factory label set with
-`factory:local`), and the handoff into the [local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session) skill.
+worktree and port-slot claiming, session bootstrap, lease inspection before
+claiming, atomic full label-set replacement with `factory:local`, and the handoff
+into the [local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session) skill.
+Where that upstream skill mentions adopter `make` wrappers, use the equivalent
+GitHub CLI/API operation instead; the wrappers are not present here.
 
 Agents with the `github-issue-kanban` skill should follow that skill. Other
 agents must read `docs/ISSUE_EXECUTION_PROTOCOL.md`, update the selected
@@ -609,8 +608,9 @@ for Josh.
 Before ending a turn involving an issue or PR:
 
 - ensure the issue and PR each have the truthful factory workflow state;
-- ensure exactly one next-action owner (`factory:unowned`, `factory:local`, or `factory:1` through
-  `factory:5`) is present where factory work is involved;
+- ensure exactly one next-action owner (`factory:unowned`, `factory:local`, or a
+  registered numeric `factory:<worker>` label) is present where factory work is
+  involved;
 - remove stale or mutually exclusive state and owner labels;
 - release expired ownership while preserving `factory:review` or `factory:changes-requested` when
   that remains the truthful next action;
