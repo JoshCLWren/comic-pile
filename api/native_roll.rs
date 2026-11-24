@@ -234,6 +234,10 @@ fn app() -> Router {
             "/api/v2/factory/github/dispatch",
             post(native_dispatch).options(native_dispatch),
         )
+        .route(
+            "/api/v2/factory/github/runs/{run_id}",
+            get(native_dispatch).options(native_dispatch),
+        )
         .route("/api/v2/identity-inbox", get(native_dispatch))
         .route("/api/v2/identity-inbox/issue-matches", get(native_dispatch))
         .route("/api/v2/identity-inbox/{mapping_id}", get(native_dispatch))
@@ -846,6 +850,8 @@ mod tests {
             ("OPTIONS", "/api/v2/factory/github/session"),
             ("POST", "/api/v2/factory/github/dispatch"),
             ("OPTIONS", "/api/v2/factory/github/dispatch"),
+            ("GET", "/api/v2/factory/github/runs/1"),
+            ("OPTIONS", "/api/v2/factory/github/runs/1"),
         ] {
             let response = app()
                 .call(

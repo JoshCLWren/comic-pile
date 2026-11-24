@@ -128,6 +128,15 @@ fn dispatch(token: &str, origin: &str, operation: &str) -> Request<Body> {
         .unwrap()
 }
 
+fn dispatch_details(run_id: u64) -> String {
+    json!({
+        "workflow_run_id": run_id,
+        "run_url": format!("https://api.github.com/repos/JoshCLWren/comic-pile/actions/runs/{run_id}"),
+        "html_url": format!("https://github.com/JoshCLWren/comic-pile/actions/runs/{run_id}"),
+    })
+    .to_string()
+}
+
 fn seconds() -> usize {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -297,13 +306,18 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
     fake.push_ok(
         StatusCode::OK,
         HeaderMap::new(),
-        Bytes::from_static(br#"{"id":1234}"#),
+        Bytes::from(dispatch_details(1234)),
     );
     let accepted = send(&state, dispatch(&session_token, PAGES_ORIGIN, "doctor_fix")).await;
     assert_eq!(accepted.status(), StatusCode::ACCEPTED);
     let payload: Value =
         serde_json::from_slice(&to_bytes(accepted.into_body(), 4096).await.unwrap()).unwrap();
-    assert_eq!(payload["result"], "submitted");
+    assert_eq!(payload["result"], "accepted");
+    assert_eq!(payload["run_id"], 1234);
+    assert_eq!(
+        payload["run_url"],
+        "https://github.com/JoshCLWren/comic-pile/actions/runs/1234"
+    );
     let calls = fake.calls();
     assert_eq!(calls.len(), 3);
     let workflow = &calls[2];
@@ -349,4 +363,439 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
         format!("{PAGES_URL}#rotisserie_error=not_admin")
     );
     assert_eq!(fake.calls().len(), 5);
+}
+
+const WRITE_OPERATIONS: [&str; 18] = [
+    "run",
+    "cancel",
+    "prioritize",
+    "sync",
+    "unstick",
+    "settings",
+    "provider_switch",
+    "model_switch",
+    "incident_start",
+    "incident_stop",
+    "doctor_fix",
+    "release_expired",
+    "claim",
+    "finish",
+    "labels",
+    "estimate_neon",
+    "close",
+    "backoffs_reset",
+];
+const WORKFLOWS: &str = "/repos/JoshCLWren/comic-pile/actions/workflows";
+
+async fn operator_state() -> (Arc<AppState>, tokio::sync::MutexGuard<'static, ()>, String) {
+    let (state, guard) = database().await;
+    std::env::set_var("ROTISSERIE_ADMIN_GITHUB_IDS", "");
+    std::env::set_var("GITHUB_TOKEN", "synthetic-workflow-token");
+    let token = signed_session(&OWNER_ID.to_string(), seconds() + 300);
+    (state, guard, token)
+}
+
+fn dispatch_body(token: &str, body: Value) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri("/api/v2/factory/github/dispatch")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::ORIGIN, PAGES_ORIGIN)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
+fn run_request(token: &str, origin: &str, run_id: &str) -> Request<Body> {
+    Request::builder()
+        .method("GET")
+        .uri(format!("/api/v2/factory/github/runs/{run_id}"))
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::ORIGIN, origin)
+        .body(Body::empty())
+        .unwrap()
+}
+
+async fn json_body(response: Response<Body>) -> Value {
+    serde_json::from_slice(&to_bytes(response.into_body(), 1 << 21).await.unwrap()).unwrap()
+}
+
+fn push_json(fake: &comicpile_roll_service::outbound::RecordingFakeOutbound, body: Value) {
+    fake.push_ok(
+        StatusCode::OK,
+        HeaderMap::new(),
+        Bytes::from(body.to_string()),
+    );
+}
+
+fn workflow_run(run_id: u64, workflow: &str, status: &str) -> Value {
+    json!({
+        "id": run_id,
+        "path": format!(".github/workflows/{workflow}"),
+        "status": status,
+        "conclusion": if status == "completed" { json!("success") } else { Value::Null },
+        "html_url": format!("https://github.com/JoshCLWren/comic-pile/actions/runs/{run_id}"),
+    })
+}
+
+fn artifacts(run_id: u64, size: u64) -> Value {
+    json!({"total_count": 1, "artifacts": [{
+        "id": 77,
+        "name": format!("rotisserie-operator-{run_id}"),
+        "size_in_bytes": size,
+        "expired": false,
+    }]})
+}
+
+fn redirect_to(location: &str) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(header::LOCATION, location.parse().unwrap());
+    headers
+}
+
+/// A streamed archive like upload-artifact writes: zero sizes in the local
+/// header, real sizes in a data descriptor and the central directory.
+fn streamed_zip(name: &str, content: &[u8]) -> Vec<u8> {
+    let data = miniz_oxide::deflate::compress_to_vec(content, 6);
+    let sizes = [data.len() as u32, content.len() as u32];
+    let mut zip = Vec::new();
+    zip.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
+    zip.extend_from_slice(&[20, 0, 8, 0, 8, 0]);
+    zip.extend_from_slice(&[0; 16]);
+    zip.extend_from_slice(&(name.len() as u16).to_le_bytes());
+    zip.extend_from_slice(&[0; 2]);
+    zip.extend_from_slice(name.as_bytes());
+    zip.extend_from_slice(&data);
+    zip.extend_from_slice(&0x0807_4b50u32.to_le_bytes());
+    zip.extend_from_slice(&[0; 4]);
+    sizes
+        .iter()
+        .for_each(|size| zip.extend_from_slice(&size.to_le_bytes()));
+    let directory = zip.len() as u32;
+    zip.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
+    zip.extend_from_slice(&[20, 0, 20, 0, 8, 0, 8, 0]);
+    zip.extend_from_slice(&[0; 8]);
+    sizes
+        .iter()
+        .for_each(|size| zip.extend_from_slice(&size.to_le_bytes()));
+    zip.extend_from_slice(&(name.len() as u16).to_le_bytes());
+    zip.extend_from_slice(&[0; 12]);
+    zip.extend_from_slice(&0u32.to_le_bytes());
+    zip.extend_from_slice(name.as_bytes());
+    let directory_len = zip.len() as u32 - directory;
+    zip.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
+    zip.extend_from_slice(&[0, 0, 0, 0, 1, 0, 1, 0]);
+    zip.extend_from_slice(&directory_len.to_le_bytes());
+    zip.extend_from_slice(&directory.to_le_bytes());
+    zip.extend_from_slice(&[0; 2]);
+    zip
+}
+
+#[tokio::test]
+async fn dispatch_accepts_every_rotisserie_operation_and_routes_reads() {
+    let (state, _db, token) = operator_state().await;
+    let fake = state.recording_fake().unwrap();
+
+    for (index, operation) in WRITE_OPERATIONS.iter().enumerate() {
+        let run_id = 500 + index as u64;
+        fake.push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(dispatch_details(run_id)),
+        );
+        let response = send(
+            &state,
+            dispatch_body(
+                &token,
+                json!({"operation": operation, "request_id": "request-1"}),
+            ),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::ACCEPTED, "{operation}");
+        let payload = json_body(response).await;
+        assert_eq!(payload["run_id"], run_id, "{operation}");
+        assert_eq!(payload["request_id"], "request-1");
+        let call = fake.calls().pop().unwrap();
+        assert_eq!(
+            call.path,
+            format!("{WORKFLOWS}/rotisserie-operator.yml/dispatches"),
+            "{operation}"
+        );
+    }
+
+    fake.push_ok(
+        StatusCode::OK,
+        HeaderMap::new(),
+        Bytes::from(dispatch_details(900)),
+    );
+    let read = json!({
+        "operation": "read",
+        "request_id": "0b8f6d2e-6f4f-4a51-9f3c-3d1f0f8a2b11",
+        "reads": [{"name": "leases"}],
+    });
+    let response = send(&state, dispatch_body(&token, read.clone())).await;
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    let payload = json_body(response).await;
+    assert_eq!(payload["run_id"], 900);
+    assert_eq!(
+        payload["run_url"],
+        "https://github.com/JoshCLWren/comic-pile/actions/runs/900"
+    );
+    assert_eq!(payload["request_id"], read["request_id"]);
+    let call = fake.calls().pop().unwrap();
+    assert_eq!(
+        call.path,
+        format!("{WORKFLOWS}/rotisserie-operator-read.yml/dispatches")
+    );
+    let body: Value = serde_json::from_slice(&call.body).unwrap();
+    let forwarded: Value =
+        serde_json::from_str(body["inputs"]["request"].as_str().unwrap()).unwrap();
+    assert_eq!(forwarded, read);
+
+    // An accepted dispatch without run details still succeeds without a run.
+    fake.push_ok(StatusCode::NO_CONTENT, HeaderMap::new(), Bytes::new());
+    let response = send(&state, dispatch_body(&token, json!({"operation": "claim"}))).await;
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    let payload = json_body(response).await;
+    assert_eq!(payload["run_id"], Value::Null);
+    assert_eq!(payload["result"], "accepted");
+
+    let calls_before = fake.calls().len();
+    for rejected in [
+        json!({"operation": "arbitrary_shell"}),
+        json!({"operation": "Read"}),
+        json!({"operation": "doctor"}),
+        json!({"operation": ""}),
+        json!({}),
+        json!({"operation": "read", "request_id": "bad id"}),
+        json!({"operation": "run", "request_id": 7}),
+        json!({"operation": "run", "request_id": "short"}),
+        json!({"operation": "read", "reads": "x".repeat(5000)}),
+    ] {
+        let response = send(&state, dispatch_body(&token, rejected.clone())).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{rejected}");
+    }
+    assert_eq!(
+        fake.calls().len(),
+        calls_before,
+        "rejected commands reached GitHub"
+    );
+}
+
+#[tokio::test]
+async fn run_status_enforces_session_origin_and_refuses_foreign_workflows() {
+    let (state, _db, token) = operator_state().await;
+    let fake = state.recording_fake().unwrap();
+
+    let expired = signed_session(&OWNER_ID.to_string(), seconds().saturating_sub(1));
+    let outsider = signed_session("77", seconds() + 300);
+    for (session, origin, run_id, expected) in [
+        (
+            token.as_str(),
+            "https://attacker.example",
+            "5",
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            "forged-session",
+            PAGES_ORIGIN,
+            "5",
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            expired.as_str(),
+            PAGES_ORIGIN,
+            "5",
+            StatusCode::UNAUTHORIZED,
+        ),
+        (outsider.as_str(), PAGES_ORIGIN, "5", StatusCode::FORBIDDEN),
+        (token.as_str(), PAGES_ORIGIN, "abc", StatusCode::NOT_FOUND),
+        (
+            token.as_str(),
+            PAGES_ORIGIN,
+            "123456789012345678901",
+            StatusCode::NOT_FOUND,
+        ),
+    ] {
+        let response = send(&state, run_request(session, origin, run_id)).await;
+        assert_eq!(response.status(), expected, "{origin} {run_id}");
+        assert_eq!(
+            header_text(&response, header::ACCESS_CONTROL_ALLOW_ORIGIN),
+            PAGES_ORIGIN
+        );
+    }
+    assert!(
+        fake.calls().is_empty(),
+        "rejected run lookups reached GitHub"
+    );
+
+    push_json(fake, workflow_run(41, "ci.yml", "completed"));
+    let foreign = send(&state, run_request(&token, PAGES_ORIGIN, "41")).await;
+    assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
+    push_json(
+        fake,
+        workflow_run(99, "rotisserie-operator.yml", "completed"),
+    );
+    let mismatched = send(&state, run_request(&token, PAGES_ORIGIN, "42")).await;
+    assert_eq!(mismatched.status(), StatusCode::NOT_FOUND);
+    fake.push_ok(StatusCode::NOT_FOUND, HeaderMap::new(), Bytes::new());
+    let missing = send(&state, run_request(&token, PAGES_ORIGIN, "43")).await;
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    // GitHub's own 401 or 403 must not sign the page out.
+    fake.push_ok(StatusCode::FORBIDDEN, HeaderMap::new(), Bytes::new());
+    let denied = send(&state, run_request(&token, PAGES_ORIGIN, "44")).await;
+    assert_eq!(denied.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let calls = fake.calls();
+    assert_eq!(calls.len(), 4);
+    assert_eq!(
+        calls[0].path,
+        "/repos/JoshCLWren/comic-pile/actions/runs/41"
+    );
+    assert!(
+        calls[0]
+            .headers
+            .iter()
+            .any(|(name, value)| name == "Authorization"
+                && value == "Bearer synthetic-workflow-token")
+    );
+
+    push_json(
+        fake,
+        workflow_run(45, "rotisserie-operator-read.yml", "in_progress"),
+    );
+    let running = send(&state, run_request(&token, PAGES_ORIGIN, "45")).await;
+    assert_eq!(running.status(), StatusCode::OK);
+    let payload = json_body(running).await;
+    assert_eq!(payload["run_id"], 45);
+    assert_eq!(payload["status"], "in_progress");
+    assert_eq!(payload["conclusion"], Value::Null);
+    assert_eq!(payload["result"], Value::Null);
+    assert_eq!(
+        payload["run_url"],
+        "https://github.com/JoshCLWren/comic-pile/actions/runs/45"
+    );
+    assert_eq!(fake.calls().len(), 5, "an unfinished run downloads nothing");
+}
+
+#[tokio::test]
+async fn completed_run_returns_the_artifact_json_and_caps_its_size() {
+    let (state, _db, token) = operator_state().await;
+    let fake = state.recording_fake().unwrap();
+    let storage = "https://productionresultssa1.blob.core.windows.net/actions/77.zip?sig=synthetic";
+    let envelope = json!({"request_id": "req-9", "kind": "read", "exit_code": 0, "reads": []});
+
+    push_json(
+        fake,
+        workflow_run(60, "rotisserie-operator-read.yml", "completed"),
+    );
+    push_json(fake, artifacts(60, 300));
+    fake.push_ok(StatusCode::FOUND, redirect_to(storage), Bytes::new());
+    fake.push_ok(
+        StatusCode::OK,
+        HeaderMap::new(),
+        Bytes::from(streamed_zip(
+            "rotisserie-result.json",
+            envelope.to_string().as_bytes(),
+        )),
+    );
+    let response = send(&state, run_request(&token, PAGES_ORIGIN, "60")).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = json_body(response).await;
+    assert_eq!(payload["status"], "completed");
+    assert_eq!(payload["conclusion"], "success");
+    assert_eq!(payload["result"], envelope);
+    let calls = fake.calls();
+    assert_eq!(calls.len(), 4);
+    assert_eq!(
+        calls[1].path,
+        "/repos/JoshCLWren/comic-pile/actions/runs/60/artifacts?name=rotisserie-operator-60&per_page=10"
+    );
+    assert_eq!(
+        calls[2].path,
+        "/repos/JoshCLWren/comic-pile/actions/artifacts/77/zip"
+    );
+    assert_eq!(calls[3].host, "productionresultssa1.blob.core.windows.net");
+    assert_eq!(calls[3].path, "/actions/77.zip?sig=synthetic");
+    assert!(
+        !calls[3]
+            .headers
+            .iter()
+            .any(|(name, _)| name == "Authorization"),
+        "the GitHub token must not reach artifact storage"
+    );
+
+    // No artifact yet, or an expired one, gives a null result.
+    push_json(
+        fake,
+        workflow_run(61, "rotisserie-operator.yml", "completed"),
+    );
+    push_json(fake, json!({"total_count": 0, "artifacts": []}));
+    let payload = json_body(send(&state, run_request(&token, PAGES_ORIGIN, "61")).await).await;
+    assert_eq!(payload["result"], Value::Null);
+    push_json(
+        fake,
+        workflow_run(62, "rotisserie-operator.yml", "completed"),
+    );
+    push_json(fake, artifacts(62, 300));
+    fake.push_ok(StatusCode::GONE, HeaderMap::new(), Bytes::new());
+    let payload = json_body(send(&state, run_request(&token, PAGES_ORIGIN, "62")).await).await;
+    assert_eq!(payload["result"], Value::Null);
+
+    // A declared size over 1 MB is refused before any download.
+    let before = fake.calls().len();
+    push_json(
+        fake,
+        workflow_run(63, "rotisserie-operator.yml", "completed"),
+    );
+    push_json(fake, artifacts(63, 1024 * 1024 + 1));
+    let response = send(&state, run_request(&token, PAGES_ORIGIN, "63")).await;
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(fake.calls().len(), before + 2);
+
+    // An archive that streams more than 1 MB is refused.
+    push_json(
+        fake,
+        workflow_run(64, "rotisserie-operator.yml", "completed"),
+    );
+    push_json(fake, artifacts(64, 300));
+    fake.push_ok(StatusCode::FOUND, redirect_to(storage), Bytes::new());
+    fake.push_ok(
+        StatusCode::OK,
+        HeaderMap::new(),
+        Bytes::from(vec![b'P'; 1024 * 1024 + 1]),
+    );
+    let response = send(&state, run_request(&token, PAGES_ORIGIN, "64")).await;
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+    // A small archive whose JSON file inflates past 1 MB is refused.
+    let inflated = format!("\"{}\"", " ".repeat(1024 * 1024 + 1));
+    push_json(
+        fake,
+        workflow_run(65, "rotisserie-operator.yml", "completed"),
+    );
+    push_json(fake, artifacts(65, 300));
+    fake.push_ok(StatusCode::FOUND, redirect_to(storage), Bytes::new());
+    fake.push_ok(
+        StatusCode::OK,
+        HeaderMap::new(),
+        Bytes::from(streamed_zip("rotisserie-result.json", inflated.as_bytes())),
+    );
+    let response = send(&state, run_request(&token, PAGES_ORIGIN, "65")).await;
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+    // A redirect off the artifact storage hosts is never followed.
+    let before = fake.calls().len();
+    push_json(
+        fake,
+        workflow_run(66, "rotisserie-operator.yml", "completed"),
+    );
+    push_json(fake, artifacts(66, 300));
+    fake.push_ok(
+        StatusCode::FOUND,
+        redirect_to("https://attacker.example/x.zip"),
+        Bytes::new(),
+    );
+    let response = send(&state, run_request(&token, PAGES_ORIGIN, "66")).await;
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(fake.calls().len(), before + 3);
 }
