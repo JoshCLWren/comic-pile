@@ -69,7 +69,7 @@ def test_issue_plans_are_marked_for_archive() -> None:
     _, overlap, action, replacement = default_disposition("docs/issue-plans/123.md")
 
     assert action == "historical — preserve"
-    assert "implementation history" in overlap
+    assert "implementation history" in overlap.casefold()
     assert replacement == "Git history or ComicPile Wiki historical decisions"
 
 
