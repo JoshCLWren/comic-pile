@@ -58,6 +58,7 @@
 .priority-inline{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
 .priority-inline select{background:#111a25;color:var(--text);padding:8px;border:1px solid var(--line);border-radius:8px}
 @media(max-width:740px){.main{padding:16px 12px 32px}.model-list{grid-template-columns:1fr}.kpi{padding:10px}.kpi .value{font-size:23px}.advanced summary .hint{display:none}}
+.recap-h{font-size:13px;margin:18px 0 6px}.recap-verdict{font-size:17px}
 </style>
 <meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; script-src &#39;unsafe-inline&#39;; style-src &#39;unsafe-inline&#39;; connect-src https://raw.githubusercontent.com https://comic-pile.vercel.app; img-src data:; base-uri &#39;none&#39;; form-action &#39;none&#39;; frame-ancestors &#39;none&#39;"></head>
 <body>
@@ -80,6 +81,7 @@
  <header class="top"><div><div class="eyebrow">Factory operations</div><h1 class="title" id="page-title">Control room</h1><p class="sub" id="page-sub">Real workers, real claims, and one deliberate place to start work.</p></div><div class="top-actions"><div class="repo" id="repository"></div><span id="operation-status" class="hint" role="status" aria-live="polite"></span><button class="button ghost" id="refresh">↻ Refresh</button></div></header>
  <div role="status" aria-live="polite" class="message" id="message"></div>
  <section class="view active" id="overview">
+  <section class="panel" id="recap-panel" style="margin-bottom:18px"><div class="panel-header"><div><h2>Morning recap</h2><p class="section-desc">What the factory did in the last 12 hours, the answer first.</p></div><button class="button small" id="recap-refresh">Refresh recap</button></div><div class="panel-body" id="overview-recap"><div class="empty">Loading the recap…</div></div></section>
   <div class="kpis">
    <div class="kpi"><div class="name">Active workers</div><div class="value" id="k-workers">···</div><div class="detail">Current claims</div></div>
    <div class="kpi"><div class="name">Merged in 12 hours</div><div class="value" id="k-merged">···</div><div class="detail">Verified GitHub merges</div></div>
@@ -88,7 +90,7 @@
   </div>
   <div class="two-col">
    <div class="stack">
-    <section class="panel"><div class="panel-header"><div><h2>Start a worker <span style="color:var(--ember)">↗</span></h2><p class="section-desc">Same dispatch and guardrails as <code>rotisserie factory run</code>.</p></div><span class="pill">Operator action</span></div>
+    <section class="panel"><div class="panel-header"><div><h2>Start a worker <span style="color:var(--ember)">↗</span></h2><p class="section-desc">Same dispatch and guardrails as <code>baste run</code>.</p></div><span class="pill">Operator action</span></div>
      <div class="panel-body">
       <form id="launcher">
        <div class="form-grid"><div class="field"><label for="provider">Provider</label><select id="provider" required><option value="">Loading providers…</option></select></div><div class="field"><label for="model">Model</label><select id="model" required disabled><option value="auto">Loading models…</option></select></div></div>
@@ -122,14 +124,14 @@
  <section class="view" id="models"><div class="panel"><div class="panel-header"><div><h2>Available models</h2><p class="section-desc">Actual model IDs discovered from each provider. Listed does not guarantee quota.</p></div><button class="button small" id="models-refresh">Refresh models</button></div><div class="panel-body"><div class="page-controls"><select id="catalog-provider" aria-label="Filter by provider"><option value="">Loading providers…</option></select><input id="model-search" type="search" placeholder="Find a model…" aria-label="Search models"></div><div id="catalog-summary" class="hint"></div><div id="model-catalog" class="model-list spaced"><div class="empty">Select a provider to see its models.</div></div></div></div>
   <section class="panel spaced"><div class="panel-header"><div><h2>Provider switches</h2><p class="section-desc">The next dispatcher tick skips a provider or model that is off. Running work continues.</p></div></div><div class="panel-body" id="provider-switches"><div class="empty">Loading providers…</div></div></section></section>
  <section class="view" id="settings"><div class="panel"><div class="panel-header"><div><h2>Factory settings</h2><p class="section-desc">Values come from repository variables and factory defaults; updates take effect on the next run.</p></div></div><div class="panel-body" id="settings-content"></div></div></section>
- <section class="view" id="health"><div class="panel"><div class="panel-header"><div><h2>Diagnostics</h2><p class="section-desc">Scheduler freshness, product CI, provider failures and main health.</p></div><button class="button small" id="doctor-refresh">Run checks</button></div><div class="panel-body"><div class="page-controls"><button class="button" id="doctor-fix">Apply safe doctor repairs</button><button class="button" id="limits-read">GitHub API limits</button><button class="button" id="backoffs-read">Backoffs</button><button class="button danger" id="backoffs-reset">Reset quota backoffs</button></div><div id="limits-content"></div><div id="health-content"></div></div></div>
+ <section class="view" id="health"><div class="panel"><div class="panel-header"><div><h2>Diagnostics</h2><p class="section-desc">Scheduler freshness, product CI, provider failures and main health.</p></div><button class="button small" id="doctor-refresh">Run checks</button></div><div class="panel-body"><div class="page-controls"><button class="button" id="doctor-fix">Apply safe doctor repairs</button><button class="button" id="limits-read">GitHub API limits</button><button class="button" id="backoffs-read">Backoffs</button><button class="button" id="db-usage-read">Database usage</button><button class="button danger" id="backoffs-reset">Reset quota backoffs</button></div><div id="limits-content"></div><div id="health-content"></div></div></div>
   <section class="panel spaced"><div class="panel-header"><div><h2>Label doctor</h2><p class="section-desc">Audits claim and lifecycle labels in a GitHub Actions run. A dry run changes nothing.</p></div></div><div class="panel-body"><div class="page-controls"><button class="button" id="labels-dry-run">Start dry run</button><button class="button danger" id="labels-repair">Start repair</button></div><p class="hint">Each button starts a GitHub run and returns. Open the run link to read its report.</p></div></section></section>
  <div class="footer">Rotisserie Control Room · GitHub Pages · Published snapshot for public views · Live views and operator actions run in GitHub Actions after sign-in</div>
 </main></div>
 <script>
 "use strict";
 (function () {
-const CONTRACT = {"public_reads": ["doctor", "outcomes", "report", "stats", "status"], "live_reads": ["backoffs", "checks", "conflicts", "estimate", "failures", "follow", "history", "incident", "leases", "limits", "models", "providers", "review", "runs", "settings", "unstick", "why"], "write_operations": ["backoffs_reset", "cancel", "claim", "close", "doctor_fix", "estimate_neon", "finish", "incident_start", "incident_stop", "labels", "model_switch", "prioritize", "provider_switch", "release_expired", "run", "settings", "sync", "unstick"], "max_batch": 8};
+const CONTRACT = {"public_reads": ["db-usage", "doctor", "outcomes", "report", "stats", "status"], "live_reads": ["backoffs", "checks", "conflicts", "estimate", "failures", "follow", "history", "incident", "leases", "limits", "models", "providers", "recap", "review", "runs", "settings", "unstick", "why"], "write_operations": ["backoffs_reset", "cancel", "claim", "close", "doctor_fix", "estimate_neon", "finish", "incident_start", "incident_stop", "labels", "model_switch", "prioritize", "provider_switch", "release_expired", "run", "settings", "sync", "unstick"], "max_batch": 8};
 /* Public reads: sanitized snapshots from the factory-status-live branch.
  * These work without sign-in. They are observations, never live evaluations.
  */
@@ -168,6 +170,24 @@ async function statistics() {
   const result = await cached("stats", "factory-stats.json");
   if (!Array.isArray(result.models)) throw Error("Published reliability data is unavailable.");
   return result;
+}
+async function dbUsage() {
+  const stats = await cached("stats", "factory-stats.json").catch(() => null);
+  const usage = stats && stats.db_usage;
+  if (!usage || typeof usage !== "object") {
+    return {exit_code: 0, status: "unpublished", source: "published",
+      reasons: ["No Turso usage has been published yet."]};
+  }
+  return {...usage, exit_code: 0, source: "published"};
+}
+function usageFinding(usage) {
+  const status = {ok: "ok", critical: "fail", not_configured: "ok", unpublished: "info"}[usage.status];
+  return {
+    check: "Database usage (published)",
+    status: status || "warn",
+    text: (usage.label ? usage.label + ": " : "") + usage.status + ". " +
+      (usage.reasons || []).join("; ")
+  };
 }
 function asWork(s) {
   const rows = [];
@@ -256,6 +276,7 @@ async function publicRead(name, params) {
   if (name === "stats") return reliability(await statistics(), params.get("window") || "7d");
   if (name === "providers") return historicalProviders(await statistics());
   if (name === "models") return historicalModels(await statistics(), params.get("provider"));
+  if (name === "db-usage") return dbUsage();
   const s = await snapshot();
   if (name === "status") return {exit_code: 0, working: asWork(s), generated_at: s.generated_at};
   if (name === "report") {
@@ -263,7 +284,9 @@ async function publicRead(name, params) {
     const merged = (s.merged_prs || []).filter(p => Date.parse(p.merged_at) >= cutoff);
     return {exit_code: 0, merged, published_at: s.generated_at};
   }
-  if (name === "doctor") return {exit_code: 0, findings: asFindings(s)};
+  if (name === "doctor") {
+    return {exit_code: 0, findings: [...asFindings(s), usageFinding(await dbUsage())]};
+  }
   if (name === "outcomes") {
     return {exit_code: 0, requests: (s.workers || [])
       .filter(w => w.attempt_outcome)
@@ -612,7 +635,7 @@ const gh=(ref)=>link("https://github.com/"+REPO+(String(ref).startsWith("pr:")?"
 const badge=(text,kind)=>'<span class="pill '+h(kind||"")+'"><span class="dot"></span>'+h(text)+'</span>';
 const empty=(txt)=>'<div class="empty">'+h(txt)+'</div>';
 const raw=(obj)=>'<pre class="raw">'+h(JSON.stringify(obj,null,2))+'</pre>';
-const state={page:"overview",providers:[],queue:null,status:null,report:null,doctor:null,catalogModels:[],mutating:false};
+const state={page:"overview",providers:[],queue:null,status:null,report:null,recap:null,doctor:null,catalogModels:[],mutating:false};
 const modelCache=new Map();
 let modelRequestSeq=0;
 let statusRequest=null;
@@ -685,6 +708,18 @@ function loadStatus(){
 }
 async function loadReport(){try{const d=await get("report",{since:"12h"});state.report=d;setText("k-merged",(d.merged||[]).length);el("overview-merged").innerHTML=(d.merged||[]).slice(0,3).map(x=>'<div class="item"><div class="item-title">'+link("https://github.com/"+REPO+"/pull/"+x.number,"#"+x.number)+" "+h(x.title)+"</div></div>").join("")||empty("No recent merges.")}catch(err){setText("k-merged","?");el("overview-merged").innerHTML=empty(err.message)}}
 function renderFindings(d){if(!Array.isArray(d.findings))return raw(d);return d.findings.map(f=>'<div class="item"><div class="item-head"><div><div class="item-title">'+h(f.check)+'</div><div class="meta">'+h(f.text||f.hint||"")+'</div></div>'+badge(f.status,f.status==="ok"?"good":f.status==="fail"?"bad":"")+'</div></div>').join("")||empty("No diagnostic findings.")}
+const recapPart=(title,rows)=>rows.length?'<h3 class="recap-h">'+h(title)+'</h3>'+rows.join(""):"";
+const recapRow=(text,meta,url)=>'<div class="item"><div class="item-title">'+(url?link(url,text):h(text))+'</div>'+(meta?'<div class="meta">'+h(meta)+'</div>':"")+'</div>';
+function renderRecap(d){const m=d.merged||{},w=d.went_wrong||{},p=d.providers||{};const merged=g=>(m[g]||[]).map(x=>recapRow(x.title,"#"+x.number,x.url));const wrongTitle="What went wrong"+(w.read!==w.failed_runs?" (newest "+w.read+" of "+w.failed_runs+" failed runs)":"");
+ return sourceNote(d)+'<div class="item-head"><div class="item-title recap-verdict">'+h(d.verdict)+'</div>'+badge(d.tone,d.tone==="good"?"good":d.tone==="rough"?"bad":"")+'</div><div class="hint">Since '+h(fmtDate(d.since))+'</div>'
+ +recapPart("Merged: product",merged("product"))+recapPart("Merged: factory",merged("factory"))
+ +recapPart("Needs you",(d.needs_you||[]).map(x=>recapRow(x.text,x.action,x.url)))
+ +recapPart(wrongTitle,(w.causes||[]).map(c=>recapRow(c.count+"× "+c.words+((c.providers||[]).length?" ("+c.providers.join(", ")+")":""),[c.example,c.fix?"Fix: "+c.fix:""].filter(Boolean).join(" · "))))
+ +recapPart("Providers (last 24 hours)",[...(p.delivered||[]).map(x=>recapRow(x.provider+" delivered "+x.delivered+" of "+x.runs+" runs")),...(p.wasted||[]).map(x=>recapRow(x.provider+" delivered nothing: "+x.failed+" of "+x.runs+" runs failed")),...(p.off||[]).map(x=>recapRow((x.model?x.provider+" "+x.model:x.provider)+" is switched off",x.reason||"no reason given")),...(p.paused||[]).map(x=>recapRow(x.provider+": "+x.models+" model(s) paused"+(x.why?" after "+x.why:""),"until "+fmtDate(x.until)))])
+ +recapPart("Stuck",(d.stuck||[]).map(x=>recapRow(x.text,"",x.url)))
+ +(d.database?recapPart("Database",[recapRow(d.database.text,d.database.status)]):"")
+ +((d.unread||[]).length?'<div class="hint">Could not read: '+h(d.unread.join(", "))+'</div>':"")}
+async function loadRecap(){el("overview-recap").innerHTML=empty("Reading what the factory did…");try{const d=await get("recap",{since:"12h"});state.recap=d;el("overview-recap").innerHTML=renderRecap(d)}catch(err){el("overview-recap").innerHTML=empty(err.message)}}
 async function loadDoctor(){try{const d=await get("doctor");state.doctor=d;setText("k-health",(d.findings||[]).filter(x=>x.status!=="ok").length);el("overview-health").innerHTML=renderFindings({...d,findings:(d.findings||[]).filter(x=>x.status!=="ok").slice(0,5)});if(!(d.findings||[]).some(x=>x.status!=="ok"))el("overview-health").innerHTML=empty("All checked systems healthy.");el("health-content").innerHTML=renderFindings(d)}catch(err){setText("k-health","?");el("overview-health").innerHTML=empty(err.message);el("health-content").innerHTML=empty(err.message)}}
 async function loadIncidents(){try{const d=await get("incident");const rows=d.incidents||[];el("incidents-content").innerHTML=rows.length?'<div class="table-wrap"><table class="table"><thead><tr><th>Issue</th><th>Attempts</th><th>State</th><th>Reason</th><th>Action</th></tr></thead><tbody>'+rows.map(i=>'<tr><td>#'+h(i.issue)+'</td><td>'+h(i.attempts)+'</td><td>'+badge(i.active?"active":"ended",i.active?"bad":"good")+'</td><td>'+h(i.reason||"")+'</td><td><button class="button small" data-incident-stop="'+h(i.issue)+'">Stop</button></td></tr>').join("")+'</tbody></table></div>':empty("No incident. Normal intake.")}catch(err){el("incidents-content").innerHTML=empty(err.message)}}
 async function loadQueue(){el("queue-content").innerHTML=empty("Evaluating the current work graph…");try{const d=await get("why");state.queue=d;setText("k-ready",(d.ready||[]).length);renderQueue()}catch(err){setText("k-ready","?");el("queue-content").innerHTML=empty(err.message)}}
@@ -868,6 +903,7 @@ async function refresh(){
  const page=state.page;
  el("refresh").disabled=true;el("refresh").classList.add("is-loading");
  try{
+  if(page==="overview"&&!state.recap)void loadRecap();
   if(page==="overview")await Promise.all([loadStatus(),loadReport(),loadDoctor(),loadQueue()]);
   if(page==="queue")await Promise.all([loadQueue(),loadIncidents()]);
   if(page==="workers")await Promise.all([loadStatus(),loadLeases()]);
@@ -912,7 +948,7 @@ document.body.addEventListener("click",e=>{const b=e.target.closest("button");if
 el("launcher").addEventListener("submit",e=>{e.preventDefault();if(state.mutating||el("model").disabled)return;const kind=el("work-kind").value;const number=el("target-number").value;if(kind!=="next"&&(!/^[1-9][0-9]*$/.test(number))){notice("Enter a valid issue or PR number.",true);return}const data={operation:"run",provider:el("provider").value,model:el("model").value||"auto",target:kind==="next"?"":target(),action:kind==="pr"?el("action").value:"advance",force:el("force").checked,take_over:el("take-over").checked};if(el("slot").value)data.slot=Number(el("slot").value);act(data,el("launch"))});
 ["provider","model","work-kind","target-number","action","slot","force","take-over"].forEach(id=>el(id).addEventListener("change",()=>{preview();if(id==="provider")loadModelOptions()}));
 el("model").addEventListener("input",preview);el("target-number").addEventListener("input",preview);
-el("refresh").onclick=refresh;el("queue-refresh").onclick=loadQueue;el("workers-refresh").onclick=loadStatus;el("leases-refresh").onclick=loadLeases;el("outcomes-refresh").onclick=loadOutcomes;el("models-refresh").onclick=()=>{modelCache.clear();loadProviders()};el("doctor-refresh").onclick=loadDoctor;el("queue-filter").oninput=renderQueue;el("queue-state").onchange=renderQueue;el("stats-window").onchange=loadStats;el("catalog-provider").onchange=loadCatalog;el("model-search").oninput=renderCatalog;el("view-plan").onclick=()=>showPlan(el("view-plan"));
+el("refresh").onclick=refresh;el("recap-refresh").onclick=loadRecap;el("queue-refresh").onclick=loadQueue;el("workers-refresh").onclick=loadStatus;el("leases-refresh").onclick=loadLeases;el("outcomes-refresh").onclick=loadOutcomes;el("models-refresh").onclick=()=>{modelCache.clear();loadProviders()};el("doctor-refresh").onclick=loadDoctor;el("queue-filter").oninput=renderQueue;el("queue-state").onchange=renderQueue;el("stats-window").onchange=loadStats;el("catalog-provider").onchange=loadCatalog;el("model-search").oninput=renderCatalog;el("view-plan").onclick=()=>showPlan(el("view-plan"));
 el("pr-select").onclick=()=>{const number=el("pr-number").value;if(!/^[1-9][0-9]*$/.test(number)){notice("Enter a valid PR number.",true);return}go("overview");el("work-kind").value="pr";el("target-number").value=number;preview()};
 el("pr-sync").onclick=()=>{const number=el("pr-number").value;if(!/^[1-9][0-9]*$/.test(number)){notice("Enter a valid PR number.",true);return}act({operation:"sync",target:"pr:"+number},el("pr-sync"))};
 el("main-checks").onclick=async()=>{el("pr-inspector").innerHTML=empty("Reading checks on main…");try{el("pr-inspector").innerHTML=renderChecks(ok(await get("checks",{target:"main"})))}catch(err){el("pr-inspector").innerHTML=empty(err.message)}};
@@ -920,6 +956,9 @@ el("incidents-refresh").onclick=loadIncidents;
 el("pr-close").onclick=()=>{const number=el("pr-number").value;if(!/^[1-9][0-9]*$/.test(number)){notice("Enter a valid PR number.",true);return}const reason=(window.prompt("Why close PR #"+number+"? The reason is posted as the closing comment, and the issue it delivers closes as not planned.")||"").trim();if(!reason){notice("Give a reason before closing.",true);return}if(window.confirm("Close PR #"+number+" and the issue it delivers?\nReason: "+reason))act({operation:"close",target:"pr:"+number,reason},el("pr-close"))};
 el("failures-read").onclick=async()=>{el("outcomes-content").innerHTML=empty("Reading failed worker runs from the last 10 hours…");try{const d=ok(await get("failures",{since:"10h"}));el("outcomes-content").innerHTML=sourceNote(d)+raw(d)}catch(err){el("outcomes-content").innerHTML=empty(err.message)}};
 el("backoffs-read").onclick=async()=>{el("limits-content").innerHTML=empty("Reading backoffs through the trusted workflow…");try{const d=ok(await get("backoffs"));el("limits-content").innerHTML=sourceNote(d)+raw(d)}catch(err){el("limits-content").innerHTML=empty(err.message)}};
+const usageRows=d=>{const m=d.metrics||{};return Object.entries({rows_read:"Rows read",rows_written:"Rows written",storage_bytes:"Storage (bytes)",bytes_synced:"Sync (bytes)"}).filter(([k])=>m[k]).map(([k,n])=>'<tr><td>'+h(n)+'</td><td>'+h(Number(m[k].organization).toLocaleString())+' of '+h(Number(m[k].allowance).toLocaleString())+'</td><td>'+h(m[k].share_used==null?"?":(m[k].share_used*100).toFixed(1)+"%")+'</td><td>'+h(Number(m[k].projected_organization).toLocaleString())+'</td></tr>').join("")};
+const renderUsage=d=>'<div class="item"><div class="item-head"><div class="item-title">Turso this month'+(d.label?' · '+h(d.label):'')+'</div>'+badge(d.status||"unknown",d.status==="critical"||d.status==="error"?"bad":d.status==="ok"?"good":"")+'</div><div class="meta">'+(d.resets_at?h(d.days_left)+' days left · resets '+h(fmtDate(d.resets_at))+' (exact hour unverified) · allowances: '+h(d.allowance_source)+'<br>':'')+h((d.reasons||[]).join("; "))+'<br>Source: '+h(d.source||"published")+' · checked '+h(d.checked_at?fmtDate(d.checked_at):"never")+'</div>'+(usageRows(d)?'<div class="table-wrap"><table class="table"><thead><tr><th>Metric</th><th>Used of allowance</th><th>Share</th><th>Projected month end</th></tr></thead><tbody>'+usageRows(d)+'</tbody></table></div>':'')+'</div>';
+el("db-usage-read").onclick=async()=>{el("limits-content").innerHTML=empty("Reading the published Turso usage…");try{const d=ok(await get("db-usage"));el("limits-content").innerHTML=sourceNote(d)+renderUsage(d)}catch(err){el("limits-content").innerHTML=empty(err.message)}};
 el("backoffs-reset").onclick=()=>{if(window.confirm("Clear quota and throttle backoffs and cap other streaks at one day? Real-failure streaks stay."))act({operation:"backoffs_reset"},el("backoffs-reset"))};
 el("limits-read").onclick=async()=>{el("limits-content").innerHTML=empty("Reading GitHub API limits…");try{const d=ok(await get("limits"));el("limits-content").innerHTML=sourceNote(d)+raw(d)}catch(err){el("limits-content").innerHTML=empty(err.message)}};
 el("incident-start").onclick=()=>{const number=el("incident-number").value;if(!/^[1-9][0-9]*$/.test(number)){notice("Enter a valid issue number.",true);return}const body={operation:"incident_start",issue:"issue:"+number,reason:el("incident-reason").value.trim()};if(el("incident-attempts").value)body.attempts=el("incident-attempts").value;if(window.confirm("Start an incident on #"+number+"? Free workers go to it first and other new intake pauses."))act(body,el("incident-start"))};
