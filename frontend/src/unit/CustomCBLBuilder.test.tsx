@@ -572,6 +572,35 @@ describe('CustomCBLBuilder', () => {
     anchorClick.mockRestore()
   })
 
+  it('keeps a pending deletion focused and undismissable, then restores focus after success', async () => {
+    let finishDelete: (() => void) | undefined
+    mocks.delete.mockImplementation(() => new Promise<void>((resolve) => {
+      finishDelete = resolve
+    }))
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    const dialog = screen.getByRole('dialog', { name: 'Delete custom CBL' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete custom CBL' }))
+    await waitFor(() => expect(mocks.delete).toHaveBeenCalledWith(9))
+
+    expect(dialog).toHaveFocus()
+    expect(within(dialog).getByRole('button', { name: 'Close modal' })).toBeDisabled()
+    expect(within(dialog).getByRole('status')).toHaveTextContent('Deleting…')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(dialog).toBeInTheDocument()
+
+    await act(async () => {
+      finishDelete?.()
+    })
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Custom CBL deleted.'))
+    expect(screen.queryByRole('dialog', { name: 'Delete custom CBL' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Custom CBLs' })).toHaveFocus()
+  })
+
   it('keeps the delete confirmation open with a visible error when deletion fails', async () => {
     mocks.delete.mockRejectedValue(new Error('Deletion unavailable'))
     renderBuilder()
