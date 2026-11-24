@@ -10,6 +10,10 @@ interface ModalProps {
   overlayClassName?: string
   autoFocus?: boolean
   size?: 'default' | 'large'
+  /** When true, Escape, backdrop click and the close button do not dismiss. */
+  closeDisabled?: boolean
+  /** Focus target used on close when the pre-open element is no longer stable. */
+  restoreFocusRef?: React.RefObject<HTMLElement | null>
 }
 
 // Module-level lock counter so nested/overlapping modals don't prematurely
@@ -38,12 +42,16 @@ export default function Modal({
   overlayClassName,
   autoFocus = true,
   size = 'default',
+  closeDisabled = false,
+  restoreFocusRef,
 }: ModalProps) {
   const [overlayElement, setOverlayElement] = useState<HTMLDivElement | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const onCloseRef = useRef(onClose)
+  const closeDisabledRef = useRef(closeDisabled)
+  const restoreFocusRefRef = useRef(restoreFocusRef)
   const titleId = useId()
 
   const modalIdRef = useRef<number | null>(null)
@@ -51,10 +59,13 @@ export default function Modal({
     modalIdRef.current = nextModalId++
   }
 
-  // Keep onCloseRef up to date without causing effect re-runs
+  // Keep refs up to date without causing effect re-runs
   useEffect(() => {
     onCloseRef.current = onClose
   })
+  useEffect(() => {
+    closeDisabledRef.current = closeDisabled
+  }, [closeDisabled])
 
   // OverlayPortal creates its shared root after the parent modal's first commit.
   // Wait until the portaled overlay node is attached before registering, layering,
@@ -81,7 +92,7 @@ export default function Modal({
       if (!isTopmostModal(modalId)) return
 
       if (e.key === 'Escape') {
-        onCloseRef.current()
+        if (!closeDisabledRef.current) onCloseRef.current()
         return
       }
 
@@ -131,8 +142,8 @@ export default function Modal({
 
       // Only restore focus when this modal was the topmost layer. Closing a
       // lower modal must not steal focus from the modal rendered above it.
-      if (wasTopmost) {
-        previousFocusRef.current?.focus()
+      if (wasTopmost && previousFocusRef.current?.isConnected) {
+        previousFocusRef.current.focus()
       }
     }
   }, [autoFocus, isOpen, overlayElement])
@@ -172,7 +183,7 @@ export default function Modal({
         <div
           className="absolute inset-0 bg-[#110e0a]/60 surface-glass touch-none"
           onClick={() => {
-            if (isTopmostModal(modalIdRef.current!)) onClose()
+            if (!closeDisabled && isTopmostModal(modalIdRef.current!)) onClose()
           }}
           aria-hidden="true"
         ></div>
@@ -196,7 +207,8 @@ export default function Modal({
               ref={closeButtonRef}
               type="button"
               onClick={onClose}
-              className="text-stone-500 hover:text-stone-300 transition-colors text-2xl leading-none py-1"
+              disabled={closeDisabled}
+              className="text-stone-500 hover:text-stone-300 transition-colors text-2xl leading-none py-1 disabled:opacity-50"
               aria-label="Close modal"
             >
               &times;
