@@ -145,8 +145,8 @@ Before deploying to production:
 
 - [ ] Generate strong secrets with `openssl rand -base64 32`
 - [ ] Update Vercel project environment variables with production values
-- [ ] Run vulnerability scan on Docker image
-- [ ] Test health checks locally
+- [ ] Run vulnerability scans (CI image and dependencies)
+- [ ] Test health checks locally (`GET /api/v2/health`)
 - [ ] Verify no secrets in git history
 - [ ] Review .gitignore includes all sensitive files
 - [ ] Backup database before migration
@@ -162,18 +162,18 @@ If secrets are leaked:
 4. Redeploy so services pick up the new secrets
 
 #### Container Breach
-If container is compromised:
+If a local/CI container is compromised:
 1. Stop affected containers immediately
 2. Review container logs for indicators of compromise
-3. Rotate all secrets
+3. Rotate all secrets that were reachable from the container
 4. Update to latest base images with security patches
-5. Rebuild and redeploy containers
+5. Rebuild and rerun
 
 ### Monitoring Recommendations
 
-- Monitor container logs for suspicious activity
+- Monitor service logs for suspicious activity
 - Set up alerts for health check failures
-- Track rate limit violations
+- Track rate limit violations and login lockouts
 - Regular security audits (quarterly)
 
 ### Additional Resources
