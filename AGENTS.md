@@ -24,32 +24,32 @@ remote factory WIP/backpressure limits do not block locals.
 Follow [`docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md`](docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md) for original user intent, reviewable PR boundaries, rollout decisions, deployment proof, and continuation handoffs. The owner's requested behavior, not a self-authored partial issue or PR, defines completion. Keep all existing security, ownership, CI, review, and deployment gates.
 
 
-## Owner-approved exception: consolidate Roll bootstrap on Rust v2 (2026-10-29)
+## Completed Roll bootstrap consolidation
 
-**Historical pre-cutover snapshot (production routing observed 2026-10-29, before #4383):**
+The owner-approved Roll bootstrap consolidation is complete: both live clients use
+`GET /api/v2/roll/bootstrap`, native Rust serves it, and the v1/legacy bootstrap
+GET aliases are retired. Authenticated production execution was verified on
+2026-11-07; see [the bootstrap contract](docs/RUST_ROLL_BOOTSTRAP_CONTRACT.md).
+Do not recreate a v1/legacy caller or a Python enrichment hop.
 
-| Public operation | Runtime at that snapshot | Caller at that snapshot |
-| --- | --- | --- |
-| `GET /api/v2/roll/bootstrap` | Native Rust | Dedicated QA probe; normal Roll UI still used v1 |
-| `POST /api/v2/reading-boundaries` | Python / FastAPI | Queue/Thread/optional Roll reading-boundary UI |
-| `GET /api/v2/reading-boundaries/{thread_id}` | Python / FastAPI | No direct frontend service caller established |
-| `GET /api/v1/roll/bootstrap` | Python / FastAPI | Normal Roll + protected recovery |
+The old whole-library excluded/inactive/blocked/stale counters were intentionally
+retired from the v2 payload; `pool_reason` and route overflow metadata are the
+current contract. Preserve actual frontend behavior and generated DTOs, not
+obsolete counter requirements from the migration campaign.
 
-**These are per-operation observations, not promises about an entire API version.** Never refer to "v2 is Rust," "all v2 migrated," "v1 is Python," or "migrate the v2 API" as if one version has a single language. For every migration decision, report **HTTP method + exact path + current destination + observed runtime + client consumers**. Read the current deployment rather than treating this historical snapshot as authoritative after additional deploys. The only approved API-version consolidation here concerns **Roll bootstrap GET**; it does not remove or rewrite either reading-boundaries v2 operation.
+## MANDATORY: API version is not an implementation language
 
-**Current checked-in state (after #4383, `main`):** both live clients request `GET /api/v2/roll/bootstrap` — `frontend/src/services/rollBootstrapApi.ts` and `frontend/src/services/protectedRollMutationApi.ts` — and `vercel.json` routes that method/path to `api/native_roll.rs`. That is route configuration and client wiring, not production runtime proof. The Python v1/legacy bootstrap GET handlers are already removed, so those retired paths fall through to the Python catch-all; the cleanup PR (#4350) removes the remaining dead Python v1 bootstrap projection code, the unused Python v2 response DTO, dead aliases and obsolete tests. The frozen Python v2 projection and parity oracle was retired by #4738 independent of #4299, which retains native v2. Production runtime proof of native v2 execution is still required before #4350 closes.
+The `v1`, `v2`, etc. segments in public HTTP paths refer **only to API contract
+versions**, not an implementation language or migration phase. Never describe an
+operation as “Python v1” or “Rust v2” without explicitly distinguishing the exact
+method/path from its observed runtime.
 
-For **Roll bootstrap GET only**, the owner explicitly chose to retire the old public operations `GET /api/v1/roll/bootstrap` and `GET /api/roll/bootstrap` and standardize on a **single `GET /api/v2/roll/bootstrap` implemented in native Rust**. This is a deliberate, approved API consolidation, not evidence that v1 implies Python or v2 implies Rust. It is the sole exception to the same-path language-port restriction below, and takes precedence over its prohibitions **for bootstrap only**. See #4335, #4299 and #4350. Other v1 operations (including `POST /api/v1/roll/`) remain unchanged until their own separate migration.
-
-**Do not port bootstrap v1 to Rust.** Complete and maintain Rust v2's canonical generated OpenAPI response, preserving all actual Roll frontend functionality that previously came from v1, including candidate tag chips and excluded/inactive counters and visible explanations, plus session/pending/recovery, die, rollable issue selection and routes. Extend the canonical v2 schema deliberately where required by those existing UI behaviors, with focused regressions for the known losses from closed PR #4369. Both live clients are already switched (#4383); do not re-add a v1/legacy caller or a Python enrichment hop. Prove successful authenticated native v2 execution **from actual production Roll and recovery requests**, not just health/401/deployed code. Require green exact-head required CI and independent exact-head semantic/acceptance review; Greptile is optional per current factory policy, and any Greptile finding must be fixed or rebutted with concrete evidence. Then remove the Python v1/legacy and Python v2 bootstrap implementations, exclusive dependencies, dead aliases and obsolete tests in the cleanup PR (#4350), preserving code still shared by other operations. Reverify prod and close issues only when no v1 bootstrap path remains.
-
-## MANDATORY: API version is not an implementation language (Rust cutover #4335)
-
-The `v1`, `v2`, etc. segments in public HTTP paths refer **only to API contract versions**, not Python, Rust, a new server, or a migration phase. Both Python and Rust can implement any API version. Never describe an operation as "Python v1" or "Rust v2" without explicitly distinguishing the exact path from its **observed/current** runtime.
-
-**A Rust cutover replaces the implementation behind the same HTTP method, URL and aliases.** First trace the live frontend/background/recovery callers to that precise path, its existing handler, its generated OpenAPI operation and its actual PostgreSQL statements and transaction behavior. Keep the client's URL and wire contract unchanged; never redirect `/api/v1/...` to `/api/v2/...` as a shortcut to reach Rust. Changing API versions is a separate, deliberate API change, not a language replacement.
-
-PR A must verify the same-path routing, generated contract, focused caller transport and SQL/bind/transaction semantics. After deployment, verify a successful real authenticated production request ran in Rust rather than Python, not just a health check, 401, response header, or READY deployment. PR B removes the **same-path** Python implementation only after proof, with exact-head green required CI and independent factory semantic/acceptance review for both PRs. Greptile is optional: its availability, credits, check, and confidence score are not merge gates. Existing actionable findings still require fixes or evidence-backed rebuttals. Do not infer runtime from a URL version, and do not claim migration from an unused parallel endpoint. Coordinate with active factory claims and permitted production bug fixes; do not bundle unrelated API refactors.
+A same-path runtime cutover must trace live callers, the route registry, generated
+OpenAPI and database semantics while preserving the client's URL and wire
+contract. Never redirect `/api/v1/...` to `/api/v2/...` merely to reach another
+runtime. Verify a successful authenticated production request in the intended
+runtime before removing the old implementation. Required CI and independent
+exact-head review remain mandatory; Greptile is optional.
 
 <!-- route-burndown:begin (generated by scripts/generate_route_burndown.mjs, issue #4739) -->
 
