@@ -433,6 +433,40 @@ def _verify_deployed(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ground_candidate(args: argparse.Namespace) -> int:
+    path: Path = args.candidate
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 32768:
+            raise RecoveryError("invalid or oversized release candidate")
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RecoveryError("release candidate is not readable JSON") from exc
+    if not isinstance(payload, dict):
+        raise RecoveryError("release candidate must be an object")
+    grounded, changed = ground_candidate(
+        payload,
+        repository=args.repository,
+        pr_number=args.pr,
+        changed_files=_changed_files,
+    )
+    if changed:
+        try:
+            path.write_text(
+                json.dumps(grounded, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            raise RecoveryError("grounded release candidate could not be written") from exc
+    _write_outputs(
+        {
+            "pr_number": args.pr,
+            "grounded_internal": changed,
+            "visibility": grounded.get("visibility", "public"),
+        }
+    )
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
