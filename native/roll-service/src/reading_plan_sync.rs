@@ -1524,17 +1524,16 @@ async fn sync_released_issues_for_user_with_rosters(
                 }
 
                 if !adopted_for_extension.is_empty() {
-                    // Best-effort plan extension for enabled sibling plans following this volume.
-                    for issue_id in &adopted_for_extension {
-                        extend_adopted_issue_to_following_plans(
-                            &tx,
-                            user_id,
-                            source.thread_id,
-                            source.external_identity_id,
-                            *issue_id,
-                        )
-                        .await?;
-                    }
+                    // Extend every enabled sibling source in one bounded, set-based
+                    // pass so roster size does not multiply source/list/graph queries.
+                    extend_adopted_issues_to_following_plans(
+                        &tx,
+                        user_id,
+                        source.thread_id,
+                        source.external_identity_id,
+                        &adopted_for_extension,
+                    )
+                    .await?;
                 }
 
                 if created_any || source_reused > 0 {
@@ -1596,11 +1595,11 @@ async fn sync_released_issues_for_user_with_rosters(
     }
 
     let synced_at = Utc::now();
-    for source_id in synced_source_ids {
+    if !synced_source_ids.is_empty() {
         let _ = connection
             .execute(
-                "UPDATE reading_plan_release_sources SET last_synced_at = $1 WHERE id = $2",
-                &[&synced_at, &source_id],
+                "UPDATE reading_plan_release_sources SET last_synced_at = $1 WHERE id = ANY($2)",
+                &[&synced_at, &synced_source_ids],
             )
             .await;
     }
@@ -1926,11 +1925,15 @@ mod tests {
     use std::sync::Arc;
 
     async fn test_state() -> Arc<AppState> {
+        test_state_with_pool(2).await
+    }
+
+    async fn test_state_with_pool(pool_size: usize) -> Arc<AppState> {
         let url = crate::test_support::database_url().await;
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-reading-plan-sync-test".into()),
-            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
             _ => None,
         })
         .expect("reading-plan-sync test config");
@@ -2105,7 +2108,8 @@ mod tests {
         serde_json::json!({
             "3874": [
                 {"id": "9001", "issue_number": "1", "store_date": "2024-01-01"},
-                {"id": "9002", "issue_number": "2", "store_date": "2024-01-02"}
+                {"id": "9002", "issue_number": "2", "store_date": "2024-01-02"},
+                {"id": "9003", "issue_number": "3", "store_date": "2024-01-03"}
             ]
         })
     }
@@ -2201,7 +2205,7 @@ mod tests {
         .await
         .expect("linked list sync");
         assert_eq!(report.failed_sources, 0);
-        assert_eq!(report.created_issues, 1);
+        assert_eq!(report.created_issues, 2);
         assert_eq!(report.reused_issues, 1);
 
         let connection = crate::db::checkout(&state)
@@ -2215,7 +2219,7 @@ mod tests {
             )
             .await
             .expect("list entries");
-        assert_eq!(entries.len(), 2);
+        assert_eq!(entries.len(), 3);
         assert_eq!(entries[0].get::<_, i32>(0), LIST_SYNC_FIRST_ISSUE_ID);
         assert_eq!(entries[0].get::<_, i32>(1), 7);
         assert_eq!(entries[0].get::<_, String>(2), "hold");
@@ -2223,6 +2227,9 @@ mod tests {
         assert_eq!(entries[1].get::<_, i32>(1), 8);
         assert_eq!(entries[1].get::<_, String>(2), "none");
         assert!(!entries[1].get::<_, bool>(3));
+        assert_eq!(entries[2].get::<_, i32>(1), 9);
+        assert_eq!(entries[2].get::<_, String>(2), "none");
+        assert!(!entries[2].get::<_, bool>(3));
         let second_issue_id: i32 = connection
             .query_one(
                 "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = '2'",
@@ -2232,6 +2239,15 @@ mod tests {
             .expect("created issue")
             .get(0);
         assert_eq!(entries[1].get::<_, i32>(0), second_issue_id);
+        let third_issue_id: i32 = connection
+            .query_one(
+                "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = '3'",
+                &[&LIST_SYNC_THREAD_ID],
+            )
+            .await
+            .expect("second created issue")
+            .get(0);
+        assert_eq!(entries[2].get::<_, i32>(0), third_issue_id);
 
         let nodes_json: Value = connection
             .query_one(
@@ -2268,7 +2284,7 @@ mod tests {
         .expect("idempotent retry");
         assert_eq!(retry.failed_sources, 0);
         assert_eq!(retry.created_issues, 0);
-        assert_eq!(retry.reused_issues, 2);
+        assert_eq!(retry.reused_issues, 3);
         let connection = crate::db::checkout(&state).await.expect("retry connection");
         let entry_count: i64 = connection
             .query_one(
@@ -2286,7 +2302,7 @@ mod tests {
             .await
             .expect("retry issues")
             .get(0);
-        assert_eq!((entry_count, issue_count), (2, 2));
+        assert_eq!((entry_count, issue_count), (3, 3));
     }
 
     #[tokio::test]
