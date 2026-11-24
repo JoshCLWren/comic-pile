@@ -24,6 +24,10 @@ ready. Every new push requires review and checks for the new commit. Enrollment
 alone never approves or authorizes merging your code. Fork CI runs without
 repository secrets or permission to publish container images.
 
+Do not create new GitHub issues or sub-issues for defects found during a PR
+without explicit owner authorization. Record out-of-scope discoveries in the
+existing issue or PR handoff.
+
 ## Pre-commit hook
 
 A pre-commit hook is installed in `.git/hooks/pre-commit` that automatically runs:
@@ -31,19 +35,26 @@ A pre-commit hook is installed in `.git/hooks/pre-commit` that automatically run
 - Run the shared lint script (`scripts/lint.sh`)
 
 The lint script runs:
-- Python compilation check
-- Full-repo ruff linting (`ruff check .`)
-- Any type usage check (ruff ANN401 rule)
-- Full-repo ty type checking (`ty check --error-on-warning`). Warnings fail this check, including `redundant-cast`. Do not recast a value after `isinstance` has already narrowed it.
+- Python compilation and prohibited-ignore/`Any` checks
+- JavaScript and frontend ESLint
+- HTML lint when legacy HTML templates are present
 
-Path-filtered ruff or ty is not a valid CI substitute. CI runs `ruff check .`
-and `ty check --error-on-warning` over the whole repository. Run both (or
-`bash scripts/lint.sh`) after your last Python edit and re-run after later
-edits.
+It does **not** run Ruff or ty. CI runs the required full-repo pair:
+
+```bash
+ruff check .
+ty check --error-on-warning
+```
+
+Path-filtered Ruff or ty is not a valid CI substitute. Run both after your last
+Python edit and re-run after later edits. Warnings from ty fail the check,
+including `redundant-cast`; do not recast a value after `isinstance` has already
+narrowed it.
 
 The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: ignore`, or `# pylint: ignore`.
 
-To test the hook manually: `make githook` or `bash scripts/lint.sh`
+To test the shared lint checks manually: `make githook` or `bash scripts/lint.sh`.
+Run `ruff check .` and `ty check --error-on-warning` separately for Python changes.
 
 ## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
 
@@ -86,8 +97,9 @@ Fix the problem instead.
    ```
 
 3. Run `make setup` to install frontend dependencies, start local PostgreSQL, and apply migrations.
-4. Run `make dev` and open the app at `http://localhost:5173`. The native Rust API serves `http://localhost:8010`.
-5. There is no seed command: register an account in the running app to create your first queue.
+4. For Python tooling tests or git hooks, create the tooling environment with `uv venv && uv sync --all-extras`. This is not required to run the application.
+5. Run `make dev` and open the app at `http://localhost:5173`. The native Rust API serves `http://localhost:8010`.
+6. There is no seed command: register an account in the running app to create your first queue.
 
 Production deploys run the same Rust migration runner (`native/migrate`) against
 Neon before the Vercel deployment. It reads `MIGRATE_DATABASE_URL`, falling back
@@ -100,8 +112,9 @@ application runtime to install.
 - HTTP handlers live in `native/roll-service/src/`, registered in
   `native/roll-service/src/lib.rs` and reached through the Vercel entrypoint
   `api/native_roll.rs`.
-- Request/response types are Rust `serde`/`utoipa` DTOs; the generated contract
-  is checked in at `native/contracts/v2-runtime.openapi.json`.
+- Request/response types are Rust `serde`/`utoipa` DTOs. Generated native contracts
+  are checked in under `native/contracts/`; the merged client contract is
+  `frontend/src/generated/openapi.json`.
 - Database access uses `deadpool-postgres`/`tokio-postgres`; shared pool and SQL
   helpers live in `native/roll-service/src/db.rs`.
 - Add new client resources under `/api/v2/*`. Route ingress is bot-owned
@@ -116,21 +129,22 @@ Contributors edit only `docs/api/route-fragments/*.json` source fragments
 `vercel.json`, `docs/api/v2-route-inventory.json`, the `AGENTS.md`
 `<!-- route-burndown -->` section, or `docs/api/route-fragments/vercel-rewrites.json` in a PR.
 Those files are bot-owned and are regenerated post-merge by
-`.github/workflows/regenerate-routes.yml` (runs
-`node scripts/generate_route_burndown.mjs` then
-`node scripts/generate_vercel_routes.mjs`). The `route-fragment-guard`
-workflow fails PRs that include generated files. `vercel.json` stays on
+`.github/workflows/regenerate-routes.yml` runs
+`node scripts/generate_route_burndown.mjs`, then
+`node scripts/generate_vercel_routes.mjs`, then the burndown generator again so
+its enrichment is preserved. Both `--check` gates must pass. The
+`route-fragment-guard` workflow fails PRs that include generated files. `vercel.json` stays on
 `main` for Vercel deploy (do not gitignore it); the previous `main` copy
 remains valid until the bot lands.
 
 ### Frontend Development
 
-- Install deps:    `pnpm install`
+- Install deps:    `pnpm install --frozen-lockfile`
 - Dev server:      `make dev` (starts Vite on :5173 and the native Rust API on :8010)
 - Build:           `pnpm --filter frontend run build` (outputs to `static/react/`)
 - Lint:            `pnpm --filter frontend run lint`
-- Unit tests:      `pnpm --filter frontend test` (vitest, no server needed)
-- E2E tests:       `pnpm --filter frontend run test:e2e` (requires backend server)
+- Unit tests:      `pnpm --filter frontend exec vitest run <file>` (focused, no server needed)
+- E2E tests:       `BASE_URL=http://localhost:5173 make verify-e2e` while `make dev` is running; use `BASE_URL=http://localhost:8000` with `make docker-test-up`
 
 React components live in `frontend/src/` with JSX syntax. Style with Tailwind CSS (mobile-first, touch targets ≥44px).
 
@@ -147,13 +161,14 @@ make migrate  # or: cargo run --locked -p comicpile-migrate -- up
 ## Code quality standards
 
 - Run linting after each change:
-  - `make lint` or `bash scripts/lint.sh` (ruff + ty + frontend ESLint)
+  - `ruff check .` and `ty check --error-on-warning` for Python tooling
+  - `bash scripts/lint.sh` for the other repository static checks
   - `pnpm --filter frontend run lint && pnpm --filter frontend run typecheck` (TypeScript)
 - Use specific types instead of `Any` in type annotations (ruff ANN401 rule)
-- Run tests when you touch logic or input handling:
-  - `cargo test --workspace` (Rust API)
-  - `pnpm --filter frontend test` (frontend)
-  - focused files under `tests/` with `pytest tests/test_<name>.py`
+- Run focused tests when you touch logic or input handling:
+  - `cargo test -p comicpile-roll-service <filter>` (Rust API)
+  - `pnpm --filter frontend exec vitest run <file>` (frontend)
+  - `uv run python -m pytest tests/test_<name>.py` (repository tooling)
 - Always write a regression test when fixing a bug.
 - If you break something while fixing it, fix both in the same PR.
 - Do not check in sample data or proprietary content.
@@ -162,19 +177,19 @@ make migrate  # or: cargo run --locked -p comicpile-migrate -- up
 
 ## Testing guidelines
 
-- Rust API behavior lives in `native/roll-service`; run `cargo test --workspace`, or `cargo test -p comicpile-roll-service <filter>` for one case.
-- Frontend unit tests use Vitest (`pnpm --filter frontend test`); browser coverage uses Playwright specs in `frontend/src/test/`.
-- Repository tooling tests live in `tests/` and run with focused `pytest tests/test_<name>.py`.
+- Rust API behavior lives in `native/roll-service`; run `cargo test -p comicpile-roll-service <filter>` for one module or case. Full workspace suites run in CI unless explicitly requested.
+- Frontend unit tests use Vitest (`pnpm --filter frontend exec vitest run <file>`); browser coverage uses Playwright specs in `frontend/src/test/`.
+- Repository tooling tests live in `tests/` and run with focused `uv run python -m pytest tests/test_<name>.py`.
 - Test both success and error paths, including ownership and auth failures.
 - The frontend unit suite enforces the 94% coverage gate in CI; Python coverage thresholds are retired.
 
 ## Style guidelines
 
 - Keep helpers explicit and descriptive (snake_case), and annotate public
-  functions with precise types.
-- Use Pydantic schemas for API validation
-- Use SQLAlchemy models for database operations
-- Follow PEP 8 spacing (4 spaces, 100-character soft wrap)
+  Python tooling functions with precise types.
+- API validation and DTOs are Rust `serde`/`utoipa` types; database access is
+  asynchronous Rust through `deadpool-postgres`/`tokio-postgres`.
+- Follow PEP 8 spacing (4 spaces, 100-character soft wrap) for Python tooling.
 
 ## Branch workflow
 

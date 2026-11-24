@@ -256,10 +256,8 @@ cargo check --workspace      # Rust API and migration runner
 
 ### Testing
 ```bash
-cargo test --workspace                          # Rust API + migration runner tests
-cargo test -p comicpile-roll-service roll_offer # Single module/filter
-pytest tests/test_markdown_docs.py -v           # Repository tooling test file
-cd frontend && pnpm test                         # Frontend unit tests (vitest)
+cargo test -p comicpile-roll-service <module-or-filter> # Focused Rust tests
+uv run python -m pytest tests/test_markdown_docs.py -v # Repository tooling test file
 cd frontend && pnpm exec vitest run src/unit/<file>.test.ts  # Single frontend file
 cd frontend && pnpm run typecheck                # Frontend TypeScript check
 ```
