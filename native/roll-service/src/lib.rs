@@ -29,7 +29,9 @@ pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
+pub mod factory_github_artifact;
 pub mod factory_github_oauth;
+pub mod factory_github_runs;
 pub mod frontier_audit;
 pub mod identity_inbox;
 pub mod issue_handler;
@@ -638,6 +640,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/factory/github/dispatch",
             post(factory_github_oauth::dispatch).options(factory_github_oauth::options),
+        )
+        .route(
+            "/api/v2/factory/github/runs/{run_id}",
+            get(factory_github_runs::run).options(factory_github_oauth::options),
         )
         .route(
             "/api/v2/auth/forgot-password",

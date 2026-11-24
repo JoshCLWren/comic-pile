@@ -23,7 +23,7 @@ use sha2::{Digest, Sha256};
 use std::{sync::Arc, time::Duration};
 use uuid::Uuid;
 
-const REPO: &str = "JoshCLWren/comic-pile";
+pub(crate) const REPO: &str = "JoshCLWren/comic-pile";
 const PAGES_URL: &str = "https://joshclwren.github.io/comic-pile/";
 const PAGES_ORIGIN: &str = "https://joshclwren.github.io";
 const CALLBACK_URL: &str = "https://comic-pile.vercel.app/api/v2/factory/github/callback";
@@ -35,6 +35,30 @@ const STATE_TTL_SECONDS: usize = 300;
 const SESSION_TTL_SECONDS: usize = 20 * 60;
 const MAX_PROVIDER_RESPONSE: usize = 20_000;
 const MAX_COMMAND_BYTES: usize = 4096;
+const WRITE_WORKFLOW: &str = "rotisserie-operator.yml";
+const READ_WORKFLOW: &str = "rotisserie-operator-read.yml";
+pub(crate) const OPERATOR_WORKFLOWS: [&str; 2] = [WRITE_WORKFLOW, READ_WORKFLOW];
+/// Mirrors `WRITE_OPERATIONS` in Rotisserie's `control_contract.py` (main plus #252).
+const WRITE_OPERATIONS: [&str; 18] = [
+    "run",
+    "cancel",
+    "prioritize",
+    "sync",
+    "unstick",
+    "settings",
+    "provider_switch",
+    "model_switch",
+    "incident_start",
+    "incident_stop",
+    "doctor_fix",
+    "release_expired",
+    "claim",
+    "finish",
+    "labels",
+    "estimate_neon",
+    "close",
+    "backoffs_reset",
+];
 
 #[derive(Debug, Serialize, Deserialize)]
 struct OAuthState {
@@ -45,7 +69,7 @@ struct OAuthState {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct AdminSession {
+pub(crate) struct AdminSession {
     aud: String,
     sub: String,
     login: String,
@@ -158,7 +182,10 @@ fn verified_session(state: &AppState, token: &str) -> Result<AdminSession, ApiEr
     Ok(claims)
 }
 
-fn session_from_headers(state: &AppState, headers: &HeaderMap) -> Result<AdminSession, ApiError> {
+pub(crate) fn session_from_headers(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<AdminSession, ApiError> {
     let bearer = headers
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
@@ -210,7 +237,7 @@ fn clear_cookie(response: Response) -> Response {
     )
 }
 
-fn cors(mut response: Response) -> Response {
+pub(crate) fn cors(mut response: Response) -> Response {
     let headers = response.headers_mut();
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_ORIGIN,
@@ -511,7 +538,7 @@ pub async fn callback(
     }
 }
 
-fn same_origin(headers: &HeaderMap) -> bool {
+pub(crate) fn same_origin(headers: &HeaderMap) -> bool {
     headers
         .get(header::ORIGIN)
         .and_then(|value| value.to_str().ok())
@@ -554,6 +581,79 @@ pub async fn dispatch(
     })
 }
 
+pub(crate) fn github_token() -> Result<String, ApiError> {
+    std::env::var("GITHUB_TOKEN")
+        .ok()
+        .filter(|token| !token.is_empty())
+        .ok_or_else(|| ApiError::ServiceUnavailable("GitHub workflow dispatch unavailable".into()))
+}
+
+pub(crate) async fn send_github(
+    state: &AppState,
+    host: &str,
+    request: OutboundRequest,
+) -> Result<crate::outbound::OutboundResponse, ApiError> {
+    tokio::time::timeout(Duration::from_secs(10), state.outbound.send(host, request))
+        .await
+        .map_err(|_| ApiError::ServiceUnavailable("GitHub request timed out".into()))?
+        .map_err(|_| ApiError::ServiceUnavailable("GitHub unavailable".into()))
+}
+
+/// Reads at most `limit` bytes while the body streams; `None` past the cap.
+pub(crate) async fn read_limited(body: axum::body::Body, limit: usize) -> Option<HttpBytes> {
+    if body
+        .size_hint()
+        .upper()
+        .is_some_and(|length| length > limit as u64)
+    {
+        return None;
+    }
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        http_body_util::Limited::new(body, limit).collect(),
+    )
+    .await
+    .ok()?
+    .ok()
+    .map(|collected| collected.to_bytes())
+}
+
+/// Same rule as `REQUEST_ID` in Rotisserie's `control_contract.py`.
+fn request_id(command: &Value) -> Result<Option<&str>, ApiError> {
+    match command.get("request_id") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) if value.is_empty() => Ok(None),
+        Some(Value::String(value))
+            if (8..=64).contains(&value.len())
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-') =>
+        {
+            Ok(Some(value))
+        }
+        Some(_) => Err(ApiError::BadRequest("Invalid request_id".into())),
+    }
+}
+
+fn workflow_for(operation: &str) -> Option<&'static str> {
+    if operation == "read" {
+        Some(READ_WORKFLOW)
+    } else if WRITE_OPERATIONS.contains(&operation) {
+        Some(WRITE_WORKFLOW)
+    } else {
+        None
+    }
+}
+
+async fn dispatched_run(response: crate::outbound::OutboundResponse) -> Option<u64> {
+    if response.status != StatusCode::OK {
+        return None;
+    }
+    let bytes = read_limited(response.body, MAX_PROVIDER_RESPONSE).await?;
+    let data: Value = serde_json::from_slice(&bytes).ok()?;
+    data.get("workflow_run_id").and_then(Value::as_u64)
+}
+
 async fn dispatch_inner(
     state: Arc<AppState>,
     headers: HeaderMap,
@@ -567,33 +667,18 @@ async fn dispatch_inner(
         .get("operation")
         .and_then(Value::as_str)
         .unwrap_or("");
-    if !matches!(
-        operation,
-        "run"
-            | "unstick"
-            | "cancel"
-            | "sync"
-            | "doctor_fix"
-            | "release_expired"
-            | "settings"
-            | "prioritize"
-    ) {
-        return Err(ApiError::BadRequest("Unsupported factory operation".into()));
-    }
+    let workflow = workflow_for(operation)
+        .ok_or_else(|| ApiError::BadRequest("Unsupported factory operation".into()))?;
+    let request_id = request_id(&command)?;
     let serialized = serde_json::to_string(&command)
         .map_err(|_| ApiError::BadRequest("Invalid command".into()))?;
     if serialized.len() > MAX_COMMAND_BYTES {
         return Err(ApiError::BadRequest("Factory command too large".into()));
     }
-    let token = std::env::var("GITHUB_TOKEN")
-        .ok()
-        .filter(|token| !token.is_empty())
-        .ok_or_else(|| {
-            ApiError::ServiceUnavailable("GitHub workflow dispatch unavailable".into())
-        })?;
+    let token = github_token()?;
     let request = OutboundRequest {
         method: Method::POST,
-        path: format!("/repos/{REPO}/actions/workflows/rotisserie-operator.yml/dispatches"),
+        path: format!("/repos/{REPO}/actions/workflows/{workflow}/dispatches"),
         headers: vec![
             ("Accept".into(), "application/vnd.github+json".into()),
             ("Authorization".into(), format!("Bearer {token}")),
@@ -609,13 +694,9 @@ async fn dispatch_inner(
             .map_err(|_| ApiError::Internal("Could not serialize command".into()))?,
         ),
     };
-    let result = tokio::time::timeout(
-        Duration::from_secs(10),
-        state.outbound.send("api.github.com", request),
-    )
-    .await
-    .map_err(|_| ApiError::ServiceUnavailable("GitHub dispatch timed out".into()))?
-    .map_err(|_| ApiError::ServiceUnavailable("GitHub dispatch unavailable".into()))?;
+    let result = send_github(&state, "api.github.com", request)
+        .await
+        .map_err(|_| ApiError::ServiceUnavailable("GitHub dispatch unavailable".into()))?;
     if !matches!(result.status, StatusCode::OK | StatusCode::NO_CONTENT) {
         tracing::warn!(
             github_user_id = signed.sub.as_str(),
@@ -627,15 +708,24 @@ async fn dispatch_inner(
             "GitHub did not accept the factory command".into(),
         ));
     }
+    // GitHub already accepted the command, so a missing run ID is not an error.
+    let run_id = dispatched_run(result).await;
     tracing::info!(
         github_user_id = signed.sub.as_str(),
         operation,
+        workflow,
+        run_id,
         "Rotisserie operator dispatched"
     );
+    let workflow_url = format!("https://github.com/{REPO}/actions/workflows/{workflow}");
+    let run_url = run_id.map(|id| format!("https://github.com/{REPO}/actions/runs/{id}"));
     Ok(json!({
-        "result": "submitted",
+        "result": "accepted",
+        "request_id": request_id,
+        "run_id": run_id,
+        "run_url": run_url,
         "exit_code": 0,
-        "scheduler_url": format!("https://github.com/{REPO}/actions/workflows/rotisserie-operator.yml"),
+        "scheduler_url": run_url.clone().unwrap_or(workflow_url),
     }))
 }
 
