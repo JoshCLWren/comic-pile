@@ -232,7 +232,7 @@ jobs:
           python scripts/release_recovery.py verify-deployed \
             --merge-sha "$INPUT_MERGE_SHA"
 
-      - name: Reject test-only public candidates
+      - name: Classify test-only public candidates as internal
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -240,8 +240,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           # A complete bounded merged diff of only test files is developer-only
-          # work; it must never become a public reader-facing note. This guard
-          # runs before any database credential is loaded.
+          # work. Record a durable internal outcome instead of publishing it or
+          # rejecting it forever as the oldest missing source. This guard runs
+          # before any database credential is loaded.
           python scripts/release_recovery.py verify-public \
             --candidate "$RUNNER_TEMP/release-candidate/candidate.json" \
             --repository "$GITHUB_REPOSITORY" \

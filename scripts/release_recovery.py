@@ -233,7 +233,7 @@ def is_public_publication(payload: object) -> bool:
 
 
 def test_only_public_violation(payload: object, filenames: Sequence[str]) -> str | None:
-    """Return a blocking message when a complete test-only diff is public.
+    """Return the internal-classification reason for a public test-only diff.
 
     A full changed-file page may be truncated, so only a strictly smaller,
     non-empty list proves that every changed file is a test file. Provenance
@@ -244,7 +244,7 @@ def test_only_public_violation(payload: object, filenames: Sequence[str]) -> str
         filenames: Changed-file names from one bounded GitHub page.
 
     Returns:
-        The blocking message, or None when the candidate stays eligible.
+        The internal-classification reason, or None when no rewrite is needed.
     """
     if not is_public_publication(payload):
         return None
@@ -256,6 +256,27 @@ def test_only_public_violation(payload: object, filenames: Sequence[str]) -> str
             "internal instead of publishing a public reader-facing note"
         )
     return None
+
+
+def _record_test_only_internal(payload: dict[str, object], reason: str) -> None:
+    """Replace unsupported public provenance with deterministic internal evidence.
+
+    Recording the source as internal, rather than rejecting the candidate, makes
+    the outcome durable. The next reconciliation can therefore advance to the
+    next oldest missing source instead of retrying the same test-only PR forever.
+    """
+    payload["visibility"] = "internal"
+    payload["status"] = "published"
+    payload["provenance_json"] = {
+        "classification": "internal",
+        "reason": reason,
+        "classification_reason": reason,
+        "reader_reachable": False,
+        "user_visible_evidence": "",
+        "inspected_issue_numbers": [],
+        "scope_fences": [],
+        "contradicting_evidence": [],
+    }
 
 
 def changed_file_names(repository: str, number: int) -> list[str]:
@@ -311,7 +332,19 @@ def _verify_public(args: argparse.Namespace) -> int:
     filenames = changed_file_names(args.repository, args.pr)
     violation = test_only_public_violation(payload, filenames)
     if violation is not None:
-        raise RecoveryError(violation)
+        _record_test_only_internal(payload, violation)
+        rendered = json.dumps(payload, separators=(",", ":")) + "\n"
+        if len(rendered.encode("utf-8")) > _MAX_CANDIDATE_BYTES:
+            raise RecoveryError("internal release candidate exceeds the size limit")
+        Path(args.candidate).write_text(rendered, encoding="utf-8")
+        _write_outputs(
+            {
+                "guard": "classified_internal",
+                "reason": "test_only",
+                "changed_files": len(filenames),
+            }
+        )
+        return 0
     _write_outputs({"guard": "ok", "changed_files": len(filenames)})
     return 0
 

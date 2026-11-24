@@ -35,8 +35,11 @@ from merged PRs in the last 72 hours. Each run is serialized through the
 4. A separate trusted persist job rechecks the PR number and merge SHA against
    GitHub, validates public/internal provenance and reader-facing content
    again, and verifies that the merge SHA is still in the actual live production
-   revision immediately before loading the database credential. This closes
-   the rollback/failed-deployment window during model generation.
+   revision immediately before loading the database credential. A public
+   candidate whose complete bounded diff is test-only is rewritten as a durable
+   internal record, so it neither reaches readers nor blocks newer missing
+   sources by failing the same recovery selection repeatedly. The deployment
+   recheck closes the rollback/failed-deployment window during model generation.
 5. Parameterized SQL inserts a record only when both stable source identities
    are unused. Exact retries are no-ops; conflicting PR or SHA identities
    fail without overwriting records (even retracted ones).
@@ -88,6 +91,8 @@ published source record.
 
 Public releases must have reader-visible classification evidence and honor
 linked-issue scope fences. Internal-only factory, CI, test-only and refactoring
-changes are recorded with internal visibility. A staged candidate does not
-count as published: only a successful trusted Neon transaction establishes
-durability.
+changes are recorded with internal visibility. In particular, a model's
+unsupported public classification of a complete test-only diff is converted to
+a durable internal outcome rather than rejected and retried indefinitely. A
+staged candidate does not count as published: only a successful trusted Neon
+transaction establishes durability.

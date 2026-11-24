@@ -264,10 +264,14 @@ def test_workflow_recovers_only_after_deploy_success_and_rechecks_before_publish
     assert persist["steps"][0]["with"]["fetch-depth"] == 0
     steps = {step["name"]: step for step in persist["steps"] if "name" in step}
     verify = steps["Verify selected merge is live before publication"]
+    grounding = steps["Classify test-only public candidates as internal"]
     publish = steps["Validate and publish directly to Neon"]
     assert "verify-deployed" in verify["run"]
     assert "NEON_API_KEY" not in verify.get("env", {})
-    assert list(steps).index(verify["name"]) < list(steps).index(publish["name"])
+    assert "verify-public" in grounding["run"]
+    assert "NEON_API_KEY" not in grounding.get("env", {})
+    assert list(steps).index(verify["name"]) < list(steps).index(grounding["name"])
+    assert list(steps).index(grounding["name"]) < list(steps).index(publish["name"])
 
 
 def test_release_writer_documents_the_bounded_automatic_delay() -> None:
@@ -278,3 +282,4 @@ def test_release_writer_documents_the_bounded_automatic_delay() -> None:
     assert "one per run, oldest first" in document
     assert "does not change any automation schedule" in document
     assert "manual refresh" in document
+    assert "durable internal outcome" in document
