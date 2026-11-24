@@ -216,6 +216,11 @@ export interface ComicIssueCardProps {
   onMutated?: (response: IssueReadRateResponse) => void
   /** Hide the mapping control (provider-only entries use Add to ComicPile instead). */
   showMapping?: boolean
+  /**
+   * Hide the local cover when the host already renders the provider art for
+   * this exact issue (the manual read view mirrors the post-roll pillar).
+   */
+  showCover?: boolean
   /** Opens the Add-to-ComicPile flow for provider-only entries. */
   onAddToLibrary?: () => void
   isOwned?: boolean
@@ -259,6 +264,7 @@ export function ComicIssueCard({
   children,
   onMutated,
   showMapping = true,
+  showCover = true,
   onAddToLibrary,
   isOwned = true,
 }: ComicIssueCardProps) {
@@ -326,12 +332,14 @@ export function ComicIssueCard({
     >
       <div className={horizontal ? 'flex items-start gap-3' : ''}>
         <div className={horizontal ? 'flex min-w-0 flex-1 items-start gap-3' : 'flex items-start gap-3'}>
-          <ComicIssueCover
-            coverImageUrl={coverImageUrl}
-            threadTitle={resolvedTitle}
-            issueNumber={resolvedNumber}
-            variant={variant}
-          />
+          {showCover && (
+            <ComicIssueCover
+              coverImageUrl={coverImageUrl}
+              threadTitle={resolvedTitle}
+              issueNumber={resolvedNumber}
+              variant={variant}
+            />
+          )}
           <div className="min-w-0 flex-1 space-y-1">
             <ComicIssueIdentity
               threadTitle={resolvedTitle}

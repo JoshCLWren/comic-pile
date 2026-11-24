@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { ComicIssueCard } from './ComicIssueCard'
+import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
+import { TagSection } from './Tags/TagSection'
 import { useIssueCards } from '../hooks/useIssueCards'
 import { issuesApi } from '../services/api-issues'
 import { queryKeys } from '../query/queryKeys'
@@ -25,6 +27,10 @@ interface DirectReadIssuePanelProps {
  * automatic Roll eligibility. Only ComicIssueCard Save writes, through the
  * owner-scoped, idempotent Rust v2 direct command. That command never creates
  * or consumes a pending random Roll offer.
+ *
+ * The selected issue opens the same provider details a completed roll shows
+ * (cover, summary, creators with roles, story arcs) plus that exact issue's
+ * tags, so mappings and credits can be inspected without rolling first (#5751).
  */
 export function DirectReadIssuePanel({
   threadId,
@@ -128,15 +134,32 @@ export function DirectReadIssuePanel({
                 : 'Saved rating details are unavailable. Retry details before editing.'}
             </p>
           )}
-          {canShowEditor && <ComicIssueCard
-            key={issue.id}
-            issueId={issue.id}
-            card={card}
-            threadTitle={threadTitle}
-            issueNumber={String(issue.issue_number)}
-            status={issue.status}
-            variant="compact"
-          />}
+          {canShowEditor && (
+            <div className="space-y-4" data-testid="direct-read-comic-details">
+              {/* Roll parity (#5751): the manual read surface renders the same
+                  provider detail the post-roll pillar does, beside this exact
+                  issue's tags. The card keeps the mapping and read/rate actions
+                  and drops its cover because the provider art is already shown. */}
+              <ComicIdentity issueId={issue.id} />
+              <div className="min-w-0" data-testid="direct-read-issue-tags">
+                <TagSection
+                  targetType="Issue"
+                  targetId={issue.id}
+                  targetLabel={`${threadTitle} #${issue.issue_number}`}
+                />
+              </div>
+              <ComicIssueCard
+                key={issue.id}
+                issueId={issue.id}
+                card={card}
+                threadTitle={threadTitle}
+                issueNumber={String(issue.issue_number)}
+                status={issue.status}
+                variant="compact"
+                showCover={false}
+              />
+            </div>
+          )}
         </>
       )}
       {!lookup.isPending && !lookup.isError && !issue && (

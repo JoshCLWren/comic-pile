@@ -266,6 +266,7 @@ export function RollModals({
           isOpen={isDirectReadOpen}
           title={`Read ${selectedThread.title}`}
           onClose={onCloseDirectRead}
+          size="large"
         >
           <DirectReadIssuePanel
             key={selectedThread.id}

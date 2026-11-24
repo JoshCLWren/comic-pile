@@ -55,6 +55,23 @@ function mount(status: 'read' | 'unread' = 'read') {
 }
 beforeEach(() => { patch.mockReset(); patch.mockResolvedValue(receipt) })
 
+it('omits its own cover when the host already renders the provider art (#5751)', () => {
+  render(
+    <ComicIssueCard
+      issueId={75}
+      card={{ ...card, cover_image_url: 'https://comicvine.gamespot.com/cable-annual-1.jpg' }}
+      threadTitle="Fallback"
+      issueNumber="1"
+      status="read"
+      showMapping={false}
+      showCover={false}
+    />,
+    { wrapper },
+  )
+  expect(screen.queryByTestId('comic-issue-cover')).not.toBeInTheDocument()
+  expect(screen.getByRole('article', { name: 'Issue Cable #Annual 1' })).toBeVisible()
+})
+
 describe('shared direct issue card', () => {
   it('shows a pending save state until the write settles', async () => {
     let resolvePatch!: (value: IssueReadRateResponse) => void
