@@ -1,4 +1,4 @@
-# Python endpoint references for native ports
+# Native contract snapshots
 
 `roll-bootstrap-v1.openapi.json` is the transitive operation snapshot from
 `frontend/src/generated/openapi.json` at production commit `cdaa74f`, for
@@ -17,9 +17,8 @@ cargo run --example issue_openapi > ../contracts/issue-v2.openapi.json
 ```
 
 The Rust test `checked_in_openapi_contract_is_current` fails when the checked-in
-file drifts from `IssueApi::openapi()`. This is the canonical Rust contract, not
-a FastAPI-generated operation; the coordinated frontend client and caller
-cutover remain #4444/#4337 work.
+file drifts from `IssueApi::openapi()`. This is the canonical native Rust
+contract for the live issue read/rate surface.
 
 `v2-runtime.openapi.json` is the aggregate contract for **every deployed native
 `/api/v2` operation** (#4457): the eight auth endpoints, Roll bootstrap and
@@ -47,7 +46,8 @@ requiring bearer auth on every operation.
 client-facing document (`frontend/src/generated/openapi.json`) and then
 `scripts/generate_openapi_types.mjs` regenerates `openapi.ts` plus the thin
 `nativeV2Client.ts` request client. A native operation replaces the same
-`(path, method)` FastAPI operation because ingress sends that request to Rust.
+`(path, method)` entry from the frozen legacy snapshot because ingress sends
+that request to Rust.
 A component-name collision is renamed `Native<Name>` with every reference
 inside the native subtree rewritten; an identical schema is reused.
 `nativeV2Client.ts` is generated from the native operation set and the merged
@@ -57,10 +57,10 @@ retries or error handling. Its `--check` drift runs in the same canonical
 generator boundary and never rewrites repository artifacts from custom-schema
 runs.
 `docs/api/v2-route-inventory.json` records the observed runtime and declared
-consumers for each live v2 operation, and
-`tests/test_api_v2_contract_inventory.py` fails when the inventory, the native <!-- docs-path-check: ignore -->
-contract, the generated schema, `vercel.json` or a frontend service caller
-drifts.
+consumers for each live v2 operation. The generated client contract is kept
+current by `node scripts/export_openapi_schema.mjs` and
+`node scripts/generate_openapi_types.mjs --check` (the frontend
+`check:api-types` gate); do not edit the generated artifacts by hand.
 
 `threads-v2.openapi.json` is the generated native contract for
 `GET /api/v2/threads` (#4342). Regenerate it with:
@@ -74,11 +74,13 @@ Its checked-in drift test is `threads::tests::checked_in_openapi_contract_is_cur
 The normal consumer is `frontend/src/services/api-threads.ts` (`list` only; the
 remaining thread mutations stay on their existing v1 paths).
 
-The normal consumer is `frontend/src/services/rollBootstrapApi.ts`; recovery
-uses `frontend/src/services/protectedRollMutationApi.ts`. Both already call
+`roll-bootstrap-v1.openapi.json`'s live replacement is the aggregate
+`v2-runtime.openapi.json`. The normal consumer is
+`frontend/src/services/rollBootstrapApi.ts`; recovery
+uses `frontend/src/services/protectedRollMutationApi.ts`. Both call
 `/api/v2/roll/bootstrap`. The legacy `/api/roll/bootstrap` and
 `/api/v1/roll/bootstrap` aliases were removed with the Python handler (#4397)
-and now fall through to the Python catch-all. V2 is a separate contract.
+and now answer the Rust catch-all 404. V2 is a separate contract.
 
 `bug-reports-v1.openapi.json` is the generated native contract for the
 same-path bug-report slice `POST /api/bug-reports/` and
