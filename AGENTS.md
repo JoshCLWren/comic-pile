@@ -265,12 +265,16 @@ cd frontend && pnpm run typecheck                # Frontend TypeScript check
 ### E2E Tests (Playwright)
 **⚠️ MUST build frontend first:**
 ```bash
-make verify-e2e                         # Builds + runs TypeScript Playwright tests
+make verify-e2e                         # Builds + runs TypeScript Playwright tests (set BASE_URL)
 cd frontend && pnpm run test:e2e:quick  # Skip build (faster iteration)
-cd frontend && pnpm run build && npx playwright test --headed  # Run with browser visible
+cd frontend && pnpm run build && pnpm exec playwright test --headed  # Run with browser visible
 ```
 
-**Why build required?** Playwright tests run against production build in `static/react/`, not dev server. Without build, tests fail with 404s for CSS/JS assets.
+**Why build first?** `make verify-e2e` runs the frontend build before Playwright.
+The Docker/nginx and rendered-audit paths serve `static/react`, so tests fail with
+404s if that build is absent. When `BASE_URL` points at Vite on `:5173`, the dev
+server serves source assets instead; the build step still runs but is not the
+served bundle.
 
 **Inventory-driven Chromium regression lane** (`make verify-e2e-regression`, `pnpm test:e2e:regression`, scheduled `e2e-chromium-regression` workflow): before running, fixing, or triaging it, load the `e2e-chromium-regression` skill (`.agents/skills/e2e-chromium-regression/SKILL.md`) — it documents the mandatory `TEST_ENVIRONMENT=true` backend contract, scope rules (P0 must stay green; P1/P2 reds reconcile into one canonical issue), and the verified failure-class triage table.
 
@@ -323,9 +327,6 @@ Handlers validate and delegate; domain modules decide; persistence stays behind 
 - **Persistence** uses the bounded pool and SQL helpers in `native/roll-service/src/db.rs`; request/response DTOs derive `serde`/`utoipa` and stay aligned with the generated contract.
 
 New backend code follows this layout without exceptions. Every native route module requires a DB-backed HTTP test; the `native-route-db-test-guard` CI job enforces that with `node scripts/check_native_route_db_tests.mjs`. The former Python router/service/repository layout and its conformance baseline were retired with the Python API.
-
-The MissingGreenlet notes below are historical: they applied to the retired SQLAlchemy
-sessions. No shipped code path commits a SQLAlchemy session.
 
 ### Domain Nouns With Multiple Meanings (House Standard)
 
@@ -550,7 +551,7 @@ The following rules in `.greptile/config.json` are enforced by Greptile during P
 - Branch from `main`: `git checkout -b phase/X-description`
 - Commit messages: imperative, component-scoped (e.g., "Add thread creation API endpoint")
 - Run the required lint/typecheck/build gates and targeted tests before committing; leave full test suites and aggregate coverage to CI
-- Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft. This repo relies on CodeRabbit signals that do not arrive on draft PRs for the current plan/tier.
+- Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft.
 - **Do not add or repair changelog Markdown for implementation PRs.** Release notes are published after merge by the dedicated release writer to the database-backed release ledger. `docs/changelog.md` and `docs/changelog.d/` are frozen historical provenance only; release-note publication delays do not block implementation merges.
 - **Local factory sessions**: before the first commit of any issue-driven session, load the [local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session) skill ([local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session/SKILL.md)). It covers hook installation and the inert-`core.hooksPath` caveat, exporting `OPENCODE_MODEL` and verifying the `Model:` commit trailer, atomic label reconciliation, review-fleet pickup state (`factory:review` + `factory:unowned`), and the 24h stale-expiration bot.
 

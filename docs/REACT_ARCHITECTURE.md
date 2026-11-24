@@ -371,10 +371,12 @@ disposed on unmount. Geometry and texture rebuild on `sides` / `color` /
   queries). Run with `cd frontend && pnpm test`.
 - **Style audit**: `pnpm run test:style-audit` / `audit:style` guard the visual
   grammar; `docs/FRONTEND_VISUAL_GRAMMAR.md` is the canonical contract.
-- **E2E tests**: TypeScript Playwright specs under `frontend/src/test/`. They
-  run against the production build in `static/react/`, so **build first**
-  (`pnpm run build` and then `pnpm run test:e2e`, or `make verify-e2e`).
-  Chromium is the maintained required Playwright target.
+- **E2E tests**: TypeScript Playwright specs under `frontend/src/test/`. Set
+  `BASE_URL` to the running same-origin server. The Docker/nginx path serves the
+  production build in `static/react/` and therefore requires `pnpm run build`
+  first (`BASE_URL=http://localhost:8000 make verify-e2e` after
+  `make docker-test-up`); the Vite development path can use
+  `BASE_URL=http://localhost:5173`. Chromium is the maintained required target.
 - **Type contract tests**: compile-time Vitest tests keep the alias-bound
   `frontend/src/types.ts` exports identical to the generated OpenAPI schemas.
 - **Backend tests**: Rust integration tests in `native/roll-service` cover the

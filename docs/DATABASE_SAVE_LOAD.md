@@ -34,6 +34,11 @@ make restore-postgres FILE=backups/postgres/postgres_backup_<database>_YYYYMMDD_
 | `BACKUP_DIR` | `backups/postgres` | Output directory |
 | `MAX_BACKUPS` | `10` | Rotation count kept by the backup script |
 
+The shell URL parser does not strip query parameters. For these scripts, use a
+`DATABASE_URL` without `?sslmode=...` or other query options; set libpq options
+such as `PGSSLMODE=require` as separate environment variables when needed. The
+restore script still refuses every non-loopback host.
+
 Backups are gzip-compressed `pg_dump` output named
 `postgres_backup_<database>_<timestamp>.sql.gz`. Treat them as production data:
 they contain reader libraries and account rows. Do not commit or upload them.
