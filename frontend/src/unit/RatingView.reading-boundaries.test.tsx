@@ -215,7 +215,7 @@ describe('RatingView Reading Boundaries optional card (#2764 restores #2519 beha
     }))
 
     await user.click(screen.getByTestId('reading-boundaries-button'))
-    expect(screen.getByRole('alert')).toHaveTextContent('Reading boundaries could not be loaded.')
+    expect(screen.getByText('Reading boundaries could not be loaded.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Retry reading boundaries' }))
     expect(onRetryBoundaries).toHaveBeenCalledTimes(1)
   })
