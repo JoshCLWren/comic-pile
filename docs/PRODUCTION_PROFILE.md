@@ -81,7 +81,7 @@ Each run attaches `production-profile.json` with:
 - observed account thread/session counts;
 - every normalized browser API request;
 - response status and wall-clock duration;
-- request ID, `Server-Timing`, `X-App-Cache`, and `X-App-DB-Queries` (local Python container only; native Rust production emits none);
+- request ID when present, `Server-Timing`, `X-App-Cache`, and `X-App-DB-Queries` (retired Python middleware diagnostics; native Rust does not emit them);
 - median, p95, and maximum latency;
 - observed/source request ratio;
 - duplicate GET bursts, transport failures, and slow responses.
@@ -99,29 +99,21 @@ JSON body's `build`/`process` identity; it does not run the Python
 and `/openapi.json` return Vercel 404s and never start Python). Production
 liveness is `GET /api/v2/health`.
 
-The local Python container still runs the middleware and returns all four
-headers (`X-Request-ID`, `X-App-Cache`, `X-App-DB-Queries`, and
-`Server-Timing`), so the two environments are not header-compatible.
-
 Consequences for the production profile report:
 
-- `serverTiming` (and the other Python-middleware diagnostics) are expected to
-  be `null` for records captured against production. Treat that as an observed
-  property of the native Rust deployment, not a regression.
-- Timing and diagnostics evidence for production comes from the Rust health
-  body's `build`/`process` identity, the `X-ComicPile-API-Runtime` marker, and
-  Vercel runtime logs such as request `x-vercel-id` and invocation timing.
-- Local profiling against the Python container remains the place to exercise
-  `Slow HTTP request` warnings and the middleware headers. ComicPile
-  intentionally does not provision Vercel Preview deployments for comparison
-  testing.
+- `serverTiming`, `X-App-Cache`, `X-App-DB-Queries` and `X-Request-ID` are expected
+  to be absent on native Rust responses. Treat that as the current runtime
+  property, not a regression.
+- Timing and diagnostics evidence comes from the health body's `build`/`process`
+  identity, `X-ComicPile-API-Runtime`, structured native request logs and Vercel
+  invocation metadata such as `x-vercel-id`.
+- There is no local Python middleware container or Vercel Preview comparison
+  environment. Use a disposable native service plus ingress for local profiling.
 
-## Production slow-request warnings are enabled
+## Native request logging
 
-The middleware emits `Slow HTTP request` and `Client Error` warnings at WARNING level. Production defaults to WARNING (not ERROR) so these structured records reach Vercel runtime logs. Operators may still set `LOG_LEVEL` to raise (e.g. `ERROR`) or lower (e.g. `INFO`/`DEBUG`) verbosity. Verify slow-request logging locally with:
-
-```bash
-SLOW_REQUEST_THRESHOLD_MS=1 .venv/bin/python -m uvicorn app.main:app --port 9000
-```
-
-then exercise a slow endpoint and look for `Slow HTTP request` in the server output.
+Set `RUST_ROLL_LOG` (default `info`) to control structured native tracing. Request
+logs include method, status and elapsed milliseconds, not bodies, credentials or
+SQL. Investigate repeated high latency with the pool/request timeout settings in
+[`OPERATIONAL_HEALTH.md`](OPERATIONAL_HEALTH.md); raising a timeout is not a query
+fix.
