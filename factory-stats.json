@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T16:52:42.055619+00:00",
+  "generated_at": "2026-11-24T17:08:53.981272+00:00",
   "models": [
     {
       "health": {
@@ -3167,22 +3167,22 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 13,
+          "failed": 19,
           "failures": {
-            "control_plane_failure": 13
+            "control_plane_failure": 19
           },
           "idle": 4,
-          "runs": 17
+          "runs": 23
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 20,
+          "failed": 26,
           "failures": {
-            "control_plane_failure": 20
+            "control_plane_failure": 26
           },
           "idle": 30,
-          "runs": 50
+          "runs": 56
         }
       }
     },
@@ -4915,26 +4915,26 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 4,
-          "delivered": 4,
+          "completed": 5,
+          "delivered": 5,
           "failed": 13,
           "failures": {
             "control_plane_failure": 1,
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 18
+          "runs": 19
         },
         "7d": {
-          "completed": 4,
-          "delivered": 4,
+          "completed": 5,
+          "delivered": 5,
           "failed": 13,
           "failures": {
             "control_plane_failure": 1,
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 18
+          "runs": 19
         }
       }
     },
@@ -5927,12 +5927,12 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 38,
+          "failed": 37,
           "failures": {
-            "control_plane_failure": 38
+            "control_plane_failure": 37
           },
           "idle": 0,
-          "runs": 38
+          "runs": 37
         }
       }
     },
@@ -22609,16 +22609,16 @@
         "24h": {
           "completed": 18,
           "delivered": 17,
-          "failed": 93,
+          "failed": 99,
           "idle": 28,
-          "runs": 139
+          "runs": 145
         },
         "7d": {
           "completed": 55,
           "delivered": 53,
-          "failed": 589,
+          "failed": 595,
           "idle": 282,
-          "runs": 926
+          "runs": 932
         }
       }
     },
@@ -22645,18 +22645,18 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 11,
-          "delivered": 11,
+          "completed": 12,
+          "delivered": 12,
           "failed": 64,
           "idle": 32,
-          "runs": 107
+          "runs": 108
         },
         "7d": {
-          "completed": 52,
-          "delivered": 42,
+          "completed": 53,
+          "delivered": 43,
           "failed": 372,
           "idle": 82,
-          "runs": 506
+          "runs": 507
         }
       }
     },
@@ -22673,9 +22673,9 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 46,
+          "failed": 45,
           "idle": 4,
-          "runs": 50
+          "runs": 49
         }
       }
     },
@@ -22786,10 +22786,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T16:52:42.172377+00:00",
-    "days_elapsed": 23.703,
+    "checked_at": "2026-11-24T17:08:54.110602+00:00",
+    "days_elapsed": 23.715,
     "days_in_month": 30.0,
-    "days_left": 6.3,
+    "days_left": 6.29,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
