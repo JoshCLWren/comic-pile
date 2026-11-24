@@ -103,16 +103,16 @@ describe('canonical Custom CBL deletion accessibility', () => {
     await act(async () => {
       finishDelete?.()
     })
-    // Removing the active detail query closes the dialog before list invalidation
-    // finishes. Focus must already target the stable heading in that render.
+    // The mutation remains pending while the authoritative list cache refreshes.
     await waitFor(() => expect(mocks.list).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(screen.getByRole('heading', { name: 'Custom CBLs' })).toHaveFocus()
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Close modal' })).toBeDisabled()
 
     await act(async () => {
       finishListRefresh?.()
     })
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Custom CBL deleted.'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Custom CBLs' })).toHaveFocus()
   })
 })
