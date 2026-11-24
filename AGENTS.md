@@ -566,8 +566,10 @@ checks. Scheduled assignments come from the current Rotisserie controller.
 skill for worktree/port-slot isolation, live lease checks and the adopter's
 atomic claim procedure, then hand off to
 [local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session/SKILL.md).
-Do not invent replacement Make flags or bypass the controller because an
-upstream example still mentions a removed target.
+The upstream skill is reference material only: this repository's `AGENTS.md` and
+factory policy override its stale `make next-task` / `make start-task`, uvicorn,
+deleted lint-script and issue-splitting examples. Do not invent replacement Make
+flags or bypass the controller.
 
 Agents with the `github-issue-kanban` skill should follow that skill. Other
 agents must read `docs/ISSUE_EXECUTION_PROTOCOL.md`, update the selected

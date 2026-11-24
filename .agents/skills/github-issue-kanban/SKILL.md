@@ -16,7 +16,10 @@ use the current local-factory selection procedure from the Rotisserie
 `local-factory-next-task` skill and
 [docs/AUTONOMOUS_FACTORY_POLICY.md](../../../docs/AUTONOMOUS_FACTORY_POLICY.md).
 The old `make next-task` / `make start-task` targets do not exist; do not invent
-replacement flags or bypass the controller's ownership checks.
+replacement flags or bypass the controller's ownership checks. Upstream
+`local-factory-next-task` is reference material only: this repository's
+`AGENTS.md` and factory policy override its stale removed-target, uvicorn,
+deleted-lint-script and issue-splitting examples.
 
 Before editing:
 
