@@ -209,43 +209,16 @@ make migrate  # or: cargo run --locked -p comicpile-migrate -- up
 
 ### Merge gate (agent-authored PRs)
 
-This is the only pre-merge process rule (#3561). Every agent-authored pull
-request — Cursor cloud agents and factory workers — may merge only when both
-are true for the **exact current head**:
+Agent-authored PRs follow [the autonomous factory policy](docs/AUTONOMOUS_FACTORY_POLICY.md)
+and [the issue execution protocol](docs/ISSUE_EXECUTION_PROTOCOL.md). For the
+exact current head, the PR must be open, non-draft, conflict-free and mergeable;
+every required CI check must pass; every actionable review finding must be fixed,
+demonstrably outdated, or concretely rebutted; and independent exact-head
+semantic/acceptance review must confirm that the declared scope is complete and
+safe to integrate.
 
-1. One thorough code review by a Cursor cloud agent running a **different
-   model** than the PR author. Same-model reviews do not count. A review
-   recorded against a previous SHA does not count after the head moves.
-2. CI is green on that head.
-
-There are no extra pre-merge QA, preview, smoke, or migration-rehearsal
-steps. Do not add a `factory:approved` label; controller provenance is the
-authority.
-
-The review controller writes those models as `github-actions[bot]` comments.
-It records the author model from the factory roster when the producing worker
-records the head, and the reviewer model when it launches and interprets an
-independent factory review. Cursor cloud-agent ids (`bc-…`) in a PR footer
-are a distinct identity token, not a substitute for the controller marker.
-
-Only `github-actions[bot]` model markers count. OWNER/MEMBER/COLLABORATOR
-comments — including Cursor agents posting as the repository owner — cannot
-satisfy the gate. A missing author marker, or two author markers that disagree,
-fails closed.
-
-Markers (entire comment body, written only by the controller):
-
-- Author:
-  `<!-- comic-pile-agent-model-author-v1:pr-<n>:head-<sha>:model-<model>:agent-<author-id> -->`
-- Reviewer:
-  `<!-- comic-pile-agent-model-review-v1:pr-<n>:head-<sha>:author-<author-model>:reviewer-<reviewer-model>:author-agent-<author-id>:reviewer-agent-<reviewer-id>:verdict-approve -->`
-
-The reviewer agent id must differ from the author agent id. Model comparison
-uses the model family: a leading `cursor-` prefix and effort/speed suffixes
-(`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `thinking`,
-`fast`) are stripped, so `cursor-grok-4.6-high-fast` and `cursor-grok-4.6-low`
-are the same model.
-
-The factory merge drain refuses the PR when those markers are missing, the
-author record is missing or conflicting, the models match, the reviewer is
-the authoring agent, the review SHA is stale, or required CI is red.
+Reviewer independence and provenance are determined by the current factory
+controller, not by a hand-maintained model-name comparison in this document.
+Do not fabricate approval markers or formal self-approval. `factory:approved` is
+visibility only, and labels never replace review or CI evidence. Never enable
+auto-merge or merge a moved or unverified head.

@@ -19,10 +19,10 @@ surfaces:
 
 | Surface | Location | Command |
 | --- | --- | --- |
-| Rust API behavior | `native/roll-service` (unit + DB-backed HTTP tests) | `cargo test --workspace` |
-| Frontend unit/contract tests | `frontend/src/unit`, colocated `*.test.ts(x)` | `pnpm --filter frontend test` |
-| Browser E2E (Chromium) | `frontend/src/test` (Playwright, TypeScript) | `make verify-e2e` |
-| Repository tooling | `tests/` (pytest, Node test files) | focused `pytest tests/test_<name>.py` |
+| Rust API behavior | `native/roll-service` (unit + DB-backed HTTP tests) | `cargo test -p comicpile-roll-service <filter>` |
+| Frontend unit/contract tests | `frontend/src/unit`, colocated `*.test.ts(x)` | `pnpm --filter frontend exec vitest run <file>` |
+| Browser E2E (Chromium) | `frontend/src/test` (Playwright, TypeScript) | `BASE_URL=http://localhost:5173 make verify-e2e` |
+| Repository tooling | `tests/` (pytest, Node test files) | `uv run python -m pytest tests/test_<name>.py` |
 
 The legacy Python pytest/Playwright suite under `tests_e2e/` was removed with
 the Python API. `tests_e2e/README.md` now only points at the maintained
@@ -47,6 +47,9 @@ set -a; . ./.env; set +a
 make migrate
 ```
 
+For repository tooling tests or git hooks, create the Python environment once
+with `uv venv && uv sync --all-extras`. The running application does not need it.
+
 ### 2. Create an account instead of seeding
 
 There is no seed command. Start the app with `make dev`, then register through
@@ -55,8 +58,12 @@ serves fabricated fixtures and writes nothing.
 
 ### 3. Run the API for browser tests
 
-Playwright specs run against a same-origin server. Start the native service
-against a disposable database, never a shared or production one:
+Playwright specs run against a same-origin server. For the normal development
+path, start Vite and the native service together with `make dev`, then point
+Playwright at `http://localhost:5173`. Vite proxies `/api` to the native service.
+
+To run only the native API directly against a disposable database (for focused
+HTTP testing, not browser E2E), apply migrations first and run:
 
 ```bash
 RUST_ROLL_BIND=127.0.0.1:8010 \
@@ -65,31 +72,26 @@ RUST_ROLL_JWT_SECRET="test-secret-key-for-testing-only" \
 cargo run --locked -p comicpile-roll-service
 ```
 
-`make docker-test-up` builds the frontend and starts the maintained test
-topology (PostgreSQL on 5437, Redis, the native service behind nginx on 8000).
-See [`docs/E2E_CHROMIUM_REGRESSION.md`](docs/E2E_CHROMIUM_REGRESSION.md) for the
-full ingress contract and the inventory-driven regression lane.
+`make docker-test-up` builds the frontend and starts the maintained same-origin
+test topology (PostgreSQL on 5437, the native service behind nginx on 8000). Use
+`BASE_URL=http://localhost:8000 make verify-e2e` with that topology. See
+[`docs/E2E_CHROMIUM_REGRESSION.md`](docs/E2E_CHROMIUM_REGRESSION.md) for the full
+ingress contract and the inventory-driven regression lane.
 
 ### 4. Run tests
 
 ```bash
-# Rust: all workspace tests
-cargo test --workspace
-
 # Rust: one focused test or module
 cargo test -p comicpile-roll-service roll_offer
-
-# Frontend: unit tests (Vitest, plus style/sitemap/SEO audits)
-pnpm --filter frontend test
 
 # Frontend: one focused file
 pnpm --filter frontend exec vitest run src/unit/queryKeys.test.ts
 
-# Browser: Chromium Playwright (builds first)
-make verify-e2e
+# Browser: Chromium Playwright (builds first; requires a running same-origin server)
+BASE_URL=http://localhost:5173 make verify-e2e
 
 # Repository tooling: one test file
-pytest tests/test_markdown_docs.py -v
+uv run python -m pytest tests/test_markdown_docs.py -v
 ```
 
 Full suites run in CI. Run only the files or cases that cover your change
