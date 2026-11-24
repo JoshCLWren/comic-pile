@@ -10,7 +10,7 @@ Do not create a new Markdown file just because a topic needs notes. Extend the e
 
 ## Current production truth
 
-ComicPile deploys production from `main` on Vercel. The frontend is a static Vite build and every deployed `/api/*` route is served by the native Rust handler (`api/native_roll.rs`) selected by `vercel.json` ingress. PostgreSQL is hosted by Neon and schema changes run through the Rust refinery runner (`native/migrate`). Pull requests are validated locally and in GitHub Actions; Vercel Preview environments are intentionally unsupported. Fly.io and Railway are historical deployment experiments, not current deployment targets.
+ComicPile deploys production from `main` on Vercel. The frontend is a static Vite build and the production workflow regenerates ingress, strips retired function entries, and deploys a single native Rust API handler (`api/native_roll.rs`) for `/api/*`. PostgreSQL is hosted by Neon and schema changes run through the Rust refinery runner (`native/migrate`). Pull requests are validated locally and in GitHub Actions; Vercel Preview environments are intentionally unsupported. Fly.io and Railway are historical deployment experiments, not current deployment targets.
 
 
 
@@ -58,5 +58,7 @@ The inventory generator remains available for audits through the Documentation w
 `node scripts/check_doc_code_paths.mjs` fails the required CI Summary when current docs cite a code path in backticks that no longer exists (offline, no network). Mark intentionally historical material with `<!-- docs-path-check: ignore -->` on the line or `<!-- docs-path-check: historical -->` in the file; `docs/issue-plans/` and changelogs are exempt. `scripts/check_markdown_docs.py` is the repository-side guard for local Markdown links and undocumented root-level Markdown sprawl. `scripts/generate_markdown_inventory.py` provides the exhaustive file-by-file audit when needed, while CI keeps its output artifact-only so documentation validation cannot create a repository-wide coordination bottleneck.
 
 Do not commit `docs/MARKDOWN_INVENTORY.md`; generate the inventory locally or download the Documentation workflow artifact when an audit requires it. <!-- docs-path-check: ignore -->
+
+Link and code-path checks do not prove semantic accuracy. When runtime behavior changes, reconcile active documents against the router, generated contracts, real callers, configuration and workflows; record unresolved contradictions in the existing issue or PR handoff rather than presenting them as intended behavior.
 
 Historical implementation notes and explorations should live in the Wiki or Git history, not beside current operational instructions.

@@ -148,7 +148,7 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 
 - **Backend**: Rust's type system plus generated `utoipa` schemas
 - **Frontend**: TypeScript with strict mode
-- **Contracts**: the checked-in OpenAPI schema is the single source of truth
+- **Contracts**: generated native OpenAPI contracts plus the same-path compatibility contract feed the checked-in client schema
 
 ### Testing
 
@@ -172,8 +172,8 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 1. Developer runs `make dev`
 2. Vite serves the frontend on port 5173
 3. The native Rust service listens on port 8010
-4. Vite proxies `/api` to the Rust service; both sides hot-reload independently
-5. Frontend sees immediate updates via HMR
+4. Vite proxies `/api` to the Rust service; Vite hot-reloads frontend changes
+5. Frontend sees immediate updates via HMR; restart the native service after Rust changes
 
 ### Deployment Flow
 

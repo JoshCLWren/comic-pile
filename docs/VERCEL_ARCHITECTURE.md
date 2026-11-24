@@ -2,8 +2,10 @@
 
 ComicPile deploys a static React frontend and a single native Rust API handler
 from the same repository. `vercel.json` is generated from the route fragments
-and the inventory; it is the deployed ingress, not a claim about language per
-API version.
+and the inventory. The production workflow regenerates it and strips retired
+function entries before deployment; the checked-in generated file can briefly
+retain those entries until the bot-owned regeneration lands. API version is not
+implementation language.
 
 ## Production request boundary
 
@@ -66,7 +68,8 @@ curl --silent --show-error --location --dump-header - \
 ```
 
 The first response must include `X-ComicPile-Frontend: vercel-static`.
-The second must return HTTP 200, `{"status":"ok"}`, and
-`X-ComicPile-API-Runtime: rust`. The production deploy workflow independently
-checks the rejected-login contract and Rust marker. Bare legacy health/docs
-paths must return HTTP 404 without invoking the API runtime.
+The second must return HTTP 200 with `status: "ok"`, build/process identity fields,
+and `X-ComicPile-API-Runtime: rust`. The production deploy workflow checks the
+revision, package and compiler identity as well as the status. Bare legacy
+health/docs paths must return HTTP 404 at the Rust catch-all without starting a
+database-backed runtime.

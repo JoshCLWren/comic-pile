@@ -102,8 +102,7 @@ DATABASE_URL=postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/co
 | `SECRET_KEY` / `RUST_ROLL_JWT_SECRET` | Yes | JWT signing secret. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `RUST_ROLL_ENV` | No (defaults) | `development` / `production`; development must bind to a loopback address |
 | `RUST_ROLL_BIND` | No | Defaults to `127.0.0.1:8010` |
-| `CORS_ORIGINS` | Required in production | Comma-separated origins |
-| `COMICVINE_API_KEY` | Optional | Used by ComicVine hydration/backfill scripts (`docs/COMICVINE_HYDRATOR.md`); not listed in `.env.example` |
+| `COMICVINE_API_KEY` | Optional | Enables live ComicVine provider calls from the native service; not listed in `.env.example` |
 
 Production startup also accepts the existing `DATABASE_URL` and `SECRET_KEY`
 names for the native service. See `.env.example` for additional optional

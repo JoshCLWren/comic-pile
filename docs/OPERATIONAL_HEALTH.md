@@ -5,16 +5,17 @@ distinguish process availability from database readiness.
 
 ## Production liveness
 
-`GET /api/v2/health` is the production liveness probe. It returns HTTP 200
-with `{"status":"ok"}` and the `X-ComicPile-API-Runtime: rust` response
-header, without opening a PostgreSQL connection. Production deployment smoke
-checks status, body and runtime marker, as well as a separate rejected-login
+`GET /api/v2/health` is the production liveness probe. It returns HTTP 200 with
+`status: "ok"`, `runtime: "rust"`, service/build/process identity fields, and the
+`X-ComicPile-API-Runtime: rust` response header, without opening a PostgreSQL
+connection. Production deployment smoke checks the status, source revision,
+package/compiler identity and runtime marker, as well as a separate rejected-login
 request.
 
 The public bare `/health`, `/docs`, `/redoc` and `/openapi.json` paths return
-**404 at Vercel ingress** (see the explicit rewrite in `vercel.json`). They do
-not start a runtime or serve the SPA shell. Use `/api/v2/health` for production
-liveness, and read the checked-in generated contracts
+**404 at the Rust catch-all**. They do not start a database-backed runtime or
+serve the SPA shell. Use `/api/v2/health` for production liveness, and read the
+checked-in generated contracts
 (`native/contracts/v2-runtime.openapi.json`,
 `frontend/src/generated/openapi.json`) for the API surface.
 
@@ -44,12 +45,14 @@ workflow use the same runner.
 
 ## Response semantics
 
-- `200 ok`: the process can serve a request.
+- Production `200 ok`: the process can serve a request and reports its build/process identity.
+- Local `200 {"status":"ok"}`: the standalone native process can serve a request.
 - `401`: authentication is enforced on protected paths; the health route is public.
 - `503` or a connection failure: the process is unavailable.
 
-Responses contain only status fields. They never include connection strings,
-hostnames, credentials, exception text, user data, or queried records.
+Liveness responses contain no connection strings, hostnames, credentials,
+exception text, user data, or queried records. Build/process fields are
+operational identity evidence, not cryptographic attestation.
 
 ## Logging
 
