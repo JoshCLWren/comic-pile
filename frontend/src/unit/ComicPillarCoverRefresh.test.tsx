@@ -13,6 +13,7 @@ const { searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, confirmIdentit
     confirmIdentitySpy: vi.fn().mockResolvedValue({} as never),
     // SAFETY: mock payload supplies only the fields this test asserts
     replaceIdentitySpy: vi.fn().mockResolvedValue({} as never),
+    // SAFETY: mock payload supplies only the fields this test asserts
     removeIdentitySpy: vi.fn().mockResolvedValue({} as never),
     getIntelligenceSpy: vi.fn(),
   }))
