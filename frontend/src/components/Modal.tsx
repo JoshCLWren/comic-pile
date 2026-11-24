@@ -58,13 +58,7 @@ export default function Modal({
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const onCloseRef = useRef(onClose)
   const closeDisabledRef = useRef(closeDisabled)
-  const returnFocusRefValue = useRef(returnFocusRef)
   const titleId = useId()
-
-  // Event handlers and cleanup must see the latest props without resetting the
-  // modal's focus/stack lifecycle on every parent render.
-  closeDisabledRef.current = closeDisabled
-  returnFocusRefValue.current = returnFocusRef
 
   const modalIdRef = useRef<number | null>(null)
   if (modalIdRef.current === null) {
@@ -74,6 +68,12 @@ export default function Modal({
   // Keep onCloseRef up to date without causing effect re-runs
   useEffect(() => {
     onCloseRef.current = onClose
+  })
+
+  // Escape uses the latest pending state without re-registering the modal or
+  // replacing the trigger whose focus must be restored on close.
+  useLayoutEffect(() => {
+    closeDisabledRef.current = closeDisabled
   })
 
   // OverlayPortal creates its shared root after the parent modal's first commit.
@@ -148,7 +148,7 @@ export default function Modal({
       // Only restore focus when this modal was the topmost layer. Closing a
       // lower modal must not steal focus from the modal rendered above it.
       if (wasTopmost) {
-        const returnTarget = returnFocusRefValue.current?.current
+        const returnTarget = returnFocusRef?.current
         if (returnTarget?.isConnected) {
           returnTarget.focus()
         } else {
@@ -156,7 +156,7 @@ export default function Modal({
         }
       }
     }
-  }, [autoFocus, isOpen, overlayElement])
+  }, [autoFocus, isOpen, overlayElement, returnFocusRef])
 
   // A pending action can disable the currently focused control. Recompute the
   // live focus boundary after every render so focus never falls to document.body

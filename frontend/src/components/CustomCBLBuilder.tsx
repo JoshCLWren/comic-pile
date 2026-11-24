@@ -77,6 +77,7 @@ export default function CustomCBLBuilder({
   const queryClient = useQueryClient()
   const issueSearchInput = useRef<HTMLInputElement>(null)
   const customCBLHeadingRef = useRef<HTMLHeadingElement>(null)
+  const deleteReturnFocusRef = useRef<HTMLElement | null>(null)
   const issueSearchResults = useRef<HTMLDivElement>(null)
   const listNavigationRef = useRef<HTMLDivElement>(null)
   const pendingNavigationFocusRef = useRef<number | null>(null)
