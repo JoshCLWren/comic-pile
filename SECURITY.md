@@ -1,193 +1,120 @@
-# Security Documentation
+# Security documentation
 
-## Docker Security Configuration
+ComicPile serves a static React frontend and native Rust API on Vercel, with
+PostgreSQL hosted by Neon. There is no Python application server or FastAPI
+middleware in the deployed request path.
 
-### Non-Root User
-The application runs as a non-root user (`appuser`) for security:
+## Production request boundary
 
-```dockerfile
-RUN useradd --create-home --shell /bin/bash appuser
-USER appuser
+```text
+Internet -> Vercel edge (TLS) -> static frontend or native Rust API -> Neon PostgreSQL
 ```
 
-**Benefits:**
-- If container is compromised, attacker has limited privileges
-- Prevents privilege escalation attacks
-- Follows security best practices
+`vercel.json` sends every `/api/*` request to native Rust and rejects unknown API
+paths with a Rust JSON 404. The frontend is served as static output. TLS
+certificates are provisioned and renewed by Vercel; certificate files are not
+stored in this repository.
 
-### Secrets Management
+The native service requires `sslmode=require` in production and validates the
+PostgreSQL server certificate and hostname. Do not enable an insecure TLS bypass.
 
-#### Development Environment
-- `docker-compose.yml` contains hardcoded development passwords (acceptable for local development only)
-- `postgres_password` and `pgadmin_password` are placeholder credentials
+## Secrets management
 
-#### Production Environment
-- Production runs on Vercel + Neon; secrets are configured as Vercel project environment variables and GitHub Actions secrets
-- `.env.production` remains in `.gitignore` to prevent committing secrets locally
-- Strong secrets must be generated with: `openssl rand -base64 32`
+- Production secrets belong in Vercel project environment variables and GitHub
+  Actions secrets. Local `.env` files must remain ignored.
+- Use a long random JWT secret. Generate one with
+  `openssl rand -base64 32` or `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'`.
+- Never commit secrets, put them in command arguments, or copy them into issues,
+  logs, screenshots, browser environment variables or test artifacts.
+- Use different credentials for development, CI and production. Rotate any
+  credential that may have been exposed.
+- ComicVine, SMTP, OAuth and cron credentials are server-side only; the frontend
+  must never receive them.
 
-**Best Practices:**
-1. Never commit `.env.production` to version control
-2. Use different passwords for development and production
-3. Rotate secrets regularly
-4. Use strong, randomly generated secrets (32+ bytes)
+See [deployment](docs/DEPLOYMENT.md) for the supported environment variables and
+[database save/load](docs/DATABASE_SAVE_LOAD.md) for backup credentials.
 
-### Image Security
+## Browser-facing headers
 
-#### Base Image
-- Uses official `python:3.14-slim` image
-- Slim variants reduce attack surface by excluding unnecessary packages
+The static HTML routes in `vercel.json` set the browser security policy. The
+canonical values are generated route configuration, not a second copy maintained
+by this document:
 
-#### Dependencies
-- Minimal system packages installed (`libpq5`, `curl`)
-- `apt` cache cleaned after installation
-- Multi-stage build reduces final image size
+- Content-Security-Policy, including `frame-ancestors 'none'`, `form-action 'self'`
+  and `frame-src 'none'`.
+- Strict-Transport-Security with a two-year max-age, subdomains and preload.
+- `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY`.
+- `Referrer-Policy: strict-origin-when-cross-origin`.
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`.
 
-### Network Security
+Non-indexable HTML routes also receive `X-Robots-Tag: noindex, nofollow`. See
+[the public SEO surface](docs/SEO_PUBLIC_SURFACE.md) for the indexing contract.
+Do not claim that static HTML headers are applied by Rust API middleware.
 
-#### Production Architecture
-```
-Internet → Vercel edge (TLS termination) → FastAPI API function → Neon PostgreSQL
-```
+## Authentication and authorization
 
-**Security Features:**
-- TLS termination handled by the Vercel platform
-- Security headers applied by application middleware (`app/middleware/security_headers.py`) <!-- docs-path-check: ignore -->
-- Rate limiting enforced at the application layer (`app/middleware/rate_limit.py`) <!-- docs-path-check: ignore -->
-- Database reachable only through the configured Neon connection URL
+- Product clients use `/api/v2/auth/*`. Access tokens are bearer credentials;
+  refresh tokens are HttpOnly cookies, and state-changing browser requests use
+  the CSRF token flow.
+- The native auth handlers validate token signature, expiry, revocation,
+  credential epoch and user existence. Ownership failures return 404 rather than
+  revealing another reader's resource.
+- Reading-history records are not authentication sessions. Password reset and
+  credential revocation operate on auth state and must preserve reading history.
+- Rate limits and durable login lockout are implemented in native Rust. See
+  [rate limiting](docs/rate_limiting.md) for the authoritative controls.
 
-### SSL/TLS Configuration
+## Logging and error handling
 
-TLS certificates are provisioned and renewed automatically by the Vercel platform;
-no certificate files are stored in this repository. Application responses also declare
-HSTS via `SecurityHeadersMiddleware`
-(`max-age=63072000; includeSubDomains; preload` in production environments).
+The native service logs method, route, status, timing and sanitized error kinds.
+It does not log request bodies, authorization headers, cookies, reset tokens,
+database URLs, SQL text or raw upstream error payloads. Production panic output
+is redacted. Client errors use the documented JSON envelope without internal
+exception details.
 
-### Security Headers
+## Health and recovery
 
-The FastAPI application sets security headers through `SecurityHeadersMiddleware`
-(`app/middleware/security_headers.py`): <!-- docs-path-check: ignore -->
+`GET /api/v2/health` is a process liveness probe and does not open a database
+connection. A 200 response does not prove database readiness or successful
+authenticated execution. Use a real data request and the migration planner for
+those separate checks; see [operational health](docs/OPERATIONAL_HEALTH.md).
 
-```http
-Content-Security-Policy: default-src 'self'; ...
-Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
-X-Content-Type-Options: nosniff
-X-Frame-Options: DENY
-X-XSS-Protection: 1; mode=block
-Referrer-Policy: strict-origin-when-cross-origin
-Permissions-Policy: camera=(), microphone=(), geolocation=()
-```
+Before a production migration, take and verify a database backup. Schema
+migrations are forward-only; a previous Vercel deployment is not proof that it
+remains compatible with the current Neon schema.
 
-**Purpose:**
-- **CSP**: Restricts resource loading origins
-- **HSTS**: Forces HTTPS connections
-- **X-Frame-Options**: Prevents clickjacking
-- **X-Content-Type-Options**: Prevents MIME sniffing
-- **X-XSS-Protection**: XSS protection
-- **Referrer-Policy**: Controls referrer information
-- **Permissions-Policy**: Disables sensitive browser capabilities
+## Containers and supply chain
 
-### Rate Limiting
+Production runs on Vercel, not in an application-owned long-lived container.
+The repository's Docker images are for CI and isolated browser/test stacks:
 
-API endpoints are rate-limited in the application using slowapi
-(`app/middleware/rate_limit.py`, registered in `app/main.py`): <!-- docs-path-check: ignore -->
+- `Dockerfile.ci` contains Python/Node tooling for repository checks; it is not a
+  production runtime image.
+- `native/roll-service/Dockerfile.audit` builds the Rust service and migration
+  runner for the disposable UI-audit stack.
 
-**Configuration:**
-- Limits are applied per endpoint via the shared limiter
-- Requests are keyed by client IP address
-- Rate limiting responses return HTTP 429
+Do not describe these images as proof of production non-root execution or
+read-only filesystem hardening. Those properties must be verified at the actual
+managed-runtime boundary.
 
-### Health Checks
-
-All services have health checks:
-
-**App Container:**
-```dockerfile
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-```
-
-**Database Container:**
-```yaml
-healthcheck:
-  test: ["CMD-SHELL", "pg_isready -U comicpile"]
-  interval: 10s
-  timeout: 5s
-  retries: 5
-```
-
-### Container Hardening Checklist
-
-✅ **Implemented:**
-- [x] Non-root user
-- [x] Minimal base image (slim)
-- [x] Multi-stage build
-- [x] Health checks on containers
-- [x] Secrets in environment variables (not code)
-- [x] .env.production in .gitignore
-- [x] TLS terminated by the Vercel platform
-- [x] Security headers in application middleware
-- [x] Rate limiting on API (slowapi)
-- [x] No direct database exposure
-- [x] Read-only file system where possible
-
-### Vulnerability Scanning
-
-Run vulnerability scans before deployment:
+Before deployment, review dependency and image scan results appropriate to the
+artifacts being released, for example:
 
 ```bash
-# Scan Docker image
-docker scout cves comic-pile:latest
-
-# Scan base image
-docker scout cves python:3.14-slim
-
-# Check for exposed secrets
-git-secrets --scan
-
-# Check for dependencies with known vulnerabilities
-# (Requires setup of tools like Snyk or Dependabot)
+cargo audit
+docker scout cves <ci-or-audit-image>
 ```
 
-### Deployment Security Checklist
+A scanner must target the image actually built for the relevant workflow. Do
+not scan a retired Python base image and treat that as production evidence.
 
-Before deploying to production:
+## Incident response
 
-- [ ] Generate strong secrets with `openssl rand -base64 32`
-- [ ] Update Vercel project environment variables with production values
-- [ ] Run vulnerability scan on Docker image
-- [ ] Test health checks locally
-- [ ] Verify no secrets in git history
-- [ ] Review .gitignore includes all sensitive files
-- [ ] Backup database before migration
-- [ ] Test rollback procedure
-
-### Incident Response
-
-#### Compromised Secrets
-If secrets are leaked:
-1. Immediately rotate all secrets
-2. Rotate the affected Vercel project environment variables and GitHub Actions secrets
-3. Check audit logs for unauthorized access
-4. Redeploy so services pick up the new secrets
-
-#### Container Breach
-If container is compromised:
-1. Stop affected containers immediately
-2. Review container logs for indicators of compromise
-3. Rotate all secrets
-4. Update to latest base images with security patches
-5. Rebuild and redeploy containers
-
-### Monitoring Recommendations
-
-- Monitor container logs for suspicious activity
-- Set up alerts for health check failures
-- Track rate limit violations
-- Regular security audits (quarterly)
-
-### Additional Resources
-
-- [CIS Docker Benchmark](https://www.cisecurity.org/benchmark/docker)
-- [OWASP Docker Security](https://owasp.org/www-project-docker-security)
-- [Python Security](https://docs.python.org/3/security/index.html)
+1. Rotate affected Vercel, GitHub Actions, database, SMTP, OAuth, cron and
+   provider credentials.
+2. Review Vercel, GitHub, Neon and provider audit logs for unauthorized use.
+3. Redeploy or restore only through the established production workflow after
+   confirming schema compatibility.
+4. Preserve secret-free evidence and record the affected revision, timestamps
+   and mitigation in the existing incident or PR record.
+5. Add a focused regression test for any corrected security defect.

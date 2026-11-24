@@ -30,7 +30,7 @@ missing test configuration fails instead of silently skipping the tests.
 export RUST_ROLL_TEST_DATABASE_URL=postgresql://localhost/native_auth_test
 MIGRATE_DATABASE_URL="$RUST_ROLL_TEST_DATABASE_URL" \
   cargo run --locked -p comicpile-migrate -- up
-cargo test -locked -p comicpile-roll-service <module-or-test-filter>
+cargo test --locked -p comicpile-roll-service <module-or-test-filter>
 ```
 
 Never use a production or shared library database for tests.
