@@ -74,7 +74,10 @@ def _repository_parts(repository: str) -> tuple[str, str]:
     parts = repository.split("/")
     if len(parts) != 2 or not all(parts):
         raise RecoveryError("repository must use owner/name form")
-    return tuple(urllib.parse.quote(part, safe="") for part in parts)  # type: ignore[return-value]
+    return (
+        urllib.parse.quote(parts[0], safe=""),
+        urllib.parse.quote(parts[1], safe=""),
+    )
 
 
 def _source_from_pull(item: object) -> Source | None:
