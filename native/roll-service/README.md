@@ -43,11 +43,10 @@ job uses an absolute `CARGO_TARGET_DIR`
 (`$GITHUB_WORKSPACE/native/roll-service/target`) so parity examples and artifact
 uploads keep their existing paths; e2e builds from the repository root. When
 building from another working directory, set an absolute `CARGO_TARGET_DIR`;
-relative values are resolved against the workspace root by the parity helper
-(Cargo itself resolves a relative `CARGO_TARGET_DIR` against the current
-working directory). The standalone binary depends
-on the build platform's OpenSSL/runtime libraries. It is not a Vercel function;
-provider selection and actual ingress verification belong to #4313.
+Cargo resolves a relative `CARGO_TARGET_DIR` against the current working directory,
+so use an absolute path when building from another directory. The standalone binary
+and `api/native_roll.rs` use the same native service/router; Vercel supplies the
+function runtime around that entrypoint.
 
 ## Configuration
 
@@ -66,19 +65,18 @@ in command arguments, commits, logs, issue comments or fixtures.
 | RUST_ROLL_REQUEST_TIMEOUT_MS | 10000 | Request deadline, range 1–60000 ms |
 
 Defaults only expose a loopback listener. Production requires explicit environment
-selection, provider binding and credential provisioning; this task provisions none.
-TLS uses the native trust store with certificate/hostname verification enabled;
-no invalid-certificate bypass exists. The pool opens connections lazily, so process
-startup and health do not depend on PostgreSQL availability. Health is liveness,
-not database readiness. Pool checkout failure is bounded; query/statement timeout
-and auth-specific outage mapping are subsequent handler work, not implicit retries.
+selection and credential provisioning. TLS uses the native trust store with
+certificate/hostname verification enabled; no invalid-certificate bypass exists.
+The pool opens connections lazily, so process startup and health do not depend on
+PostgreSQL availability. Health is liveness, not database readiness. Pool checkout
+and request deadlines are bounded, with no implicit retry of handler writes.
 
 SIGINT/SIGTERM stops accepting new connections and drains ongoing work under the
 request deadline, then closes the pool. A hard drain deadline of request timeout
 plus one second bounds shutdown even for connections still sending headers. Request timeout cancels the handler future
-and returns HTTP 503 `{"detail":"Request timed out"}`. Later mutation handlers must
-use transactions and cancellation-safe rollback; this foundation performs no writes.
-404/405 also return the Python-style `detail` envelope. Startup failures report
+and returns HTTP 503 `{"detail":"Request timed out"}`. Mutation handlers use
+transactions and cancellation-safe rollback. 404/405 retain the compatible
+`detail` envelope. Startup failures report
 static descriptions only; dependency errors are never serialized.
 
 Logs contain method, status, elapsed milliseconds and a listener address. They
