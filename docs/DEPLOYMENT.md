@@ -148,7 +148,7 @@ The core application remains portable PostgreSQL software. Neon is the maintaine
 
 Merges to `main` are the production source. The production workflow runs the required database migration against Neon before deploying the application to Vercel.
 
-Factory merges made with the built-in `GITHUB_TOKEN` fire no push event, so the existing factory ready-merge drains dispatch Deploy Production after the last merge. Factory workers may merge only after every exact-head gate in the autonomous policy is satisfied. A queued manual redeploy can be superseded by a later pending run (GitHub keeps only the newest pending run), so see the note in [Overlapping runs](VERCEL_DEPLOYMENT.md#overlapping-runs). See [Bot merges dispatch the deploy](VERCEL_DEPLOYMENT.md#bot-merges-dispatch-the-deploy).
+Factory merges made with the built-in `GITHUB_TOKEN` fire no push event, so the existing ready-merge drains dispatch Deploy Production after the last merge and `Production Deploy Wakeup` observes completed factory Entry runs. Factory workers may merge only after every exact-head gate in the autonomous policy is satisfied. The wakeup currently omits the helper's `source=factory-merge` input, a known integration discrepancy documented in [Factory merges and deployment wakeup](VERCEL_DEPLOYMENT.md#factory-merges-and-deployment-wakeup). A queued manual redeploy can be superseded by a later pending run (GitHub keeps only the newest pending run), so see [Overlapping runs](VERCEL_DEPLOYMENT.md#overlapping-runs).
 
 Do not add Fly.io, Railway, or another maintained hosting target without a new product decision and an explicit migration plan. Historical references in the changelog describe past deployments and are not active operating instructions.
 

@@ -7,45 +7,21 @@ ComicPile uses Vercel for production only. The production branch is `main`.
 - A push or merge to `main` may create one production deployment for that exact commit SHA.
 - Pull requests and non-production branches must not create Vercel deployments.
 - Pull requests are validated locally and through GitHub Actions.
-- The React/Vite frontend is built as static output. Native `/api/v2` resources run in Rust, remaining transitional `/api/*` routes run in FastAPI, and bare production health/docs paths return 404 without invoking Python.
+- The React/Vite frontend is built as static output. Every deployed `/api/*` operation is served by native Rust (`api/native_roll.rs`); retained v1 paths are compatibility contracts, not a Python runtime. Bare production health/docs paths return 404 from Vercel's explicit legacy-path rule.
 - Neon is the production PostgreSQL provider.
 
 `vercel.json` disables Vercel Git deployments. The migration-aware
 `.github/workflows/deploy-production.yml` workflow is the only supported deployment path.
 
-The workflow listens for a direct `main` push and also retains factory-completion and scheduled
-recovery triggers. A merge performed with the built-in `GITHUB_TOKEN` (`github-actions[bot]`) fires
-no push or `workflow_run` event at all, and the `*/5` cron fires only every few hours in practice,
-so on its own a factory merge could leave production hours behind `main` (PR #3869, merged as
-`1319bc5a` at 12:10 PM CT by Factory Ready Merge Drain, started no deploy).
+The workflow listens for a direct `main` push and also retains factory-completion and scheduled recovery triggers. A merge performed with the built-in `GITHUB_TOKEN` (`github-actions[bot]`) suppresses the normal push event, so `Production Deploy Wakeup` observes completed factory Entry runs and dispatches deployment when `main` advanced. Scheduled recovery remains a fallback.
 
-### Bot merges dispatch the deploy
+### Factory merges and deployment wakeup
 
-`workflow_dispatch` is the one event `GITHUB_TOKEN` may raise. Only two paths merge factory PRs in
-production, Factory Ready Merge Drain and the Fixed Model Factory Dispatcher's ready drain. Both call
-`factory_dispatch_production_deploy` from `.github/scripts/dispatch-production-deploy.sh`,
-which runs `gh workflow run deploy-production.yml --ref main -f source=factory-merge`:
+Factory Ready Merge Drain and the fixed-model dispatcher's ready drain may merge only after the exact-head gates pass. Their shared dispatch helper calls `gh workflow run deploy-production.yml --ref main -f source=factory-merge` once after a run that actually merged a PR. Local/worker merges are also permitted by `docs/AUTONOMOUS_FACTORY_POLICY.md` only after the same gates.
 
-- Each drain dispatches once per run, after the last merge (an `EXIT` trap, so a later loop failure
-  cannot skip it), and only when that run merged at least one PR. A PR found `MERGED` after
-  `gh pr merge` errored (the merge landed anyway, or another actor merged it) also counts, because
-  a GITHUB_TOKEN merge by anyone fires no push event. Dedupe makes the extra dispatch harmless.
-- A failed `gh workflow run` is retried up to 3 times (3s, then 6s apart, the `dispatch_worker`
-  pattern). If every attempt fails, it only warns; the merge stands and the next trigger deploys the
-  same `main`. Both jobs run with `actions: write`. `FACTORY_DEPLOY_DISPATCH=off` disables the
-  dispatch for an incident.
-- The worker wrappers ([free-model-factory-worker-primitives.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/free-model-factory-worker-primitives.sh), [nvidia-factory-worker.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/nvidia-factory-worker.sh),
-  [omniroute-factory-worker.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/omniroute-factory-worker.sh)) do not merge in production. Workers hand finished PRs to the
-  merge controller. [validate-free-model-factories.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/validate-free-model-factories.py) forbids `gh pr merge "$NUMBER"` in the live
-  [free-model-factory-worker.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/free-model-factory-worker.sh), which sources the primitives only up to `ensure_owner_label`, so
-  the primitives' standalone merge loop never runs. The NVIDIA and OmniRoute wrappers are not called
-  by any workflow. Their `gh pr merge` blocks and the dispatch call after each one are dead code. The
-  dispatch calls stay in so the guard test below keeps passing, and they would do the right thing if
-  one of those paths were revived.
-- [tests/test_factory_deploy_dispatch_after_merge.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/tests/test_factory_deploy_dispatch_after_merge.py) finds every `gh pr merge` or merge-API call
-  under `.github/` and `scripts/` and fails when one does not dispatch the deploy. The only
-  exemption is [scripts/opencode_pipeline.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/scripts/opencode_pipeline.sh), which merges locally with the operator's token, so
-  its push event deploys normally.
+`Production Deploy Wakeup` observes completed Fixed Model Factory Entry runs and dispatches Deploy Production when `main` advanced while the worker ran. The current wakeup workflow calls `gh workflow run` directly without `source=factory-merge`; Deploy Production therefore treats it as a manual force redeploy. This is a known integration discrepancy: the wakeup path does not use the shared helper's factory-merge input. Do not change the workflow or schedule as part of documentation repair; record and repair it through the existing authorized factory/automation process.
+
+Dispatched runs expose their source and reason in the Actions run name. A manual dispatch deliberately bypasses exact-SHA deduplication as the force-recovery path.
 
 Dispatched runs are named `Deploy Production [source=<source>] <reason>` (`run-name`), so the
 Actions list shows whether a run is a manual force-redeploy or a factory-merge dispatch. `source` is
@@ -106,7 +82,7 @@ and expected metadata are visible, and the dashboard offers an eligible
 production promotion/rollback action. A promotion is **not** automatic:
 verify the older application remains compatible with the *current* Neon
 schema before deliberately restoring it. A READY deployment is not proof of
-schema rollback compatibility; no Alembic downgrade is run by this policy.
+schema rollback compatibility; the refinery migration runner has no downgrade path.
 
 For a non-destructive listing (requires `VERCEL_TOKEN`,
 `VERCEL_PROJECT_ID` and `VERCEL_ORG_ID`):
@@ -124,8 +100,8 @@ than falling back to a project-level remove operation.
 ## Daily release-source sync (Vercel Cron)
 
 ComicPile runs release-source synchronization once per day through Vercel Cron.
-The job uses the existing FastAPI function; it does not require another service,
-a long-running worker, or a GitHub Actions scheduler.
+The same `/api/v1/cron/release-sync` URL is now served by the native Rust handler;
+it does not require a Python function, another service, or a long-running worker.
 
 ```json
 {
@@ -238,8 +214,8 @@ After this change is merged:
 3. Allow the factory-completion and scheduled recovery triggers to run and confirm they do not
    create another deployment for the same SHA.
 4. Confirm the production alias still points to the successful `main` deployment.
-5. Confirm older deployments were pruned down to the current production alias
-   only (`targets.production`). The previous READY production must be gone.
+5. After a settled rollout, confirm pruning retained the live production alias
+   plus exactly one previous READY production deployment as the rollback candidate.
 
 Do not add Preview credentials, Preview databases, Preview Redis instances, or Preview-specific runtime branches. Disposable service instances used by local development or GitHub Actions are separate from Vercel Preview and remain supported.
 
