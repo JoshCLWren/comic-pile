@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T18:45:38.319373+00:00",
+  "generated_at": "2026-11-24T19:01:06.123592+00:00",
   "models": [
     {
       "health": {
@@ -2886,9 +2886,9 @@
     },
     {
       "health": {
-        "cooldown_until": null,
-        "last_outcome": "work_failure",
-        "status": "healthy"
+        "cooldown_until": "2026-11-24T18:54:32.206588+00:00",
+        "last_outcome": "provider_failure",
+        "status": "cooling"
       },
       "model": "nvidia/nemotron-3-ultra-550b-a55b",
       "source": "nvidia",
@@ -2896,23 +2896,25 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
-          "failures": {},
+          "failed": 1,
+          "failures": {
+            "provider_failure": 1
+          },
           "idle": 0,
-          "runs": 0
+          "runs": 1
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 19,
+          "failed": 20,
           "failures": {
             "control_plane_failure": 3,
-            "provider_failure": 1,
+            "provider_failure": 2,
             "provider_throttle": 3,
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 20
+          "runs": 21
         }
       }
     },
@@ -2940,15 +2942,15 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 21,
+          "failed": 18,
           "failures": {
             "control_plane_failure": 3,
             "model_policy_violation": 1,
             "provider_throttle": 1,
-            "work_failure": 16
+            "work_failure": 13
           },
-          "idle": 69,
-          "runs": 90
+          "idle": 67,
+          "runs": 85
         }
       }
     },
@@ -3167,22 +3169,22 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 24,
+          "failed": 29,
           "failures": {
-            "control_plane_failure": 24
+            "control_plane_failure": 29
           },
           "idle": 4,
-          "runs": 28
+          "runs": 33
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 30,
+          "failed": 35,
           "failures": {
-            "control_plane_failure": 30
+            "control_plane_failure": 35
           },
           "idle": 30,
-          "runs": 60
+          "runs": 65
         }
       }
     },
@@ -3621,12 +3623,10 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 1,
-          "failures": {
-            "unknown_failure": 1
-          },
+          "failed": 0,
+          "failures": {},
           "idle": 0,
-          "runs": 1
+          "runs": 0
         },
         "7d": {
           "completed": 0,
@@ -4959,16 +4959,16 @@
         "7d": {
           "completed": 4,
           "delivered": 3,
-          "failed": 57,
+          "failed": 56,
           "failures": {
             "control_plane_failure": 11,
             "provider_failure": 1,
             "provider_throttle": 1,
             "unknown_failure": 1,
-            "work_failure": 43
+            "work_failure": 42
           },
           "idle": 3,
-          "runs": 64
+          "runs": 63
         }
       }
     },
@@ -5899,13 +5899,13 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 5,
+          "failed": 4,
           "failures": {
-            "control_plane_failure": 3,
+            "control_plane_failure": 2,
             "work_failure": 2
           },
           "idle": 1,
-          "runs": 6
+          "runs": 5
         }
       }
     },
@@ -22606,16 +22606,16 @@
         "24h": {
           "completed": 16,
           "delivered": 15,
-          "failed": 100,
+          "failed": 106,
           "idle": 29,
-          "runs": 145
+          "runs": 151
         },
         "7d": {
           "completed": 55,
           "delivered": 53,
-          "failed": 599,
-          "idle": 283,
-          "runs": 937
+          "failed": 602,
+          "idle": 281,
+          "runs": 938
         }
       }
     },
@@ -22625,9 +22625,9 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 3,
+          "failed": 2,
           "idle": 30,
-          "runs": 33
+          "runs": 32
         },
         "7d": {
           "completed": 0,
@@ -22651,9 +22651,9 @@
         "7d": {
           "completed": 56,
           "delivered": 46,
-          "failed": 375,
+          "failed": 374,
           "idle": 83,
-          "runs": 514
+          "runs": 513
         }
       }
     },
@@ -22670,9 +22670,9 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 44,
+          "failed": 43,
           "idle": 4,
-          "runs": 48
+          "runs": 47
         }
       }
     },
@@ -22783,10 +22783,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T18:45:38.426070+00:00",
-    "days_elapsed": 23.782,
+    "checked_at": "2026-11-24T19:01:06.254127+00:00",
+    "days_elapsed": 23.792,
     "days_in_month": 30.0,
-    "days_left": 6.22,
+    "days_left": 6.21,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
