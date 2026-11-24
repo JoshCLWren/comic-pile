@@ -322,6 +322,27 @@ pub(crate) async fn provider_response(
     }
 }
 
+/// Normalize one configured credential value. ComicVine keys are alphanumeric
+/// and [`provider_exchange`] refuses anything else before it builds a URL, so a
+/// value pasted into a deployment dashboard with a trailing newline (or
+/// surrounding spaces) must be trimmed where it is read instead of being
+/// reported as a provider outage. An absent or all-whitespace value is "not
+/// configured", matching the Python client's empty-key check.
+fn normalize_provider_api_key(raw: &str) -> Option<String> {
+    let key = raw.trim();
+    (!key.is_empty()).then(|| key.to_owned())
+}
+
+/// The single `COMICVINE_API_KEY` read. Every provider path (repair worker,
+/// catalog roster, inline hydration, search, plan sync) goes through this so
+/// they agree on one normalization and on what "configured" means. The
+/// returned value is never logged.
+pub(crate) fn provider_api_key() -> Option<String> {
+    std::env::var("COMICVINE_API_KEY")
+        .ok()
+        .and_then(|raw| normalize_provider_api_key(&raw))
+}
+
 pub(crate) async fn provider_exchange(
     outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
@@ -330,7 +351,16 @@ pub(crate) async fn provider_exchange(
 ) -> Result<Exchange, ProviderFailure> {
     // Callers construct only trusted resource names and numeric query values.
     // Fail closed on unexpected credential syntax rather than sending an unescaped secret.
-    if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
+    // Normalizing here as well as at the read boundary makes the invariant hold
+    // for every caller, including future ones: whitespace can never turn into
+    // `Unavailable` without a provider round trip (#5695).
+    let Some(api_key) = normalize_provider_api_key(api_key) else {
+        tracing::debug!("comicvine provider credential is not configured");
+        return Err(ProviderFailure::Unavailable);
+    };
+    if !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
+        // Never log the value, any fragment of it, or the credential-bearing URL.
+        tracing::warn!("comicvine provider credential contains non-alphanumeric bytes");
         return Err(ProviderFailure::Unavailable);
     }
     // Python `_provider_url`: only collection endpoints use a trailing slash.
@@ -474,10 +504,7 @@ pub(crate) async fn catalog_volume_roster(
         .ok()
         .filter(|v| *v > 0)
         .ok_or_else(unavailable)?;
-    let api_key = std::env::var("COMICVINE_API_KEY")
-        .ok()
-        .filter(|v| !v.is_empty())
-        .ok_or_else(unavailable)?;
+    let api_key = provider_api_key().ok_or_else(unavailable)?;
     let volume = provider_response(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
         .await
         .map_err(|_| unavailable())?;
@@ -835,7 +862,7 @@ pub(crate) async fn hydrate_catalog_commit(
     committed_issue_ids: &[i32],
     budget: Duration,
 ) {
-    let Ok(api_key) = std::env::var("COMICVINE_API_KEY") else {
+    let Some(api_key) = provider_api_key() else {
         return;
     };
     hydrate_catalog_commit_with_key(state, user_id, committed_issue_ids, budget, &api_key).await;
@@ -1141,8 +1168,8 @@ async fn drain_authorized(
     expected: Option<&str>,
 ) -> Result<Json<DrainReport>, ApiError> {
     authorize(headers, expected)?;
-    let key = std::env::var("COMICVINE_API_KEY").ok();
-    let key = key.as_deref().filter(|v| !v.is_empty());
+    let key = provider_api_key();
+    let key = key.as_deref();
     let mut report = DrainReport {
         provider_configured: key.is_some(),
         ..Default::default()
@@ -1489,6 +1516,29 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("authorization", "Bearer test-secret".parse().unwrap());
         headers
+    }
+
+    /// #5695: `provider_exchange` refuses non-alphanumeric credential bytes
+    /// before any round trip, so an untrimmed read used to surface a pasted
+    /// dashboard value with a trailing newline as a provider outage in tens of
+    /// milliseconds. Normalization must make a padded key indistinguishable
+    /// from a clean one, and an all-whitespace value "not configured".
+    #[test]
+    fn provider_api_key_normalizes_surrounding_whitespace() {
+        assert_eq!(
+            normalize_provider_api_key("c0ffee1234"),
+            Some("c0ffee1234".to_owned())
+        );
+        assert_eq!(
+            normalize_provider_api_key("  c0ffee1234\n"),
+            Some("c0ffee1234".to_owned())
+        );
+        assert_eq!(
+            normalize_provider_api_key("\tc0ffee1234 \r\n"),
+            Some("c0ffee1234".to_owned())
+        );
+        assert_eq!(normalize_provider_api_key(""), None);
+        assert_eq!(normalize_provider_api_key(" \n\t\r"), None);
     }
 
     /// #4516 legacy oracle: `_provider_timestamp` returned a naive datetime
