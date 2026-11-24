@@ -496,6 +496,29 @@ describe('ReadingPlanDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hide release tracking' }))
     expect(screen.queryByTestId('new-release-candidate')).not.toBeInTheDocument()
   })
+  it('keeps paused subscription status visible while release controls are collapsed', async () => {
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      release_sources: [{ ...readerView.release_sources[0], enabled: false }],
+    })
+    renderPage()
+
+    expect(await screen.findByTestId('release-tracking-summary')).toHaveTextContent(
+      'Current subscriptions: X-Men (paused)',
+    )
+    expect(screen.queryByTestId('new-release-source')).not.toBeInTheDocument()
+  })
+
+  it('summarizes an empty subscription list without rendering release candidates', async () => {
+    mockGetReader.mockResolvedValue({ ...readerView, release_sources: [] })
+    renderPage()
+
+    expect(await screen.findByTestId('release-tracking-summary')).toHaveTextContent(
+      'No ComicVine volumes followed yet.',
+    )
+    expect(screen.queryByTestId('new-release-candidate')).not.toBeInTheDocument()
+  })
+
   it('rejects an invalid plan id before fetching', () => {
     renderPage('not-a-number')
     expect(screen.getByRole('alert')).toHaveTextContent('Invalid reading plan ID.')
