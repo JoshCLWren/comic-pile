@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -88,6 +89,23 @@ test('ignored directories are excluded from Markdown discovery', () => {
     run({'archive/a.md': body, 'node_modules/p/a.md': body, '.vercel/a.md': body}),
     [],
   );
+});
+
+test('untracked overlay markdown is not scanned in a git checkout', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'doc-code-paths-git-'));
+  try {
+    writeFileSync(path.join(root, 'README.md'), 'See `app/gone.py`.\n', 'utf8');
+    execFileSync('git', ['init', '-q'], {cwd: root, stdio: 'ignore'});
+    execFileSync('git', ['add', 'README.md'], {cwd: root, stdio: 'ignore'});
+    mkdirSync(path.join(root, 'overlay/docs'), {recursive: true});
+    writeFileSync(path.join(root, 'overlay/docs/extra.md'), 'Old `app/also_gone.py`.\n', 'utf8');
+    assert.deepEqual(iterMarkdownFiles(root), [path.join(root, 'README.md')]);
+    assert.deepEqual(findStalePaths(root, iterMarkdownFiles(root)), [
+      'README.md:1: stale code path: app/gone.py',
+    ]);
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
 });
 
 test('current repository has no stale code paths', () => {

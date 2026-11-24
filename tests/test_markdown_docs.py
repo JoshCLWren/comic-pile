@@ -117,6 +117,52 @@ def test_iter_markdown_files_ignores_generated_directories(tmp_path: Path) -> No
     assert iter_markdown_files(tmp_path) == [tmp_path / "README.md"]
 
 
+def _init_git_checkout(root: Path) -> None:
+    """Turn a temporary directory into a minimal Git checkout with one tracked file.
+
+    Args:
+        root: Temporary repository root supplied by pytest.
+    """
+    subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(root), "add", "README.md"],
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_iter_markdown_files_scans_tracked_files_in_git_checkouts(tmp_path: Path) -> None:
+    """Ignored overlay documents must not participate in Git checkout validation.
+
+    Untracked Rotisserie overlay Markdown is machine-local working state; scanning it
+    would report overlay drift as a failure of the PR under validation.
+
+    Args:
+        tmp_path: Temporary repository root supplied by pytest.
+    """
+    (tmp_path / "README.md").write_text("# Root\n", encoding="utf-8")
+    _init_git_checkout(tmp_path)
+    overlay = tmp_path / ".rotisserie" / "runtime" / "factory" / "docs"
+    overlay.mkdir(parents=True)
+    (overlay / "OVERLAY.md").write_text("[stale](missing.md)\n", encoding="utf-8")
+
+    assert iter_markdown_files(tmp_path) == [tmp_path / "README.md"]
+    assert find_broken_local_links(tmp_path, iter_markdown_files(tmp_path)) == []
+
+
+def test_find_unapproved_root_markdown_ignores_untracked_files(tmp_path: Path) -> None:
+    """Untracked root Markdown is not repository content and is not flagged.
+
+    Args:
+        tmp_path: Temporary repository root supplied by pytest.
+    """
+    (tmp_path / "README.md").write_text("# Root\n", encoding="utf-8")
+    _init_git_checkout(tmp_path)
+    (tmp_path / "LOCAL_DRAFT.md").write_text("# Draft\n", encoding="utf-8")
+
+    assert find_unapproved_root_markdown(tmp_path) == []
+
+
 def test_find_unapproved_root_markdown_flags_documentation_sprawl(tmp_path: Path) -> None:
     """Require an explicit ownership decision for unexpected root Markdown.
 
