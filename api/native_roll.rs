@@ -392,8 +392,10 @@ fn app() -> Router {
             "/api/v2/threads/{thread_id}/issue-order",
             put(native_dispatch),
         )
-        .route("/api/v2/issues/{issue_id}", delete(native_dispatch))
-        .route("/api/v2/issues/{issue_id}", patch(native_dispatch))
+        .route(
+            "/api/v2/issues/{issue_id}",
+            delete(native_dispatch).patch(native_dispatch),
+        )
         .route("/api/v2/issues/cards", post(native_dispatch))
         .route(
             "/api/v2/continuity-plans/{plan_id}/reader",
