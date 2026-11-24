@@ -1,8 +1,17 @@
-import { describe, expect, it, vi } from 'vitest'
-import { render, waitFor, act } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { render, waitFor, act, fireEvent } from '@testing-library/react'
 import ImageWithLoading from '../components/ImageWithLoading'
 
+function getImage(container: HTMLElement): HTMLImageElement {
+  const image = container.querySelector('img')
+  if (!image) throw new Error('Image element not found')
+  return image
+}
+
 describe('ImageWithLoading', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
   it('shows loading spinner initially', () => {
     const { getByRole, queryByText } = render(
       <ImageWithLoading src="https://example.com/image.jpg" alt="" />
