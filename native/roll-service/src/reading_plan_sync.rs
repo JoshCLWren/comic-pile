@@ -875,17 +875,21 @@ async fn rebuild_plan_issues_from_nodes_json_batch(
     Ok(())
 }
 
-async fn extend_adopted_issue_to_following_plans(
+async fn extend_adopted_issues_to_following_plans(
     tx: &tokio_postgres::Transaction<'_>,
     user_id: i32,
     thread_id: i32,
     external_identity_id: i32,
-    issue_id: i32,
+    issue_ids: &[i32],
 ) -> Result<(), ApiError> {
+    if issue_ids.is_empty() {
+        return Ok(());
+    }
+
     // Extend enabled sibling sources following the same thread+volume for this user.
-    // For sources linked to an authoritative Reading List, append the adopted issue
-    // to that list (reader-locked, cycle-validated, non-destructive) and do NOT
-    // write plan JSON. Unlinked (legacy) sources keep the plan-JSON append.
+    // Linked sources append to authoritative Reading Lists; unlinked legacy sources
+    // retain the Plan-JSON append. All reads and writes below are set-based so a
+    // roster with many released issues does not multiply source/list/graph queries.
     let source_rows = tx
         .query(
             "SELECT DISTINCT rps.plan_id, rps.custom_cbl_list_id \
@@ -899,143 +903,205 @@ async fn extend_adopted_issue_to_following_plans(
         .await
         .map_err(db::query_error)?;
 
-    // Track lists already handled to avoid duplicate appends.
-    let mut handled_lists: std::collections::BTreeSet<i32> = std::collections::BTreeSet::new();
-
+    let mut list_ids = std::collections::BTreeSet::new();
+    let mut plan_ids = std::collections::BTreeSet::new();
     for row in &source_rows {
         let plan_id: i32 = row.get(0);
-        let list_id: Option<i32> = row.get(1);
+        if let Some(list_id) = row.get::<_, Option<i32>>(1) {
+            list_ids.insert(list_id);
+        } else {
+            plan_ids.insert(plan_id);
+        }
+    }
 
-        if let Some(lid) = list_id {
-            if handled_lists.contains(&lid) {
-                continue;
-            }
-            handled_lists.insert(lid);
-            // Reader-lock the list.
-            let list_row = tx
-                .query_opt(
-                    "SELECT id FROM custom_cbl_lists WHERE id = $1 AND user_id = $2 FOR UPDATE",
-                    &[&lid, &user_id],
+    if !list_ids.is_empty() {
+        let candidate_list_ids: Vec<i32> = list_ids.into_iter().collect();
+        // The caller already holds the per-reader advisory lock. Lock every owned
+        // target list in one deterministic statement before reading membership.
+        let locked_rows = tx
+            .query(
+                "SELECT id FROM custom_cbl_lists \
+                 WHERE id = ANY($1) AND user_id = $2 ORDER BY id FOR UPDATE",
+                &[&candidate_list_ids, &user_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let locked_list_ids: Vec<i32> = locked_rows.iter().map(|row| row.get(0)).collect();
+
+        if !locked_list_ids.is_empty() {
+            let membership_rows = tx
+                .query(
+                    "SELECT list_id, issue_id FROM custom_cbl_entries \
+                     WHERE list_id = ANY($1) AND issue_id = ANY($2)",
+                    &[&locked_list_ids, &issue_ids],
                 )
                 .await
                 .map_err(db::query_error)?;
-            if list_row.is_none() {
-                continue;
-            }
-            // Idempotence: skip if issue already in list.
-            let exists = tx
-                .query_opt(
-                    "SELECT 1 FROM custom_cbl_entries WHERE list_id = $1 AND issue_id = $2 LIMIT 1",
-                    &[&lid, &issue_id],
-                )
-                .await
-                .map_err(db::query_error)?
-                .is_some();
-            if exists {
-                continue;
-            }
-            // Append at end without changing existing positions/gates/progress.
-            // `custom_cbl_entries.position` is INTEGER, so decode it as i32 and
-            // refuse overflow rather than panicking or wrapping the position.
-            let max_pos: i32 = tx
-                .query_one(
-                    "SELECT COALESCE(MAX(position), -1) FROM custom_cbl_entries WHERE list_id = $1",
-                    &[&lid],
-                )
-                .await
-                .map_err(db::query_error)?
-                .get(0);
-            let new_pos = max_pos.checked_add(1).ok_or_else(|| {
-                ApiError::Unprocessable(format!("Reading List {lid} has no append position"))
-            })?;
-            // Cycle validation: run graph preflight on a projected snapshot.
-            // We attempt insert then validate; rollback handled by caller tx.
-            tx.execute(
-                "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at, is_checkpoint, gate, skipped) \
-                 VALUES ($1, $2, $3, NOW(), FALSE, 'none', FALSE)",
-                &[&lid, &issue_id, &new_pos],
-            )
-            .await
-            .map_err(db::query_error)?;
-            // Validate cycle constraints; on failure the caller transaction rolls back.
-            let inputs = crate::option_inputs::load_inputs_in_transaction(
-                tx,
-                AuthenticatedUser::from_id(user_id),
-            )
-            .await?;
-            let list_names: std::collections::BTreeMap<i32, String> = inputs
-                .lists
+            let existing_membership: std::collections::HashSet<(i32, i32)> = membership_rows
                 .iter()
-                .map(|l| (l.list_id, l.name.clone()))
+                .map(|row| (row.get(0), row.get(1)))
                 .collect();
-            crate::reading_constraints::ValidatedReadingInputs::new(inputs.clone(), &list_names)
-                .map_err(|e| ApiError::Unprocessable(format!("cycle validation failed: {e:?}")))?;
-            continue;
-        }
 
-        // Legacy plan-JSON append (unlinked).
-        let plan = tx
-            .query_opt(
-                "SELECT nodes_json FROM continuity_plans WHERE id = $1 AND user_id = $2 FOR UPDATE",
-                &[&plan_id, &user_id],
-            )
-            .await
-            .map_err(db::query_error)?;
-        let Some(plan_row) = plan else {
-            continue;
-        };
+            let max_rows = tx
+                .query(
+                    "SELECT list_id, COALESCE(MAX(position), -1)::int \
+                     FROM custom_cbl_entries WHERE list_id = ANY($1) GROUP BY list_id",
+                    &[&locked_list_ids],
+                )
+                .await
+                .map_err(db::query_error)?;
+            let max_positions: std::collections::BTreeMap<i32, i32> = max_rows
+                .iter()
+                .map(|row| (row.get(0), row.get(1)))
+                .collect();
 
-        let exists = tx
-            .query_opt(
-                "SELECT 1 FROM reading_plan_issues WHERE plan_id = $1 AND issue_id = $2 LIMIT 1",
-                &[&plan_id, &issue_id],
-            )
-            .await
-            .map_err(db::query_error)?
-            .is_some();
-        if exists {
-            continue;
-        }
-
-        let nodes_json: Value = plan_row
-            .try_get::<_, Value>(0)
-            .unwrap_or(Value::Array(Vec::new()));
-        let mut nodes = nodes_json.as_array().cloned().unwrap_or_default();
-        let mut max_pos: i64 = -1;
-        let mut already_in_json = false;
-        for node in &nodes {
-            if let Some(pos) = node.get("position").and_then(Value::as_i64) {
-                if pos > max_pos {
-                    max_pos = pos;
+            let mut appended = Vec::new();
+            for list_id in locked_list_ids {
+                let mut position = *max_positions.get(&list_id).unwrap_or(&-1);
+                for issue_id in issue_ids {
+                    if existing_membership.contains(&(list_id, *issue_id)) {
+                        continue;
+                    }
+                    position = position.checked_add(1).ok_or_else(|| {
+                        ApiError::Unprocessable(format!("Reading List {list_id} has no append position"))
+                    })?;
+                    appended.push(serde_json::json!({
+                        "list_id": list_id,
+                        "issue_id": issue_id,
+                        "position": position,
+                    }));
                 }
             }
-            if node.get("node_type").and_then(Value::as_str) == Some("issue")
-                && node.get("ref_id").and_then(Value::as_i64) == Some(i64::from(issue_id))
-            {
-                already_in_json = true;
+
+            if !appended.is_empty() {
+                // Append only. Existing positions, gates, checkpoints, skips and
+                // reading progress are never rewritten.
+                tx.execute(
+                    "INSERT INTO custom_cbl_entries \
+                       (list_id, issue_id, position, created_at, is_checkpoint, gate, skipped) \
+                     SELECT list_id, issue_id, position, NOW(), FALSE, 'none', FALSE \
+                     FROM jsonb_to_recordset($1::jsonb) AS appended(\
+                       list_id integer, issue_id integer, position integer)",
+                    &[&Value::Array(appended)],
+                )
+                .await
+                .map_err(db::query_error)?;
+
+                // Validate the complete projected graph once. Any cycle or invalid
+                // reference rolls back the caller's whole source transaction.
+                let inputs = crate::option_inputs::load_inputs_in_transaction(
+                    tx,
+                    AuthenticatedUser::from_id(user_id),
+                )
+                .await?;
+                let list_names: std::collections::BTreeMap<i32, String> = inputs
+                    .lists
+                    .iter()
+                    .map(|list| (list.list_id, list.name.clone()))
+                    .collect();
+                crate::reading_constraints::ValidatedReadingInputs::new(inputs.clone(), &list_names)
+                    .map_err(|e| ApiError::Unprocessable(format!("cycle validation failed: {e:?}")))?;
             }
         }
-        if !already_in_json {
-            let new_pos = (max_pos + 1) as i32;
-            nodes.push(serde_json::json!({
-                "id": format!("release-{issue_id}"),
-                "node_type": "issue",
-                "ref_id": issue_id,
-                "lane_id": "unread-tail",
-                "position": new_pos,
-                "label": Value::Null,
-                "is_checkpoint": false
-            }));
+    }
+
+    if !plan_ids.is_empty() {
+        let plan_ids: Vec<i32> = plan_ids.into_iter().collect();
+        let plan_rows = tx
+            .query(
+                "SELECT id, nodes_json FROM continuity_plans \
+                 WHERE id = ANY($1) AND user_id = $2 ORDER BY id FOR UPDATE",
+                &[&plan_ids, &user_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let membership_rows = tx
+            .query(
+                "SELECT plan_id, issue_id FROM reading_plan_issues \
+                 WHERE plan_id = ANY($1) AND issue_id = ANY($2)",
+                &[&plan_ids, &issue_ids],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let existing_membership: std::collections::HashSet<(i32, i32)> = membership_rows
+            .iter()
+            .map(|row| (row.get(0), row.get(1)))
+            .collect();
+
+        let mut changed_plans = Vec::new();
+        let mut rebuild_plan_ids = std::collections::BTreeSet::new();
+        for row in &plan_rows {
+            let plan_id: i32 = row.get(0);
+            let nodes_json: Value = row
+                .try_get::<_, Value>(1)
+                .unwrap_or(Value::Array(Vec::new()));
+            let mut nodes = nodes_json.as_array().cloned().unwrap_or_default();
+            let mut issue_nodes = std::collections::HashSet::new();
+            let mut max_position = -1_i64;
+            for node in &nodes {
+                if let Some(position) = node.get("position").and_then(Value::as_i64) {
+                    max_position = max_position.max(position);
+                }
+                if node.get("node_type").and_then(Value::as_str) == Some("issue") {
+                    if let Some(issue_id) = node.get("ref_id").and_then(Value::as_i64) {
+                        issue_nodes.insert(issue_id);
+                    }
+                }
+            }
+
+            let mut next_position = i32::try_from(max_position)
+                .ok()
+                .and_then(|position| position.checked_add(1));
+            let mut changed = false;
+            let mut needs_rebuild = false;
+            for issue_id in issue_ids {
+                if existing_membership.contains(&(plan_id, *issue_id)) {
+                    continue;
+                }
+                needs_rebuild = true;
+                if issue_nodes.contains(&i64::from(*issue_id)) {
+                    continue;
+                }
+                let position = next_position.ok_or_else(|| {
+                    ApiError::Unprocessable(format!("Reading Plan {plan_id} has no append position"))
+                })?;
+                nodes.push(serde_json::json!({
+                    "id": format!("release-{issue_id}"),
+                    "node_type": "issue",
+                    "ref_id": issue_id,
+                    "lane_id": "unread-tail",
+                    "position": position,
+                    "label": Value::Null,
+                    "is_checkpoint": false
+                }));
+                next_position = position.checked_add(1);
+                changed = true;
+            }
+
+            if changed {
+                changed_plans.push(serde_json::json!({
+                    "id": plan_id,
+                    "nodes_json": Value::Array(nodes),
+                }));
+            }
+            if needs_rebuild {
+                rebuild_plan_ids.insert(plan_id);
+            }
+        }
+
+        if !changed_plans.is_empty() {
             tx.execute(
-                "UPDATE continuity_plans SET nodes_json = $1::jsonb, updated_at = NOW() WHERE id = $2",
-                &[&Value::Array(nodes), &plan_id],
+                "UPDATE continuity_plans cp \
+                 SET nodes_json = changed.nodes_json, updated_at = NOW() \
+                 FROM jsonb_to_recordset($1::jsonb) AS changed(id integer, nodes_json jsonb) \
+                 WHERE cp.id = changed.id AND cp.user_id = $2",
+                &[&Value::Array(changed_plans), &user_id],
             )
             .await
             .map_err(db::query_error)?;
         }
-        // Rebuild issue membership from plan nodes for closer parity with
-        // rebuild_plan_membership (source/placement rebuild still pending).
-        rebuild_plan_issues_from_nodes_json(tx, plan_id).await?;
+        let rebuild_plan_ids: Vec<i32> = rebuild_plan_ids.into_iter().collect();
+        rebuild_plan_issues_from_nodes_json_batch(tx, &rebuild_plan_ids).await?;
     }
 
     Ok(())
