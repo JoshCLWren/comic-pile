@@ -7,6 +7,8 @@ import { queryKeys } from '../query/queryKeys'
 interface ComicVineIssueIntelligenceState {
   metadata: ComicVineIssueIntelligence | null
   isLoading: boolean
+  isError: boolean
+  error: Error | null
   refetch: () => Promise<void>
 }
 
@@ -31,6 +33,8 @@ export function useComicVineIssueIntelligence(
   return {
     metadata: data ?? null,
     isLoading: isPending,
+    isError,
+    error,
     refetch,
   }
 }
