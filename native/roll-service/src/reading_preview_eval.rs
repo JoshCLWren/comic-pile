@@ -382,4 +382,37 @@ mod tests {
         assert_eq!(blocker.waiting_on_issue_ids, vec![100]);
         assert_eq!(blocker.gate_issue_id, Some(102));
     }
+
+    #[test]
+    fn loose_list_after_previous_named_handoff_issue_4199() {
+        // Issue #4199: loose multi-series list. gate=none entries advance
+        // independently; after_previous waits for immediately preceding
+        // included entry (BP #19 before SM #20). No derived cross-series gating.
+        let entries = vec![
+            entry(101, "none", false), // SM #19 read (not in unread set)
+            entry(201, "none", false), // BP #11 unread
+            entry(219, "none", false), // BP #19 unread - named preceding
+            entry(102, "after_previous", false), // SM #20 waits for BP #19
+            entry(301, "none", false), // UXM #5 independent
+        ];
+        let unread: HashSet<i32> = [201, 219, 102, 301].into();
+        let found = list_blockers(
+            1000008,
+            "loose",
+            &entries,
+            &[],
+            &unread,
+            &BTreeSet::new(),
+            &volumes(&[]),
+        );
+        // gate=none entries in a loose list have no derived cross-series blockers
+        assert!(!found.contains_key(&201), "BP #11 should not be blocked: {found:?}");
+        assert!(!found.contains_key(&219), "BP #19 should not be blocked: {found:?}");
+        assert!(!found.contains_key(&301), "UXM #5 should not be blocked: {found:?}");
+        // SM #20 blocked by after_previous on BP #19
+        let sm20 = found.get(&102).expect("SM #20 should be blocked");
+        let after = sm20.iter().find(|b| b.kind == "after_previous").expect("after_previous blocker");
+        assert_eq!(after.waiting_on_issue_ids, vec![219]);
+        assert_eq!(after.gate_issue_id, Some(102));
+    }
 }
