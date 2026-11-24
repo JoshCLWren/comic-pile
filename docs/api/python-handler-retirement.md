@@ -5,10 +5,10 @@ tests, and confirmed test-only code in one PR. The public API operations remain
 implemented by the existing Rust router; this cleanup does not retire their URLs.
 
 `tests/fixtures/retired-python-handlers.json` records the 78 retired method/path
-registrations (65 handler functions, with shared aliases). The Python retirement
-guard proves they are absent from FastAPI. The frontend proxy regression checks
-that each operation still resolves to native ingress, and the Rust-generated
-same-path contract test checks that each operation remains documented.
+registrations (65 handler functions, with shared aliases). The frontend proxy
+regression proves the retired paths are absent from the Vite/Vercel ingress and
+still resolve to native Rust, and the Rust-generated
+same-path contract test checks that each retained operation remains documented.
 
 ## Contracts and local requests
 
@@ -25,7 +25,8 @@ is preserved.
 
 The bot-owned route inventory contains the historical shadowed-handler entries;
 those entries do not imply the Python implementations still exist. Use the
-retirement manifest and current FastAPI route table to identify removed code.
+retirement manifest and the native router registration in
+`native/roll-service/src/lib.rs` to identify removed code.
 Bot-owned ingress artifacts remain under the post-merge regeneration workflow.
 
 ## Scope of deletion

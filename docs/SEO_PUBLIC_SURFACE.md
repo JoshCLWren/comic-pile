@@ -57,7 +57,8 @@ The policy is enforced across artifacts, so drift fails CI rather than shipping:
 
 ## Production launch audit
 
-The regression suites above cover the build output and the FastAPI surface. They
+The regression suites above cover the build output and the native Rust API
+surface. They
 cannot cover the deployed origin, because the production routing layer (Vercel's
 catch-all) can serve a different document than the backend would. Issue #3905
 is that class of defect: the per-route HTML was built correctly, but the
