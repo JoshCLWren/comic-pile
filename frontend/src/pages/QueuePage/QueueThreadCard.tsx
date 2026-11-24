@@ -38,20 +38,18 @@ interface QueueThreadCardProps {
   snoozeIcon: string
   snoozeLabel: string
   snoozeDisabled: boolean
-  readDisabled?: boolean
-  readDisabledReason?: string
   onCardClick: () => void
   onDragStart: React.DragEventHandler<HTMLElement>
   onDragEnd: React.DragEventHandler<HTMLElement>
   onDragOver: React.DragEventHandler<HTMLElement>
   onDrop: React.DragEventHandler<HTMLElement>
-  onRead: () => void
   onSnooze: () => void
   onMoveToFront: () => void
   onMoveToBack: () => void
   onReposition: () => void
   onEdit: () => void
   onDependencies: () => void
+  onMigrate?: () => void
   onDelete: () => void
   onRemoveFromQueue?: () => void
   positionActionsAvailable?: boolean
@@ -106,20 +104,18 @@ export default function QueueThreadCard({
   snoozeIcon,
   snoozeLabel,
   snoozeDisabled,
-  readDisabled,
-  readDisabledReason,
   onCardClick,
   onDragStart,
   onDragEnd,
   onDragOver,
   onDrop,
-  onRead,
   onSnooze,
   onMoveToFront,
   onMoveToBack,
   onReposition,
   onEdit,
   onDependencies,
+  onMigrate,
   onDelete,
   onRemoveFromQueue,
   positionActionsAvailable = true,
@@ -370,9 +366,7 @@ export default function QueueThreadCard({
       <div className="flex shrink-0 items-center gap-2 self-stretch pl-12 @2xl:pl-0 @2xl:self-center flex-wrap">
         <QueueThreadActions
           title={thread.title}
-          readDisabled={readDisabled}
-          readDisabledReason={readDisabledReason}
-          onRead={onRead}
+          onRead={() => setIssueCardOpen(true)}
         />
         <PositionMenu
           thread={thread}
@@ -398,7 +392,7 @@ export default function QueueThreadCard({
         aria-label={`Exact issue actions for ${thread.title}`}
         className="mx-3 mb-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3"
       >
-        <QueueNextIssueCard threadId={thread.id} threadTitle={thread.title} />
+        <QueueNextIssueCard threadId={thread.id} threadTitle={thread.title} issuesRemaining={thread.issues_remaining} onMigrate={onMigrate} />
       </section>
     )}
     <QueueMapSeriesDialog

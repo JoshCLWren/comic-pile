@@ -486,7 +486,18 @@ pub(crate) fn natural_issue_order(existing: &[String], incoming: &[String]) -> O
         });
         match slot {
             Some(index) => result.insert(index, label.clone()),
-            None => result.push(label.clone()),
+            None => {
+                // Beyond the maximum, anchor after the last ordinary number rather
+                // than after any irregular labels saved at the tail.
+                let last_numbered = result
+                    .iter()
+                    .rposition(|current| ordinary_key(current).is_some());
+                if let Some(index) = last_numbered {
+                    result.insert(index + 1, label.clone());
+                } else {
+                    result.push(label.clone());
+                }
+            }
         }
     }
     Some(result)
@@ -1950,6 +1961,42 @@ mod tests {
     }
 
     #[test]
+    fn natural_order_repairs_cbl_appended_issues_3483() {
+        // #3483: adopting the Ultimate Universe CBL list into a thread that
+        // already held #7-#24 appended the missing low issues after #24.
+        // This routine is the single ordering authority for series:import,
+        // CBL adoption materialization and reading-plan sync; the Queue and
+        // thread-page dialogs are covered by the same #3029 ordering contract
+        // through their shared create-issues handler.
+        let high_run: Vec<String> = (7..=24).map(|n| n.to_string()).collect();
+        let mut seated: Vec<String> = strings(&["1", "2"]);
+        seated.extend(high_run.iter().cloned());
+
+        // First adoption: the missing #1 and #2 must be seated in front of the
+        // existing run, regardless of the CBL roster order.
+        let ascending = natural_issue_order(&high_run, &strings(&["1", "2"]));
+        let descending = natural_issue_order(&high_run, &strings(&["2", "1"]));
+        assert_eq!(ascending, Some(seated.clone()));
+        assert_eq!(descending, Some(seated));
+
+        // Re-adoption after the historical append bug: the stored order is
+        // #7-#24, then #2-#6, then #1. A subsequent natural pass reseats every
+        // ordinary number instead of appending again.
+        let mut appended = high_run;
+        appended.extend(
+            ["2", "3", "4", "5", "6", "1"]
+                .iter()
+                .map(|n| (*n).to_string()),
+        );
+        let reseated: Vec<String> = (1..=24).map(|n| n.to_string()).collect();
+        assert_eq!(
+            natural_issue_order(&appended, &[]),
+            Some(reseated),
+            "all-ordinary threads are repaired on the next natural pass"
+        );
+    }
+
+    #[test]
     fn python_int_parsing() {
         assert_eq!(python_int("5"), Some(5));
         assert_eq!(python_int(" 5 "), Some(5));
@@ -1961,6 +2008,27 @@ mod tests {
         assert_eq!(python_int("1.5"), None);
         assert_eq!(python_int("Annual 1"), None);
         assert_eq!(python_int(""), None);
+    }
+
+    #[test]
+    fn natural_order_places_new_maximum_before_trailing_special() {
+        let existing = strings(&["1", "2", "5", "7", "8", "Annual 1", "9", "10", "Special 0"]);
+        let expected = strings(&[
+            "1",
+            "2",
+            "5",
+            "7",
+            "8",
+            "Annual 1",
+            "9",
+            "10",
+            "11",
+            "Special 0",
+        ]);
+        assert_eq!(
+            natural_issue_order(&existing, &strings(&["11"])),
+            Some(expected)
+        );
     }
 
     #[test]

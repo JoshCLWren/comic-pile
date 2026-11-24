@@ -643,6 +643,176 @@ async fn adoption_commit_creates_plan_with_valid_fingerprint() {
     assert!(body["unresolved_positions"].is_array(), "{body}");
 }
 
+async fn crossover_snapshot(
+    state: &Arc<AppState>,
+) -> Vec<(
+    i32,
+    i32,
+    String,
+    Option<i32>,
+    Option<i32>,
+    Option<i32>,
+    Option<i32>,
+    Option<i32>,
+)> {
+    let conn = state.pool.get().await.unwrap();
+    conn.query(
+        "SELECT g.id, g.user_id, g.name,
+                m.id, m.group_id, m.thread_id, m.issue_id, m.sequence_order
+         FROM dependency_groups g
+         LEFT JOIN dependency_group_memberships m ON m.group_id = g.id
+         ORDER BY g.id, m.id",
+        &[],
+    )
+    .await
+    .unwrap()
+    .iter()
+    .map(|row| {
+        (
+            row.get(0),
+            row.get(1),
+            row.get(2),
+            row.get(3),
+            row.get(4),
+            row.get(5),
+            row.get(6),
+            row.get(7),
+        )
+    })
+    .collect()
+}
+
+async fn seed_crossover_sentinel(state: &Arc<AppState>, user_id: i32) {
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO threads
+          (id, user_id, title, format, issues_remaining, queue_position, status,
+           total_issues, reading_progress, created_at)
+        VALUES
+          (351700, {user_id}, 'Existing crossover thread', 'comic', 1, 90, 'active',
+           1, 'not_started', NOW());
+        INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+        VALUES (351701, 351700, '1', 0, 'unread', NOW());
+        INSERT INTO dependency_groups (id, user_id, name, created_at)
+        VALUES (351702, {user_id}, 'Reader-created crossover', NOW());
+        INSERT INTO dependency_group_memberships
+          (id, group_id, issue_id, sequence_order)
+        VALUES (351703, 351702, 351701, 0);
+        "#
+    ))
+    .await
+    .unwrap();
+}
+
+fn one_selected_adoption_payload() -> Value {
+    json!({
+        "entry_decisions": {},
+        "series_decisions": [],
+        "series_overrides": [
+            {"cbl_position": 0, "decision": "include"},
+            {"cbl_position": 1, "decision": "exclude"}
+        ],
+        "content_hash": "h-mm",
+        "revision_sha": "rev-1"
+    })
+}
+
+fn assert_one_selected_adoption(body: &Value, plan_id: i64) {
+    assert_eq!(body["id"], plan_id, "{body}");
+    assert_eq!(body["created_positions"], json!([0]), "{body}");
+    assert_eq!(body["reused_positions"], json!([]), "{body}");
+    assert_eq!(body["excluded_positions"], json!([1]), "{body}");
+    assert_eq!(body["unresolved_positions"], json!([]), "{body}");
+    let nodes = body["nodes"].as_array().unwrap();
+    assert_eq!(
+        nodes.len(),
+        1,
+        "only the selected entry belongs in the plan: {body}"
+    );
+    assert_eq!(nodes[0]["node_type"], "issue", "{body}");
+    assert_eq!(nodes[0]["label"], "Mister Miracle #1", "{body}");
+    assert!(nodes[0]["ref_id"].as_i64().unwrap() > 0, "{body}");
+}
+
+#[tokio::test]
+async fn adoption_commit_does_not_create_crossover_event_label_issue_3517() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+    seed_crossover_sentinel(&state, user_id).await;
+    let before = crossover_snapshot(&state).await;
+    assert_eq!(
+        before.len(),
+        1,
+        "the sentinel must make this a non-empty check"
+    );
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        one_selected_adoption_payload(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{status} {body}");
+    let plan_id = body["id"].as_i64().expect("plan id");
+    assert_one_selected_adoption(&body, plan_id);
+
+    assert_eq!(
+        crossover_snapshot(&state).await,
+        before,
+        "CBL adoption must neither create event labels nor change their memberships (issue #3517): {body}"
+    );
+}
+
+#[tokio::test]
+async fn targeted_adoption_commit_does_not_create_crossover_event_label_issue_3517() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+    seed_crossover_sentinel(&state, user_id).await;
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO continuity_plans
+           (id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
+         VALUES
+           (351710, $1, 'Fresh target plan', 'informational',
+            '[{\"id\":\"default\",\"name\":\"Default\",\"order\":0}]'::jsonb,
+            '[]'::jsonb, NOW(), NOW())",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+    let before = crossover_snapshot(&state).await;
+    assert_eq!(
+        before.len(),
+        1,
+        "the sentinel must make this a non-empty check"
+    );
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/reading-plans/351710/adoption-commits",
+        one_selected_adoption_payload(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{status} {body}");
+    assert_one_selected_adoption(&body, 351710);
+
+    assert_eq!(
+        crossover_snapshot(&state).await,
+        before,
+        "Targeted CBL adoption must neither create event labels nor change their memberships (issue #3517): {body}"
+    );
+}
+
 #[tokio::test]
 async fn adoption_plan_reports_title_number_ambiguity_statuses() {
     let (state, token, csrf, _guard) = setup().await;
@@ -758,6 +928,110 @@ async fn adoption_commit_materializes_missing_importable_issue() {
     assert_eq!(body["created_positions"], json!([0]), "{body}");
     assert_eq!(body["unresolved_positions"], json!([]), "{body}");
     assert_eq!(body["excluded_positions"], json!([]), "{body}");
+}
+
+#[tokio::test]
+async fn adoption_commit_seats_missing_low_issues_in_natural_order_3483() {
+    // #3483: adopting a CBL list into an existing series thread that already
+    // held #7-#24 must seat #1 and #2 in front of #7, not append them after
+    // #24. The ordering is owned by the shared `natural_issue_order` routine
+    // used by every insertion path.
+    let (state, token, csrf, _guard) = setup().await;
+
+    let conn = state.pool.get().await.unwrap();
+    let user_id: i32 = conn
+        .query_one(
+            "SELECT id FROM users WHERE username LIKE 'issue-identity-%' ORDER BY id DESC LIMIT 1",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let issues_seed = (7..=24)
+        .enumerate()
+        .map(|(idx, number)| {
+            format!(
+                "({}, 34830, '{}', {}, 'unread', NOW())",
+                348300 + idx,
+                number,
+                idx + 1
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",\n          ");
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+        VALUES (40, '{MIRROR_REPOSITORY}-3483', 'rev-3483', NOW(), NOW(), NOW());
+        INSERT INTO cbl_source_lists
+          (id, source_id, source_path, name, declared_issue_count, content_hash,
+           revision_sha, active, created_at, updated_at)
+        VALUES
+          (40, 40, 'Marvel/Ultimate/Ultimate Spider-Man.cbl', 'Ultimate Spider-Man',
+           2, 'h-3483', 'rev-3483', TRUE, NOW(), NOW());
+        INSERT INTO external_identities
+          (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+        VALUES
+          (3481, 'comicvine', 'issue', '4000-3483-1', '{{}}'::json, NOW(), NOW()),
+          (3482, 'comicvine', 'issue', '4000-3483-2', '{{}}'::json, NOW(), NOW()),
+          (3483, 'comicvine', 'series', '4050-3483', '{{}}'::json, NOW(), NOW());
+        INSERT INTO cbl_source_entries
+          (id, list_id, "position", series_name, issue_number, volume_year,
+           publication_year, external_issue_identity_id, external_series_identity_id, created_at)
+        VALUES
+          (3481, 40, 0, 'Ultimate Spider-Man', '1', 2024, 2024, 3481, 3483, NOW()),
+          (3482, 40, 1, 'Ultimate Spider-Man', '2', 2024, 2024, 3482, 3483, NOW());
+        INSERT INTO threads
+          (id, user_id, title, format, issues_remaining, queue_position, status,
+           total_issues, reading_progress, created_at)
+        VALUES
+          (34830, {user_id}, 'Ultimate Spider-Man', 'comic', 18, 40, 'active',
+           18, 'in_progress', NOW());
+        INSERT INTO thread_external_series_mappings
+          (thread_id, external_identity_id, status, evidence_source, created_at, updated_at)
+        VALUES (34830, 3483, 'confirmed', 'test', NOW(), NOW());
+        INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+        VALUES
+          {issues_seed};
+        "#
+    ))
+    .await
+    .unwrap();
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/40/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-3483",
+            "revision_sha": "rev-3483"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+    assert_eq!(body["created_positions"], json!([0, 1]), "{body}");
+
+    let rows = conn
+        .query(
+            "SELECT issue_number FROM issues WHERE thread_id = 34830 ORDER BY position, id",
+            &[],
+        )
+        .await
+        .unwrap();
+    let actual: Vec<String> = rows.iter().map(|row| row.get::<_, String>(0)).collect();
+    let mut expected: Vec<String> = vec!["1".to_string(), "2".to_string()];
+    expected.extend((7..=24).map(|number| number.to_string()));
+    assert_eq!(
+        actual, expected,
+        "CBL-adopted low issues must be natural-ordered"
+    );
 }
 
 #[tokio::test]

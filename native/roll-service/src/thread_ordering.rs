@@ -304,6 +304,9 @@ fn describe_origin(
             "Converted prerequisite".into()
         };
     }
+    if blocker.kind == "reading_cycle" {
+        return "Reading constraint cycle".into();
+    }
     let kind = match blocker.kind.as_str() {
         "strict_order" => "Strict order",
         "hold" => "Hold",
@@ -323,7 +326,7 @@ async fn option_e_explanations(
     user: AuthenticatedUser,
     thread_ids: &[i32],
 ) -> Result<Vec<(i32, BlockingExplanation)>, ApiError> {
-    let validated = option_inputs::load_option_inputs(state, user).await?;
+    let validated = option_inputs::load_option_inputs_contained(state, user).await?;
     let evaluated = reading_eligibility::evaluate(&validated)?;
     let inputs = validated.inputs();
     let thread_titles: HashMap<i32, &str> = inputs

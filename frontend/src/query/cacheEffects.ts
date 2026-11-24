@@ -34,6 +34,14 @@ export function clearSessionCache(client: QueryClient): void {
   client.clear()
 }
 
+/** Remember the deployment-wide boundary authority for later route loads. */
+export function recordReadingBoundaryEvaluator(
+  client: QueryClient,
+  evaluator: 'enabled' | 'unavailable',
+): void {
+  client.setQueryData(queryKeys.dependencies.readingBoundaryEvaluator(), evaluator)
+}
+
 /**
  * Refetch active queries that failed during a recognized backend outage.
  *
@@ -198,6 +206,17 @@ export async function applyUpdatedThreadCache(
     client.invalidateQueries({
       queryKey: queryKeys.roll.issueCardsAll(),
     }),
+  ])
+}
+
+/** Reopen a manually selected series after tracking migration. */
+export async function invalidateDirectReadIssueSelection(
+  client: QueryClient,
+  threadId: number,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.thread.nextUnreadIssue(threadId) }),
+    client.invalidateQueries({ queryKey: queryKeys.thread.directReadBrowse(threadId) }),
   ])
 }
 

@@ -18,7 +18,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::instrument;
 
-use crate::{auth::AuthenticatedUser, db::checkout, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser, db::checkout, thread_issues::natural_issue_order, ApiError, AppState,
+};
 
 // Public projection constants mirror `app.services.cbl_source_public` and the
 // existing native `cbl_catalog` module. The local mirror path must never reach
@@ -3754,16 +3756,21 @@ async fn merge_adoption_nodes_tx(
         if created_now {
             created_positions.push(pos);
         }
+        let series_name = entry
+            .get("series_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let raw_issue_number = entry
+            .get("issue_number")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let label = format!(
             "{} #{}",
-            entry
-                .get("series_name")
-                .and_then(|v| v.as_str())
-                .unwrap_or(""),
-            entry
-                .get("issue_number")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
+            series_name,
+            crate::reading_plan_reader::normalize_issue_number_display(
+                raw_issue_number,
+                series_name,
+            )
         );
         let placement = serde_json::json!({"source_path": source_path, "position": pos});
         if let Some(&idx) = issue_node_index.get(&issue_id) {
@@ -3922,59 +3929,6 @@ fn tx_to_commit_err(error: tokio_postgres::Error, context: &str) -> MaterializeE
     } else {
         MaterializeErr::Unexpected(format!("{context}: {error}"))
     }
-}
-
-fn parse_ordinary_issue_number(issue_number: &str) -> Option<i64> {
-    if issue_number.is_empty() || issue_number.starts_with('0') {
-        return None;
-    }
-    if !issue_number.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    issue_number.parse::<i64>().ok().filter(|n| *n > 0)
-}
-
-fn natural_issue_order(existing: &[String], new_numbers: &[String]) -> Option<Vec<String>> {
-    let mut incoming: Vec<(i64, String)> = Vec::new();
-    for issue_number in new_numbers {
-        let value = parse_ordinary_issue_number(issue_number)?;
-        incoming.push((value, issue_number.clone()));
-    }
-    let existing_numbered: Vec<(i64, String)> = existing
-        .iter()
-        .filter_map(|n| parse_ordinary_issue_number(n).map(|v| (v, n.clone())))
-        .collect();
-    if existing_numbered.len() == existing.len() {
-        let mut merged = existing_numbered;
-        merged.extend(incoming);
-        merged.sort_by_key(|(n, _)| *n);
-        return Some(merged.into_iter().map(|(_, s)| s).collect());
-    }
-    if existing_numbered.is_empty() {
-        return None;
-    }
-    let numbers: Vec<i64> = existing_numbered.iter().map(|(n, _)| *n).collect();
-    if numbers.windows(2).any(|w| w[0] > w[1]) {
-        return None;
-    }
-    let mut result: Vec<String> = existing.to_vec();
-    incoming.sort_by_key(|(n, _)| *n);
-    for (number, label) in incoming {
-        let mut inserted = false;
-        for idx in 0..result.len() {
-            if let Some(existing_number) = parse_ordinary_issue_number(&result[idx]) {
-                if existing_number > number {
-                    result.insert(idx, label.clone());
-                    inserted = true;
-                    break;
-                }
-            }
-        }
-        if !inserted {
-            result.push(label);
-        }
-    }
-    Some(result)
 }
 
 async fn insert_issue_natural_order_tx(

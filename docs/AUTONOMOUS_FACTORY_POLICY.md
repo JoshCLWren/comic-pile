@@ -29,7 +29,7 @@ The delivery factory follows this permanent cycle:
 5. if the shared executable pool is genuinely empty, release any active lease, record a truthful no-work completion, and end that bounded session cleanly;
 6. remain scheduled and check the shared pool again on the next normal heartbeat.
 
-An empty or blocked ordinary backlog is never a reason to pause, disable, suspend, or mutate a factory schedule. Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable a factory. Scheduled workers remain enabled and continue checking on schedule.
+An empty or blocked ordinary backlog is never a reason to pause, disable, suspend, or mutate a factory schedule. Only Josh, or an interactive session with Josh present (`gh api user` returns the repository owner) acting on his direct instruction in that session, may pause or disable a factory. No second confirmation is needed. Scheduled workers remain enabled and continue checking on schedule.
 
 User-reported product bugs are the first delivery queue. Reproducible E2E-discovered product bugs come after them, then ordinary executable product issues. Preserve `user-reported` only for defects actually reported by a user.
 
@@ -513,7 +513,7 @@ Rules:
 - Never merge unless every gate in this policy is verified for the exact current head SHA.
 - Never weaken checks, skip tests, remove meaningful coverage, bypass hooks, or add suppressions merely to make CI green.
 - Never manufacture evidence or claim commands ran when they did not.
-- Never mutate factory schedules or topology. Only Josh or an interactive session acting on Josh's direct instruction may do so.
+- Never mutate factory schedules or topology. Only Josh, or an interactive session with Josh present (`gh api user` returns the repository owner) acting on his direct instruction in that session, may do so; no second confirmation is needed. Autonomous workers never may. The discovery workflow's retirement PR for fixed-model churn still applies; human-initiated additions need no separate approval.
 - Never pause, disable, suspend, or stop a scheduled factory because the ordinary backlog is blocked or empty. Keep the schedule enabled and end only the current bounded session when no executable work exists.
 - When an interactive session pauses or disables a worker on Josh's instruction, release that worker's open claims before treating the pause as complete.
 

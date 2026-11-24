@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { DragEvent } from 'react'
 import type { ThreadListItem } from '../../types'
-import { threadsApi } from '../../services/api-threads'
 import { focusSeriesActionsTrigger } from '../../components/seriesActionsTrigger'
 import {
   useMoveToBack,
@@ -15,15 +14,11 @@ import { useUnsnooze } from '../../hooks/useRoll'
 import type { RollUnsnoozeResponse } from '../../services/apiTypes'
 
 import { useToast } from '../../contexts/useToast'
-import {
-  invalidateAfterQueueMovement,
-  resetRollBootstrapAfterManualSelection,
-} from '../../query/cacheEffects'
+import { invalidateAfterQueueMovement } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 
 interface UseQueueThreadActionsParams {
-  navigateToRoll: (thread: ThreadListItem, response: unknown) => void
   /**
    * Returns focus to a row's "Series actions" trigger once the queue cache has
    * settled. The reset that follows a queue mutation remounts every row, so
@@ -62,7 +57,6 @@ export interface UseQueueThreadActionsDeps {
   reroll?: typeof rollApi.reroll
   unsnooze?: (threadId: number) => Promise<RollUnsnoozeResponse>
   toastHook?: typeof useToast
-  setPending?: typeof threadsApi.setPending
 }
 
 interface QueueThreadActionResult {
@@ -94,7 +88,6 @@ interface QueueThreadActionResult {
   handleMoveToFront: (threadId: number) => Promise<void> | void
   handleMoveToBack: (threadId: number) => Promise<void> | void
   handleReposition: (threadId: number, targetPosition: number, total: number) => Promise<void> | void
-  handleThreadRead: (thread: ThreadListItem) => Promise<void> | void
   handleSnoozeToggle: (thread: ThreadListItem, isSnoozed: boolean) => Promise<void> | void
 }
 
@@ -109,7 +102,6 @@ export function useQueueThreadActions(
   deps: UseQueueThreadActionsDeps = {},
 ): QueueThreadActionResult {
   const {
-    navigateToRoll,
     restoreSeriesActionsFocus = restoreSeriesActionsFocusByThreadId,
   } = params
   const {
@@ -122,7 +114,6 @@ export function useQueueThreadActions(
     reroll = rollApi.reroll,
     unsnooze: unsnoozeOverride,
     toastHook = useToast,
-    setPending = threadsApi.setPending,
   } = deps
   // Unsnooze is a write: it goes through the shared mutation, which owns the
   // roll cache effects in onSuccess.
@@ -317,25 +308,6 @@ export function useQueueThreadActions(
     }
   }, [shuffleQueueMutation])
 
-  const handleThreadRead = useCallback(
-    async (thread: ThreadListItem) => {
-      if (thread.is_blocked) {
-        return
-      }
-      try {
-        const response = await setPending(thread.id)
-        // Roll hydrates the rating view from the bootstrap query, so the
-        // cached snapshot must not outlive the selection we just persisted.
-        await resetRollBootstrapAfterManualSelection(queryClient)
-        navigateToRoll(thread, response)
-      } catch (error: unknown) {
-        console.error('Action failed:', error)
-        showToast(`Action failed: ${getApiErrorDetail(error)}`, 'error')
-      }
-    },
-    [navigateToRoll, setPending, showToast],
-  )
-
   const handleSnoozeToggle = useCallback(
     async (thread: ThreadListItem, isSnoozed: boolean) => {
       try {
@@ -408,7 +380,6 @@ export function useQueueThreadActions(
     handleMoveToFront,
     handleMoveToBack,
     handleReposition,
-    handleThreadRead,
     handleSnoozeToggle,
   }
 }

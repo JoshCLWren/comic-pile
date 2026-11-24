@@ -20,6 +20,7 @@ use crate::{
     auth::AuthenticatedUser,
     db,
     outbound::{OutboundHttp, OutboundRequest},
+    thread_issues::natural_issue_order,
     ApiError, AppState,
 };
 use axum::{
@@ -231,6 +232,8 @@ fn parse_store_date(value: Option<&Value>) -> Option<DateTime<Utc>> {
 struct EnabledSourceRow {
     source_id: i32,
     plan_id: i32,
+    #[allow(dead_code)]
+    custom_cbl_list_id: Option<i32>,
     thread_id: i32,
     external_identity_id: i32,
     provider_volume_id: String,
@@ -288,69 +291,6 @@ async fn load_release_exclusions(
         }
     }
     Ok(out)
-}
-
-#[allow(dead_code)]
-fn parse_ordinary_issue_number(issue_number: &str) -> Option<i64> {
-    if issue_number.is_empty() {
-        return None;
-    }
-    let bytes = issue_number.as_bytes();
-    if bytes[0] == b'0' {
-        return None;
-    }
-    if !bytes.iter().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    issue_number.parse::<i64>().ok().filter(|n| *n > 0)
-}
-
-#[allow(dead_code)]
-fn natural_issue_order(existing: &[String], new_numbers: &[String]) -> Option<Vec<String>> {
-    let mut incoming: Vec<(i64, String)> = Vec::new();
-    for issue_number in new_numbers {
-        let value = parse_ordinary_issue_number(issue_number)?;
-        incoming.push((value, issue_number.clone()));
-    }
-
-    let existing_numbered: Vec<(i64, String)> = existing
-        .iter()
-        .filter_map(|n| parse_ordinary_issue_number(n).map(|v| (v, n.clone())))
-        .collect();
-
-    if existing_numbered.len() == existing.len() {
-        let mut merged = existing_numbered;
-        merged.extend(incoming);
-        merged.sort_by_key(|(n, _)| *n);
-        return Some(merged.into_iter().map(|(_, s)| s).collect());
-    }
-
-    if existing_numbered.is_empty() {
-        return None;
-    }
-    let numbers: Vec<i64> = existing_numbered.iter().map(|(n, _)| *n).collect();
-    if numbers.windows(2).any(|w| w[0] > w[1]) {
-        return None;
-    }
-
-    let mut result: Vec<String> = existing.to_vec();
-    incoming.sort_by_key(|(n, _)| *n);
-    for (number, label) in incoming {
-        let mut inserted = false;
-        for idx in 0..result.len() {
-            if let Some(existing_number) = parse_ordinary_issue_number(&result[idx]) {
-                if existing_number > number {
-                    result.insert(idx, label.clone());
-                    inserted = true;
-                    break;
-                }
-            }
-        }
-        if !inserted {
-            result.push(label);
-        }
-    }
-    Some(result)
 }
 
 fn issue_identity(row: &Value) -> Option<String> {
@@ -638,8 +578,8 @@ async fn create_issues_in_natural_order_tx(
             if let Some(&pos) = target_positions.get(number) {
                 let row = tx
                     .query_one(
-                        "INSERT INTO issues (thread_id, issue_number, position, status, read_at) \
-                         VALUES ($1, $2, $3, 'unread', NULL) RETURNING id",
+                        "INSERT INTO issues (thread_id, issue_number, position, status, read_at, created_at) \
+                         VALUES ($1, $2, $3, 'unread', NULL, NOW()) RETURNING id",
                         &[&thread_id, number, &pos],
                     )
                     .await
@@ -658,8 +598,8 @@ async fn create_issues_in_natural_order_tx(
         let pos = max_pos + (idx as i32) + 1;
         let row = tx
             .query_one(
-                "INSERT INTO issues (thread_id, issue_number, position, status, read_at) \
-                 VALUES ($1, $2, $3, 'unread', NULL) RETURNING id",
+                "INSERT INTO issues (thread_id, issue_number, position, status, read_at, created_at) \
+                 VALUES ($1, $2, $3, 'unread', NULL, NOW()) RETURNING id",
                 &[&thread_id, number, &pos],
             )
             .await
@@ -792,108 +732,149 @@ pub(crate) async fn rebuild_plan_issues_from_nodes_json(
     tx: &tokio_postgres::Transaction<'_>,
     plan_id: i32,
 ) -> Result<(), ApiError> {
-    let row = tx
-        .query_opt(
-            "SELECT nodes_json FROM continuity_plans WHERE id = $1 FOR UPDATE",
-            &[&plan_id],
+    rebuild_plan_issues_from_nodes_json_batch(tx, &[plan_id]).await
+}
+
+/// Rebuild authored Plan membership for a bounded set in one delete and one
+/// set-based upsert. Callers already hold the reader/continuity write locks.
+async fn rebuild_plan_issues_from_nodes_json_batch(
+    tx: &tokio_postgres::Transaction<'_>,
+    plan_ids: &[i32],
+) -> Result<(), ApiError> {
+    if plan_ids.is_empty() {
+        return Ok(());
+    }
+
+    let rows = tx
+        .query(
+            "SELECT id, nodes_json FROM continuity_plans \
+             WHERE id = ANY($1) ORDER BY id FOR UPDATE",
+            &[&plan_ids],
         )
         .await
         .map_err(db::query_error)?;
-    let Some(row) = row else {
-        return Ok(());
-    };
-    let nodes_json: Value = row
-        .try_get::<_, Value>(0)
-        .unwrap_or(Value::Array(Vec::new()));
-    let nodes = nodes_json.as_array().cloned().unwrap_or_default();
-
     tx.execute(
-        "DELETE FROM reading_plan_issues WHERE plan_id = $1",
-        &[&plan_id],
+        "DELETE FROM reading_plan_issues WHERE plan_id = ANY($1)",
+        &[&plan_ids],
     )
     .await
     .map_err(db::query_error)?;
 
-    let mut seen_issue_ids: std::collections::HashSet<i32> = std::collections::HashSet::new();
-    for node in &nodes {
-        if node.get("node_type").and_then(Value::as_str) != Some("issue") {
-            continue;
-        }
-        let Some(ref_id) = node.get("ref_id").and_then(Value::as_i64) else {
-            continue;
-        };
-        let issue_id = i32::try_from(ref_id).unwrap_or(-1);
-        if issue_id <= 0 || !seen_issue_ids.insert(issue_id) {
-            continue;
-        }
-        let occurrence_id = node
-            .get("id")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| format!("release-{issue_id}"));
-        let lane_id = node
-            .get("lane_id")
-            .and_then(Value::as_str)
-            .unwrap_or("unread-tail")
-            .to_string();
-        let display_position = node.get("position").and_then(Value::as_i64).unwrap_or(0) as i32;
-        let label = node
-            .get("label")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string());
-        let reader_role = node
-            .get("reader_role")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string());
-        let reader_optional = node.get("reader_optional").and_then(Value::as_bool);
-        let is_checkpoint = node
-            .get("is_checkpoint")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+    // A malformed legacy snapshot can repeat an occurrence id for different
+    // issues. The former row-at-a-time upsert kept the last occurrence; retain
+    // that behavior without asking a set-based INSERT to update one row twice.
+    let mut rebuilt = std::collections::BTreeMap::new();
+    for row in &rows {
+        let plan_id: i32 = row.get(0);
+        let nodes_json: Value = row
+            .try_get::<_, Value>(1)
+            .unwrap_or(Value::Array(Vec::new()));
+        let nodes = nodes_json.as_array().cloned().unwrap_or_default();
+        let mut seen_issue_ids: std::collections::HashSet<i32> = std::collections::HashSet::new();
 
-        // Collect source metadata annotations similar to normalization service.
-        let mut meta = serde_json::Map::new();
-        if let Some(v) = node.get("source_role") {
-            if !v.is_null() {
-                meta.insert("source_role".into(), v.clone());
+        for node in &nodes {
+            if node.get("node_type").and_then(Value::as_str) != Some("issue") {
+                continue;
             }
-        }
-        if let Some(v) = node.get("source_confidence") {
-            if !v.is_null() {
-                meta.insert("source_confidence".into(), v.clone());
+            let Some(ref_id) = node.get("ref_id").and_then(Value::as_i64) else {
+                continue;
+            };
+            let issue_id = i32::try_from(ref_id).unwrap_or(-1);
+            if issue_id <= 0 || !seen_issue_ids.insert(issue_id) {
+                continue;
             }
-        }
-        if let Some(v) = node.get("source_explanation") {
-            if !v.is_null() {
-                meta.insert("source_explanation".into(), v.clone());
-            }
-        }
-        if let Some(v) = node.get("source_story_arc_ids") {
-            if !v.is_null() {
-                meta.insert("source_story_arc_ids".into(), v.clone());
-            }
-        }
-        if let Some(v) = node.get("source_target_story_arc_id") {
-            if !v.is_null() {
-                meta.insert("source_target_story_arc_id".into(), v.clone());
-            }
-        }
-        let source_metadata_json: Option<Value> = if meta.is_empty() {
-            None
-        } else {
-            Some(Value::Object(meta))
-        };
+            let occurrence_id = node
+                .get("id")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| format!("release-{issue_id}"));
+            let lane_id = node
+                .get("lane_id")
+                .and_then(Value::as_str)
+                .unwrap_or("unread-tail")
+                .to_string();
+            let display_position = node.get("position").and_then(Value::as_i64).unwrap_or(0) as i32;
+            let label = node
+                .get("label")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string());
+            let reader_role = node
+                .get("reader_role")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string());
+            let reader_optional = node.get("reader_optional").and_then(Value::as_bool);
+            let is_checkpoint = node
+                .get("is_checkpoint")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
 
+            // Collect source metadata annotations similar to normalization service.
+            let mut meta = serde_json::Map::new();
+            if let Some(v) = node.get("source_role") {
+                if !v.is_null() {
+                    meta.insert("source_role".into(), v.clone());
+                }
+            }
+            if let Some(v) = node.get("source_confidence") {
+                if !v.is_null() {
+                    meta.insert("source_confidence".into(), v.clone());
+                }
+            }
+            if let Some(v) = node.get("source_explanation") {
+                if !v.is_null() {
+                    meta.insert("source_explanation".into(), v.clone());
+                }
+            }
+            if let Some(v) = node.get("source_story_arc_ids") {
+                if !v.is_null() {
+                    meta.insert("source_story_arc_ids".into(), v.clone());
+                }
+            }
+            if let Some(v) = node.get("source_target_story_arc_id") {
+                if !v.is_null() {
+                    meta.insert("source_target_story_arc_id".into(), v.clone());
+                }
+            }
+            let source_metadata_json: Option<Value> = if meta.is_empty() {
+                None
+            } else {
+                Some(Value::Object(meta))
+            };
+
+            rebuilt.insert(
+                (plan_id, occurrence_id.clone()),
+                serde_json::json!({
+                    "plan_id": plan_id,
+                    "occurrence_id": occurrence_id,
+                    "issue_id": issue_id,
+                    "lane_id": lane_id,
+                    "display_position": display_position,
+                    "label": label,
+                    "reader_role": reader_role,
+                    "reader_optional": reader_optional,
+                    "is_checkpoint": is_checkpoint,
+                    "source_metadata_json": source_metadata_json,
+                }),
+            );
+        }
+    }
+
+    let rebuilt: Vec<Value> = rebuilt.into_values().collect();
+    if !rebuilt.is_empty() {
         tx.execute(
             "INSERT INTO reading_plan_issues \
-             (plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb) \
-             ON CONFLICT (plan_id, occurrence_id) DO UPDATE SET \
-               issue_id = EXCLUDED.issue_id, lane_id = EXCLUDED.lane_id, display_position = EXCLUDED.display_position, \
-               label = EXCLUDED.label, reader_role = EXCLUDED.reader_role, reader_optional = EXCLUDED.reader_optional, \
-               is_checkpoint = EXCLUDED.is_checkpoint, source_metadata_json = EXCLUDED.source_metadata_json",
-            &[&plan_id, &occurrence_id, &issue_id, &lane_id, &display_position, &label, &reader_role, &reader_optional, &is_checkpoint, &source_metadata_json],
+              (plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json) \
+              SELECT plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json \
+              FROM jsonb_to_recordset($1::jsonb) AS rebuilt(\
+                plan_id integer, occurrence_id text, issue_id integer, lane_id text, \
+                display_position integer, label text, reader_role text, reader_optional boolean, \
+                is_checkpoint boolean, source_metadata_json jsonb) \
+              ON CONFLICT (plan_id, occurrence_id) DO UPDATE SET \
+                issue_id = EXCLUDED.issue_id, lane_id = EXCLUDED.lane_id, display_position = EXCLUDED.display_position, \
+                label = EXCLUDED.label, reader_role = EXCLUDED.reader_role, reader_optional = EXCLUDED.reader_optional, \
+                is_checkpoint = EXCLUDED.is_checkpoint, source_metadata_json = EXCLUDED.source_metadata_json",
+            &[&Value::Array(rebuilt)],
         )
         .await
         .map_err(db::query_error)?;
@@ -901,19 +882,31 @@ pub(crate) async fn rebuild_plan_issues_from_nodes_json(
     Ok(())
 }
 
-async fn extend_adopted_issue_to_following_plans(
+async fn extend_adopted_issues_to_following_plans(
     tx: &tokio_postgres::Transaction<'_>,
     user_id: i32,
     thread_id: i32,
     external_identity_id: i32,
-    issue_id: i32,
+    issue_ids: &[i32],
 ) -> Result<(), ApiError> {
-    // Extend enabled sibling plans following the same thread+volume for this user.
-    // This is a minimal parity step; full rebuild_plan_membership/source-placement
-    // parity remains pending.
-    let plan_rows = tx
+    if issue_ids.is_empty() {
+        return Ok(());
+    }
+    let mut seen_issue_ids = std::collections::HashSet::new();
+    let issue_ids: Vec<i32> = issue_ids
+        .iter()
+        .copied()
+        .filter(|issue_id| seen_issue_ids.insert(*issue_id))
+        .collect();
+    let issue_ids = issue_ids.as_slice();
+
+    // Extend enabled sibling sources following the same thread+volume for this user.
+    // Linked sources append to authoritative Reading Lists; unlinked legacy sources
+    // retain the Plan-JSON append. All reads and writes below are set-based so a
+    // roster with many released issues does not multiply source/list/graph queries.
+    let source_rows = tx
         .query(
-            "SELECT DISTINCT rps.plan_id \
+            "SELECT DISTINCT rps.plan_id, rps.custom_cbl_list_id \
              FROM reading_plan_release_sources rps \
              JOIN continuity_plans cp ON cp.id = rps.plan_id \
              WHERE rps.thread_id = $1 AND rps.external_identity_id = $2 \
@@ -924,71 +917,212 @@ async fn extend_adopted_issue_to_following_plans(
         .await
         .map_err(db::query_error)?;
 
-    for row in &plan_rows {
+    let mut list_ids = std::collections::BTreeSet::new();
+    let mut plan_ids = std::collections::BTreeSet::new();
+    for row in &source_rows {
         let plan_id: i32 = row.get(0);
-        // Lock plan row.
-        let plan = tx
-            .query_opt(
-                "SELECT nodes_json FROM continuity_plans WHERE id = $1 AND user_id = $2 FOR UPDATE",
-                &[&plan_id, &user_id],
+        if let Some(list_id) = row.get::<_, Option<i32>>(1) {
+            list_ids.insert(list_id);
+        } else {
+            plan_ids.insert(plan_id);
+        }
+    }
+
+    if !list_ids.is_empty() {
+        let candidate_list_ids: Vec<i32> = list_ids.into_iter().collect();
+        // The caller already holds the per-reader advisory lock. Lock every owned
+        // target list in one deterministic statement before reading membership.
+        let locked_rows = tx
+            .query(
+                "SELECT id FROM custom_cbl_lists \
+                 WHERE id = ANY($1) AND user_id = $2 ORDER BY id FOR UPDATE",
+                &[&candidate_list_ids, &user_id],
             )
             .await
             .map_err(db::query_error)?;
-        let Some(plan_row) = plan else {
-            continue;
-        };
+        let locked_list_ids: Vec<i32> = locked_rows.iter().map(|row| row.get(0)).collect();
 
-        let exists = tx
-            .query_opt(
-                "SELECT 1 FROM reading_plan_issues WHERE plan_id = $1 AND issue_id = $2 LIMIT 1",
-                &[&plan_id, &issue_id],
-            )
-            .await
-            .map_err(db::query_error)?
-            .is_some();
-        if exists {
-            continue;
-        }
+        if !locked_list_ids.is_empty() {
+            let membership_rows = tx
+                .query(
+                    "SELECT list_id, issue_id FROM custom_cbl_entries \
+                     WHERE list_id = ANY($1) AND issue_id = ANY($2)",
+                    &[&locked_list_ids, &issue_ids],
+                )
+                .await
+                .map_err(db::query_error)?;
+            let existing_membership: std::collections::HashSet<(i32, i32)> = membership_rows
+                .iter()
+                .map(|row| (row.get(0), row.get(1)))
+                .collect();
 
-        let nodes_json: Value = plan_row
-            .try_get::<_, Value>(0)
-            .unwrap_or(Value::Array(Vec::new()));
-        let mut nodes = nodes_json.as_array().cloned().unwrap_or_default();
-        let mut max_pos: i64 = -1;
-        let mut already_in_json = false;
-        for node in &nodes {
-            if let Some(pos) = node.get("position").and_then(Value::as_i64) {
-                if pos > max_pos {
-                    max_pos = pos;
+            let max_rows = tx
+                .query(
+                    "SELECT list_id, COALESCE(MAX(position), -1)::int \
+                     FROM custom_cbl_entries WHERE list_id = ANY($1) GROUP BY list_id",
+                    &[&locked_list_ids],
+                )
+                .await
+                .map_err(db::query_error)?;
+            let max_positions: std::collections::BTreeMap<i32, i32> = max_rows
+                .iter()
+                .map(|row| (row.get(0), row.get(1)))
+                .collect();
+
+            let mut appended = Vec::new();
+            for list_id in locked_list_ids {
+                let mut position = *max_positions.get(&list_id).unwrap_or(&-1);
+                for issue_id in issue_ids {
+                    if existing_membership.contains(&(list_id, *issue_id)) {
+                        continue;
+                    }
+                    position = position.checked_add(1).ok_or_else(|| {
+                        ApiError::Unprocessable(format!(
+                            "Reading List {list_id} has no append position"
+                        ))
+                    })?;
+                    appended.push(serde_json::json!({
+                        "list_id": list_id,
+                        "issue_id": issue_id,
+                        "position": position,
+                    }));
                 }
             }
-            if node.get("node_type").and_then(Value::as_str) == Some("issue")
-                && node.get("ref_id").and_then(Value::as_i64) == Some(i64::from(issue_id))
-            {
-                already_in_json = true;
+
+            if !appended.is_empty() {
+                // Append only. Existing positions, gates, checkpoints, skips and
+                // reading progress are never rewritten.
+                tx.execute(
+                    "INSERT INTO custom_cbl_entries \
+                       (list_id, issue_id, position, created_at, is_checkpoint, gate, skipped) \
+                     SELECT list_id, issue_id, position, NOW(), FALSE, 'none', FALSE \
+                     FROM jsonb_to_recordset($1::jsonb) AS appended(\
+                       list_id integer, issue_id integer, position integer)",
+                    &[&Value::Array(appended)],
+                )
+                .await
+                .map_err(db::query_error)?;
+
+                // Validate the complete projected graph once. Any cycle or invalid
+                // reference rolls back the caller's whole source transaction.
+                let inputs = crate::option_inputs::load_inputs_in_transaction(
+                    tx,
+                    AuthenticatedUser::from_id(user_id),
+                )
+                .await?;
+                let list_names: std::collections::BTreeMap<i32, String> = inputs
+                    .lists
+                    .iter()
+                    .map(|list| (list.list_id, list.name.clone()))
+                    .collect();
+                crate::reading_constraints::ValidatedReadingInputs::new(
+                    inputs.clone(),
+                    &list_names,
+                )
+                .map_err(|e| ApiError::Unprocessable(format!("cycle validation failed: {e:?}")))?;
             }
         }
-        if !already_in_json {
-            let new_pos = (max_pos + 1) as i32;
-            nodes.push(serde_json::json!({
-                "id": format!("release-{issue_id}"),
-                "node_type": "issue",
-                "ref_id": issue_id,
-                "lane_id": "unread-tail",
-                "position": new_pos,
-                "label": Value::Null,
-                "is_checkpoint": false
-            }));
+    }
+
+    if !plan_ids.is_empty() {
+        let plan_ids: Vec<i32> = plan_ids.into_iter().collect();
+        let plan_rows = tx
+            .query(
+                "SELECT id, nodes_json FROM continuity_plans \
+                 WHERE id = ANY($1) AND user_id = $2 ORDER BY id FOR UPDATE",
+                &[&plan_ids, &user_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let membership_rows = tx
+            .query(
+                "SELECT plan_id, issue_id FROM reading_plan_issues \
+                 WHERE plan_id = ANY($1) AND issue_id = ANY($2)",
+                &[&plan_ids, &issue_ids],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let existing_membership: std::collections::HashSet<(i32, i32)> = membership_rows
+            .iter()
+            .map(|row| (row.get(0), row.get(1)))
+            .collect();
+
+        let mut changed_plans = Vec::new();
+        let mut rebuild_plan_ids = std::collections::BTreeSet::new();
+        for row in &plan_rows {
+            let plan_id: i32 = row.get(0);
+            let nodes_json: Value = row
+                .try_get::<_, Value>(1)
+                .unwrap_or(Value::Array(Vec::new()));
+            let mut nodes = nodes_json.as_array().cloned().unwrap_or_default();
+            let mut issue_nodes = std::collections::HashSet::new();
+            let mut max_position = -1_i64;
+            for node in &nodes {
+                if let Some(position) = node.get("position").and_then(Value::as_i64) {
+                    max_position = max_position.max(position);
+                }
+                if node.get("node_type").and_then(Value::as_str) == Some("issue") {
+                    if let Some(issue_id) = node.get("ref_id").and_then(Value::as_i64) {
+                        issue_nodes.insert(issue_id);
+                    }
+                }
+            }
+
+            let mut next_position = i32::try_from(max_position)
+                .ok()
+                .and_then(|position| position.checked_add(1));
+            let mut changed = false;
+            let mut needs_rebuild = false;
+            for issue_id in issue_ids {
+                if existing_membership.contains(&(plan_id, *issue_id)) {
+                    continue;
+                }
+                needs_rebuild = true;
+                if issue_nodes.contains(&i64::from(*issue_id)) {
+                    continue;
+                }
+                let position = next_position.ok_or_else(|| {
+                    ApiError::Unprocessable(format!(
+                        "Reading Plan {plan_id} has no append position"
+                    ))
+                })?;
+                nodes.push(serde_json::json!({
+                    "id": format!("release-{issue_id}"),
+                    "node_type": "issue",
+                    "ref_id": issue_id,
+                    "lane_id": "unread-tail",
+                    "position": position,
+                    "label": Value::Null,
+                    "is_checkpoint": false
+                }));
+                next_position = position.checked_add(1);
+                changed = true;
+            }
+
+            if changed {
+                changed_plans.push(serde_json::json!({
+                    "id": plan_id,
+                    "nodes_json": Value::Array(nodes),
+                }));
+            }
+            if needs_rebuild {
+                rebuild_plan_ids.insert(plan_id);
+            }
+        }
+
+        if !changed_plans.is_empty() {
             tx.execute(
-                "UPDATE continuity_plans SET nodes_json = $1::jsonb, updated_at = NOW() WHERE id = $2",
-                &[&Value::Array(nodes), &plan_id],
+                "UPDATE continuity_plans cp \
+                 SET nodes_json = changed.nodes_json, updated_at = NOW() \
+                 FROM jsonb_to_recordset($1::jsonb) AS changed(id integer, nodes_json jsonb) \
+                 WHERE cp.id = changed.id AND cp.user_id = $2",
+                &[&Value::Array(changed_plans), &user_id],
             )
             .await
             .map_err(db::query_error)?;
         }
-        // Rebuild issue membership from plan nodes for closer parity with
-        // rebuild_plan_membership (source/placement rebuild still pending).
-        rebuild_plan_issues_from_nodes_json(tx, plan_id).await?;
+        let rebuild_plan_ids: Vec<i32> = rebuild_plan_ids.into_iter().collect();
+        rebuild_plan_issues_from_nodes_json_batch(tx, &rebuild_plan_ids).await?;
     }
 
     Ok(())
@@ -1020,11 +1154,23 @@ pub async fn sync_released_issues_for_user(
     user_id: i32,
     as_of: DateTime<Utc>,
 ) -> Result<SyncReport, ApiError> {
+    let mock_rosters = std::env::var("RUST_ROLL_SYNC_MOCK_ROSTER_JSON")
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
+    sync_released_issues_for_user_with_rosters(state, user_id, as_of, mock_rosters).await
+}
+
+async fn sync_released_issues_for_user_with_rosters(
+    state: &Arc<AppState>,
+    user_id: i32,
+    as_of: DateTime<Utc>,
+    mock_rosters: Option<Value>,
+) -> Result<SyncReport, ApiError> {
     let mut connection = db::checkout(state).await?;
 
     let all_rows = connection
         .query(
-            "SELECT rps.id, rps.plan_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled \
+            "SELECT rps.id, rps.plan_id, rps.custom_cbl_list_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled \
              FROM reading_plan_release_sources rps \
              JOIN continuity_plans cp ON cp.id = rps.plan_id \
              JOIN external_identities ei ON ei.id = rps.external_identity_id \
@@ -1038,14 +1184,15 @@ pub async fn sync_released_issues_for_user(
 
     let mut enabled_rows = Vec::new();
     for row in &all_rows {
-        let enabled: bool = row.get(5);
+        let enabled: bool = row.get(6);
         if enabled {
             enabled_rows.push(EnabledSourceRow {
                 source_id: row.get(0),
                 plan_id: row.get(1),
-                thread_id: row.get(2),
-                external_identity_id: row.get(3),
-                provider_volume_id: row.get(4),
+                custom_cbl_list_id: row.get(2),
+                thread_id: row.get(3),
+                external_identity_id: row.get(4),
+                provider_volume_id: row.get(5),
             });
         }
     }
@@ -1074,11 +1221,6 @@ pub async fn sync_released_issues_for_user(
         };
         return Ok(report);
     }
-
-    // Test-only roster injection: JSON object {"<volume_id>": [issue,...], "_fail_<volume_id>": "error"}
-    let mock_rosters: Option<Value> = std::env::var("RUST_ROLL_SYNC_MOCK_ROSTER_JSON")
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok());
 
     // Match Python: missing API key fails all enabled sources with the
     // client-construction error message (unless test mocks are injected).
@@ -1215,6 +1357,9 @@ pub async fn sync_released_issues_for_user(
                 .map_err(db::query_error)?;
 
             let source_result: SourceTxOutcome = async {
+                // Serialize with every authored Reading List/dependency/issue
+                // writer before taking any thread, issue, or list row lock.
+                crate::issue_mutation::lock_reader(&tx, user_id).await?;
                 tx.execute(
                     "SELECT id FROM users WHERE id = $1 FOR UPDATE",
                     &[&user_id],
@@ -1400,17 +1545,16 @@ pub async fn sync_released_issues_for_user(
                 }
 
                 if !adopted_for_extension.is_empty() {
-                    // Best-effort plan extension for enabled sibling plans following this volume.
-                    for issue_id in &adopted_for_extension {
-                        extend_adopted_issue_to_following_plans(
-                            &tx,
-                            user_id,
-                            source.thread_id,
-                            source.external_identity_id,
-                            *issue_id,
-                        )
-                        .await?;
-                    }
+                    // Extend every enabled sibling source in one bounded, set-based
+                    // pass so roster size does not multiply source/list/graph queries.
+                    extend_adopted_issues_to_following_plans(
+                        &tx,
+                        user_id,
+                        source.thread_id,
+                        source.external_identity_id,
+                        &adopted_for_extension,
+                    )
+                    .await?;
                 }
 
                 if created_any || source_reused > 0 {
@@ -1472,11 +1616,11 @@ pub async fn sync_released_issues_for_user(
     }
 
     let synced_at = Utc::now();
-    for source_id in synced_source_ids {
+    if !synced_source_ids.is_empty() {
         let _ = connection
             .execute(
-                "UPDATE reading_plan_release_sources SET last_synced_at = $1 WHERE id = $2",
-                &[&synced_at, &source_id],
+                "UPDATE reading_plan_release_sources SET last_synced_at = $1 WHERE id = ANY($2)",
+                &[&synced_at, &synced_source_ids],
             )
             .await;
     }
@@ -1802,11 +1946,15 @@ mod tests {
     use std::sync::Arc;
 
     async fn test_state() -> Arc<AppState> {
+        test_state_with_pool(2).await
+    }
+
+    async fn test_state_with_pool(pool_size: usize) -> Arc<AppState> {
         let url = crate::test_support::database_url().await;
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-reading-plan-sync-test".into()),
-            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
             _ => None,
         })
         .expect("reading-plan-sync test config");
@@ -1967,6 +2115,491 @@ mod tests {
             ))
             .await
             .expect("seed cron owner");
+    }
+
+    const LIST_SYNC_USER_ID: i32 = 3874;
+    const LIST_SYNC_THREAD_ID: i32 = 387_400;
+    const LIST_SYNC_PLAN_ID: i32 = 387_420;
+    const LIST_SYNC_LIST_ID: i32 = 387_430;
+    const LIST_SYNC_SOURCE_ID: i32 = 387_440;
+    const LIST_SYNC_FIRST_ISSUE_ID: i32 = 387_401;
+    const LIST_SYNC_SECOND_ISSUE_ID: i32 = 387_402;
+
+    fn list_sync_rosters() -> Value {
+        serde_json::json!({
+            "3874": [
+                {"id": "9001", "issue_number": "1", "store_date": "2024-01-01"},
+                {"id": "9002", "issue_number": "2", "store_date": "2024-01-02"},
+                {"id": "9003", "issue_number": "3", "store_date": "2024-01-03"}
+            ]
+        })
+    }
+
+    fn list_sync_as_of() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2024-02-01T00:00:00Z")
+            .expect("release boundary")
+            .with_timezone(&Utc)
+    }
+
+    async fn seed_list_sync_fixture(connection: &deadpool_postgres::Client, cycle: bool) {
+        let first_position = if cycle { 2 } else { 1 };
+        let first_gate = if cycle { "none" } else { "hold" };
+        let first_skipped = !cycle;
+        connection
+            .batch_execute(&format!(
+                "INSERT INTO users (id, username) VALUES ({LIST_SYNC_USER_ID}, 'list-sync-owner');
+                 INSERT INTO threads
+                   (id, user_id, title, format, issues_remaining, queue_position, status,
+                    total_issues, next_unread_issue_id, reading_progress)
+                 VALUES ({LIST_SYNC_THREAD_ID}, {LIST_SYNC_USER_ID}, 'List sync', 'Comic',
+                         0, 1, 'active', 1, NULL, 'completed');
+                 INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position)
+                 VALUES ({LIST_SYNC_FIRST_ISSUE_ID}, {LIST_SYNC_THREAD_ID}, '1', 'read',
+                         '2024-01-01T00:00:00Z', NOW(), {first_position});
+                 INSERT INTO continuity_plans
+                   (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+                 VALUES ({LIST_SYNC_PLAN_ID}, {LIST_SYNC_USER_ID}, 'Legacy plan', 'informational',
+                         '[{{\"id\":\"legacy-sentinel\",\"node_type\":\"thread\",\"ref_id\":{LIST_SYNC_THREAD_ID},\"lane_id\":\"legacy\",\"position\":0}}]'::json,
+                         '[]'::json, NOW(), NOW());
+                 INSERT INTO custom_cbl_lists
+                   (id, user_id, name, description, mode, created_at, updated_at)
+                 VALUES ({LIST_SYNC_LIST_ID}, {LIST_SYNC_USER_ID}, 'Authoritative list', NULL,
+                         'strict', NOW(), NOW());
+                 INSERT INTO custom_cbl_entries
+                   (list_id, issue_id, position, created_at, is_checkpoint, gate, skipped)
+                 VALUES ({LIST_SYNC_LIST_ID}, {LIST_SYNC_FIRST_ISSUE_ID}, 7, NOW(), FALSE,
+                         '{first_gate}', {first_skipped});
+                 INSERT INTO external_identities
+                   (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                 VALUES (387410, 'comicvine', 'series', '4050-3874', '{{}}'::json, NOW(), NOW()),
+                        (387411, 'comicvine', 'issue', '9001', '{{}}'::json, NOW(), NOW());
+                 INSERT INTO thread_external_series_mappings
+                   (thread_id, external_identity_id, status, created_at, updated_at)
+                 VALUES ({LIST_SYNC_THREAD_ID}, 387410, 'confirmed', NOW(), NOW());
+                 INSERT INTO issue_external_identity_mappings
+                   (issue_id, external_identity_id, status, evidence_json, created_at, updated_at)
+                 VALUES ({LIST_SYNC_FIRST_ISSUE_ID}, 387411, 'confirmed', '{{}}'::json, NOW(), NOW());
+                 INSERT INTO reading_plan_release_sources
+                   (id, plan_id, custom_cbl_list_id, thread_id, external_identity_id,
+                    enabled, created_at, updated_at)
+                 VALUES ({LIST_SYNC_SOURCE_ID}, {LIST_SYNC_PLAN_ID}, {LIST_SYNC_LIST_ID},
+                         {LIST_SYNC_THREAD_ID}, 387410, TRUE, NOW(), NOW());"
+            ))
+            .await
+            .expect("seed list-sync fixture");
+
+        if cycle {
+            connection
+                .batch_execute(&format!(
+                    "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+                     VALUES ({LIST_SYNC_SECOND_ISSUE_ID}, {LIST_SYNC_THREAD_ID}, '2', 'unread', NOW(), 1);
+                     INSERT INTO external_identities
+                       (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                     VALUES (387412, 'comicvine', 'issue', '9002', '{{}}'::json, NOW(), NOW());
+                     INSERT INTO issue_external_identity_mappings
+                       (issue_id, external_identity_id, status, evidence_json, created_at, updated_at)
+                     VALUES ({LIST_SYNC_SECOND_ISSUE_ID}, 387412, 'confirmed', '{{}}'::json, NOW(), NOW());
+                     INSERT INTO dependencies
+                       (source_issue_id, target_issue_id, origin, created_at)
+                     VALUES ({LIST_SYNC_SECOND_ISSUE_ID}, {LIST_SYNC_FIRST_ISSUE_ID}, 'reader', NOW());"
+                ))
+                .await
+                .expect("seed projected cycle");
+        }
+    }
+
+    #[tokio::test]
+    async fn linked_list_sync_appends_idempotently_without_rewriting_existing_membership() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        seed_list_sync_fixture(&connection, false).await;
+        drop(connection);
+
+        let report = sync_released_issues_for_user_with_rosters(
+            &state,
+            LIST_SYNC_USER_ID,
+            list_sync_as_of(),
+            Some(list_sync_rosters()),
+        )
+        .await
+        .expect("linked list sync");
+        assert_eq!(report.failed_sources, 0);
+        assert_eq!(report.created_issues, 2);
+        assert_eq!(report.reused_issues, 1);
+
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("verify connection");
+        let entries = connection
+            .query(
+                "SELECT issue_id, position, gate, skipped FROM custom_cbl_entries \
+                 WHERE list_id = $1 ORDER BY position",
+                &[&LIST_SYNC_LIST_ID],
+            )
+            .await
+            .expect("list entries");
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].get::<_, i32>(0), LIST_SYNC_FIRST_ISSUE_ID);
+        assert_eq!(entries[0].get::<_, i32>(1), 7);
+        assert_eq!(entries[0].get::<_, String>(2), "hold");
+        assert!(entries[0].get::<_, bool>(3));
+        assert_eq!(entries[1].get::<_, i32>(1), 8);
+        assert_eq!(entries[1].get::<_, String>(2), "none");
+        assert!(!entries[1].get::<_, bool>(3));
+        assert_eq!(entries[2].get::<_, i32>(1), 9);
+        assert_eq!(entries[2].get::<_, String>(2), "none");
+        assert!(!entries[2].get::<_, bool>(3));
+        let second_issue_id: i32 = connection
+            .query_one(
+                "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = '2'",
+                &[&LIST_SYNC_THREAD_ID],
+            )
+            .await
+            .expect("created issue")
+            .get(0);
+        assert_eq!(entries[1].get::<_, i32>(0), second_issue_id);
+        let third_issue_id: i32 = connection
+            .query_one(
+                "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = '3'",
+                &[&LIST_SYNC_THREAD_ID],
+            )
+            .await
+            .expect("second created issue")
+            .get(0);
+        assert_eq!(entries[2].get::<_, i32>(0), third_issue_id);
+
+        let nodes_json: Value = connection
+            .query_one(
+                "SELECT nodes_json FROM continuity_plans WHERE id = $1",
+                &[&LIST_SYNC_PLAN_ID],
+            )
+            .await
+            .expect("legacy plan JSON")
+            .get(0);
+        assert_eq!(nodes_json[0]["id"], "legacy-sentinel");
+        assert_eq!(nodes_json.as_array().expect("plan nodes").len(), 1);
+        let preserved_read: bool = connection
+            .query_one(
+                "SELECT status = 'read' AND read_at = '2024-01-01T00:00:00Z' \
+                 FROM issues WHERE id = $1",
+                &[&LIST_SYNC_FIRST_ISSUE_ID],
+            )
+            .await
+            .expect("existing read progress")
+            .get(0);
+        assert!(
+            preserved_read,
+            "sync must not change existing read progress"
+        );
+        drop(connection);
+
+        let mut retry_rosters = list_sync_rosters();
+        retry_rosters["3874"]
+            .as_array_mut()
+            .expect("retry roster array")
+            .push(serde_json::json!({
+                "id": "9001",
+                "issue_number": "1",
+                "store_date": "2024-01-01"
+            }));
+        let retry = sync_released_issues_for_user_with_rosters(
+            &state,
+            LIST_SYNC_USER_ID,
+            list_sync_as_of(),
+            Some(retry_rosters),
+        )
+        .await
+        .expect("idempotent retry");
+        assert_eq!(retry.failed_sources, 0);
+        assert_eq!(retry.created_issues, 0);
+        assert_eq!(retry.reused_issues, 4);
+        let connection = crate::db::checkout(&state).await.expect("retry connection");
+        let entry_count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM custom_cbl_entries WHERE list_id = $1",
+                &[&LIST_SYNC_LIST_ID],
+            )
+            .await
+            .expect("retry entries")
+            .get(0);
+        let issue_count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issues WHERE thread_id = $1",
+                &[&LIST_SYNC_THREAD_ID],
+            )
+            .await
+            .expect("retry issues")
+            .get(0);
+        assert_eq!((entry_count, issue_count), (3, 3));
+    }
+
+    #[tokio::test]
+    async fn legacy_release_sync_appends_multiple_issues_without_rewriting_existing_nodes() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        seed_list_sync_fixture(&connection, false).await;
+        connection
+            .execute(
+                "UPDATE reading_plan_release_sources SET custom_cbl_list_id = NULL WHERE id = $1",
+                &[&LIST_SYNC_SOURCE_ID],
+            )
+            .await
+            .expect("use legacy unlinked source");
+        drop(connection);
+
+        let report = sync_released_issues_for_user_with_rosters(
+            &state,
+            LIST_SYNC_USER_ID,
+            list_sync_as_of(),
+            Some(list_sync_rosters()),
+        )
+        .await
+        .expect("legacy release sync");
+        assert_eq!(report.failed_sources, 0);
+        assert_eq!(report.created_issues, 2);
+        assert_eq!(report.reused_issues, 1);
+
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("verify connection");
+        let nodes_json: Value = connection
+            .query_one(
+                "SELECT nodes_json FROM continuity_plans WHERE id = $1",
+                &[&LIST_SYNC_PLAN_ID],
+            )
+            .await
+            .expect("legacy plan JSON")
+            .get(0);
+        let nodes = nodes_json.as_array().expect("plan nodes");
+        assert_eq!(nodes.len(), 4);
+        assert_eq!(nodes[0]["id"], "legacy-sentinel");
+        assert_eq!(nodes[0]["position"], 0);
+        let second_issue_id: i32 = connection
+            .query_one(
+                "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = '2'",
+                &[&LIST_SYNC_THREAD_ID],
+            )
+            .await
+            .expect("second issue")
+            .get(0);
+        let third_issue_id: i32 = connection
+            .query_one(
+                "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = '3'",
+                &[&LIST_SYNC_THREAD_ID],
+            )
+            .await
+            .expect("third issue")
+            .get(0);
+        let expected_refs = [
+            i64::from(LIST_SYNC_THREAD_ID),
+            i64::from(LIST_SYNC_FIRST_ISSUE_ID),
+            i64::from(second_issue_id),
+            i64::from(third_issue_id),
+        ];
+        for (index, node) in nodes.iter().enumerate() {
+            assert_eq!(node["position"], index as i64);
+            assert_eq!(node["ref_id"], expected_refs[index]);
+        }
+        let membership_count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM reading_plan_issues WHERE plan_id = $1",
+                &[&LIST_SYNC_PLAN_ID],
+            )
+            .await
+            .expect("rebuilt membership")
+            .get(0);
+        assert_eq!(membership_count, 3);
+        let list_entry_count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM custom_cbl_entries WHERE list_id = $1",
+                &[&LIST_SYNC_LIST_ID],
+            )
+            .await
+            .expect("unlinked source does not append to list")
+            .get(0);
+        assert_eq!(list_entry_count, 1);
+        drop(connection);
+
+        let retry = sync_released_issues_for_user_with_rosters(
+            &state,
+            LIST_SYNC_USER_ID,
+            list_sync_as_of(),
+            Some(list_sync_rosters()),
+        )
+        .await
+        .expect("legacy retry");
+        assert_eq!(retry.created_issues, 0);
+        let connection = crate::db::checkout(&state).await.expect("retry connection");
+        let retry_nodes: Value = connection
+            .query_one(
+                "SELECT nodes_json FROM continuity_plans WHERE id = $1",
+                &[&LIST_SYNC_PLAN_ID],
+            )
+            .await
+            .expect("retry plan JSON")
+            .get(0);
+        assert_eq!(retry_nodes, nodes_json);
+    }
+
+    #[tokio::test]
+    async fn linked_list_sync_serializes_with_sibling_list_writer() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state_with_pool(4).await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        seed_list_sync_fixture(&connection, false).await;
+        drop(connection);
+
+        let mut holder = state.pool.get().await.expect("lock holder");
+        let observer = state.pool.get().await.expect("lock observer");
+        let hold = holder.transaction().await.expect("lock transaction");
+        let queue_lock_namespace = 699001_i32;
+        hold.execute(
+            "SELECT pg_advisory_xact_lock($1, $2)",
+            &[&queue_lock_namespace, &LIST_SYNC_USER_ID],
+        )
+        .await
+        .expect("hold sibling reader lock");
+
+        let sync = {
+            let state = state.clone();
+            tokio::spawn(async move {
+                sync_released_issues_for_user_with_rosters(
+                    &state,
+                    LIST_SYNC_USER_ID,
+                    list_sync_as_of(),
+                    Some(list_sync_rosters()),
+                )
+                .await
+            })
+        };
+
+        let sibling = {
+            let state = state.clone();
+            tokio::spawn(async move {
+                let mut connection = state.pool.get().await.expect("sibling connection");
+                let transaction = connection.transaction().await.expect("sibling transaction");
+                transaction
+                    .execute(
+                        "SELECT pg_advisory_xact_lock($1, $2)",
+                        &[&queue_lock_namespace, &LIST_SYNC_USER_ID],
+                    )
+                    .await
+                    .expect("sibling reader lock");
+                transaction
+                    .execute(
+                        "UPDATE custom_cbl_lists SET description = $1 WHERE id = $2",
+                        &[&"concurrent sibling writer", &LIST_SYNC_LIST_ID],
+                    )
+                    .await
+                    .expect("sibling list update");
+                transaction.commit().await.expect("sibling commit");
+            })
+        };
+
+        let mut observed_waiters = false;
+        for _ in 0..1_000_000 {
+            let waiters: i64 = observer
+                .query_one(
+                    "SELECT count(*) FROM pg_locks \
+                     WHERE locktype = 'advisory' AND NOT granted \
+                       AND classid::int = $1 AND objid::int = $2",
+                    &[&queue_lock_namespace, &LIST_SYNC_USER_ID],
+                )
+                .await
+                .expect("inspect reader lock waiters")
+                .get(0);
+            if waiters >= 2 {
+                observed_waiters = true;
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        hold.commit().await.expect("release sibling reader lock");
+        assert!(
+            observed_waiters,
+            "release sync and its sibling list writer must both take the reader lock first"
+        );
+
+        let (report, sibling) = tokio::join!(sync, sibling);
+        sibling.expect("sibling writer task");
+        let report = report
+            .expect("sync task")
+            .expect("serialized linked list sync");
+        assert_eq!(report.failed_sources, 0);
+        assert_eq!(report.created_issues, 2);
+        let description: Option<String> = observer
+            .query_one(
+                "SELECT description FROM custom_cbl_lists WHERE id = $1",
+                &[&LIST_SYNC_LIST_ID],
+            )
+            .await
+            .expect("sibling update persisted")
+            .get(0);
+        assert_eq!(description.as_deref(), Some("concurrent sibling writer"));
+    }
+
+    #[tokio::test]
+    async fn linked_list_sync_rolls_back_a_projected_cycle_and_preserves_plan_json() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        seed_list_sync_fixture(&connection, true).await;
+        drop(connection);
+
+        let report = sync_released_issues_for_user_with_rosters(
+            &state,
+            LIST_SYNC_USER_ID,
+            list_sync_as_of(),
+            Some(list_sync_rosters()),
+        )
+        .await
+        .expect("cycle is isolated to its source");
+        assert_eq!(report.failed_sources, 1);
+        assert_eq!(report.successful_sources, 0);
+        assert!(report.failures[0].error.contains("cycle validation failed"));
+
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("verify connection");
+        let entries = connection
+            .query(
+                "SELECT issue_id, position, gate, skipped FROM custom_cbl_entries \
+                 WHERE list_id = $1 ORDER BY position",
+                &[&LIST_SYNC_LIST_ID],
+            )
+            .await
+            .expect("rolled-back entries");
+        assert_eq!(entries.len(), 1, "the cyclic append must roll back");
+        assert_eq!(entries[0].get::<_, i32>(0), LIST_SYNC_FIRST_ISSUE_ID);
+        assert_eq!(entries[0].get::<_, i32>(1), 7);
+        let nodes_json: Value = connection
+            .query_one(
+                "SELECT nodes_json FROM continuity_plans WHERE id = $1",
+                &[&LIST_SYNC_PLAN_ID],
+            )
+            .await
+            .expect("legacy plan JSON")
+            .get(0);
+        assert_eq!(nodes_json[0]["id"], "legacy-sentinel");
+        assert_eq!(nodes_json.as_array().expect("plan nodes").len(), 1);
+        let unsynced: bool = connection
+            .query_one(
+                "SELECT last_synced_at IS NULL FROM reading_plan_release_sources WHERE id = $1",
+                &[&LIST_SYNC_SOURCE_ID],
+            )
+            .await
+            .expect("rollback sync timestamp")
+            .get(0);
+        assert!(
+            unsynced,
+            "a rolled-back source must not record a successful sync"
+        );
     }
 
     #[tokio::test]
