@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DirectReadIssuePanel } from '../components/DirectReadIssuePanel'
@@ -130,6 +130,42 @@ describe('manual read surface roll parity', () => {
     expect(actionCard).toHaveAttribute('data-issue-id', '91')
     // The provider cover is already rendered above, so the card drops its own.
     expect(actionCard).toHaveAttribute('data-show-cover', 'false')
+  })
+
+  it('renders creators and tags while a read issue\'s saved rating is loading', async () => {
+    getIssue.mockResolvedValue({ ...issue, status: 'read' })
+    let resolveCards!: (cards: IssueCard[]) => void
+    fetchCards.mockImplementation(() => new Promise<IssueCard[]>((resolve) => {
+      resolveCards = resolve
+    }))
+    setup()
+
+    expect(await screen.findByText('Fiona Staples')).toBeVisible()
+    expect(await screen.findByText('Physical')).toBeVisible()
+    expect(screen.getByText(/Loading the saved rating before editing/)).toBeVisible()
+    expect(screen.queryByTestId('direct-read-action-card')).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveCards([{ ...card, status: 'read', rating: 4.5 }])
+    })
+    expect(await screen.findByTestId('direct-read-action-card')).toHaveAttribute(
+      'data-issue-id',
+      '91',
+    )
+  })
+
+  it('keeps creators and tags visible when a read issue\'s saved rating fails', async () => {
+    getIssue.mockResolvedValue({ ...issue, status: 'read' })
+    fetchCards.mockRejectedValue(new Error('rating details offline'))
+    setup()
+
+    expect(await screen.findByText('Fiona Staples')).toBeVisible()
+    expect(await screen.findByText('Physical')).toBeVisible()
+    expect(await screen.findByRole('alert')).toHaveTextContent('rating details offline')
+    expect(screen.getByText(/Retry details before editing/)).toBeVisible()
+    expect(screen.queryByTestId('direct-read-action-card')).not.toBeInTheDocument()
+    expect(intelligence).toHaveBeenCalledExactlyOnceWith(91)
+    expect(effectiveTags).toHaveBeenCalledExactlyOnceWith(91)
   })
 
   it('keeps the read and rate actions for an unmapped issue without inventing credits', async () => {

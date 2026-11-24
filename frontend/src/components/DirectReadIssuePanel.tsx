@@ -134,19 +134,31 @@ export function DirectReadIssuePanel({
                 : 'Saved rating details are unavailable. Retry details before editing.'}
             </p>
           )}
-          {canShowEditor && (
-            <ComicIssueCard
-              key={issue.id}
-              issueId={issue.id}
-              card={card}
-              threadTitle={threadTitle}
-              issueNumber={String(issue.issue_number)}
-              status={issue.status}
-              variant="compact"
-              showCover={false}
-            />
-          )}
-        </div>
+          <div className="space-y-4" data-testid="direct-read-comic-details">
+            {/* Roll parity (#5751): provider details and tags are independent
+                of the saved-rating projection, so a card failure cannot hide
+                the creators or tags the reader opened this panel to inspect. */}
+            <ComicIdentity issueId={issue.id} />
+            <div className="min-w-0" data-testid="direct-read-issue-tags">
+              <TagSection
+                targetType="Issue"
+                targetId={issue.id}
+                targetLabel={`${threadTitle} #${issue.issue_number}`}
+              />
+            </div>
+            {canShowEditor && (
+              <ComicIssueCard
+                key={issue.id}
+                issueId={issue.id}
+                card={card}
+                threadTitle={threadTitle}
+                issueNumber={String(issue.issue_number)}
+                status={issue.status}
+                variant="compact"
+                showCover={false}
+              />
+            )}
+          </div>
         </>
       )}
       {!lookup.isPending && !lookup.isError && !issue && (
