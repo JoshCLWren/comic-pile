@@ -116,10 +116,12 @@ function walk(root, skip) {
   return files;
 }
 
-/** Return Markdown paths (sorted) that participate in documentation checks. */
+/** Return tracked Markdown paths (sorted) that participate in documentation checks. */
 export function iterMarkdownFiles(root) {
-  return walk(root, IGNORED_DIRECTORIES)
+  return trackedFiles(root)
     .filter((file) => file.endsWith('.md'))
+    .map((file) => path.join(root, file))
+    .filter((file) => !path.relative(root, file).split(path.sep).some((part) => IGNORED_DIRECTORIES.has(part)))
     .sort((a, b) =>
       compareParts(path.relative(root, a).split(path.sep).join('/'), path.relative(root, b).split(path.sep).join('/')),
     );

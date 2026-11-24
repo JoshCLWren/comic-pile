@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -24,12 +25,27 @@ ALLOWED_ROOT_MARKDOWN = {
 IGNORED_DIRECTORIES = {".git", ".venv", ".vercel", "node_modules", "archive"}
 
 
+def _tracked_markdown_files(root: Path) -> list[Path] | None:
+    """Return tracked Markdown paths, or ``None`` outside a Git worktree."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "--", "*.md"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return sorted(root / path for path in result.stdout.splitlines() if path)
+
+
 def iter_markdown_files(root: Path) -> list[Path]:
-    """Return Markdown paths that should participate in documentation checks.
+    """Return tracked Markdown paths that participate in documentation checks.
 
     Historical archive documents are intentionally excluded because they preserve point-in-time
     evidence and may contain dead links or machine-local paths that must not become current
-    repository contracts.
+    repository contracts. Git scope excludes untracked/ignored overlays and locally excluded files;
+    non-Git fixture roots retain the directory-walk fallback used by unit tests.
 
     Args:
         root: Repository root to inspect.
@@ -37,9 +53,12 @@ def iter_markdown_files(root: Path) -> list[Path]:
     Returns:
         Sorted Markdown paths included in validation.
     """
+    candidates = _tracked_markdown_files(root)
+    if candidates is None:
+        candidates = list(root.rglob("*.md"))
     return sorted(
         path
-        for path in root.rglob("*.md")
+        for path in candidates
         if not any(part in IGNORED_DIRECTORIES for part in path.relative_to(root).parts)
     )
 

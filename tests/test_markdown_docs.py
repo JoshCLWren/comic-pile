@@ -1,5 +1,6 @@
 """Tests for Markdown documentation validation helpers."""
 
+import subprocess
 from pathlib import Path
 
 from scripts.check_markdown_docs import (
@@ -114,6 +115,22 @@ def test_iter_markdown_files_ignores_generated_directories(tmp_path: Path) -> No
     (vercel_output / "README.md").write_text("[stale](missing.md)\n", encoding="utf-8")
 
     assert iter_markdown_files(tmp_path) == [tmp_path / "README.md"]
+
+
+def test_iter_markdown_files_uses_tracked_scope_in_git_repo(tmp_path: Path) -> None:
+    """Ignore untracked and locally excluded overlay documents in a real checkout."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (tmp_path / "README.md").write_text("# Root\n", encoding="utf-8")
+    (docs / "tracked.md").write_text("# Tracked\n", encoding="utf-8")
+    (docs / "overlay.md").write_text("# Overlay\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", "README.md", "docs/tracked.md"],
+        check=True,
+    )
+
+    assert iter_markdown_files(tmp_path) == [tmp_path / "README.md", docs / "tracked.md"]
 
 
 def test_find_unapproved_root_markdown_flags_documentation_sprawl(tmp_path: Path) -> None:
