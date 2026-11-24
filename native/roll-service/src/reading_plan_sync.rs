@@ -760,7 +760,10 @@ async fn rebuild_plan_issues_from_nodes_json_batch(
     .await
     .map_err(db::query_error)?;
 
-    let mut rebuilt = Vec::new();
+    // A malformed legacy snapshot can repeat an occurrence id for different
+    // issues. The former row-at-a-time upsert kept the last occurrence; retain
+    // that behavior without asking a set-based INSERT to update one row twice.
+    let mut rebuilt = std::collections::BTreeMap::new();
     for row in &rows {
         let plan_id: i32 = row.get(0);
         let nodes_json: Value = row
