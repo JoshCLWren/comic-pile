@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T19:51:37.424871+00:00",
+  "generated_at": "2026-11-24T20:08:36.582276+00:00",
   "models": [
     {
       "health": {
@@ -2704,8 +2704,8 @@
       "source": "nvidia",
       "windows": {
         "24h": {
-          "completed": 13,
-          "delivered": 12,
+          "completed": 12,
+          "delivered": 11,
           "failed": 36,
           "failures": {
             "agent_timeout": 10,
@@ -2714,7 +2714,7 @@
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 50
+          "runs": 49
         },
         "7d": {
           "completed": 40,
@@ -3591,12 +3591,10 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 1,
-          "failures": {
-            "provider_quota": 1
-          },
+          "failed": 0,
+          "failures": {},
           "idle": 0,
-          "runs": 1
+          "runs": 0
         },
         "7d": {
           "completed": 0,
@@ -12112,12 +12110,10 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 1,
-          "failures": {
-            "provider_quota": 1
-          },
+          "failed": 0,
+          "failures": {},
           "idle": 0,
-          "runs": 1
+          "runs": 0
         },
         "7d": {
           "completed": 0,
@@ -22442,12 +22438,10 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 1,
-          "failures": {
-            "provider_quota": 1
-          },
+          "failed": 0,
+          "failures": {},
           "idle": 0,
-          "runs": 1
+          "runs": 0
         },
         "7d": {
           "completed": 0,
@@ -22603,11 +22597,11 @@
       "source": "nvidia",
       "windows": {
         "24h": {
-          "completed": 16,
-          "delivered": 15,
+          "completed": 15,
+          "delivered": 14,
           "failed": 102,
           "idle": 29,
-          "runs": 147
+          "runs": 146
         },
         "7d": {
           "completed": 55,
@@ -22624,9 +22618,9 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 2,
+          "failed": 1,
           "idle": 30,
-          "runs": 32
+          "runs": 31
         },
         "7d": {
           "completed": 0,
@@ -22700,9 +22694,9 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 2,
+          "failed": 1,
           "idle": 16,
-          "runs": 18
+          "runs": 17
         },
         "7d": {
           "completed": 0,
@@ -22757,9 +22751,9 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 6,
+          "failed": 5,
           "idle": 9,
-          "runs": 15
+          "runs": 14
         },
         "7d": {
           "completed": 0,
@@ -22776,16 +22770,48 @@
     "24h": "24 hours",
     "7d": "7 days"
   },
+  "model_exclusions": {
+    "generated_at": "2026-11-24T20:08:38Z",
+    "sources": {
+      "kilo-auto": [
+        "kilo-auto/efficient",
+        "kilo-auto/balanced"
+      ],
+      "nvidia": [
+        "google/diffusiongemma-26b-a4b-it",
+        "minimaxai/minimax-m3",
+        "moonshotai/kimi-k3",
+        "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "nvidia/nemotron-3-nano-30b-a3b",
+        "stepfun-ai/step-3.7-flash",
+        "z-ai/glm-5.3",
+        "google/gemma-4-31b-it",
+        "nvidia/nemotron-3.5-bolt-e4b",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "nvidia/ising-calibration-1.5-31b",
+        "poolside/laguna-xs-2.1",
+        "nvidia/nemotron-3-ultra-550b-a55b",
+        "meta/muse-glimmer-30b"
+      ],
+      "opencode-free": [
+        "beam-free",
+        "hy4-flash-free"
+      ],
+      "openrouter-free": [
+        "dots-studio/dots-3-note-preview:free"
+      ]
+    }
+  },
   "db_usage": {
     "allowance_source": "turso plan starter",
     "blocked": {
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T19:51:37.541475+00:00",
-    "days_elapsed": 23.828,
+    "checked_at": "2026-11-24T20:08:38.128905+00:00",
+    "days_elapsed": 23.839,
     "days_in_month": 30.0,
-    "days_left": 6.17,
+    "days_left": 6.16,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
