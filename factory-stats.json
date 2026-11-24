@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T19:35:35.649619+00:00",
+  "generated_at": "2026-11-24T19:51:37.424871+00:00",
   "models": [
     {
       "health": {
@@ -4904,7 +4904,7 @@
     {
       "health": {
         "cooldown_until": null,
-        "last_outcome": "success",
+        "last_outcome": "work_failure",
         "status": "healthy"
       },
       "model": "hungerg-free",
@@ -4913,26 +4913,26 @@
         "24h": {
           "completed": 7,
           "delivered": 7,
-          "failed": 14,
+          "failed": 15,
           "failures": {
             "control_plane_failure": 1,
             "provider_throttle": 1,
-            "work_failure": 12
+            "work_failure": 13
           },
           "idle": 1,
-          "runs": 22
+          "runs": 23
         },
         "7d": {
           "completed": 7,
           "delivered": 7,
-          "failed": 14,
+          "failed": 15,
           "failures": {
             "control_plane_failure": 1,
             "provider_throttle": 1,
-            "work_failure": 12
+            "work_failure": 13
           },
           "idle": 1,
-          "runs": 22
+          "runs": 23
         }
       }
     },
@@ -4958,16 +4958,16 @@
         "7d": {
           "completed": 4,
           "delivered": 3,
-          "failed": 56,
+          "failed": 55,
           "failures": {
             "control_plane_failure": 11,
             "provider_failure": 1,
             "provider_throttle": 1,
             "unknown_failure": 1,
-            "work_failure": 42
+            "work_failure": 41
           },
           "idle": 3,
-          "runs": 63
+          "runs": 62
         }
       }
     },
@@ -22643,9 +22643,9 @@
         "24h": {
           "completed": 15,
           "delivered": 15,
-          "failed": 68,
+          "failed": 69,
           "idle": 33,
-          "runs": 116
+          "runs": 117
         },
         "7d": {
           "completed": 56,
@@ -22782,10 +22782,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T19:35:35.771548+00:00",
-    "days_elapsed": 23.816,
+    "checked_at": "2026-11-24T19:51:37.541475+00:00",
+    "days_elapsed": 23.828,
     "days_in_month": 30.0,
-    "days_left": 6.18,
+    "days_left": 6.17,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
