@@ -4,6 +4,16 @@ The ComicVine hydrator inspects comics that already exist in ComicPile and write
 
 ## Read-issue identity and creator backfill
 
+> **Status: historical, superseded (2026-11-24).** The Python hydrator/backfill
+> CLIs (`scripts/backfill_read_comicvine.py`,
+> `scripts/hydrate_comicvine_issues.py`) and the local SQLite snapshot workflow
+> were deleted with the Python application. There is no replacement operator
+> CLI: live ComicVine search, import, identity and metadata correction run
+> through the native `/api/v2/comicvine` endpoints in the app
+> (see [docs/API.md](API.md) and [docs/CBL_COMICVINE_LOOKUP.md](CBL_COMICVINE_LOOKUP.md)).
+> The commands below are retained as the record of the retired workflow; do not
+> follow them as current instructions.
+
 Use `scripts/backfill_read_comicvine.py` as the single operator entrypoint for read <!-- docs-path-check: ignore -->
 issues. It targets only the explicitly exported `DATABASE_URL` and runs four resumable
 stages in order:
