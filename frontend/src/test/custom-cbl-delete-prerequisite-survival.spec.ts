@@ -216,6 +216,19 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
 
   await page.goto(`/reading-lists/${deletedList.id}`)
   await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(deletedList.name)
+  // Invalidating the deleted detail can produce one handled 404 after the 204.
+  // Allow only that exact resource/status; the API assertion below requires it.
+  const deletedApiUrl = new URL(`/api/v2/reading-lists/${deletedList.id}`, page.url()).toString()
+  allowExpectedBrowserFailures.allow(
+    {
+      category: 'console',
+      message: `Failed to load resource: the server responded with a status of 404 (Not Found) @ ${deletedApiUrl}`,
+    },
+    {
+      category: 'console',
+      message: `API Error: /v2/reading-lists/${deletedList.id} AxiosError: Request failed with status code 404`,
+    },
+  )
   await page.getByRole('button', { name: 'Delete', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Delete custom CBL' })
   await expect(dialog).toBeVisible()
