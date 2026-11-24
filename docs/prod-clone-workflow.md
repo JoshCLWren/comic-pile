@@ -22,15 +22,21 @@ The backup script reads `.env` from its checkout. Use a temporary secure checkou
 or securely prepared `.env` containing the authorized production `DATABASE_URL`;
 do not overwrite a developer's normal local configuration inadvertently.
 
+For a standard Neon URL, use `pg_dump`'s URL support directly because the shell
+backup script requires an explicit `host:port` and does not strip query
+parameters:
+
 ```bash
-make backup-postgres
-make list-postgres-backups
+mkdir -p backups/postgres
+pg_dump --dbname="$NEON_DIRECT_DATABASE_URL" --no-owner --no-acl \
+  | gzip > "backups/postgres/postgres_backup_neondb_$(date +%Y%m%d_%H%M%S).sql.gz"
+gzip -t backups/postgres/postgres_backup_neondb_*.sql.gz
 ```
 
-The script accepts remote PostgreSQL hosts for backup and writes a gzip-compressed
-plain SQL dump named `postgres_backup_<database>_<timestamp>.sql.gz`. Treat the
-file as production credentials and reader data. The script verifies gzip
-integrity, not restore correctness.
+For an explicitly formatted `host:port` URL without query parameters,
+`make backup-postgres` remains available. Either path produces a gzip-compressed
+plain SQL dump. Treat it as production credentials and reader data. Gzip
+integrity is not a restore rehearsal.
 
 ## 2. Prepare an empty local target
 

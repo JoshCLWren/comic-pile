@@ -24,11 +24,11 @@ flow is:
 2. Preview exact Issue-number matches and conflicts.
 3. Confirm or replace the exact ComicVine Issue ID with ownership, stale-preview,
    conflict and idempotency checks.
-4. Commit the exact Issue identity mapping. For series-mapping/roster flows, the
-   already-fetched roster metadata is saved in that commit transaction. Exact
-   Issue confirmation creates the identity row first and enqueues deeper metadata
-   hydration after commit; it does not wait for provider hydration in the mapping
-   transaction.
+4. Commit the exact Issue identity mapping and its durable hydration enqueue
+   atomically in the same transaction (the enqueue uses a savepoint). For
+   series-mapping/roster flows, the already-fetched roster metadata is also saved
+   in that commit. Network provider hydration runs after commit; the mapping
+   transaction does not wait for it.
 
 A confirmed series/volume mapping is context, not proof of an Issue identity.
 Provider relationship data is informational and cannot create Dependencies or
