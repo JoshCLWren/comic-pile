@@ -60,7 +60,9 @@ prefixes. The Rust migration runner accepts `MIGRATE_DATABASE_URL` or
 connections require `sslmode=require`.
 
 `CORS_ORIGINS` and `SESSION_GAP_HOURS` remain in `.env.example` for historical
-compatibility but are not read by the current native configuration.
+compatibility but are not read by the current native configuration. Export the
+selected values in the shell before running the migration runner or a standalone
+native process; Vercel reads them from the project environment.
 
 For the closest match to the maintained production setup, use Neon's pooled connection for application traffic and a direct Neon connection for schema migrations. The production migration tooling can resolve a direct URL through `NEON_PROJECT_ID` and `NEON_API_KEY`, or it can use an explicit `NEON_DIRECT_DATABASE_URL`; see [`.env.example`](../.env.example) for those variables.
 

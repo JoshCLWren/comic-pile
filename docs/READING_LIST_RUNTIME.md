@@ -32,12 +32,12 @@ reader-authored cycle is contained to its affected Threads: healthy Threads keep
 their frontiers, while cyclic Threads report a `reading_cycle` blocker with the
 exact Issues needed for repair.
 
-Roll, Queue pagination, Thread projections, stale-pick recovery, and safe queue
-repositioning consume this authority. The Roll pool first takes the top-`die`
-eligible window, then removes this browser's temporary snoozes. It never backfills
-from below the die, so the effective pool can only shrink. Collection exclusions
-use stable Issue/Thread identities and normalized volume IDs, including ComicVine
-numeric and `4050-` spellings; titles never infer identity.
+The canonical surfaces consume this authority; per-surface activation is
+described below. The Roll pool first takes the top-`die` eligible window, then
+removes this browser's temporary snoozes. It never backfills from below the die,
+so the effective pool can only shrink. Collection exclusions use stable
+Issue/Thread identities and normalized volume IDs, including ComicVine numeric and
+`4050-` spellings; titles never infer identity.
 
 ## Owner-approved rollout setting
 
