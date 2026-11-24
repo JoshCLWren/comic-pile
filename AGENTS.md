@@ -140,7 +140,7 @@ ruff check .
 ty check --error-on-warning
 ```
 
-**Path-filtered ruff or ty is not a valid CI substitute.** Those two commands, with no path arguments, are the required lint/type pair. `bash scripts/lint.sh` runs that pair plus frontend ESLint; prefer it (or the two commands directly) as the local push gate.
+**Path-filtered ruff or ty is not a valid CI substitute.** Those two commands, with no path arguments, are the required lint/type pair. `bash scripts/lint.sh` currently runs Python syntax/ignore/`Any` checks and frontend ESLint; it does **not** run Ruff or ty. Run the two commands above directly for the Python push gate.
 
 **Forbidden as a push gate:**
 - `ruff check` or `ty check` limited to a file list
@@ -150,7 +150,7 @@ ty check --error-on-warning
 
 **Required:**
 1. Before the first Python commit of a session, run `bash scripts/install-git-hooks.sh` so Cursor's remapped `core.hooksPath` can still chain to `.git/hooks/pre-commit`.
-2. After the last Python edit, run `bash scripts/lint.sh` (or `ruff check .` and `ty check --error-on-warning`) against the whole repo.
+2. After the last Python edit, run `ruff check .` and `ty check --error-on-warning` against the whole repo. `bash scripts/lint.sh` is an additional hook check, not a substitute.
 3. Re-run after every later edit. A green run is invalid the moment sources change.
 4. Fix every ruff and ty finding locally. Do not use CI to discover them.
 
@@ -191,7 +191,7 @@ For autonomous factory work, [docs/AUTONOMOUS_FACTORY_POLICY.md](docs/AUTONOMOUS
 Before pushing Python changes from a normal local checkout:
 1. Run `ruff check .` with no path arguments. Path-filtered ruff is not a valid CI substitute.
 2. Run `ty check --error-on-warning` with no path arguments. CI treats ty **warnings as failures**.
-3. Prefer `bash scripts/lint.sh` so ruff, ty, and frontend lint run as one gate.
+3. Run `bash scripts/lint.sh` separately when validating the hook's syntax/ignore/frontend checks.
 4. Run the focused Rust tests and frontend test files that cover the change.
 5. Fix every lint, type, test, and build failure before pushing.
 
@@ -202,7 +202,7 @@ Before pushing frontend changes from a normal local checkout:
 4. Run focused Chromium Playwright coverage when the change affects browser behavior.
 5. Fix every failure caused or exposed by the change before pushing.
 
-**If E2E tests need a backend:** Run `make dev` first. The API runs on port 8000 and Vite runs on port 5173.
+**If E2E tests need a backend:** use the maintained same-origin test ingress. `make dev` serves Vite on 5173 and the native API on 8010, while the Docker test topology serves nginx on 8000 and the regression ingress defaults to 9000. Set `BASE_URL` to the origin actually serving Playwright; see `LOCAL_TESTING.md` and the Chromium regression skill.
 
 Never skip meaningful tests or use CI as a substitute for debugging a locally reproducible failure. Factory workers that cannot execute a local check in their runtime must state that limitation truthfully and rely only on the validation boundary permitted by the canonical factory policy.
 
@@ -240,7 +240,7 @@ Rust cutover. Do not recreate them or reintroduce Python application modules.
 
 ### Linting
 ```bash
-make lint                    # ruff + ty + frontend ESLint (scripts/lint.sh)
+make lint                    # Python syntax/ignore/Any + frontend ESLint (scripts/lint.sh)
 ruff check .                 # Python tooling style; CI runs the whole repo
 ty check --error-on-warning  # Required Python tooling type check; warnings fail CI
 cd frontend && pnpm run lint  # Frontend ESLint
@@ -249,10 +249,10 @@ cargo check --workspace      # Rust API and migration runner
 
 ### Testing
 ```bash
-cargo test --workspace                          # Rust API + migration runner tests
+cargo test --workspace                          # Full Rust suite (CI; targeted filters locally)
 cargo test -p comicpile-roll-service roll_offer # Single module/filter
 pytest tests/test_markdown_docs.py -v           # Repository tooling test file
-cd frontend && pnpm test                         # Frontend unit tests (vitest)
+cd frontend && pnpm test                         # Full frontend suite (CI; targeted files locally)
 cd frontend && pnpm exec vitest run src/unit/<file>.test.ts  # Single frontend file
 cd frontend && pnpm run typecheck                # Frontend TypeScript check
 ```
@@ -267,80 +267,28 @@ cd frontend && pnpm run build && npx playwright test --headed  # Run with browse
 
 **Why build required?** Playwright tests run against production build in `static/react/`, not dev server. Without build, tests fail with 404s for CSS/JS assets.
 
-**Inventory-driven Chromium regression lane** (`make verify-e2e-regression`, `pnpm test:e2e:regression`, scheduled `e2e-chromium-regression` workflow): before running, fixing, or triaging it, load the `e2e-chromium-regression` skill (`.agents/skills/e2e-chromium-regression/SKILL.md`) — it documents the mandatory `TEST_ENVIRONMENT=true` backend contract, scope rules (P0 must stay green; P1/P2 reds reconcile into one canonical issue), and the verified failure-class triage table.
+**Inventory-driven Chromium regression lane** (`make verify-e2e-regression`, `pnpm test:e2e:regression`, scheduled `e2e-chromium-regression` workflow): before running, fixing, or triaging it, load the `e2e-chromium-regression` skill (`.agents/skills/e2e-chromium-regression/SKILL.md`) — it documents the mandatory `TEST_ENVIRONMENT=true` backend contract, scope rules (P0 must stay green; P1/P2 reds reconcile into existing work or owner-authorized issues), and the verified failure-class triage table.
 
-## Python Code Style
+## Python Tooling Style
 
-### Imports
-Order: standard library, third-party, local. Ruff auto-sorts with `ruff check --fix`.
+Python remains in repository tooling, checks and the hand-run QA mirror refresh
+script. It is not application code.
 
-### Type Annotations
-- **Required** on all public functions with precise types
-- **Never use `Any`** - ruff ANN401 rule enforced
-- Use `Mapped[]` for SQLAlchemy model columns
-- Use `|` union syntax, not `Union[]` or `Optional[]`
-- **Never leave a redundant `cast()`.** `ty check --error-on-warning` fails CI on `redundant-cast`. After `isinstance(x, T)`, use `x` directly. Do not write `cast(object, x)` when `x` is already `object`. Narrow with `isinstance` instead of stacking casts.
+- Order imports: standard library, third-party, local.
+- Annotate public functions precisely; never use `Any` (Ruff ANN401).
+- Use `|` unions, not `Union[]` / `Optional[]`.
+- Never leave a redundant `cast()`. After `isinstance(x, T)`, use `x` directly.
+- Use `snake_case` functions/variables, `PascalCase` classes,
+  `SCREAMING_SNAKE_CASE` constants and `_` for private names.
+- Use Google-style module/public-function docstrings.
+- Use 4-space indentation, a 100-character soft wrap and trailing commas in
+  multi-line structures.
+- Never add `# type: ignore`, `# noqa`, `# ruff: ignore` or `# pylint: ignore`.
+  Fix the underlying issue.
 
-### Naming Conventions
-- **Functions/variables**: `snake_case`
-- **Classes**: `PascalCase`
-- **Constants**: `SCREAMING_SNAKE_CASE`
-- **Private**: prefix with `_`
-
-### Docstrings
-Google convention, required for modules and public functions. Include Args/Returns sections.
-
-### Formatting
-- **Line length**: 100 characters
-- **Indentation**: 4 spaces
-- **Trailing commas**: Yes, for multi-line structures
-
-### Linter Ignores - PROHIBITED
-The pre-commit hook blocks these comments:
-- `# type: ignore`
-- `# noqa`
-- `# ruff: ignore`
-- `# pylint: ignore`
-
-Fix the underlying issue instead of suppressing warnings.
-
-### CRITICAL: MissingGreenlet Errors After Database Commits
-
-**Symptom**: `sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called`
-
-**Root Cause**: Accessing SQLAlchemy model attributes after `await db.commit()` causes session expiration. SQLAlchemy lazy-loads attributes on access, but after commit the session is closed/expired.
-
-**Example of buggy code**:
-```python
-await db.commit()
-
-# This will FAIL - accessing thread.title after commit triggers lazy load
-return RollResponse(
-    title=thread.title,  # ❌ MissingGreenlet error
-    format=thread.format,
-)
-```
-
-**Required Fix Pattern**:
-```python
-# Extract all needed attributes BEFORE commit
-thread_title = thread.title
-thread_format = thread.format
-thread_issues = thread.issues_remaining
-thread_position = thread.queue_position
-
-await db.commit()
-
-# Use extracted values after commit - safe!
-return RollResponse(
-    title=thread_title,  # ✅ Works
-    format=thread_format,
-    issues_remaining=thread_issues,
-    queue_position=thread_position,
-)
-```
-
-**Rule**: If you need data from a SQLAlchemy model after `db.commit()`, extract it into variables BEFORE the commit.
+SQLAlchemy `Mapped[]` and MissingGreenlet rules applied to the retired Python
+application. Do not recreate ORM models or application sessions. The QA mirror
+script's existing SQLAlchemy use is isolated tooling, not a deployed runtime.
 
 ## API Patterns
 
@@ -352,9 +300,6 @@ Handlers validate and delegate; domain modules decide; persistence stays behind 
 - **Persistence** uses the bounded pool and SQL helpers in `native/roll-service/src/db.rs`; request/response DTOs derive `serde`/`utoipa` and stay aligned with the generated contract.
 
 New backend code follows this layout without exceptions. Every native route module requires a DB-backed HTTP test; the `native-route-db-test-guard` CI job enforces that with `node scripts/check_native_route_db_tests.mjs`. The former Python router/service/repository layout and its conformance baseline were retired with the Python API.
-
-The MissingGreenlet notes below are historical: they applied to the retired SQLAlchemy
-sessions. No shipped code path commits a SQLAlchemy session.
 
 ### Domain Nouns With Multiple Meanings (House Standard)
 
