@@ -6,6 +6,7 @@ import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import { queryKeys } from '../query/queryKeys'
 import Modal from './Modal'
+import { requestSemanticScroll } from '../scroll/scrollCoordinator'
 import {
   customCBLApi, type CustomCBLEntry, type CustomCBLIssueSearchResult, type CustomCBLWrite,
   type ReadingListEntryIntent, type ReadingListGate, type ReadingListMode, type ReadingListPredecessorChange,
@@ -75,11 +76,15 @@ export default function CustomCBLBuilder({
 }: CustomCBLBuilderProps) {
   const queryClient = useQueryClient()
   const issueSearchInput = useRef<HTMLInputElement>(null)
+  const customCBLHeadingRef = useRef<HTMLHeadingElement>(null)
+  const deleteReturnFocusRef = useRef<HTMLElement | null>(null)
   const issueSearchResults = useRef<HTMLDivElement>(null)
   const listNavigationRef = useRef<HTMLDivElement>(null)
   const pendingNavigationFocusRef = useRef<number | null>(null)
   const currentIssueRef = useRef<HTMLLIElement>(null)
+  const currentUnreadIssueRef = useRef<HTMLLIElement>(null)
   const pendingProgressRevealRef = useRef<number | null>(null)
+  const pendingUnreadRevealRef = useRef<number | null>(null)
   const [readerOpen, setReaderOpen] = useState(false)
   const [open, setOpen] = useState(initialListId !== undefined)
   const [selectedId, setSelectedId] = useState<number | null>(initialListId ?? null)
@@ -165,6 +170,10 @@ export default function CustomCBLBuilder({
     const progressIndex = getReadingListProgressIndex(list.entries)
     setEntryPage(Math.floor(progressIndex / ENTRY_PAGE_SIZE))
     pendingProgressRevealRef.current = list.entries[progressIndex]?.issue_id ?? null
+    const nextUnreadIssueId = list.entries.find(
+      (entry) => !entry.skipped && entry.status === 'unread',
+    )?.issue_id ?? null
+    pendingUnreadRevealRef.current = nextUnreadIssueId
     setJumpPosition('')
     setExpandedEntryOptions(null)
     setMoveDestinations({})
@@ -205,6 +214,9 @@ export default function CustomCBLBuilder({
   const deleteMutation = useMutation({
     mutationFn: (listId: number) => customCBLApi.delete(listId),
     onSuccess: async () => {
+      // Install the stable target before cache changes so every completion
+      // render restores focus to a connected element after the trigger unmounts.
+      deleteReturnFocusRef.current = customCBLHeadingRef.current
       if (selectedId) await applyDeletedCustomCBL(queryClient, selectedId)
       saveMutation.reset()
       setConfirmDeleteOpen(false)
@@ -224,8 +236,10 @@ export default function CustomCBLBuilder({
       return customCBLApi.apply(selectedId, planId)
     },
     onSuccess: async (result) => {
-      await applyCommittedReadingPlan(queryClient, result)
+      // The response already contains the authoritative committed plan. Let the
+      // editor adopt it before waiting for unrelated dependent-query refreshes.
       onApplied?.(result)
+      await applyCommittedReadingPlan(queryClient, result)
       const added = result.added_issue_ids.length
       const skipped = result.skipped_existing_issue_ids.length
       setMessage(`Applied to Reading Plan: ${added} added${skipped ? `, ${skipped} already present` : ''}.`)
@@ -437,13 +451,30 @@ export default function CustomCBLBuilder({
   const progressIndex = getReadingListProgressIndex(entries)
   const progressIssue = entries[progressIndex]
   const nextUnreadIssueId = entries.find((entry) => !entry.skipped && entry.status === 'unread')?.issue_id
-  useEffect(() => {
-    if (pendingProgressRevealRef.current !== progressIssue?.issue_id || !currentIssueRef.current) return
-    const target = currentIssueRef.current
+  useLayoutEffect(() => {
+    // Scroll to the progress issue if we have a ref and the IDs match
+    if (pendingProgressRevealRef.current !== entries[progressIndex]?.issue_id) return
+    if (!currentIssueRef.current) return
     pendingProgressRevealRef.current = null
-    target.scrollIntoView?.({ block: 'center' })
-    target.focus({ preventScroll: true })
-  }, [entries, currentPage, entrySearch, progressIssue?.issue_id])
+    requestSemanticScroll(() => {
+      const target = currentIssueRef.current
+      if (!target) return
+      target.scrollIntoView?.({ block: 'center' })
+      target.focus({ preventScroll: true })
+    })
+  }, [entries, currentPage, entrySearch])
+  useLayoutEffect(() => {
+    if (!nextUnreadIssueId) return
+    if (pendingUnreadRevealRef.current !== nextUnreadIssueId) return
+    if (!currentUnreadIssueRef.current) return
+    pendingUnreadRevealRef.current = null
+    requestSemanticScroll(() => {
+      const target = currentUnreadIssueRef.current
+      if (!target) return
+      target.scrollIntoView?.({ block: 'center' })
+      target.focus({ preventScroll: true })
+    })
+  }, [entries, currentPage, entrySearch, nextUnreadIssueId])
   const returnToProgress = () => {
     if (!progressIssue) return
     pendingProgressRevealRef.current = progressIssue.issue_id
@@ -712,7 +743,7 @@ export default function CustomCBLBuilder({
     <section className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3" aria-labelledby="custom-cbl-heading">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 id="custom-cbl-heading" className="text-sm font-black text-[var(--theme-text-primary)]">Custom CBLs</h3>
+          <h3 id="custom-cbl-heading" ref={customCBLHeadingRef} tabIndex={-1} className="text-sm font-black text-[var(--theme-text-primary)]">Custom CBLs</h3>
           <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Build one ordered list of real comics, choose a strict or loose reading order, add optional waits, and apply it to this Reading Plan.</p>
         </div>
         <button type="button" onClick={() => setOpen((value) => !value)} disabled={disabled || isPending} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50" aria-expanded={open}>
@@ -861,7 +892,12 @@ export default function CustomCBLBuilder({
                     index={index}
                     entryCount={entries.length}
                     isNextUnread={entry.issue_id === nextUnreadIssueId}
-                    cardRef={entry.issue_id === progressIssue?.issue_id ? currentIssueRef : undefined}
+                    cardRef={(el) => {
+                      const isProgress = entry.issue_id === progressIssue?.issue_id
+                      const isNextUnread = entry.issue_id === nextUnreadIssueId
+                      if (isProgress || currentIssueRef.current === el) currentIssueRef.current = isProgress ? el : null
+                      if (isNextUnread || currentUnreadIssueRef.current === el) currentUnreadIssueRef.current = isNextUnread ? el : null
+                    }}
                     mode={mode}
                     waitingOn={requirements.get(entry.issue_id) ?? []}
                     nameOf={nameFor}
@@ -1067,7 +1103,7 @@ export default function CustomCBLBuilder({
                 <button type="button" onClick={() => saveMutation.mutate(null)} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
                 {planId && (<button type="button" onClick={() => applyMutation.mutate()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50">{applyMutation.isPending ? 'Applying…' : 'Apply to this Reading Plan'}</button>)}
                 <button type="button" onClick={() => void exportList()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Export .cbl</button>
-                <button type="button" onClick={() => { deleteMutation.reset(); setConfirmDeleteOpen(true) }} disabled={disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-danger)] px-4 text-sm font-bold text-[var(--theme-danger)] disabled:opacity-50">Delete</button>
+                <button type="button" onClick={() => { deleteMutation.reset(); deleteReturnFocusRef.current = null; setConfirmDeleteOpen(true) }} disabled={disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-danger)] px-4 text-sm font-bold text-[var(--theme-danger)] disabled:opacity-50">Delete</button>
               </div>
               {dirty && <p className="text-xs text-[var(--theme-warning)]">Save this custom CBL before applying or exporting it.</p>}
             </div>
@@ -1106,6 +1142,7 @@ export default function CustomCBLBuilder({
         pendingLabel="Deleting…"
         onConfirm={() => { if (selectedId) deleteMutation.mutate(selectedId) }}
         onCancel={() => { if (!deleteMutation.isPending) { deleteMutation.reset() } setConfirmDeleteOpen(false) }}
+        returnFocusRef={deleteReturnFocusRef}
         testId="delete-custom-cbl-dialog"
       >
         <p className="text-sm text-[var(--theme-text-muted)]">
