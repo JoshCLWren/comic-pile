@@ -850,14 +850,10 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         let offer_ids = |validated: &ValidatedReadingInputs, snoozed: &HashSet<i32>| {
-            crate::roll_pool::offer_frontiers(
-                &validated.eligible_frontiers().unwrap(),
-                snoozed,
-                20,
-            )
-            .into_iter()
-            .map(|frontier| frontier.issue_id)
-            .collect::<Vec<_>>()
+            crate::roll_pool::offer_frontiers(&validated.eligible_frontiers().unwrap(), snoozed, 20)
+                .into_iter()
+                .map(|frontier| frontier.issue_id)
+                .collect::<Vec<_>>()
         };
 
         let validated = ValidatedReadingInputs::new(inputs.clone(), &BTreeMap::new()).unwrap();
