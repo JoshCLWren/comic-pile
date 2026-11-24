@@ -144,7 +144,8 @@ def test_factory_workflows_are_thin_callers_of_rotisserie_main() -> None:
         assert list(workflow["jobs"]) == ["rotisserie"], path.name
         job = workflow["jobs"]["rotisserie"]
         assert set(job) <= {"cache-mode", "uses", "with", "secrets"}, path.name
-        assert REUSABLE.match(job["uses"])["name"] == path.name
+        called = REUSABLE.match(job["uses"])
+        assert called is not None and called["name"] == path.name, path.name
         assert job.get("secrets") != "inherit", path.name
         assert "permissions" in workflow, path.name
     assert not (WORKFLOWS / "free-model-factory-run.yml").exists()
