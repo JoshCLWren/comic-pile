@@ -22,8 +22,8 @@ make backup-postgres
 # List backups
 make list-postgres-backups
 
-# Restore a specific backup
-make restore-postgres FILE=backups/postgres/postgres_backup_YYYYMMDD_HHMMSS.sql.gz
+# Restore a specific backup into the configured local database
+make restore-postgres FILE=backups/postgres/postgres_backup_<database>_YYYYMMDD_HHMMSS.sql.gz
 ```
 
 ### Configuration
@@ -35,26 +35,29 @@ make restore-postgres FILE=backups/postgres/postgres_backup_YYYYMMDD_HHMMSS.sql.
 | `MAX_BACKUPS` | `10` | Rotation count kept by the backup script |
 
 Backups are gzip-compressed `pg_dump` output named
-`postgres_backup_<timestamp>.sql.gz`. Treat them as production data: they
-contain reader libraries and account rows. Do not commit or upload them.
+`postgres_backup_<database>_<timestamp>.sql.gz`. Treat them as production data:
+they contain reader libraries and account rows. Do not commit or upload them.
 
-### Manual restore procedure
+### Restore procedure
+
+The restore script reads `DATABASE_URL` from `.env`, verifies the archive, asks
+for explicit confirmation, and restores with `psql`. It deliberately refuses any
+non-loopback target and has no override.
 
 ```bash
 # Stop the app dev servers first (Ctrl-C in the make dev terminal)
-
-# Decompress and restore into the configured database
-gunzip -c backups/postgres/postgres_backup_YYYYMMDD_HHMMSS.sql.gz \
-  | psql "postgresql://comicpile:comicpile_password@localhost:5435/comicpile"
+# Confirm DATABASE_URL points at a disposable local database, then:
+make restore-postgres FILE=backups/postgres/postgres_backup_<database>_YYYYMMDD_HHMMSS.sql.gz
 
 # Re-apply migrations to confirm the schema is current
 set -a; . ./.env; set +a
 make migrate
 ```
 
-Restoring over a live database replaces its contents. Use a disposable
-database for rehearsals; see [`prod-clone-workflow.md`](prod-clone-workflow.md)
-before loading production data locally.
+Restoring over a live database replaces its contents. Use a disposable database
+for rehearsals; see [`prod-clone-workflow.md`](prod-clone-workflow.md) before
+loading production data locally. This script is not a production disaster-recovery
+tool: use the hosting provider's supported backup/restore procedure for Neon.
 
 ### Prerequisites
 
@@ -74,18 +77,24 @@ sudo dnf install postgresql
 
 ### Disaster recovery
 
+For a local or disposable database:
+
 ```bash
 # 1. Stop application traffic
 # 2. Back up the current (possibly broken) database first
 make backup-postgres
 
-# 3. Restore the last known-good backup
+# 3. Restore the last known-good local backup
 make restore-postgres FILE=backups/postgres/<last-good>.sql.gz
 
 # 4. Verify migrations report no pending work
 set -a; . ./.env; set +a
 cargo run --locked -p comicpile-migrate -- plan
 ```
+
+For Neon production, use Neon's supported backup/restore or point-in-time
+recovery workflow and the repository's deployment-recovery policy. The local
+restore script intentionally cannot target a remote database.
 
 ### Troubleshooting
 
@@ -94,7 +103,7 @@ cargo run --locked -p comicpile-migrate -- plan
 pg_isready -h localhost -p 5435 -U comicpile -d comicpile
 
 # Verify an archive is intact
-gzip -t backups/postgres/postgres_backup_YYYYMMDD_HHMMSS.sql.gz
+gzip -t backups/postgres/postgres_backup_<database>_YYYYMMDD_HHMMSS.sql.gz
 
 # Check disk space
 df -h .
@@ -130,8 +139,9 @@ The runner reads `MIGRATE_DATABASE_URL`, falling back to `DATABASE_URL`, and
 strips SQLAlchemy `+asyncpg`/`+psycopg` suffixes.
 
 There is no downgrade path. To roll back an applied migration, restore a
-pre-migration backup (above) or write a new forward migration. The production
-deploy workflow runs `up` and then `plan` against Neon before deploying.
+pre-migration backup or write a new forward migration. The production deploy
+workflow runs `plan` first; if it exits with the pending-migrations status, the
+workflow runs `up` before deploying. It does not run a second post-up `plan`.
 
 ## Related commands
 

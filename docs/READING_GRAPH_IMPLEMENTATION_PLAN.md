@@ -18,7 +18,9 @@ Do not expand this into a multi-week numbered recovery program.
 
 ## Frozen architecture
 
-The accepted architecture in `docs/READING_GRAPH_ADR.md` remains authoritative:
+The architecture recorded below was authoritative when this plan was written. It
+is now superseded by the Reading List runtime and ADR linked above; retain it only
+as historical design provenance.
 
 - `Thread` owns natural series issue order and current frontier state.
 - `Issue` is the canonical executable comic node and owns global read state.

@@ -3,9 +3,9 @@
 > **API v2 is a URL contract, not Rust.** The only public Roll bootstrap GET is
 > `GET /api/v2/roll/bootstrap`, served by `api/native_roll.rs` from the contract
 > in `native/contracts/v2-runtime.openapi.json`. Python has no Roll bootstrap GET
-> handler: the v1/legacy aliases were removed by #4397, and #4350 removed the
-> dead Python v1 read model and the unused Python v2 response DTO. The frozen
-> Python v2 projection and parity oracle was retired by #4738. The `v1`
+> handler: the v1/legacy aliases and Python read model were removed during the
+> cutover (#4397), and the frozen Python v2 projection/parity oracle was retired
+> by #4738. #4350 remains open for complete caller migration. The `v1`
 > directory in `tests/fixtures/roll-v2/v1/` is a
 > golden-fixture revision, **not** the public API v1 route. Do not change the URL
 > or treat one endpoint as the implementation of another.
@@ -206,52 +206,25 @@ adapter and contract coverage. Two residuals remain:
   with adapter/unit coverage for the carried count and fail-closed
   rejection of negative or missing counts.
 
-## Surface migration order (scoped resources, #4369)
+## Scoped-resource migration status
 
-Bootstrap remains authoritative for session/pending/recovery and supplies
-fallback pool metadata. The scoped die-state resource now owns die size
-and the 3D die model; (#4352 contract-after) bootstrap no longer carries
-`current_die`/`manual_die`, so the selected die is scoped-only
-(`DieStateResponse.die`, defaulting to d6 while pending or failed) and
-there is no bootstrap die fallback. The
-callers in `frontend/src/hooks/useRollResources.ts` are now mounted
-incrementally: `RollPage` calls `useRollDieState` and passes the scoped
-value to `RollHeader`, calls `useRollEligibleIssueIds` with the
-browser snooze cookie and passes `thread_ids` to `ThreadPool`, and calls
-`useRollIssueCards` for that visible eligible batch, so a cold Roll load
-is one session POST, one bootstrap GET, one die-state GET, one
-eligible-ids GET and one bounded issue-cards POST.
-`coreRouteRequestBudget.test.tsx` pins that budget. The composed
-`useRollResourceSnapshot` remains unwired and adds no production request
-of its own.
+Bootstrap remains the source for session/pending/recovery, last-read, and the
+current Roll row metadata. The scoped resources are partially mounted:
 
-Migrate in this order, one surface per reviewable change:
+- `GET /api/v2/roll/die-state` is authoritative for the selected die, ladder,
+  readout, die size, and 3D model. Bootstrap no longer carries die fields.
+- `GET /api/v2/roll/eligible-issue-ids` supplies ordered eligible IDs and the
+  browser snooze cookie, but `RollPage` still derives its row source from
+  `bootstrap.roll_pool`.
+- `POST /api/v2/issues/cards` enriches the visible eligible batch, with Bootstrap
+  metadata retained as fallback.
 
-1. Die header — **selected die, ladder list, readout, die size and 3D model
-   mounted** from `GET /v2/roll/die-state` (`die`, `ladder`), with the
-   static ladder as the only fallback while the scoped query settles or
-   fails, and invalidated after roll/dice-command/reset. The bootstrap
-   `current_die`/`manual_die` projections were removed (#4352
-   contract-after); the selected die is scoped-only with a d6 default.
-   Remaining in this surface: drive `default_die` and `last_roll` from the
-   scoped resource.
-2. Eligible pool — **mounted** in `ThreadPool` in-play faces from
-   `GET /v2/roll/eligible-issue-ids` (`die`, `issue_ids`,
-   `thread_ids`), with browser-owned snoozes as the `snoozed` query
-   value and bootstrap `rollable` as the fallback pool. Bootstrap still
-   supplies each face's title, format, issue identity and routes until
-   the issue-card surface migrates.
-3. Issue cards — **mounted** as visible card enrichment from
-   `POST /v2/issues/cards` (one bounded batch in first-request
-   order, `items`), replacing the title and issue number bootstrap
-   already carries without adding a second per-issue fetch. Bootstrap
-   remains the fallback while the batch settles or fails.
+A cold Roll load currently uses one session POST, one Bootstrap GET, one die-state
+GET, one eligible-IDs GET, and one bounded issue-cards POST. The composed
+`useRollResourceSnapshot` remains unwired.
 
-Only after all three surfaces settle on scoped resources with green
-exact-head CI and independent review should the legacy Rust v2
-bootstrap be retired under #4369 (tracked as #4299, blocked on #4343/#4405).
-Deleting bootstrap before that point would regress session/pending/recovery,
-which the scoped resources do not yet own. `last_rolled_result` is retained
-in bootstrap for pending hydration (session-scoped; the scoped
-`DieStateResponse.last_roll` is global and must not light a stale rolled
-state).
+Do not retire Bootstrap while any real consumer still depends on it. #4350 owns
+complete caller migration (including pending, rating, reset, recovery, last-read,
+and snooze paths) and #4299 owns server deletion after zero-consumer evidence,
+exact-head CI, and independent review. `last_rolled_result` remains session-scoped
+in Bootstrap; the scoped global `last_roll` must not hydrate a stale pending state.
