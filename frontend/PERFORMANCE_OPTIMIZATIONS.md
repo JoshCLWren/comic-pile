@@ -1,5 +1,11 @@
 # Frontend Performance Optimizations - Implementation Summary
 
+> **Historical implementation summary:** Preserve for provenance. Current request
+> budgets and server-state rules live in `frontend/src/test/network-budget/` and
+> [`docs/REACT_ARCHITECTURE.md`](../docs/REACT_ARCHITECTURE.md).
+
+<!-- docs-path-check: historical -->
+
 ## Overview
 This document summarizes the performance optimizations implemented for the creator, crossover, and cbl-sources views to reduce unnecessary HTTP calls and improve caching efficiency.
 

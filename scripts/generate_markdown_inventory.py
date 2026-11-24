@@ -215,6 +215,10 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
         "docs/api/READING_LIST_AUTHORING.md",
         "docs/prod-clone-workflow.md",
         "docs/rate_limiting.md",
+        "frontend/AGENTS.md",
+        "frontend/docs/CLASS_NAME_LAYOUT_GUARD.md",
+        "frontend/src/test/UI_AUDIT.md",
+        "tools/oxlint/anti-slop/UPSTREAM.md",
     }
     if path in code_coupled_docs:
         return (
@@ -228,6 +232,13 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
             ),
             "keep",
             "—",
+        )
+    if path.startswith("scripts/__fixtures__/route-burndown/"):
+        return (
+            "Generated route-generator test fixture.",
+            "Regenerate with the owning script; not active documentation.",
+            "generated — test fixture",
+            "scripts/generate_route_burndown.mjs",
         )
     if path.startswith(("docs/manual-qa/", "docs/testing/")):
         return (
