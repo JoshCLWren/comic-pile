@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import LoadingSpinner from './LoadingSpinner'
 
 export interface ImageSource {
