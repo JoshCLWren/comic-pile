@@ -67,8 +67,8 @@ ACP checkpoints/model-selection metadata and final reports/verdicts, not logs.
 Preserve CI, independence, ownership, merge and production authorization gates.
 
 For any Python change, local verification must include the exact CI pair
-`ruff check .` **and** `ty check --error-on-warning` against the whole repo
-(`bash scripts/check-python-ci-lint.sh`). Path-filtered ruff or ty is not a valid CI substitute.
+`ruff check .` **and** `ty check --error-on-warning` against the whole repo.
+Path-filtered ruff or ty is not a valid CI substitute.
 Ruff-only or pytest-only is not enough: CI fails the required
 type-check job on ty warnings, including `redundant-cast`.
 Do not recast a value after `isinstance` has already narrowed it.

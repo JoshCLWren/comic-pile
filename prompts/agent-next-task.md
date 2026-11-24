@@ -8,9 +8,12 @@ Work on the next task in this repository.
 2. Read `docs/ISSUE_EXECUTION_PROTOCOL.md`.
 3. Read `docs/AUTONOMOUS_FACTORY_POLICY.md` when factory work is involved.
 4. Inspect `git status` and preserve all existing user changes.
-5. Run `make next-task`.
+5. Select an issue from the open GitHub queue following the selection priority in
+   `docs/AUTONOMOUS_FACTORY_POLICY.md` (this checkout provides no `make next-task`
+   target; do not invent one).
 6. Read the selected GitHub issue and any linked local plan.
-7. If the issue is too large for one implementation pass, split it into linked GitHub task/subtask issues before editing code.
+7. Do not create new issues or sub-issues without explicit owner authorization;
+   record out-of-scope discoveries in the existing issue or PR handoff.
 
 ## While working
 
@@ -21,9 +24,10 @@ Work on the next task in this repository.
 - Add regression tests for changed behavior.
 - Fix failures; never skip tests or use CI as a debugger.
 - For any Python change, run `ruff check .` and `ty check --error-on-warning`
-  against the whole repo (`bash scripts/check-python-ci-lint.sh`) after the last
+  against the whole repo after the last
   edit and before every push. Path-filtered ruff or ty is not a valid CI substitute.
-- If required work is outside the issue, create a linked GitHub issue before expanding scope.
+- If required work is outside the issue, record it in the existing issue or PR handoff
+  instead of expanding scope without owner authorization.
 - If blocked, mark the issue `ralph-status:blocked`, explain the exact blocker, and stop.
 - Do not use the archived Markdown kanban as a status source.
 - Do not discard, reset, or overwrite unrelated working-tree changes.
@@ -41,4 +45,4 @@ Work on the next task in this repository.
   after the PR merges and acceptance criteria and issue closure are verified. If the user
   explicitly asks for a draft PR, create a draft instead.
 
-Begin by running `make next-task`.
+Begin by selecting an issue from the open GitHub queue as described above.
