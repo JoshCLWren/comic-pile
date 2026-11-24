@@ -119,6 +119,103 @@ def _fetch_one(repository: str, number: int) -> Source:
     return source
 
 
+def _changed_files(
+    repository: str,
+    number: int,
+) -> tuple[list[dict[str, object]], bool]:
+    """Return a bounded changed-file response and whether it is complete."""
+    owner, name = _repository_parts(repository)
+    changed: list[dict[str, object]] = []
+    for page in range(1, _MAX_CHANGED_FILE_PAGES + 1):
+        query = urllib.parse.urlencode(
+            {"per_page": _CHANGED_FILE_PAGE_SIZE, "page": page}
+        )
+        result = _github_request(
+            f"/repos/{owner}/{name}/pulls/{number}/files?{query}"
+        )
+        if not isinstance(result, list) or not all(
+            isinstance(item, dict) for item in result
+        ):
+            raise RecoveryError("GitHub changed-file response must be an object list")
+        changed.extend(result)
+        if len(result) < _CHANGED_FILE_PAGE_SIZE:
+            return changed, True
+    return changed, False
+
+
+def _is_test_file(filename: str) -> bool:
+    """Recognize conventional automated-test paths without product heuristics."""
+    parts = [part for part in filename.split("/") if part]
+    if not parts:
+        return False
+    if _TEST_DIRECTORY_SEGMENTS.intersection(parts[:-1]):
+        return True
+    return _TEST_FILE_PATTERN.fullmatch(parts[-1]) is not None
+
+
+def ground_candidate(
+    payload: dict[str, object],
+    *,
+    repository: str,
+    pr_number: int,
+    changed_files: Callable[[str, int], tuple[list[dict[str, object]], bool]],
+) -> tuple[dict[str, object], bool]:
+    """Convert a complete test-only public candidate into an internal skip.
+
+    The trusted publisher supplies the changed-file loader. Incomplete bounded
+    responses are never treated as proof that no product file changed.
+    """
+    if payload.get("source_repository") != repository or payload.get(
+        "source_pr_number"
+    ) != pr_number:
+        raise RecoveryError("candidate does not match the selected source")
+    if (
+        payload.get("visibility", "public") != "public"
+        or payload.get("status", "published") != "published"
+    ):
+        return payload, False
+
+    changed, complete = changed_files(repository, pr_number)
+    filenames = [item.get("filename") for item in changed]
+    if (
+        not complete
+        or not changed
+        or not all(isinstance(name, str) and name for name in filenames)
+        or not all(_is_test_file(str(name)) for name in filenames)
+    ):
+        return payload, False
+
+    grounded = copy.deepcopy(payload)
+    reason = (
+        "The complete merged diff changes only automated tests; "
+        "no reader-facing product behavior changed."
+    )
+    grounded.update(
+        {
+            "category": "Internal",
+            "title": f"Internal change (PR #{pr_number})",
+            "summary": reason,
+            "body": None,
+            "visibility": "internal",
+        }
+    )
+    provenance = grounded.get("provenance_json")
+    if not isinstance(provenance, dict):
+        raise RecoveryError("public candidate provenance must be an object")
+    provenance.update(
+        {
+            "classification": "internal",
+            "reason": reason,
+            "classification_reason": reason,
+            "reader_reachable": False,
+            "user_visible_evidence": "",
+            "internal_engineering_terms": ["test-only merged diff"],
+        }
+    )
+    provenance.pop("reader_reachable_path", None)
+    return grounded, True
+
+
 def _discover(repository: str, *, since_hours: int) -> list[Source]:
     if since_hours < 1 or since_hours > 168:
         raise RecoveryError("recovery lookback must be between 1 and 168 hours")
