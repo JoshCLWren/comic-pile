@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T16:32:28.844465+00:00",
+  "generated_at": "2026-11-24T16:52:42.055619+00:00",
   "models": [
     {
       "health": {
@@ -2710,15 +2710,15 @@
         "24h": {
           "completed": 15,
           "delivered": 14,
-          "failed": 40,
+          "failed": 38,
           "failures": {
             "agent_timeout": 11,
-            "control_plane_failure": 14,
+            "control_plane_failure": 13,
             "unknown_failure": 2,
-            "work_failure": 13
+            "work_failure": 12
           },
           "idle": 1,
-          "runs": 56
+          "runs": 54
         },
         "7d": {
           "completed": 40,
@@ -2942,16 +2942,15 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 23,
+          "failed": 22,
           "failures": {
             "control_plane_failure": 3,
             "model_policy_violation": 1,
             "provider_throttle": 1,
-            "unknown_failure": 1,
             "work_failure": 17
           },
           "idle": 69,
-          "runs": 92
+          "runs": 91
         }
       }
     },
@@ -4993,8 +4992,8 @@
             "unknown_failure": 1,
             "work_failure": 19
           },
-          "idle": 30,
-          "runs": 74
+          "idle": 31,
+          "runs": 75
         },
         "7d": {
           "completed": 23,
@@ -5007,8 +5006,8 @@
             "unknown_failure": 1,
             "work_failure": 74
           },
-          "idle": 54,
-          "runs": 183
+          "idle": 55,
+          "runs": 184
         }
       }
     },
@@ -5928,12 +5927,12 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 40,
+          "failed": 38,
           "failures": {
-            "control_plane_failure": 40
+            "control_plane_failure": 38
           },
           "idle": 0,
-          "runs": 40
+          "runs": 38
         }
       }
     },
@@ -13437,12 +13436,12 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 2,
+          "failed": 1,
           "failures": {
-            "control_plane_failure": 2
+            "control_plane_failure": 1
           },
           "idle": 33,
-          "runs": 35
+          "runs": 34
         }
       }
     },
@@ -22610,16 +22609,16 @@
         "24h": {
           "completed": 18,
           "delivered": 17,
-          "failed": 95,
+          "failed": 93,
           "idle": 28,
-          "runs": 141
+          "runs": 139
         },
         "7d": {
           "completed": 55,
           "delivered": 53,
-          "failed": 590,
+          "failed": 589,
           "idle": 282,
-          "runs": 927
+          "runs": 926
         }
       }
     },
@@ -22649,15 +22648,15 @@
           "completed": 11,
           "delivered": 11,
           "failed": 64,
-          "idle": 31,
-          "runs": 106
+          "idle": 32,
+          "runs": 107
         },
         "7d": {
           "completed": 52,
           "delivered": 42,
           "failed": 372,
-          "idle": 81,
-          "runs": 505
+          "idle": 82,
+          "runs": 506
         }
       }
     },
@@ -22674,9 +22673,9 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 48,
+          "failed": 46,
           "idle": 4,
-          "runs": 52
+          "runs": 50
         }
       }
     },
@@ -22712,9 +22711,9 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 32,
+          "failed": 31,
           "idle": 33,
-          "runs": 65
+          "runs": 64
         }
       }
     },
@@ -22787,10 +22786,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T16:32:28.965919+00:00",
-    "days_elapsed": 23.689,
+    "checked_at": "2026-11-24T16:52:42.172377+00:00",
+    "days_elapsed": 23.703,
     "days_in_month": 30.0,
-    "days_left": 6.31,
+    "days_left": 6.3,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
