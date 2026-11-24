@@ -83,7 +83,7 @@ describe('ImageWithLoading', () => {
 
   it('handles image error', async () => {
     const onErrorMock = vi.fn()
-    const { getByRole } = render(
+    const { container, getByRole, queryByRole } = render(
       <ImageWithLoading src="https://example.com/image.jpg" alt="" onError={onErrorMock} />
     )
 
