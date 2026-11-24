@@ -1,8 +1,8 @@
 # Requested creator summary reads
 
-`GET /api/v1/creators/summaries` uses
-`load_creator_summary_inputs_for_creators` in
-`app/repositories/creator_summary.py`. The full-library reader remains available <!-- docs-path-check: ignore -->
+`GET /api/v2/creators/summaries` is served by the native Rust creator resource
+(`native/roll-service/src/creators_v2.rs`; the retained same-path creators
+operations share the implementation). The full-library reader remains available
 for creator discovery and detail callers that need all owned issues.
 
 The requested summary reader runs two user-scoped statements:
