@@ -99,8 +99,123 @@ describe('ImageWithLoading', () => {
       img.dispatchEvent(new Event('error'))
     })
 
-    // Should have called the onError callback
+    // Only the real error event settles a failed request, exactly once.
     expect(onErrorMock).toHaveBeenCalledTimes(1)
+    const image = getImage(document.body)
+    expect(image).toHaveClass('hidden', 'opacity-0')
+    expect(document.querySelector('[role="status"]')).not.toBeInTheDocument()
+
+    fireEvent.error(image)
+    expect(onErrorMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a deferred lazy image pending when complete has zero intrinsic width', () => {
+    vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true)
+    const naturalWidth = vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(0)
+    const naturalHeight = vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(0)
+    const onLoad = vi.fn<(img: HTMLImageElement) => void>()
+    const onError = vi.fn()
+    const { container, getByRole, queryByRole } = render(
+      <ImageWithLoading
+        src="https://example.com/lazy.jpg"
+        alt="Lazy cover"
+        loading="lazy"
+        onLoad={onLoad}
+        onError={onError}
+      />,
+    )
+    const image = getImage(container)
+
+    expect(getByRole('status')).toBeInTheDocument()
+    expect(image).toHaveClass('opacity-0')
+    expect(image).not.toHaveClass('hidden')
+    expect(onLoad).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+
+    naturalWidth.mockReturnValue(320)
+    naturalHeight.mockReturnValue(480)
+    fireEvent.load(image)
+
+    expect(queryByRole('status')).not.toBeInTheDocument()
+    expect(image).toHaveClass('opacity-100')
+    expect(onLoad).toHaveBeenCalledOnce()
+    expect(onLoad).toHaveBeenCalledWith(image)
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('settles a cached successful image through onLoad exactly once', () => {
+    vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true)
+    vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(300)
+    vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(400)
+    const onLoad = vi.fn<(img: HTMLImageElement) => void>()
+    const { container, queryByRole } = render(
+      <ImageWithLoading src="https://example.com/cached.jpg" alt="Cached cover" onLoad={onLoad} />,
+    )
+    const image = getImage(container)
+
+    expect(queryByRole('status')).not.toBeInTheDocument()
+    expect(image).toHaveClass('opacity-100')
+    expect(onLoad).toHaveBeenCalledOnce()
+    expect(onLoad).toHaveBeenCalledWith(image)
+    expect(onLoad.mock.calls[0][0].naturalWidth).toBe(300)
+    expect(onLoad.mock.calls[0][0].naturalHeight).toBe(400)
+
+    fireEvent.load(image)
+    expect(onLoad).toHaveBeenCalledOnce()
+  })
+
+  it('starts every changed source with fresh art and ignores detached request events', () => {
+    const onLoad = vi.fn<(img: HTMLImageElement) => void>()
+    const onError = vi.fn()
+    const firstSrc = 'https://example.com/first.jpg'
+    const secondSrc = 'https://example.com/second.jpg'
+    const thirdSrc = 'https://example.com/third.jpg'
+    const { container, getByRole, rerender } = render(
+      <ImageWithLoading src={firstSrc} alt="Cover" onLoad={onLoad} onError={onError} />,
+    )
+    const first = getImage(container)
+    fireEvent.load(first)
+    expect(first).toHaveClass('opacity-100')
+
+    rerender(<ImageWithLoading src={secondSrc} alt="Cover" onLoad={onLoad} onError={onError} />)
+    const second = getImage(container)
+    expect(second).not.toBe(first)
+    expect(getByRole('status')).toBeInTheDocument()
+    expect(second).toHaveClass('opacity-0')
+
+    rerender(<ImageWithLoading src={thirdSrc} alt="Cover" onLoad={onLoad} onError={onError} />)
+    const third = getImage(container)
+    expect(third).not.toBe(second)
+    expect(third).toHaveClass('opacity-0')
+
+    fireEvent.error(first)
+    fireEvent.error(second)
+    fireEvent.load(second)
+    expect(onError).not.toHaveBeenCalled()
+    expect(onLoad).toHaveBeenCalledOnce()
+    expect(third).toHaveClass('opacity-0')
+
+    fireEvent.load(third)
+    expect(third).toHaveClass('opacity-100')
+    expect(onLoad).toHaveBeenCalledTimes(2)
+    expect(onLoad).toHaveBeenLastCalledWith(third)
+  })
+
+  it('resets the request when a responsive source changes without changing src', () => {
+    const src = 'https://example.com/fallback.jpg'
+    const { container, getByRole, rerender } = render(
+      <ImageWithLoading src={src} srcSet="https://example.com/small.jpg 240w" alt="Cover" />,
+    )
+    const first = getImage(container)
+    fireEvent.load(first)
+    expect(first).toHaveClass('opacity-100')
+
+    rerender(<ImageWithLoading src={src} srcSet="https://example.com/large.jpg 720w" alt="Cover" />)
+    const replacement = getImage(container)
+    expect(replacement).not.toBe(first)
+    expect(replacement).toHaveAttribute('srcset', 'https://example.com/large.jpg 720w')
+    expect(replacement).toHaveClass('opacity-0')
+    expect(getByRole('status')).toBeInTheDocument()
   })
 
   it('applies placeholderClassName to the loading overlay while keeping the base classes', () => {
