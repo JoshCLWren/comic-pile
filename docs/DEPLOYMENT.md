@@ -53,7 +53,11 @@ SECRET_KEY=<generate-a-long-random-value>
 RUST_ROLL_ENV=production
 ```
 
-ComicPile accepts `postgresql://`, `postgres://`, and SQLAlchemy-style URLs. The native runtime normalizes them for `tokio-postgres`; the Rust migration runner accepts the same forms and strips `+asyncpg`/`+psycopg` suffixes. Production startup requires `sslmode=require`.
+The Rust migration runner accepts `postgresql://`, `postgres://`, and historical
+SQLAlchemy-style URLs and strips `+asyncpg`/`+psycopg` suffixes. The Vercel native
+entrypoint also normalizes supported URL forms; the standalone native process
+requires a plain `postgresql://` URL. Production startup requires
+`sslmode=require`.
 
 For the closest match to the maintained production setup, use Neon's pooled connection for application traffic and a direct Neon connection for schema migrations. The production migration tooling can resolve a direct URL through `NEON_PROJECT_ID` and `NEON_API_KEY`, or it can use an explicit `NEON_DIRECT_DATABASE_URL`; see [`.env.example`](../.env.example) for those variables.
 
@@ -62,6 +66,7 @@ For the closest match to the maintained production setup, use Neon's pooled conn
 Run the committed migrations (refinery runner, `native/migrate`) before serving the application:
 
 ```bash
+set -a; . ./.env; set +a
 make migrate
 ```
 

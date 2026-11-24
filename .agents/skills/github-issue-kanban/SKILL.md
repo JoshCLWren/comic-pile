@@ -53,7 +53,8 @@ reports/verdicts, never full logs or transcripts.
 
 For any Python change, local verification must include `ruff check .` and
 `ty check --error-on-warning` against the whole repository. `bash scripts/lint.sh`
-runs that pair plus frontend ESLint. The former
+is an additional syntax/ignore/frontend ESLint check and does not run that pair.
+The former
 `bash scripts/check-python-ci-lint.sh` target has been removed. Path-filtered
 ruff or ty is not a valid CI substitute.
 

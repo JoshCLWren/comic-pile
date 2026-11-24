@@ -194,8 +194,10 @@ A worker App slug (e.g., `mark-cordova`) with `OWNER`/`MEMBER`/`COLLABORATOR` as
 ### Controller provenance remains authoritative
 
 The review controller writes `comic-pile-factory-semantic-review-v1` and
-`comic-pile-factory-head-contributor-v1` markers as **entire comment bodies**.
-They carry exact-head provenance and the reviewer's executed model.
+`comic-pile-factory-head-contributor-v1` markers as **entire comment bodies** for
+exact-head verdict/contributor provenance. The reviewer's executed model is
+recorded in the separate reviewer-model marker; do not assume the semantic-review
+or contributor marker schema contains it.
 
 Under the owner's 2026-11-22 policy, one recorded independent approval authorizes
 the head:

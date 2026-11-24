@@ -176,7 +176,7 @@ Factory ownership is a connection-pool lock around the next action, not a perman
   next-action stage. Never overwrite a freshly changed owner during cleanup.
 - Cross-worker takeover and merge are allowed after the prior lease is released.
 - A factory that creates or advances a PR releases active ownership when its implementation attempt ends, including while CI or review is pending.
-- Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so another worker can try later. Review independence is based on factory identity and exact-head provenance, not on requiring a different model; OmniRoute may route both workers through the same upstream model.
+- Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so another worker can try later. Review independence is based on the reviewer's actual executed model and exact-head provenance, not merely worker identity. OmniRoute may route workers through the same provider, but a model known to have authored the PR cannot review it.
 - Review independence excludes a reviewer model known from trusted factory records to have authored any part of the PR. Factory pushes share one Git identity, so contributor identity comes from the controller-authored `comic-pile-factory-head-contributor-v1` record written at every push or repair, unioned with the declared branch/body producer and every other record on the same PR. Under the owner's 2026-11-22 policy, one recorded independent approval authorizes the exact head. Missing author provenance does not require two approvals: a human, external or unattributed PR may be approved by any recorded reviewer. A reviewer's executed model must be recorded so known self-review can be excluded; a worker that switched to a model that authored none of the PR may review. Queue selection excludes known author models, and refusing a known self-review is the backstop.
 - A controller claim is not durable until the worker reaches an executable session. Smoke, executor-selection, credential, and other pre-session failures release the owner to `factory:unowned` immediately, preserve the truthful stage, and post `comic-pile-factory-claim-released-v3`. Do not wait for the 900s stale-lease TTL.
   The reusable runner records when the worker session starts. If it never starts,
@@ -234,8 +234,8 @@ Repeat until the selected issue reaches closure or a valid blocker:
 `inspect contract -> implement closure-critical behavior -> focused validation -> commit -> push -> inspect exact SHA -> account for all review feedback -> repair blockers -> verify merge gates -> merge when eligible -> verify issue closure`
 
 Python focused validation must include the exact CI pair `ruff check .` and
-`ty check --error-on-warning` against the whole repo
-(`ruff check .` and `ty check --error-on-warning`, or `bash scripts/lint.sh`).
+`ty check --error-on-warning` against the whole repo. `bash scripts/lint.sh` is an
+additional syntax/ignore/frontend check and does not replace that pair.
 Path-filtered ruff or ty is not a valid CI substitute.
 Re-run that pair after every later Python edit and before every Python push.
 A lint run from before the last edit does not count.

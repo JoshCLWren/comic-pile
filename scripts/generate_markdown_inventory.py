@@ -82,9 +82,27 @@ def _linked_markdown_targets(root: Path) -> set[str]:
     return targets
 
 
+def _has_historical_marker(text: str) -> bool:
+    """Return whether a real historical marker exists outside inline/fenced code."""
+    fence: str | None = None
+    marker = "<!-- docs-path-check: historical -->"
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(("```", "~~~")):
+            marker_chars = stripped[:3]
+            if fence is None:
+                fence = marker_chars
+            elif stripped.startswith(fence):
+                fence = None
+            continue
+        if fence is None and stripped == marker:
+            return True
+    return False
+
+
 def _content_disposition(path: str, text: str, default_action: str) -> tuple[str, str, str]:
     """Apply explicit historical/superseded markers before path defaults."""
-    if "<!-- docs-path-check: historical -->" in text:
+    if _has_historical_marker(text):
         return (
             "Point-in-time record; body is preserved for provenance, not current instructions.",
             "historical — preserve",
