@@ -1,4 +1,10 @@
-# Step 23B — Guarded legacy Reading Order apply and rollback
+# Step 23B
+
+> **Historical migration runbook:** The Python scripts/tests and legacy migration
+> sequence below are retained for provenance. Current schema changes use
+> `native/migrate/migrations/`; do not rerun this Python migration.
+
+<!-- docs-path-check: historical --> — Guarded legacy Reading Order apply and rollback
 
 Guarded apply + rollback tooling for migrating the three surviving user-1
 legacy Reading Orders into informational canonical Reading Plans.

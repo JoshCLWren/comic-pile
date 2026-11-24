@@ -1,5 +1,13 @@
 # Production reading-graph golden replay
 
+> **Historical replay harness:** The Python exporter and pytest paths below were
+> retired with the Python runtime. The fixture remains provenance. Current
+> read-only frontier evidence is the native `GET /api/v2/reading-graph` audit in
+> `native/roll-service/src/frontier_audit.rs`; see
+> [Reading List runtime](READING_LIST_RUNTIME.md).
+
+<!-- docs-path-check: historical -->
+
 This fixture is a **read-only snapshot of the actual production reader's Option E inputs**, not a synthetic subset or a dump of current Roll results.
 
 ## Artifacts

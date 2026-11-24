@@ -1,5 +1,13 @@
 # Comic Pile: Understanding Issues and Dependencies for Storyline Reading Orders
 
+> **Historical product guide:** The Python models, Alembic-era paths and several
+> v1 examples below are pre-Reading-List / pre-Rust guidance. Use
+> [Reading List runtime](READING_LIST_RUNTIME.md) for current eligibility,
+> [API documentation](API.md) plus the generated same-path contract for retained
+> endpoints, and `native/roll-service/src/dependencies.rs` for current writes.
+
+<!-- docs-path-check: historical -->
+
 ## Executive Summary
 
 Comic Pile supports **issue-level dependencies** that enable creating linear reading chains between specific comic issues across different series. This is perfect for storyline reading orders like "Uncanny X-Men #362" → "X-Men #82" → "Uncanny X-Men #363".

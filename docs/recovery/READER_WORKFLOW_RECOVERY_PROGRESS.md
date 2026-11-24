@@ -1,5 +1,13 @@
 # Reader Workflow Recovery — Temporary Resume Checklist
 
+> **Historical recovery checkpoint (September 2026):** The Python migration
+> commands, runtime switch and Reading Plan authority described below are retired.
+> This file preserves the incident record only. Current behavior is documented in
+> [Reading List runtime](../READING_LIST_RUNTIME.md); do not execute these commands
+> or reactivate the legacy switch.
+
+<!-- docs-path-check: historical -->
+
 > Temporary handoff file created on 2026-09-12. Delete this file when the reader-workflow
 > recovery is complete and the production cutover has been verified.
 
