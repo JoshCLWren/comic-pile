@@ -842,21 +842,25 @@ async fn rebuild_plan_issues_from_nodes_json_batch(
                 Some(Value::Object(meta))
             };
 
-            rebuilt.push(serde_json::json!({
-                "plan_id": plan_id,
-                "occurrence_id": occurrence_id,
-                "issue_id": issue_id,
-                "lane_id": lane_id,
-                "display_position": display_position,
-                "label": label,
-                "reader_role": reader_role,
-                "reader_optional": reader_optional,
-                "is_checkpoint": is_checkpoint,
-                "source_metadata_json": source_metadata_json,
-            }));
+            rebuilt.insert(
+                (plan_id, occurrence_id.clone()),
+                serde_json::json!({
+                    "plan_id": plan_id,
+                    "occurrence_id": occurrence_id,
+                    "issue_id": issue_id,
+                    "lane_id": lane_id,
+                    "display_position": display_position,
+                    "label": label,
+                    "reader_role": reader_role,
+                    "reader_optional": reader_optional,
+                    "is_checkpoint": is_checkpoint,
+                    "source_metadata_json": source_metadata_json,
+                }),
+            );
         }
     }
 
+    let rebuilt: Vec<Value> = rebuilt.into_values().collect();
     if !rebuilt.is_empty() {
         tx.execute(
             "INSERT INTO reading_plan_issues \
