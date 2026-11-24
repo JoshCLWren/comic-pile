@@ -13,8 +13,16 @@ const { searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, confirmIdentit
     confirmIdentitySpy: vi.fn().mockResolvedValue({} as never),
     // SAFETY: mock payload supplies only the fields this test asserts
     replaceIdentitySpy: vi.fn().mockResolvedValue({} as never),
-    // SAFETY: mock payload supplies only the fields this test asserts
-    removeIdentitySpy: vi.fn().mockResolvedValue({} as never),
+    removeIdentitySpy: vi.fn().mockResolvedValue({
+      issue_id: 77,
+      thread_id: 7,
+      thread_title: 'Stormwatch Vol. 1',
+      has_confirmed_identity: false,
+      comicvine_issue_id: null,
+      confirmed_mappings: [],
+      candidate_mappings: [],
+      has_unresolved: false,
+    }),
     getIntelligenceSpy: vi.fn(),
   }))
 
