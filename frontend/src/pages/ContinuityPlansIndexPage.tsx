@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import GlossaryLink from '../components/GlossaryLink'
 import Modal from '../components/Modal'
-import { useDeleteReadingPlan, useReadingPlans } from '../hooks/useReadingPlans'
+import {
+  useDeleteReadingPlan,
+  useReadingPlans,
+  useReadingPlansCrossTabSync,
+} from '../hooks/useReadingPlans'
 import { readingPlanModeLabel } from '../services/api-continuity-plans'
 import { displayCblSourcePath, displayReadingListName } from '../utils/cblSourceDisplay'
 
@@ -21,6 +25,9 @@ function formatDate(iso: string): string {
 export default function ContinuityPlansIndexPage() {
   const navigate = useNavigate()
   const plansQuery = useReadingPlans()
+  // Plan writes committed in another tab (and a tab regaining focus) refresh
+  // this list instead of leaving a renamed, added, or deleted plan stale (#5686).
+  useReadingPlansCrossTabSync()
   const deletePlan = useDeleteReadingPlan()
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null)
   const [cblChooserOpen, setCblChooserOpen] = useState(false)

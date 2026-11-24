@@ -1,22 +1,18 @@
 /**
- * Issue #2153: Queue → Read Now must land on the rating view for the chosen
- * thread, never on an empty Roll page with no comic selected.
- *
- * The regression reproduces the user path exactly: Roll is visited first (so
- * the roll bootstrap query is cached and fresh), the user moves to Queue via
- * in-app navigation, and clicks Read on an eligible thread with a known
- * next unread issue.
+ * Regression for #5525: Queue Read & Rate opens a direct exact-owned-issue
+ * editor without replacing a pending random Roll offer or checking eligibility.
+ * Supersedes #2153's legacy set-pending handoff contract.
  */
 import { expect } from '@playwright/test'
 import { test } from './fixtures'
 import { createThread, gotoRollPage, waitForQueueReady, SELECTORS } from './helpers'
 
-test.describe('Issue #2153: Queue Read Now handoff', () => {
-  test('Read Now from Queue opens the rating view for that thread and its next unread issue', async ({
+test.describe('P0 #5525: Queue manual issue reading', () => {
+  test('Read & Rate opens the correct issue and saves via direct Rust v2 without set-pending', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
-    const title = 'Read Now Target'
+    const title = 'Direct Issue Target'
     await createThread(page, {
       title,
       format: 'Comic',
@@ -24,64 +20,62 @@ test.describe('Issue #2153: Queue Read Now handoff', () => {
       total_issues: 4,
     })
 
-    // Visit Roll first so the bootstrap cache is warm with no pending thread.
+    // Visit Roll first: a warm bootstrap must not be overwritten by a manual
+    // click in Queue, even if it currently contains a pending random offer.
     await gotoRollPage(page)
-
-    // Move to Queue through the app shell (client-side navigation keeps the
-    // React Query cache alive, which is the state the bug depends on).
     await page.locator(SELECTORS.navigation.queueLink).first().click()
     await waitForQueueReady(page)
 
-    const threadItem = page
-      .locator(SELECTORS.threadList.threadItem)
-      .filter({ hasText: title })
-    await expect(threadItem).toBeVisible()
+    const writes: string[] = []
+    page.on('request', (request) => {
+      if (request.method() !== 'GET') {
+        writes.push(`${request.method()} ${new URL(request.url()).pathname}`)
+      }
+    })
 
-    const setPendingResponse = page.waitForResponse(
-      (response) =>
-        response.url().includes('/set-pending') && response.request().method() === 'POST',
-    )
-    await threadItem.getByRole('button', { name: 'Read & Rate', exact: true }).click()
-    const selectedResponse = await setPendingResponse
-    expect(selectedResponse.ok()).toBeTruthy()
-    // SAFETY: the successful RollResponse exposes issue_id; its numeric type is asserted below.
-    const selected = await selectedResponse.json() as { issue_id: number }
-    expect(selected.issue_id).toEqual(expect.any(Number))
+    const row = page.locator(SELECTORS.threadList.threadItem).filter({ hasText: title })
+    await row.getByRole('button', { name: 'Read & Rate', exact: true }).click()
+    const panel = page.getByTestId('direct-read-issue-panel')
+    await expect(panel).toBeVisible()
+    const card = panel.getByRole('article', { name: `Issue ${title} #1` })
+    await expect(card).toBeVisible()
+    expect(writes.some((write) => write.includes('set-pending'))).toBe(false)
 
-    // The handoff must land on Roll in rating view for the chosen thread.
-    await expect(page).toHaveURL(/\/$/)
-    await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 15000 })
-    const heading = page.locator('[data-testid="comic-header-title"]')
-    await expect(heading).toContainText(title)
-    await expect(heading).toContainText('#1')
-    await expect(page.locator(SELECTORS.roll.mainDie)).toHaveCount(0)
+    await card.getByRole('button', { name: 'Read now', exact: true }).click()
+    await expect(card.getByRole('slider')).toBeVisible()
+    // Opening and canceling are reads only; neither pending Roll nor history
+    // can be changed before Save.
+    expect(writes.some((write) => write.includes('/api/v2/issues/'))).toBe(false)
+    await card.getByRole('button', { name: 'Cancel', exact: true }).click()
 
-    await page.locator(SELECTORS.rate.ratingInput).fill('4')
-    const rateResponse = page.waitForResponse(
+    await card.getByRole('button', { name: 'Read now', exact: true }).click()
+    const slider = card.getByRole('slider')
+    await slider.press('End')
+    await slider.press('ArrowLeft')
+    await slider.press('ArrowLeft')
+    await expect(slider).toHaveValue('4')
+    const saveResponse = page.waitForResponse(
       (response) => response.url().includes('/api/v2/issues/') && response.request().method() === 'PATCH',
     )
-    await page.getByTestId('save-and-continue').click()
-    const rated = await rateResponse
-    expect(rated.ok(), await rated.text()).toBeTruthy()
-    // SAFETY: a successful rating returns roll_reconciliation; the exact issue is asserted below.
-    const result = await rated.json() as {
-      roll_reconciliation: { last_read: { issue_id: number } }
-    }
-    expect(result.roll_reconciliation.last_read.issue_id).toBe(selected.issue_id)
+    await card.getByRole('button', { name: 'Mark read & save' }).click()
+    const response = await saveResponse
+    expect(response.ok(), await response.text()).toBeTruthy()
+    expect(response.request().postDataJSON()).toEqual(expect.objectContaining({
+      source: 'direct',
+      status: 'read',
+      rating: 4,
+      idempotency_key: expect.any(String),
+    }))
+    expect(writes.some((write) => write.includes('set-pending'))).toBe(false)
+    await expect(page).toHaveURL(/\/queue$/)
   })
 
-  test('Read Now on a thread the server rejects stays on Queue with an actionable error', async ({
+  test('an unavailable exact-issue lookup reports a retry without changing Roll', async ({
     authenticatedPage,
-    allowExpectedBrowserFailures,
   }) => {
     const page = authenticatedPage
-    allowExpectedBrowserFailures.allow(
-      { category: 'console', message: 'set-pending' },
-      { category: 'console', message: 'API Validation Error Details' },
-      { category: 'console', message: 'Request failed with status code 400' },
-    )
-    const title = 'Rejected Read Target'
-    await createThread(page, {
+    const title = 'Unavailable Direct Issue'
+    const thread = await createThread(page, {
       title,
       format: 'Comic',
       issues_remaining: 2,
@@ -90,29 +84,14 @@ test.describe('Issue #2153: Queue Read Now handoff', () => {
 
     await page.goto('/queue', { waitUntil: 'domcontentloaded' })
     await waitForQueueReady(page)
-
-    await page.route('**/set-pending', (route) =>
-      route.fulfill({
-        status: 400,
-        contentType: 'application/json',
-        body: JSON.stringify({ detail: 'Thread has no issues remaining' }),
-      }),
+    await page.route(`**/api/v1/threads/${thread.id}/issues?*`, async (route) =>
+      route.fulfill({ status: 503, json: { detail: 'Issue lookup temporarily unavailable' } }),
     )
-
-    const dialogMessage = new Promise<string>((resolve) => {
-      page.once('dialog', (dialog) => {
-        resolve(dialog.message())
-        void dialog.dismiss()
-      })
-    })
-
-    const threadItem = page
-      .locator(SELECTORS.threadList.threadItem)
-      .filter({ hasText: title })
-    await threadItem.getByRole('button', { name: 'Read & Rate', exact: true }).click()
-
-    expect(await dialogMessage).toContain('Thread has no issues remaining')
+    const row = page.locator(SELECTORS.threadList.threadItem).filter({ hasText: title })
+    await row.getByRole('button', { name: 'Read & Rate', exact: true }).click()
+    const panel = page.getByTestId('direct-read-issue-panel')
+    await expect(panel.getByRole('alert')).toContainText('Issue lookup temporarily unavailable')
+    await expect(panel.getByRole('button', { name: 'Retry issue lookup' })).toBeEnabled()
     await expect(page).toHaveURL(/\/queue$/)
-    await waitForQueueReady(page)
   })
 })

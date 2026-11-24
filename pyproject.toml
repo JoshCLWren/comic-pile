@@ -35,7 +35,7 @@ dev = [
     # releases. Worker 48's App name ("Mark Cordova") is already provisioned
     # and persisted in .github/factory-worker-github-apps.json, so a newer
     # Faker would re-roll it and break the existing App identity.
-    "faker==40.54.0",
+    "faker==40.63.0",
     "jsonschema>=4.0.0",
     "pyyaml>=6.0.0",
     "pytest-mock>=3.16.0",

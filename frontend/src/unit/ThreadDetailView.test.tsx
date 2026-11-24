@@ -89,7 +89,7 @@ const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
 
 beforeEach(() => {
-  vi.mocked(readingBoundariesApi.batch).mockReset().mockResolvedValue({ threads: { 1: { thread_id: 1, state: 'available', summary: 'Available now', blockers: [] } } })
+  vi.mocked(readingBoundariesApi.batch).mockReset().mockResolvedValue({ evaluator: 'enabled', threads: { 1: { thread_id: 1, state: 'available', summary: 'Available now', blockers: [] } } })
   routeParams.id = '1'
   locationState.state = undefined
   locationState.search = undefined
@@ -742,6 +742,52 @@ it('lists a circular dependency once instead of under both directions (#3239)', 
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
 })
 
+it('states a circular dependency as the blocker when only cycle blockers exist (#3518)', async () => {
+  vi.mocked(readingBoundariesApi.batch).mockResolvedValue({
+    evaluator: 'enabled',
+    threads: { 1: {
+      thread_id: 1,
+      state: 'blocked',
+      summary: 'Saga #2 is blocked by an active reading rule.',
+      blockers: [{
+        kind: 'reading_cycle',
+        origin: 'reader_prerequisite',
+        reason: 'Blocked by a dependency cycle.',
+        waiting_on: [],
+        editor: null,
+      }],
+    } },
+  })
+  mockedConnectedThreads.mockResolvedValue({
+    thread_id: 1,
+    connected_threads: [
+      { thread_id: 9, title: 'Magneto Rex', connection_type: 'blocks & blocked_by', dependency_id: 11, issue_number: '42', is_circular: true },
+    ],
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+  expect(screen.getByRole('heading', { name: /Circular Dependencies/ })).toBeInTheDocument()
+  expect(screen.getByText('Blocked by a dependency cycle.')).toBeInTheDocument()
+  expect(screen.getByText(/Blocked by the circular dependency listed above/)).toBeInTheDocument()
+  expect(screen.queryByText('No recorded incoming prerequisites')).not.toBeInTheDocument()
+})
+
+it('does not call a recorded cycle an active blocker when the canonical evaluator is available', async () => {
+  mockedConnectedThreads.mockResolvedValue({
+    thread_id: 1,
+    connected_threads: [
+      { thread_id: 9, title: 'Magneto Rex', connection_type: 'blocks & blocked_by', dependency_id: 11, issue_number: '42', is_circular: true },
+    ],
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+  expect(screen.getByRole('heading', { name: /Circular Dependencies/ })).toBeInTheDocument()
+  expect(screen.queryByText(/Blocked by the circular dependency listed above/)).not.toBeInTheDocument()
+  expect(screen.getByText('No recorded incoming prerequisites')).toBeInTheDocument()
+})
+
 it('passes onIssueChanged callback to IssueToggleList', async () => {
   vi.mocked(issuesApi.list).mockResolvedValue({
     issues: [
@@ -868,7 +914,7 @@ it('retries canonical requirements without claiming a failed load means availabl
 })
 
 it('uses canonical list blockers even when explicit connected prerequisites are empty', async () => {
-  vi.mocked(readingBoundariesApi.batch).mockResolvedValue({ threads: { 1: {
+  vi.mocked(readingBoundariesApi.batch).mockResolvedValue({ evaluator: 'enabled', threads: { 1: {
     thread_id: 1, state: 'blocked', summary: 'Waiting', blockers: [{
       kind: 'hold', origin: 'reading_list', reason: 'Hold in Ultimate: waiting on One Year In #1',
       waiting_on: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1', volume_label: 'One Year In (2025)', reading_lists: [] }],
@@ -883,6 +929,7 @@ it('uses canonical list blockers even when explicit connected prerequisites are 
 
 it('falls back to the legacy availability explanation when canonical boundaries are unavailable', async () => {
   vi.mocked(readingBoundariesApi.batch).mockResolvedValue({
+    evaluator: 'unavailable',
     threads: { 1: { thread_id: 1, state: 'unavailable', summary: 'Option E is not active for Saga.', blockers: [] } },
   })
   vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({

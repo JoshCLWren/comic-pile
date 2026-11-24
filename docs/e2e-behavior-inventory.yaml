@@ -308,6 +308,13 @@ behaviors:
     status: covered
     specs: ["reading-mode-acceptance.spec.ts", "reading-mode-quiz.spec.ts"]
 
+  - id: LIST-001
+    area: order
+    behavior: "Canonical Reading List deletion stays accessible and owner-scoped, rejects linked-plan deletion without mutation, and preserves global history, reader prerequisites, and overlapping lists"
+    priority: P1
+    status: covered
+    specs: ["custom-cbl-delete-confirm.spec.ts", "custom-cbl-delete-prerequisite-survival.spec.ts"]
+
   # ---- Secondary features (P2) ----
   - id: CONT-001
     area: feature
