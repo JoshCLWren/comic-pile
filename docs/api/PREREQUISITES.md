@@ -1,5 +1,16 @@
 # Stable explicit prerequisites
 
+> **Historical contract and discrepancy handoff:** `/api/v1/prerequisites/` is
+> not registered in the current native router or generated same-path contract.
+> The Python authoring API described below is retired. Current execution accepts
+> only deliberately reader-authored `origin=reader` prerequisites and never
+> promotes historical/converted rows; see
+> [Reading List runtime](../READING_LIST_RUNTIME.md) and
+> [API documentation](../API.md). Any new prerequisite-authoring surface requires
+> separately authorized product work; this document does not authorize it.
+
+<!-- docs-path-check: historical -->
+
 `/api/v1/prerequisites/` authors stable Issue-to-Issue requirements on the existing
 `dependencies` table. It does not activate Option E, convert historical rows, or
 change reading progress. A requirement has no owning list: list placement, reordering,

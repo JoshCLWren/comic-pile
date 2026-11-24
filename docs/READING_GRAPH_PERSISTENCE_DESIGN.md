@@ -1,5 +1,13 @@
 # Reading Graph persistence design
 
+> **Historical design:** This September 2026 persistence proposal belongs to the
+> retired Reading Graph / Reading Plan architecture. It is retained as design
+> provenance. Current reader execution is documented in
+> [Reading List runtime](READING_LIST_RUNTIME.md); do not implement this schema
+> plan as current guidance.
+
+<!-- docs-path-check: historical -->
+
 **Date:** 2026-09-17  
 **Scope:** Documentation-only deliverable for issue #2537.  
 **Authority:** [READING_GRAPH_ADR.md](READING_GRAPH_ADR.md), accepted 2026-09-16.

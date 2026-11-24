@@ -1,5 +1,13 @@
 # Undo snapshot delta lookup (issue #3218)
 
+> **Historical implementation note:** The Python modules, Alembic revision and
+> pytest paths below describe issue #3218 before the Rust cutover. Current undo
+> and snapshot reads live in `native/roll-service/src/undo_snapshots.rs`,
+> `undo_apply.rs`, `session_history.rs` and `session_details.rs`; current API
+> paths are in `docs/API.md`.
+
+<!-- docs-path-check: historical -->
+
 ## What changed
 
 `get_latest_delta_snapshot` selected the newest supported unconsumed delta by

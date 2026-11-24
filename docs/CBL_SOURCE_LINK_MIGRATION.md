@@ -1,5 +1,12 @@
 # Reader-owned CBL source links
 
+> **Historical migration note:** The Alembic commands and Python test below
+> describe PR #4052 before the Rust cutover. Applied migrations are immutable;
+> current schema changes use `native/migrate/migrations/`. See
+> [database save/load](DATABASE_SAVE_LOAD.md) for current migration operations.
+
+<!-- docs-path-check: historical -->
+
 PR #4052 implements #4021's source-link scaffolding. Selected-comic persistence
 and the adoption API cutover belong to the dependent #4022.
 

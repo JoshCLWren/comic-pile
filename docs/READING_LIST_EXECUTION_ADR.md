@@ -1,5 +1,13 @@
 # ADR: Reading Lists are the authority for reading sequence and live Roll eligibility
 
+> **Historical rollout record:** The product rules and rationale below remain
+> useful, but the staged “implementation pending” phases are not current runbook
+> steps. The checked-in runtime and its owner-approved rollout setting are
+> documented in [Reading List runtime](READING_LIST_RUNTIME.md). Do not recreate
+> retired Reading Plan compiler or migration machinery from this ADR.
+
+<!-- docs-path-check: historical -->
+
 **Status:** Accepted (design decision; implementation pending)  
 **Date:** 2026-10-13  
 **Decision owner:** JoshCLWren  

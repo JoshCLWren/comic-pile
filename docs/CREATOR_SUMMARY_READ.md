@@ -1,5 +1,13 @@
 # Requested creator summary reads
 
+> **Historical Python performance note:** The repository paths and pytest
+> evidence below describe the pre-cutover implementation. Native Rust still
+> serves `GET /api/v1/creators/summaries` for compatibility and the canonical
+> `GET /api/v2/creators/summaries`; see `native/roll-service/src/creators.rs`,
+> `creators_v2.rs` and [API documentation](API.md).
+
+<!-- docs-path-check: historical -->
+
 `GET /api/v1/creators/summaries` uses
 `load_creator_summary_inputs_for_creators` in
 `app/repositories/creator_summary.py`. The full-library reader remains available <!-- docs-path-check: ignore -->

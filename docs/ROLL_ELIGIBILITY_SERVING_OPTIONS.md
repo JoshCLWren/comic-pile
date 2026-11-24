@@ -1,5 +1,13 @@
 # Roll eligibility serving options
 
+> **Historical design review (2026-10-25):** The Python evaluator and candidate
+> options below are pre-cutover evidence. Current native eligibility and query
+> behavior are documented in `native/roll-service/README.md` and
+> [Reading List runtime](READING_LIST_RUNTIME.md). Do not implement an option
+> from this review as current work.
+
+<!-- docs-path-check: historical -->
+
 **Status:** Independent review. Not an accepted decision, migration, or implementation specification.  
 **Date:** 2026-10-25  
 **Does not supersede:** [Reading List execution ADR](READING_LIST_EXECUTION_ADR.md). That document remains the authority for reading-order rules and forbids a stored frontier or cached `is_blocked` flag from becoming a second authority.  

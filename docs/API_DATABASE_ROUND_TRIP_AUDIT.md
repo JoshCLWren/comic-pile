@@ -1,5 +1,13 @@
 # ComicPile FastAPI Database Round-Trip Audit
 
+> **Historical audit (August 2026):** This document records the retired Python /
+> FastAPI / SQLAlchemy runtime. Its endpoint names, query counts and pool tuning
+> are point-in-time evidence, not current operating instructions. Current query
+> rules are in `AGENTS.md`; the native runtime and pool behavior are documented in
+> `native/roll-service/README.md` and `docs/OPERATIONAL_HEALTH.md`.
+
+<!-- docs-path-check: historical -->
+
 ## Executive summary
 
 ComicPile's current performance bottleneck is primarily excessive sequential database round trips rather than raw Python compute. Controlled benchmarking against the production Neon database showed:

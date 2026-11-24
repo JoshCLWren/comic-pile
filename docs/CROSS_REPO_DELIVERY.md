@@ -1,5 +1,14 @@
 # Cross-repository factory delivery
 
+> **Historical:** This document describes the retired Python delivery runtime
+> and its `app/config.py` implementation. It is retained for provenance, not as
+> current factory authorization or configuration. Current delivery boundaries
+> and safeguards are defined by `docs/AUTONOMOUS_FACTORY_POLICY.md` and
+> `docs/FACTORY_GITHUB_VISIBILITY.md`; do not recreate the Python runtime from
+> this runbook.
+
+<!-- docs-path-check: historical -->
+
 ComicPile's autonomous factory can deliver selected work to a small, allowlisted set of target repositories. The coordination/source repository is always `JoshCLWren/comic-pile`; the delivery/target repository is an allowlisted destination. The bootstrap target is `JoshCLWren/Latticery`.
 
 ## Allowlisted targets

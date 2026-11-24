@@ -1,5 +1,11 @@
 # Repository Structure Decision: Monorepo vs Split Repo
 
+> **Historical decision record:** The monorepo decision remains in force, but
+> the `app/` paths and Python-era implementation examples below are dated. See
+> [architecture](ARCHITECTURE.md) for the current native Rust layout.
+
+<!-- docs-path-check: historical -->
+
 ## Date: 2026-08-13
 
 ## Context

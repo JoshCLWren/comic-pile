@@ -1,5 +1,13 @@
 # Canonical Reader Execution Model - Decision Record
 
+> **Superseded architecture record:** This accepted 2026 decision explains the
+> retired Reading Plan compiler model. Current product behavior is Reading Lists
+> plus natural series order and explicit reader-authored prerequisites; see
+> [Reading List runtime](READING_LIST_RUNTIME.md). Preserve this document for the
+> decision history, not as implementation guidance.
+
+<!-- docs-path-check: historical -->
+
 **Issue:** #1619 (child of #1612)  
 **Original decision:** 2026-08-22  
 **Reconciled:** 2026-09-07 under #2363 and #2366  
