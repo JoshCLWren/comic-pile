@@ -119,6 +119,7 @@ async function registerForeignHeaders(
  */
 test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading List deletion', async ({
   authenticatedPage: page,
+  allowExpectedBrowserFailures,
   browser,
 }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 900 })
