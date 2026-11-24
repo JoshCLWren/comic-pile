@@ -21,6 +21,11 @@ What’s New is backed by the release API and Neon release ledger. A dedicated p
 - [Project README](../README.md): project overview and local-development entry point.
 - [Code of Conduct](../CODE_OF_CONDUCT.md): community participation and enforcement expectations.
 - [Deployment](DEPLOYMENT.md): maintained Vercel/Neon production architecture and the Neon self-hosting path.
+- [Vercel architecture](VERCEL_ARCHITECTURE.md): static/native request boundary, ingress, headers and local proxy behavior.
+- [Operational health](OPERATIONAL_HEALTH.md): liveness, database readiness, logging and timeout guidance.
+- [Runtime architecture](ARCHITECTURE.md): native Rust service, data flow and repository boundaries.
+- [Reading List runtime](READING_LIST_RUNTIME.md): canonical automatic-Roll eligibility, manual reads, authoring and boundaries.
+- [Local testing](../LOCAL_TESTING.md): supported prerequisites, commands, ports and same-origin browser topology.
 - [Public SEO surface](SEO_PUBLIC_SURFACE.md): crawlable public routes, indexability policy, and the production launch audit.
 - [SEO launch runbook](operations/SEO_LAUNCH_RUNBOOK.md): operator steps for Search Console ownership, sitemap submission, index inspection, baseline metrics, and legitimate off-site discovery.
 - [Agent engineering rules](../AGENTS.md): mandatory repository conventions for coding agents.
