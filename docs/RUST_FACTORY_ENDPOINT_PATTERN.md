@@ -1,109 +1,40 @@
-# Rust API cutover: endpoint implementation pattern
+# Rust API endpoint implementation pattern
 
-Use this as an implementation checklist, not an alternative API architecture. The
-authoritative product contract is #4335 and its latest owner decisions. Preserve
-the precise resource-oriented v2 contract and migrate the **actual frontend
-caller**. Do not create a parallel unused endpoint, temporary feature flag, or
-Python fallback.
+Use this as an implementation checklist, not an alternative API architecture. The authoritative product contract is #4335 and its latest owner decisions. Preserve the exact resource contract and migrate the real caller; do not create a parallel unused endpoint, temporary feature flag, or Python fallback.
 
-## Copy the existing working structure
+## Implementation checklist
 
-1. Start from the current canonical Rust service:
-   `native/roll-service/src/lib.rs`. For owned issue writes, inspect
-   `issue_handler.rs` and its transaction-bound `issue_service.rs::persist`.
-   For batch reads, inspect `reading_boundary.rs`. Preserve the established
-   `AuthenticatedUser` extractor, `AppState`, `ApiError`, bounded DB pool
-   and owner-scoped SQL. Never hardcode a user ID or return mock success values.
-2. Define the request and response using the canonical OpenAPI shape. Validate
-   bounds, errors and 404/422 behavior against the existing route and frontend
-   expectations, including null versus absent JSON fields.
-3. Add the exact HTTP **method and path** in the service router in `lib.rs`,
-   then register the same handler in the real ingress (`api/native_roll.rs`) and add the method-specific `vercel.json`
-   rewrite **before** the catch-all. Test both allowed and rejected methods,
-   numeric IDs, route precedence and security headers.
-4. Trace and switch the real caller under `frontend/src/services/`. Update
-   generated API types, tests, and API oracle/parity tests as needed. Do not
-   infer an implementation language from an API version.
-5. For writes, use owner-scoped SQL within a transaction, serialize concurrent
-   modifications when necessary, persist idempotency receipts, and check the
-   resulting database state. A mock, auth-only or read-only test does not prove
-   a mutation. The HTTP write-path guard covers POST, PATCH, PUT and DELETE.
-6. Protect the exact behavior with disposable-PostgreSQL tests and targeted
-   frontend/ingress checks. For direct read/rate, see
-   `native/roll-service/src/issue_service.rs` and its DB-backed HTTP tests in
-   `native/roll-service/tests/`. For ingress checks, see
-   `scripts/generate_vercel_routes.test.mjs` and
-   `scripts/vercel_slim_routes.test.mjs`.
-7. Deploy only after exact-head CI and independent semantic review. Confirm a
-   successful authenticated production request used the Rust entrypoint and
-   achieved the requested behavior. Keep the owner objective open until
-   applicable caller migration, deletion and production acceptance are done.
+1. Start from `native/roll-service/src/lib.rs` and the owning resource module. Preserve `AuthenticatedUser`, `AppState`, `ApiError`, the bounded DB pool, owner-scoped SQL, and transaction boundaries.
+2. Define request/response DTOs with `serde`/`utoipa`. Validate bounds, nullability, errors, and ownership before database work.
+3. Register the exact HTTP method/path in the service router and the separate Vercel ingress router in `api/native_roll.rs`. Both tables must agree; an ingress omission produces a Rust JSON 404 before the handler runs.
+4. Express production routing in `docs/api/route-fragments/*.json`. Never hand-edit `vercel.json`, `docs/api/v2-route-inventory.json`, `docs/api/route-fragments/vercel-rewrites.json`, or the generated `AGENTS.md` route block. The route-regeneration workflow owns those outputs.
+5. Switch the real caller under `frontend/src/services/`, regenerate contracts/types, and add focused frontend tests. Do not infer implementation language from an API version.
+6. For writes, use owner-scoped SQL in a transaction, serialize concurrent writers where required, preserve idempotency/locking, and assert the resulting rows. Add a disposable-PostgreSQL HTTP test for the route.
+7. Verify route precedence and wrong-method behavior with method/path lookups rather than fixed route indexes. Keep unrelated routes intact when reconciling branch drift.
+8. After exact-head CI and independent review, verify a successful authenticated production request uses the Rust entrypoint and achieves the requested behavior.
 
-## Conflict-resistant ingress tests (required for every new Rust endpoint)
-
-Native cutovers change a shared `vercel.json` route list, but they must **not**
-renumber unrelated test expectations. Use the method/path/entrypoint lookups
-in `scripts/generate_vercel_routes.test.mjs` and
-`scripts/vercel_slim_routes.test.mjs` instead of route-index positions. **Do not introduce
-`routes[37]`-style assertions, fixed native-route counts, or mass index
-updates** when adding an endpoint. Any test added for an endpoint should
-probe its real HTTP method, numeric ID validation and wrong-method fallback.
-
-The deploy regression resolves exactly one route by `src` (plus HTTP method
-when needed) and verifies that all native rewrites precede the Python
-catch-all, which itself precedes the static/SPA routes. Missing or duplicate
-routes, shadowing, and missing security headers must continue to fail; an
-unrelated route inserted before the catch-all must not.
-
-Start new endpoint branches at current `main`. Before requesting exact-head
-review, reconcile branch drift or genuine conflicts with the latest `main`,
-then rerun local routing tests and CI on the final head. **Do not enable
-automatic rebases for every open PR on each main update**: that repeatedly
-invalidates exact-head CI, independent reviews and concurrent factory leases.
-Use the normal mergeability/ready-drain gate and resolve conflicts when
-needed. Preserve all newer routes when reconciling an older PR; never restore
-an obsolete `vercel.json` wholesale.
-
-## Pre-push checks
-
-From the repository root:
+## Focused checks
 
 ```bash
-bash scripts/check-rust-factory-prepush.sh
-uv run --frozen pytest -q -x --no-cov \
-  tests/test_native_roll_live_ingress.py \
-  tests/test_native_roll_write_test_guard.py \
-  tests/test_vercel_deployment.py
+cargo test --locked -p comicpile-roll-service <module-or-filter>
+node scripts/generate_vercel_routes.mjs
+node scripts/generate_route_burndown.mjs
+node scripts/generate_vercel_routes.mjs --check
+node scripts/generate_route_burndown.mjs --check
+node --test scripts/generate_vercel_routes.test.mjs scripts/vercel_slim_routes.test.mjs
+node scripts/export_openapi_schema.mjs --check
+node scripts/generate_openapi_types.mjs --check
+node scripts/check_native_route_db_tests.mjs
 ```
 
-The first command checks the whole Cargo workspace through the shared root
-toolchain and lockfile, matching `.github/workflows/rust-roll.yml` and
-`.github/workflows/native-vercel-rust.yml` (root `rust-toolchain.toml`:
-floating stable).
-The trusted factory wrapper runs these checks automatically for Rust or native
-ingress changes. Targeted service tests requiring `RUST_ROLL_TEST_DATABASE_URL`
-must use **disposable** PostgreSQL, never the production database. Full suite,
-parity, migration health, and the remaining gates run in CI.
+The generator sequence above mutates generated outputs in a disposable validation checkout; do not include bot-owned outputs in the PR. CI validates the resolved ingress and current Rust/Node contract tests. DB-backed tests require `RUST_ROLL_TEST_DATABASE_URL` and must use disposable PostgreSQL, never production.
 
-The worker's pre-push toolchain is a prerequisite, not evidence that CI passed.
-If compilation cannot run, fail closed and preserve a truthful handoff rather
-than pretending the code was verified or weakening the tests.
+The retired Python endpoint-oracle scripts/tests are historical and must not be used as current gates. The current witnesses are Rust DB-backed HTTP tests, Rust contract drift tests, Node route/generator tests, frontend type checks, and exact-head CI.
 
 ## Quality measurement
 
-The read-only first-head scorecard runs daily from
-`.github/workflows/rust-first-head-quality.yml`. Its rolling seven-day JSON
-and Markdown artifacts are retained for 30 days and identify the declared
-model and worker where supplied by the PR body.
-
-To inspect the latest retained GitHub Actions history manually:
+The read-only first-head scorecard runs from `.github/workflows/rust-first-head-quality.yml`. Its retained artifacts distinguish passed, failed, cancelled, incomplete, and missing first-head runs; they do not authorize merging or classify root cause without investigation.
 
 ```bash
 python scripts/report_rust_first_head_ci.py --since 2026-10-29 --format markdown
 ```
-
-The report distinguishes passed, failed, cancelled, incomplete, and missing
-first-head runs. Failed job names are shown, but **code versus infrastructure**
-causality remains unclassified unless someone investigates the actual logs.
-Its bounded GitHub query window and retained-run limitations are explicit.
-It does not change merge gates, schedule factory dispatch, or write to GitHub.

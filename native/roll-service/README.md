@@ -112,30 +112,16 @@ requests. Query/programming errors stay 500, while connection, resource and pool
 failures return the sanitized Python database-unavailable 503 envelope and
 `Retry-After: 30`. Credentials and dependency messages are never logged.
 
-Tests require a **disposable local PostgreSQL** connection. The native Roll
-service never creates or alters schema, so its integration tests run against the
-canonical schema in `public`, loaded from
-`native/migrate/migrations/V1__baseline.sql` (a `pg_dump --schema-only` of a database
-at Alembic head — regenerate with `make roll-test-schema`). They truncate and
-reseed the application tables between cases and never hand-write them:
+DB-backed tests require a **disposable local PostgreSQL** connection. The shared Rust test harness applies every tracked migration automatically, then truncates/reseeds application tables between cases:
 
 ```sh
 export RUST_ROLL_TEST_DATABASE_URL=postgresql://localhost/native_auth_test
-# migrate the database once (or load the fixture by running any test)
-cargo test --locked -p comicpile-roll-service --all-targets
+cargo test --locked -p comicpile-roll-service <focused-filter>
 ```
 
-Missing test configuration fails instead of silently skipping integration tests.
-CI also runs `node scripts/check_native_route_db_tests.mjs` (with its own
-`node --test` regression file): every module that registers an HTTP route in
-`lib.rs::router` must have at least one `tests/*.rs` HTTP test using this real
-database harness, or an explicit reason in the checker's allowlist. This closes
-the gap that let a route module ship with no database test at all (#5351).
-CI provisions PostgreSQL. `tests/fixtures/roll-v2/auth-matrix.json` is consumed by
-both Rust integration tests and `tests/test_native_auth_matrix.py`, pinning valid <!-- docs-path-check: ignore -->
-credentials and exact auth rejection status/detail/challenge across languages.
-Python tests use the existing isolated database fixtures. Run them with the
-repository's disposable `TEST_DATABASE_URL` and `DATABASE_URL`, never a live library.
+Missing test configuration fails instead of silently skipping integration tests. Never point `RUST_ROLL_TEST_DATABASE_URL` at production or a shared reader database. CI provisions PostgreSQL and runs `node scripts/check_native_route_db_tests.mjs` so every native route module has a DB-backed HTTP test.
+
+The Python parity files and `make roll-test-schema` workflow described in later historical sections no longer exist. Current witnesses are the Rust unit/integration/contract tests.
 
 ### Core scalar reading loader (#4304)
 
