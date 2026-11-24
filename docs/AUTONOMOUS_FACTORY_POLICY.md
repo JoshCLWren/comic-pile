@@ -234,8 +234,7 @@ Repeat until the selected issue reaches closure or a valid blocker:
 `inspect contract -> implement closure-critical behavior -> focused validation -> commit -> push -> inspect exact SHA -> account for all review feedback -> repair blockers -> verify merge gates -> merge when eligible -> verify issue closure`
 
 Python focused validation must include the exact CI pair `ruff check .` and
-`ty check --error-on-warning` against the whole repo
-(`bash scripts/check-python-ci-lint.sh`). Path-filtered ruff or ty is not a valid CI substitute.
+`ty check --error-on-warning` against the whole repo. Path-filtered ruff or ty is not a valid CI substitute.
 Re-run that pair after every later Python edit and before every Python push.
 A lint run from before the last edit does not count.
 
