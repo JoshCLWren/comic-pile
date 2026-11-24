@@ -24,9 +24,10 @@ interface DirectReadIssuePanelProps {
  *
  * Opening this panel and choosing an issue perform only authenticated reads.
  * Neither the next-unread lookup nor the optional all-issues picker checks
- * automatic Roll eligibility. Only ComicIssueCard Save writes, through the
- * owner-scoped, idempotent Rust v2 direct command. That command never creates
- * or consumes a pending random Roll offer.
+ * automatic Roll eligibility. ComicIssueCard Save writes through the
+ * owner-scoped, idempotent Rust v2 direct command, which never creates or
+ * consumes a pending random Roll offer. The reused provider and tag detail
+ * components retain their own explicit edit actions; none run on open.
  *
  * The selected issue opens the same provider details a completed roll shows
  * (cover, summary, creators with roles, story arcs) plus that exact issue's
