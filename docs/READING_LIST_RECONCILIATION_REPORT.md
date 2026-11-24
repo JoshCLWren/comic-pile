@@ -1,5 +1,11 @@
 # Read-only Custom CBL and Reading Plan reconciliation
 
+> **Historical Python census:** `scripts.report_custom_cbl_plan_reconciliation`
+> was removed with the Python runtime. Current behavior and unresolved reader
+> intent are documented in [`READING_LIST_RUNTIME.md`](READING_LIST_RUNTIME.md).
+
+<!-- docs-path-check: historical -->
+
 Option E issue #3660 supplies a census, not a conversion decision. Run from the
 repository root with an explicit PostgreSQL asyncpg URL and owner ID:
 

@@ -1,5 +1,13 @@
 # Production E2E data safety
 
+> **Historical production-monitoring runbook:** The Python cleanup script and
+> account lifecycle below are retired. Do not connect to production or create
+> test accounts from this document. Current safety rules are in
+> [`AUTONOMOUS_FACTORY_POLICY.md`](AUTONOMOUS_FACTORY_POLICY.md) and
+> [`DATABASE_SAVE_LOAD.md`](DATABASE_SAVE_LOAD.md).
+
+<!-- docs-path-check: historical -->
+
 Production browser monitoring creates a disposable account through the real registration UI for every run. It must never use a personal account.
 
 ## Disposable account contract

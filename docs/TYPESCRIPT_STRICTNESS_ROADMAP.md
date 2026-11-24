@@ -1,5 +1,11 @@
 # TypeScript Strictness Roadmap
 
+> **Historical roadmap:** Preserve for planning provenance. Current frontend
+> validation commands and architecture are in [`REACT_ARCHITECTURE.md`](REACT_ARCHITECTURE.md)
+> and [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+
+<!-- docs-path-check: historical -->
+
 ## Current State
 
 - Frontend TypeScript migration is complete (`.js/.jsx` migrated to `.ts/.tsx`).

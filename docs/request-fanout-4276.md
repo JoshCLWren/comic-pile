@@ -1,5 +1,11 @@
 # Request fan-out trace for #4276
 
+> **Historical request audit:** Counts and endpoint names are point-in-time
+> evidence. Current budgets live in `frontend/src/test/network-budget/`; current
+> API paths are in [`API.md`](API.md).
+
+<!-- docs-path-check: historical -->
+
 Scope: frontend/transport fan-out for Queue, Roll, and the Read/Rate → next Roll
 loop. Traced against the actual TanStack callers in `frontend/src` and the Rust
 ingress in `api/native_roll.rs` / `native/roll-service/src`.

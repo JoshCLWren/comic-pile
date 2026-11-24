@@ -1,5 +1,11 @@
 # Reader-facing CBL source labels
 
+> **Historical Python UI contract:** The repository paths and Python tests below
+> are retired. Use the native CBL catalog and Reading List documents for current
+> behavior; preserve this note only for display/provenance rationale.
+
+<!-- docs-path-check: historical -->
+
 Source titles identify reading material. Repository paths, revision hashes, and storage references are provenance, not primary names.
 
 Reading Plan index cards, reader issue rows, and source summaries use a readable source filename/title. An owned Reading List name is shown verbatim, because bracketed prefixes such as `[DC] Crisis` are part of the reader's chosen name rather than CBL filename metadata. A retained `custom-cbl:<id>` reference resolves to that reader's current Reading List name through an owner-scoped, batched repository read. Missing or foreign references use a generic Reading List label without exposing another reader's name. The API retains the original reference for compatibility and adds `source_names` to index items and `display_name` to source snapshots. Reading these labels does not modify lists, progress, or history.

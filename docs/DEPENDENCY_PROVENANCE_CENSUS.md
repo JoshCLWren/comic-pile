@@ -1,5 +1,11 @@
 # Read-only Option E dependency and frontier census
 
+> **Historical Python census tool:** `scripts.report_dependency_provenance` no
+> longer exists. Current canonical frontier evidence is the native reading-graph
+> audit; see [`READING_LIST_RUNTIME.md`](READING_LIST_RUNTIME.md).
+
+<!-- docs-path-check: historical -->
+
 Issue #3661 adds an offline evidence report. It does not change Roll, classify historical
 edges as approved, repair pointers, or execute the production operation in #3588.
 

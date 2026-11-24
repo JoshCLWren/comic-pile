@@ -1,5 +1,11 @@
 # Latent reading-order parity incident
 
+> **Historical incident record (2026-10-26):** Preserve the evidence and lessons,
+> but use [`READING_LIST_RUNTIME.md`](READING_LIST_RUNTIME.md) for current
+> eligibility and provenance rules.
+
+<!-- docs-path-check: historical -->
+
 On October 26, a read-only owner-1 comparison of unread-to-unread historical relationships against active Option E rules found 134 potentially unrepresented edges before manual remediation. A zero-write migration preview was incorrectly interpreted as proof of semantic parity.
 
 Never declare reading-order parity because a migration returns an empty change set. Reconcile old generated adjacency against the actual reader-owned Reading Lists and deliberate prerequisites, honoring saved loose modes and overlap choices. Check future unread targets, not only today's Roll candidates.

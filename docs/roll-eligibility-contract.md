@@ -1,5 +1,12 @@
 # ComicPile Roll Eligibility Contract (Josh, 2026-10-12, authoritative)
 
+> **Superseded contract:** This October 12 snapshot is replaced by the Reading
+> List execution decision and the owner's 2026-11-23 single-engine correction.
+> Use [`READING_LIST_RUNTIME.md`](READING_LIST_RUNTIME.md); do not implement from
+> the older rules below.
+
+<!-- docs-path-check: historical -->
+
 **Architecture update (2026-10-13):** [Reading List Execution ADR](READING_LIST_EXECUTION_ADR.md) is the **accepted replacement contract**. The below describes existing runtime/safety behavior **until cutover**, not the desired final design. In particular, strict Reading Lists will directly enforce list order without compiling adjacency edges.
 
 

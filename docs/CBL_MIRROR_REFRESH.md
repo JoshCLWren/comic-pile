@@ -1,5 +1,12 @@
 # CBL Mirror Refresh Runbook
 
+> **Historical Python runbook:** `scripts.sync_cbl_mirror` was removed with the
+> Python application. Current catalog reads are native Rust and do not fetch
+> GitHub per request; see [`CBL_CATALOG_API.md`](CBL_CATALOG_API.md). Do not run
+> the commands below.
+
+<!-- docs-path-check: historical -->
+
 This runbook makes a complete `JoshCLWren/CBL-ReadingLists` refresh repeatable and measurable. The
 sync is always performed **outside** application requests: the web/API runtime reads the already
 persisted `cbl_sources`, `cbl_source_lists`, and `cbl_source_entries` tables and never fetches GitHub

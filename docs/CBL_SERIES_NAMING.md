@@ -1,5 +1,12 @@
 # Names for newly materialized CBL series
 
+> **Historical Python implementation note:** The pytest path below is retired.
+> Current native adoption/mapping behavior is in
+> [`COMICVINE_RUNTIME_FALLBACK.md`](COMICVINE_RUNTIME_FALLBACK.md) and
+> [`CBL_CATALOG_API.md`](CBL_CATALOG_API.md).
+
+<!-- docs-path-check: historical -->
+
 CBL adoption resolves an owned series by its confirmed external volume identity. Its display title is not its identity, so a retry or another issue from the same volume reuses the existing series even if the reader renamed it.
 
 A newly created confirmed series uses `CBL: <source series> (<volume year>)` when the source has a year. If that title is already in use by the same reader, a readable `(run 2)`, `(run 3)`, etc. suffix distinguishes the new volume. Unknown-year series use the same collision rule without inventing a year or displaying internal identity numbers. Long source names are shortened to fit the 200-character title limit while preserving the year/run suffix.

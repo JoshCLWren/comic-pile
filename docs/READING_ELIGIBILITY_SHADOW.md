@@ -1,5 +1,11 @@
 # Read-only Reading List eligibility comparison
 
+> **Historical Python shadow report:** `scripts.report_reading_eligibility` was
+> removed with the Python runtime. Current runtime evidence is the native
+> reading-graph audit; see [`READING_LIST_RUNTIME.md`](READING_LIST_RUNTIME.md).
+
+<!-- docs-path-check: historical -->
+
 Option E's shadow report compares the existing stored frontier/cache with derived
 frontiers and hypothetical eligibility from current authored Reading List modes,
 gates, skips, explicit requirements and resolved collection exclusions. It does

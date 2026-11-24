@@ -1,5 +1,13 @@
 # Durable custom CBL checkpoint targets
 
+> **Superseded compiler contract:** This document describes the retired Reading
+> Plan/Dependency compiler. Current checkpoint metadata is preserved by Reading
+> List authoring, while automatic-Roll eligibility uses the canonical evaluator;
+> see [`READING_LIST_RUNTIME.md`](READING_LIST_RUNTIME.md) and
+> [`api/READING_LIST_AUTHORING.md`](api/READING_LIST_AUTHORING.md).
+
+<!-- docs-path-check: historical -->
+
 Custom CBL membership is intended display order. A checkpoint carries specific
 source and target issue IDs. List adjacency never becomes an implicit additional
 prerequisite. This extends the existing CBL and plan compiler; Roll still consumes

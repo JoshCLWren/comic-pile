@@ -1,5 +1,11 @@
 # Blocking UX Polish Plan
 
+> **Historical implementation plan:** Preserve for provenance. Current reading
+> and blocking behavior is in [`READING_LIST_RUNTIME.md`](READING_LIST_RUNTIME.md)
+> and the frontend visual grammar.
+
+<!-- docs-path-check: historical -->
+
 **Branch:** `feature/thread-blocking-usability-overhaul`  
 **Goal:** Make the dependency/blocking feature feel intuitive before merge.  
 **Scope:** Frontend-only changes. No backend/API/schema changes.

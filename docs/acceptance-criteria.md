@@ -1,3 +1,9 @@
+> **Historical acceptance transcript:** This is point-in-time validation output,
+> not current product guidance. See `README.md` and `docs/manual-qa/README.md` for
+> current behavior and QA coverage.
+
+<!-- docs-path-check: historical -->
+
 1: PASS - The application allows users to track their comic reading progress.
 2: PASS - The application integrates with a dice-driven system for random selection.
 3: PASS - The application uses async PostgreSQL for database operations.

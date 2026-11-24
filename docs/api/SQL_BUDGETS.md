@@ -1,5 +1,7 @@
 # Historical SQL-budget registry (retired November 15, 2026)
 
+<!-- docs-path-check: historical -->
+
 The owner canceled the mandatory per-route SQL-budget and
 `pg_stat_statements` parity program. The existing
 `docs/api/sql-budget-sources.json` entries are historical route metadata used
