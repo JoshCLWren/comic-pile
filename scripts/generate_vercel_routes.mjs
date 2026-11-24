@@ -10,7 +10,7 @@ import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
 
 const PYTHON = '/api/index.py';
 const RUST = '/api/native_roll.rs';
-const NATIVE = new Set([RUST, '/api/native_issue.rs']);
+const NATIVE = new Set([RUST]);
 const FALLBACK = '/api(?:/.*)?';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const PARAM = /\{([^{}]+)\}/g;
@@ -187,7 +187,7 @@ export function generateVercel(config, operations, fragments = null) {
   // order) + fragment natives (sorted) + fragment pythons (sorted) +
   // baseline exceptions (sorted by path) + catch-all + non-API tail.
   // Fragment-derived native_roll routes are emitted only when a later Python
-  // or native_issue route could otherwise shadow them (the catch-all already
+  // route could otherwise shadow them (the catch-all already
   // sends everything else to native_roll).
   const fullRoutes = [
     ...baselineNatives,

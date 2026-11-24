@@ -18,8 +18,7 @@ Python fallback.
    bounds, errors and 404/422 behavior against the existing route and frontend
    expectations, including null versus absent JSON fields.
 3. Add the exact HTTP **method and path** in the service router in `lib.rs`,
-   then register the same handler in the real ingress (`api/native_roll.rs`
-   or `api/native_issue.rs`) and add the method-specific `vercel.json`
+   then register the same handler in the real ingress (`api/native_roll.rs`) and add the method-specific `vercel.json`
    rewrite **before** the catch-all. Test both allowed and rejected methods,
    numeric IDs, route precedence and security headers.
 4. Trace and switch the real caller under `frontend/src/services/`. Update
