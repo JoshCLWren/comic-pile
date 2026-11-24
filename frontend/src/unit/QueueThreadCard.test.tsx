@@ -487,13 +487,73 @@ describe('QueueThreadCard', () => {
     expect(screen.getByTestId('queue-thread-blocked-detail').className).toMatch(/theme-continuity-accent/)
   })
 
-  it('renders the derived series cover image from the thread projection', () => {
+  it('renders the derived series cover lazily and reveals it after loading', () => {
     renderCard(createMockThread({ title: 'Cover Series', series_cover_image_url: 'https://comicvine.example/covers/series.jpg' }))
     const cover = screen.getByTestId('queue-thread-series-cover')
-    expect(within(cover).getByRole('img', { name: 'Cover for Cover Series' })).toHaveAttribute(
-      'src',
-      'https://comicvine.example/covers/series.jpg',
+    const image = within(cover).getByRole('img', { name: 'Cover for Cover Series' })
+    expect(image).toHaveAttribute('src', 'https://comicvine.example/covers/series.jpg')
+    expect(image).toHaveAttribute('loading', 'lazy')
+    expect(image).toHaveClass('opacity-0')
+
+    fireEvent.load(image)
+    expect(image).toHaveClass('opacity-100')
+    expect(within(cover).queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('renders a blocked series cover without changing its prerequisite or manual actions', () => {
+    const blocker: BlockingDependency = {
+      thread_id: 42,
+      thread_title: 'Fantastic Four',
+      issue_number: '600',
+      label: 'Read Fantastic Four #600 first',
+    }
+    renderCard(createMockThread({ title: 'FF', series_cover_image_url: 'https://comicvine.example/covers/ff.jpg' }), {
+      isBlocked: true,
+      blockingDependencies: [blocker],
+    })
+    const image = screen.getByRole('img', { name: 'Cover for FF' })
+
+    fireEvent.load(image)
+    expect(image).toHaveClass('opacity-100')
+    expect(screen.getByLabelText('Blocked series')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open Fantastic Four' })).toHaveTextContent('Read Fantastic Four #600 first')
+    expect(screen.getByRole('button', { name: 'Read / Rate / Map issue' })).toBeEnabled()
+  })
+
+  it('replaces failed series art with No cover while preserving issue actions', () => {
+    renderCard(createMockThread({ title: 'Failed Cover', series_cover_image_url: 'https://comicvine.example/covers/missing.jpg' }))
+
+    fireEvent.error(screen.getByRole('img', { name: 'Cover for Failed Cover' }))
+    expect(screen.getByTestId('queue-thread-series-cover-placeholder')).toHaveAttribute('aria-label', 'No cover for Failed Cover')
+    expect(screen.queryByRole('img', { name: 'Cover for Failed Cover' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Read / Rate / Map issue' })).toBeEnabled()
+  })
+
+  it('does not carry visible art into a replacement cover for the same thread', () => {
+    const thread = createMockThread({ title: 'Changing Cover', series_cover_image_url: 'https://comicvine.example/covers/first.jpg' })
+    const { props, rerender } = renderCard(thread)
+    const first = screen.getByRole('img', { name: 'Cover for Changing Cover' })
+    fireEvent.load(first)
+    expect(first).toHaveClass('opacity-100')
+
+    rerender(
+      <MemoryRouter>
+        <QueueThreadCard
+          {...props}
+          thread={{ ...thread, series_cover_image_url: 'https://comicvine.example/covers/second.jpg' }}
+        />
+      </MemoryRouter>,
     )
+    const second = screen.getByRole('img', { name: 'Cover for Changing Cover' })
+    expect(second).not.toBe(first)
+    expect(second).toHaveClass('opacity-0')
+
+    fireEvent.error(first)
+    expect(second).toHaveClass('opacity-0')
+    expect(screen.queryByTestId('queue-thread-series-cover-placeholder')).not.toBeInTheDocument()
+    fireEvent.load(second)
+    expect(second).toHaveClass('opacity-100')
   })
 
   it('shows the existing No cover placeholder when no confirmed series cover exists', () => {
