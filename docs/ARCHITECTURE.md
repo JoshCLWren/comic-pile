@@ -34,14 +34,14 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 
 **Decision**: `/api/v2/*` is the current client surface; the version segment never identifies the implementation language
 
-**Documented in**: [API.md](API.md) and `docs/api/v2-route-inventory.json`
+**Documented in**: [API.md](API.md), [API_V1_CANONICAL.md](API_V1_CANONICAL.md), the native same-path contract and `docs/api/v2-route-inventory.json`
 
 **Key Points**:
 
 - New client resources are added under `/api/v2/*`
-- Older `/api/v1/*` and unversioned aliases survive only where the generated inventory lists an active contract
+- Older `/api/v1/*` and unversioned aliases survive only where the native route registry and `native/contracts/same-path-runtime.openapi.json` still publish them
 - Every deployed `/api/*` operation is served by native Rust; an API version is a wire contract, not a runtime
-- `docs/api/v2-route-inventory.json` is the authoritative per-operation inventory of consumers and ingress destinations
+- `docs/api/v2-route-inventory.json` is the authoritative v2 cutover inventory; it is not an exhaustive native v1 compatibility table
 - Route source fragments live in `docs/api/route-fragments/`; `vercel.json` and the inventory are generated and bot-owned
 
 ### 3. Frontend-Backend Communication
@@ -75,7 +75,7 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 **Key Points**:
 
 - Frontend built as static output served from `/static/react/`
-- `vercel.json` routes every `/api/*` request to `api/native_roll.rs`; unknown API paths return a Rust JSON 404
+- The deployment workflow regenerates `vercel.json`, strips retired functions and routes every `/api/*` request to `api/native_roll.rs`; unknown API paths return a Rust JSON 404
 - Production deployments from `main` branch only
 - Vercel Preview environments intentionally unsupported
 - Database hosted externally (Neon PostgreSQL)

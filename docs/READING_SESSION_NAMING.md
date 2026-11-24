@@ -61,7 +61,7 @@ test or source locations.
 | Retained name | Where | Why retained |
 | --- | --- | --- |
 | `sessions` table | Native reading-history SQL | Renaming requires a migration and client coordination |
-| `/api/v1/sessions/` and `/api/v1/sessions/{id}` | `native/roll-service/src/lib.rs` | Existing browser history callers |
+| Retired `/api/v1/sessions/` and `/api/v1/sessions/{id}` | No current native registration | `frontend/src/services/api-sessions.ts` still references them; caller drift is a separate repair |
 | `/api/v2/reading-sessions/{id}/details` and `/snapshots` | Native session detail/history modules | Canonical resource-shaped reads |
 | `SessionDetailsResponse`, `SessionSnapshotsResponse` | Rust response DTOs | Existing generated wire schema names |
 | `SessionListItem`, `SessionSummary` and related frontend types | `frontend/src/types.ts` and `frontend/src/services/api-sessions.ts` | Existing client projections |

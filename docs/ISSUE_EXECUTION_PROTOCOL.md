@@ -26,7 +26,7 @@ Repository engineering rules still apply. Factory workers may not skip tests, we
 3. Confirm dependencies are complete or explicitly non-blocking.
 4. Inspect the named files, surrounding data flow, and existing tests before editing.
 5. Claim work using the current factory lease protocol before implementation.
-6. Do not broaden scope. Include a discovered defect only when it is required for coherent issue completion. Preserve unrelated defects as separate issues.
+6. Do not broaden scope. Include a discovered defect only when required for coherent issue completion. Record unrelated defects in the existing issue/PR handoff; the backlog freeze prohibits new issues or sub-issues without explicit interactive owner authorization.
 
 Autonomous factories must not claim issues labeled `epic` or `prd`, and must not claim an issue whose body contains `<!-- factory-execution:manual-only -->`. Those issues are human/interactive coordination, acceptance, architecture, destructive-authorization, or similar gates. A narrow implementation child may remain executable even when it belongs to a domain under an architecture hold, but only when the child has an explicit frozen contract. The factory implements that contract exactly, does not reinterpret the architecture, and does not lift or close the governing hold.
 
@@ -54,7 +54,7 @@ Do not create planning-only pull requests unless the issue itself requests docum
 
 ## Chromium discovery
 
-The repository runs daily Chromium discovery to surface reproducible product defects. Discovery failures must preserve traces, screenshots, video, JSON results, backend logs, and run metadata. Reproducible product failures become focused `bug` issues. Ordinary factories do not launch the complete discovery suite; they consume the resulting executable issues through normal selection.
+The repository runs daily Chromium discovery to surface reproducible product defects. Discovery failures must preserve traces, screenshots, video, JSON results, backend logs and run metadata. Reconcile failures against existing issues/PRs and group by root cause. The pipeline creates no issues or labels, and the backlog freeze prohibits new tickets without explicit interactive owner authorization. Ordinary factories do not launch the complete discovery suite; they consume already-authorized work through normal selection.
 
 ## Validation
 
