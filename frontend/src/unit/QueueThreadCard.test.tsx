@@ -556,6 +556,57 @@ describe('QueueThreadCard', () => {
     expect(second).toHaveClass('opacity-100')
   })
 
+  it('resets cover state when a far-down virtualized row is recycled for a blocked series', () => {
+    const firstThread = createMockThread({
+      id: 29,
+      title: 'Black Panther',
+      queue_position: 29,
+      series_cover_image_url: 'https://comicvine.example/covers/black-panther.jpg',
+    })
+    const blocker: BlockingDependency = {
+      thread_id: 42,
+      thread_title: 'Fantastic Four',
+      issue_number: '600',
+      label: 'Read Fantastic Four #600 first',
+    }
+    const { props, rerender } = renderCard(firstThread, { index: 28 })
+    const first = screen.getByRole('img', { name: 'Cover for Black Panther' })
+    fireEvent.load(first)
+    expect(first).toHaveClass('opacity-100')
+
+    rerender(
+      <MemoryRouter>
+        <QueueThreadCard
+          {...props}
+          index={34}
+          isBlocked
+          blockingDependencies={[blocker]}
+          thread={createMockThread({
+            id: 35,
+            title: 'FF',
+            queue_position: 35,
+            series_cover_image_url: 'https://comicvine.example/covers/ff.jpg',
+          })}
+        />
+      </MemoryRouter>,
+    )
+    const replacement = screen.getByRole('img', { name: 'Cover for FF' })
+    expect(replacement).not.toBe(first)
+    expect(replacement).toHaveAttribute('src', 'https://comicvine.example/covers/ff.jpg')
+    expect(replacement).toHaveClass('opacity-0')
+    expect(screen.getByText('#35')).toBeInTheDocument()
+
+    fireEvent.error(first)
+    expect(replacement).toHaveClass('opacity-0')
+    expect(screen.queryByTestId('queue-thread-series-cover-placeholder')).not.toBeInTheDocument()
+    fireEvent.load(replacement)
+    expect(replacement).toHaveClass('opacity-100')
+    expect(screen.getByLabelText('Blocked series')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open Fantastic Four' })).toHaveTextContent(
+      'Read Fantastic Four #600 first',
+    )
+  })
+
   it('shows the existing No cover placeholder when no confirmed series cover exists', () => {
     renderCard(createMockThread({ title: 'Bare Series', series_cover_image_url: null }))
     const placeholder = screen.getByTestId('queue-thread-series-cover-placeholder')
