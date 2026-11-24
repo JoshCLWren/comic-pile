@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import type { RefObject } from 'react'
 import OverlayPortal from './OverlayPortal'
 
 interface ModalProps {
@@ -10,6 +11,10 @@ interface ModalProps {
   overlayClassName?: string
   autoFocus?: boolean
   size?: 'default' | 'large'
+  /** Prevent Escape, backdrop and Close from dismissing an in-flight action. */
+  closeDisabled?: boolean
+  /** Stable focus target for completion paths that unmount the original trigger. */
+  returnFocusRef?: RefObject<HTMLElement | null>
 }
 
 // Module-level lock counter so nested/overlapping modals don't prematurely
@@ -29,6 +34,12 @@ function isTopmostModal(modalId: number): boolean {
   return openModalStack[openModalStack.length - 1] === modalId
 }
 
+function getModalFocusableElements(modal: HTMLElement): HTMLElement[] {
+  return Array.from(modal.querySelectorAll<HTMLElement>(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  )).filter(element => element.tabIndex >= 0 && !element.matches(':disabled, [hidden], [aria-hidden="true"]'))
+}
+
 export default function Modal({
   isOpen,
   title,
@@ -38,13 +49,22 @@ export default function Modal({
   overlayClassName,
   autoFocus = true,
   size = 'default',
+  closeDisabled = false,
+  returnFocusRef,
 }: ModalProps) {
   const [overlayElement, setOverlayElement] = useState<HTMLDivElement | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const onCloseRef = useRef(onClose)
+  const closeDisabledRef = useRef(closeDisabled)
+  const returnFocusRefValue = useRef(returnFocusRef)
   const titleId = useId()
+
+  // Event handlers and cleanup must see the latest props without resetting the
+  // modal's focus/stack lifecycle on every parent render.
+  closeDisabledRef.current = closeDisabled
+  returnFocusRefValue.current = returnFocusRef
 
   const modalIdRef = useRef<number | null>(null)
   if (modalIdRef.current === null) {
@@ -73,22 +93,18 @@ export default function Modal({
 
     const modal = modalRef.current
 
-    const getFocusableElements = () => Array.from(modal.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    )).filter(element => element.tabIndex >= 0 && !element.matches(':disabled, [hidden], [aria-hidden="true"]'))
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isTopmostModal(modalId)) return
 
       if (e.key === 'Escape') {
-        onCloseRef.current()
+        if (!closeDisabledRef.current) onCloseRef.current()
         return
       }
 
       if (e.key === 'Tab') {
         // Async content can replace or enable controls after the dialog opens.
         // Recompute the boundaries so keyboard focus stays in the live dialog.
-        const focusableElements = getFocusableElements()
+        const focusableElements = getModalFocusableElements(modal)
         const firstElement = focusableElements[0]
         const lastElement = focusableElements[focusableElements.length - 1]
         if (!firstElement) {
@@ -111,7 +127,7 @@ export default function Modal({
     document.addEventListener('keydown', handleKeyDown)
 
     // Focus the first input/textarea/select element, or fall back to the first focusable element
-    const focusableArray = getFocusableElements()
+    const focusableArray = getModalFocusableElements(modal)
     const firstElement = focusableArray[0]
     const firstInput = focusableArray.find(
       el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
