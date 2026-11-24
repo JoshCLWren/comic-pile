@@ -7,7 +7,7 @@ ComicPile uses Vercel for production only. The production branch is `main`.
 - A push or merge to `main` may create one production deployment for that exact commit SHA.
 - Pull requests and non-production branches must not create Vercel deployments.
 - Pull requests are validated locally and through GitHub Actions.
-- The React/Vite frontend is built as static output. Native `/api/v2` resources run in Rust, remaining transitional `/api/*` routes run in FastAPI, and bare production health/docs paths return 404 without invoking Python.
+- The React/Vite frontend is built as static output. Every deployed `/api/*` request is served by native Rust after the workflow regenerates routes and strips retired build functions. Bare production health/docs paths return 404 without starting an API runtime.
 - Neon is the production PostgreSQL provider.
 
 `vercel.json` disables Vercel Git deployments. The migration-aware
@@ -106,7 +106,7 @@ and expected metadata are visible, and the dashboard offers an eligible
 production promotion/rollback action. A promotion is **not** automatic:
 verify the older application remains compatible with the *current* Neon
 schema before deliberately restoring it. A READY deployment is not proof of
-schema rollback compatibility; no Alembic downgrade is run by this policy.
+schema rollback compatibility; the refinery runner has no downgrade path.
 
 For a non-destructive listing (requires `VERCEL_TOKEN`,
 `VERCEL_PROJECT_ID` and `VERCEL_ORG_ID`):
@@ -124,8 +124,8 @@ than falling back to a project-level remove operation.
 ## Daily release-source sync (Vercel Cron)
 
 ComicPile runs release-source synchronization once per day through Vercel Cron.
-The job uses the existing FastAPI function; it does not require another service,
-a long-running worker, or a GitHub Actions scheduler.
+The retained `/api/v1/cron/release-sync` operation is implemented in native Rust;
+it does not require a Python function, long-running worker or another scheduler.
 
 ```json
 {
@@ -238,8 +238,8 @@ After this change is merged:
 3. Allow the factory-completion and scheduled recovery triggers to run and confirm they do not
    create another deployment for the same SHA.
 4. Confirm the production alias still points to the successful `main` deployment.
-5. Confirm older deployments were pruned down to the current production alias
-   only (`targets.production`). The previous READY production must be gone.
+5. Confirm pruning retained the live production alias and the most recent
+   previous READY production deployment as the rollback candidate.
 
 Do not add Preview credentials, Preview databases, Preview Redis instances, or Preview-specific runtime branches. Disposable service instances used by local development or GitHub Actions are separate from Vercel Preview and remain supported.
 
