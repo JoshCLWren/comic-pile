@@ -53,14 +53,15 @@ export function catalogTotalLabel(total: number, folderCount: number): string {
  * Decide whether served results belong to an obsolete browse position.
  *
  * `keepPreviousData` intentionally holds the prior page while a new
- * folder/search fetch runs. Those old folders must not appear under a new
- * search banner. A pager clamped by the server keeps the same folder and
- * query, so its result stays visible.
+ * folder/search/page fetch runs. Those old folders must not appear under a
+ * new search banner. A pager clamped by the server keeps the same folder,
+ * query, and page, so its result stays visible.
  *
  * @param served - The currently displayed page, or null before first data.
  * @param fetching - Whether a new browse request is in flight.
  * @param folder - Folder in the current URL.
  * @param submittedQuery - Search term in the current URL.
+ * @param page - Page number in the current URL.
  * @returns True while stale results are on screen.
  */
 export function isStaleBrowsePosition(
@@ -72,7 +73,7 @@ export function isStaleBrowsePosition(
 ): boolean {
   if (!fetching || served === null) return false
   if (submittedQuery) {
-    return served.scope !== 'search' || (served.query ?? '') !== submittedQuery || (served.page ?? 1) !== page
+    return served.scope !== 'search' || (served.query ?? '') !== submittedQuery || served.page !== page
   }
-  return served.scope === 'search' || served.folder !== folder || (served.page ?? 1) !== page
+  return served.scope === 'search' || served.folder !== folder || served.page !== page
 }

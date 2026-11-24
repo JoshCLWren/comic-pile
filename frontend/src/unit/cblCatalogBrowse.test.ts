@@ -56,4 +56,9 @@ describe('isStaleBrowsePosition', () => {
     expect(isStaleBrowsePosition({ ...root, page: 1 }, true, '', '', 2)).toBe(true)
     expect(isStaleBrowsePosition({ ...root, page: 2 }, true, '', '', 2)).toBe(false)
   })
+
+  it('hides an obsolete search page while a new page loads', () => {
+    expect(isStaleBrowsePosition({ ...search('Batman'), page: 1 }, true, '', 'Batman', 2)).toBe(true)
+    expect(isStaleBrowsePosition({ ...search('Batman'), page: 2 }, true, '', 'Batman', 2)).toBe(false)
+  })
 })
