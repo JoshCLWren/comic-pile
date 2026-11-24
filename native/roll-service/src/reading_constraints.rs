@@ -429,7 +429,11 @@ fn constraint_edges(snapshot: &Snapshot) -> Result<BTreeSet<ConstraintEdge>, Val
             }
             if entry.gate == "after_previous" && index > 0 {
                 // Skip excluded entries when finding the predecessor for after_previous.
-                if let Some(pred_entry) = entries[..index].iter().rev().find(|e| !snapshot.excluded_issue_ids.contains(&e.issue_id)) {
+                if let Some(pred_entry) = entries[..index]
+                    .iter()
+                    .rev()
+                    .find(|e| !snapshot.excluded_issue_ids.contains(&e.issue_id))
+                {
                     edges.insert(ConstraintEdge::in_list(
                         pred_entry.issue_id,
                         entry.issue_id,

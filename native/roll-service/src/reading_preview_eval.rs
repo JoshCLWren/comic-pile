@@ -375,7 +375,10 @@ mod tests {
         );
         // Entry 102 should wait for 100, not 101 (excluded)
         let after = found.get(&102).expect("after_previous blocker expected");
-        let blocker = after.iter().find(|b| b.kind == "after_previous").expect("after_previous");
+        let blocker = after
+            .iter()
+            .find(|b| b.kind == "after_previous")
+            .expect("after_previous");
         assert_eq!(blocker.waiting_on_issue_ids, vec![100]);
         assert_eq!(blocker.gate_issue_id, Some(102));
     }
