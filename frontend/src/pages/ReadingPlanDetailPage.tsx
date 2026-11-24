@@ -611,7 +611,12 @@ export default function ReadingPlanDetailPage() {
       <section aria-label="Optional release tracking" className="surface-panel p-4">
         <h2 className="text-base font-bold text-[var(--theme-text-primary)]">Optional: Track future releases</h2>
         <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
-          Subscribing to ComicVine volumes is separate from the reading order and is not required to read any of these comics.
+          Follow only checks ComicVine for newly published issues in a mapped series. It does not change your reading order, eligibility, or progress.
+        </p>
+        <p data-testid="release-tracking-summary" className="mt-2 text-sm text-[var(--theme-text-muted)]">
+          {followedReleaseSummary
+            ? `Current subscriptions: ${followedReleaseSummary}`
+            : 'No ComicVine volumes followed yet.'}
         </p>
         <button
           type="button"
