@@ -460,8 +460,11 @@ describe('ComicIdentity', () => {
   })
 
   it('shows a retryable error when metadata loading fails and recovers', async () => {
+    const metadataError = Object.assign(new Error('metadata unavailable'), {
+      response: { status: 400 },
+    })
     getIntelligence
-      .mockRejectedValueOnce(new Error('metadata unavailable'))
+      .mockRejectedValueOnce(metadataError)
       .mockResolvedValueOnce(null)
     const { container } = renderWithToast(<ComicIdentity issueId={3} />)
     expect(await screen.findByRole('alert')).toHaveTextContent(
