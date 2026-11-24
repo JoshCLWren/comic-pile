@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T17:37:11.182346+00:00",
+  "generated_at": "2026-11-24T17:53:48.843224+00:00",
   "models": [
     {
       "health": {
@@ -2708,17 +2708,17 @@
       "source": "nvidia",
       "windows": {
         "24h": {
-          "completed": 15,
-          "delivered": 14,
-          "failed": 38,
+          "completed": 13,
+          "delivered": 12,
+          "failed": 37,
           "failures": {
-            "agent_timeout": 11,
+            "agent_timeout": 10,
             "control_plane_failure": 13,
             "unknown_failure": 2,
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 54
+          "runs": 51
         },
         "7d": {
           "completed": 40,
@@ -4985,29 +4985,29 @@
         "24h": {
           "completed": 7,
           "delivered": 7,
-          "failed": 38,
+          "failed": 39,
           "failures": {
             "control_plane_failure": 16,
             "provider_failure": 1,
             "unknown_failure": 1,
-            "work_failure": 20
+            "work_failure": 21
           },
           "idle": 32,
-          "runs": 77
+          "runs": 78
         },
         "7d": {
           "completed": 23,
           "delivered": 23,
-          "failed": 107,
+          "failed": 108,
           "failures": {
             "control_plane_failure": 27,
             "provider_failure": 3,
             "provider_quota": 1,
             "unknown_failure": 1,
-            "work_failure": 75
+            "work_failure": 76
           },
           "idle": 56,
-          "runs": 186
+          "runs": 187
         }
       }
     },
@@ -5512,12 +5512,12 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 47,
+          "failed": 46,
           "failures": {
-            "control_plane_failure": 47
+            "control_plane_failure": 46
           },
           "idle": 0,
-          "runs": 47
+          "runs": 46
         }
       }
     },
@@ -5927,12 +5927,12 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 37,
+          "failed": 36,
           "failures": {
-            "control_plane_failure": 37
+            "control_plane_failure": 36
           },
           "idle": 0,
-          "runs": 37
+          "runs": 36
         }
       }
     },
@@ -22605,11 +22605,11 @@
       "source": "nvidia",
       "windows": {
         "24h": {
-          "completed": 18,
-          "delivered": 17,
-          "failed": 104,
+          "completed": 16,
+          "delivered": 15,
+          "failed": 103,
           "idle": 28,
-          "runs": 150
+          "runs": 147
         },
         "7d": {
           "completed": 55,
@@ -22645,9 +22645,9 @@
         "24h": {
           "completed": 13,
           "delivered": 13,
-          "failed": 65,
+          "failed": 66,
           "idle": 33,
-          "runs": 111
+          "runs": 112
         },
         "7d": {
           "completed": 54,
@@ -22671,9 +22671,9 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 45,
+          "failed": 44,
           "idle": 4,
-          "runs": 49
+          "runs": 48
         }
       }
     },
@@ -22784,10 +22784,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T17:37:11.351091+00:00",
-    "days_elapsed": 23.734,
+    "checked_at": "2026-11-24T17:53:48.966280+00:00",
+    "days_elapsed": 23.746,
     "days_in_month": 30.0,
-    "days_left": 6.27,
+    "days_left": 6.25,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
