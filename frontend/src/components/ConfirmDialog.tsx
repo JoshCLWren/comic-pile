@@ -53,6 +53,9 @@ export default function ConfirmDialog({
     >
       <div className="space-y-4">
         {children}
+        {isPending && pendingLabel && (
+          <p role="status" className="sr-only">{pendingLabel}</p>
+        )}
         {error && (
           <p
             role="alert"

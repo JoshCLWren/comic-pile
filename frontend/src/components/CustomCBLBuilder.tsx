@@ -76,6 +76,7 @@ export default function CustomCBLBuilder({
 }: CustomCBLBuilderProps) {
   const queryClient = useQueryClient()
   const issueSearchInput = useRef<HTMLInputElement>(null)
+  const customCBLHeadingRef = useRef<HTMLHeadingElement>(null)
   const issueSearchResults = useRef<HTMLDivElement>(null)
   const listNavigationRef = useRef<HTMLDivElement>(null)
   const pendingNavigationFocusRef = useRef<number | null>(null)
@@ -738,7 +739,7 @@ export default function CustomCBLBuilder({
     <section className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3" aria-labelledby="custom-cbl-heading">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 id="custom-cbl-heading" className="text-sm font-black text-[var(--theme-text-primary)]">Custom CBLs</h3>
+          <h3 id="custom-cbl-heading" ref={customCBLHeadingRef} tabIndex={-1} className="text-sm font-black text-[var(--theme-text-primary)]">Custom CBLs</h3>
           <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Build one ordered list of real comics, choose a strict or loose reading order, add optional waits, and apply it to this Reading Plan.</p>
         </div>
         <button type="button" onClick={() => setOpen((value) => !value)} disabled={disabled || isPending} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50" aria-expanded={open}>
@@ -1137,6 +1138,7 @@ export default function CustomCBLBuilder({
         pendingLabel="Deleting…"
         onConfirm={() => { if (selectedId) deleteMutation.mutate(selectedId) }}
         onCancel={() => { if (!deleteMutation.isPending) { deleteMutation.reset() } setConfirmDeleteOpen(false) }}
+        returnFocusRef={deleteMutation.isSuccess ? customCBLHeadingRef : undefined}
         testId="delete-custom-cbl-dialog"
       >
         <p className="text-sm text-[var(--theme-text-muted)]">
