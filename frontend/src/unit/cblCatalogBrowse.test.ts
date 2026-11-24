@@ -52,6 +52,10 @@ describe('isStaleBrowsePosition', () => {
     expect(isStaleBrowsePosition(root, true, 'Marvel', '', 1)).toBe(true)
   })
 
+  it('hides stale search results while the cleared catalog loads', () => {
+    expect(isStaleBrowsePosition(search('Batman'), true, '', '', 1)).toBe(true)
+  })
+
   it('hides an obsolete page while a new page loads', () => {
     expect(isStaleBrowsePosition({ ...root, page: 1 }, true, '', '', 2)).toBe(true)
     expect(isStaleBrowsePosition({ ...root, page: 2 }, true, '', '', 2)).toBe(false)
