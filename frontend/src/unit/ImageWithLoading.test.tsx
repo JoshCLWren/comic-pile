@@ -101,9 +101,9 @@ describe('ImageWithLoading', () => {
 
     // Only the real error event settles a failed request, exactly once.
     expect(onErrorMock).toHaveBeenCalledTimes(1)
-    const image = getImage(document.body)
+    const image = getImage(container)
     expect(image).toHaveClass('hidden', 'opacity-0')
-    expect(document.querySelector('[role="status"]')).not.toBeInTheDocument()
+    expect(queryByRole('status')).not.toBeInTheDocument()
 
     fireEvent.error(image)
     expect(onErrorMock).toHaveBeenCalledTimes(1)
