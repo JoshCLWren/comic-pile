@@ -142,9 +142,9 @@ status matrix, SQL-budget program, or unused parallel route is a current exit ga
 
 Authenticated production execution of `GET /api/v2/roll/bootstrap` in the
 native Rust runtime was verified via a Playwright (MCP) browser session
-against `https://comic-pile.vercel.app` on 2026-11-07 (UTC). This is the
-production proof required before the #4350 cleanup closes, distinct from
-health/401 checks.
+against `https://comic-pile.vercel.app` on 2026-11-07 (UTC). This is historical
+runtime evidence for that snapshot; it does not satisfy the reopened #4350
+zero-Bootstrap-consumer acceptance.
 
 Evidence captured in that session:
 

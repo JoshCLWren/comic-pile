@@ -162,7 +162,7 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 ### Data Flow
 
 1. User interacts with the React frontend
-2. Frontend makes HTTP requests to `/api/v2/*` endpoints
+2. Frontend makes HTTP requests to `/api/v2/*` resources or a retained compatibility path
 3. The native Rust handler validates the request, applies auth and ownership rules, and queries PostgreSQL
 4. The handler returns JSON
 5. Frontend updates the TanStack Query cache and re-renders
@@ -219,7 +219,7 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 
 ### Scalability
 
-- Backend: stateless handlers suitable for horizontal scaling
+- Backend: reader data is externalized in PostgreSQL; bounded process-local safeguards protect startup and rate limits
 - Database: externalized (Neon) for independent scaling
 - Frontend: static CDN delivery
 
