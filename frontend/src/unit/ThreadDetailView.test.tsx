@@ -223,6 +223,7 @@ it('loads the next issue cover before expansion and shares its card batch with I
   )
   // SAFETY: only the canonical next-issue fields used by the panel are needed.
   vi.mocked(readingBoundariesApi.batch).mockResolvedValue({
+    evaluator: 'enabled',
     threads: { 1: {
       thread_id: 1, state: 'available', summary: 'Saga #3 is available next.',
       blockers: [], next: { issue: {
