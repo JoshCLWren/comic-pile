@@ -37,7 +37,7 @@ Prerequisites:
 git clone https://github.com/JoshCLWren/comic-pile.git
 cd comic-pile
 cp .env.example .env
-# edit .env and set SECRET_KEY (python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+# edit .env and set SECRET_KEY (openssl rand -base64 32)
 set -a; . ./.env; set +a
 export RUST_ROLL_DATABASE_URL=postgresql://comicpile:comicpile_password@localhost:5435/comicpile
 export RUST_ROLL_JWT_SECRET="$SECRET_KEY"

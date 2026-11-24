@@ -18,7 +18,7 @@ Parallel sessions share host ports. Claim the smallest free slot `N` under the l
    ```bash
    export E2E_POSTGRES_PUBLISH="$((5437+N)):5432"
    docker compose -f docker-compose.test.yml up -d postgres-test
-   export E2E_TEST_DB_URL="postgresql+asyncpg://postgres:postgres@localhost:$((5437+N))/comic_pile_test"
+   export E2E_TEST_DB_URL="postgresql://postgres:postgres@localhost:$((5437+N))/comic_pile_test"
    MIGRATE_DATABASE_URL="$E2E_TEST_DB_URL" cargo run --locked -p comicpile-migrate -- up
    ```
 

@@ -2,6 +2,8 @@
 
 ComicPile uses Vercel for production only. The production branch is `main`.
 
+This document describes the checked-in deployment workflow and routing contract. Live Vercel/Neon project settings and successful production probes remain operator verification; documentation reconciliation does not itself prove a fresh deployment.
+
 ## Deployment contract
 
 - A push or merge to `main` may create one production deployment for that exact commit SHA.
