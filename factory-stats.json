@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T23:36:26+00:00",
+  "generated_at": "2026-11-24T23:52:43.159944+00:00",
   "models": [
     {
       "health": {
@@ -2294,21 +2294,23 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
-          "failures": {},
+          "failed": 1,
+          "failures": {
+            "unknown_failure": 1
+          },
           "idle": 0,
-          "runs": 0
+          "runs": 1
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 6,
+          "failed": 7,
           "failures": {
             "control_plane_failure": 2,
-            "unknown_failure": 4
+            "unknown_failure": 5
           },
           "idle": 0,
-          "runs": 6
+          "runs": 7
         }
       }
     },
@@ -2391,7 +2393,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-22T19:17:51+00:00",
+        "cooldown_until": "2026-11-24T23:44:18+00:00",
         "last_outcome": "provider_failure",
         "status": "cooling"
       },
@@ -2474,7 +2476,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-22T22:14:11+00:00",
+        "cooldown_until": "2026-11-24T23:44:18+00:00",
         "last_outcome": "provider_failure",
         "status": "cooling"
       },
@@ -2553,20 +2555,20 @@
           "failures": {
             "work_failure": 3
           },
-          "idle": 1,
-          "runs": 5
+          "idle": 0,
+          "runs": 4
         },
         "7d": {
           "completed": 1,
           "delivered": 1,
-          "failed": 22,
+          "failed": 21,
           "failures": {
-            "control_plane_failure": 9,
+            "control_plane_failure": 8,
             "provider_throttle": 1,
             "work_failure": 12
           },
           "idle": 12,
-          "runs": 35
+          "runs": 34
         }
       }
     },
@@ -2619,15 +2621,14 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 15,
+          "failed": 14,
           "failures": {
             "agent_timeout": 9,
             "control_plane_failure": 3,
-            "provider_quota": 1,
             "provider_throttle": 2
           },
           "idle": 0,
-          "runs": 15
+          "runs": 14
         }
       }
     },
@@ -2643,15 +2644,14 @@
         "24h": {
           "completed": 1,
           "delivered": 1,
-          "failed": 16,
+          "failed": 12,
           "failures": {
-            "agent_timeout": 3,
+            "agent_timeout": 2,
             "control_plane_failure": 4,
-            "provider_quota": 1,
-            "work_failure": 8
+            "work_failure": 6
           },
-          "idle": 4,
-          "runs": 21
+          "idle": 3,
+          "runs": 16
         },
         "7d": {
           "completed": 3,
@@ -2706,8 +2706,8 @@
       "source": "nvidia",
       "windows": {
         "24h": {
-          "completed": 12,
-          "delivered": 11,
+          "completed": 11,
+          "delivered": 10,
           "failed": 26,
           "failures": {
             "agent_timeout": 5,
@@ -2716,7 +2716,7 @@
             "work_failure": 11
           },
           "idle": 1,
-          "runs": 39
+          "runs": 38
         },
         "7d": {
           "completed": 40,
@@ -2737,7 +2737,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-22T22:12:53+00:00",
+        "cooldown_until": "2026-11-24T23:44:18+00:00",
         "last_outcome": "provider_failure",
         "status": "cooling"
       },
@@ -2957,7 +2957,7 @@
     {
       "health": {
         "cooldown_until": null,
-        "last_outcome": "no_work",
+        "last_outcome": "work_failure",
         "status": "healthy"
       },
       "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -2966,22 +2966,24 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
-          "failures": {},
+          "failed": 1,
+          "failures": {
+            "work_failure": 1
+          },
           "idle": 0,
-          "runs": 0
+          "runs": 1
         },
         "7d": {
           "completed": 6,
           "delivered": 6,
-          "failed": 62,
+          "failed": 63,
           "failures": {
             "control_plane_failure": 15,
             "provider_throttle": 2,
-            "work_failure": 45
+            "work_failure": 46
           },
           "idle": 19,
-          "runs": 87
+          "runs": 88
         }
       }
     },
@@ -3017,7 +3019,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T00:39:37+00:00",
+        "cooldown_until": "2026-11-25T05:39:18+00:00",
         "last_outcome": "model_unavailable",
         "status": "unavailable"
       },
@@ -3046,7 +3048,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T12:21:13+00:00",
+        "cooldown_until": "2026-11-24T23:44:18+00:00",
         "last_outcome": "provider_failure",
         "status": "cooling"
       },
@@ -4268,16 +4270,15 @@
           "runs": 0
         },
         "7d": {
-          "completed": 3,
+          "completed": 1,
           "delivered": 0,
-          "failed": 12,
+          "failed": 7,
           "failures": {
             "agent_timeout": 1,
-            "control_plane_failure": 9,
-            "provider_quota": 2
+            "control_plane_failure": 6
           },
           "idle": 0,
-          "runs": 15
+          "runs": 8
         }
       }
     },
@@ -4904,9 +4905,9 @@
     },
     {
       "health": {
-        "cooldown_until": null,
-        "last_outcome": "work_failure",
-        "status": "healthy"
+        "cooldown_until": "2026-11-24T23:43:33+00:00",
+        "last_outcome": "provider_throttle",
+        "status": "cooling"
       },
       "model": "hungerg-free",
       "source": "opencode-free",
@@ -4959,15 +4960,15 @@
         "7d": {
           "completed": 3,
           "delivered": 3,
-          "failed": 47,
+          "failed": 46,
           "failures": {
             "control_plane_failure": 9,
             "provider_failure": 1,
             "unknown_failure": 1,
-            "work_failure": 36
+            "work_failure": 35
           },
           "idle": 3,
-          "runs": 53
+          "runs": 52
         }
       }
     },
@@ -4983,29 +4984,53 @@
         "24h": {
           "completed": 8,
           "delivered": 8,
-          "failed": 42,
+          "failed": 43,
           "failures": {
             "control_plane_failure": 16,
             "provider_failure": 1,
             "unknown_failure": 1,
-            "work_failure": 24
+            "work_failure": 25
           },
           "idle": 33,
-          "runs": 83
+          "kinds": {
+            "review": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 1,
+              "failures": {
+                "work_failure": 1
+              },
+              "idle": 0,
+              "runs": 1
+            }
+          },
+          "runs": 84
         },
         "7d": {
           "completed": 24,
           "delivered": 24,
-          "failed": 111,
+          "failed": 112,
           "failures": {
             "control_plane_failure": 27,
             "provider_failure": 3,
             "provider_quota": 1,
             "unknown_failure": 1,
-            "work_failure": 79
+            "work_failure": 80
           },
           "idle": 57,
-          "runs": 192
+          "kinds": {
+            "review": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 1,
+              "failures": {
+                "work_failure": 1
+              },
+              "idle": 0,
+              "runs": 1
+            }
+          },
+          "runs": 193
         }
       }
     },
@@ -22563,16 +22588,16 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 29,
+          "failed": 30,
           "idle": 0,
-          "runs": 29
+          "runs": 30
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 71,
+          "failed": 72,
           "idle": 18,
-          "runs": 89
+          "runs": 90
         }
       }
     },
@@ -22599,18 +22624,18 @@
       "source": "nvidia",
       "windows": {
         "24h": {
-          "completed": 14,
-          "delivered": 13,
-          "failed": 89,
-          "idle": 29,
-          "runs": 132
+          "completed": 13,
+          "delivered": 12,
+          "failed": 86,
+          "idle": 27,
+          "runs": 126
         },
         "7d": {
           "completed": 55,
           "delivered": 53,
-          "failed": 589,
+          "failed": 588,
           "idle": 272,
-          "runs": 916
+          "runs": 915
         }
       }
     },
@@ -22639,16 +22664,16 @@
         "24h": {
           "completed": 15,
           "delivered": 15,
-          "failed": 71,
+          "failed": 72,
           "idle": 34,
-          "runs": 120
+          "runs": 121
         },
         "7d": {
-          "completed": 54,
+          "completed": 52,
           "delivered": 46,
-          "failed": 367,
+          "failed": 362,
           "idle": 84,
-          "runs": 505
+          "runs": 498
         }
       }
     },
@@ -22772,9 +22797,9 @@
     "24h": "24 hours",
     "7d": "7 days"
   },
-  "counts_generated_at": "2026-11-24T22:48:23.201762+00:00",
+  "counts_generated_at": "2026-11-24T23:52:43.159944+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-24T23:36:27Z",
+    "generated_at": "2026-11-24T23:52:44Z",
     "sources": {
       "kilo-auto": [
         "kilo-auto/efficient"
@@ -22785,12 +22810,18 @@
         "moonshotai/kimi-k3",
         "nvidia/llama-3.3-nemotron-super-49b-v1.5",
         "nvidia/nemotron-3-nano-30b-a3b",
+        "nvidia/nvclip",
         "stepfun-ai/step-3.7-flash",
         "z-ai/glm-5.3",
         "poolside/laguna-xs-2.1",
         "nvidia/nemotron-3-ultra-550b-a55b",
         "z-ai/glm-5.3-flash",
         "minimaxai/minimax-m3.1-flash",
+        "fastino/gliner2-pii",
+        "google/gemma-3-4b-it",
+        "nvidia/cosmos-reason2-8b",
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "nvidia/riva-translate-4b-instruct-v2",
         "nvidia/ising-calibration-1.5-31b",
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
         "meta/muse-glimmer-30b",
@@ -22798,6 +22829,7 @@
         "nvidia/nemotron-3.5-bolt-e4b"
       ],
       "opencode-free": [
+        "iceman-contributor-free",
         "beam-free",
         "hy4-flash-free"
       ],
@@ -22812,10 +22844,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T23:36:27.619510+00:00",
-    "days_elapsed": 23.984,
+    "checked_at": "2026-11-24T23:52:44.520007+00:00",
+    "days_elapsed": 23.995,
     "days_in_month": 30.0,
-    "days_left": 6.02,
+    "days_left": 6.01,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -22831,31 +22863,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 990679,
-        "organization": 990679,
+        "database": 1158162,
+        "organization": 1158162,
         "owner_target": 50000000,
-        "projected_database": 1239175,
-        "projected_organization": 1239175,
-        "projected_share": 0.0025,
-        "share_used": 0.002
+        "projected_database": 1448004,
+        "projected_organization": 1448004,
+        "projected_share": 0.0029,
+        "share_used": 0.0023
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 103018,
-        "organization": 103018,
+        "database": 103380,
+        "organization": 103380,
         "owner_target": 1000000,
-        "projected_database": 128858,
-        "projected_organization": 128858,
+        "projected_database": 129252,
+        "projected_organization": 129252,
         "projected_share": 0.0129,
         "share_used": 0.0103
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 17084416,
-        "organization": 17084416,
+        "database": 17108992,
+        "organization": 17108992,
         "owner_target": 250000000,
-        "projected_database": 17084416,
-        "projected_organization": 17084416,
+        "projected_database": 17108992,
+        "projected_organization": 17108992,
         "projected_share": 0.0034,
         "share_used": 0.0034
       }
