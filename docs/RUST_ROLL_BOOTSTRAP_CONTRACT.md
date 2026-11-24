@@ -10,8 +10,11 @@
 > golden-fixture revision, **not** the public API v1 route. Do not change the URL
 > or treat one endpoint as the implementation of another.
 >
-> The language-only cutover contract in #4335 supersedes older notes below
-> referring to component gates or a v1→v2 client migration.
+> The current owner contract in #4335 retires Bootstrap after all real consumers
+> move to scoped resources. #4350 owns caller migration and #4299 owns server
+> deletion; both remain open. This document describes the current interim native
+> v2 behavior. Older notes about a v1-to-v2 migration or component gates are
+> historical, not active instructions.
 
 
 The wire contract is the native operation `GET /api/v2/roll/bootstrap` and its
@@ -59,14 +62,17 @@ returned identical payloads and left the post-first-request state unchanged.
 Changing an expectation once required an explicitly reviewed Python-contract
 change and fresh isolated Python capture; that path no longer exists.
 
-## Scenario matrix
+## Historical scenario matrix
 
-All happy-path fixtures use Option E enabled with a local-only approval reference.
-Unless specified, Alpha and Beta each have two unread issues, queue positions
-1 and 2, no mappings, and a recent existing d6 reading session with uninitialized
-bandwidth. `before` and `after` capture reading-session fields, issue read state,
-event count, full undo snapshot content, and live thread state including queue
-positions, counters, cached frontier, read progress, rating and activity time.
+The matrix below records the retired Python oracle's fixture design. It is not a
+description of current GET side effects: the native GET is read-only, and explicit
+session initialization now belongs to `POST /api/v2/reading-sessions`.
+
+All historical happy-path fixtures used Option E enabled with a local-only
+approval reference. Unless specified, Alpha and Beta each had two unread issues,
+queue positions 1 and 2, no mappings, and a recent existing d6 reading session with
+uninitialized bandwidth. `before` and `after` captured reading-session fields,
+issue read state, event count, full undo snapshot content, and live thread state.
 
 | Fixture | Distinguishing setup / behavior |
 | --- | --- |
@@ -87,69 +93,50 @@ positions, counters, cached frontier, read progress, rating and activity time.
 | timezone_preserved | Existing Asia/Tokyo retained despite browser America/Chicago |
 | auth_* | Missing/malformed/expired/refresh/revoked/deleted-user/missing-jti/password-change rejection; no reading writes or refresh rotation |
 
-## Request flow and side effects
+## Current request flow and side effects
 
-1. `get_current_user` verifies signed access JWT, expiry, string subject/jti and
-   access token type, then loads the user with revocation in one owner lookup.
-   Password-change epoch revokes older credentials. Reading-history sessions are
-   not login credentials. The current User model has no disabled-user flag;
-   native code must not invent one. Missing or invalid bearer credentials,
-   expired signatures, non-access token types, revoked/missing jti, absent user,
-   and changed password have their Python error JSON/header examples in auth fixtures.
-2. `get_or_create` resolves the authenticated owner's recent unended reading
-   session from the latest durable activity, preferring pending work. It
-   initializes missing inferred bandwidth and commits once. New-session creation
-   uses the per-process lock and a per-user PostgreSQL advisory transaction lock,
-   rechecks, and persists inferred bandwidth plus a session-start snapshot.
-   Snapshot content captures issue tracking, thread state and session modes.
-3. Browser timezone is the only query parameter. When stored timezone is null,
-   strip it, accept a nonempty <=100-character IANA zone, persist and refresh.
-   Invalid zones (including blank or too long values) are soft failures, not 422.
-   An already captured timezone is never overwritten by this GET.
-4. Load safe active-thread context, die/ladder, bandwidth and session mode. Load
-   cross-session backoff/snooze exclusions and recovery for the preserved pending
-   selection. Recovery is explanatory: it does not clear pending state or roll.
-5. The live GET is served by `native/roll-service/src/bootstrap.rs`: it consumes
-   validated Option E eligibility, applies exclusions before die limiting, and
-   reads issue identities, canonical metadata, direct provider artwork URLs,
-   reader stats, group routes and session-scoped last-read. The frozen Python
-   v2 projection and parity oracle
-   (`app/services/roll_v2_projection.py`, `app/repositories/roll_v2_projection.py`, <!-- docs-path-check: ignore -->
-   `app/services/roll_v2_parity.py`, `app/repositories/roll_v2_parity.py`) <!-- docs-path-check: ignore -->
-   was retired by #4738. Stored blocked/frontier flags are not
-   authority.
-6. Summary-section derivation for the retired Python payload lived in
-   `RollService.load_bootstrap_thread_data`; that reference implementation and
-   its unused Python `RollV2BootstrapResponse` DTO were removed by #4350. V2
-   replaces v1 `roll_pool` with non-null-issue `rollable` and nullable
-   `last_read`.
+1. `get_current_user` verifies the signed access JWT, expiry, string subject/jti,
+   access-token type, revocation, and credential epoch before reading history.
+   Reading-history sessions are not login credentials.
+2. `POST /api/v2/reading-sessions` is the explicit initialization boundary. It
+   creates or reuses the reader's active session and performs the required
+   initialization writes. `GET /api/v2/roll/bootstrap` then reads that session in a
+   read-only transaction and returns `404 No active session` when none exists.
+3. Browser timezone is accepted by the initialization POST. The GET may carry the
+   legacy query parameter, but it never persists timezone, infers bandwidth,
+   creates a session, or writes an undo snapshot.
+4. The GET loads die/ladder, session mode, pending state, durable exclusions,
+   canonical eligibility, recovery, issue identities, provider artwork URLs,
+   reader stats, group routes, and session-scoped last-read.
+5. Canonical eligibility is loaded even when the rollout setting is off. The pool
+   takes the top-`die` eligible window first, then removes this browser's temporary
+   snoozes, with no backfill from deeper ranks.
+6. The response projects `rollable`, nullable `last_read`, a single `pool_reason`,
+   recovery blockers, tag rows, and the current session/pending state. Stored
+   blocked/frontier flags are not the Roll authority.
 
-GET can create reading history, initialize bandwidth, capture timezone and write
-an undo snapshot. It does not rate/read an issue, roll/select a new target,
-change queue positions, rotate refresh credentials or emit a reading Event.
-The native parity suite seeds its own scenarios; the frozen golden JSON is not
-read by any test.
+The GET performs no writes: it does not initialize history, capture timezone,
+rate/read an Issue, roll/select a target, change queue positions, rotate refresh
+credentials, or emit a reading Event. The explicit POST owns initialization.
 
-## Error boundary and remaining campaign work
+## Error boundary
 
-Auth failure occurs before reading-history bootstrap. HTTP 422 validation remains
-in the OpenAPI contract; timezone is a string and invalid IANA names are ignored.
-Dependency outages use the native service's stable 503 boundary; unforeseen
-failures use its 500 handler. Cyclic/missing-reference Option E inputs fail closed; they must
-never become successful partial candidate sets. Existing auth, recovery,
-route-versioning and Option E tests remain authoritative alongside
-these examples.
+Auth failure occurs before reading-history access. HTTP 422 validation remains in
+the OpenAPI contract for request-shape errors; timezone is a string on the explicit
+initialization POST. Dependency outages use the native service's stable 503
+boundary; unforeseen failures use its 500 handler.
 
-These fixtures are synthetic examples, not proof of full native parity. They do
-not replace catalog projection tests for ambiguous mappings, aggregate progress,
-cover sanitization or route overflow, nor large-library query budgets,
-concurrent session creation, cancellation, database outage fault injection,
-legacy Option E-off mode, or every corrupt graph. #4303–#4310 implement those
-contracts; #4311 must compare full Python/Rust status/JSON/database effects;
-#4312 measures equivalent workloads; #4314 verifies the frontend.
-All mutations, Queue/auth/catalog APIs, ingress deployment and rollback remain
-outside this contract task. No production routing switch is authorized here;
-#4313 retains the campaign cutover gates.
+A reader-authored constraint cycle is contained to affected Threads. Healthy
+Threads retain their candidates, while cyclic Threads report a `reading_cycle`
+blocker. Converted/historical edges are not loaded and cannot create a cycle.
+Existing auth, recovery, route-versioning, and Option E tests remain authoritative.
+
+### Historical campaign checklist
+
+The remaining-work list formerly maintained here targeted the retired Python
+oracle and pre-cutover campaign. It is preserved only as provenance. Current
+witnesses are the Rust tests named at the start of this document; no Python/Rust
+status matrix, SQL-budget program, or unused parallel route is a current exit gate.
 
 ## Production runtime proof (2026-11-07)
 
