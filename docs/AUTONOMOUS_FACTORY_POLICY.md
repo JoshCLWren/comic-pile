@@ -619,6 +619,12 @@ This is an attempt-level circuit breaker, not an issue-level failure. The issue 
 
 ## No-progress PR retirement (owner-authorized)
 
+> **Known policy/runtime mismatch:** the owner-authorized threshold below is
+> three trusted records, while the installed runtime setting
+> `FACTORY_NO_DIFF_RETRY_LIMIT` currently defaults to four. Preserve the owner
+> policy and repair the runtime/settings through the authorized automation
+> process; documentation work must not silently change either value.
+
 Three trusted \`repair-no-persisted-change-handoff\` records on the **same unchanged
 PR head**, across the review/changes-requested handoff, exhaust that implementation
 attempt. The serialized dispatcher must close the PR and immediately return its
