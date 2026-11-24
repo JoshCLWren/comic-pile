@@ -211,7 +211,7 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   } finally {
     await foreignContext.close()
   }
-  expect(await getReadingList(page, deletedList.id)).toEqual(deletedList)
+  expect(await getReadingList(page, deletedList.id)).toEqual(beforeDeletedList)
 
   await page.goto(`/reading-lists/${deletedList.id}`)
   await expect(page.getByLabel('Name')).toHaveValue(deletedList.name)
