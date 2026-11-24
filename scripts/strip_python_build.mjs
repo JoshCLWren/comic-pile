@@ -15,13 +15,14 @@ export const PYTHON_BUILD_SRC = 'api/index.py';
 export const RETIRED_ISSUE_BUILD_SRC = 'api/native_issue.rs';
 export const RETIRED_ISSUE_DEST = '/api/native_issue.rs';
 export const RETIRED_ISSUE_HEALTH_SRC = '/api/_native_issue/health';
-export const NATIVE_DEST = '/api/native_roll.rs';
 
 /** Consolidate the retired second Rust function (#5733). The generators
  * preserve baseline natives and `builds` verbatim, so this removes the
- * `api/native_issue.rs` build and its internal health probe, and retargets
- * the remaining Issue routes to the single `api/native_roll.rs` function
- * (dropping exact duplicates the retarget creates). Idempotent.
+ * `api/native_issue.rs` build and every route that targets it (the internal
+ * health probe and the two Issue ingress routes). The catch-all already
+ * sends those requests to `api/native_roll.rs`, so dropping the routes keeps
+ * the output identical to what the generators emit and keeps `--check`
+ * stable. Idempotent.
  */
 export function withoutRetiredIssueFunction(document) {
   const hasBuild = Array.isArray(document.builds)
@@ -35,17 +36,8 @@ export function withoutRetiredIssueFunction(document) {
     result.builds = document.builds.filter(build => build.src !== RETIRED_ISSUE_BUILD_SRC);
   }
   if (hasRoutes) {
-    const seen = new Set();
-    result.routes = document.routes
-      .filter(route => route.src !== RETIRED_ISSUE_HEALTH_SRC)
-      .map(route => route.dest === RETIRED_ISSUE_DEST ? {...route, dest: NATIVE_DEST} : route)
-      .filter(route => {
-        if (route.dest !== NATIVE_DEST) return true;
-        const key = JSON.stringify([route.src, route.methods ?? null]);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+    result.routes = document.routes.filter(route => route.dest !== RETIRED_ISSUE_DEST
+      && route.src !== RETIRED_ISSUE_HEALTH_SRC);
   }
   return result;
 }
