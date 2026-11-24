@@ -732,30 +732,44 @@ pub(crate) async fn rebuild_plan_issues_from_nodes_json(
     tx: &tokio_postgres::Transaction<'_>,
     plan_id: i32,
 ) -> Result<(), ApiError> {
-    let row = tx
-        .query_opt(
-            "SELECT nodes_json FROM continuity_plans WHERE id = $1 FOR UPDATE",
-            &[&plan_id],
+    rebuild_plan_issues_from_nodes_json_batch(tx, &[plan_id]).await
+}
+
+/// Rebuild authored Plan membership for a bounded set in one delete and one
+/// set-based upsert. Callers already hold the reader/continuity write locks.
+async fn rebuild_plan_issues_from_nodes_json_batch(
+    tx: &tokio_postgres::Transaction<'_>,
+    plan_ids: &[i32],
+) -> Result<(), ApiError> {
+    if plan_ids.is_empty() {
+        return Ok(());
+    }
+
+    let rows = tx
+        .query(
+            "SELECT id, nodes_json FROM continuity_plans \
+             WHERE id = ANY($1) ORDER BY id FOR UPDATE",
+            &[&plan_ids],
         )
         .await
         .map_err(db::query_error)?;
-    let Some(row) = row else {
-        return Ok(());
-    };
-    let nodes_json: Value = row
-        .try_get::<_, Value>(0)
-        .unwrap_or(Value::Array(Vec::new()));
-    let nodes = nodes_json.as_array().cloned().unwrap_or_default();
-
     tx.execute(
-        "DELETE FROM reading_plan_issues WHERE plan_id = $1",
-        &[&plan_id],
+        "DELETE FROM reading_plan_issues WHERE plan_id = ANY($1)",
+        &[&plan_ids],
     )
     .await
     .map_err(db::query_error)?;
 
-    let mut seen_issue_ids: std::collections::HashSet<i32> = std::collections::HashSet::new();
-    for node in &nodes {
+    let mut rebuilt = Vec::new();
+    for row in &rows {
+        let plan_id: i32 = row.get(0);
+        let nodes_json: Value = row
+            .try_get::<_, Value>(1)
+            .unwrap_or(Value::Array(Vec::new()));
+        let nodes = nodes_json.as_array().cloned().unwrap_or_default();
+        let mut seen_issue_ids: std::collections::HashSet<i32> = std::collections::HashSet::new();
+
+        for node in &nodes {
         if node.get("node_type").and_then(Value::as_str) != Some("issue") {
             continue;
         }
@@ -825,15 +839,35 @@ pub(crate) async fn rebuild_plan_issues_from_nodes_json(
             Some(Value::Object(meta))
         };
 
+            rebuilt.push(serde_json::json!({
+                "plan_id": plan_id,
+                "occurrence_id": occurrence_id,
+                "issue_id": issue_id,
+                "lane_id": lane_id,
+                "display_position": display_position,
+                "label": label,
+                "reader_role": reader_role,
+                "reader_optional": reader_optional,
+                "is_checkpoint": is_checkpoint,
+                "source_metadata_json": source_metadata_json,
+            }));
+        }
+    }
+
+    if !rebuilt.is_empty() {
         tx.execute(
             "INSERT INTO reading_plan_issues \
-             (plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb) \
-             ON CONFLICT (plan_id, occurrence_id) DO UPDATE SET \
-               issue_id = EXCLUDED.issue_id, lane_id = EXCLUDED.lane_id, display_position = EXCLUDED.display_position, \
-               label = EXCLUDED.label, reader_role = EXCLUDED.reader_role, reader_optional = EXCLUDED.reader_optional, \
-               is_checkpoint = EXCLUDED.is_checkpoint, source_metadata_json = EXCLUDED.source_metadata_json",
-            &[&plan_id, &occurrence_id, &issue_id, &lane_id, &display_position, &label, &reader_role, &reader_optional, &is_checkpoint, &source_metadata_json],
+              (plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json) \
+              SELECT plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json \
+              FROM jsonb_to_recordset($1::jsonb) AS rebuilt(\
+                plan_id integer, occurrence_id text, issue_id integer, lane_id text, \
+                display_position integer, label text, reader_role text, reader_optional boolean, \
+                is_checkpoint boolean, source_metadata_json jsonb) \
+              ON CONFLICT (plan_id, occurrence_id) DO UPDATE SET \
+                issue_id = EXCLUDED.issue_id, lane_id = EXCLUDED.lane_id, display_position = EXCLUDED.display_position, \
+                label = EXCLUDED.label, reader_role = EXCLUDED.reader_role, reader_optional = EXCLUDED.reader_optional, \
+                is_checkpoint = EXCLUDED.is_checkpoint, source_metadata_json = EXCLUDED.source_metadata_json",
+            &[&Value::Array(rebuilt)],
         )
         .await
         .map_err(db::query_error)?;
