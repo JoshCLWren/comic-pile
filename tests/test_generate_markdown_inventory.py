@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 from scripts.generate_markdown_inventory import (
     InventoryRow,
+    _content_disposition,
+    _linked_markdown_targets,
     default_disposition,
     render_markdown,
     tracked_markdown_files,
@@ -39,7 +41,7 @@ def test_default_disposition_preserves_code_coupled_docs() -> None:
 
     assert agents_action == "keep"
     assert prompt_action == "keep"
-    assert changelog_action == "keep"
+    assert changelog_action == "historical — preserve"
     assert skill_action == "keep"
 
 
@@ -66,7 +68,7 @@ def test_issue_plans_are_marked_for_archive() -> None:
     """Completed issue plans should not silently remain active documentation."""
     _, overlap, action, replacement = default_disposition("docs/issue-plans/123.md")
 
-    assert action == "archive"
+    assert action == "historical — preserve"
     assert "implementation history" in overlap
     assert replacement == "Git history or ComicPile Wiki historical decisions"
 
@@ -82,12 +84,34 @@ def test_legacy_root_docs_receive_explicit_dispositions() -> None:
     assert "Wiki troubleshooting" in rollback_replacement
 
 
-def test_human_facing_docs_receive_wiki_disposition() -> None:
-    """Narrative docs must have a final Wiki disposition rather than 'review'."""
+def test_unknown_docs_require_content_classification() -> None:
+    """Unlinked narrative docs must not be moved to the Wiki automatically."""
     _, _, action, replacement = default_disposition("docs/FEATURE_OVERVIEW.md")
 
-    assert action == "move to Wiki"
-    assert replacement == "ComicPile Wiki"
+    assert action == "review — classify"
+    assert replacement == "Canonical docs hub / ComicPile Wiki"
+
+
+def test_explicit_historical_marker_overrides_active_default() -> None:
+    """Point-in-time records stay historical even when linked from the docs hub."""
+    overlap, action, replacement = _content_disposition(
+        "docs/EXAMPLE.md",
+        "# Example\n\n<!-- docs-path-check: historical -->\n",
+        "keep",
+    )
+
+    assert action == "historical — preserve"
+    assert "provenance" in overlap
+    assert "Git history" in replacement
+
+
+def test_canonical_entry_point_links_are_discovered() -> None:
+    """The inventory recognizes active contracts linked from root/docs hubs."""
+    linked = _linked_markdown_targets(Path.cwd())
+
+    assert "docs/ARCHITECTURE.md" in linked
+    assert "docs/DEPLOYMENT.md" in linked
+    assert "docs/READING_LIST_RUNTIME.md" in linked
 
 
 def test_render_markdown_includes_required_audit_columns_and_escapes_pipes() -> None:

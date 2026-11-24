@@ -229,11 +229,8 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
     if path.startswith("docs/issue-plans/"):
         return (
             "Implementation plan retained for a specific GitHub issue.",
-            (
-                "Potentially historical after the issue closes; preserve as implementation "
-                "history rather than active guidance."
-            ),
-            "archive",
+            "Implementation history; preserve rather than treating it as active guidance.",
+            "historical — preserve",
             "Git history or ComicPile Wiki historical decisions",
         )
     if path.startswith("docs/"):
@@ -268,11 +265,20 @@ def build_inventory() -> list[InventoryRow]:
     """Build inventory rows covering every tracked Markdown source file.
 
     Returns:
-        One inventory row for each tracked Markdown source path.
+        One inventory row for each tracked Markdown source path. The generated
+        inventory itself is excluded so regeneration remains idempotent.
     """
+    root = Path(__file__).resolve().parents[1]
+    linked = _linked_markdown_targets(root)
     rows: list[InventoryRow] = []
     for path in tracked_markdown_files():
         purpose, overlap, action, replacement = default_disposition(path)
+        text = (root / path).read_text(encoding="utf-8")
+        overlap, action, replacement = _content_disposition(path, text, action)
+        if path in linked and action == "review — classify":
+            action = "keep"
+            overlap = "Linked from a canonical entry point; keep versioned with the code."
+            replacement = "—"
         rows.append(
             InventoryRow(
                 path=path,
