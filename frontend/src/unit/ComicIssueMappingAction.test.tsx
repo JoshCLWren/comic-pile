@@ -6,7 +6,7 @@
  * runs only on demand, and provider-only entries never hit the owner-scoped
  * mapping mutation.
  */
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, renderHook, act } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IssueIdentityResponse } from '../services/api-comicvine'
 import { queryClient } from '../query/queryClient'
@@ -262,5 +262,54 @@ describe('ComicIssueMappingAction', () => {
     expect(screen.queryByTestId('comic-mapping-change')).not.toBeInTheDocument()
     expect(screen.queryByTestId('comic-mapping-remove')).not.toBeInTheDocument()
     await waitFor(() => expect(onMapped).toHaveBeenCalled())
+  })
+
+  it('ignores close while a mapping removal is in flight', async () => {
+    let resolveRemoval!: (value: IssueIdentityResponse) => void
+    removeIdentitySpy.mockImplementation(
+      () => new Promise<IssueIdentityResponse>((resolve) => { resolveRemoval = resolve }),
+    )
+
+    render(
+      <ComicIssueMappingAction
+        issueId={77}
+        threadTitle="Hellboy in Hell"
+        issueNumber="1"
+        initialIdentity={MAPPED}
+      />,
+    )
+
+    fireEvent.click(screen.getByTestId('comic-mapping-remove'))
+    fireEvent.click(await screen.findByText('Remove mapping'))
+    await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.getByTestId('remove-comicvine-mapping-dialog')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Removing…' })).toBeDisabled()
+
+    resolveRemoval(UNMAPPED)
+    await waitFor(() =>
+      expect(screen.queryByTestId('remove-comicvine-mapping-dialog')).not.toBeInTheDocument(),
+    )
+  })
+
+  it('shows a fallback message when mapping removal throws a non-Error value', async () => {
+    removeIdentitySpy.mockRejectedValue('boom')
+
+    render(
+      <ComicIssueMappingAction
+        issueId={77}
+        threadTitle="Hellboy in Hell"
+        issueNumber="1"
+        initialIdentity={MAPPED}
+      />,
+    )
+
+    fireEvent.click(screen.getByTestId('comic-mapping-remove'))
+    fireEvent.click(await screen.findByText('Remove mapping'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not remove the ComicVine mapping.',
+    )
   })
 })
