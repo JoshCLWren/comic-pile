@@ -4,19 +4,19 @@ Issue: [#1483](https://github.com/JoshCLWren/comic-pile/issues/1483) (epic [#147
 
 This is the broader P1/P2 Chromium regression lane. It runs on a daily
 schedule and on explicit manual dispatch — it is **not** a required
-pull-request gate. The required P0 PR gate is separate (`playwright.p0.config.ts`).
+pull-request gate. The required P0 PR gate is separate
+(`frontend/playwright.p0.config.ts`).
 
 ## Coverage source of truth
 
 `docs/e2e-behavior-inventory.yaml` is the single source of truth. Every
 `covered` behavior lists the Playwright spec files (basenames under
-`frontend/src/test/`) that own its scenario ID, and the selector:
+`frontend/src/test/`) that own its scenario ID. The selector resolves a priority
+scope to that spec list:
 
 ```bash
 python3 scripts/e2e_regression_select.py --scope p1-p2 --output selection.json
 ```
-
-resolves a priority scope to that spec list:
 
 | Scope | Priorities | Typical use |
 | --- | --- | --- |
@@ -38,30 +38,20 @@ make verify-e2e-regression SCOPE=all  # full inventory sweep
 pnpm --filter frontend run test:e2e:regression -- --scope p0 --list
 ```
 
-Prerequisites mirror the normal Playwright suite: one origin must serve on
-`BASE_URL` (default `http://127.0.0.1:9000`) with a reachable database, and
-the backend must run with `TEST_ENVIRONMENT=true` so the disposable test
-database uses the browser-suite contract (rate limits disabled — the fixture
-layer registers users and creates data at test speed, exactly like
-`docker-compose.test.yml` does for `api-test`).
+Build the frontend before Playwright. The suite needs one same-origin server at
+`BASE_URL` (default `http://127.0.0.1:9000`), a disposable migrated PostgreSQL
+database, the native Rust service and the local ingress helper. Redis and a
+Python application server are not part of this runtime.
 
-**One database for both runtimes.** In test mode Python settings prefer
-`TEST_DATABASE_URL` over `DATABASE_URL`, and the tracked `.env.test` supplies a
-`TEST_DATABASE_URL` on `:5437`. When you point `DATABASE_URL` at another port
-(or a private slot), pin `TEST_DATABASE_URL` to that same database too —
-otherwise Python and the native service register fixtures in different
-databases. The CI workflow pins `DATABASE_URL`, `TEST_DATABASE_URL` and
-`RUST_ROLL_DATABASE_URL` to the same disposable endpoint; see the
-`e2e-chromium-regression` skill for the local slot-safe command. This is a
-fixture/CI contract only — application database-precedence behavior is
-unchanged.
+Use the slot-safe commands in
+[`.agents/skills/e2e-chromium-regression/SKILL.md`](../.agents/skills/e2e-chromium-regression/SKILL.md)
+when other local sessions may be running. Set `TEST_ENVIRONMENT=true` so the
+native auth limiter permits fixture-speed user registration. Never point
+`RUST_ROLL_DATABASE_URL` or `MIGRATE_DATABASE_URL` at production.
 
-Native v2 resources are real production paths, so the same-origin server must
-route `/api/v2/*` to the Rust service and everything else to FastAPI. The CI
-workflow uses `scripts/e2e_native_ingress.py` (Python on `:9001`, native Roll on
-`:8010`, ingress on `:9000`) and gives both processes the same `SECRET_KEY`
-through `ENVIRONMENT=test`. Without that routing, Queue and Roll fail with the
-native path's 404/401 rather than exercising the product.
+`scripts/e2e_native_ingress.py` is test/dev tooling, not an application route or
+a deployed compatibility fallback. It serves `static/react` and proxies every
+`/api/*` request to the native service, matching the production Rust ingress.
 
 ## CI workflow
 
@@ -70,20 +60,20 @@ native path's 404/401 rather than exercising the product.
 - **Schedule:** daily at 04:47 UTC.
 - **Dispatch:** Actions → *E2E Chromium Regression* → *Run workflow* with a
   `scope` (`p1-p2` default) and worker count.
-- The job builds the frontend and native v2 service, applies migrations, starts
-  FastAPI and the native service behind the `:9000` ingress, runs the
+- The job builds the frontend and native Rust service, applies refinery
+  migrations, starts the native service behind the `:9000` ingress, runs the
   inventory-selected suite with Chromium only, and uploads artifacts for every
   run — including failures.
-- A single disposable PostgreSQL database is shared by `DATABASE_URL`,
-  `TEST_DATABASE_URL` and `RUST_ROLL_DATABASE_URL`, so Python and native v2
-  fixtures meet on one database. `tests/test_e2e_chromium_shared_db.py` guards
-  that contract and the preserved schedule/dispatch/permissions shape.
+- One disposable PostgreSQL database is shared through
+  `RUST_ROLL_DATABASE_URL`. The workflow retains the historical
+  `DATABASE_URL` / `TEST_DATABASE_URL` fields as a guarded CI compatibility
+  contract; the native application reads `RUST_ROLL_DATABASE_URL`.
 
 ### Artifacts
 
 | Artifact | Contents |
 | --- | --- |
-| `regression-results-<run>` | `results.json` (structured outcomes), `selection.json` (what ran and why), per-test trace/screenshot/video output, backend log |
+| `regression-results-<run>` | `results.json` (structured outcomes), `selection.json` (what ran and why), per-test trace/screenshot/video output, native and ingress logs |
 | `regression-report-<run>` | HTML report with traces, screenshots, and video attached to failures |
 
 ## Defect path: no auto-ticket creation
@@ -97,17 +87,15 @@ run summary restates the contract.
 A failing run is a *signal*. To turn it into product work:
 
 1. **Reproduce** the failure from the uploaded artifacts (trace + JSON results
-   + backend log) on the recorded head.
+   + native/ingress logs) on the recorded head.
 2. **Reconcile** it against existing open issues, PRs, and closed bug history.
    Search before creating anything.
 3. **Group to one root cause.** Multiple failing tests that share a product
-   behavior or root cause become *one* canonical product bug — not one issue
-   per failed test. Repeated observations of the same regression update or
-   reference that same canonical bug instead of creating duplicates.
-4. **Create normal product work only after reconciliation**, using the
-   repository's standard issue workflow (priority labels, `ralph-status`,
-   factory state machine). That issue then flows through normal backlog
-   selection like any other.
+   behavior or root cause belong in one canonical record, not one ticket per
+   failed test.
+4. **Respect the backlog freeze.** Update an existing authorized issue/PR or
+   record the evidence in its handoff. Do not create a new issue or sub-issue
+   without an explicit interactive owner instruction.
 
 ## Optional Firefox/WebKit diagnostics
 
@@ -122,7 +110,7 @@ When you add or retire Chromium coverage:
 - Add the spec file to the owning behavior's `specs` list (or add a new
   behavior entry with a stable scenario ID).
 - Never edit statuses speculatively: `covered` requires an existing spec file,
-  enforced by `tests/test_e2e_behavior_inventory.py` and by selection failing <!-- docs-path-check: ignore -->
+  enforced by `tests/test_e2e_behavior_inventory.py` and by selection failing
   closed.
 - Scenario IDs are the ownership boundary — cite the inventory IDs your work
   owns so two factories do not build duplicate coverage.
