@@ -143,7 +143,7 @@ def test_factory_workflows_are_thin_callers_of_rotisserie_main() -> None:
     for path, workflow in callers.items():
         assert list(workflow["jobs"]) == ["rotisserie"], path.name
         job = workflow["jobs"]["rotisserie"]
-        assert set(job) <= {"uses", "with", "secrets"}, path.name
+        assert set(job) <= {"cache-mode", "uses", "with", "secrets"}, path.name
         assert REUSABLE.match(job["uses"])["name"] == path.name
         assert job.get("secrets") != "inherit", path.name
         assert "permissions" in workflow, path.name
