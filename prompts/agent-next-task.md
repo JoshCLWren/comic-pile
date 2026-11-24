@@ -1,5 +1,13 @@
 # Agent Next-Task Prompt
 
+> **Superseded:** This local copy describes removed Make targets and an obsolete
+> issue-splitting rule. Use the current upstream
+> [Rotisserie agent-next-task prompt](https://github.com/JoshCLWren/rotisserie/blob/main/factory/prompts/agent-next-task.md),
+> the `local-factory-next-task` skill, `AGENTS.md` and
+> `docs/AUTONOMOUS_FACTORY_POLICY.md`. The text below is historical provenance.
+
+<!-- docs-path-check: historical -->
+
 Work on the next task in this repository.
 
 ## Before editing

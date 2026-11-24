@@ -39,7 +39,7 @@ Model: <resolved model id>
 <what has already been done; current state of the repo/PR/CI>
 
 ## What done looks like
-<specific, verifiable completion criteria — e.g. "all CI checks green", "PR merged", "make pytest passes">
+<specific, verifiable completion criteria — e.g. "all required CI checks green", "PR merged", "focused regression tests pass">
 
 ## Key files
 <files most relevant to the task>

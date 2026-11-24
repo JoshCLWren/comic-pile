@@ -5,124 +5,103 @@ description: Use GitHub Issues as the Comic Pile kanban and execution queue. Tri
 
 # GitHub issue workflow
 
-Use GitHub Issues as the only backlog and status source of truth. Do not maintain a parallel Markdown kanban. Local plan files are implementation references for large issues, not a second status system.
+Use GitHub Issues as the only backlog and status source of truth. Do not maintain
+a parallel Markdown kanban. Local plan files are implementation references, not
+a second status system.
 
 ## Select work
 
-From the repository root, run:
+If the user assigned an issue or PR, verify that target and work on it. Otherwise,
+use the current local-factory selection procedure from the Rotisserie
+`local-factory-next-task` skill and
+[docs/AUTONOMOUS_FACTORY_POLICY.md](../../../docs/AUTONOMOUS_FACTORY_POLICY.md).
+The old `make next-task` / `make start-task` targets do not exist; do not invent
+replacement flags or bypass the controller's ownership checks.
 
-```bash
-make next-task
-```
+Before editing:
 
-Use the issue selected by that command unless the user explicitly names another issue. The selector prefers open issues with `ralph-status:pending`, highest `ralph-priority:*`, and no unresolved issue dependencies. Epics, blocked issues, issues already in progress/review, duplicates, and issues with unresolved dependencies are not selected.
-
-Then read the selected issue body, the files it names, `AGENTS.md`, and
-`docs/ISSUE_EXECUTION_PROTOCOL.md`. For factory work, also read
-[docs/AUTONOMOUS_FACTORY_POLICY.md](../../../docs/AUTONOMOUS_FACTORY_POLICY.md) and the latest canonical resume packet. Do not load unrelated
-comment history. If the issue points to `docs/issue-plans/<number>.md`, read that plan in bounded
-chunks.
+1. Read `AGENTS.md`, the selected issue/PR and
+   [docs/ISSUE_EXECUTION_PROTOCOL.md](../../../docs/ISSUE_EXECUTION_PROTOCOL.md).
+2. For factory work, read the autonomous policy, GitHub visibility contract and
+   the latest canonical resume packet.
+3. Confirm dependencies, manual-only holds, live leases and file ownership.
+4. Preserve unrelated working-tree changes.
 
 ## Start work
 
-Before editing code:
+Use the canonical claim marker and atomic label replacement defined by the
+current factory policy. An issue or PR must have exactly one truthful stage and
+one next-action owner; do not use add-only or sequential remove/add calls.
 
-1. Confirm the issue is open and still eligible.
-2. Confirm dependencies are closed or explicitly non-blocking.
-3. Move the issue to active work. For factory work, replace the complete label set atomically so
-   it contains `factory`, `factory:building`, and exactly one owner label without exposing an
-   intermediate contradictory state:
+Implement only the authorized scope. If required work is outside it, record the
+specific blocker in the existing issue/PR handoff. The Rust-cutover backlog
+freeze prohibits new issues, sub-issues and work splits without an explicit
+interactive owner instruction.
 
-   ```bash
-   gh api --method PUT repos/JoshCLWren/comic-pile/issues/ISSUE/labels \
-     --input /path/to/complete-truthful-label-set.json
-   gh issue comment ISSUE --body "Starting implementation from the repository issue workflow."
-   ```
+Issue work normally produces a ready-for-review PR. After local verification,
+commit and push through the applicable delivery path. Follow the exact-head CI
+and independent-review procedure in
+[local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session/SKILL.md).
+Do not leave completed issue work only in a local working tree, and do not treat
+a PR link with pending CI as ordinary completion.
 
-   Build the JSON label set from the issue's current unrelated labels plus the complete target
-   Ralph status, factory stage, and factory owner. Do not use add-only or sequential label calls.
+For local factory delivery, continue through actual independent review, gated
+merge, authorized deployment and real acceptance. Start an eligible local
+reviewer instead of waiting for scheduled pickup; record actual identity and
+exact-head evidence. Read only ACP checkpoints/model-selection metadata and final
+reports/verdicts, never full logs or transcripts.
 
-4. Make the smallest complete change within the issue scope.
-5. If required work is outside the issue, **do not create a new issue or split the parent**. Record the specific blocker or needed follow-up in the existing issue's canonical resume comment and ask the owner/interactive coordinator for an explicit scope decision. Only an owner-directed interactive session may authorize creating a child ticket during the Rust cutover. Do not create speculative bug, CI, test, or feature tickets simply to clear the current task.
-
-Issue work is expected to produce a pull request. After local verification, commit the
-implementation, push the branch, and open a ready-for-review PR linked to the issue. Do not
-leave completed issue work only in the local working tree. Use a draft PR only when the user
-explicitly requests one. After pushing, follow the **CI completion after every push**
-section in [local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session/SKILL.md): monitor the exact
-head through required CI, repair failures locally, and report the actual result. A PR
-link with "CI pending" is not an ordinary completion boundary.
-
-Continue authorized local factory delivery through actual independent review,
-gated merge, deployment and real acceptance. Do not wait for scheduled review
-when an eligible local reviewer can run: follow
-[the Codex Crouton adapter](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/crouton-factory-codex/SKILL.md) and
-[the executable ACP review path](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/LOCAL_FACTORY_REVIEW.md).
-Record the actual independent reviewer/model/session and exact head; manually
-use the canonical `factory:review` + `factory:local` lease only during active
-local review, then release it. Never invent a controller approval. Read only
-ACP checkpoints/model-selection metadata and final reports/verdicts, not logs.
-Preserve CI, independence, ownership, merge and production authorization gates.
-
-For any Python change, local verification must include the exact CI pair
-`ruff check .` **and** `ty check --error-on-warning` against the whole repo
-(`bash scripts/check-python-ci-lint.sh`). Path-filtered ruff or ty is not a valid CI substitute.
-Ruff-only or pytest-only is not enough: CI fails the required
-type-check job on ty warnings, including `redundant-cast`.
-Do not recast a value after `isinstance` has already narrowed it.
+For any Python change, local verification must include `ruff check .` and
+`ty check --error-on-warning` against the whole repository. `bash scripts/lint.sh`
+runs that pair plus frontend ESLint. The former
+`bash scripts/check-python-ci-lint.sh` target has been removed. Path-filtered
+ruff or ty is not a valid CI substitute.
 
 ## Keep status synchronized
 
-Use these labels:
+Use the lifecycle in [docs/ISSUE_EXECUTION_PROTOCOL.md](../../../docs/ISSUE_EXECUTION_PROTOCOL.md)
+and the factory label state machine:
 
-| State | Label |
+| State | Issue status / factory stage |
 | --- | --- |
-| Ready to implement | `ralph-status:pending` |
-| Actively editing | `ralph-status:in-progress` |
-| Code complete and checks running/passed | `ralph-status:in-review` |
-| Cannot proceed | `ralph-status:blocked` |
-| Completed | `ralph-status:done` |
+| Ready to implement | `ralph-status:pending` / unclaimed executable work |
+| Actively editing | `ralph-status:in-progress` / `factory:building` |
+| Checks running or complete | `ralph-status:validation` / `factory:ci` |
+| Exact head needs review | `ralph-status:in-review` / `factory:review` |
+| Actionable findings | `factory:changes-requested` |
+| Every merge gate satisfied | `ralph-status:in-review` / `factory:ready` |
+| Cannot proceed | `ralph-status:blocked` / `factory:blocked` |
+| Verified complete | `ralph-status:done` after truthful closure |
 
-When blocked, leave the issue open, replace the active label with `ralph-status:blocked`, and comment with the exact blocker and required decision. Do not silently move to another issue.
+Reconcile the complete label set atomically and preserve unrelated labels. When
+blocked, leave the issue open and record the exact decision or external condition
+in the canonical handoff.
 
-When implementation is complete, run all required checks locally. Then move to review:
+Before closure, add the required verification comment: changed files,
+acceptance evidence, commands and results, local versus CI evidence, merge SHA or
+PR number, and any authorized follow-up. Close only after the issue contract is
+actually satisfied.
 
-```bash
-gh issue edit ISSUE --remove-label "ralph-status:in-progress" --add-label "ralph-status:in-review"
-gh issue comment ISSUE --body-file /path/to/verification-comment.md
-```
-
-The verification comment must include changed files, acceptance criteria evidence, commands and results, and follow-up issue numbers.
-
-After the PR merges and acceptance criteria and issue closure are verified:
-
-```bash
-gh api --method PUT repos/JoshCLWren/comic-pile/issues/ISSUE/labels \
-  --input /path/to/complete-done-label-set.json
-gh issue close ISSUE --reason completed
-```
-
-If claimed work remains unfinished when releasing ownership, switching work, reaching a runtime
-limit, or ending the turn, create or update one `<!-- factory-resume:v1 -->` comment in place. Keep
-it compact: current head, hypothesis, files touched, passed/failed checks, next narrow verification,
-remaining action, worker ID, and UTC timestamp. A takeover worker must verify the recorded head and
-discard or update stale claims before acting.
+If claimed work remains unfinished when releasing ownership, switching work or
+ending the turn, update one `<!-- factory-resume:v1 -->` comment in place with
+the current head, hypothesis, files touched, checks, next narrow verification,
+remaining action, worker ID and UTC timestamp.
 
 ## Issue hierarchy
 
-Use GitHub issue links for hierarchy:
-
-- Epic: broad outcome; never selected as the next coding task.
-- Task: independently executable implementation unit.
-- Subtask: narrow prerequisite linked to its parent task.
-
-Put `Part of #NUMBER` and `Depends on #NUMBER` in issue bodies. Add `epic`, `ralph-task`, or `ralph-subtask` labels so the selector can distinguish planning work from executable work.
+Use GitHub issue links for hierarchy. Epic/PRD and manual-only work is not
+ordinary autonomous selection work. Put `Part of #NUMBER` and
+`Depends on #NUMBER` in issue bodies where those relationships are authorized.
+Do not create child tickets or split a large issue during the backlog freeze
+without explicit owner direction.
 
 ## Rules for cheaper agents
 
-- Do not dump issue comment history into context.
-- Do not begin work on an issue without updating its status label.
+- Do not select a new task when the user assigned an existing one.
+- Do not bypass live ownership or factory holds.
 - Do not close an issue without a verification comment.
-- Do not skip tests or use CI as a debugger.
-- Do not push Python changes after only path-filtered `ruff` or pytest. Run `ruff check .` and `ty check --error-on-warning`; ty warnings fail CI. Path-filtered ruff or ty is not a valid CI substitute.
-- If the issue is too large for one run, split it into linked GitHub tasks/subtasks before coding.
+- Do not skip tests, weaken gates or use CI as a local debugger.
+- Do not push Python changes after only path-filtered ruff or pytest. Run the
+  whole-repository ruff/ty pair.
+- If the work cannot safely finish in the current runtime, preserve the blocker
+  and hand off instead of manufacturing partial completion evidence.
