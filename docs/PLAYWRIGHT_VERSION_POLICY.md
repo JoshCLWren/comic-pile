@@ -52,7 +52,7 @@ These are the required Chromium paths that must continue to run:
   `ubuntu-24.04` runner already provides the browser system libraries, so no apt
   access is needed at runtime. The same rule applies to the
   `e2e-chromium-regression` workflow.
-- E2E suite: `make verify-e2e` → `pnpm --filter frontend run test:e2e`.
+- Full E2E suite: `make verify-e2e` → `pnpm --filter frontend run test:e2e` (use focused Playwright specs locally; full suites run in CI unless explicitly requested).
 - P0 Chromium suite: `pnpm --filter frontend run test:e2e:p0`
   (`playwright.p0.config.ts`).
 - Quick/dev E2E: `pnpm --filter frontend run test:e2e:quick`.
