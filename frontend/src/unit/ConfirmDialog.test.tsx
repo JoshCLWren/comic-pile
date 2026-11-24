@@ -56,4 +56,13 @@ describe('ConfirmDialog', () => {
     expect(screen.getByTestId('confirm-delete-custom-cbl-dialog')).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
   })
+
+  it('blocks Escape while pending so the action cannot be dismissed mid-flight', async () => {
+    const user = userEvent.setup()
+    const { props } = renderDialog({ isPending: true, pendingLabel: 'Deleting…' })
+
+    await user.keyboard('{Escape}')
+
+    expect(props.onCancel).not.toHaveBeenCalled()
+  })
 })
