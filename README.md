@@ -106,8 +106,10 @@ DATABASE_URL=postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/co
 
 The Vercel entrypoint also accepts the existing `DATABASE_URL` and `SECRET_KEY`
 names and normalizes supported driver URL forms. The standalone process uses the
-`RUST_ROLL_*` names above. `CORS_ORIGINS` and `ENVIRONMENT` are not read by the
-current native config; use `RUST_ROLL_ENV` and the same-origin Vite proxy. See
+`RUST_ROLL_*` names above. `CORS_ORIGINS` is not read by the current native
+config, and `ENVIRONMENT` does not replace `RUST_ROLL_ENV` for bind/TLS validation
+(the mailer still uses it for production defaults). Use `RUST_ROLL_ENV` and the
+same-origin Vite proxy. See
 `.env.example` and `native/roll-service/src/config.rs` for supported settings.
 
 ### 3. Start PostgreSQL and bootstrap

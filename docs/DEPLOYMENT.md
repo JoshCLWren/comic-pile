@@ -69,7 +69,11 @@ The migration must target the same Neon database that the deployed application w
 
 ### 4. Deploy the application
 
-The maintained hosting target is Vercel. Configure the production environment variables there, including `DATABASE_URL`, `SECRET_KEY`, `ENVIRONMENT=production`, and `CORS_ORIGINS`, then deploy from `main`.
+The maintained hosting target is Vercel. Configure `DATABASE_URL`, `SECRET_KEY`
+and `RUST_ROLL_ENV=production`, then deploy from `main`. `CORS_ORIGINS` is not a
+native configuration input. `ENVIRONMENT=production` is still used by the
+password-reset mailer for sender/origin defaults; it does not replace
+`RUST_ROLL_ENV` for bind/TLS validation.
 
 After deployment, `GET /api/v2/health` verifies process liveness without opening a database connection and returns the `X-ComicPile-API-Runtime: rust` header. Confirm database readiness with a real data request or with the migration planner:
 

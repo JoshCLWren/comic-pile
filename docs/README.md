@@ -35,7 +35,9 @@ What’s New is backed by the release API and Neon release ledger. A dedicated p
 - [Factory GitHub visibility](./FACTORY_GITHUB_VISIBILITY.md): canonical factory labels and GitHub visibility rules.
 - [Historical changelog](changelog.md): frozen pre-release-ledger source retained for provenance and auditability.
 - [Release writer](RELEASE_WRITER.md): post-merge publication and reconciliation contract for the database release ledger.
-- [API documentation](API.md): REST API contracts and examples.
+- [API documentation](API.md): current REST contracts, versioning, ingress and retired surfaces.
+- [Retained v1 contracts](API_V1_CANONICAL.md): native same-path compatibility operations and known contract drift.
+- [CBL catalog API](CBL_CATALOG_API.md): native shared-catalog browse, pagination and error contracts.
 - [React architecture](REACT_ARCHITECTURE.md): frontend architecture, TanStack Query server-state layer, and build structure.
 - [Database save/load](DATABASE_SAVE_LOAD.md): backup, import/export, and recovery procedures.
 - [Historical comic dependencies guide](COMIC_DEPENDENCIES_GUIDE.md): pre-Reading-List provenance; use the Reading List runtime and API contracts for current behavior.

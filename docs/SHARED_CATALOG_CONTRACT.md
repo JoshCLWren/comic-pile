@@ -138,9 +138,8 @@ content other than the two new nullable columns is unchanged.
 
 ## Verification
 
-- Rust tests in `native/roll-service` cover catalog identity invariants,
-  confirmed-only creation, concurrency-safe get-or-create, and additive series
-  linking (`cargo test -p comicpile-roll-service catalog`).
+- No current native Rust suite covers the retired catalog get-or-create service;
+  do not claim `cargo test -p comicpile-roll-service catalog` proves it.
 - The migration runner must plan clean after `up`:
   `cargo run --locked -p comicpile-migrate -- plan`.
 - CI requires a DB-backed HTTP test for every native route module
