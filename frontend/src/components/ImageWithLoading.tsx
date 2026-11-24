@@ -71,11 +71,24 @@ export default function ImageWithLoading({
 }: ImageWithLoadingProps) {
   const [isLoaded, setIsLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
+  const imgRef = useRef<HTMLImageElement | null>(null)
 
   useEffect(() => {
     // Reset state when src changes
     setIsLoaded(false)
     setHasError(false)
+    // Handle cached images that are already complete
+    const img = imgRef.current
+    if (img) {
+      if (img.complete) {
+        if (img.naturalWidth > 0) {
+          setIsLoaded(true)
+        } else {
+          setHasError(true)
+          setIsLoaded(true)
+        }
+      }
+    }
   }, [src])
 
   const imgProps = {
