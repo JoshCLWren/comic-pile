@@ -210,8 +210,8 @@ make dev-native    # native Rust Roll/auth service only, on :8010
 make migrate    # run migrations (refinery runner, native/migrate)
 make db-up      # start local PostgreSQL
 make db-down    # stop local PostgreSQL without deleting data
-make lint       # repository lint/type checks
-make verify-e2e # Chromium browser validation when required (set BASE_URL)
+make lint       # repository static checks + frontend ESLint
+make verify-e2e # full Chromium suite only when explicitly requested (set BASE_URL)
 make tidy       # sweep local generated artifacts
 ```
 

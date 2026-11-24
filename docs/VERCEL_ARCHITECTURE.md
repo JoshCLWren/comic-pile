@@ -71,5 +71,5 @@ The first response must include `X-ComicPile-Frontend: vercel-static`.
 The second must return HTTP 200 with `status: "ok"`, build/process identity fields,
 and `X-ComicPile-API-Runtime: rust`. The production deploy workflow checks the
 revision, package and compiler identity as well as the status. Bare legacy
-health/docs paths must return HTTP 404 at the Rust catch-all without starting a
-database-backed runtime.
+health/docs paths must return HTTP 404 from Vercel's explicit legacy-path rule,
+before the SPA fallback, without starting a database-backed runtime.

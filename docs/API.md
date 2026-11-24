@@ -92,7 +92,7 @@ response schemas, bounds, and status codes come from the generated contracts.
 - Admin JSON/CSV import/export endpoints are absent. Database backup and restore
   are operator procedures in [DATABASE_SAVE_LOAD.md](DATABASE_SAVE_LOAD.md).
 - The former `/docs`, `/redoc`, `/openapi.json`, and bare `/health` URLs return
-  404 at the production Rust catch-all.
+  404 from Vercel's explicit legacy-path rule before the SPA fallback.
 
 ## Authentication and CSRF
 

@@ -152,7 +152,7 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 
 ### Testing
 
-- **Backend**: `cargo test --workspace`, including DB-backed HTTP tests
+- **Backend**: `cargo test -p comicpile-roll-service <filter>` for focused unit and DB-backed HTTP tests; full workspace suites run in CI
 - **Frontend**: Vitest unit tests plus Chromium Playwright E2E
 - **Repository tooling**: focused pytest and Node test files under `tests/`
 - **Contract**: generated OpenAPI freshness check in CI
@@ -241,18 +241,21 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 
 ## Canonical Reader Order
 
-**Decision** (#1619): `continuity_plans` is the canonical reader-owned reading
-plan; `reading_orders` is a legacy compatibility view. New ordering intent
-must target the canonical plan. Legacy orders remain readable and can be
-adopted via the native `POST /api/v2/continuity-plans/from-reading-order`
-without data loss; projection `plan → reading_order` remains only as
-export/migration tooling. Within-series `Issue.position` is never compiled into
-blocking `ContinuityRule` edges unless the user explicitly chooses
-`strict_sequential`. See [READING_PLAN_CANONICAL_MODEL.md](READING_PLAN_CANONICAL_MODEL.md).
+Reading Lists are the canonical reader-owned sequence and the authority for live
+Roll eligibility. Natural Issue position, strict/loose list mode, list-local
+gates, and explicit reader-authored prerequisites determine availability;
+historical dependency rows are audit evidence rather than execution authority.
+Continuity Plans remain a transitional compatibility/editor surface, and legacy
+Reading Orders remain readable/adoptable through the native v2 resources. See
+[READING_LIST_RUNTIME.md](READING_LIST_RUNTIME.md) and
+[READING_LIST_EXECUTION_ADR.md](READING_LIST_EXECUTION_ADR.md). The earlier
+[#1619 model](READING_PLAN_CANONICAL_MODEL.md) is retained as historical design
+provenance, not the current execution authority.
 
 ## Related Documentation
 
-- [READING_PLAN_CANONICAL_MODEL.md](READING_PLAN_CANONICAL_MODEL.md): Canonical reader-order decision record for #1619
+- [READING_LIST_RUNTIME.md](READING_LIST_RUNTIME.md): current canonical Reading List and Roll eligibility behavior
+- [READING_PLAN_CANONICAL_MODEL.md](READING_PLAN_CANONICAL_MODEL.md): historical reader-order decision record for #1619
 - [AGENTS.md](../AGENTS.md): Project guidelines and conventions for coding agents
 - [API.md](API.md): API reference and versioning rules
 - [REACT_ARCHITECTURE.md](REACT_ARCHITECTURE.md): Frontend-specific architecture

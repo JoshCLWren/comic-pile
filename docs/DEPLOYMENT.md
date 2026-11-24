@@ -154,7 +154,7 @@ Do not add Fly.io, Railway, or another maintained hosting target without a new p
 
 ## Local development
 
-Use `make setup` for the local environment and `make dev` for the Vite frontend (`:5173`) and native Rust API (`:8010`). Run `make lint`, the full-repo Ruff/ty pair for Python tooling, focused Rust and frontend tests, and `BASE_URL=http://localhost:5173 make verify-e2e` when browser behavior is affected. Full suites run in CI unless explicitly requested. Local development and GitHub Actions remain independent from production deployment configuration.
+Use `make setup` for the local environment and `make dev` for the Vite frontend (`:5173`) and native Rust API (`:8010`). Run `make lint`, the full-repo Ruff/ty pair for Python tooling, and focused Rust/frontend tests. For browser changes, build and run one focused Chromium spec: `cd frontend && pnpm run build && BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium`. Full suites run in CI unless explicitly requested. Local development and GitHub Actions remain independent from production deployment configuration.
 
 
 ### Automatic deployment repair

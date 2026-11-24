@@ -265,9 +265,10 @@ cd frontend && pnpm run typecheck                # Frontend TypeScript check
 ### E2E Tests (Playwright)
 **⚠️ MUST build frontend first:**
 ```bash
-make verify-e2e                         # Builds + runs TypeScript Playwright tests (set BASE_URL)
-cd frontend && pnpm run test:e2e:quick  # Skip build (faster iteration)
-cd frontend && pnpm run build && pnpm exec playwright test --headed  # Run with browser visible
+cd frontend && pnpm run build
+BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium
+# Full suite only when explicitly requested:
+BASE_URL=http://localhost:5173 make verify-e2e
 ```
 
 **Why build first?** `make verify-e2e` runs the frontend build before Playwright.
@@ -383,11 +384,12 @@ if thread.user_id != current_user.id {
 ```bash
 make setup
 make dev
-BASE_URL=http://localhost:5173 make verify-e2e
+cd frontend && pnpm run build
+BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium
 ```
 
-For the Docker same-origin test topology, run `make docker-test-up` and use
-`BASE_URL=http://localhost:8000 make verify-e2e` instead.
+For the Docker same-origin test topology, run `make docker-test-up`, then from
+`frontend/` use `BASE_URL=http://localhost:8000 pnpm exec playwright test <spec> --project=chromium`.
 
 **Common Commands (from `frontend/`):** `pnpm exec playwright test --project=chromium` (all), `pnpm exec playwright test roll.spec.ts` (single file), `pnpm exec playwright test --ui` (interactive), `pnpm exec playwright test --headed` (browser visible), `pnpm exec playwright test --debug` (debug mode).
 

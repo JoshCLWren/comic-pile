@@ -200,7 +200,7 @@ entire library across all screens. The guard test
   at most one fetch per likely-next chunk plus one Queue first-page data warm-up,
   publicly cancellable, errors swallowed).
 
-Current URL patterns (React Router preserves these):
+Selected current URL patterns (React Router preserves these; `App.tsx` is authoritative):
 
 | URL | Page | Notes |
 |-----|------|-------|
@@ -307,7 +307,7 @@ actions) is documented in [`REACT_INTERACTION_POLICY.md`](REACT_INTERACTION_POLI
 ### Development Mode
 
 ```bash
-pnpm run dev       # or: make dev (native Rust API on :8010, frontend on :5173)
+cd frontend && pnpm run dev  # or: make dev (native Rust API on :8010, frontend on :5173)
 ```
 
 Vite serves `http://localhost:5173` with HMR and proxies `/api` to the native
@@ -368,15 +368,17 @@ disposed on unmount. Geometry and texture rebuild on `sides` / `color` /
 - **Unit tests**: Vitest suites colocated under `frontend/src/unit/` (React
   Testing Library + `msw` for API mocking), plus guard tests that enforce
   architectural invariants (single cache, scroll ownership, bounded thread
-  queries). Run with `cd frontend && pnpm test`.
+  queries). Run focused files with
+  `cd frontend && pnpm exec vitest run <changed-behavior-test-files>`; the full
+  suite and coverage run in CI unless explicitly requested.
 - **Style audit**: `pnpm run test:style-audit` / `audit:style` guard the visual
   grammar; `docs/FRONTEND_VISUAL_GRAMMAR.md` is the canonical contract.
-- **E2E tests**: TypeScript Playwright specs under `frontend/src/test/`. Set
-  `BASE_URL` to the running same-origin server. The Docker/nginx path serves the
-  production build in `static/react/` and therefore requires `pnpm run build`
-  first (`BASE_URL=http://localhost:8000 make verify-e2e` after
-  `make docker-test-up`); the Vite development path can use
-  `BASE_URL=http://localhost:5173`. Chromium is the maintained required target.
+- **E2E tests**: TypeScript Playwright specs under `frontend/src/test/`. Build
+  first, then run a focused Chromium spec against the running same-origin server:
+  `cd frontend && pnpm run build && BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium`.
+  After `make docker-test-up`, use `BASE_URL=http://localhost:8000` with the same
+  focused command. Chromium is the maintained required target; full suites run
+  in CI unless explicitly requested.
 - **Type contract tests**: compile-time Vitest tests keep the alias-bound
   `frontend/src/types.ts` exports identical to the generated OpenAPI schemas.
 - **Backend tests**: Rust integration tests in `native/roll-service` cover the

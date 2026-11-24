@@ -13,8 +13,9 @@ package/compiler identity and runtime marker, as well as a separate rejected-log
 request.
 
 The public bare `/health`, `/docs`, `/redoc` and `/openapi.json` paths return
-**404 at the Rust catch-all**. They do not start a database-backed runtime or
-serve the SPA shell. Use `/api/v2/health` for production liveness, and read the
+**404 from Vercel's explicit legacy-path rule**, before the SPA fallback. They do
+not start a database-backed runtime or serve the SPA shell. Use `/api/v2/health`
+for production liveness, and read the
 checked-in generated contracts
 (`native/contracts/v2-runtime.openapi.json`,
 `frontend/src/generated/openapi.json`) for the API surface.

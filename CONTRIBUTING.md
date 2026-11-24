@@ -30,7 +30,9 @@ existing issue or PR handoff.
 
 ## Pre-commit hook
 
-A pre-commit hook is installed in `.git/hooks/pre-commit` that automatically runs:
+The repository provides pre-commit and pre-push hooks. Install them once per
+checkout with `bash scripts/install-git-hooks.sh` (see
+[`docs/GIT_HOOKS.md`](docs/GIT_HOOKS.md)). The pre-commit hook automatically runs:
 - Check for type/linter ignores in staged files
 - Run the shared lint script (`scripts/lint.sh`)
 
@@ -119,8 +121,9 @@ application runtime to install.
   helpers live in `native/roll-service/src/db.rs`.
 - Add new client resources under `/api/v2/*`. Route ingress is bot-owned
   (`docs/api/route-fragments/*.json`); never hand-edit `vercel.json`.
-- Verify the contract with `pnpm --filter frontend run check:api-types` and run
-  the Rust tests for the route module you changed.
+- Verify the contract with `pnpm --filter frontend run check:api-types` and
+  `node scripts/export_openapi_schema.mjs --check`, then run the Rust tests for
+  the route module you changed.
 
 ### Route fragments and generated routing files
 
@@ -144,9 +147,9 @@ remains valid until the bot lands.
 - Build:           `pnpm --filter frontend run build` (outputs to `static/react/`)
 - Lint:            `pnpm --filter frontend run lint`
 - Unit tests:      `pnpm --filter frontend exec vitest run <file>` (focused, no server needed)
-- E2E tests:       `BASE_URL=http://localhost:5173 make verify-e2e` while `make dev` is running; use `BASE_URL=http://localhost:8000` with `make docker-test-up`
+- E2E tests:       from `frontend/`, run `pnpm run build`, then `BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium` while `make dev` is running; after `make docker-test-up`, use `BASE_URL=http://localhost:8000` with the same focused Playwright command
 
-React components live in `frontend/src/` with JSX syntax. Style with Tailwind CSS (mobile-first, touch targets ≥44px).
+React components live in `frontend/src/` as TypeScript/TSX. Style with Tailwind CSS (mobile-first, touch targets ≥44px).
 
 ### Database Migrations
 
@@ -181,7 +184,7 @@ make migrate  # or: cargo run --locked -p comicpile-migrate -- up
 - Frontend unit tests use Vitest (`pnpm --filter frontend exec vitest run <file>`); browser coverage uses Playwright specs in `frontend/src/test/`.
 - Repository tooling tests live in `tests/` and run with focused `uv run python -m pytest tests/test_<name>.py`.
 - Test both success and error paths, including ownership and auth failures.
-- The frontend unit suite enforces the 94% coverage gate in CI; Python coverage thresholds are retired.
+- Frontend coverage thresholds are enforced in CI through `frontend/vitest.config.ts`; Python coverage thresholds are retired.
 
 ## Style guidelines
 

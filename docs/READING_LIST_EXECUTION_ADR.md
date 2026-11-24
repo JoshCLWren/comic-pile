@@ -1,6 +1,6 @@
 # ADR: Reading Lists are the authority for reading sequence and live Roll eligibility
 
-**Status:** Accepted (design decision; implementation pending)  
+**Status:** Accepted; implemented on the Rust v2 stack (see status amendments)  
 **Date:** 2026-10-13  
 **Decision owner:** JoshCLWren  
 **Supersedes:** [Reading Graph ADR](READING_GRAPH_ADR.md) as the target runtime/storage architecture; [2026-10-12 Roll eligibility contract](roll-eligibility-contract.md) where it requires compiling explicit checkpoint edges or rejects strict list order. Existing runtime remains in force **until** the guarded Option E cutover.  
