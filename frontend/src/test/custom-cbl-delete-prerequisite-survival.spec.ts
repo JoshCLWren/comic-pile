@@ -121,12 +121,12 @@ for (const viewport of [{ width: 1280, height: 900 }]) {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(depsResp.ok(), await depsResp.text()).toBeTruthy()
-    // SAFETY: issue dependencies endpoint returns { outgoing: [{ dependency_id, target_issue_id, ... }] }.
+    // SAFETY: outgoing edges encode the other issue in source_issue_* fields per IssueDependencyEdge contract.
     const depsBody = (await depsResp.json()) as {
-      outgoing: Array<{ dependency_id: number; target_issue_id: number }>
+      outgoing: Array<{ dependency_id: number; source_issue_id: number }>
     }
     expect(
-      depsBody.outgoing.some((edge) => edge.dependency_id === dep.id && edge.target_issue_id === targetIssueId),
+      depsBody.outgoing.some((edge) => edge.dependency_id === dep.id && edge.source_issue_id === targetIssueId),
     ).toBe(true)
 
     await page.screenshot({
