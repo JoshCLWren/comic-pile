@@ -75,7 +75,7 @@
   <button class="nav" data-view="health"><span>♡</span> Diagnostics</button>
  </nav>
  <div class="sidebar-bottom"><div><span class="spark">●</span> Hosted factory dashboard</div><strong>GitHub authorizes remote operations. Read-only status is public.</strong><div style="margin-top:7px">No separate worker state or credentials stored in the browser.</div></div>
-<div class="sidebar-bottom" id="hosted-admin"><strong>GitHub operator access</strong><p class="hint">Use your existing GitHub account. Only approved administrators can control the factory.</p><button class="button small" id="github-connect">Sign in with GitHub</button><div class="hint" id="github-identity">Read-only visitor</div></div></aside>
+<div class="sidebar-bottom" id="hosted-admin"><strong>GitHub operator access</strong><p class="hint">Use your existing GitHub account. Only approved administrators can control the factory.</p><button class="button small" id="github-connect">Sign in with GitHub</button><div class="hint" id="github-identity">Read-only visitor</div><div class="hint" id="hosted-live" aria-live="polite"></div></div></aside>
 <main class="main">
  <header class="top"><div><div class="eyebrow">Factory operations</div><h1 class="title" id="page-title">Control room</h1><p class="sub" id="page-sub">Real workers, real claims, and one deliberate place to start work.</p></div><div class="top-actions"><div class="repo" id="repository"></div><span id="operation-status" class="hint" role="status" aria-live="polite"></span><button class="button ghost" id="refresh">↻ Refresh</button></div></header>
  <div role="status" aria-live="polite" class="message" id="message"></div>
@@ -112,272 +112,495 @@
  <section class="view" id="queue"><div class="panel"><div class="panel-header"><div><h2>Issue eligibility</h2><p class="section-desc">Why the dispatcher would or would not pick each issue.</p></div><button class="button small" id="queue-refresh">Refresh queue</button></div><div class="panel-body"><div class="page-controls"><input id="queue-filter" placeholder="Search number or title" aria-label="Filter queue"><select id="queue-state" aria-label="Queue status"><option value="all">All issues</option><option value="ready">Ready</option><option value="held">Not starting</option></select><input id="queue-explain-number" type="number" min="1" step="1" placeholder="Issue #" aria-label="Issue number to explain"><button class="button small" id="queue-explain">Explain</button></div><div id="queue-content" class="empty">Open the queue to load eligibility.</div></div></div>
   <section class="panel spaced"><div class="panel-header"><div><h2>Incidents</h2><p class="section-desc">Free workers go to an incident issue first. Other new intake pauses until it closes. Running work continues.</p></div><button class="button small" id="incidents-refresh">Refresh incidents</button></div><div class="panel-body"><div class="page-controls"><input id="incident-number" type="number" min="1" step="1" placeholder="Issue #" aria-label="Incident issue number"><select id="incident-attempts" aria-label="Fix attempts"><option value="">3 attempts</option><option value="1">1 attempt</option><option value="2">2 attempts</option><option value="4">4 attempts</option><option value="5">5 attempts</option><option value="6">6 attempts</option></select><input id="incident-reason" maxlength="180" placeholder="Reason" aria-label="Incident reason"><button class="button small danger" id="incident-start">Start incident</button></div><div id="incidents-content" class="empty">Open the queue to load incidents.</div></div></section>
   <section class="panel spaced"><div class="panel-header"><div><h2>Pull request workbench</h2><p class="section-desc">Inspect exact-head checks, review eligibility, and conflicts before changing anything.</p></div></div>
-   <div class="panel-body"><div class="page-controls"><input id="pr-number" type="number" min="1" step="1" placeholder="PR number" aria-label="Pull request number"><button class="button small" data-pr-inspect="checks">Checks</button><button class="button small" id="main-checks">Checks on main</button><button class="button small" data-pr-inspect="review">Review gate</button><button class="button small" data-pr-inspect="conflicts">Conflicts</button><button class="button small" id="pr-select">Select for launch</button><button class="button small danger" id="pr-sync">Sync with main</button></div><div id="pr-inspector" class="hint">Choose a PR and an inspection. Sync uses Rotisserie's existing claim protection.</div></div>
+   <div class="panel-body"><div class="page-controls"><input id="pr-number" type="number" min="1" step="1" placeholder="PR number" aria-label="Pull request number"><button class="button small" data-pr-inspect="checks">Checks</button><button class="button small" id="main-checks">Checks on main</button><button class="button small" data-pr-inspect="review">Review gate</button><button class="button small" data-pr-inspect="conflicts">Conflicts</button><button class="button small" id="pr-select">Select for launch</button><button class="button small danger" id="pr-sync">Sync with main</button><button class="button small danger" id="pr-close">Close PR</button></div><div id="pr-inspector" class="hint">Choose a PR and an inspection. Sync uses Rotisserie's existing claim protection.</div></div>
   </section>
   <section class="panel spaced"><div class="panel-header"><div><h2>Item tracker</h2><p class="section-desc">Follow one issue or PR, read its label claim runs and history, or claim it with <code>factory:claimed</code>.</p></div></div>
    <div class="panel-body"><div class="page-controls"><select id="item-kind" aria-label="Item kind"><option value="issue">Issue</option><option value="pr">Pull request</option></select><input id="item-number" type="number" min="1" step="1" placeholder="Number" aria-label="Issue or PR number"><button class="button small" data-item-read="follow">Follow</button><button class="button small" data-item-read="runs">Claim runs</button><button class="button small" data-item-read="history">History</button><button class="button small" data-item-read="estimate">Estimate</button><button class="button small" id="item-estimate-neon">Exact estimate (Neon)</button><button class="button small" id="item-claim">Claim</button><button class="button small danger" id="item-finish">Finish claim</button></div><div id="item-content" class="hint">Claim and Finish claim change the label and return. The label claim controller answers on the item. Estimate counts attempts from GitHub markers; Exact estimate starts a GitHub run that reads Neon history, then shows the result here.</div></div>
   </section></section>
  <section class="view" id="workers"><div class="panel"><div class="panel-header"><div><h2>Workers and claims</h2><p class="section-desc">A request, an assignment, and actual model activity are different stages.</p></div><button class="button small" id="workers-refresh">Refresh workers</button></div><div class="panel-body"><div id="workers-content" class="empty">Loading workers…</div></div></div><section class="panel spaced"><div class="panel-header"><h2>Lease ledger</h2></div><div class="panel-body"><div class="page-controls"><button class="button small" id="leases-refresh">Refresh leases</button><button class="button small danger" id="release-expired">Release expired only</button></div><div id="leases-content"></div></div></section></section>
- <section class="view" id="outcomes"><div class="panel"><div class="panel-header"><div><h2>Run results</h2><p class="section-desc">What workers attempted and whether the requested work was delivered.</p></div><button class="button small" id="outcomes-refresh">Refresh results</button></div><div class="panel-body" id="outcomes-content"></div></div><section class="panel spaced"><div class="panel-header"><h2>Reliability</h2><div class="page-controls"><select id="stats-window"><option value="7d">7 days</option><option value="24h">24 hours</option></select></div></div><div class="panel-body" id="stats-content"></div></section></section>
+ <section class="view" id="outcomes"><div class="panel"><div class="panel-header"><div><h2>Run results</h2><p class="section-desc">What workers attempted and whether the requested work was delivered.</p></div><button class="button small" id="outcomes-refresh">Refresh results</button><button class="button small" id="failures-read">Failed runs</button></div><div class="panel-body" id="outcomes-content"></div></div><section class="panel spaced"><div class="panel-header"><h2>Reliability</h2><div class="page-controls"><select id="stats-window"><option value="7d">7 days</option><option value="24h">24 hours</option></select></div></div><div class="panel-body" id="stats-content"></div></section></section>
  <section class="view" id="models"><div class="panel"><div class="panel-header"><div><h2>Available models</h2><p class="section-desc">Actual model IDs discovered from each provider. Listed does not guarantee quota.</p></div><button class="button small" id="models-refresh">Refresh models</button></div><div class="panel-body"><div class="page-controls"><select id="catalog-provider" aria-label="Filter by provider"><option value="">Loading providers…</option></select><input id="model-search" type="search" placeholder="Find a model…" aria-label="Search models"></div><div id="catalog-summary" class="hint"></div><div id="model-catalog" class="model-list spaced"><div class="empty">Select a provider to see its models.</div></div></div></div>
   <section class="panel spaced"><div class="panel-header"><div><h2>Provider switches</h2><p class="section-desc">The next dispatcher tick skips a provider or model that is off. Running work continues.</p></div></div><div class="panel-body" id="provider-switches"><div class="empty">Loading providers…</div></div></section></section>
  <section class="view" id="settings"><div class="panel"><div class="panel-header"><div><h2>Factory settings</h2><p class="section-desc">Values come from repository variables and factory defaults; updates take effect on the next run.</p></div></div><div class="panel-body" id="settings-content"></div></div></section>
- <section class="view" id="health"><div class="panel"><div class="panel-header"><div><h2>Diagnostics</h2><p class="section-desc">Scheduler freshness, product CI, provider failures and main health.</p></div><button class="button small" id="doctor-refresh">Run checks</button></div><div class="panel-body"><div class="page-controls"><button class="button" id="doctor-fix">Apply safe doctor repairs</button></div><div id="health-content"></div></div></div>
+ <section class="view" id="health"><div class="panel"><div class="panel-header"><div><h2>Diagnostics</h2><p class="section-desc">Scheduler freshness, product CI, provider failures and main health.</p></div><button class="button small" id="doctor-refresh">Run checks</button></div><div class="panel-body"><div class="page-controls"><button class="button" id="doctor-fix">Apply safe doctor repairs</button><button class="button" id="limits-read">GitHub API limits</button><button class="button" id="backoffs-read">Backoffs</button><button class="button danger" id="backoffs-reset">Reset quota backoffs</button></div><div id="limits-content"></div><div id="health-content"></div></div></div>
   <section class="panel spaced"><div class="panel-header"><div><h2>Label doctor</h2><p class="section-desc">Audits claim and lifecycle labels in a GitHub Actions run. A dry run changes nothing.</p></div></div><div class="panel-body"><div class="page-controls"><button class="button" id="labels-dry-run">Start dry run</button><button class="button danger" id="labels-repair">Start repair</button></div><p class="hint">Each button starts a GitHub run and returns. Open the run link to read its report.</p></div></section></section>
- <div class="footer">Rotisserie Control Room · GitHub Pages · Published snapshot · Operator writes use GitHub Actions</div>
+ <div class="footer">Rotisserie Control Room · GitHub Pages · Published snapshot for public views · Live views and operator actions run in GitHub Actions after sign-in</div>
 </main></div>
 <script>
-/* Hosted adapter for the canonical Rotisserie web_ui.html.
- * The public dashboard contains no GitHub credentials. GitHub OAuth runs
- * through the adopter sign-in service; Rotisserie keeps all factory operation safeguards.
- */
 "use strict";
 (function () {
-  const WORKFLOW = "rotisserie-operator.yml";
-  const CACHE_MS = 60000;
-  let snapshotCache = null;
-  let statsCache = null;
+const CONTRACT = {"public_reads": ["doctor", "outcomes", "report", "stats", "status"], "live_reads": ["backoffs", "checks", "conflicts", "estimate", "failures", "follow", "history", "incident", "leases", "limits", "models", "providers", "review", "runs", "settings", "unstick", "why"], "write_operations": ["backoffs_reset", "cancel", "claim", "close", "doctor_fix", "estimate_neon", "finish", "incident_start", "incident_stop", "labels", "model_switch", "prioritize", "provider_switch", "release_expired", "run", "settings", "sync", "unstick"], "max_batch": 8};
+/* Public reads: sanitized snapshots from the factory-status-live branch.
+ * These work without sign-in. They are observations, never live evaluations.
+ */
+const SNAPSHOT_MS = 60000;
+let snapshotCache = null;
+let statsCache = null;
 
-  function rawUrl(name) {
-    return "https://raw.githubusercontent.com/" + REPO + "/factory-status-live/" + name;
+function rawUrl(name) {
+  return "https://raw.githubusercontent.com/" + REPO + "/factory-status-live/" + name;
+}
+async function publicJson(name) {
+  const response = await fetch(rawUrl(name) + "?v=" + Date.now(), { cache: "no-store" });
+  if (!response.ok) throw Error("Published factory data unavailable (" + response.status + ").");
+  return response.json();
+}
+function cached(slot, name) {
+  const current = slot === "snapshot" ? snapshotCache : statsCache;
+  if (current && Date.now() - current.time < SNAPSHOT_MS) return current.value;
+  const value = publicJson(name).catch(error => {
+    if (slot === "snapshot") snapshotCache = null;
+    else statsCache = null;
+    throw error;
+  });
+  if (slot === "snapshot") snapshotCache = { time: Date.now(), value };
+  else statsCache = { time: Date.now(), value };
+  return value;
+}
+async function snapshot() {
+  const result = await cached("snapshot", "factory-status-snapshot.json");
+  if (!result || !result.generated_at || !Array.isArray(result.workers)) {
+    throw Error("The published snapshot has an invalid schema.");
   }
-  async function publicJson(name) {
-    const response = await fetch(rawUrl(name) + "?v=" + Date.now(), { cache: "no-store" });
-    if (!response.ok) throw Error("Published factory data unavailable (" + response.status + ").");
-    return response.json();
-  }
-  function cached(slot, name) {
-    const current = slot === "snapshot" ? snapshotCache : statsCache;
-    if (current && Date.now() - current.time < CACHE_MS) return current.value;
-    const value = publicJson(name).catch(error => {
-      if (slot === "snapshot") snapshotCache = null;
-      else statsCache = null;
-      throw error;
-    });
-    if (slot === "snapshot") snapshotCache = { time: Date.now(), value };
-    else statsCache = { time: Date.now(), value };
-    return value;
-  }
-  async function snapshot() {
-    const result = await cached("snapshot", "factory-status-snapshot.json");
-    if (!result || !result.generated_at || !Array.isArray(result.workers)) {
-      throw Error("The published snapshot has an invalid schema.");
-    }
-    return result;
-  }
-  async function statistics() {
-    const result = await cached("stats", "factory-stats.json");
-    if (!Array.isArray(result.models)) throw Error("Published reliability data is unavailable.");
-    return result;
-  }
-  function asWork(s) {
-    const rows = [];
-    for (const worker of s.workers || []) {
-      if (worker.activity !== "working") continue;
-      const tasks = worker.work && worker.work.length ? worker.work : [{
-        title: worker.persisted_work || "Factory worker",
-        kind: "issue", number: 0
-      }];
-      for (const task of tasks) {
-        rows.push({
-          ref: task.number > 0 ? task.kind + ":" + task.number : "",
-          title: task.title,
-          worker: worker.worker,
-          provider: worker.runtime_source,
-          model: worker.runtime_model,
-          run_url: /^\d+$/.test(String(worker.attempt_run || ""))
-            ? "https://github.com/" + REPO + "/actions/runs/" + worker.attempt_run : null,
-          running_since: worker.updated || null,
-          coding_since: null
-        });
-      }
-    }
-    return rows;
-  }
-  function asFindings(s) {
-    const minutes = Math.max(0, Math.round((Date.now() - Date.parse(s.generated_at)) / 60000));
-    return [
-      {
-        check: "Published snapshot (not a live doctor run)",
-        status: minutes > 30 ? "warn" : "ok",
-        text: "Generated " + minutes + " minutes ago. GitHub schedules can be delayed."
-      },
-      {
-        check: "Observed capacity",
-        status: "info",
-        text: (s.busy_workers || 0) + " workers active, " +
-          (s.executable_slot_capacity || 0) + " executable slots reported."
-      },
-      {
-        check: "Provider availability observation",
-        status: (s.unavailable_candidates || 0) > 0 ? "warn" : "info",
-        text: (s.cooling_candidates || 0) + " cooling, " +
-          (s.unavailable_candidates || 0) + " unavailable candidates. Run local doctor for diagnosis."
-      }
-    ];
-  }
-  async function publicRead(path) {
-    const parsed = new URL(path, location.origin);
-    const name = parsed.pathname.replace(/^\/api\//, "");
-    if (name === "stats" || name === "models" || name === "providers") {
-      const stats = await statistics();
-      if (name === "stats") {
-        const window = parsed.searchParams.get("window") || "7d";
-        if (window !== "7d" && window !== "24h") throw Error("Invalid reliability window.");
-        return {models: stats.models.map(x => {
-          const w = (x.windows || {})[window] || {};
-          const fail = Object.entries(w.failures || {}).sort((a, b) => b[1] - a[1])[0];
-          return {
-            model: x.model, health: x.health?.status || "unverified",
-            runs: w.runs || 0, delivered: w.delivered || 0,
-            failed: w.failed || 0, top_failure: fail ? fail[0] : ""
-          };
-        }).filter(x => x.runs > 0).sort((a, b) => b.delivered - a.delivered || b.runs - a.runs)};
-      }
-      if (name === "providers") {
-        const unique = [...new Set(stats.models.map(x => x.source).filter(Boolean))];
-        return {exit_code: 0, providers: unique.map(p => ({
-          provider: p === "opencode-free" ? "opencode-go" : p,
-          name: p, setup: "published observation"
-        }))};
-      }
-      const requested = parsed.searchParams.get("provider");
-      const source = requested === "opencode-go" ? "opencode-free" : requested;
-      return {
-        exit_code: 0,
-        models: stats.models.filter(x => x.source === source && x.model !== "unclassified")
-          .map(x => ({
-            model: x.model,
-            offered: ["retired", "unavailable"].includes(x.health?.status) ? false : null,
-            track_record: "Published history only. " +
-              ((x.windows || {})["7d"]?.delivered || 0) + " deliveries / " +
-              ((x.windows || {})["7d"]?.runs || 0) + " runs in 7 days"
-          }))
-      };
-    }
-    const s = await snapshot();
-    if (name === "status") return {exit_code: 0, working: asWork(s), generated_at: s.generated_at};
-    if (name === "report") {
-      const cutoff = Date.now() - 12 * 3600000;
-      const merged = (s.merged_prs || []).filter(p => Date.parse(p.merged_at) >= cutoff);
-      return {exit_code: 0, merged, published_at: s.generated_at};
-    }
-    if (name === "doctor") return {exit_code: 0, findings: asFindings(s)};
-    if (name === "outcomes") {
-      return {exit_code: 0, requests: (s.workers || [])
-        .filter(w => w.attempt_outcome)
-        .map(w => ({
-          target: w.persisted_work || "Worker " + w.worker,
-          action: "Last recorded attempt",
-          model: w.runtime_model || "Unknown",
-          decision: w.attempt_outcome,
-          worker_result: w.delivery_outcome || w.attempt_outcome
-        }))};
-    }
-    throw Error(
-      "This requires a live Rotisserie evaluation, not a published snapshot. " +
-      "Use the local control room or the authenticated GitHub operator workflow."
-    );
-  }
-
-  // GitHub performs the interactive sign-in. The adopter's sign-in service
-  // ([dashboard] auth_url) exchanges the code and issues a short-lived
-  // dashboard session. The browser never receives a GitHub personal or OAuth
-  // access token. Without a service the dashboard stays read-only.
-  const AUTH_BASE = "https://comic-pile.vercel.app/api/v2/factory/github";
-  const SESSION_KEY = "rotisserie-github-admin-session";
-  let session = null;
-  let identity = null;
-
-  function disconnect() {
-    session = null; identity = null;
-    try { sessionStorage.removeItem(SESSION_KEY); } catch (_) { /* optional */ }
-    const button = document.getElementById("github-connect");
-    const status = document.getElementById("github-identity");
-    if (button) button.textContent = "Sign in with GitHub";
-    if (status) status.textContent = "Read-only visitor";
-  }
-
-  async function authRequest(path, options = {}) {
-    const response = await fetch(AUTH_BASE + path, {
-      ...options, mode:"cors", credentials:"omit",
-      headers: {
-        "Authorization":"Bearer " + session, "Accept":"application/json",
-        ...(options.headers || {})
-      }
-    });
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      const message = data.detail || "GitHub request failed (" + response.status + ").";
-      if (response.status === 401 || response.status === 403) disconnect();
-      throw Error(message);
-    }
-    return response.json();
-  }
-
-  async function validateSession() {
-    if (!session) return disconnect();
-    try {
-      const profile = await authRequest("/session");
-      identity = profile.login;
-      document.getElementById("github-connect").textContent = "Sign out";
-      document.getElementById("github-identity").textContent =
-        "Signed in with GitHub as " + identity + ". Admin access verified.";
-    } catch (error) {
-      disconnect();
-      document.getElementById("github-identity").textContent =
-        error.message || "GitHub sign-in expired.";
+  return result;
+}
+async function statistics() {
+  const result = await cached("stats", "factory-stats.json");
+  if (!Array.isArray(result.models)) throw Error("Published reliability data is unavailable.");
+  return result;
+}
+function asWork(s) {
+  const rows = [];
+  for (const worker of s.workers || []) {
+    if (worker.activity !== "working") continue;
+    const tasks = worker.work && worker.work.length ? worker.work : [{
+      title: worker.persisted_work || "Factory worker",
+      kind: "issue", number: 0
+    }];
+    for (const task of tasks) {
+      rows.push({
+        ref: task.number > 0 ? task.kind + ":" + task.number : "",
+        title: task.title,
+        worker: worker.worker,
+        provider: worker.runtime_source,
+        model: worker.runtime_model,
+        run_url: /^\d+$/.test(String(worker.attempt_run || ""))
+          ? "https://github.com/" + REPO + "/actions/runs/" + worker.attempt_run : null,
+        running_since: worker.updated || null,
+        coding_since: null
+      });
     }
   }
-
-  function connect() {
-    if (session) return disconnect();
-    if (!AUTH_BASE) {
-      document.getElementById("github-identity").textContent = "Sign-in is not configured.";
-      return;
+  return rows;
+}
+function asFindings(s) {
+  const minutes = Math.max(0, Math.round((Date.now() - Date.parse(s.generated_at)) / 60000));
+  return [
+    {
+      check: "Published snapshot (not a live doctor run)",
+      status: minutes > 30 ? "warn" : "ok",
+      text: "Generated " + minutes + " minutes ago. GitHub schedules can be delayed."
+    },
+    {
+      check: "Observed capacity",
+      status: "info",
+      text: (s.busy_workers || 0) + " workers active, " +
+        (s.executable_slot_capacity || 0) + " executable slots reported."
+    },
+    {
+      check: "Provider availability observation",
+      status: (s.unavailable_candidates || 0) > 0 ? "warn" : "info",
+      text: (s.cooling_candidates || 0) + " cooling, " +
+        (s.unavailable_candidates || 0) + " unavailable candidates. Run local doctor for diagnosis."
     }
-    location.assign(AUTH_BASE + "/start");
-  }
-
-  async function dispatch(body) {
-    if (!session) throw Error("Sign in with GitHub to operate the factory.");
-    if (JSON.stringify(body).length > 4096) throw Error("Factory command too large.");
-    return authRequest("/dispatch", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(body)
-    });
-  }
-
-  function bootstrapSession() {
-    const hash = new URLSearchParams(location.hash.replace(/^#/, ""));
-    const granted = hash.get("rotisserie_session");
-    const error = hash.get("rotisserie_error");
-    if (granted || error) history.replaceState(null,"",location.pathname+location.search);
-    if (error) {
-      disconnect();
-      document.getElementById("github-identity").textContent =
-        error === "not_admin" ? "This GitHub account is not an administrator." :
-          "GitHub sign-in was not completed.";
-      return;
-    }
-    if (granted) {
-      session = granted;
-      try { sessionStorage.setItem(SESSION_KEY,granted); } catch (_) { /* optional */ }
-    } else {
-      try { session = sessionStorage.getItem(SESSION_KEY); } catch (_) { /* optional */ }
-    }
-    if (session) void validateSession();
-    else disconnect();
-  }
-  window.hostedRequest = function (path, body) {
-    if (path === "/api/command" && body) return dispatch(body);
-    if (path.startsWith("/api/") && !body) return publicRead(path);
-    return Promise.reject(Error("Unsupported hosted operation."));
+  ];
+}
+function reliability(stats, window) {
+  if (window !== "7d" && window !== "24h") throw Error("Invalid reliability window.");
+  return {models: stats.models.map(x => {
+    const w = (x.windows || {})[window] || {};
+    const fail = Object.entries(w.failures || {}).sort((a, b) => b[1] - a[1])[0];
+    return {
+      model: x.model, health: x.health?.status || "unverified",
+      runs: w.runs || 0, delivered: w.delivered || 0,
+      failed: w.failed || 0, top_failure: fail ? fail[0] : ""
+    };
+  }).filter(x => x.runs > 0).sort((a, b) => b.delivered - a.delivered || b.runs - a.runs)};
+}
+/* Signed out, the picker shows history only. Historical model IDs are never
+ * offered as choices because only the live CLI knows what is valid now (#207). */
+function historicalProviders(stats) {
+  const unique = [...new Set(stats.models.map(x => x.source).filter(Boolean))];
+  return {exit_code: 0, historical: true, providers: unique.map(p => ({
+    provider: p === "opencode-free" ? "opencode-go" : p,
+    name: p, setup: "published history, sign in for the live list"
+  }))};
+}
+function historicalModels(stats, requested) {
+  const source = requested === "opencode-go" ? "opencode-free" : requested;
+  return {
+    exit_code: 0,
+    historical: true,
+    models: stats.models.filter(x => x.source === source && x.model !== "unclassified")
+      .map(x => ({
+        model: x.model,
+        offered: false,
+        historical: true,
+        track_record: "Published history only. " +
+          ((x.windows || {})["7d"]?.delivered || 0) + " deliveries / " +
+          ((x.windows || {})["7d"]?.runs || 0) + " runs in 7 days"
+      }))
   };
-  document.getElementById("github-connect").addEventListener("click", connect);
-  bootstrapSession();
-})();
+}
+async function publicRead(name, params) {
+  if (name === "stats") return reliability(await statistics(), params.get("window") || "7d");
+  if (name === "providers") return historicalProviders(await statistics());
+  if (name === "models") return historicalModels(await statistics(), params.get("provider"));
+  const s = await snapshot();
+  if (name === "status") return {exit_code: 0, working: asWork(s), generated_at: s.generated_at};
+  if (name === "report") {
+    const cutoff = Date.now() - 12 * 3600000;
+    const merged = (s.merged_prs || []).filter(p => Date.parse(p.merged_at) >= cutoff);
+    return {exit_code: 0, merged, published_at: s.generated_at};
+  }
+  if (name === "doctor") return {exit_code: 0, findings: asFindings(s)};
+  if (name === "outcomes") {
+    return {exit_code: 0, requests: (s.workers || [])
+      .filter(w => w.attempt_outcome)
+      .map(w => ({
+        target: w.persisted_work || "Worker " + w.worker,
+        action: "Last recorded attempt",
+        model: w.runtime_model || "Unknown",
+        decision: w.attempt_outcome,
+        worker_result: w.delivery_outcome || w.attempt_outcome
+      }))};
+  }
+  throw Error("No published snapshot serves " + name + ".");
+}
 
+/* GitHub performs the interactive sign-in. The adopter's sign-in service
+ * ([dashboard] auth_url) exchanges the code and issues a short-lived
+ * dashboard session. The browser never receives a GitHub personal or OAuth
+ * access token. Without a service the dashboard stays read-only.
+ */
+const AUTH_BASE = "https://comic-pile.vercel.app/api/v2/factory/github";
+const SESSION_KEY = "rotisserie-github-admin-session";
+const SIGNED_OUT_HINT = "Read-only visitor. Sign in to use live views and operator actions.";
+let session = null;
+let identity = null;
+const signedOutListeners = [];
+
+function signedIn() {
+  return Boolean(session);
+}
+function onSignedOut(listener) {
+  signedOutListeners.push(listener);
+}
+function setIdentity(text) {
+  const status = document.getElementById("github-identity");
+  if (status) status.textContent = text;
+}
+function disconnect() {
+  session = null; identity = null;
+  try { sessionStorage.removeItem(SESSION_KEY); } catch (_) { /* optional */ }
+  document.body.classList.remove("hosted-signed-in");
+  const button = document.getElementById("github-connect");
+  if (button) button.textContent = "Sign in with GitHub";
+  setIdentity(SIGNED_OUT_HINT);
+  for (const listener of signedOutListeners) listener();
+}
+
+async function authRequest(path, options = {}) {
+  if (!session) throw Error("Sign in with GitHub to use this.");
+  const response = await fetch(AUTH_BASE + path, {
+    ...options, mode:"cors", credentials:"omit",
+    headers: {
+      "Authorization":"Bearer " + session, "Accept":"application/json",
+      ...(options.headers || {})
+    }
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = data.detail || "GitHub request failed (" + response.status + ").";
+    if (response.status === 401 || response.status === 403) {
+      disconnect();
+      setIdentity("GitHub sign-in expired or was refused. Sign in again.");
+      throw Error("Your GitHub sign-in expired or was refused. Sign in again. " + message);
+    }
+    throw Error(message);
+  }
+  return response.json();
+}
+
+async function validateSession() {
+  if (!session) return disconnect();
+  try {
+    const profile = await authRequest("/session");
+    identity = profile.login;
+    document.body.classList.add("hosted-signed-in");
+    document.getElementById("github-connect").textContent = "Sign out";
+    setIdentity("Signed in with GitHub as " + identity + ". Admin access verified.");
+  } catch (error) {
+    disconnect();
+    setIdentity(error.message || "GitHub sign-in expired.");
+  }
+}
+
+function connect() {
+  if (session) return disconnect();
+  if (!AUTH_BASE) {
+    setIdentity("Sign-in is not configured.");
+    return;
+  }
+  location.assign(AUTH_BASE + "/start");
+}
+
+async function dispatchRaw(body) {
+  if (JSON.stringify(body).length > 4096) throw Error("Factory command too large.");
+  return authRequest("/dispatch", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body)
+  });
+}
+
+async function runState(runId) {
+  if (!/^[0-9]{1,20}$/.test(String(runId))) throw Error("The sign-in service returned an invalid run.");
+  return authRequest("/runs/" + runId);
+}
+
+function bootstrapSession() {
+  const hash = new URLSearchParams(location.hash.replace(/^#/, ""));
+  const granted = hash.get("rotisserie_session");
+  const error = hash.get("rotisserie_error");
+  if (granted || error) history.replaceState(null,"",location.pathname+location.search);
+  if (error) {
+    disconnect();
+    setIdentity(error === "not_admin" ? "This GitHub account is not an administrator." :
+      "GitHub sign-in was not completed.");
+    return;
+  }
+  if (granted) {
+    session = granted;
+    try { sessionStorage.setItem(SESSION_KEY,granted); } catch (_) { /* optional */ }
+  } else {
+    try { session = sessionStorage.getItem(SESSION_KEY); } catch (_) { /* optional */ }
+  }
+  if (session) void validateSession();
+  else disconnect();
+}
+
+/* Live reads and writes through the adopter's trusted GitHub operator workflows.
+ * The sign-in service dispatches the request, returns the GitHub run ID, and
+ * reports that run's state and its JSON result artifact. Every request carries
+ * a fresh request ID, and the result must echo it before the page trusts it.
+ */
+const LIVE_TTL_MS = 60000;
+const POLL_MS = 5000;
+const READ_WAIT_MS = 8 * 60000;
+const WRITE_WAIT_MS = 15 * 60000;
+const BATCH_DELAY_MS = 40;
+const liveCache = new Map();
+let pendingReads = [];
+let batchTimer = null;
+
+function newRequestId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return [...bytes].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function liveKey(name, query) {
+  return name + "?" + Object.keys(query).sort().map(k => k + "=" + query[k]).join("&");
+}
+function clearLive() {
+  liveCache.clear();
+}
+function liveLine(text) {
+  const box = document.getElementById("hosted-live");
+  if (box) box.textContent = text;
+}
+function progress(label, run) {
+  const text = label + ": GitHub run " + (run.run_id || "") + " " +
+    String(run.status || "queued").replace(/_/g, " ") + "…";
+  const status = document.getElementById("operation-status");
+  if (label.startsWith("Operator") && status) status.textContent = text;
+  else liveLine(text);
+}
+
+async function waitForRun(accepted, label, limitMs) {
+  const deadline = Date.now() + limitMs;
+  let run = {run_id: accepted.run_id, run_url: accepted.run_url, status: "queued"};
+  for (;;) {
+    progress(label, run);
+    if (run.status === "completed") return run;
+    if (Date.now() > deadline) {
+      throw Error(label + " did not finish in " + Math.round(limitMs / 60000) +
+        " minutes. It may still act. Follow " + (run.run_url || "the GitHub run") + ".");
+    }
+    await new Promise(resolve => setTimeout(resolve, POLL_MS));
+    run = {...run, ...(await runState(accepted.run_id))};
+  }
+}
+
+function needsRunReporting(accepted) {
+  return !accepted || !/^[0-9]{1,20}$/.test(String(accepted.run_id || ""));
+}
+
+function trustedEnvelope(run, requestId, label) {
+  const envelope = run.result;
+  if (!envelope || typeof envelope !== "object") {
+    throw Error(label + " ended (" + (run.conclusion || "unknown") +
+      ") before Rotisserie returned a result. Open " + (run.run_url || "the GitHub run") + ".");
+  }
+  if (envelope.request_id !== requestId) {
+    throw Error(label + " returned a result for another request. Refusing to show it.");
+  }
+  if (envelope.error) throw Error(envelope.error + " (" + (run.run_url || "GitHub run") + ")");
+  return envelope;
+}
+
+async function flushReads() {
+  batchTimer = null;
+  const batch = pendingReads.splice(0, CONTRACT.max_batch);
+  if (pendingReads.length) batchTimer = setTimeout(flushReads, 0);
+  const requestId = newRequestId();
+  const label = "Live read (" + batch.map(item => item.name).join(", ") + ")";
+  try {
+    const accepted = await dispatchRaw({
+      operation: "read", request_id: requestId,
+      reads: batch.map(item => ({name: item.name, query: item.query}))
+    });
+    if (needsRunReporting(accepted)) {
+      throw Error("The sign-in service accepted the read but cannot report GitHub run " +
+        "results yet, so live data is unavailable. Its /runs endpoint is required.");
+    }
+    const run = await waitForRun(accepted, label, READ_WAIT_MS);
+    const envelope = trustedEnvelope(run, requestId, label);
+    const observed = envelope.finished_at || new Date().toISOString();
+    batch.forEach((item, index) => {
+      const answer = (envelope.reads || [])[index];
+      if (!answer || answer.name !== item.name) {
+        item.reject(Error(label + " did not return " + item.name + "."));
+        return;
+      }
+      item.resolve({
+        ...(answer.result || {}),
+        _source: {kind: "live", run_url: run.run_url, observed_at: observed}
+      });
+    });
+    liveLine("Live data from GitHub run " + run.run_id + ", observed " +
+      new Date(observed).toLocaleTimeString() + ".");
+  } catch (error) {
+    for (const item of batch) item.reject(error);
+    liveLine(error.message);
+  }
+}
+
+function liveRead(name, query) {
+  const key = liveKey(name, query);
+  const hit = liveCache.get(key);
+  if (hit && Date.now() - hit.time < LIVE_TTL_MS) return hit.value;
+  const value = new Promise((resolve, reject) => {
+    pendingReads.push({name, query, resolve, reject});
+    if (pendingReads.length >= CONTRACT.max_batch) {
+      clearTimeout(batchTimer);
+      void flushReads();
+    } else if (!batchTimer) batchTimer = setTimeout(flushReads, BATCH_DELAY_MS);
+  }).then(answer => {
+    // A pending answer (an estimate waiting for its Neon run) must be asked again.
+    if (answer && answer.result === "pending" && liveCache.get(key)?.value === value) {
+      liveCache.delete(key);
+    }
+    return answer;
+  }, error => {
+    if (liveCache.get(key)?.value === value) liveCache.delete(key);
+    throw error;
+  });
+  liveCache.set(key, {time: Date.now(), value});
+  return value;
+}
+
+async function checkModel(body) {
+  if (!body.model || body.model === "auto") return;
+  const listing = await liveRead("models", {provider: body.provider});
+  const model = (listing.models || []).find(m => m.model === body.model);
+  if (!model) {
+    throw Error("Model " + body.model + " is not in the live model list for " + body.provider +
+      ". Choose a listed model or Automatic selection.");
+  }
+  if (model.offered === false || model.disabled) {
+    throw Error("Model " + body.model + " is " + (model.disabled ? "turned off" : "unavailable") +
+      " for " + body.provider + ". Choose another model or Automatic selection.");
+  }
+}
+
+async function liveWrite(body) {
+  if (!signedIn()) throw Error("Sign in with GitHub to use this.");
+  if (!CONTRACT.write_operations.includes(body.operation)) {
+    throw Error("The hosted control room does not support " + body.operation + ".");
+  }
+  if (body.operation === "run") await checkModel(body);
+  const requestId = newRequestId();
+  const accepted = await dispatchRaw({...body, request_id: requestId});
+  if (needsRunReporting(accepted)) {
+    return {exit_code: 0, result: "accepted by GitHub. This sign-in service does not report " +
+      "the operator run's outcome yet, so check the repository's Actions page"};
+  }
+  const label = "Operator run";
+  const run = await waitForRun(accepted, label, WRITE_WAIT_MS);
+  const envelope = trustedEnvelope(run, requestId, label);
+  clearLive();
+  const result = envelope.result || {};
+  if (envelope.exit_code !== 0) {
+    throw Error((result.error || result.reason || (result.status ? result.target + ": " +
+      result.status : "Rotisserie returned exit " + envelope.exit_code)) +
+      ". GitHub operator run " + run.run_url + " " + (run.conclusion || "failed") + ".");
+  }
+  return {...result, exit_code: 0, operator: {run_url: run.run_url, conclusion: run.conclusion}};
+}
+
+/* Hosted adapter for the canonical Rotisserie web_ui.html.
+ * The public dashboard contains no GitHub credentials. GitHub OAuth runs
+ * through the adopter sign-in service; Rotisserie keeps all factory operation
+ * safeguards. The builder inlines factory/scripts/hosted/*.js before this file
+ * and injects CONTRACT from src/rotisserie/control_contract.py.
+ */
+const SIGN_IN_NEEDED = "Sign in with GitHub to use this. It needs a live Rotisserie " +
+  "evaluation, which the published snapshot cannot provide.";
+
+function hostedRead(path) {
+  const parsed = new URL(path, location.origin);
+  const name = parsed.pathname.replace(/^\/api\//, "");
+  if (CONTRACT.public_reads.includes(name)) return publicRead(name, parsed.searchParams);
+  if (!CONTRACT.live_reads.includes(name)) return Promise.reject(Error("Unknown read operation."));
+  if (!signedIn()) {
+    if (name === "providers" || name === "models") return publicRead(name, parsed.searchParams);
+    return Promise.reject(Error(SIGN_IN_NEEDED));
+  }
+  const live = liveRead(name, Object.fromEntries(parsed.searchParams));
+  if (name !== "providers" && name !== "models") return live;
+  // An older sign-in service or a missing read caller must not take away the
+  // launcher: fall back to labeled history, which is never selectable.
+  return live.catch(async error => {
+    const history = await publicRead(name, parsed.searchParams);
+    liveLine("Live " + name + " unavailable, showing published history: " + error.message);
+    return {...history, live_error: error.message};
+  });
+}
+
+window.hostedRequest = function (path, body) {
+  if (path === "/api/command" && body) return liveWrite(body);
+  if (path.startsWith("/api/") && !body) return hostedRead(path);
+  return Promise.reject(Error("Unsupported hosted operation."));
+};
+document.addEventListener("click", event => {
+  const button = event.target.closest && event.target.closest("button");
+  if (button && /(^|-)refresh$/.test(button.id || "")) clearLive();
+}, true);
+onSignedOut(clearLive);
+document.getElementById("github-connect").addEventListener("click", connect);
+bootstrapSession();
+
+})();
 </script>
 <script>
 "use strict";
@@ -401,7 +624,7 @@ async function act(body,source){
  if(state.mutating)return;
  state.mutating=true;
  const button=source&&source.tagName==="BUTTON"?source:null;
- const operation=({claim:"Requesting claim",finish:"Finishing claim",labels:"Starting label doctor",incident_start:"Starting incident",incident_stop:"Ending incident",provider_switch:"Switching provider",model_switch:"Switching model",run:"Submitting worker request",unstick:"Preparing recovery",cancel:"Stopping worker",sync:"Synchronizing PR",doctor_fix:"Applying safe repairs",release_expired:"Releasing expired leases",settings:"Saving setting",prioritize:"Setting priority"})[body.operation]||"Applying change";
+ const operation=({claim:"Requesting claim",finish:"Finishing claim",labels:"Starting label doctor",incident_start:"Starting incident",incident_stop:"Ending incident",provider_switch:"Switching provider",model_switch:"Switching model",run:"Submitting worker request",unstick:"Preparing recovery",cancel:"Stopping worker",sync:"Synchronizing PR",doctor_fix:"Applying safe repairs",release_expired:"Releasing expired leases",settings:"Saving setting",close:"Closing pull request",backoffs_reset:"Resetting quota backoffs",prioritize:"Setting priority"})[body.operation]||"Applying change";
  if(button){button.disabled=true;button.classList.add("is-loading");}
  el("operation-status").textContent=operation+"…";
  el("message").className="message";
@@ -421,6 +644,7 @@ async function act(body,source){
    notice((data.kind==="model"?"Model "+data.model:"Provider "+data.provider)+(data.changed?" turned ":" was already ")+(data.enabled?"on.":"off."));
    modelCache.clear();await loadProviders();
   }else notice("Rotisserie reports: "+(data.result||"completed")+".");
+  if(data.operator&&data.operator.run_url)el("message").insertAdjacentHTML("beforeend"," "+link(data.operator.run_url,"GitHub operator run: "+(data.operator.conclusion||"completed")));
   el("operation-status").textContent="Refreshing factory state…";
   await refresh();
  }catch(err){notice(err.message||String(err),true)}
@@ -470,7 +694,7 @@ function renderQueue(){
  issues=issues.filter(x=>{const ready=x.verdict?.status==="ready";return(status==="all"||status==="ready"&&ready||status==="held"&&!ready)&&(String(x.issue).includes(filter)||String(x.title).toLowerCase().includes(filter))});
  const counts=Object.entries(d.not_starting||{}).map(([k,v])=>k.replace(/[-_]/g," ")+": "+v).join(" · ");
  const shown=issues.slice(0,35);
- el("queue-content").innerHTML='<div class="hint" style="margin:4px 0 12px">'+h((d.ready||[]).length)+' ready / '+h(d.open_issues||0)+' open · '+h(counts)+'</div>'+(shown.map(x=>'<div class="item"><div class="item-head"><div><div class="item-title">'+gh("issue:"+x.issue)+' · '+h(x.title)+'</div><div class="meta">'+h(x.verdict?.reasons?.map?.(r=>r.text||r).join("; ")||"")+'</div></div>'+badge(x.verdict?.status||"unknown",x.verdict?.status==="ready"?"good":"")+'</div><div class="item-actions"><button class="button small" data-explain="'+h(x.issue)+'">Why?</button><button class="button small" data-choose="'+h(x.issue)+'">Assign</button><button class="button small ghost" data-prioritize="'+h(x.issue)+'">Priority</button></div></div>').join("")||empty("No issues match."))+(issues.length>shown.length?'<div class="hint">Showing first 35 of '+h(issues.length)+' matches. Refine the search to narrow the list.</div>':"");
+ el("queue-content").innerHTML=sourceNote(d)+'<div class="hint" style="margin:4px 0 12px">'+h((d.ready||[]).length)+' ready / '+h(d.open_issues||0)+' open · '+h(counts)+'</div>'+(shown.map(x=>'<div class="item"><div class="item-head"><div><div class="item-title">'+gh("issue:"+x.issue)+' · '+h(x.title)+'</div><div class="meta">'+h(x.verdict?.reasons?.map?.(r=>r.text||r).join("; ")||"")+'</div></div>'+badge(x.verdict?.status||"unknown",x.verdict?.status==="ready"?"good":"")+'</div><div class="item-actions"><button class="button small" data-explain="'+h(x.issue)+'">Why?</button><button class="button small" data-choose="'+h(x.issue)+'">Assign</button><button class="button small ghost" data-prioritize="'+h(x.issue)+'">Priority</button></div></div>').join("")||empty("No issues match."))+(issues.length>shown.length?'<div class="hint">Showing first 35 of '+h(issues.length)+' matches. Refine the search to narrow the list.</div>':"");
 }
 async function explain(number){try{const d=await get("why",{target:"issue:"+number});notice("#"+number+": "+(d.reasons||[]).join("; ")+(d.error?" · "+d.error:""))}catch(err){notice(err.message,true)}}
 async function loadProviders(){
@@ -519,7 +743,7 @@ async function loadModelOptions(){
   const models=await fetchModels(provider);
   if(seq!==modelRequestSeq||el("provider").value!==provider)return;
   const selectable=models.filter(m=>m.offered!==false);
-  el("model").innerHTML='<option value="auto">Automatic selection (recommended)</option>'+models.map(m=>'<option value="'+h(m.model)+'"'+(m.offered===false?" disabled":"")+'>'+h(m.model)+(m.offered===false?" (unavailable)":m.offered!==true?" (unverified)":"")+'</option>').join("");
+  el("model").innerHTML='<option value="auto">Automatic selection (recommended)</option>'+models.map(m=>'<option value="'+h(m.model)+'"'+(m.offered===false?" disabled":"")+'>'+h(m.model)+(m.historical?" (history only)":m.offered===false?" (unavailable)":m.offered!==true?" (unverified)":"")+'</option>').join("");
   if(selectable.some(m=>m.model===old))el("model").value=old;
  }catch(err){
   if(seq!==modelRequestSeq)return;
@@ -548,11 +772,12 @@ async function loadCatalog(){
   state.catalogModels=models;renderCatalog();
  }catch(err){if(el("catalog-provider").value===provider){el("catalog-summary").textContent="";el("model-catalog").innerHTML=empty("Could not discover models: "+err.message)}}
 }
-async function loadSettings(){el("settings-content").innerHTML=empty("Loading repository settings…");try{const d=await get("settings");el("settings-content").innerHTML=(d.settings||[]).map(s=>'<div class="item"><div class="item-head"><div><div class="item-title">'+h(s.title)+'</div><div class="meta">'+h(s.description)+'<br>'+h(s.name)+' · '+h(s.origin)+'</div></div><div class="item-actions"><input aria-label="'+h(s.title)+'" style="width:85px;padding:9px;background:#111a25;color:#fff;border:1px solid #3b4a5a;border-radius:8px" data-setting-name="'+h(s.name)+'" value="'+h(s.value)+'"><button class="button small" data-save-setting="'+h(s.name)+'">Save</button></div></div></div>').join("")||empty("No settings found.")}catch(err){el("settings-content").innerHTML=empty(err.message)}}
+async function loadSettings(){el("settings-content").innerHTML=empty("Loading repository settings…");try{const d=await get("settings");el("settings-content").innerHTML=sourceNote(d)+(d.settings||[]).map(s=>'<div class="item"><div class="item-head"><div><div class="item-title">'+h(s.title)+'</div><div class="meta">'+h(s.description)+'<br>'+h(s.name)+' · '+h(s.origin)+'</div></div><div class="item-actions"><input aria-label="'+h(s.title)+'" style="width:85px;padding:9px;background:#111a25;color:#fff;border:1px solid #3b4a5a;border-radius:8px" data-setting-name="'+h(s.name)+'" value="'+h(s.value)+'"><button class="button small" data-save-setting="'+h(s.name)+'">Save</button></div></div></div>').join("")||empty("No settings found.")}catch(err){el("settings-content").innerHTML=empty(err.message)}}
 async function loadOutcomes(){try{const d=await get("outcomes");el("outcomes-content").innerHTML=(d.requests||[]).slice(0,40).map(x=>'<div class="item"><div class="item-head"><div><div class="item-title">'+h(x.target||"Next eligible")+' · '+h(x.action||"advance")+'</div><div class="meta">'+h(x.model||"Auto model")+' · '+h(x.decision||"")+'</div></div>'+badge(x.goal||x.worker_result||"Recorded",x.goal==="met"?"good":"")+'</div></div>').join("")||empty("No targeted requests in the selected period.")}catch(err){el("outcomes-content").innerHTML=empty(err.message)}}
 async function loadStats(){try{const d=await get("stats",{window:el("stats-window").value});el("stats-content").innerHTML=(d.models||[]).slice(0,30).map(x=>'<div class="item"><div class="item-head"><div class="item-title">'+h(x.model)+'</div>'+badge(x.health||"recorded",x.health==="paused"?"bad":"")+'</div><div class="meta">'+h(x.delivered)+' PRs delivered / '+h(x.runs)+' runs · '+h(x.failed)+' failed'+(x.top_failure?" · "+h(x.top_failure):"")+'</div></div>').join("")||empty("No model reliability data published.")}catch(err){el("stats-content").innerHTML=empty(err.message)}}
-async function inspectPr(which){const number=el("pr-number").value;if(!/^[1-9][0-9]*$/.test(number)){notice("Enter a valid PR number.",true);return}el("pr-inspector").innerHTML=empty("Inspecting PR #"+number+"…");try{const d=await get(which,{target:"pr:"+number});el("pr-inspector").innerHTML=which==="checks"?renderChecks(ok(d)):raw(d)}catch(err){el("pr-inspector").innerHTML=empty(err.message)}}
+async function inspectPr(which){const number=el("pr-number").value;if(!/^[1-9][0-9]*$/.test(number)){notice("Enter a valid PR number.",true);return}el("pr-inspector").innerHTML=empty("Inspecting PR #"+number+"…");try{const d=await get(which,{target:"pr:"+number});el("pr-inspector").innerHTML=sourceNote(d)+(which==="checks"?renderChecks(ok(d)):raw(d))}catch(err){el("pr-inspector").innerHTML=empty(err.message)}}
 const ok=d=>{if(d.exit_code!==undefined&&d.exit_code!==0)throw Error(d.error||d.reason||"Rotisserie returned "+(d.result||"an error"));return d};
+const sourceNote=d=>d&&d._source?'<div class="hint">Live result from '+link(d._source.run_url,"GitHub Actions run")+' · observed '+h(fmtDate(d._source.observed_at))+'</div>':"";
 const short=sha=>String(sha||"").slice(0,12);
 const runBadge=v=>badge(v,/^(success|reserved|released|already-held|completed)$/.test(v)?"good":/^(failure|conflict|rejected|unavailable)$/.test(v)?"bad":"");
 function renderChecks(d){
@@ -610,14 +835,14 @@ async function estimateNeon(){
  }catch(err){box.innerHTML=empty(err.message)}
 }
 function itemTarget(){const number=el("item-number").value;return /^[1-9][0-9]*$/.test(number)?el("item-kind").value+":"+number:""}
-async function itemRead(which){const t=itemTarget();if(!t){notice("Enter an issue or PR number.",true);return}el("item-content").innerHTML=empty("Reading "+which+" for "+t+"…");try{const d=ok(await get(which,{target:t}));el("item-content").innerHTML=({follow:renderFollow,runs:renderRuns,history:renderHistory,estimate:renderEstimate})[which](d)}catch(err){el("item-content").innerHTML=empty(err.message)}}
+async function itemRead(which){const t=itemTarget();if(!t){notice("Enter an issue or PR number.",true);return}el("item-content").innerHTML=empty("Reading "+which+" for "+t+"…");try{const d=ok(await get(which,{target:t}));el("item-content").innerHTML=sourceNote(d)+({follow:renderFollow,runs:renderRuns,history:renderHistory,estimate:renderEstimate})[which](d)}catch(err){el("item-content").innerHTML=empty(err.message)}}
 function itemWrite(operation,question){const t=itemTarget();if(!t){notice("Enter an issue or PR number.",true);return}if(window.confirm(question+" "+t+"?"))act({operation,target:t},el(operation==="claim"?"item-claim":"item-finish"))}
 const switchText=(off,reason)=>off?"off"+(reason?": "+reason:""):"on";
 const switchAttrs=(provider,model)=>' data-provider="'+h(provider)+'"'+(model?' data-model="'+h(model)+'"':"");
 const switchButton=(off,provider,model)=>off?'<button class="button small"'+switchAttrs(provider,model)+' data-switch-on="1">Turn on</button>':'<button class="button small danger"'+switchAttrs(provider,model)+' data-switch-off="1">Turn off</button>';
 function switchBody(b,enabled,reason){const body={operation:b.dataset.model?"model_switch":"provider_switch",provider:b.dataset.provider,enabled,reason};if(b.dataset.model)body.model=b.dataset.model;return body}
 function renderSwitches(){el("provider-switches").innerHTML=state.providers.length?'<div class="table-wrap"><table class="table"><thead><tr><th>Provider</th><th>Setup</th><th>Switch</th><th>Working</th><th>Action</th></tr></thead><tbody>'+state.providers.map(p=>'<tr><td>'+h(p.provider)+'<small>'+h(p.name)+'</small></td><td>'+h(p.setup)+'</td><td>'+badge(switchText(p.disabled,p.disabled_reason),p.disabled?"bad":"good")+'</td><td>'+h(p.working_now??"")+'</td><td>'+switchButton(p.disabled,p.provider)+'</td></tr>').join("")+'</tbody></table></div>':empty("No providers found.")}
-async function loadLeases(){try{const d=await get("leases");el("leases-content").innerHTML='<div class="hint" style="margin-bottom:12px">Source: '+h(d.source||"unavailable")+' · '+h(d.note||"")+'</div>'+(d.rows||[]).map(x=>'<div class="item"><div class="item-head"><div><div class="item-title">'+h(x.target)+' · '+h(x.holder)+'</div><div class="meta">Expires '+h(x.expires_at||"not recorded")+'</div></div>'+badge(x.active?"Active":"Expired",x.active?"good":"")+'</div></div>').join("")||empty("No lease rows found.")}catch(err){el("leases-content").innerHTML=empty(err.message)}}
+async function loadLeases(){try{const d=await get("leases");el("leases-content").innerHTML=sourceNote(d)+'<div class="hint" style="margin-bottom:12px">Source: '+h(d.source||"unavailable")+' · '+h(d.note||"")+'</div>'+(d.rows||[]).map(x=>'<div class="item"><div class="item-head"><div><div class="item-title">'+h(x.target)+' · '+h(x.holder)+'</div><div class="meta">Expires '+h(x.expires_at||"not recorded")+'</div></div>'+badge(x.active?"Active":"Expired",x.active?"good":"")+'</div></div>').join("")||empty("No lease rows found.")}catch(err){el("leases-content").innerHTML=empty(err.message)}}
 function renderPlan(plan){
  const p=plan||{}, assignments=p.assignments||[], syncs=p.syncs||[],held=p.held||[],problems=p.problems||[],diagnosis=p.diagnosis||[];
  const total=assignments.length+syncs.length;
@@ -692,6 +917,11 @@ el("pr-select").onclick=()=>{const number=el("pr-number").value;if(!/^[1-9][0-9]
 el("pr-sync").onclick=()=>{const number=el("pr-number").value;if(!/^[1-9][0-9]*$/.test(number)){notice("Enter a valid PR number.",true);return}act({operation:"sync",target:"pr:"+number},el("pr-sync"))};
 el("main-checks").onclick=async()=>{el("pr-inspector").innerHTML=empty("Reading checks on main…");try{el("pr-inspector").innerHTML=renderChecks(ok(await get("checks",{target:"main"})))}catch(err){el("pr-inspector").innerHTML=empty(err.message)}};
 el("incidents-refresh").onclick=loadIncidents;
+el("pr-close").onclick=()=>{const number=el("pr-number").value;if(!/^[1-9][0-9]*$/.test(number)){notice("Enter a valid PR number.",true);return}const reason=(window.prompt("Why close PR #"+number+"? The reason is posted as the closing comment, and the issue it delivers closes as not planned.")||"").trim();if(!reason){notice("Give a reason before closing.",true);return}if(window.confirm("Close PR #"+number+" and the issue it delivers?\nReason: "+reason))act({operation:"close",target:"pr:"+number,reason},el("pr-close"))};
+el("failures-read").onclick=async()=>{el("outcomes-content").innerHTML=empty("Reading failed worker runs from the last 10 hours…");try{const d=ok(await get("failures",{since:"10h"}));el("outcomes-content").innerHTML=sourceNote(d)+raw(d)}catch(err){el("outcomes-content").innerHTML=empty(err.message)}};
+el("backoffs-read").onclick=async()=>{el("limits-content").innerHTML=empty("Reading backoffs through the trusted workflow…");try{const d=ok(await get("backoffs"));el("limits-content").innerHTML=sourceNote(d)+raw(d)}catch(err){el("limits-content").innerHTML=empty(err.message)}};
+el("backoffs-reset").onclick=()=>{if(window.confirm("Clear quota and throttle backoffs and cap other streaks at one day? Real-failure streaks stay."))act({operation:"backoffs_reset"},el("backoffs-reset"))};
+el("limits-read").onclick=async()=>{el("limits-content").innerHTML=empty("Reading GitHub API limits…");try{const d=ok(await get("limits"));el("limits-content").innerHTML=sourceNote(d)+raw(d)}catch(err){el("limits-content").innerHTML=empty(err.message)}};
 el("incident-start").onclick=()=>{const number=el("incident-number").value;if(!/^[1-9][0-9]*$/.test(number)){notice("Enter a valid issue number.",true);return}const body={operation:"incident_start",issue:"issue:"+number,reason:el("incident-reason").value.trim()};if(el("incident-attempts").value)body.attempts=el("incident-attempts").value;if(window.confirm("Start an incident on #"+number+"? Free workers go to it first and other new intake pauses."))act(body,el("incident-start"))};
 el("item-claim").onclick=()=>itemWrite("claim","Claim");
 el("item-estimate-neon").onclick=estimateNeon;
