@@ -351,31 +351,30 @@ if thread.user_id != current_user.id {
 
 **Use TypeScript Playwright tests** (in `frontend/src/test/`) for browser automation. Python Playwright tests are NOT supported due to event loop conflicts.
 
-**Running E2E Tests Locally:**
+**Running E2E Tests Locally:** follow [`LOCAL_TESTING.md`](LOCAL_TESTING.md). Build
+the frontend, start the native service plus same-origin ingress against a
+disposable database, and set `BASE_URL` to that ingress. `make docker-test-up`
+serves nginx on `:8000`; the regression ingress defaults to `:9000`. Do not point
+Playwright at the standalone `:8010` API unless the config explicitly uses it.
+
+From `frontend/`, common commands include:
 
 ```bash
-make setup
-make dev
-make verify-e2e
+pnpm exec playwright test --project=chromium
+pnpm exec playwright test roll.spec.ts
+pnpm exec playwright test --ui
 ```
-
-**Common Commands:** `npx playwright test --project=chromium` (all), `npx playwright test roll.spec.ts` (single file), `npx playwright test --ui` (interactive), `npx playwright test --headed` (browser visible), `npx playwright test --debug` (debug mode).
 
 ### API Tests
 
-API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Frontend coverage remains gated in CI; legacy Python product tests are no longer part of required CI during the Rust cutover.
+Native API tests are Rust tests under `native/roll-service/tests/` and module
+`#[cfg(test)]` blocks. DB-backed HTTP tests build the real router and call it with
+`tower::ServiceExt::oneshot` against a disposable migrated PostgreSQL database.
+Set `RUST_ROLL_TEST_DATABASE_URL`; missing configuration fails rather than
+skipping. Test success, auth, ownership, validation and failure paths.
 
-**Key Fixtures (from `tests/conftest.py`)**: <!-- docs-path-check: ignore -->
-```python
-# Authenticated HTTP client
-async def test_example(auth_client, sample_data):
-    response = await auth_client.post("/api/roll/")
-    assert response.status_code == 200
-
-# Database session
-def test_db_example(db):
-    thread = db.get(Thread, 1)
-```
+Python tests under `tests/` cover repository tooling only. They do not use a
+Python application client or ORM fixture.
 
 ### Docker Test Environment
 
@@ -388,7 +387,7 @@ make docker-test-logs   # View logs
 make docker-test-down   # Stop test environment
 ```
 
-Port conflicts: Dev (5435), Test (5437), CI (5432).
+Port conflicts: dev PostgreSQL 5435, test PostgreSQL 5437, CI PostgreSQL 5432, Vite 5173, standalone native API 8010, Docker nginx 8000, regression ingress 9000.
 
 ## Frontend Code Style
 
@@ -552,23 +551,23 @@ bash /path/to/rotisserie/factory/install/overlay.sh .
 GitHub Issues are the backlog and status source of truth. The former Markdown
 kanban is archived and must not be used to determine current status.
 
-Before choosing work, run:
+The old `make next-task` / `make start-task` targets do not exist. For an
+advisory local Ralph-queue view, run:
 
 ```bash
-make next-task
+python3 scripts/next_task.py
 ```
 
-For a complete copy-paste execution prompt, read
-[prompts/agent-next-task.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/prompts/agent-next-task.md).
+That selector does not create a fixed-model lease or replace live ownership
+checks. Scheduled assignments come from the current Rotisserie controller.
 
-**Local factory sessions**: load the [local-factory-next-task](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-next-task) skill
-([local-factory-next-task](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-next-task/SKILL.md)) for the full startup flow — private
-worktree and port-slot claiming (so parallel local agents such as Codex never clobber each
-other's branches, artifacts, or ports), session bootstrap, how `make next-task` orders
-claimable work (priority, then oldest issue number), how to check factory leases (labels,
-claim markers) before claiming so a local session never interferes with the scheduled GitHub
-Action factories, the two-step atomic claim (`make start-task` + full factory label set with
-`factory:local`), and the handoff into the [local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session) skill.
+**Local factory sessions**: load the upstream
+[local-factory-next-task](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-next-task/SKILL.md)
+skill for worktree/port-slot isolation, live lease checks and the adopter's
+atomic claim procedure, then hand off to
+[local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session/SKILL.md).
+Do not invent replacement Make flags or bypass the controller because an
+upstream example still mentions a removed target.
 
 Agents with the `github-issue-kanban` skill should follow that skill. Other
 agents must read `docs/ISSUE_EXECUTION_PROTOCOL.md`, update the selected
