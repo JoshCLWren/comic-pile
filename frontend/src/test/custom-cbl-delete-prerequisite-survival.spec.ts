@@ -1,50 +1,246 @@
-import { test, expect } from '@playwright/test'
-import { getAuthToken, registerUser } from './helpers'
+import { expect, type APIRequestContext, type Page } from '@playwright/test'
+import { test } from './fixtures'
+import { authHeaders, createThread, getFirstIssueId } from './helpers'
+import type { CustomCBL } from '../services/api-custom-cbl'
+import type {
+  CreateDependencyResponse,
+  GetIssueDependenciesResponse,
+  IssueCardsResponse,
+  IssueReadRateResponse,
+  ListActivityResponse,
+} from '../generated/nativeV2Client'
+
+async function createReadingList(
+  page: Page,
+  name: string,
+  issueIds: number[],
+): Promise<CustomCBL> {
+  const response = await page.request.post('/api/v2/reading-lists', {
+    headers: await authHeaders(page),
+    data: {
+      name,
+      description: 'MQA-LIST-004 deletion fixture',
+      mode: 'loose',
+      issue_ids: issueIds,
+      entry_intents: Object.fromEntries(
+        issueIds.map((issueId) => [issueId, { gate: 'none', skipped: false }]),
+      ),
+      checkpoint_issue_ids: [],
+    },
+  })
+  expect(response.status(), await response.text()).toBe(201)
+  // SAFETY: the canonical create endpoint returns the created Reading List contract.
+  return (await response.json()) as CustomCBL
+}
+
+async function getReadingList(page: Page, listId: number): Promise<CustomCBL> {
+  const response = await page.request.get(`/api/v2/reading-lists/${listId}`, {
+    headers: await authHeaders(page),
+  })
+  expect(response.ok(), await response.text()).toBeTruthy()
+  // SAFETY: the canonical detail endpoint returns the Reading List contract.
+  return (await response.json()) as CustomCBL
+}
+
+async function getIssueCard(page: Page, issueId: number): Promise<IssueCardsResponse['items'][number]> {
+  const response = await page.request.post('/api/v2/issues/cards', {
+    headers: await authHeaders(page),
+    data: { issue_ids: [issueId] },
+  })
+  expect(response.ok(), await response.text()).toBeTruthy()
+  // SAFETY: the cards endpoint returns the generated IssueCardsResponse contract.
+  const body = (await response.json()) as IssueCardsResponse
+  const card = body.items.find((item) => item.issue_id === issueId)
+  expect(card).toBeDefined()
+  if (!card) throw new Error(`Issue card ${issueId} was not returned`)
+  return card
+}
+
+async function getIssueHistory(
+  page: Page,
+  issueId: number,
+): Promise<ListActivityResponse['items']> {
+  const response = await page.request.get('/api/v2/activity', {
+    headers: await authHeaders(page),
+    params: { limit: 100 },
+  })
+  expect(response.ok(), await response.text()).toBeTruthy()
+  // SAFETY: the activity endpoint returns the generated ActivityResponse contract.
+  const body = (await response.json()) as ListActivityResponse
+  return body.items.filter((item) => item.issue_id === issueId)
+}
+
+async function getIssueDependencies(
+  page: Page,
+  issueId: number,
+): Promise<GetIssueDependenciesResponse> {
+  const response = await page.request.get(`/api/v2/issues/${issueId}/dependencies`, {
+    headers: await authHeaders(page),
+  })
+  expect(response.ok(), await response.text()).toBeTruthy()
+  // SAFETY: the dependency endpoint returns its generated owner-scoped response contract.
+  return (await response.json()) as GetIssueDependenciesResponse
+}
+
+async function registerForeignHeaders(
+  request: APIRequestContext,
+  suffix: string,
+): Promise<Record<string, string>> {
+  const credentials = {
+    username: `cbl_foreign_${suffix}`,
+    email: `cbl_foreign_${suffix}@example.com`,
+    password: 'CblPrereqTest123!',
+  }
+  const registered = await request.post('/api/v2/auth/register', { data: credentials })
+  expect(registered.ok(), await registered.text()).toBeTruthy()
+  const loggedIn = await request.post('/api/v2/auth/login', {
+    data: { username: credentials.username, password: credentials.password },
+  })
+  expect(loggedIn.ok(), await loggedIn.text()).toBeTruthy()
+  // SAFETY: a successful login returns the bearer token used by this isolated request context.
+  const auth = (await loggedIn.json()) as { access_token: string }
+  const csrfResponse = await request.get('/api/v2/auth/csrf', {
+    headers: { Authorization: `Bearer ${auth.access_token}` },
+  })
+  expect(csrfResponse.ok(), await csrfResponse.text()).toBeTruthy()
+  // SAFETY: the CSRF endpoint returns the token required for the foreign DELETE attempt.
+  const csrf = (await csrfResponse.json()) as { csrf_token: string }
+  return {
+    Authorization: `Bearer ${auth.access_token}`,
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': csrf.csrf_token,
+  }
+}
 
 /**
- * MQA-LIST-004: explicit prerequisite survives list deletion.
- * Verifies that deleting a canonical Reading List does not remove an explicit
- * reader prerequisite created independently of the list.
+ * MQA-LIST-004 / #4186: canonical list deletion is owner-scoped and removes only
+ * that list. A real reader prerequisite, durable read/rating history, and a
+ * second list sharing the same issues must all survive byte-for-byte.
  */
-for (const viewport of [{ width: 1280, height: 900 }]) {
-  test(`MQA-LIST-004 explicit prerequisite survives canonical Reading List deletion at ${viewport.width}px`, async ({ page }, testInfo) => {
-    await page.setViewportSize(viewport)
-    const suffix = `${Date.now()}${viewport.width}`
-    await registerUser(page, { username: `cblprereq${suffix}`, email: `cblprereq${suffix}@example.com`, password: 'CblPrereqTest123!' })
-    const token = await getAuthToken(page)
-    expect(token).toBeTruthy()
-    const csrfResponse = await page.request.get('/api/v2/auth/csrf', { headers: { Authorization: `Bearer ${token}` } })
-    expect(csrfResponse.ok()).toBeTruthy()
-    const csrf = await csrfResponse.json() as { csrf_token: string }
-    const headers = { Authorization: `Bearer ${token}`, 'X-CSRF-Token': csrf.csrf_token }
-
-    // Create a custom CBL to delete
-    const listResponse = await page.request.post('/api/v2/reading-lists', { headers, data: { name: `Prereq Survival List ${suffix}`, issue_ids: [] } })
-    expect(listResponse.ok(), await listResponse.text()).toBeTruthy()
-    const list = await listResponse.json() as { id: number }
-
-    // Open canonical editor
-    await page.goto(`/reading-lists/${list.id}`)
-    await expect(page.getByLabel('Name')).toHaveValue(`Prereq Survival List ${suffix}`)
-
-    // Delete via in-page confirmation
-    const deleteButton = page.getByRole('button', { name: 'Delete', exact: true })
-    await expect(deleteButton).toBeVisible()
-    await deleteButton.click()
-    const dialog = page.getByRole('dialog', { name: 'Delete custom CBL' })
-    await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: 'Delete custom CBL' }).click()
-    await expect(page.getByRole('status')).toContainText('Custom CBL deleted.')
-
-    // Verify list is gone
-    const afterDelete = await page.request.get('/api/v2/reading-lists', { headers })
-    const afterDeleteBody = await afterDelete.json() as Array<{ id: number }>
-    expect(afterDeleteBody.some((item) => item.id === list.id)).toBe(false)
-
-    // Read/rating history is untouched – we only assert list removal and no server error.
-    // Explicit prerequisites are stored independently in dependencies table, not in custom_cbl_lists,
-    // so deletion of the list cannot affect them. The absence of an error and successful list removal
-    // satisfies MQA-LIST-004 survival requirement for the canonical surface.
-    await page.screenshot({ path: testInfo.outputPath('cbl-delete-prerequisite-survival.png'), fullPage: true })
+test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading List deletion', async ({
+  authenticatedPage: page,
+  browser,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  const suffix = `${Date.now()}`
+  const source = await createThread(page, {
+    title: `Prerequisite Source ${suffix}`,
+    format: 'Comics',
+    issues_remaining: 1,
+    total_issues: 1,
   })
-}
+  const target = await createThread(page, {
+    title: `Prerequisite Target ${suffix}`,
+    format: 'Comics',
+    issues_remaining: 1,
+    total_issues: 1,
+  })
+  const sourceIssueId = await getFirstIssueId(page, source.id)
+  const targetIssueId = await getFirstIssueId(page, target.id)
+  const headers = await authHeaders(page)
+
+  const dependencyResponse = await page.request.post('/api/v2/dependencies/', {
+    headers,
+    data: {
+      source_type: 'issue',
+      source_id: sourceIssueId,
+      target_type: 'issue',
+      target_id: targetIssueId,
+    },
+  })
+  expect(dependencyResponse.status(), await dependencyResponse.text()).toBe(201)
+  // SAFETY: dependency creation returns the generated DependencyResponse contract.
+  const dependency = (await dependencyResponse.json()) as CreateDependencyResponse
+  expect(dependency.source_issue_id).toBe(sourceIssueId)
+  expect(dependency.target_issue_id).toBe(targetIssueId)
+
+  const deletedList = await createReadingList(
+    page,
+    `Delete List ${suffix}`,
+    [sourceIssueId, targetIssueId],
+  )
+  const survivingList = await createReadingList(
+    page,
+    `Surviving List ${suffix}`,
+    [sourceIssueId, targetIssueId],
+  )
+
+  const ratingResponse = await page.request.patch(`/api/v2/issues/${targetIssueId}`, {
+    headers,
+    data: {
+      status: 'read',
+      rating: 4.5,
+      idempotency_key: `mqa-list-delete-${targetIssueId}-${suffix}`,
+      source: 'direct',
+    },
+  })
+  expect(ratingResponse.ok(), await ratingResponse.text()).toBeTruthy()
+  // SAFETY: the native issue mutation returns the generated read/rate receipt.
+  const rating = (await ratingResponse.json()) as IssueReadRateResponse
+  expect(rating.read_event_created).toBe(true)
+  expect(rating.rating_event_created).toBe(true)
+  expect(rating.issue).toMatchObject({ issue_id: targetIssueId, status: 'read', rating: 4.5 })
+  expect(rating.issue.read_at).not.toBeNull()
+
+  const beforeCard = await getIssueCard(page, targetIssueId)
+  const beforeHistory = await getIssueHistory(page, targetIssueId)
+  const beforeDependencies = await getIssueDependencies(page, targetIssueId)
+  const beforeSurvivingList = await getReadingList(page, survivingList.id)
+  expect(beforeCard).toEqual(rating.issue)
+  expect(beforeHistory).toHaveLength(1)
+  expect(beforeHistory[0]).toMatchObject({
+    type: 'rate',
+    issue_id: targetIssueId,
+    rating: 4.5,
+  })
+  expect(beforeDependencies.incoming).toContainEqual(expect.objectContaining({
+    dependency_id: dependency.id,
+    source_issue_id: sourceIssueId,
+  }))
+
+  // A foreign owner's failed delete must not partially delete the owner's list.
+  const foreignContext = await browser.newContext({ baseURL: testInfo.project.use.baseURL })
+  try {
+    const foreignHeaders = await registerForeignHeaders(foreignContext.request, suffix)
+    const foreignDelete = await foreignContext.request.delete(
+      `/api/v2/reading-lists/${deletedList.id}`,
+      { headers: foreignHeaders },
+    )
+    expect(foreignDelete.status(), await foreignDelete.text()).toBe(404)
+  } finally {
+    await foreignContext.close()
+  }
+  expect(await getReadingList(page, deletedList.id)).toEqual(deletedList)
+
+  await page.goto(`/reading-lists/${deletedList.id}`)
+  await expect(page.getByLabel('Name')).toHaveValue(deletedList.name)
+  await page.getByRole('button', { name: 'Delete', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Delete custom CBL' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText(deletedList.name)
+  await expect(dialog).toContainText('Read history and ratings for those comics are not changed.')
+
+  const deleteResponsePromise = page.waitForResponse((response) => (
+    response.request().method() === 'DELETE'
+    && new URL(response.url()).pathname === `/api/v2/reading-lists/${deletedList.id}`
+  ))
+  const confirm = dialog.getByRole('button', { name: 'Delete custom CBL' })
+  await confirm.focus()
+  await confirm.press('Enter')
+  const deleteResponse = await deleteResponsePromise
+  expect(deleteResponse.status()).toBe(204)
+  await expect(dialog).toBeHidden()
+  await expect(page.getByRole('status').filter({ hasText: 'Custom CBL deleted.' })).toBeVisible()
+
+  const deletedDetail = await page.request.get(`/api/v2/reading-lists/${deletedList.id}`, { headers })
+  expect(deletedDetail.status()).toBe(404)
+  expect(await getReadingList(page, survivingList.id)).toEqual(beforeSurvivingList)
+  expect(await getIssueCard(page, targetIssueId)).toEqual(beforeCard)
+  expect(await getIssueHistory(page, targetIssueId)).toEqual(beforeHistory)
+  expect(await getIssueDependencies(page, targetIssueId)).toEqual(beforeDependencies)
+
+  await page.screenshot({
+    path: testInfo.outputPath('cbl-delete-prerequisite-survival.png'),
+    fullPage: true,
+  })
+})
