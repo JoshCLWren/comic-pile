@@ -79,18 +79,19 @@ function ImageRequest({
   const [isLoaded, setIsLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
   const imgRef = useRef<HTMLImageElement | null>(null)
-  const settledImageRef = useRef<HTMLImageElement | null>(null)
+  const loadedImageRef = useRef<HTMLImageElement | null>(null)
+  const failedImageRef = useRef<HTMLImageElement | null>(null)
 
   const handleLoad = useCallback((img: HTMLImageElement) => {
-    if (settledImageRef.current === img) return
-    settledImageRef.current = img
+    if (loadedImageRef.current === img) return
+    loadedImageRef.current = img
     setIsLoaded(true)
     onLoad?.(img)
   }, [onLoad])
 
   const handleError = useCallback((img: HTMLImageElement) => {
-    if (settledImageRef.current === img) return
-    settledImageRef.current = img
+    if (failedImageRef.current === img) return
+    failedImageRef.current = img
     setHasError(true)
     setIsLoaded(true)
     onError?.()
