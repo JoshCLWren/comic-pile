@@ -758,13 +758,15 @@ mod tests {
                     (500, 5, 1, "unread", "1"),
                 ]
                 .into_iter()
-                .map(|(id, thread_id, position, status, issue_number)| ReadingIssue {
-                    id,
-                    thread_id,
-                    position,
-                    status: status.into(),
-                    issue_number: issue_number.into(),
-                })
+                .map(
+                    |(id, thread_id, position, status, issue_number)| ReadingIssue {
+                        id,
+                        thread_id,
+                        position,
+                        status: status.into(),
+                        issue_number: issue_number.into(),
+                    },
+                )
                 .collect(),
                 stored: (1..=5)
                     .map(|thread_id| StoredThreadEligibility {
@@ -858,16 +860,21 @@ mod tests {
         assert_eq!(states[&1].blockers[0].waiting_on_issue_ids, vec![201]);
         assert!(states[&2].eligible, "Black Panther #11 stays eligible");
         assert_eq!(states[&2].next_issue_id, Some(200));
-        assert!(states[&3].eligible, "plain loose entries do not gate other series");
-        assert!(states[&4].eligible, "the hold milestone itself is reachable");
+        assert!(
+            states[&3].eligible,
+            "plain loose entries do not gate other series"
+        );
+        assert!(
+            states[&4].eligible,
+            "the hold milestone itself is reachable"
+        );
         assert!(!states[&5].eligible);
         assert_eq!(states[&5].blockers[0].kind, "hold");
         assert_eq!(states[&5].blockers[0].waiting_on_issue_ids, vec![400]);
         assert_eq!(eligible_ids(&validated), vec![200, 300, 400]);
 
-        let gates = crate::reading_blocker_projection::describe_blocker_gates(
-            states[&1].blockers.clone(),
-        );
+        let gates =
+            crate::reading_blocker_projection::describe_blocker_gates(states[&1].blockers.clone());
         assert_eq!(gates.len(), 1);
         assert_eq!(gates[0].described_issue_ids, vec![201]);
         assert_eq!(
@@ -881,7 +888,13 @@ mod tests {
 
         // Reading the named predecessor releases Spider-Man #20 without changing
         // the loose list or retroactively authoring the converted dependency.
-        inputs.core.issues.iter_mut().find(|issue| issue.id == 201).unwrap().status = "read".into();
+        inputs
+            .core
+            .issues
+            .iter_mut()
+            .find(|issue| issue.id == 201)
+            .unwrap()
+            .status = "read".into();
         let validated = ValidatedReadingInputs::new(inputs.clone(), &BTreeMap::new()).unwrap();
         let states = evaluate(&validated).unwrap();
         assert!(states[&1].eligible);
@@ -896,17 +909,32 @@ mod tests {
 
         // Undo restores the predecessor to unread, so the same named handoff is
         // blocked again on the next canonical evaluation.
-        inputs.core.issues.iter_mut().find(|issue| issue.id == 201).unwrap().status = "unread".into();
+        inputs
+            .core
+            .issues
+            .iter_mut()
+            .find(|issue| issue.id == 201)
+            .unwrap()
+            .status = "unread".into();
         let validated = ValidatedReadingInputs::new(inputs.clone(), &BTreeMap::new()).unwrap();
         let states = evaluate(&validated).unwrap();
         assert!(!states[&1].eligible);
         assert_eq!(states[&1].blockers[0].waiting_on_issue_ids, vec![201]);
         assert_eq!(eligible_ids(&validated), vec![200, 300, 400]);
 
-        inputs.core.issues.iter_mut().find(|issue| issue.id == 400).unwrap().status = "read".into();
+        inputs
+            .core
+            .issues
+            .iter_mut()
+            .find(|issue| issue.id == 400)
+            .unwrap()
+            .status = "read".into();
         let validated = ValidatedReadingInputs::new(inputs, &BTreeMap::new()).unwrap();
         let states = evaluate(&validated).unwrap();
-        assert!(states[&5].eligible, "reading the hold milestone releases later entries");
+        assert!(
+            states[&5].eligible,
+            "reading the hold milestone releases later entries"
+        );
         assert_eq!(states[&5].next_issue_id, Some(500));
         assert_eq!(eligible_ids(&validated), vec![200, 300, 500]);
     }

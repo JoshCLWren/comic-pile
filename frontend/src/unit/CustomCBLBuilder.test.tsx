@@ -1036,11 +1036,11 @@ describe('CustomCBLBuilder', () => {
       ],
     })
     mocks.update.mockResolvedValue({
-      ...existingList,
+      ...gatedList,
       updated_at: '2026-09-14T03:10:00Z',
       issue_count: 3,
       entries: [
-        { ...existingList.entries[0], position: 0 },
+        { ...gatedList.entries[0], position: 0 },
         {
           id: 94,
           position: 1,
@@ -1053,15 +1053,15 @@ describe('CustomCBLBuilder', () => {
           gate: 'none',
           skipped: false,
         },
-        { ...existingList.entries[1], position: 2 },
+        { ...gatedList.entries[1], position: 2 },
       ],
     })
     const replacedList = {
-      ...existingList,
+      ...gatedList,
       updated_at: '2026-09-14T03:10:00Z',
       issue_count: 3,
       entries: [
-        { ...existingList.entries[0], position: 0 },
+        { ...gatedList.entries[0], position: 0 },
         {
           id: 94,
           position: 1,
@@ -1074,14 +1074,14 @@ describe('CustomCBLBuilder', () => {
           gate: 'none',
           skipped: false,
         },
-        { ...existingList.entries[1], position: 2 },
+        { ...gatedList.entries[1], position: 2 },
       ],
     }
     // Detail load, then the replacement's stale-review check read the original
     // version; Undo must see the version the replacement wrote.
     mocks.get
-      .mockResolvedValueOnce(existingList)
-      .mockResolvedValueOnce(existingList)
+      .mockResolvedValueOnce(gatedList)
+      .mockResolvedValueOnce(gatedList)
       .mockResolvedValue(replacedList)
 
     renderBuilder()
@@ -1111,7 +1111,7 @@ describe('CustomCBLBuilder', () => {
         entry_intents: {
           26360: { gate: 'none', skipped: false },
           30002: { gate: 'none', skipped: false },
-          30001: { gate: 'none', skipped: false },
+          30001: { gate: 'after_previous', skipped: false },
         },
         checkpoint_issue_ids: [],
       }),
@@ -1128,7 +1128,7 @@ describe('CustomCBLBuilder', () => {
         issue_ids: [26360, 30001],
         entry_intents: {
           26360: { gate: 'none', skipped: false },
-          30001: { gate: 'none', skipped: false },
+          30001: { gate: 'after_previous', skipped: false },
         },
         checkpoint_issue_ids: [],
       }),
