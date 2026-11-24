@@ -1,170 +1,63 @@
-# Python endpoint references for native ports
+# Native API contracts
 
-`roll-bootstrap-v1.openapi.json` is the transitive operation snapshot from
-`frontend/src/generated/openapi.json` at production commit `cdaa74f`, for
-GET `/api/v1/roll/bootstrap` (#4350). It includes nested models, security
-schemes and query defaults. Arrays retain their original ordering. The Python handler and its PostgreSQL-backed port-oracle test were both
-removed by #4397, so this file is a frozen comparison baseline for the native
-port, not a live oracle.
+ComicPile's checked-in OpenAPI documents are generated from Rust `serde` /
+`utoipa` DTOs. They are transport contracts, not hand-maintained route tables.
+The Vercel ingress and frontend service callers must agree with the generated
+operation set.
 
-`issue-v2.openapi.json` is the generated native contract for the new product
-behaviour in #4443: `PATCH /api/v2/issues/{issue_id}` and the bounded
-`POST /api/v2/issues/cards` projection. Regenerate it with:
+## Canonical documents
 
-```sh
-cd native/roll-service
-cargo run --example issue_openapi > ../contracts/issue-v2.openapi.json
-```
+- [`v2-runtime.openapi.json`](v2-runtime.openapi.json) is the aggregate native
+  v2 contract produced by `comicpile_roll_service::openapi::canonical_openapi`.
+- [`same-path-runtime.openapi.json`](same-path-runtime.openapi.json) preserves
+  operations that intentionally keep their original v1 or unversioned HTTP
+  method/path while running in Rust. A v1 URL is not evidence of a Python
+  runtime.
+- [`python-legacy.openapi.json`](python-legacy.openapi.json) is a frozen wire
+  snapshot used only to preserve contracts for retired Python operations. No
+  Python handler is deployed.
+- [`frontend/src/generated/openapi.json`](../../frontend/src/generated/openapi.json)
+  and [`openapi.ts`](../../frontend/src/generated/openapi.ts) are the merged
+  client-facing schema and types. `nativeV2Client.ts` is generated from the
+  native operation set and delegates to the existing frontend `HttpClient`.
 
-The Rust test `checked_in_openapi_contract_is_current` fails when the checked-in
-file drifts from `IssueApi::openapi()`. This is the canonical Rust contract, not
-a FastAPI-generated operation; the coordinated frontend client and caller
-cutover remain #4444/#4337 work.
+The per-domain artifacts (for example `issue-v2`, `threads-v2`, `preferences-v1`
+and `bug-reports-v1`) are focused generated contracts with their own Rust drift
+tests. `roll-bootstrap-v1.openapi.json` and its SQL oracle transcript are frozen
+historical comparison evidence from the retired Python bootstrap handler; they
+are not live runtime contracts.
 
-`v2-runtime.openapi.json` is the aggregate contract for **every deployed native
-`/api/v2` operation** (#4457): the eight auth endpoints, Roll bootstrap and
-reading-session initialization, the dice/offer/reset commands, the scoped
-`GET /api/v2/roll/die-state` and `GET /api/v2/roll/eligible-issue-ids` resources
-(#4595), the reading-boundaries batch, and the queue, thread and issue resources
-already published by `QueueApi`, `ThreadsApi` and `IssueApi`. It is generated
-only from Rust declarations (`comicpile_roll_service::openapi::canonical_openapi`),
-which merges the per-domain `utoipa::OpenApi` documents instead of duplicating a
-spec. Regenerate it with:
+## Regeneration
 
-```sh
-cd native/roll-service
-cargo run --example v2_openapi > ../contracts/v2-runtime.openapi.json
-```
-
-Its checked-in drift test is
-`openapi::tests::checked_in_runtime_contract_is_current`, and
-`openapi::tests::covers_every_deployed_native_v2_operation` pins the exact
-method/path surface. The aggregate intentionally includes public auth entry
-points, so the artifact guard checks explicit security declarations rather than
-requiring bearer auth on every operation.
-
-`scripts/export_openapi_schema.mjs` merges this contract into the single
-client-facing document (`frontend/src/generated/openapi.json`) and then
-`scripts/generate_openapi_types.mjs` regenerates `openapi.ts` plus the thin
-`nativeV2Client.ts` request client. A native operation replaces the same
-`(path, method)` FastAPI operation because ingress sends that request to Rust.
-A component-name collision is renamed `Native<Name>` with every reference
-inside the native subtree rewritten; an identical schema is reused.
-`nativeV2Client.ts` is generated from the native operation set and the merged
-operation types, and every method delegates to the caller-provided
-`HttpClient`; it is not a second transport and does not reimplement auth, CSRF,
-retries or error handling. Its `--check` drift runs in the same canonical
-generator boundary and never rewrites repository artifacts from custom-schema
-runs.
-`docs/api/v2-route-inventory.json` records the observed runtime and declared
-consumers for each live v2 operation, and
-`tests/test_api_v2_contract_inventory.py` fails when the inventory, the native <!-- docs-path-check: ignore -->
-contract, the generated schema, `vercel.json` or a frontend service caller
-drifts.
-
-`threads-v2.openapi.json` is the generated native contract for
-`GET /api/v2/threads` (#4342). Regenerate it with:
+Run from the repository root:
 
 ```sh
-cd native/roll-service
-cargo run --example threads_openapi > ../contracts/threads-v2.openapi.json
+cargo run --locked -p comicpile-roll-service --example v2_openapi \
+  > native/contracts/v2-runtime.openapi.json
+cargo run --locked -p comicpile-roll-service --example same_path_openapi \
+  > native/contracts/same-path-runtime.openapi.json
+node scripts/export_openapi_schema.mjs
+node scripts/generate_openapi_types.mjs
 ```
 
-Its checked-in drift test is `threads::tests::checked_in_openapi_contract_is_current`.
-The normal consumer is `frontend/src/services/api-threads.ts` (`list` only; the
-remaining thread mutations stay on their existing v1 paths).
-
-The normal consumer is `frontend/src/services/rollBootstrapApi.ts`; recovery
-uses `frontend/src/services/protectedRollMutationApi.ts`. Both already call
-`/api/v2/roll/bootstrap`. The legacy `/api/roll/bootstrap` and
-`/api/v1/roll/bootstrap` aliases were removed with the Python handler (#4397)
-and now fall through to the Python catch-all. V2 is a separate contract.
-
-`bug-reports-v1.openapi.json` is the generated native contract for the
-same-path bug-report slice `POST /api/bug-reports/` and
-`POST /api/v1/bug-reports/` (#4852, Part of #4335). Regenerate it with:
+Use the non-writing drift check after regeneration:
 
 ```sh
-cd native/roll-service
-cargo run --example bug_reports_openapi > ../contracts/bug-reports-v1.openapi.json
+node scripts/generate_openapi_types.mjs --check
 ```
 
-It is generated only from `comicpile_roll_service::bug_reports::BugReportsApi`
-and preserves the retired Python wire contract (201 `issue_url`,
-401/422/429/502/503) at the exact same method/paths; the Python handlers were
-removed in #5162. The frontend caller
-(`frontend/src/services/api-bug-reports.ts`) keeps calling
-`/v1/bug-reports/` unchanged.
+Rust tests compare the checked-in aggregate and same-path documents with the
+current DTO declarations. Frontend CI also verifies generated-contract
+freshness. Do not edit generated JSON or TypeScript directly.
 
-The unified Rust-derived contract and generated TS client are owned by #4457; this
-repository does not hand-author a second analytics schema. The merged generated
-client schema temporarily retains the legacy Python v1/bare analytics operation
-until #4348's authenticated production proof permits the post-proof cleanup.
+## Runtime and caller evidence
 
-`preferences-v1.openapi.json` is the generated native contract for the
-remaining same-path Taste Bank signal surface in #4834:
-`GET /api/v1/users/me/taste-signals` and
-`PUT /api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict`.
-Browser-called user preferences moved to Rust v2
-(`GET`/`PATCH /api/v2/users/me/preferences`) and are documented in the
-v2 runtime/OpenAPI surface, not in this same-path contract. It is generated
-only from Rust declarations
-(`comicpile_roll_service::preferences::PreferencesApi`). Regenerate it with:
+[`docs/api/v2-route-inventory.json`](../../docs/api/v2-route-inventory.json) is
+the generated v2 cutover inventory. Its `full_surface` section describes the
+retired Python-handler surface and fragment-owned v1 operations; it is not an
+exhaustive list of every native v1 compatibility route. For retained same-path
+operations, use `same-path-runtime.openapi.json`, the route registry in
+[`native/roll-service/src/lib.rs`](../../native/roll-service/src/lib.rs), and
+the frontend service callers together.
 
-```sh
-cd native/roll-service
-cargo run -p comicpile-roll-service --example preferences_openapi > ../contracts/preferences-v1.openapi.json
-```
-
-Its checked-in drift test is
-`preferences::tests::checked_in_openapi_contract_is_current`. The Python
-handlers stay mounted until authenticated production proof permits their
-removal; the schemas here match the Python `TasteSignal*` and
-`TasteVerdictRequest` contracts field for field.
-
-To compare an independently generated Rust OpenAPI operation:
-
-```sh
-python scripts/rust_endpoint_oracle.py check \
-  --schema /tmp/rust-generated-openapi.json \
-  --contract native/contracts/roll-bootstrap-v1.openapi.json
-```
-
-The comparison includes the full referenced component closure, not only the
-top-level response. It must receive actual native-generated output. The frozen
-Python file alone does not establish native parity, runtime behavior, or a
-production cutover.
-
-The retired `tests/test_roll_bootstrap_port_oracle.py` <!-- docs-path-check: ignore --> executed the original
-Python v1 handler, validated its response against the frozen schema and recorded
-the emitted SQL, bind shapes and connection transaction events as
-`roll-bootstrap-v1.sql.json` in the CI `rust-sql-oracle-*` artifact. The oracle was removed with the Python handler (#4397); its transcript is
-historical evidence only.
-
-The captured transcript covered one representative existing-session path, not a
-complete SQL inventory: new-session creation, pending recovery, and timezone
-updates still needed targeted captures. Do not substitute those queries for the
-unrecorded branches or treat the file as proof they are equivalent.
-
-Run the focused reference check:
-
-```sh
-pytest tests/test_rust_endpoint_oracle.py --no-cov
-```
-
-This infrastructure does not change ingress. The Python bootstrap handlers and
-read model are removed (#4397, #4350); deleting the native Rust v2 handler
-remains #4299's scope.
-
-## Native operations retaining their original paths
-
-`same-path-runtime.openapi.json` is generated from Rust utoipa declarations and
-actual request/response DTOs for the native v1 and unversioned handlers. The
-Python schema exporter merges it before the canonical v2 document, so retiring
-shadowed Python handlers does not remove TypeScript client contracts.
-
-```bash
-cargo run --manifest-path native/roll-service/Cargo.toml --example same_path_openapi > native/contracts/same-path-runtime.openapi.json
-```
-
-The Rust drift test checks this artifact independently of the v2 contract.
+See [API documentation](../../docs/API.md) for the versioning and ingress rules.

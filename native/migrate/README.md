@@ -1,33 +1,51 @@
 # comicpile-migrate
 
-Rust database migration runner (successor to Alembic, which is frozen), backed by
-[refinery](https://crates.io/crates/refinery).
+`comicpile-migrate` is the Rust/refinery database migration runner used by local
+development, CI and the production deployment workflow. Alembic is retired; do
+not recreate an `alembic/` tree or edit an applied migration.
+
+## Commands
+
+The runner reads `MIGRATE_DATABASE_URL`, falling back to `DATABASE_URL`. It
+accepts `postgresql://`, `postgres://`, and the historical
+`postgresql+asyncpg://` / `postgresql+psycopg://` forms and strips the driver
+suffix before connecting.
 
 ```sh
-MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -- up
+# Apply every pending embedded migration.
+MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -p comicpile-migrate -- up
+
+# Report whether work is pending without applying it.
+# Exit 0 means current; exit 10 means pending; other nonzero codes are failures.
+MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -p comicpile-migrate -- plan
 ```
 
-- `migrations/V1__baseline.sql` is a cleaned `pg_dump --schema-only` of the
-  Alembic head `i5378deferred01` (`make roll-test-schema` regenerates it). That
-  revision is a no-op schema repair on top of `c44050000002`, so the baseline
-  SQL is unchanged. Never edit an applied migration; append `V2__*.sql` etc.
-- `migrations/V2__queue_exclusion_groups.sql` adds the queue-exclusion group
-  schema introduced for container bulk remove/restore in Queue (#5435), bringing
-  the schema to the current Alembic head `m54i537800001`.
-- `BASELINE_ALEMBIC_HEAD` in `src/lib.rs` is the current Alembic head and must
-  stay in sync with Alembic/parity checks. Each new Alembic revision must be
-  mirrored by a new refinery migration (or a regenerated baseline) before the
-  pin advances.
-- Empty database: all migrations run and `alembic_version` is stamped with the
-  current head.
-- Alembic database whose `alembic_version` is at the baseline schema head
-  (`c44050000002`/`i5378deferred01`): V1 is recorded as adopted and V2 runs.
-  Alembic database already at the queue-exclusion or merged head: both migrations
-  are recorded as adopted without executing, using refinery's own
-  `Target::FakeVersion` guarded by `alembic_version`. Any other revision or
-  unmanaged schema is refused.
-- Stale external-identity status checks predating the deferred-repair revision
-  are repaired idempotently before the current head is stamped.
-- CI (`rust-roll.yml`) builds an Alembic database and a Rust database and fails
-  on any normalized `pg_dump` difference
-  (`scripts/check_rust_migration_parity.py`). <!-- docs-path-check: ignore -->
+`make migrate` runs `up`. The production workflow runs `up` before deployment
+and uses `plan` to verify that no migration remains pending.
+
+## Migration ownership
+
+- Migrations are append-only files under `native/migrate/migrations/`.
+- `V1__baseline.sql` reproduces the schema at the retired Alembic baseline. V2
+  adopts the queue-exclusion schema that was already present in supported
+  Alembic-managed databases. Later migrations are ordinary refinery migrations.
+- The runner still reads `alembic_version` solely to adopt a supported historical
+  database safely. An empty database runs all migrations; a database at a
+  supported Alembic head adopts the covered versions and applies newer Rust-only
+  migrations. Unknown or unmanaged schema states fail closed.
+- Refinery records applied versions and checksums in
+  `public.refinery_schema_history`. A session advisory lock serializes concurrent
+  runners.
+- `MIGRATE_LOCK_TIMEOUT` and `MIGRATE_STATEMENT_TIMEOUT` optionally bound lock
+  waits and statement execution for deployment automation.
+
+## Validation
+
+CI applies every embedded migration to a fresh disposable PostgreSQL database,
+reruns the runner to prove idempotence, and exercises the production runner. Use
+a disposable database for local migration tests; never point these commands at
+production.
+
+See [deployment](../docs/DEPLOYMENT.md) and
+[database save/load and recovery](../docs/DATABASE_SAVE_LOAD.md) for the operator
+workflow.
