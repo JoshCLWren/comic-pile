@@ -354,5 +354,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except RecoveryError as error:
-        print(f"release recovery failed: {error}", file=__import__("sys").stderr)
+        print(f"release recovery failed: {error}", file=sys.stderr)
         raise SystemExit(1) from error
