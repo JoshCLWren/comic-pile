@@ -587,9 +587,11 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete custom CBL' }))
     await waitFor(() => expect(mocks.delete).toHaveBeenCalledWith(9))
 
-    expect(dialog).toHaveFocus()
-    expect(within(dialog).getByRole('button', { name: 'Close modal' })).toBeDisabled()
-    expect(within(dialog).getByRole('status')).toHaveTextContent('Deleting…')
+    await waitFor(() => {
+      expect(dialog).toHaveFocus()
+      expect(within(dialog).getByRole('button', { name: 'Close modal' })).toBeDisabled()
+      expect(within(dialog).getByRole('status')).toHaveTextContent('Deleting…')
+    })
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(dialog).toBeInTheDocument()
 
