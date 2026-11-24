@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T20:52:18+00:00",
+  "generated_at": "2026-11-24T21:09:38+00:00",
   "models": [
     {
       "health": {
@@ -22772,7 +22772,7 @@
   },
   "counts_generated_at": "2026-11-24T20:32:57.302520+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-24T20:52:19Z",
+    "generated_at": "2026-11-24T21:09:39Z",
     "sources": {
       "kilo-auto": [
         "kilo-auto/efficient"
@@ -22808,10 +22808,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T20:52:19.513823+00:00",
-    "days_elapsed": 23.87,
+    "checked_at": "2026-11-24T21:09:39.554918+00:00",
+    "days_elapsed": 23.882,
     "days_in_month": 30.0,
-    "days_left": 6.13,
+    "days_left": 6.12,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -22827,21 +22827,21 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 221935,
-        "organization": 221935,
+        "database": 309094,
+        "organization": 309094,
         "owner_target": 50000000,
-        "projected_database": 278930,
-        "projected_organization": 278930,
-        "projected_share": 0.0006,
-        "share_used": 0.0004
+        "projected_database": 388277,
+        "projected_organization": 388277,
+        "projected_share": 0.0008,
+        "share_used": 0.0006
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 102215,
-        "organization": 102215,
+        "database": 102257,
+        "organization": 102257,
         "owner_target": 1000000,
-        "projected_database": 128465,
-        "projected_organization": 128465,
+        "projected_database": 128453,
+        "projected_organization": 128453,
         "projected_share": 0.0128,
         "share_used": 0.0102
       },
