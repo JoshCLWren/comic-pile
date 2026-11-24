@@ -2320,9 +2320,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn linked_list_sync_serializes_with_sibling_reader_writers() {
+    async fn linked_list_sync_serializes_with_sibling_list_writer() {
         let _guard = DB_LOCK.lock().await;
-        let state = test_state_with_pool(3).await;
+        let state = test_state_with_pool(4).await;
         crate::test_support::reset(&state).await;
         let connection = crate::db::checkout(&state).await.expect("seed connection");
         seed_list_sync_fixture(&connection, false).await;
@@ -2352,7 +2352,30 @@ mod tests {
             })
         };
 
-        let mut observed_waiter = false;
+        let sibling = {
+            let state = state.clone();
+            tokio::spawn(async move {
+                let mut connection = state.pool.get().await.expect("sibling connection");
+                let transaction = connection.transaction().await.expect("sibling transaction");
+                transaction
+                    .execute(
+                        "SELECT pg_advisory_xact_lock($1, $2)",
+                        &[&queue_lock_namespace, &LIST_SYNC_USER_ID],
+                    )
+                    .await
+                    .expect("sibling reader lock");
+                transaction
+                    .execute(
+                        "UPDATE custom_cbl_lists SET description = $1 WHERE id = $2",
+                        &[&"concurrent sibling writer", &LIST_SYNC_LIST_ID],
+                    )
+                    .await
+                    .expect("sibling list update");
+                transaction.commit().await.expect("sibling commit");
+            })
+        };
+
+        let mut observed_waiters = false;
         for _ in 0..1_000_000 {
             let waiters: i64 = observer
                 .query_one(
@@ -2364,24 +2387,29 @@ mod tests {
                 .await
                 .expect("inspect reader lock waiters")
                 .get(0);
-            if waiters > 0 {
-                observed_waiter = true;
+            if waiters >= 2 {
+                observed_waiters = true;
                 break;
             }
             tokio::task::yield_now().await;
         }
         hold.commit().await.expect("release sibling reader lock");
         assert!(
-            observed_waiter,
-            "release sync must take the reader lock before any thread/list row lock"
+            observed_waiters,
+            "release sync and its sibling list writer must both take the reader lock first"
         );
 
-        let report = sync
-            .await
-            .expect("sync task")
-            .expect("serialized linked list sync");
+        let (report, sibling) = tokio::join!(sync, sibling);
+        sibling.expect("sibling writer task");
+        let report = report.expect("sync task").expect("serialized linked list sync");
         assert_eq!(report.failed_sources, 0);
         assert_eq!(report.created_issues, 2);
+        let description: Option<String> = observer
+            .query_one("SELECT description FROM custom_cbl_lists WHERE id = $1", &[&LIST_SYNC_LIST_ID])
+            .await
+            .expect("sibling update persisted")
+            .get(0);
+        assert_eq!(description.as_deref(), Some("concurrent sibling writer"));
     }
 
     #[tokio::test]
