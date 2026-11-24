@@ -5,7 +5,9 @@
  * The check is offline and deterministic. It inspects inline-backtick file paths in the Markdown
  * files selected by `iterMarkdownFiles` (Markdown links are validated by
  * scripts/check_markdown_docs.py in the docs workflow). Fenced code blocks are ignored so
- * examples are not treated as contracts.
+ * examples are not treated as contracts. In a Git checkout the audited documents are the tracked
+ * `*.md` files, so ignored Rotisserie overlays and locally excluded documents cannot invalidate
+ * PR validation; outside a checkout it walks the tree.
  *
  * Resolution rules:
  *
@@ -118,6 +120,23 @@ function walk(root, skip) {
 
 /** Return Markdown paths (sorted) that participate in documentation checks. */
 export function iterMarkdownFiles(root) {
+  try {
+    const out = execFileSync('git', ['-C', root, 'ls-files', '--', '*.md'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    return out
+      .split('\n')
+      .filter((file) => file.endsWith('.md'))
+      .map((file) => path.join(root, file))
+      .filter((file) => existsSync(file))
+      .sort((a, b) =>
+        compareParts(path.relative(root, a).split(path.sep).join('/'), path.relative(root, b).split(path.sep).join('/')),
+      );
+  } catch {
+    // Outside a Git checkout (for example an isolated test directory), audit the walk.
+  }
   return walk(root, IGNORED_DIRECTORIES)
     .filter((file) => file.endsWith('.md'))
     .sort((a, b) =>
