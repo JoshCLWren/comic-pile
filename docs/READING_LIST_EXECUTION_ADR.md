@@ -3,7 +3,7 @@
 **Status:** Accepted; implemented on the Rust v2 stack (see status amendments)
 **Date:** 2026-10-13  
 **Decision owner:** JoshCLWren  
-**Supersedes:** [Reading Graph ADR](READING_GRAPH_ADR.md) as the target runtime/storage architecture; [2026-10-12 Roll eligibility contract](roll-eligibility-contract.md) where it requires compiling explicit checkpoint edges or rejects strict list order. Existing runtime remains in force **until** the guarded Option E cutover.  
+**Supersedes:** [Reading Graph ADR](READING_GRAPH_ADR.md) as the target runtime/storage architecture; [2026-10-12 Roll eligibility contract](roll-eligibility-contract.md) where it requires compiling explicit checkpoint edges or rejects strict list order. At decision time the existing runtime remained in force until the guarded cutover; the current implementation status is recorded in the amendments below.
 **Design basis:** Independent Opus architecture review, revised 2026-10-13, and production read-only evidence.  
 **Implementation coordination:** [#2366](https://github.com/JoshCLWren/comic-pile/issues/2366). **This ADR is the authority for replacement work; do not extend the retiring Reading Plan compiler.**
 

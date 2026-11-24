@@ -89,9 +89,7 @@ cargo test -p comicpile-roll-service roll_offer
 pnpm --filter frontend exec vitest run src/unit/queryKeys.test.ts
 
 # Browser: one focused Chromium spec (build first; requires a running same-origin server)
-cd frontend
-pnpm run build
-BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium
+(cd frontend && pnpm run build && BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium)
 
 # Repository tooling: one test file
 uv run python -m pytest tests/test_markdown_docs.py -v
