@@ -122,7 +122,7 @@ calls fired (or did not) before an assertion.
 
 ## Changing the lane itself
 
-- Inventory edits: keep `tests/test_e2e_behavior_inventory.py` green; every
+- Inventory edits: keep `tests/test_e2e_regression_select.py` green; every
   covered behavior needs real spec mappings. Check `selection.json` for
   `unmapped_specs` and `skipped_behaviors`.
 - Selector/config/workflow edits: run
