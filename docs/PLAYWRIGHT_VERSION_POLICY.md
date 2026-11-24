@@ -13,7 +13,8 @@ All Playwright configs, specs, and invocations live in (or delegate to) the `fro
 package:
 
 - Configs: `frontend/playwright.config.ts`, `frontend/playwright.audit.config.ts`,
-  `frontend/playwright.p0.config.ts`.
+  `frontend/playwright.p0.config.ts`, `frontend/playwright.regression.config.ts`,
+  and `frontend/playwright.prod-performance.config.ts`.
 - Specs: `frontend/src/test/**/*.spec.ts` and `frontend/src/test/**/*.audit.ts`.
 - Entry points: every `Makefile` target and CI job runs Playwright through
   `pnpm --filter frontend ...`, so `frontend/package.json` owns the version.
@@ -55,6 +56,9 @@ These are the required Chromium paths that must continue to run:
 - P0 Chromium suite: `pnpm --filter frontend run test:e2e:p0`
   (`playwright.p0.config.ts`).
 - Quick/dev E2E: `pnpm --filter frontend run test:e2e:quick`.
-- Prod smoke: `make test-e2e-prod-smoke` → `pnpm --filter frontend run test:e2e:prod-smoke`.
+- Production performance: `pnpm --filter frontend exec playwright test --config=playwright.prod-performance.config.ts`.
+  The package's `test:e2e:prod-smoke`, `test:e2e:prod-profile`, and `test:e2e:prod-all`
+  scripts reference configs that are not currently tracked; do not present them as
+  runnable until those configs are restored.
 
 Firefox and WebKit are optional diagnostics only and are not required release coverage.

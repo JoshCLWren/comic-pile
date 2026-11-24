@@ -39,7 +39,7 @@ The frontend coverage validation runs the focused audit tests and the audit comm
 
 ## Interpretation
 
-Until #2044 establishes a merged canonical visual grammar, the audit runs in neutral mode. It reports authored evidence and ranks useful outliers, but it does not declare a particular radius, color, control, breakpoint, or spacing value correct or incorrect.
+The audit runs in neutral evidence mode. The canonical visual contract is now [`docs/FRONTEND_VISUAL_GRAMMAR.md`](../FRONTEND_VISUAL_GRAMMAR.md); use it when deciding whether an outlier is intentional, but the audit itself does not declare a particular radius, color, control, breakpoint, or spacing value correct or incorrect.
 
 The static audit also does not inspect rendered geometry or computed browser styles. That responsibility belongs to the rendered UI audit from #2043.
 
