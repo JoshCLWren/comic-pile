@@ -7,6 +7,8 @@ Worker 48 is provisioned as **Mark Cordova** (`mark-cordova[bot]`), App ID
 `JoshCLWren/comic-pile`, and the three worker-48 repository secrets are configured.
 Workers other than 48 keep using `PR_REBASE_TOKEN` for push and pull-request creation.
 
+The helper commands below are supplied by the Rotisserie overlay and are not tracked in this repository. Install the current overlay once per checkout before running them; see `AGENTS.md` → Factory runtime.
+
 ## Bootstrap (already done for worker 48)
 
 Faker **40.40.0**, locale `en_US`, a brand-new `Faker()` per worker, `seed_instance(worker_number + 100)`, then `name()` as the first call. Worker 48's first `name()` is **Mark Cordova**. That name is persisted in `.github/factory-worker-github-apps.json`. Later reads must not re-roll it.

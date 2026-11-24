@@ -50,27 +50,17 @@ It is observability, not workflow state:
 - the status dashboard counts it in the PR pipeline "Conflict" tile while keeping
   it out of its stage list.
 
-`factory:approved` is a **review-disposition label**, not a lifecycle stage:
-it means a trusted reviewer has posted a PASS marker for the current PR head.
-It may coexist with `factory:review` while independent controller acceptance is
-still outstanding, or with `factory:ci` / `factory:ready` as the same work advances.
-A stale-head PASS, generic GitHub `COMMENTED` review, self-authored prose, or green
-CI alone does not mint it. Current controller `semantic-review-v1` markers and
-legacy `review-v2` PASS comments are recognized only for the matching PR and
-live head. The trusted controller writes the approval label directly after an
-accepted semantic review, because its `GITHUB_TOKEN` comments cannot trigger
-new GitHub Actions runs; human/owner-authored review comments route through a
-filtered `issue_comment` workflow. Neither path supplies merge authorization.
-Any new head or trusted actionable changes-required
-feedback removes it. The existing **`factory:changes-requested`** (spelled exactly
-that way) is the blocking repair stage; **`factory:ready`** means all exact-head
-merge gates pass. `factory:approved` is visibility only: it cannot approve a
-self-authored GitHub PR, satisfy controller issue acceptance, authorize merging,
-or prove deployment. `factory:merge-conflict` remains independent observability.
+There is no `factory:approved` label. Trusted exact-head review is recorded by
+the controller's `comic-pile-factory-semantic-review-v1` marker; legacy
+`review-v2` markers remain historical compatibility input. **`factory:changes-requested`**
+is the blocking repair stage, **`factory:ci`** means review passed and required
+checks are being verified, and **`factory:ready`** means every exact-head merge
+gate is satisfied. Labels are never review or merge authorization.
+`factory:merge-conflict` remains independent observability.
 
-The labels are synchronized automatically from existing factory claim, progress, review, ready, release, and needs-human markers. Pull requests on `factory/*` branches are also recognized automatically. A linked issue claim supplies the initial pull-request owner when the branch name starts with `factory/<issue-number>-...`.
+The labels are synchronized automatically from existing factory claim, progress, review, ready, release, and needs-human markers. Issue linkage follows an explicit `Closes #N`, `Fixes #N`, or `Resolves #N` reference, or the canonical standalone `Part of #N.` line (including `Part of #N and governed by #M.`). The canonical factory branch form is `factory/<worker>-<issue>-...`; a branch prefix alone does not replace the explicit linkage contract.
 
-Only marker comments from the repository owner, members, or collaborators are trusted. Formal review transitions are accepted from trusted collaborators and independent Greptile findings. Public commenters and untrusted fork branches cannot spoof factory ownership or stage labels.
+Only marker comments from the repository owner, members, or collaborators are trusted, and only `github-actions[bot]` is a trusted App actor. Greptile findings may route repair work but can never author factory markers, ownership, review verdicts, or readiness. Public commenters and untrusted fork branches cannot spoof factory ownership or stage labels.
 
 Labels are visibility metadata, not merge evidence. A label-only change never counts as substantive factory progress and never overrides exact-head CI, review threads, mergeability, issue scope, or the canonical autonomous factory policy.
 
@@ -84,7 +74,11 @@ GitHub's built-in review filters remain useful, but they report formal GitHub re
 - **Review required** depends on branch or ruleset requirements that have not yet been satisfied.
 - **Reviewed by you**, **Not reviewed by you**, and **Awaiting review from you** are relative to the signed-in GitHub account.
 
-The current factories authenticate as `JoshCLWren`, and their pull requests are also authored as `JoshCLWren`. GitHub does not permit an author to approve their own pull request, so the approval-oriented filters cannot be the sole factory dashboard with the current identity model.
+Factory identity is mixed: worker 48 uses its provisioned Mark Cordova App when all three App secrets are present, while other workers use `PR_REBASE_TOKEN`; trusted controller markers remain `github-actions[bot]`. GitHub does not permit an author to approve their own pull request, so approval-oriented filters cannot be the sole factory dashboard. See [worker App identities](../.github/factory-worker-github-apps.md).
+
+> **Greptile integration status:** disabled. The residual-finding rules below
+> apply only to existing actionable feedback. Never request, wait for, or
+> re-enable Greptile review.
 
 Greptile (`greptile-apps[bot]`) submits `COMMENTED` reviews whose actionable findings live in inline review threads, each with a "Prompt To Fix With AI" block, plus a PR-body summary between `<!-- greptile_comment -->` markers and a `Greptile Review` check run. Greptile findings are high-priority, must-address review feedback:
 
@@ -100,17 +94,17 @@ Greptile (`greptile-apps[bot]`) submits `COMMENTED` reviews whose actionable fin
   `FACTORY_GATE_READY` is downgraded to a repair verdict when any open finding lacks a valid outcome or a reply cannot be posted. The reason is appended to the review log. When new findings arrived during the run, the PR is released as `factory:changes-requested` for re-dispatch instead. An incomplete fetch releases it to `factory:review` for another attempt. A repair push that leaves open findings without outcomes is released as `factory:changes-requested` rather than `factory:review`. A repair-stage "no change, ready" handoff is gated the same way. The wrapper never resolves threads.
 - **Worker context.** Before every PR-mode agent run, each worker wrapper (OmniRoute, NVIDIA, free-model/Kilo via the shared primitives) calls the trusted [.github/scripts/factory-review-findings.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/factory-review-findings.sh) helper, staged from `main` at startup. It fetches unresolved review threads across every page (author, path, line, body, `isOutdated`, replies, with a notice when replies or pages are truncated), Greptile's top-level review body, the Greptile PR-body summary, and current-head PR-Agent check output, writes them to `/tmp/factory-review-findings-<worker>-pr<number>.md`, and injects that file into the PR mission. Greptile items are listed first and labeled HIGH PRIORITY, each tagged `[OPEN: outcome entry required]` or `[ANSWERED: awaiting Greptile]`, and the mission lists the required thread ids for the outcome file (see the Greptile outcome gate above). The mission build also clears any stale outcome file and snapshots the open findings to `<findings file>.open-before.json`. Other unresolved threads follow the normal fix-or-rebut rule. PR-Agent output (`PR Agent - Review` / `PR-Agent advisory review` check runs) is lower-priority advisory input.
 - **Semantic verdict.** The semantic-verdict recovery reviewer must confirm that every Greptile finding was fixed or concretely rebutted and must return `FACTORY_GATE_BLOCKED`, never `FACTORY_GATE_READY`, otherwise. The existing exact-head merge gate still blocks on any unresolved review thread.
-- **Pre-push fast checks.** Before committing an agent diff, both persistence paths in [free-model-factory-worker-primitives.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/free-model-factory-worker-primitives.sh) run `factory_run_fast_checks` from the trusted [.github/scripts/factory-fast-checks.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/factory-fast-checks.sh), staged from `main` at startup. Each touched file type gets its checks: `node --check` for `.mjs`/`.cjs`; CI-parity `ruff check .` and `ty check --error-on-warning` plus targeted pytest for `.py`, covering touched `test_*.py` files and `tests/test_<stem>.py` for each touched module; and `pnpm --filter frontend run typecheck` plus `eslint` on the touched files that still exist for `frontend/**/*.ts|tsx|mjs`. Added, modified, and deleted paths all count (renames count as both paths), so deleting a still-imported module still runs the whole-project checks. The toolchain (uv, pnpm) is installed on demand. When a check or the toolchain setup fails, the diff is not committed or pushed: the tree is reset, a `comic-pile-factory-fast-checks-failed-v1` comment with the log tail is posted for the next worker, and an approval from that run is downgraded to repair. A targeted-test failure whose only error is a database connection error does not block, because worker runners have no PostgreSQL (CI still runs those tests). `FACTORY_FAST_CHECKS=off` disables the gate for an incident. The agent timeout reserves `FACTORY_FAST_CHECK_RESERVE_SECONDS` (default 240) for these checks.
-- **Live wrapper scope.** [free-model-factory-worker.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/free-model-factory-worker.sh) (with the shared primitives) is the only wrapper any workflow dispatches ([free-model-factory-run.yml](https://github.com/JoshCLWren/rotisserie/blob/main/.github/workflows/free-model-factory-run.yml)). The outcome gate and fast checks live there. [omniroute-factory-worker.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/omniroute-factory-worker.sh) and [nvidia-factory-worker.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/nvidia-factory-worker.sh) are not invoked by any workflow.
+- **Pre-push fast checks.** Before committing an agent diff, both persistence paths in [free-model-factory-worker-primitives.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/free-model-factory-worker-primitives.sh) run `factory_run_fast_checks` from the trusted [.github/scripts/factory-fast-checks.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/factory-fast-checks.sh), staged from `main` at startup. Each touched file type gets its checks: `node --check` for `.mjs`/`.cjs`; CI-parity `ruff check .` and `ty check --error-on-warning` plus targeted pytest for `.py`, covering touched `test_*.py` files and `tests/test_<stem>.py` for each touched module; and `pnpm --filter frontend run typecheck` plus `eslint` on the touched files that still exist for `frontend/**/*.ts|tsx|mjs`. Added, modified, and deleted paths all count (renames count as both paths), so deleting a still-imported module still runs the whole-project checks. The toolchain (uv, pnpm) is installed on demand. When a check or the toolchain setup fails, the diff is not committed or pushed: the tree is reset, a `comic-pile-factory-fast-checks-failed-v1` comment with the log tail is posted for the next worker, and an approval from that run is downgraded to repair. A targeted-test failure whose only error is a database connection error does not block, because worker runners have no PostgreSQL (CI still runs those tests). The gate must not be disabled merely to avoid a failure; any incident override requires explicit owner authorization, a durable record, and restoration. The agent timeout reserves `FACTORY_FAST_CHECK_RESERVE_SECONDS` (default 240) for these checks.
+- **Live wrapper scope.** The tracked dispatcher calls the reusable [Fixed Model Factory Entry workflow](../.github/workflows/free-model-factory-entry.yml), which runs the current Rotisserie shared worker primitives. The outcome gate and fast checks live in that upstream wrapper path; there is no tracked `free-model-factory-run.yml` caller.
 - **Fail-closed pagination.** Every review-thread lookup reads every page. The wrappers' `current_head_review_blockers` gate uses `factory_count_unresolved_review_threads`, which fails the gate when a page is missing, unparseable, or still reports `hasNextPage`. The findings helper also pages through the comments nested in each unresolved thread. A thread whose comments cannot all be fetched is marked INCOMPLETE, and the mission is told not to emit `FACTORY_GATE_READY` until the agent has inspected the threads directly. Repair routing throws, leaving the reconciler run red, rather than treating a truncated listing with no findings seen as "no Greptile findings". It reads each thread's first comment (`comments(first:1)`) plus its 20 most recent comments. Only the comments after Greptile's latest one decide the rule, so that window is exact whenever it contains Greptile's latest comment or a trusted reply. The outcome gate fails closed (no `.open.json`) when thread or comment pagination is incomplete. The review controller already fails closed (`retry`) on truncated thread or comment pages.
 
 The merge drain asks Jev to request CodeRabbit reviews on its existing cadence (a failed request never blocks a merge). CodeRabbit review bodies and inline comments stay advisory: they do not gate factory merges or route factory PRs into repair or worker prompts. Historical GitHub comments remain visible but do not grant factory authorization.
 
-If factory pull requests later use a separate GitHub App or machine-user identity, independent reviewers should submit formal `APPROVE` or `REQUEST_CHANGES` reviews. At that point the built-in review filters can become a stronger first-class view. Do not add a required-approval branch rule until a reliable independent reviewer identity exists, because the present single-account setup would deadlock factory-authored pull requests.
+Independent reviewers should submit formal `APPROVE` or `REQUEST_CHANGES` reviews when the identity model permits. Do not add a required-approval branch rule until a reliable independent reviewer identity exists, because factory-authored pull requests cannot self-approve.
 
 ## Active heartbeat monitoring
 
-Issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is retired as the heartbeat/registry: factories never read or write its comments. Active fixed-model workers use durable `opencode-free-model-factory-<number>` identities. Their lifecycle (`worker_started` at trusted assignment validation, `worker_outcome_signal` at trusted lease release) is written to Neon by the run workflow's trusted jobs; terminal outcomes, model health, failover and transitions are persisted to Neon from the trusted Actions job log. `.github/factory-expected-workers.json` defines the expected roster; retired and paused workers are excluded. <!-- docs-path-check: ignore -->
+Issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is retired as the heartbeat/registry: factories never read or write its comments. Active worker identities and capacity are derived from the provider/slot registry at runtime; there is no committed expected-worker JSON or static model roster. Worker lifecycle and terminal outcomes are written to Neon by trusted workflow jobs and logs. <!-- docs-path-check: ignore -->
 
 `.github/workflows/fixed-model-factory-dispatch-recovery.yml` runs every 15 minutes. It records per-worker freshness, last heartbeat timestamp, last run, and the latest classified runtime outcome in the job summary and the `factory-heartbeat-health` JSON artifact. The generated GitHub Pages fleet scoreboard uses the same observations. At 20 minutes an observation becomes stale; missing heartbeats are reported separately. One fresh worker cannot hide stale peers in these diagnostics.
 
@@ -130,7 +124,7 @@ The five legacy ChatGPT schedules are disabled. Their permanent comments are his
 | `chatgpt-factory-4` | Mister Miracle | `:16` | `5260478414` |
 | `chatgpt-factory-5` | Death's Head | `:28` | `5260478724` |
 
-At run start, replace only the assigned comment with:
+The following template is retained only as a historical example. It is non-operative; no current worker may write these comments:
 
 ```text
 <!-- factory-heartbeat:v1 worker=<WORKER_ID> -->
@@ -143,11 +137,11 @@ Outcome: running
 Updated by: `<WORKER_ID>`
 ```
 
-At run end, replace the same comment again, preserving the start timestamp and recording the current UTC completion timestamp, actual PR or issue, and truthful outcome. Do not create additional heartbeat comments.
+Historically, workers replaced the same comment at run end. That behavior is retired and prohibited; do not create or update heartbeat comments.
 
 The former `.github/workflows/factory-heartbeat-watchdog.yml` workflow is absent. It does not monitor current workers. Do not resurrect disabled schedules or infer active-worker failures from these historical comments. <!-- docs-path-check: ignore -->
 
-Heartbeat writes are mandatory telemetry but never substantive factory progress. They do not satisfy a heartbeat outcome, outrank delivery work, extend a lease, justify ending a run, or excuse a missing implementation. If the update fails, retry once through another available GitHub path, preserve the telemetry failure in the user-visible update when material, and continue delivery.
+No heartbeat write is mandatory or permitted for the retired registry. Current lifecycle telemetry is written only by trusted workflows to Neon and never counts as substantive factory progress, extends a lease, or justifies ending a run.
 
 ## Durable GitHub App identity contract
 
@@ -198,7 +192,7 @@ The review controller writes `comic-pile-factory-semantic-review-v1` and `comic-
 A native-style GitHub `APPROVE` review **does not** satisfy `head_has_authorized_approval` / `approval_can_promote` without controller marker provenance:
 - When `provenance_complete == False` (no controller marker for the exact head), the head is fail-closed: **two distinct eligible reviewers** are required, and the producer cannot self-approve.
 - When `provenance_complete == True`, **one eligible reviewer** authorizes the head.
-- The producer (worker that opened the PR) is **always excluded** from the eligible reviewer set, regardless of provenance.
+- Every factory worker that authored the exact head under review is excluded from the eligible reviewer set, not only the worker that opened the PR. Contributor provenance is the union of controller head-contributor records and the declared branch/body producer.
 
 This contract ensures that worker GitHub Apps can push and create PRs, but they cannot forge review authorization or trusted marker provenance.
 
