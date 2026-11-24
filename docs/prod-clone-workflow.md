@@ -1,70 +1,70 @@
-# Production-to-local data clone workflow
+# Production-to-local database copy
 
-This workflow copies one ComicPile user's data from the production PostgreSQL database into a local development database. Production PostgreSQL is hosted by Neon. The export is read-only, the import remaps every exported ID, and authentication secrets are never copied.
+ComicPile has no supported user-scoped JSON clone/remapping CLI. The old
+`scripts.clone_prod_to_local` command and `clone-prod-export` / `clone-prod-import`
+Make targets were removed. Do not recreate or invoke them.
+
+For an authorized full-database copy, use the maintained PostgreSQL backup and
+restore scripts. This copies the **entire database**, including account rows and
+password hashes; it is not a safe default for ordinary local development. Prefer
+registering a synthetic local account through the UI instead.
 
 ## Prerequisites
 
-- A working local checkout with the project virtual environment installed.
-- A production Neon PostgreSQL URL supplied through `CLONE_PROD_DB_URL` or `--db-url`.
-- A local PostgreSQL database with the current schema. Run migrations first:
+- PostgreSQL client tools (`pg_dump`, `psql`) compatible with the server.
+- Explicit owner authorization to export production data.
+- A fresh, empty, loopback local PostgreSQL database for the import.
+- A secure temporary location for the dump. Never commit or upload it.
+
+## 1. Export with the production URL
+
+The backup script reads `.env` from its checkout. Use a temporary secure checkout
+or securely prepared `.env` containing the authorized production `DATABASE_URL`;
+do not overwrite a developer's normal local configuration inadvertently.
 
 ```bash
-make migrate
+make backup-postgres
+make list-postgres-backups
 ```
 
-The local database URL can be supplied with `--local-db-url`, or the script can use the normal application database configuration. For imports, the resolved destination must be a loopback/local PostgreSQL host such as `localhost`, `127.0.0.1`, or `::1`. Do not point the import command at Neon, Vercel-connected production credentials, or any other remote database.
+The script accepts remote PostgreSQL hosts for backup and writes a gzip-compressed
+plain SQL dump named `postgres_backup_<database>_<timestamp>.sql.gz`. Treat the
+file as production credentials and reader data. The script verifies gzip
+integrity, not restore correctness.
 
-## Export production data
+## 2. Prepare an empty local target
 
-Always pass the production Neon database URL explicitly with `CLONE_PROD_DB_URL` or `--db-url`. Railway is retired and is not a supported production source.
+Create a fresh empty local database. Use a separate checkout or securely prepared
+`.env` whose `DATABASE_URL` points at that loopback target.
+
+The restore script refuses every non-loopback host and has no override. It pipes
+the dump into `psql`; it does not drop/recreate the target. Because the dump has
+no `--clean`/`--if-exists`, importing into a non-empty target will produce
+duplicate-object errors. Let the dump create the schema in the empty target; run
+the migration planner afterward instead of migrating before restore.
+
+## 3. Restore into the empty loopback database
 
 ```bash
-CLONE_PROD_DB_URL='postgresql+asyncpg://USER:PASSWORD@HOST:5432/DB' \
-python -m scripts.clone_prod_to_local export \
-  --username YOUR_PRODUCTION_USERNAME \
-  --output prod_backup.json
+make restore-postgres FILE=backups/postgres/postgres_backup_<database>_<timestamp>.sql.gz
+set -a; . ./.env; set +a
+cargo run --locked -p comicpile-migrate -- plan
 ```
 
-You can provide the same value directly with `--db-url` instead of using the environment variable. Review the redacted target before confirming the export.
+Review the destination and type `yes` only after confirming it is the disposable
+local database. If the planner reports pending work, apply forward migrations
+before serving the copied data.
 
-The output is a private (`0600`) JSON file. It contains user-scoped threads, issues, dependencies, reading orders, sessions, events, and snapshots. It does not contain `password_hash`, revoked tokens, failed-login records, or database credentials.
+## 4. Secure and verify the copy
 
-## Validate without writing
+- Keep the dump and any pre-copy backup private and access-controlled.
+- Do not expect production passwords to be appropriate for local use. The dump
+  contains password hashes and auth state; never expose the copied database on a
+  network or use it as a shared test service.
+- Verify counts and representative screens locally, then delete the copy and
+  dump when the authorized task is complete.
+- Never point an import, test or application process at production for destructive
+  verification.
 
-Run the import in dry-run mode before changing the local database:
-
-```bash
-python -m scripts.clone_prod_to_local import \
-  --file prod_backup.json \
-  --dry-run \
-  --local-db-url 'postgresql+asyncpg://USER:PASSWORD@localhost:5435/comic_pile'
-```
-
-Dry-run validates the schema and all exported foreign-key references, reports the per-table record counts that would be imported, and performs no database writes.
-
-## Import into local development
-
-A normal import replaces that user's clone data in one transaction, and a failed import is rolled back. The CLI currently creates a timestamped destination backup by default; use `--backup` when you need a predictable path:
-
-```bash
-python -m scripts.clone_prod_to_local import \
-  --file prod_backup.json \
-  --backup local_before_clone.json \
-  --local-db-url 'postgresql+asyncpg://USER:PASSWORD@localhost:5435/comic_pile'
-```
-
-Type `yes` at the confirmation prompt after checking the destination. For non-interactive automation, add `--yes` only after validating the file and confirming that the resolved destination is a loopback/local development database. Until the CLI itself rejects remote import targets, treat this destination check as a mandatory safety gate rather than a suggestion.
-
-After a successful import, sign in with the imported username. The imported user has no production password hash, so set a local password through the normal registration or administrative workflow rather than expecting the production password to work.
-
-## Safety checklist
-
-1. Confirm the explicit Neon export target is production and the username is correct.
-2. Keep export and pre-import backup files private; do not commit them.
-3. Run `--dry-run` against the intended local database.
-4. Confirm the resolved import target is loopback/local (`localhost`, `127.0.0.1`, or `::1`) before allowing writes.
-5. Never run the import command with a Neon hostname, production Vercel database URL, or another remote PostgreSQL target.
-6. Keep the pre-import backup until the clone has been verified.
-7. Confirm thread counts, reading orders, and sessions in the local UI.
-
-The command must never mutate production. Export is the only operation that should connect to production, and import must target a loopback/local development database supplied by configuration or `--local-db-url`.
+See [`DATABASE_SAVE_LOAD.md`](DATABASE_SAVE_LOAD.md) for backup rotation, restore
+limitations and production disaster-recovery boundaries.

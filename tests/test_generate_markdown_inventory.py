@@ -105,6 +105,20 @@ def test_explicit_historical_marker_overrides_active_default() -> None:
     assert "Git history" in replacement
 
 
+def test_marker_mentioned_in_code_is_not_historical() -> None:
+    """Inline/fenced examples of the marker must not classify the whole document."""
+    text = (
+        "# Active guide\n\n"
+        "Use `<!-- docs-path-check: historical -->` only for real history.\n\n"
+        "```html\n"
+        "<!-- docs-path-check: historical -->\n"
+        "```\n"
+    )
+    _, action, _ = _content_disposition("docs/EXAMPLE.md", text, "keep")
+
+    assert action == "keep"
+
+
 def test_canonical_entry_point_links_are_discovered() -> None:
     """The inventory recognizes active contracts linked from root/docs hubs."""
     linked = _linked_markdown_targets(Path.cwd())
@@ -112,6 +126,7 @@ def test_canonical_entry_point_links_are_discovered() -> None:
     assert "docs/ARCHITECTURE.md" in linked
     assert "docs/DEPLOYMENT.md" in linked
     assert "docs/READING_LIST_RUNTIME.md" in linked
+    assert "docs/README.md" in linked
 
 
 def test_render_markdown_includes_required_audit_columns_and_escapes_pipes() -> None:
