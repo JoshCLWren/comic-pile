@@ -2000,9 +2000,21 @@ mod tests {
             mode: "loose".into(),
             name: "Loose".into(),
             entries: vec![
-                ReadingEntry { issue_id: 13, gate: "none".into(), skipped: false },
-                ReadingEntry { issue_id: 14, gate: "none".into(), skipped: false }, // excluded
-                ReadingEntry { issue_id: 15, gate: "after_previous".into(), skipped: false },
+                ReadingEntry {
+                    issue_id: 13,
+                    gate: "none".into(),
+                    skipped: false,
+                },
+                ReadingEntry {
+                    issue_id: 14,
+                    gate: "none".into(),
+                    skipped: false,
+                }, // excluded
+                ReadingEntry {
+                    issue_id: 15,
+                    gate: "after_previous".into(),
+                    skipped: false,
+                },
             ],
             overlap_decisions: vec![],
         });
@@ -2030,21 +2042,78 @@ mod tests {
         let source = OptionInputs {
             core: CoreReadingInputs {
                 threads: vec![
-                    ReadingThread { id: 1, status: "active".into(), title: "Ultimate Spider-Man".into() },
-                    ReadingThread { id: 2, status: "active".into(), title: "Ultimate Black Panther".into() },
-                    ReadingThread { id: 3, status: "active".into(), title: "Ultimate X-Men".into() },
+                    ReadingThread {
+                        id: 1,
+                        status: "active".into(),
+                        title: "Ultimate Spider-Man".into(),
+                    },
+                    ReadingThread {
+                        id: 2,
+                        status: "active".into(),
+                        title: "Ultimate Black Panther".into(),
+                    },
+                    ReadingThread {
+                        id: 3,
+                        status: "active".into(),
+                        title: "Ultimate X-Men".into(),
+                    },
                 ],
                 issues: vec![
-                    ReadingIssue { id: 101, thread_id: 1, position: 19, status: "read".into(), issue_number: "19".into() },
-                    ReadingIssue { id: 102, thread_id: 1, position: 20, status: "unread".into(), issue_number: "20".into() },
-                    ReadingIssue { id: 201, thread_id: 2, position: 11, status: "unread".into(), issue_number: "11".into() },
-                    ReadingIssue { id: 219, thread_id: 2, position: 19, status: "unread".into(), issue_number: "19".into() },
-                    ReadingIssue { id: 301, thread_id: 3, position: 5, status: "unread".into(), issue_number: "5".into() },
+                    ReadingIssue {
+                        id: 101,
+                        thread_id: 1,
+                        position: 19,
+                        status: "read".into(),
+                        issue_number: "19".into(),
+                    },
+                    ReadingIssue {
+                        id: 102,
+                        thread_id: 1,
+                        position: 20,
+                        status: "unread".into(),
+                        issue_number: "20".into(),
+                    },
+                    ReadingIssue {
+                        id: 201,
+                        thread_id: 2,
+                        position: 11,
+                        status: "unread".into(),
+                        issue_number: "11".into(),
+                    },
+                    ReadingIssue {
+                        id: 219,
+                        thread_id: 2,
+                        position: 19,
+                        status: "unread".into(),
+                        issue_number: "19".into(),
+                    },
+                    ReadingIssue {
+                        id: 301,
+                        thread_id: 3,
+                        position: 5,
+                        status: "unread".into(),
+                        issue_number: "5".into(),
+                    },
                 ],
                 stored: vec![
-                    StoredThreadEligibility { thread_id: 1, next_issue_id: None, is_blocked: false, queue_position: 1 },
-                    StoredThreadEligibility { thread_id: 2, next_issue_id: None, is_blocked: false, queue_position: 2 },
-                    StoredThreadEligibility { thread_id: 3, next_issue_id: None, is_blocked: false, queue_position: 3 },
+                    StoredThreadEligibility {
+                        thread_id: 1,
+                        next_issue_id: None,
+                        is_blocked: false,
+                        queue_position: 1,
+                    },
+                    StoredThreadEligibility {
+                        thread_id: 2,
+                        next_issue_id: None,
+                        is_blocked: false,
+                        queue_position: 2,
+                    },
+                    StoredThreadEligibility {
+                        thread_id: 3,
+                        next_issue_id: None,
+                        is_blocked: false,
+                        queue_position: 3,
+                    },
                 ],
             },
             thread_volumes: BTreeMap::new(),
@@ -2053,11 +2122,31 @@ mod tests {
                 mode: "loose".into(),
                 name: "Ultimate Universe".into(),
                 entries: vec![
-                    ReadingEntry { issue_id: 101, gate: "none".into(), skipped: false }, // SM #19 read
-                    ReadingEntry { issue_id: 201, gate: "none".into(), skipped: false }, // BP #11
-                    ReadingEntry { issue_id: 219, gate: "none".into(), skipped: false }, // BP #19
-                    ReadingEntry { issue_id: 102, gate: "after_previous".into(), skipped: false }, // SM #20 waits for BP #19
-                    ReadingEntry { issue_id: 301, gate: "none".into(), skipped: false }, // UXM #5 independent
+                    ReadingEntry {
+                        issue_id: 101,
+                        gate: "none".into(),
+                        skipped: false,
+                    }, // SM #19 read
+                    ReadingEntry {
+                        issue_id: 201,
+                        gate: "none".into(),
+                        skipped: false,
+                    }, // BP #11
+                    ReadingEntry {
+                        issue_id: 219,
+                        gate: "none".into(),
+                        skipped: false,
+                    }, // BP #19
+                    ReadingEntry {
+                        issue_id: 102,
+                        gate: "after_previous".into(),
+                        skipped: false,
+                    }, // SM #20 waits for BP #19
+                    ReadingEntry {
+                        issue_id: 301,
+                        gate: "none".into(),
+                        skipped: false,
+                    }, // UXM #5 independent
                 ],
                 overlap_decisions: vec![],
             }],
@@ -2069,13 +2158,31 @@ mod tests {
         // Before BP #19 is read: SM #20 blocked by after_previous on BP #19.
         // BP #19 itself is behind BP #11 by natural series order, so BP #11 is
         // the BP frontier; BP #11 remains eligible/snoozable (not stalled).
-        let contained = ValidatedReadingInputs::contained(source.clone(), &BTreeMap::new()).unwrap();
+        let contained =
+            ValidatedReadingInputs::contained(source.clone(), &BTreeMap::new()).unwrap();
         assert!(contained.graph_problem().is_none());
-        let frontiers: Vec<i32> = contained.eligible_frontiers().unwrap().into_iter().map(|f| f.issue_id).collect();
-        assert!(frontiers.contains(&201), "BP #11 should be eligible/snoozable: {frontiers:?}");
-        assert!(!frontiers.contains(&219), "BP #19 blocked by natural order behind BP #11: {frontiers:?}");
-        assert!(frontiers.contains(&301), "UXM #5 should be eligible (independent loose-list series): {frontiers:?}");
-        assert!(!frontiers.contains(&102), "SM #20 must NOT be rollable before BP #19 read: {frontiers:?}");
+        let frontiers: Vec<i32> = contained
+            .eligible_frontiers()
+            .unwrap()
+            .into_iter()
+            .map(|f| f.issue_id)
+            .collect();
+        assert!(
+            frontiers.contains(&201),
+            "BP #11 should be eligible/snoozable: {frontiers:?}"
+        );
+        assert!(
+            !frontiers.contains(&219),
+            "BP #19 blocked by natural order behind BP #11: {frontiers:?}"
+        );
+        assert!(
+            frontiers.contains(&301),
+            "UXM #5 should be eligible (independent loose-list series): {frontiers:?}"
+        );
+        assert!(
+            !frontiers.contains(&102),
+            "SM #20 must NOT be rollable before BP #19 read: {frontiers:?}"
+        );
 
         // After BP #11 and BP #19 are read in natural order: SM #20 becomes eligible.
         let mut after = source;
@@ -2086,8 +2193,19 @@ mod tests {
         }
         let contained_after = ValidatedReadingInputs::contained(after, &BTreeMap::new()).unwrap();
         assert!(contained_after.graph_problem().is_none());
-        let frontiers_after: Vec<i32> = contained_after.eligible_frontiers().unwrap().into_iter().map(|f| f.issue_id).collect();
-        assert!(frontiers_after.contains(&102), "SM #20 should be eligible after BP #19 read: {frontiers_after:?}");
-        assert!(frontiers_after.contains(&301), "UXM #5 still eligible: {frontiers_after:?}");
+        let frontiers_after: Vec<i32> = contained_after
+            .eligible_frontiers()
+            .unwrap()
+            .into_iter()
+            .map(|f| f.issue_id)
+            .collect();
+        assert!(
+            frontiers_after.contains(&102),
+            "SM #20 should be eligible after BP #19 read: {frontiers_after:?}"
+        );
+        assert!(
+            frontiers_after.contains(&301),
+            "UXM #5 still eligible: {frontiers_after:?}"
+        );
     }
 }
