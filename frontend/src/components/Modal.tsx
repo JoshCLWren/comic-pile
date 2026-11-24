@@ -66,6 +66,9 @@ export default function Modal({
   useEffect(() => {
     closeDisabledRef.current = closeDisabled
   }, [closeDisabled])
+  useEffect(() => {
+    restoreFocusRefRef.current = restoreFocusRef
+  }, [restoreFocusRef])
 
   // OverlayPortal creates its shared root after the parent modal's first commit.
   // Wait until the portaled overlay node is attached before registering, layering,
@@ -142,8 +145,11 @@ export default function Modal({
 
       // Only restore focus when this modal was the topmost layer. Closing a
       // lower modal must not steal focus from the modal rendered above it.
-      if (wasTopmost && previousFocusRef.current?.isConnected) {
-        previousFocusRef.current.focus()
+      if (wasTopmost) {
+        const restoreTarget = previousFocusRef.current?.isConnected
+          ? previousFocusRef.current
+          : restoreFocusRefRef.current?.current
+        if (restoreTarget?.isConnected) restoreTarget.focus()
       }
     }
   }, [autoFocus, isOpen, overlayElement])

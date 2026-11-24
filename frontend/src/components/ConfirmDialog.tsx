@@ -1,5 +1,5 @@
 import Modal from './Modal'
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
 
 interface ConfirmDialogProps {
   isOpen: boolean
@@ -16,6 +16,8 @@ interface ConfirmDialogProps {
   onConfirm: () => void
   onCancel: () => void
   testId?: string
+  /** Focus target used on close when the pre-open element is no longer stable. */
+  restoreFocusRef?: RefObject<HTMLElement | null>
 }
 
 /**
@@ -38,9 +40,10 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
   testId,
+  restoreFocusRef,
 }: ConfirmDialogProps) {
   return (
-    <Modal isOpen={isOpen} title={title} onClose={onCancel} closeDisabled={isPending} data-testid={testId}>
+    <Modal isOpen={isOpen} title={title} onClose={onCancel} closeDisabled={isPending} restoreFocusRef={restoreFocusRef} data-testid={testId}>
       <div className="space-y-4">
         {children}
         {error && (
