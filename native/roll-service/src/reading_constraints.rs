@@ -2066,25 +2066,28 @@ mod tests {
             unresolved: vec![],
         };
 
-        // Before BP #19 is read: SM #20 blocked, others eligible by natural frontier.
+        // Before BP #19 is read: SM #20 blocked by after_previous on BP #19.
+        // BP #19 itself is behind BP #11 by natural series order, so BP #11 is
+        // the BP frontier; BP #11 remains eligible/snoozable (not stalled).
         let contained = ValidatedReadingInputs::contained(source.clone(), &BTreeMap::new()).unwrap();
         assert!(contained.graph_problem().is_none());
         let frontiers: Vec<i32> = contained.eligible_frontiers().unwrap().into_iter().map(|f| f.issue_id).collect();
-        assert!(frontiers.contains(&201), "BP #11 should be eligible: {frontiers:?}");
-        assert!(frontiers.contains(&219), "BP #19 should be eligible: {frontiers:?}");
+        assert!(frontiers.contains(&201), "BP #11 should be eligible/snoozable: {frontiers:?}");
+        assert!(!frontiers.contains(&219), "BP #19 blocked by natural order behind BP #11: {frontiers:?}");
         assert!(frontiers.contains(&301), "UXM #5 should be eligible (independent loose-list series): {frontiers:?}");
         assert!(!frontiers.contains(&102), "SM #20 must NOT be rollable before BP #19 read: {frontiers:?}");
 
-        // After BP #19 is read: SM #20 becomes eligible.
+        // After BP #11 and BP #19 are read in natural order: SM #20 becomes eligible.
         let mut after = source;
-        if let Some(bp19) = after.core.issues.iter_mut().find(|i| i.id == 219) {
-            bp19.status = "read".into();
+        for id in [201, 219] {
+            if let Some(issue) = after.core.issues.iter_mut().find(|i| i.id == id) {
+                issue.status = "read".into();
+            }
         }
         let contained_after = ValidatedReadingInputs::contained(after, &BTreeMap::new()).unwrap();
         assert!(contained_after.graph_problem().is_none());
         let frontiers_after: Vec<i32> = contained_after.eligible_frontiers().unwrap().into_iter().map(|f| f.issue_id).collect();
         assert!(frontiers_after.contains(&102), "SM #20 should be eligible after BP #19 read: {frontiers_after:?}");
-        assert!(frontiers_after.contains(&201), "BP #11 still eligible: {frontiers_after:?}");
         assert!(frontiers_after.contains(&301), "UXM #5 still eligible: {frontiers_after:?}");
     }
 }
