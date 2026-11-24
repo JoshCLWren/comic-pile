@@ -321,6 +321,63 @@ it('ignores its own broadcast so the writing tab does not refresh twice (#5686 G
   unsubscribe()
 })
 
+it('keeps plan sync best-effort when BroadcastChannel is unavailable (#5686)', () => {
+  vi.stubGlobal('BroadcastChannel', undefined)
+  const listener = vi.fn()
+
+  expect(() => notifyReadingPlansChanged()).not.toThrow()
+  const unsubscribe = subscribeToCrossTabChanges(listener)
+  expect(listener).not.toHaveBeenCalled()
+  unsubscribe()
+})
+
+it('keeps plan sync best-effort when the browser blocks BroadcastChannel (#5686)', () => {
+  class BlockedBroadcastChannel {
+    constructor() {
+      throw new Error('BroadcastChannel blocked')
+    }
+  }
+  vi.stubGlobal('BroadcastChannel', BlockedBroadcastChannel)
+  const listener = vi.fn()
+
+  expect(() => notifyReadingPlansChanged()).not.toThrow()
+  const unsubscribe = subscribeToCrossTabChanges(listener)
+  expect(listener).not.toHaveBeenCalled()
+  unsubscribe()
+})
+
+it('keeps plan sync best-effort when posting a change fails (#5686)', () => {
+  class FailingBroadcastChannel extends FakeBroadcastChannel {
+    override postMessage(_data: unknown): void {
+      throw new Error('postMessage blocked')
+    }
+  }
+  vi.stubGlobal('BroadcastChannel', FailingBroadcastChannel)
+
+  expect(() => notifyReadingPlansChanged()).not.toThrow()
+  expect(FakeBroadcastChannel.channels.size).toBe(0)
+})
+
+it('ignores malformed and unrelated cross-tab messages (#5686)', () => {
+  const listener = vi.fn()
+  const unsubscribe = subscribeToCrossTabChanges(listener)
+  const otherTab = new BroadcastChannel('comic-pile-data')
+
+  for (const data of [
+    null,
+    {},
+    { type: 42, senderId: 'other-tab' },
+    { type: 'reading-plans-changed' },
+    { type: 'unrelated-change', senderId: 'other-tab' },
+  ]) {
+    otherTab.postMessage(data)
+  }
+
+  expect(listener).not.toHaveBeenCalled()
+  otherTab.close()
+  unsubscribe()
+})
+
 it('announces a committed plan adoption to other tabs (#5686 G1)', async () => {
   const changes: string[] = []
   const observer = new BroadcastChannel('comic-pile-data')
