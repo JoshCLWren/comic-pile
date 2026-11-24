@@ -161,12 +161,7 @@ export default function Modal({
       // Only restore focus when this modal was the topmost layer. Closing a
       // lower modal must not steal focus from the modal rendered above it.
       if (wasTopmost) {
-        const returnTarget = returnFocusRef?.current
-        if (returnTarget?.isConnected) {
-          returnTarget.focus()
-        } else {
-          previousFocusRef.current?.focus()
-        }
+        restoreModalFocus(returnFocusRef, previousFocusRef.current)
       }
     }
   }, [autoFocus, isOpen, overlayElement, returnFocusRef])
