@@ -1,137 +1,126 @@
-# Local Testing Guide
+# Local testing guide
 
-## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+## Never skip tests
 
-**TESTS MUST NEVER BE SKIPPED - EVER.**
+Fix failing tests and their root cause. Never skip, disable or weaken a test to
+make a run green, and never use CI as a substitute for a locally reproducible
+check.
 
-When running tests locally:
-- ✅ Fix failing tests before moving on
-- ✅ Investigate root causes
-- ❌ **NEVER skip tests to save time**
-- ❌ **NEVER ignore test failures**
+## Prerequisites
 
-Local testing is your opportunity to catch issues before they reach CI. Take advantage of it.
+- Docker for disposable PostgreSQL/test stacks.
+- Rust/Cargo, Node.js and pnpm for application builds/tests.
+- Python 3.14 and uv for repository tooling tests and lint/type checks:
+
+  ```bash
+  make sync
+  ```
+
+There is no Python application runtime. The legacy Python API and
+`tests_e2e/` pytest/Playwright suite were removed; `tests_e2e/README.md` only
+points to the maintained TypeScript browser suite.
 
 ## What runs where
 
-Comic Pile has no Python application runtime. Testing is split across three
-surfaces:
-
-| Surface | Location | Command |
+| Surface | Location | Focused local command |
 | --- | --- | --- |
-| Rust API behavior | `native/roll-service` (unit + DB-backed HTTP tests) | `cargo test --workspace` |
-| Frontend unit/contract tests | `frontend/src/unit`, colocated `*.test.ts(x)` | `pnpm --filter frontend test` |
-| Browser E2E (Chromium) | `frontend/src/test` (Playwright, TypeScript) | `make verify-e2e` |
-| Repository tooling | `tests/` (pytest, Node test files) | focused `pytest tests/test_<name>.py` |
+| Rust API behavior | `native/roll-service` | `cargo test -p comicpile-roll-service <filter>` |
+| Frontend unit/contract | `frontend/src/unit`, colocated tests | `pnpm --filter frontend exec vitest run <file>` |
+| Browser E2E | `frontend/src/test` | Playwright against a same-origin test ingress |
+| Repository tooling | `tests/`, Node test files | `python3 -m pytest tests/<file>.py` or `node --test <file>` |
 
-The legacy Python pytest/Playwright suite under `tests_e2e/` was removed with
-the Python API. `tests_e2e/README.md` now only points at the maintained
-browser suite.
+Full Rust/frontend suites and aggregate coverage run in CI. Use focused files or
+cases locally.
 
-## Quick start
-
-### 1. Local database
+## Local application database
 
 ```bash
 make db-up        # PostgreSQL on host port 5435
-make db-down      # stop it without deleting data
-```
-
-The local defaults in `.env.example` already point at this database. The
-migration runner reads `MIGRATE_DATABASE_URL`, falling back to `DATABASE_URL`;
-load `.env` into the shell first, because neither the Make targets nor the Rust
-binaries read `.env` themselves:
-
-```bash
+make db-down      # stop without deleting data
 set -a; . ./.env; set +a
 make migrate
 ```
 
-### 2. Create an account instead of seeding
+The migration runner reads `MIGRATE_DATABASE_URL`, falling back to
+`DATABASE_URL`. The standalone native service reads `RUST_ROLL_DATABASE_URL` and
+`RUST_ROLL_JWT_SECRET` directly; neither binary loads `.env` for you.
 
-There is no seed command. Start the app with `make dev`, then register through
-the UI to create a user and queue. The read-only guest Demo page at `/demo`
-serves fabricated fixtures and writes nothing.
+There is no seed command. Run `make dev`, register through the UI, or use the
+read-only `/demo` fixture page.
 
-### 3. Run the API for browser tests
+## Browser test topology
 
-Playwright specs run against a same-origin server. Start the native service
-against a disposable database, never a shared or production one:
+Playwright expects one origin that serves both the built frontend and `/api`.
+The standalone API on `:8010` is not that origin by itself.
+
+### Docker nginx topology
 
 ```bash
-RUST_ROLL_BIND=127.0.0.1:8010 \
-RUST_ROLL_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5437/comic_pile_test" \
-RUST_ROLL_JWT_SECRET="test-secret-key-for-testing-only" \
-cargo run --locked -p comicpile-roll-service
+make docker-test-up
+BASE_URL=http://127.0.0.1:8000 pnpm --filter frontend run test:e2e:quick
+make docker-test-down
 ```
 
-`make docker-test-up` builds the frontend and starts the maintained test
-topology (PostgreSQL on 5437, Redis, the native service behind nginx on 8000).
-See [`docs/E2E_CHROMIUM_REGRESSION.md`](docs/E2E_CHROMIUM_REGRESSION.md) for the
-full ingress contract and the inventory-driven regression lane.
+`make docker-test-up` builds the frontend, applies migrations and starts native
+Rust behind nginx on `:8000`, with PostgreSQL on `:5437`. The Compose file also
+defines Redis, but the native runtime does not use it.
 
-### 4. Run tests
+### Slot-safe regression topology
+
+For parallel local sessions, follow
+[`.agents/skills/e2e-chromium-regression/SKILL.md`](../.agents/skills/e2e-chromium-regression/SKILL.md).
+It starts a slot-specific PostgreSQL database, native Rust and
+`scripts/e2e_native_ingress.py`, then exports `BASE_URL` (default ingress
+`:9000`). Set `TEST_ENVIRONMENT=true` so fixture-speed auth registration is not
+throttled. Never use a production or shared database.
+
+`make verify-e2e` and the direct Playwright configs do not set `BASE_URL` for
+you. Set it to the origin actually serving the suite.
+
+## Common commands
 
 ```bash
-# Rust: all workspace tests
-cargo test --workspace
-
-# Rust: one focused test or module
+# Rust: focused module/test; full workspace suite runs in CI
 cargo test -p comicpile-roll-service roll_offer
 
-# Frontend: unit tests (Vitest, plus style/sitemap/SEO audits)
-pnpm --filter frontend test
-
-# Frontend: one focused file
+# Frontend: focused unit file
 pnpm --filter frontend exec vitest run src/unit/queryKeys.test.ts
 
-# Browser: Chromium Playwright (builds first)
-make verify-e2e
+# Browser: build first, then run against the chosen BASE_URL
+pnpm --filter frontend run build
+pnpm --filter frontend exec playwright test --project=chromium
 
-# Repository tooling: one test file
-pytest tests/test_markdown_docs.py -v
+# Repository tooling: focused file
+python3 -m pytest tests/test_markdown_docs.py -v
+
+# Documentation mechanics
+python3 scripts/check_markdown_docs.py
+node scripts/check_doc_code_paths.mjs
 ```
 
-Full suites run in CI. Run only the files or cases that cover your change
-locally, plus focused regressions for a bug you are fixing.
+## Rust request tests
 
-## Common patterns
+DB-backed HTTP tests build the real router and call it with
+`tower::ServiceExt::oneshot` against a disposable migrated PostgreSQL database.
+Set `RUST_ROLL_TEST_DATABASE_URL`; missing configuration fails rather than
+skipping. Every native route module requires such a test, enforced by
+`node scripts/check_native_route_db_tests.mjs`.
 
-### Rust request test
+## Frontend query tests
 
-Handler tests build the router from `native/roll-service/src/lib.rs` and call it
-with `tower::ServiceExt::oneshot`. Every native route module is expected to have
-a DB-backed HTTP test; the `native-route-db-test-guard` CI job enforces that
-coverage with `node scripts/check_native_route_db_tests.mjs`.
-
-```rust
-let response = app
-    .clone()
-    .oneshot(Request::builder().uri("/api/v2/health").body(Body::empty())?)
-    .await?;
-assert_eq!(response.status(), StatusCode::OK);
-```
-
-### Frontend query test
-
-Unit tests mock the service layer with `msw` and render through the shared
+Unit tests mock the service layer with MSW and render through the shared
 `QueryClient`. Follow the cache-effect and query-key rules in
 [`docs/REACT_ARCHITECTURE.md`](docs/REACT_ARCHITECTURE.md).
 
 ## Troubleshooting
 
-**Native service exits at startup?**
-- It requires `RUST_ROLL_DATABASE_URL` and `RUST_ROLL_JWT_SECRET`. It does not
-  read `.env`.
-- `RUST_ROLL_DATABASE_URL` must be a plain `postgresql://` URL (no `+asyncpg`).
-- In development the bind address must be loopback.
-
-**Migrations say "set MIGRATE_DATABASE_URL or DATABASE_URL"?**
-- Export the environment first: `set -a; . ./.env; set +a`.
-
-**Database connection errors?**
-- Ensure PostgreSQL is running (`make db-up`) and the URL points at port 5435.
-
-**Port conflicts?**
-- Dev PostgreSQL 5435, test PostgreSQL 5437, local native API 8010, Vite 5173.
-  The Docker test topology serves the frontend through nginx on 8000.
+- **Native startup failure:** provide `RUST_ROLL_DATABASE_URL` and
+  `RUST_ROLL_JWT_SECRET`; use a plain `postgresql://` URL for the standalone
+  process and a loopback bind in development.
+- **Migration URL missing:** export `.env` before `make migrate`.
+- **Wrong browser origin:** confirm `BASE_URL` matches nginx/ingress, not the
+  standalone `:8010` API.
+- **429 during browser fixtures:** set `TEST_ENVIRONMENT=true` and do not opt
+  back into rate limiting unless the test specifically covers it.
+- **Port conflicts:** dev PostgreSQL 5435, test PostgreSQL 5437, Vite 5173,
+  standalone API 8010, Docker nginx 8000, regression ingress 9000.
