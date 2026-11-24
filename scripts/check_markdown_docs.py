@@ -172,7 +172,7 @@ def find_broken_local_links(root: Path, markdown_files: list[Path]) -> list[str]
 
 
 def find_unapproved_root_markdown(root: Path) -> list[str]:
-    """Find root Markdown files that bypass the documentation ownership model.
+    """Find tracked root Markdown files that bypass the documentation ownership model.
 
     Args:
         root: Repository root to inspect.
@@ -180,11 +180,12 @@ def find_unapproved_root_markdown(root: Path) -> list[str]:
     Returns:
         Sorted names of unapproved root Markdown files.
     """
-    return sorted(
-        path.name
-        for path in root.glob("*.md")
-        if path.name not in ALLOWED_ROOT_MARKDOWN
-    )
+    tracked = _tracked_markdown_files(root)
+    if tracked is not None:
+        candidates = [path for path in tracked if path.parent == root]
+    else:
+        candidates = list(root.glob("*.md"))
+    return sorted(path.name for path in candidates if path.name not in ALLOWED_ROOT_MARKDOWN)
 
 
 def main() -> int:
