@@ -1,11 +1,16 @@
 name: Release writer
 
 # Reactivated after the 2026-10-20 Fluid Compute incident.
-# One event = one merged PR. No Vercel API, schedule, or historical rescan.
+# One run stages at most one merged PR. Deployment completions recover missed or
+# failed events from a bounded recent window; no schedule or unbounded rescan.
 # pull_request_target runs only trusted main code, including for external contributors.
 on:
   pull_request_target:
     types: [closed]
+    branches: [main]
+  workflow_run:
+    workflows: [Deploy Production]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -29,9 +34,74 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  discover:
+    # Bot merges do not reliably emit pull_request_target. Every successful
+    # deployment rechecks recent deployed sources, including prior failed runs.
+    if: >-
+      ${{
+        (github.event_name == 'pull_request_target' && github.event.pull_request.merged == true) ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+        github.event_name == 'workflow_dispatch'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      needed: ${{ steps.select.outputs.needed }}
+      pr_number: ${{ steps.select.outputs.pr_number }}
+      merge_sha: ${{ steps.select.outputs.merge_sha }}
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up isolated Python discovery
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Install Neon client
+        run: python -m pip install 'psycopg[binary]>=3.2,<4'
+      - name: Select one missing deployed ledger source
+        id: select
+        shell: bash
+        env:
+          INPUT_PR: ${{ github.event.pull_request.number || inputs.pr_number }}
+          GH_TOKEN: ${{ github.token }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -Eeuo pipefail
+          uri=""
+          if [[ -n "$NEON_API_KEY" && -n "$NEON_PROJECT_ID" ]]; then
+            # The read-only discovery query uses the same trusted Neon DSN as
+            # the publisher. Model generation never receives this credential.
+            uri="$(curl --fail --silent --show-error \
+              --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?database_name=neondb&role_name=neondb_owner" \
+              --header 'Accept: application/json' \
+              --header "Authorization: Bearer ${NEON_API_KEY}" | jq -r '.uri')"
+            [[ -n "$uri" && "$uri" != "null" ]] || exit 1
+            echo "::add-mask::$uri"
+          fi
+          args=(select --repository "$GITHUB_REPOSITORY")
+          if [[ -n "$INPUT_PR" ]]; then
+            args+=(--pr "$INPUT_PR")
+          fi
+          RELEASE_NEON_DATABASE_URL="$uri" python scripts/release_recovery.py "${args[@]}"
+      - name: Write discovery summary
+        if: always()
+        run: |
+          {
+            echo '## Release recovery discovery'
+            echo
+            echo '- Needed: ${{ steps.select.outputs.needed }}'
+            echo '- PR: ${{ steps.select.outputs.pr_number }}'
+            echo '- Merge SHA: ${{ steps.select.outputs.merge_sha }}'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   generate:
-    # Closed, unmerged PRs are ignored. Only merged PRs or manual exact PRs run.
-    if: ${{ github.event_name != 'pull_request_target' || github.event.pull_request.merged == true }}
+    needs: discover
+    if: needs.discover.outputs.needed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -55,7 +125,7 @@ jobs:
 
       - name: Validate exact scope and model credential
         env:
-          INPUT_PR: ${{ github.event.pull_request.number || inputs.pr_number }}
+          INPUT_PR: ${{ needs.discover.outputs.pr_number }}
         run: |
           set -Eeuo pipefail
           [[ "$INPUT_PR" =~ ^[1-9][0-9]*$ ]] || { echo 'Exact PR number required' >&2; exit 1; }
@@ -90,7 +160,7 @@ jobs:
       - name: Generate one staged candidate (no DB credentials)
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_PR: ${{ github.event.pull_request.number || inputs.pr_number }}
+          INPUT_PR: ${{ needs.discover.outputs.pr_number }}
           RELEASE_WRITER_MODELS: ${{ steps.model.outputs.models }}
         run: |
           set -Eeuo pipefail
@@ -153,7 +223,7 @@ jobs:
       - name: Validate and publish directly to Neon
         shell: bash
         env:
-          INPUT_PR: ${{ github.event.pull_request.number || inputs.pr_number }}
+          INPUT_PR: ${{ needs.discover.outputs.pr_number }}
           GH_TOKEN: ${{ github.token }}
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
