@@ -56,4 +56,16 @@ describe('ConfirmDialog', () => {
     expect(screen.getByTestId('confirm-delete-custom-cbl-dialog')).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
   })
+
+  it('keeps focus and the dialog open while a pending action cannot be cancelled', () => {
+    const { props } = renderDialog({ isPending: true, pendingLabel: 'Deleting…' })
+    const dialog = screen.getByRole('dialog', { name: 'Delete custom CBL' })
+
+    expect(dialog).toHaveFocus()
+    expect(screen.getByRole('status')).toHaveTextContent('Deleting…')
+    expect(screen.getByRole('button', { name: 'Close modal' })).toBeDisabled()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(props.onCancel).not.toHaveBeenCalled()
+    expect(dialog).toBeInTheDocument()
+  })
 })
