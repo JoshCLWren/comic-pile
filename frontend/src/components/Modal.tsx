@@ -162,7 +162,7 @@ export default function Modal({
   // live focus boundary after every render so focus never falls to document.body
   // and escapes the dialog while it remains open.
   useLayoutEffect(() => {
-    if (!isOpen || !overlayElement) return
+    if (!isOpen || !overlayElement || !isTopmostModal(modalIdRef.current!)) return
     const modal = modalRef.current
     if (!modal || modal.contains(document.activeElement)) return
     const focusTarget = getModalFocusableElements(modal)[0] ?? modal

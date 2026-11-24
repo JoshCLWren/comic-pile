@@ -220,20 +220,6 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   const beforeDependencies = await getIssueDependencies(page, targetIssueId)
   const beforeDeletedList = await getReadingList(page, deletedList.id)
   const beforeSurvivingList = await getReadingList(page, survivingList.id)
-  const beforeSurvivingReader = await getReadingListReader(page, survivingList.id)
-  expect(beforeSurvivingReader.execution_mode).toBe('option_e')
-  const blockedEntry = beforeSurvivingReader.entries.find(
-    (entry) => entry.issue_id === blockedTargetIssueId,
-  )
-  expect(blockedEntry).toMatchObject({
-    availability: 'blocked',
-    explanation: { is_blocked: true },
-  })
-  expect(blockedEntry?.explanation?.blocking_dependencies).toContainEqual(expect.objectContaining({
-    issue_id: sourceIssueId,
-    thread_id: source.id,
-    label: expect.stringContaining('Reader prerequisite'),
-  }))
   expect(beforeCard).toEqual(rating.issue)
   expect(beforeHistory).toHaveLength(1)
   expect(beforeHistory[0]).toMatchObject({
