@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T19:19:44.297810+00:00",
+  "generated_at": "2026-11-24T19:35:35.649619+00:00",
   "models": [
     {
       "health": {
@@ -2177,12 +2177,10 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 1,
-          "failures": {
-            "unknown_failure": 1
-          },
+          "failed": 0,
+          "failures": {},
           "idle": 0,
-          "runs": 1
+          "runs": 0
         },
         "7d": {
           "completed": 0,
@@ -2239,8 +2237,8 @@
           "delivered": 0,
           "failed": 0,
           "failures": {},
-          "idle": 1,
-          "runs": 1
+          "idle": 0,
+          "runs": 0
         },
         "7d": {
           "completed": 0,
@@ -2708,15 +2706,15 @@
         "24h": {
           "completed": 13,
           "delivered": 12,
-          "failed": 37,
+          "failed": 36,
           "failures": {
             "agent_timeout": 10,
-            "control_plane_failure": 13,
+            "control_plane_failure": 12,
             "unknown_failure": 2,
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 51
+          "runs": 50
         },
         "7d": {
           "completed": 40,
@@ -3135,7 +3133,7 @@
     {
       "health": {
         "cooldown_until": null,
-        "last_outcome": "work_failure",
+        "last_outcome": "control_plane_failure",
         "status": "healthy"
       },
       "model": "stepfun-ai/step-5-preview",
@@ -3144,21 +3142,24 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
-          "failures": {},
+          "failed": 1,
+          "failures": {
+            "control_plane_failure": 1
+          },
           "idle": 0,
-          "runs": 0
+          "runs": 1
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 21,
+          "failed": 22,
           "failures": {
             "agent_timeout": 17,
+            "control_plane_failure": 1,
             "work_failure": 4
           },
           "idle": 2,
-          "runs": 23
+          "runs": 24
         }
       }
     },
@@ -3227,12 +3228,10 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 2,
-          "failures": {
-            "agent_timeout": 2
-          },
+          "failed": 0,
+          "failures": {},
           "idle": 0,
-          "runs": 2
+          "runs": 0
         },
         "7d": {
           "completed": 4,
@@ -22568,9 +22567,9 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 31,
-          "idle": 1,
-          "runs": 32
+          "failed": 30,
+          "idle": 0,
+          "runs": 30
         },
         "7d": {
           "completed": 0,
@@ -22606,16 +22605,16 @@
         "24h": {
           "completed": 16,
           "delivered": 15,
-          "failed": 104,
+          "failed": 102,
           "idle": 29,
-          "runs": 149
+          "runs": 147
         },
         "7d": {
           "completed": 55,
           "delivered": 53,
-          "failed": 601,
+          "failed": 602,
           "idle": 279,
-          "runs": 935
+          "runs": 936
         }
       }
     },
@@ -22783,10 +22782,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T19:19:44.444318+00:00",
-    "days_elapsed": 23.805,
+    "checked_at": "2026-11-24T19:35:35.771548+00:00",
+    "days_elapsed": 23.816,
     "days_in_month": 30.0,
-    "days_left": 6.19,
+    "days_left": 6.18,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
