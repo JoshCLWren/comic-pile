@@ -2306,6 +2306,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn linked_list_sync_serializes_with_sibling_reader_writers() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state_with_pool(3).await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        seed_list_sync_fixture(&connection, false).await;
+        drop(connection);
+
+        let mut holder = state.pool.get().await.expect("lock holder");
+        let observer = state.pool.get().await.expect("lock observer");
+        let hold = holder.transaction().await.expect("lock transaction");
+        let queue_lock_namespace = 699001_i32;
+        hold.execute(
+            "SELECT pg_advisory_xact_lock($1, $2)",
+            &[&queue_lock_namespace, &LIST_SYNC_USER_ID],
+        )
+        .await
+        .expect("hold sibling reader lock");
+
+        let sync = {
+            let state = state.clone();
+            tokio::spawn(async move {
+                sync_released_issues_for_user_with_rosters(
+                    &state,
+                    LIST_SYNC_USER_ID,
+                    list_sync_as_of(),
+                    Some(list_sync_rosters()),
+                )
+                .await
+            })
+        };
+
+        let mut observed_waiter = false;
+        for _ in 0..1_000_000 {
+            let waiters: i64 = observer
+                .query_one(
+                    "SELECT count(*) FROM pg_locks \
+                     WHERE locktype = 'advisory' AND NOT granted \
+                       AND classid::int = $1 AND objid::int = $2",
+                    &[&queue_lock_namespace, &LIST_SYNC_USER_ID],
+                )
+                .await
+                .expect("inspect reader lock waiters");
+            if waiters > 0 {
+                observed_waiter = true;
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        hold.commit().await.expect("release sibling reader lock");
+        assert!(
+            observed_waiter,
+            "release sync must take the reader lock before any thread/list row lock"
+        );
+
+        let report = sync
+            .await
+            .expect("sync task")
+            .expect("serialized linked list sync");
+        assert_eq!(report.failed_sources, 0);
+        assert_eq!(report.created_issues, 2);
+    }
+
+    #[tokio::test]
     async fn linked_list_sync_rolls_back_a_projected_cycle_and_preserves_plan_json() {
         let _guard = DB_LOCK.lock().await;
         let state = test_state().await;

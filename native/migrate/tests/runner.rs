@@ -259,7 +259,8 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
              VALUES (387401, 3874, 'Unambiguous', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),
                     (387402, 3874, 'Ambiguous', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),
                     (387403, 3874, 'Unpaired', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),
-                    (387404, 3874, 'Foreign provenance', 'informational', '[]'::json, '[]'::json, NOW(), NOW());
+                    (387404, 3874, 'Foreign provenance', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),
+                     (387405, 3874, 'Mixed-owner provenance', 'informational', '[]'::json, '[]'::json, NOW(), NOW());
              INSERT INTO custom_cbl_lists
                (id, user_id, name, description, mode, created_at, updated_at)
              VALUES (387411, 3874, 'List A', NULL, 'loose', NOW(), NOW()),
@@ -269,7 +270,9 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
              VALUES (387401, 'custom-cbl:a', 387411, NOW()),
                     (387402, 'custom-cbl:a', 387411, NOW()),
                     (387402, 'custom-cbl:b', 387412, NOW()),
-                    (387404, 'custom-cbl:foreign', 387413, NOW());
+                    (387404, 'custom-cbl:foreign', 387413, NOW()),
+                     (387405, 'custom-cbl:a', 387411, NOW()),
+                     (387405, 'custom-cbl:foreign', 387413, NOW());
              INSERT INTO external_identities
                (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
              VALUES (387420, 'comicvine', 'series', '4050-3874', '{}'::json, NOW(), NOW());
@@ -278,7 +281,8 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
              VALUES (387431, 387401, 387400, 387420, FALSE, '2024-01-02T03:04:05Z', '2023-01-01T00:00:00Z', '2023-01-02T00:00:00Z'),
                     (387432, 387402, 387400, 387420, TRUE, '2024-01-02T03:04:05Z', '2023-01-01T00:00:00Z', '2023-01-02T00:00:00Z'),
                     (387433, 387403, 387400, 387420, FALSE, '2024-01-02T03:04:05Z', '2023-01-01T00:00:00Z', '2023-01-02T00:00:00Z'),
-                    (387434, 387404, 387400, 387420, TRUE, '2024-01-02T03:04:05Z', '2023-01-01T00:00:00Z', '2023-01-02T00:00:00Z');",
+                    (387434, 387404, 387400, 387420, TRUE, '2024-01-02T03:04:05Z', '2023-01-01T00:00:00Z', '2023-01-02T00:00:00Z'),
+                     (387435, 387405, 387400, 387420, TRUE, '2024-01-02T03:04:05Z', '2023-01-01T00:00:00Z', '2023-01-02T00:00:00Z');",
         )
         .await
         .unwrap();
@@ -297,10 +301,10 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
         )
         .await
         .unwrap();
-    assert_eq!(rows.len(), 4, "migration must preserve every subscription");
-    let expected_ids = [387431, 387432, 387433, 387434];
-    let expected_lists = [Some(387411), None, None, None];
-    let expected_enabled = [false, true, false, true];
+    assert_eq!(rows.len(), 5, "migration must preserve every subscription");
+    let expected_ids = [387431, 387432, 387433, 387434, 387435];
+    let expected_lists = [Some(387411), None, None, None, Some(387411)];
+    let expected_enabled = [false, true, false, true, true];
     for (index, row) in rows.iter().enumerate() {
         assert_eq!(row.get::<_, i32>(0), expected_ids[index]);
         assert_eq!(row.get::<_, Option<i32>>(1), expected_lists[index]);

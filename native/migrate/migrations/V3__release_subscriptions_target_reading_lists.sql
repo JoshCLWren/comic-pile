@@ -14,20 +14,24 @@ CREATE INDEX ix_release_sources_custom_cbl_list_id
 
 -- Backfill unambiguous provenance: only plans with exactly one distinct same-owner
 -- linked custom_cbl_list_id among reading_plan_sources are eligible.
-WITH plan_lists AS (
-    SELECT src.plan_id,
-           count(DISTINCT src.custom_cbl_list_id) AS distinct_lists
+WITH eligible_sources AS (
+    SELECT src.plan_id, src.custom_cbl_list_id
     FROM public.reading_plan_sources src
+    JOIN public.continuity_plans cp ON cp.id = src.plan_id
+    JOIN public.custom_cbl_lists l ON l.id = src.custom_cbl_list_id
     WHERE src.custom_cbl_list_id IS NOT NULL
-    GROUP BY src.plan_id
+      AND cp.user_id = l.user_id
+),
+plan_lists AS (
+    SELECT plan_id,
+           count(DISTINCT custom_cbl_list_id) AS distinct_lists
+    FROM eligible_sources
+    GROUP BY plan_id
 ),
 single_list AS (
     SELECT src.plan_id, min(src.custom_cbl_list_id) AS list_id
-    FROM public.reading_plan_sources src
+    FROM eligible_sources src
     JOIN plan_lists pl ON pl.plan_id = src.plan_id AND pl.distinct_lists = 1
-    JOIN public.custom_cbl_lists l ON l.id = src.custom_cbl_list_id
-    JOIN public.continuity_plans cp ON cp.id = src.plan_id AND cp.user_id = l.user_id
-    WHERE src.custom_cbl_list_id IS NOT NULL
     GROUP BY src.plan_id
 )
 UPDATE public.reading_plan_release_sources rps

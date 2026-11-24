@@ -4459,7 +4459,8 @@ mod tests {
                  INSERT INTO reading_plan_sources (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
                  VALUES (483881, 'custom-cbl:a', 483831, NOW()),
                         (483881, 'custom-cbl:b', 483832, NOW()),
-                        (483882, 'custom-cbl:b', 483832, NOW());
+                        (483882, 'custom-cbl:b', 483832, NOW()),
+                         (483882, 'custom-cbl:foreign', 483833, NOW());
                  INSERT INTO external_identities
                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
                  VALUES (483810, 'comicvine', 'series', '4050-4838', '{}'::json, NOW(), NOW());
