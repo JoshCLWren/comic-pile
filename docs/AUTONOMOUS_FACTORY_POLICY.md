@@ -183,7 +183,7 @@ Factory ownership is a connection-pool lock around the next action, not a perman
   The reusable runner records when the worker session starts. If it never starts,
   a separate trusted-main cleanup job releases the lease before the per-worker
   concurrency lock ends; started sessions keep their existing wrapper lifecycle.
-- Exact-head review assignments use the multi-provider Entry path (`nvidia`, `opencode-free`, `openrouter-free`, `kilo-auto`) while OmniRoute is dark; they must not smoke `auto/reasoning:free` or `auto/coding:free`.
+- Exact-head review assignments use the configured multi-provider Entry path. Provider/model choice is runtime catalog driven; no fixed provider list or route alias authorizes capacity, and review work must not smoke a coding route as a substitute for a review session.
 - UPDATE (2026-11-16): Runtime model selection is catalog driven across registered providers, with no fixed price or free-name eligibility gate. Actual execution determines model usability.
 - INCIDENT (2026-09-06): OmniRoute can remain disabled by its existing provider-health control. The other registered provider lanes operate independently and select models at runtime.
 - A takeover worker continues the current branch/head rather than creating a replacement solely because another model authored the existing commits.
@@ -780,6 +780,8 @@ Retired and unattributed history remain visible. Immutable merged attribution
 is cached on the existing status branch; unavailable history is not reported as zero.
 
 ### Measured starter/finisher preference
+
+> **Historical roster note:** the source/model examples below describe measured past behavior. Current assignments come from the runtime registry; this preference does not create a static roster or override protected priorities.
 
 Within otherwise eligible work, lanes pinned to `z-ai` / `glm-4.5-flash`
 prefer fresh issues and lanes pinned to `kilo-auto` / `kilo-auto/free` prefer

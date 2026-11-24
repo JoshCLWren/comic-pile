@@ -14,7 +14,7 @@ Local testing is your opportunity to catch issues before they reach CI. Take adv
 
 ## What runs where
 
-Comic Pile has no Python application runtime. Testing is split across three
+Comic Pile has no Python application runtime. Testing is split across four
 surfaces:
 
 | Surface | Location | Command |

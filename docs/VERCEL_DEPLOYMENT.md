@@ -129,8 +129,8 @@ The endpoint fails closed:
 
 Merging the cron configuration therefore does not start production
 synchronization on its own. The job remains inert until an operator configures
-`CRON_SECRET`, which is the intended activation boundary for the Option E
-exclusion gate (#3671). The scheduled run delegates to the existing release-sync
+`CRON_SECRET`, which is the required authentication boundary for the native
+release-source collection-exclusion guard (#3671). The scheduled run delegates to the existing release-sync
 service, so durable collection exclusions, confirmed-volume identity checks, and
 per-owner ownership rules still apply.
 

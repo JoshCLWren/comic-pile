@@ -14,7 +14,7 @@
 
 ## MQA-SESSION-002: Session boundary keeps durable progress
 
-**Status: Retired (2026-11-18)** -- owner decision [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405): no reading sessions as entities, no inactivity/six-hour boundary, no automatic resets. Durable read and rating history persisting across time is covered by MQA-HISTORY-001 and MQA-HISTORY-004.
+**Status: Automatic lifecycle retired (2026-11-18)** -- owner decision [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405): no inactivity/six-hour boundary or automatic resets. Durable `ReadingSession` history, details, snapshots, and read/rating progress remain and are covered by MQA-HISTORY-001 and MQA-HISTORY-004.
 
 **Original expectation (historical):** Session identity/boundaries behave as configured while persistent read and rating history survives.
 
