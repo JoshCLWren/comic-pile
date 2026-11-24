@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import re
@@ -22,6 +23,13 @@ _GITHUB_API_BASE = "https://api.github.com"
 _SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 _MAX_DISCOVERY_PAGES = 3
 _DISCOVERY_PAGE_SIZE = 100
+_MAX_CHANGED_FILE_PAGES = 10
+_CHANGED_FILE_PAGE_SIZE = 100
+_TEST_DIRECTORY_SEGMENTS = {"test", "tests", "tests_e2e", "__tests__"}
+_TEST_FILE_PATTERN = re.compile(
+    r"(?:^test_.*\.py$|.*_test\.(?:py|rs|go)$|.*\.(?:test|spec)\.[cm]?[jt]sx?$)",
+    re.IGNORECASE,
+)
 
 
 class RecoveryError(RuntimeError):
