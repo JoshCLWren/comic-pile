@@ -222,6 +222,7 @@ safe to integrate.
 
 Reviewer independence and provenance are determined by the current factory
 controller, not by a hand-maintained model-name comparison in this document.
-Do not fabricate approval markers or formal self-approval. `factory:approved` is
-visibility only, and labels never replace review or CI evidence. Never enable
+Do not fabricate approval markers or formal self-approval. There is no
+`factory:approved` label; trusted exact-head review is recorded by the factory
+controller, and labels never replace review or CI evidence. Never enable
 auto-merge or merge a moved or unverified head.
