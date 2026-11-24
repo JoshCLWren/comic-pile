@@ -1,6 +1,6 @@
 # Frontend OpenAPI type boundary
 
-ComicPile generates `frontend/src/generated/openapi.ts` from FastAPI's OpenAPI schema and treats that file as a transport-contract source, not as a replacement for frontend domain and view-model types.
+ComicPile generates `frontend/src/generated/openapi.ts` from the checked-in OpenAPI contract assembled from the native Rust runtime contracts plus the frozen legacy compatibility snapshot, and treats that file as a transport-contract source, not as a replacement for frontend domain and view-model types.
 
 ## Use generated transport types when the shapes are exact
 
