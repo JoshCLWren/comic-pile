@@ -147,6 +147,15 @@ it('blocks dismissal and contains focus while close is disabled', () => {
   if (!backdrop) throw new Error('Backdrop not found')
   fireEvent.click(backdrop)
   expect(onClose).not.toHaveBeenCalled()
+
+  rerender(
+    <Modal isOpen title="Pending" onClose={onClose}>
+      <button type="button">Action</button>
+    </Modal>,
+  )
+  expect(dialog).toHaveFocus()
+  fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+  expect(screen.getByRole('button', { name: 'Action' })).toHaveFocus()
 })
 
 it('restores focus to an explicit completion target when the trigger is gone', () => {

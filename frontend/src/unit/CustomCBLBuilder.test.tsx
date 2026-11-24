@@ -574,6 +574,17 @@ describe('CustomCBLBuilder', () => {
 
   it('keeps a pending deletion focused and undismissable, then restores focus after success', async () => {
     let finishDelete: (() => void) | undefined
+    let finishListRefresh: (() => void) | undefined
+    mocks.list.mockResolvedValueOnce([{
+      id: 9,
+      name: existingList.name,
+      description: existingList.description,
+      mode: existingList.mode,
+      issue_count: 2,
+      updated_at: existingList.updated_at,
+    }]).mockImplementation(() => new Promise(resolve => {
+      finishListRefresh = () => resolve([])
+    }))
     mocks.delete.mockImplementation(() => new Promise<void>((resolve) => {
       finishDelete = resolve
     }))
@@ -598,8 +609,16 @@ describe('CustomCBLBuilder', () => {
     await act(async () => {
       finishDelete?.()
     })
+    // Removing the active detail query closes the dialog before list invalidation
+    // finishes. Focus must already target the stable heading in that intermediate render.
+    await waitFor(() => expect(mocks.list).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Delete custom CBL' })).not.toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: 'Custom CBLs' })).toHaveFocus()
+
+    await act(async () => {
+      finishListRefresh?.()
+    })
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Custom CBL deleted.'))
-    expect(screen.queryByRole('dialog', { name: 'Delete custom CBL' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Custom CBLs' })).toHaveFocus()
   })
 

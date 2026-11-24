@@ -112,12 +112,13 @@ export default function Modal({
           modal.focus()
           return
         }
+        const focusIsOnModal = document.activeElement === modal
         if (e.shiftKey) {
-          if (document.activeElement === firstElement) {
+          if (focusIsOnModal || document.activeElement === firstElement) {
             e.preventDefault()
             lastElement?.focus()
           }
-        } else if (document.activeElement === lastElement) {
+        } else if (focusIsOnModal || document.activeElement === lastElement) {
           e.preventDefault()
           firstElement?.focus()
         }
