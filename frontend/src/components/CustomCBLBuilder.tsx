@@ -214,9 +214,12 @@ export default function CustomCBLBuilder({
   const deleteMutation = useMutation({
     mutationFn: (listId: number) => customCBLApi.delete(listId),
     onSuccess: async () => {
+      // Cache removal can close the dialog before invalidation finishes. Install
+      // the stable focus target first so that intermediate render cannot restore
+      // focus to the Delete trigger that is about to unmount.
+      deleteReturnFocusRef.current = customCBLHeadingRef.current
       if (selectedId) await applyDeletedCustomCBL(queryClient, selectedId)
       saveMutation.reset()
-      deleteReturnFocusRef.current = customCBLHeadingRef.current
       setConfirmDeleteOpen(false)
       setSelectedId(null)
       setLoadedListId(null)
