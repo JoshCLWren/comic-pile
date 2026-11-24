@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T21:25:51+00:00",
+  "generated_at": "2026-11-24T21:42:09.277278+00:00",
   "models": [
     {
       "health": {
@@ -2532,8 +2532,8 @@
             "unknown_failure": 16,
             "work_failure": 23
           },
-          "idle": 27,
-          "runs": 84
+          "idle": 26,
+          "runs": 83
         }
       }
     },
@@ -2559,14 +2559,14 @@
         "7d": {
           "completed": 1,
           "delivered": 1,
-          "failed": 27,
+          "failed": 26,
           "failures": {
             "control_plane_failure": 9,
             "provider_throttle": 1,
-            "work_failure": 17
+            "work_failure": 16
           },
-          "idle": 14,
-          "runs": 42
+          "idle": 13,
+          "runs": 40
         }
       }
     },
@@ -2617,15 +2617,15 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 15,
+          "failed": 14,
           "failures": {
-            "agent_timeout": 9,
+            "agent_timeout": 8,
             "control_plane_failure": 3,
             "provider_quota": 1,
             "provider_throttle": 2
           },
           "idle": 0,
-          "runs": 15
+          "runs": 14
         }
       }
     },
@@ -2706,15 +2706,15 @@
         "24h": {
           "completed": 12,
           "delivered": 11,
-          "failed": 33,
+          "failed": 30,
           "failures": {
-            "agent_timeout": 10,
+            "agent_timeout": 7,
             "control_plane_failure": 9,
             "unknown_failure": 2,
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 46
+          "runs": 43
         },
         "7d": {
           "completed": 40,
@@ -2870,15 +2870,15 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 24,
+          "failed": 23,
           "failures": {
-            "control_plane_failure": 4,
+            "control_plane_failure": 3,
             "provider_throttle": 2,
             "unknown_failure": 4,
             "work_failure": 14
           },
           "idle": 27,
-          "runs": 51
+          "runs": 50
         }
       }
     },
@@ -2947,8 +2947,8 @@
             "provider_throttle": 1,
             "work_failure": 13
           },
-          "idle": 67,
-          "runs": 85
+          "idle": 66,
+          "runs": 84
         }
       }
     },
@@ -2972,14 +2972,14 @@
         "7d": {
           "completed": 6,
           "delivered": 6,
-          "failed": 64,
+          "failed": 63,
           "failures": {
             "control_plane_failure": 15,
             "provider_throttle": 2,
-            "work_failure": 47
+            "work_failure": 46
           },
           "idle": 20,
-          "runs": 90
+          "runs": 89
         }
       }
     },
@@ -3236,16 +3236,16 @@
         "7d": {
           "completed": 4,
           "delivered": 4,
-          "failed": 77,
+          "failed": 76,
           "failures": {
             "agent_timeout": 46,
             "control_plane_failure": 3,
             "provider_throttle": 1,
-            "unknown_failure": 17,
+            "unknown_failure": 16,
             "work_failure": 10
           },
           "idle": 13,
-          "runs": 94
+          "runs": 93
         }
       }
     },
@@ -4954,18 +4954,17 @@
           "runs": 2
         },
         "7d": {
-          "completed": 4,
+          "completed": 3,
           "delivered": 3,
-          "failed": 55,
+          "failed": 47,
           "failures": {
-            "control_plane_failure": 11,
+            "control_plane_failure": 9,
             "provider_failure": 1,
-            "provider_throttle": 1,
             "unknown_failure": 1,
-            "work_failure": 41
+            "work_failure": 36
           },
           "idle": 3,
-          "runs": 62
+          "runs": 53
         }
       }
     },
@@ -5896,13 +5895,13 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 4,
+          "failed": 3,
           "failures": {
             "control_plane_failure": 2,
-            "work_failure": 2
+            "work_failure": 1
           },
           "idle": 1,
-          "runs": 5
+          "runs": 4
         }
       }
     },
@@ -22599,16 +22598,16 @@
         "24h": {
           "completed": 15,
           "delivered": 14,
-          "failed": 96,
+          "failed": 93,
           "idle": 29,
-          "runs": 140
+          "runs": 137
         },
         "7d": {
           "completed": 55,
           "delivered": 53,
-          "failed": 600,
-          "idle": 279,
-          "runs": 934
+          "failed": 595,
+          "idle": 276,
+          "runs": 926
         }
       }
     },
@@ -22642,11 +22641,11 @@
           "runs": 117
         },
         "7d": {
-          "completed": 56,
+          "completed": 55,
           "delivered": 46,
-          "failed": 374,
+          "failed": 366,
           "idle": 83,
-          "runs": 513
+          "runs": 504
         }
       }
     },
@@ -22663,9 +22662,9 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 43,
+          "failed": 42,
           "idle": 4,
-          "runs": 47
+          "runs": 46
         }
       }
     },
@@ -22770,9 +22769,9 @@
     "24h": "24 hours",
     "7d": "7 days"
   },
-  "counts_generated_at": "2026-11-24T20:32:57.302520+00:00",
+  "counts_generated_at": "2026-11-24T21:42:09.277278+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-24T21:25:51Z",
+    "generated_at": "2026-11-24T21:42:10Z",
     "sources": {
       "kilo-auto": [
         "kilo-auto/efficient"
@@ -22808,10 +22807,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T21:25:52.075540+00:00",
-    "days_elapsed": 23.893,
+    "checked_at": "2026-11-24T21:42:10.328264+00:00",
+    "days_elapsed": 23.904,
     "days_in_month": 30.0,
-    "days_left": 6.11,
+    "days_left": 6.1,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -22827,21 +22826,21 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 398833,
-        "organization": 398833,
+        "database": 446324,
+        "organization": 446324,
         "owner_target": 50000000,
-        "projected_database": 500774,
-        "projected_organization": 500774,
-        "projected_share": 0.001,
-        "share_used": 0.0008
+        "projected_database": 560146,
+        "projected_organization": 560146,
+        "projected_share": 0.0011,
+        "share_used": 0.0009
       },
       "rows_written": {
         "allowance": 10000000,
         "database": 102275,
         "organization": 102275,
         "owner_target": 1000000,
-        "projected_database": 128416,
-        "projected_organization": 128416,
+        "projected_database": 128357,
+        "projected_organization": 128357,
         "projected_share": 0.0128,
         "share_used": 0.0102
       },
