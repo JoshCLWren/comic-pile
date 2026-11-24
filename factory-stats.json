@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T19:01:06.123592+00:00",
+  "generated_at": "2026-11-24T19:19:44.297810+00:00",
   "models": [
     {
       "health": {
@@ -2525,17 +2525,17 @@
         "7d": {
           "completed": 1,
           "delivered": 1,
-          "failed": 57,
+          "failed": 56,
           "failures": {
             "agent_timeout": 9,
             "control_plane_failure": 5,
             "provider_failure": 1,
             "provider_throttle": 2,
-            "unknown_failure": 17,
+            "unknown_failure": 16,
             "work_failure": 23
           },
-          "idle": 29,
-          "runs": 87
+          "idle": 27,
+          "runs": 84
         }
       }
     },
@@ -3227,12 +3227,12 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 4,
+          "failed": 2,
           "failures": {
-            "agent_timeout": 4
+            "agent_timeout": 2
           },
           "idle": 0,
-          "runs": 4
+          "runs": 2
         },
         "7d": {
           "completed": 4,
@@ -22606,16 +22606,16 @@
         "24h": {
           "completed": 16,
           "delivered": 15,
-          "failed": 106,
+          "failed": 104,
           "idle": 29,
-          "runs": 151
+          "runs": 149
         },
         "7d": {
           "completed": 55,
           "delivered": 53,
-          "failed": 602,
-          "idle": 281,
-          "runs": 938
+          "failed": 601,
+          "idle": 279,
+          "runs": 935
         }
       }
     },
@@ -22783,10 +22783,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T19:01:06.254127+00:00",
-    "days_elapsed": 23.792,
+    "checked_at": "2026-11-24T19:19:44.444318+00:00",
+    "days_elapsed": 23.805,
     "days_in_month": 30.0,
-    "days_left": 6.21,
+    "days_left": 6.19,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
@@ -22822,11 +22822,11 @@
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 0,
-        "organization": 0,
+        "database": 4096,
+        "organization": 4096,
         "owner_target": 250000000,
-        "projected_database": 0,
-        "projected_organization": 0,
+        "projected_database": 4096,
+        "projected_organization": 4096,
         "projected_share": 0.0,
         "share_used": 0.0
       }
