@@ -46,6 +46,6 @@ reruns the runner to prove idempotence, and exercises the production runner. Use
 a disposable database for local migration tests; never point these commands at
 production.
 
-See [deployment](../docs/DEPLOYMENT.md) and
-[database save/load and recovery](../docs/DATABASE_SAVE_LOAD.md) for the operator
-workflow.
+See [deployment](../../docs/DEPLOYMENT.md) and
+[database save/load and recovery](../../docs/DATABASE_SAVE_LOAD.md) for the
+operator workflow.

@@ -68,7 +68,7 @@ defines Redis, but the native runtime does not use it.
 ### Slot-safe regression topology
 
 For parallel local sessions, follow
-[`.agents/skills/e2e-chromium-regression/SKILL.md`](../.agents/skills/e2e-chromium-regression/SKILL.md).
+[`.agents/skills/e2e-chromium-regression/SKILL.md`](.agents/skills/e2e-chromium-regression/SKILL.md).
 It starts a slot-specific PostgreSQL database, native Rust and
 `scripts/e2e_native_ingress.py`, then exports `BASE_URL` (default ingress
 `:9000`). Set `TEST_ENVIRONMENT=true` so fixture-speed auth registration is not
