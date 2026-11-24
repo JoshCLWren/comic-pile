@@ -849,6 +849,16 @@ mod tests {
                 .map(|frontier| frontier.issue_id)
                 .collect::<Vec<_>>()
         };
+        let offer_ids = |validated: &ValidatedReadingInputs, snoozed: &HashSet<i32>| {
+            crate::roll_pool::offer_frontiers(
+                &validated.eligible_frontiers().unwrap(),
+                snoozed,
+                20,
+            )
+            .into_iter()
+            .map(|frontier| frontier.issue_id)
+            .collect::<Vec<_>>()
+        };
 
         let validated = ValidatedReadingInputs::new(inputs.clone(), &BTreeMap::new()).unwrap();
         let states = evaluate(&validated).unwrap();
@@ -872,6 +882,11 @@ mod tests {
         assert_eq!(states[&5].blockers[0].kind, "hold");
         assert_eq!(states[&5].blockers[0].waiting_on_issue_ids, vec![400]);
         assert_eq!(eligible_ids(&validated), vec![200, 300, 400]);
+        assert_eq!(
+            offer_ids(&validated, &HashSet::from([2])),
+            vec![300, 400],
+            "snoozing Black Panther #11 leaves unrelated loose series in the Roll pool"
+        );
 
         let gates =
             crate::reading_blocker_projection::describe_blocker_gates(states[&1].blockers.clone());
@@ -904,6 +919,11 @@ mod tests {
         assert!(states[&3].eligible);
         assert!(!states[&5].eligible, "the separate hold still applies");
         assert_eq!(eligible_ids(&validated), vec![101, 200, 300, 400]);
+        assert_eq!(
+            offer_ids(&validated, &HashSet::from([2])),
+            vec![101, 300, 400],
+            "Spider-Man #20 enters the Roll pool without backfilling the snoozed series"
+        );
         assert_eq!(inputs.lists[0].mode, "loose");
         assert_eq!(inputs.prerequisites[0].origin, "converted");
 

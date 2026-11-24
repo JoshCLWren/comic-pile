@@ -1035,24 +1035,25 @@ describe('CustomCBLBuilder', () => {
         },
       ],
     })
+    const replacementEntry = {
+      id: 94,
+      position: 1,
+      issue_id: 30002,
+      thread_id: 9002,
+      series_name: 'JSA',
+      issue_number: '1',
+      status: 'unread',
+      is_checkpoint: false,
+      gate: 'none',
+      skipped: false,
+    }
     mocks.update.mockResolvedValue({
       ...gatedList,
       updated_at: '2026-09-14T03:10:00Z',
       issue_count: 3,
       entries: [
         { ...gatedList.entries[0], position: 0 },
-        {
-          id: 94,
-          position: 1,
-          issue_id: 30002,
-          thread_id: 9002,
-          series_name: 'JSA',
-          issue_number: '1',
-          status: 'unread',
-          is_checkpoint: false,
-          gate: 'none',
-          skipped: false,
-        },
+        replacementEntry,
         { ...gatedList.entries[1], position: 2 },
       ],
     })
@@ -1062,18 +1063,7 @@ describe('CustomCBLBuilder', () => {
       issue_count: 3,
       entries: [
         { ...gatedList.entries[0], position: 0 },
-        {
-          id: 94,
-          position: 1,
-          issue_id: 30002,
-          thread_id: 9002,
-          series_name: 'JSA',
-          issue_number: '1',
-          status: 'unread',
-          is_checkpoint: false,
-          gate: 'none',
-          skipped: false,
-        },
+        replacementEntry,
         { ...gatedList.entries[1], position: 2 },
       ],
     }
