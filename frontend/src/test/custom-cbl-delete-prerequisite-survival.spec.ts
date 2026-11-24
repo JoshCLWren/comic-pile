@@ -1,7 +1,7 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
 import { test } from './fixtures'
 import { authHeaders, createThread, getFirstIssueId } from './helpers'
-import type { CustomCBL } from '../services/api-custom-cbl'
+import type { CustomCBL, ReadingListReader } from '../services/api-custom-cbl'
 import type {
   CreateDependencyResponse,
   GetIssueDependenciesResponse,
@@ -30,7 +30,9 @@ async function createReadingList(
   })
   expect(response.status(), await response.text()).toBe(201)
   // SAFETY: the canonical create endpoint returns the created Reading List contract.
-  return (await response.json()) as CustomCBL
+  const list = (await response.json()) as CustomCBL
+  expect(list.entries.map((entry) => entry.issue_id)).toEqual(issueIds)
+  return list
 }
 
 async function getReadingList(page: Page, listId: number): Promise<CustomCBL> {
@@ -40,6 +42,15 @@ async function getReadingList(page: Page, listId: number): Promise<CustomCBL> {
   expect(response.ok(), await response.text()).toBeTruthy()
   // SAFETY: the canonical detail endpoint returns the Reading List contract.
   return (await response.json()) as CustomCBL
+}
+
+async function getReadingListReader(page: Page, listId: number): Promise<ReadingListReader> {
+  const response = await page.request.get(`/api/v2/reading-lists/${listId}/reader`, {
+    headers: await authHeaders(page),
+  })
+  expect(response.ok(), await response.text()).toBeTruthy()
+  // SAFETY: the canonical reader endpoint returns the generated ReadingListReader contract.
+  return (await response.json()) as ReadingListReader
 }
 
 async function getIssueCard(page: Page, issueId: number): Promise<IssueCardsResponse['items'][number]> {
@@ -115,7 +126,7 @@ async function registerForeignHeaders(
 /**
  * MQA-LIST-004 / #4186: canonical list deletion is owner-scoped and removes only
  * that list. A real reader prerequisite, durable read/rating history, and a
- * second list sharing the same issues must all survive byte-for-byte.
+ * second list sharing the same issues must all survive exactly.
  */
 test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading List deletion', async ({
   authenticatedPage: page,
@@ -136,8 +147,15 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
     issues_remaining: 1,
     total_issues: 1,
   })
+  const blockedTarget = await createThread(page, {
+    title: `Prerequisite Blocked Target ${suffix}`,
+    format: 'Comics',
+    issues_remaining: 1,
+    total_issues: 1,
+  })
   const sourceIssueId = await getFirstIssueId(page, source.id)
   const targetIssueId = await getFirstIssueId(page, target.id)
+  const blockedTargetIssueId = await getFirstIssueId(page, blockedTarget.id)
   const headers = await authHeaders(page)
 
   const dependencyResponse = await page.request.post('/api/v2/dependencies/', {
@@ -155,15 +173,29 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   expect(dependency.source_issue_id).toBe(sourceIssueId)
   expect(dependency.target_issue_id).toBe(targetIssueId)
 
+  const blockedDependencyResponse = await page.request.post('/api/v2/dependencies/', {
+    headers,
+    data: {
+      source_type: 'issue',
+      source_id: sourceIssueId,
+      target_type: 'issue',
+      target_id: blockedTargetIssueId,
+    },
+  })
+  expect(blockedDependencyResponse.status(), await blockedDependencyResponse.text()).toBe(201)
+  // SAFETY: the second dependency creates an unread target whose authoritative blocker can be observed.
+  const blockedDependency = (await blockedDependencyResponse.json()) as CreateDependencyResponse
+  expect(blockedDependency.target_issue_id).toBe(blockedTargetIssueId)
+
   const deletedList = await createReadingList(
     page,
     `Delete List ${suffix}`,
-    [sourceIssueId, targetIssueId],
+    [sourceIssueId, targetIssueId, blockedTargetIssueId],
   )
   const survivingList = await createReadingList(
     page,
     `Surviving List ${suffix}`,
-    [sourceIssueId, targetIssueId],
+    [sourceIssueId, targetIssueId, blockedTargetIssueId],
   )
 
   const ratingResponse = await page.request.patch(`/api/v2/issues/${targetIssueId}`, {
@@ -214,6 +246,47 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   }
   expect(await getReadingList(page, deletedList.id)).toEqual(beforeDeletedList)
 
+  // A real owner-side rejection must also leave the authoritative list untouched.
+  const guardedList = await createReadingList(page, `Plan Linked List ${suffix}`, [sourceIssueId])
+  const planResponse = await page.request.post('/api/v2/continuity-plans/', {
+    headers,
+    data: {
+      name: `Linked Plan ${suffix}`,
+      ordering_mode: 'informational',
+      lanes: [{ id: 'main', name: 'Main', order: 0 }],
+      nodes: [],
+    },
+  })
+  expect(planResponse.ok(), await planResponse.text()).toBeTruthy()
+  // SAFETY: successful plan creation returns its numeric ID.
+  const linkedPlan = (await planResponse.json()) as { id: number }
+  const applyResponse = await page.request.post(
+    `/api/v2/reading-lists/${guardedList.id}/reading-plans/${linkedPlan.id}/applications`,
+    { headers, data: { lane_id: 'main' } },
+  )
+  expect(applyResponse.ok(), await applyResponse.text()).toBeTruthy()
+  const beforeGuardedList = await getReadingList(page, guardedList.id)
+  const rejectedDelete = await page.request.delete(`/api/v2/reading-lists/${guardedList.id}`, { headers })
+  const rejectedDeleteBody = await rejectedDelete.text()
+  expect(rejectedDelete.status(), rejectedDeleteBody).toBe(409)
+  expect(rejectedDeleteBody).toContain('nothing was changed')
+  expect(await getReadingList(page, guardedList.id)).toEqual(beforeGuardedList)
+
+  const beforeSurvivingReader = await getReadingListReader(page, survivingList.id)
+  expect(beforeSurvivingReader.execution_mode).toBe('option_e')
+  const blockedEntry = beforeSurvivingReader.entries.find(
+    (entry) => entry.issue_id === blockedTargetIssueId,
+  )
+  expect(blockedEntry).toMatchObject({
+    availability: 'blocked',
+    explanation: { is_blocked: true },
+  })
+  expect(blockedEntry?.explanation?.blocking_dependencies).toContainEqual(expect.objectContaining({
+    issue_id: sourceIssueId,
+    thread_id: source.id,
+    label: expect.stringContaining('Reader prerequisite'),
+  }))
+
   await page.goto(`/reading-lists/${deletedList.id}`)
   await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(deletedList.name)
   // Invalidating the deleted detail can produce one handled 404 after the 204.
@@ -253,6 +326,7 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   expect(await getIssueCard(page, targetIssueId)).toEqual(beforeCard)
   expect(await getIssueHistory(page, targetIssueId)).toEqual(beforeHistory)
   expect(await getIssueDependencies(page, targetIssueId)).toEqual(beforeDependencies)
+  expect(await getReadingListReader(page, survivingList.id)).toEqual(beforeSurvivingReader)
 
   await page.screenshot({
     path: testInfo.outputPath('cbl-delete-prerequisite-survival.png'),

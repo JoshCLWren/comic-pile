@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import type { RefObject } from 'react'
 import OverlayPortal from './OverlayPortal'
 
 interface ModalProps {
@@ -10,6 +11,10 @@ interface ModalProps {
   overlayClassName?: string
   autoFocus?: boolean
   size?: 'default' | 'large'
+  /** Prevent Escape, backdrop and Close from dismissing an in-flight action. */
+  closeDisabled?: boolean
+  /** Stable focus target for completion paths that unmount the original trigger. */
+  returnFocusRef?: RefObject<HTMLElement | null>
 }
 
 // Module-level lock counter so nested/overlapping modals don't prematurely
@@ -29,6 +34,12 @@ function isTopmostModal(modalId: number): boolean {
   return openModalStack[openModalStack.length - 1] === modalId
 }
 
+function getModalFocusableElements(modal: HTMLElement): HTMLElement[] {
+  return Array.from(modal.querySelectorAll<HTMLElement>(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  )).filter(element => element.tabIndex >= 0 && !element.matches(':disabled, [hidden], [aria-hidden="true"]'))
+}
+
 export default function Modal({
   isOpen,
   title,
@@ -38,12 +49,15 @@ export default function Modal({
   overlayClassName,
   autoFocus = true,
   size = 'default',
+  closeDisabled = false,
+  returnFocusRef,
 }: ModalProps) {
   const [overlayElement, setOverlayElement] = useState<HTMLDivElement | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const onCloseRef = useRef(onClose)
+  const closeDisabledRef = useRef(closeDisabled)
   const titleId = useId()
 
   const modalIdRef = useRef<number | null>(null)
@@ -54,6 +68,12 @@ export default function Modal({
   // Keep onCloseRef up to date without causing effect re-runs
   useEffect(() => {
     onCloseRef.current = onClose
+  })
+
+  // Escape uses the latest pending state without re-registering the modal or
+  // replacing the trigger whose focus must be restored on close.
+  useLayoutEffect(() => {
+    closeDisabledRef.current = closeDisabled
   })
 
   // OverlayPortal creates its shared root after the parent modal's first commit.
@@ -73,22 +93,18 @@ export default function Modal({
 
     const modal = modalRef.current
 
-    const getFocusableElements = () => Array.from(modal.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    )).filter(element => element.tabIndex >= 0 && !element.matches(':disabled, [hidden], [aria-hidden="true"]'))
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isTopmostModal(modalId)) return
 
       if (e.key === 'Escape') {
-        onCloseRef.current()
+        if (!closeDisabledRef.current) onCloseRef.current()
         return
       }
 
       if (e.key === 'Tab') {
         // Async content can replace or enable controls after the dialog opens.
         // Recompute the boundaries so keyboard focus stays in the live dialog.
-        const focusableElements = getFocusableElements()
+        const focusableElements = getModalFocusableElements(modal)
         const firstElement = focusableElements[0]
         const lastElement = focusableElements[focusableElements.length - 1]
         if (!firstElement) {
@@ -96,12 +112,13 @@ export default function Modal({
           modal.focus()
           return
         }
+        const focusIsOnModal = document.activeElement === modal
         if (e.shiftKey) {
-          if (document.activeElement === firstElement) {
+          if (focusIsOnModal || document.activeElement === firstElement) {
             e.preventDefault()
             lastElement?.focus()
           }
-        } else if (document.activeElement === lastElement) {
+        } else if (focusIsOnModal || document.activeElement === lastElement) {
           e.preventDefault()
           firstElement?.focus()
         }
@@ -111,7 +128,7 @@ export default function Modal({
     document.addEventListener('keydown', handleKeyDown)
 
     // Focus the first input/textarea/select element, or fall back to the first focusable element
-    const focusableArray = getFocusableElements()
+    const focusableArray = getModalFocusableElements(modal)
     const firstElement = focusableArray[0]
     const firstInput = focusableArray.find(
       el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
@@ -132,10 +149,33 @@ export default function Modal({
       // Only restore focus when this modal was the topmost layer. Closing a
       // lower modal must not steal focus from the modal rendered above it.
       if (wasTopmost) {
-        previousFocusRef.current?.focus()
+        const returnTarget = returnFocusRef?.current
+        if (returnTarget?.isConnected) {
+          returnTarget.focus()
+        } else {
+          previousFocusRef.current?.focus()
+        }
       }
     }
-  }, [autoFocus, isOpen, overlayElement])
+  }, [autoFocus, isOpen, overlayElement, returnFocusRef])
+
+  // A pending action can disable the currently focused control. Recompute the
+  // live focus boundary after every render so focus never falls to document.body
+  // and escapes the dialog while it remains open.
+  useLayoutEffect(() => {
+    if (!isOpen || !overlayElement || !isTopmostModal(modalIdRef.current!)) return
+    const modal = modalRef.current
+    const activeElement = document.activeElement
+    if (
+      modal
+      && activeElement instanceof HTMLElement
+      && modal.contains(activeElement)
+      && !activeElement.matches(':disabled, [hidden], [aria-hidden="true"]')
+    ) return
+    if (!modal) return
+    const focusTarget = getModalFocusableElements(modal)[0] ?? modal
+    focusTarget.focus()
+  })
 
   // Lock the #root scroller while a modal is open (fixes iOS scroll-bleed).
   // The dialog itself is portaled to document.body, so locking #root no longer
@@ -172,7 +212,7 @@ export default function Modal({
         <div
           className="absolute inset-0 bg-[#110e0a]/60 surface-glass touch-none"
           onClick={() => {
-            if (isTopmostModal(modalIdRef.current!)) onClose()
+            if (!closeDisabled && isTopmostModal(modalIdRef.current!)) onClose()
           }}
           aria-hidden="true"
         ></div>
@@ -196,7 +236,8 @@ export default function Modal({
               ref={closeButtonRef}
               type="button"
               onClick={onClose}
-              className="text-stone-500 hover:text-stone-300 transition-colors text-2xl leading-none py-1"
+              disabled={closeDisabled}
+              className="text-stone-500 hover:text-stone-300 transition-colors text-2xl leading-none py-1 disabled:opacity-50"
               aria-label="Close modal"
             >
               &times;

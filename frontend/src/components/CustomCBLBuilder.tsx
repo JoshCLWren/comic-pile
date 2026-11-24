@@ -76,6 +76,8 @@ export default function CustomCBLBuilder({
 }: CustomCBLBuilderProps) {
   const queryClient = useQueryClient()
   const issueSearchInput = useRef<HTMLInputElement>(null)
+  const customCBLHeadingRef = useRef<HTMLHeadingElement>(null)
+  const deleteReturnFocusRef = useRef<HTMLElement | null>(null)
   const issueSearchResults = useRef<HTMLDivElement>(null)
   const listNavigationRef = useRef<HTMLDivElement>(null)
   const pendingNavigationFocusRef = useRef<number | null>(null)
@@ -212,6 +214,10 @@ export default function CustomCBLBuilder({
   const deleteMutation = useMutation({
     mutationFn: (listId: number) => customCBLApi.delete(listId),
     onSuccess: async () => {
+      // Cache removal can close the dialog before invalidation finishes. Install
+      // the stable focus target first so that intermediate render cannot restore
+      // focus to the Delete trigger that is about to unmount.
+      deleteReturnFocusRef.current = customCBLHeadingRef.current
       if (selectedId) await applyDeletedCustomCBL(queryClient, selectedId)
       saveMutation.reset()
       setConfirmDeleteOpen(false)
@@ -738,7 +744,7 @@ export default function CustomCBLBuilder({
     <section className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3" aria-labelledby="custom-cbl-heading">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 id="custom-cbl-heading" className="text-sm font-black text-[var(--theme-text-primary)]">Custom CBLs</h3>
+          <h3 id="custom-cbl-heading" ref={customCBLHeadingRef} tabIndex={-1} className="text-sm font-black text-[var(--theme-text-primary)]">Custom CBLs</h3>
           <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Build one ordered list of real comics, choose a strict or loose reading order, add optional waits, and apply it to this Reading Plan.</p>
         </div>
         <button type="button" onClick={() => setOpen((value) => !value)} disabled={disabled || isPending} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50" aria-expanded={open}>
@@ -1098,7 +1104,7 @@ export default function CustomCBLBuilder({
                 <button type="button" onClick={() => saveMutation.mutate(null)} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
                 {planId && (<button type="button" onClick={() => applyMutation.mutate()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50">{applyMutation.isPending ? 'Applying…' : 'Apply to this Reading Plan'}</button>)}
                 <button type="button" onClick={() => void exportList()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Export .cbl</button>
-                <button type="button" onClick={() => { deleteMutation.reset(); setConfirmDeleteOpen(true) }} disabled={disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-danger)] px-4 text-sm font-bold text-[var(--theme-danger)] disabled:opacity-50">Delete</button>
+                <button type="button" onClick={() => { deleteMutation.reset(); deleteReturnFocusRef.current = null; setConfirmDeleteOpen(true) }} disabled={disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-danger)] px-4 text-sm font-bold text-[var(--theme-danger)] disabled:opacity-50">Delete</button>
               </div>
               {dirty && <p className="text-xs text-[var(--theme-warning)]">Save this custom CBL before applying or exporting it.</p>}
             </div>
@@ -1137,6 +1143,7 @@ export default function CustomCBLBuilder({
         pendingLabel="Deleting…"
         onConfirm={() => { if (selectedId) deleteMutation.mutate(selectedId) }}
         onCancel={() => { if (!deleteMutation.isPending) { deleteMutation.reset() } setConfirmDeleteOpen(false) }}
+        returnFocusRef={deleteReturnFocusRef}
         testId="delete-custom-cbl-dialog"
       >
         <p className="text-sm text-[var(--theme-text-muted)]">
