@@ -431,19 +431,22 @@ fn constraint_edges(snapshot: &Snapshot) -> Result<BTreeSet<ConstraintEdge>, Val
                 // Skip excluded entries when finding the predecessor for after_previous.
                 let mut predecessor_index = index - 1;
                 while predecessor_index > 0 && snapshot.excluded_issue_ids.contains(&entries[predecessor_index].issue_id) {
+                    if predecessor_index == 0 { break; }
                     predecessor_index -= 1;
                 }
-                if predecessor_index >= 0 {
-                    // If the immediate predecessor is excluded, still use the first non-excluded predecessor.
-                    let pred_id = entries[predecessor_index].issue_id;
-                    if !snapshot.excluded_issue_ids.contains(&pred_id) {
-                        edges.insert(ConstraintEdge::in_list(
-                            pred_id,
-                            entry.issue_id,
-                            &format!("list {name} after_previous"),
-                            l.list_id,
-                        ));
-                    }
+                // Find first non-excluded predecessor
+                let mut pred_idx = predecessor_index;
+                while pred_idx < index && snapshot.excluded_issue_ids.contains(&entries[pred_idx].issue_id) {
+                    if pred_idx == 0 { break; }
+                    pred_idx -= 1;
+                }
+                if pred_idx < index && !snapshot.excluded_issue_ids.contains(&entries[pred_idx].issue_id) {
+                    edges.insert(ConstraintEdge::in_list(
+                        entries[pred_idx].issue_id,
+                        entry.issue_id,
+                        &format!("list {name} after_previous"),
+                        l.list_id,
+                    ));
                 }
             }
             if entry.gate == "hold" {
