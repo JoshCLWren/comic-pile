@@ -263,7 +263,7 @@ actions) is documented in [`REACT_INTERACTION_POLICY.md`](REACT_INTERACTION_POLI
 ## Auth and Client-side State
 
 - **Auth** lives in `AuthProvider` (in `frontend/src/App.tsx`): bootstraps the
-  session against `/v1/auth/me`, renews it with the refresh cookie, synchronizes
+  session against `/v2/auth/me`, renews it with the refresh cookie, synchronizes
   logout across tabs via a `BroadcastChannel`, and gates routes with
   `ProtectedRoute` / `PublicRoute`.
 - **Client-side (non-server) state** stays in dedicated providers:
@@ -294,7 +294,7 @@ actions) is documented in [`REACT_INTERACTION_POLICY.md`](REACT_INTERACTION_POLI
 1. A screen mounts and a `useQuery`/`useInfiniteQuery` wrapper (from
    `frontend/src/hooks/`) reads through a `queryKeys.*` key.
 2. The query calls a service function in `frontend/src/services/`, which hits a
-   FastAPI endpoint under `/api/v1/*` (or a tested legacy alias).
+   native Rust endpoint under `/api/v2/*` (or a retained v1 alias).
 3. Responses are cached in the shared `QueryClient`; components re-render from
    the single cache.
 4. User actions call `useMutation`; `onSuccess` runs a `cacheEffects.ts` helper
@@ -306,11 +306,12 @@ actions) is documented in [`REACT_INTERACTION_POLICY.md`](REACT_INTERACTION_POLI
 ### Development Mode
 
 ```bash
-pnpm run dev       # or: make dev (starts backend on :8000 and frontend :5173)
+pnpm run dev       # or: make dev (native Rust API on :8010, frontend on :5173)
 ```
 
-Vite serves `http://localhost:5173` with HMR and proxies `/api` to the FastAPI
-backend (`http://localhost:8000`, override with `VITE_API_URL`).
+Vite serves `http://localhost:5173` with HMR and proxies `/api` to the native
+Rust service (`http://localhost:8010`, override with `VITE_NATIVE_API_URL`),
+resolving each request against the ingress rules derived from `vercel.json`.
 
 ### Production Build
 
@@ -321,22 +322,18 @@ pnpm run build     # in frontend/
 Vite builds to `../static/react/` with SRI hashes and module splitting
 (`index-*.js`, `assets/index-*.css`, separate `three` and `vendor` chunks).
 
-### FastAPI Integration
+### Static Hosting
 
-FastAPI serves the built SPA whenever `serve_frontend` is enabled (`app/main.py`): <!-- docs-path-check: ignore -->
+There is no application server serving the SPA. Vercel publishes
+`static/react/` as static output:
 
-- The React app is served at the root `/` from `static/react/index.html` (with
-  no-store headers); `/react` and `/react/` redirect to `/`.
-- Hashed build assets under `static/react/assets` are mounted at `/assets` with
-  immutable cache headers (public, one-year max-age) via
-  `CacheControlledStaticFiles`.
-- `/static` mounts the static directory, and production startup asserts the
-  frontend assets exist before serving.
+- `/` and client-side routes return `static/react/index.html` through the SPA
+  fallback; HTML is revalidated so a new deployment is visible promptly.
+- Fingerprinted assets under `static/react/assets` are cached independently.
+- The root HTML response carries `X-ComicPile-Frontend: vercel-static`.
 
-**Access React App**: `http://localhost:8000/` — API at `http://localhost:8000/api/*`
-uses the same backend. Vercel serves the same static build + FastAPI function for
-production (see [`ARCHITECTURE.md`](ARCHITECTURE.md) and
-[`VERCEL_ARCHITECTURE.md`](VERCEL_ARCHITECTURE.md)).
+Locally, Vite serves the same app with HMR on `:5173`. See
+[`VERCEL_ARCHITECTURE.md`](VERCEL_ARCHITECTURE.md) for the production ingress.
 
 ## Styling Approach
 
@@ -379,8 +376,9 @@ disposed on unmount. Geometry and texture rebuild on `sides` / `color` /
   Chromium is the maintained required Playwright target.
 - **Type contract tests**: compile-time Vitest tests keep the alias-bound
   `frontend/src/types.ts` exports identical to the generated OpenAPI schemas.
-- **Backend tests**: existing pytest suites cover the API endpoints that the
-  frontend consumes (see [`API.md`](API.md)).
+- **Backend tests**: Rust integration tests in `native/roll-service` cover the
+  API endpoints the frontend consumes; the generated-contract check keeps
+  transport types aligned (see [`API.md`](API.md)).
 
 ## Key Decisions & Rationale
 

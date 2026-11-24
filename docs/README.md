@@ -10,7 +10,7 @@ Do not create a new Markdown file just because a topic needs notes. Extend the e
 
 ## Current production truth
 
-ComicPile deploys production from `main` on Vercel. The frontend is a static Vite build and backend API routes use FastAPI. PostgreSQL is hosted by Neon. Pull requests are validated locally and in GitHub Actions; Vercel Preview environments are intentionally unsupported. Fly.io and Railway are historical deployment experiments, not current deployment targets.
+ComicPile deploys production from `main` on Vercel. The frontend is a static Vite build and every deployed `/api/*` route is served by the native Rust handler (`api/native_roll.rs`) selected by `vercel.json` ingress. PostgreSQL is hosted by Neon and schema changes run through the Rust refinery runner (`native/migrate`). Pull requests are validated locally and in GitHub Actions; Vercel Preview environments are intentionally unsupported. Fly.io and Railway are historical deployment experiments, not current deployment targets.
 
 
 

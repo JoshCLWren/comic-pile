@@ -72,11 +72,11 @@ cd frontend && pnpm test
 Common backend checks include:
 
 ```bash
+cargo check --workspace
+cargo test -p comicpile-roll-service <focused-filter>
 ruff check .
 ty check --error-on-warning
-bash scripts/check-python-ci-lint.sh
-pytest <focused-test-file-or-test>
-pytest
+pytest tests/<focused-test-file>.py
 ```
 
 Path-filtered ruff or ty is not a valid CI substitute. `ruff check` alone is not Python validation. CI runs `ty check --error-on-warning` against the whole repo, so ty warnings such as `redundant-cast` fail the required type-check job. After `isinstance(x, T)`, do not `cast(T, x)` again. Re-run the full-repo pair after every later Python edit.

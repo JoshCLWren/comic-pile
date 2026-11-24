@@ -20,31 +20,63 @@ Comic Pile is an open-source, dice-driven comic-reading tracker for turning a co
 
 - Uses dice-driven selection to rotate through a comic reading queue.
 - Tracks reading sessions, issue progress, and ratings.
-- Provides a React/Vite frontend backed by a FastAPI API.
+- Provides a React/Vite frontend backed by a native Rust API.
 - Stores application state in PostgreSQL and can be run from source with your own database.
 - Uses Vercel and Neon for the maintained production deployment.
 
 ## Quick start
 
+Prerequisites:
+
+- Docker (for PostgreSQL)
+- A Rust toolchain (`rustup`; the workspace pins its toolchain in `rust-toolchain.toml`)
+- Node.js and `pnpm` (the repository pins `pnpm@10.15.0`)
+- Python 3.14 and `uv` only for the repository's Python lint/type/tooling checks
+
 ```bash
 git clone https://github.com/JoshCLWren/comic-pile.git
 cd comic-pile
 cp .env.example .env
+# edit .env and set SECRET_KEY (python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+set -a; . ./.env; set +a
+export RUST_ROLL_DATABASE_URL=postgresql://comicpile:comicpile_password@localhost:5435/comicpile
+export RUST_ROLL_JWT_SECRET="$SECRET_KEY"
 make setup
 make dev
 ```
 
-The frontend runs at `http://localhost:5173`. The FastAPI service and Swagger UI run at `http://localhost:8000` and `http://localhost:8000/docs`.
+The frontend runs at `http://localhost:5173`. The native Rust API runs at
+`http://localhost:8010`, with liveness at
+`http://localhost:8010/api/v2/health`. Vite proxies `/api` to the native
+service, so the browser uses one origin.
+
+Neither `make setup` nor the native service reads `.env` automatically:
+
+- `make migrate` (run by `make setup`) reads `MIGRATE_DATABASE_URL`, falling back
+  to `DATABASE_URL`, and accepts the SQLAlchemy `+asyncpg`/`+psycopg` suffixes.
+- The native service reads `RUST_ROLL_DATABASE_URL` and `RUST_ROLL_JWT_SECRET`
+  directly and does not strip driver suffixes, so the exported URL above is a
+  plain `postgresql://` URL.
+
+Re-run the `set -a; . ./.env; set +a` and `export` lines in any new shell that
+runs `make setup` or `make dev`.
+
+There is no seed command and no Swagger UI. Register an account in the running
+app to build your first queue, or use the read-only guest Demo page at `/demo`.
 
 ## Self-hosting / local quickstart
 
-Comic Pile runs from source against a standard PostgreSQL database. The local path below uses the repository's bundled Docker Compose PostgreSQL service (host port **5435**) and does not require Neon. For a hosted Neon database instead, see [Self-hosting with Neon](docs/DEPLOYMENT.md#self-hosting-with-neon).
+Comic Pile runs from source against a standard PostgreSQL database. The local
+path below uses the repository's bundled Docker Compose PostgreSQL service
+(host port **5435**) and does not require Neon. For a hosted Neon database
+instead, see [Self-hosting with Neon](docs/DEPLOYMENT.md#self-hosting-with-neon).
 
 ### Prerequisites
 
 - Docker (for PostgreSQL)
-- Python 3.14 and `uv`
+- Rust and Cargo
 - Node.js and `pnpm`
+- Python 3.14 and `uv` for repository checks (optional for running the app)
 
 ### 1. Clone and configure
 
@@ -54,7 +86,8 @@ cd comic-pile
 cp .env.example .env
 ```
 
-Edit `.env` as needed. The local defaults in `.env.example` already point at the bundled database:
+Edit `.env` as needed. The local defaults in `.env.example` already point at
+the bundled database:
 
 ```dotenv
 DATABASE_URL=postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/comicpile
@@ -64,55 +97,59 @@ DATABASE_URL=postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/co
 
 | Variable | Required? | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | Yes | Default local: `postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/comicpile` |
-| `SECRET_KEY` | Yes | Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
-| `ENVIRONMENT` | No (defaults) | `development` / `production` / `test` |
+| `DATABASE_URL` | Yes | Used by the migration runner. Default local: `postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/comicpile` |
+| `RUST_ROLL_DATABASE_URL` | Yes, for the local native service | Must use a plain `postgresql://` URL; the native config does not strip driver suffixes |
+| `SECRET_KEY` / `RUST_ROLL_JWT_SECRET` | Yes | JWT signing secret. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `RUST_ROLL_ENV` | No (defaults) | `development` / `production`; development must bind to a loopback address |
+| `RUST_ROLL_BIND` | No | Defaults to `127.0.0.1:8010` |
 | `CORS_ORIGINS` | Required in production | Comma-separated origins |
-| `COMICVINE_API_KEY` | Optional | Used by ComicVine hydrator/backfill scripts (`docs/COMICVINE_HYDRATOR.md`); not listed in `.env.example` |
+| `COMICVINE_API_KEY` | Optional | Used by ComicVine hydration/backfill scripts (`docs/COMICVINE_HYDRATOR.md`); not listed in `.env.example` |
 
-See `.env.example` for additional optional settings (access-token lifetime, logging, rating system, etc.). Do not invent variable names; only names present in `.env.example` or existing docs are supported.
+Production startup also accepts the existing `DATABASE_URL` and `SECRET_KEY`
+names for the native service. See `.env.example` for additional optional
+settings (token lifetimes, logging, rating system, password-reset email, etc.).
+Do not invent variable names; only names present in `.env.example`, the native
+configuration, or existing docs are supported.
 
 ### 3. Start PostgreSQL and bootstrap
 
-`make setup` starts the local PostgreSQL container, waits for it to be ready, installs Python and frontend dependencies, runs the refinery migration runner (`native/migrate`), and seeds deterministic demo data:
+`make setup` starts the local PostgreSQL container, waits for it to be ready,
+installs frontend dependencies, and applies the migrations with the Rust
+refinery runner (`native/migrate`):
 
 ```bash
+set -a; . ./.env; set +a
 make setup
 ```
 
-This uses `docker compose up -d db`, which exposes PostgreSQL on host port **5435** (container port 5432). Data persists in the `postgres_data` Docker volume.
+This uses `docker compose up -d db`, which exposes PostgreSQL on host port
+**5435** (container port 5432). Data persists in the `postgres_data` Docker
+volume.
 
 If you prefer to manage containers yourself, the equivalent is:
 
 ```bash
 docker compose up -d db
 # wait for readiness, then:
-uv sync --all-extras
 pnpm install --frozen-lockfile
 make migrate
-make seed-dev
 ```
 
-The full Compose stack is also available (`docker compose up -d`), which additionally runs the API on `http://localhost:8003` and pgAdmin on `http://localhost:5051`. The frontend is not served by Compose; run it separately (step 4).
+The Compose file also defines pgAdmin on `http://localhost:5051`. The frontend
+and API are not served by Compose; run them with `make dev`.
 
 ### 4. Run the app
 
 ```bash
+export RUST_ROLL_DATABASE_URL=postgresql://comicpile:comicpile_password@localhost:5435/comicpile
+export RUST_ROLL_JWT_SECRET="$SECRET_KEY"
 make dev
 ```
 
-This starts the Vite frontend and the FastAPI API together. Alternatively, run only the API with `make dev-api`.
-
-`/api/v2/*` resources — including the native auth routes — are served by the Rust
-Roll service on `:8010`, not by FastAPI. Start it in a second terminal when
-exercising login, Roll, or Queue locally:
-
-```bash
-make dev-native
-```
-
-See [`docs/E2E_CHROMIUM_REGRESSION.md`](docs/E2E_CHROMIUM_REGRESSION.md) for the
-full same-origin native ingress used by Playwright.
+`make dev` starts the Vite frontend and the native Rust Roll/auth service
+together. Use `make dev-frontend` or `make dev-native` to run either half on
+its own. See [`docs/E2E_CHROMIUM_REGRESSION.md`](docs/E2E_CHROMIUM_REGRESSION.md)
+for the same-origin ingress used by Playwright.
 
 ### ComicVine API key (optional)
 
@@ -142,13 +179,15 @@ Other scripts use environment variables for local snapshots:
 
 ### 5. Verify the app is up
 
-After `make setup` + `make dev` (or the Compose equivalent):
+After `make setup` + `make dev`:
 
 - Frontend: [http://localhost:5173](http://localhost:5173)
-- API / Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
-- Dependency health: `GET http://localhost:8000/api/v1/health/dependencies`
+- Native API liveness: `GET http://localhost:8010/api/v2/health` (HTTP 200, `{"status":"ok"}`)
+- Same-origin through Vite: `GET http://localhost:5173/api/v2/health`
 
-A healthy local response from the dependency endpoint confirms the API can reach PostgreSQL. The endpoint is open whenever `HEALTH_CHECK_TOKEN` is unset, regardless of `ENVIRONMENT`. In production, set `HEALTH_CHECK_TOKEN` in the server's environment and send its value in the `X-Health-Token` header.
+The liveness endpoint does not open a database connection. If it answers but
+data requests fail, check the database URL exported to the native service and
+run `make migrate`.
 
 ### Neon (hosted) path
 
@@ -158,47 +197,51 @@ Neon remains the maintained production database. For self-hosting on Neon, follo
 
 Comic Pile is a PostgreSQL application, so local development can use the bundled local database while a hosted installation can use Neon. The maintained production deployment runs on Neon.
 
-The application accepts standard `postgresql://` or `postgres://` connection strings and normalizes them to the `asyncpg` driver at runtime. Alembic migrations use the synchronous `psycopg` driver. See [the deployment guide](docs/DEPLOYMENT.md#self-hosting-with-neon) for a complete Neon setup path, including runtime and migration connection guidance.
+The application accepts standard `postgresql://`, `postgres://`, and SQLAlchemy-style URLs and normalizes them to a plain PostgreSQL connection for the Rust runtime. The migration runner accepts the same forms. See [the deployment guide](docs/DEPLOYMENT.md#self-hosting-with-neon) for a complete Neon setup path.
 
 ## Stack
 
 - **Frontend:** React, Vite, Tailwind CSS
-- **API:** FastAPI (Python) and native Rust, with per-operation ingress routing
-- **Database:** PostgreSQL with SQLAlchemy and `asyncpg`
-- **Migrations:** Alembic with `psycopg`
+- **API:** native Rust (axum) in a single Cargo workspace, deployed through `api/native_roll.rs`
+- **Database:** PostgreSQL via `tokio-postgres`/`deadpool-postgres`
+- **Migrations:** refinery runner (`native/migrate`), append-only SQL under `native/migrate/migrations/`
 - **Production database:** Neon
 - **Production hosting:** Vercel
 
 ## Common development commands
 
 ```bash
-make dev        # frontend + API development servers
-make dev-api    # API only
-make dev-native # native Rust Roll/auth service on :8010 for /api/v2/* routes
+make dev        # Vite frontend + native Rust API together
+make dev-frontend  # Vite only, on :5173
+make dev-native    # native Rust Roll/auth service only, on :8010
 make migrate    # run migrations (refinery runner, native/migrate)
-make seed       # seed local sample data
+make db-up      # start local PostgreSQL
+make db-down    # stop local PostgreSQL without deleting data
 make lint       # repository lint/type checks
-make verify     # complete local verification suite
 make verify-e2e # Chromium browser validation when required
 make tidy       # sweep local generated artifacts
 ```
 
-Application database access is async PostgreSQL via `asyncpg` and SQLAlchemy `AsyncSession`. Alembic migrations are the only supported synchronous database exception. Do not skip or weaken failing tests to force a green build.
+There is no Python application runtime. `app/`, `comic_pile/`, and the Alembic
+migration tree were removed by the Rust cutover; Python dependencies remain
+only for repository tooling and the hand-run QA mirror refresh script
+(`scripts/ops/refresh_torque_qa_mirror.py`). Application database access is
+asynchronous through the Rust connection pool.
 
 ## Production
 
-Production deploys from `main` on Vercel. The frontend is static Vite output, API routes are served by FastAPI, and PostgreSQL is hosted by Neon. The production workflow runs database migrations against Neon before deploying the application.
+Production deploys from `main` on Vercel. The frontend is static Vite output, every deployed `/api/*` route is served by the native Rust handler, and PostgreSQL is hosted by Neon. The production workflow runs database migrations against Neon before deploying the application.
 
 Vercel Preview environments are intentionally unsupported. Fly.io and Railway are not current deployment targets.
 
 ## Repository map
 
-- `app/`: FastAPI application and API routes
-- `comic_pile/`: core queue, roll, session, and reading logic
+- `api/`: the Vercel entrypoint, `native_roll.rs`
+- `native/`: the Rust Cargo workspace — `roll-service` (API) and `migrate` (migration runner)
 - `frontend/`: React/Vite frontend
-- `alembic/`: database migrations
-- `tests/`: pytest coverage
-- `tests_e2e/`: maintained browser scenarios
+- `static/`: built frontend assets served by Vercel
+- `tests/`: Python tooling and repository-contract tests
+- `tests_e2e/`: pointer to the maintained browser suite in `frontend/src/test/`
 - `scripts/`: operational and development utilities
 - `docs/`: code-coupled documentation and the authoritative documentation index
 
@@ -206,7 +249,7 @@ Vercel Preview environments are intentionally unsupported. Fly.io and Railway ar
 
 Start with [`docs/README.md`](docs/README.md). It identifies the authoritative repository documentation, what must remain versioned with code, and what belongs in the GitHub Wiki.
 
-For architectural decisions and system overview, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). For deployment and self-hosting with Neon, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+For architectural decisions and system overview, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). For deployment and self-hosting with Neon, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). For the authoritative per-route runtime and caller inventory, see [`docs/api/v2-route-inventory.json`](docs/api/v2-route-inventory.json).
 
 Coding agents must also follow [`AGENTS.md`](AGENTS.md). Autonomous factory workers must follow [docs/AUTONOMOUS_FACTORY_POLICY.md](docs/AUTONOMOUS_FACTORY_POLICY.md) and [`docs/ISSUE_EXECUTION_PROTOCOL.md`](docs/ISSUE_EXECUTION_PROTOCOL.md).
 

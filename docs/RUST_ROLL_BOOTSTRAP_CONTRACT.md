@@ -27,21 +27,16 @@ Python oracle; nothing regenerates native output from it.
 
 ## Reproduce
 
-Use Python 3.14 and `uv sync --frozen --all-extras`. All Rust database-backed
-bootstrap tests require `RUST_ROLL_TEST_DATABASE_URL` and **fail** with setup
-instructions when it is unset; reporting success without exercising SQL is
-forbidden. Point it at a disposable local PostgreSQL test database. The
-`RUST_ROLL_ALLOW_DB_SKIP` override is deliberately unsupported and rejected.
-The Python checks below use `TEST_DATABASE_URL`
-and `DATABASE_URL` and refuse non-test database names. Never point either suite
-at a reader's library, a read-only testuser snapshot, or production.
+All Rust database-backed bootstrap tests require `RUST_ROLL_TEST_DATABASE_URL`
+and **fail** with setup instructions when it is unset; reporting success without
+exercising SQL is forbidden. Point it at a disposable local PostgreSQL test
+database. The `RUST_ROLL_ALLOW_DB_SKIP` override is deliberately unsupported and
+rejected. Never point the suite at a reader's library, a read-only testuser
+snapshot, or production.
 
 ```sh
 RUST_ROLL_TEST_DATABASE_URL=postgresql://... \
   cargo test --manifest-path native/roll-service/Cargo.toml --locked bootstrap
-uv run pytest tests/test_option_e_runtime.py \
-  tests/test_roll_bootstrap_rust_only.py -q --no-cov
-bash scripts/check-python-ci-lint.sh
 ```
 
 The deployable field list is pinned by
@@ -139,9 +134,8 @@ read by any test.
 
 Auth failure occurs before reading-history bootstrap. HTTP 422 validation remains
 in the OpenAPI contract; timezone is a string and invalid IANA names are ignored.
-Dependency outages use the application's stable 503 boundary (see
-`tests/test_database_unavailability_contract.py`); unforeseen failures use its <!-- docs-path-check: ignore -->
-500 handler. Cyclic/missing-reference Option E inputs fail closed; they must
+Dependency outages use the native service's stable 503 boundary; unforeseen
+failures use its 500 handler. Cyclic/missing-reference Option E inputs fail closed; they must
 never become successful partial candidate sets. Existing auth, recovery,
 route-versioning and Option E tests remain authoritative alongside
 these examples.

@@ -4,28 +4,40 @@
 
 The Comic Pile API is a RESTful API for tracking comic reading using a dice-driven selection system. All endpoints use JSON for request and response bodies.
 
-- **Base URL**: `http://localhost:8000`
+- **Base URL**: `http://localhost:8010` (native service) or the same-origin `/api` prefix through Vite (`http://localhost:5173`)
 - **Content Type**: `application/json`
 - **Authentication**: JWT Bearer token required (see `/api/v2/auth/login`)
 
-### Interactive Documentation
+### Contracts
 
-FastAPI automatically generates interactive API documentation:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+There is no runtime Swagger or ReDoc surface; bare `/docs`, `/redoc` and
+`/openapi.json` return 404 at Vercel ingress. The generated contracts are
+checked in:
+
+- `native/contracts/v2-runtime.openapi.json` — deployed native operations
+- `frontend/src/generated/openapi.json` — merged client contract
+
+The per-operation runtime and caller inventory is
+[`api/v2-route-inventory.json`](api/v2-route-inventory.json). Treat it as
+authoritative when this narrative and the inventory disagree.
 
 ---
 
 ## API Versioning
 
-The API uses a **partial versioning** strategy with two surfaces:
+The API uses a **versioned** surface with one current version:
 
-- **`/api/*`** — the legacy surface, used by original resources. Most maintained client resources have migrated to the versioned surface.
-- **`/api/v1/*`** — the canonical versioned surface. All new client resources must be added here.
+- **`/api/v2/*`** — the current client surface. All new client resources are added here.
+- **`/api/v1/*` and unversioned `/api/*`** — retained only where [`api/v2-route-inventory.json`](api/v2-route-inventory.json) still lists an active contract. Retired aliases answer 404.
 
-The 16 Python unversioned thread, session and undo operations listed in [the caller audit](UNVERSIONED_ALIAS_RETIREMENT.md) are retired; use their existing `/api/v1/*` contracts. Three native detail/snapshot aliases remain under `/api/threads` and `/api/sessions`. The CLI helper and browser setup helpers also use those versioned paths. This removes 16 Python route-methods (threads 10, sessions 4, undo 2) without adding Rust handlers. The two remaining unversioned Roll handlers are retained while the live Roll migration owns their delivery. Auth has no Python mounts, but Rust still publishes eight operations at each of `/api/auth/*`, `/api/v1/auth/*` and `/api/v2/auth/*`; product callers use v2. Native auth compatibility removal remains outside this Python-alias slice because it also changes the published native same-path contract and baseline ingress generation. The snooze family (`/api/v1/snooze/*` and `/api/snooze/*`) is retired: snooze is the native `POST /api/v2/roll/offer` reroll and unsnooze is client-only via the `comicpile_roll_snoozes` cookie (#4338, #4349).
+The unversioned thread, session and undo aliases listed in
+[the caller audit](UNVERSIONED_ALIAS_RETIREMENT.md) were retired in favor of
+their versioned contracts. Auth publishes operations under `/api/v2/auth/*`,
+which is what product callers use. The snooze family is retired too: snooze is
+the native `POST /api/v2/roll/offer` reroll and unsnooze is client-only via the
+`comicpile_roll_snoozes` cookie (#4338, #4349).
 
-**Convention for new endpoints:** add new client resources under `/api/v1/*`;
+**Convention for new endpoints:** add new client resources under `/api/v2/*`;
 do not introduce new bare `/api/*` routes. Non-production tooling routes
 (`debug`, `test`) are mounted under bare `/api/*` but only in non-production or
 test environments — they are intentional exceptions, not client APIs.
@@ -47,8 +59,9 @@ The checked-in client contract
 (`frontend/src/generated/openapi.json` and `openapi.ts`) is assembled from two
 generated sources:
 
-- `native/contracts/python-legacy.openapi.json`, a frozen snapshot of the remaining
-  Python/FastAPI routes, and
+- `native/contracts/python-legacy.openapi.json`, a frozen snapshot of the legacy
+  operations that still ship under v1/unversioned paths (their Python handlers
+  are gone), and
 - `native/contracts/v2-runtime.openapi.json` for the deployed native Rust v2
   operations, generated from the Rust DTOs by `cargo run --example v2_openapi`.
 
@@ -327,9 +340,9 @@ Dice roll for thread selection.
 
 `POST /api/v1/roll/` and its unversioned `POST /api/roll/` alias were retired in
 #4336. The public Roll mutation is now the sessionless native
-`POST /api/v2/roll/offer`, which is not served by the Python FastAPI app; both
-retired Python paths return `404`. The retained Python Roll operations are
-`override`, `dismiss-pending`, and the recommendation-explanation read.
+`POST /api/v2/roll/offer`, which is served by native Rust; both retired paths
+return `404`. The retained Roll compatibility operations are `override`,
+`dismiss-pending`, and the recommendation-explanation read.
 
 ### POST /roll/override
 
@@ -955,57 +968,41 @@ Validation error for request body.
 
 ## Usage Examples
 
-### Creating a New Thread
+### Liveness
 
 ```bash
-curl -X POST http://localhost:8000/threads/ \
+curl http://localhost:8010/api/v2/health
+```
+
+### Reading the queue
+
+```bash
+curl -H "Authorization: Bearer $ACCESS_TOKEN" \
+  "http://localhost:8010/api/v2/threads?page_size=50"
+```
+
+### Rolling
+
+```bash
+curl -X POST http://localhost:8010/api/v2/roll/offer \
   -H "Content-Type: application/json" \
-  -d '{
-    "title": "The Incredible Hulk Vol. 1",
-    "format": "TPB",
-    "issues_remaining": 6
-  }'
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -d '{"idempotency_key":"roll-0123456789abcdef0123456789abcdef"}'
 ```
 
-### Rolling the Dice
-
-```bash
-curl -X POST http://localhost:8000/roll/
-```
-
-### Rating the Current Reading
-
-```bash
-curl -X POST http://localhost:8000/rate/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "rating": 4.0,
-    "issues_read": 1
-  }'
-```
-
-### Importing from CSV
-
-```bash
-curl -X POST http://localhost:8000/admin/import/csv/ \
-  -F "file=@threads.csv"
-```
-
-### Exporting to CSV
-
-```bash
-curl -O http://localhost:8000/admin/export/csv/
-```
+Request and response shapes for other operations are authoritative in the
+generated contracts listed under **Contracts** above. The retired
+`POST /roll/`, `POST /rate/` and unversioned `/api/admin/*` examples this
+section used to show no longer exist.
 
 ---
 
 ## Notes
 
-- **Single User**: The API is designed for single-user applications (user_id is always 1)
-- **Session Timeout**: Sessions are considered inactive after 6 hours of inactivity
+- **Accounts**: Authentication is multi-user; every resource is scoped to the authenticated account.
+- **Session Timeout**: Sessions are considered inactive after 6 hours of inactivity (`SESSION_GAP_HOURS`).
 - **Dice Ladder**: The dice ladder follows the pattern: d4 → d6 → d8 → d10 → d12 → d20
-
-- **CORS**: All origins are allowed for local network access during development
+- **CORS**: Allowed origins come from `CORS_ORIGINS`; production requires an explicit list.
 
 ### Dependency Blocking Behavior
 

@@ -35,8 +35,8 @@ Runs automatically before each commit.
 - Full-repo ruff linting (`ruff check .`)
 - Any type usage (ruff ANN401)
 - Full-repo ty type checking (`ty check --error-on-warning`)
-- ESLint for JavaScript
-- htmlhint for HTML templates
+- ESLint for the frontend
+- htmlhint when HTML templates are present (the retired Python templates are gone)
 
 Path-filtered ruff or ty is not a valid CI substitute. Cursor Cloud remaps
 `core.hooksPath`; run `bash scripts/install-git-hooks.sh` so the dispatcher can
@@ -55,8 +55,8 @@ Runs automatically before each push to remote.
 - Runs frontend unit tests (`pnpm test`)
 - Runs the rendered UI audit (`pnpm run audit:ui`)
 
-The Python API is frozen during the Rust cutover, so backend pytest no longer
-gates pushes. Backend pytest runs are not part of the pre-push hook.
+There is no Python application runtime, so backend pytest is not part of the
+pre-push hook. Rust API tests run with `cargo test --workspace` and in CI.
 
 **What happens on failure:**
 - Push is aborted

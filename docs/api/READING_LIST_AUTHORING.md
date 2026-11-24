@@ -1,13 +1,21 @@
-# Reading List authoring (Option E)
+# Reading List authoring
 
-The existing `/api/v1/custom-cbls` POST and PUT accept additive fields:
+Reading List authoring is served by native Rust at `/api/v2/reading-lists`. The
+former `/api/v1/custom-cbls` surface was retired with the Python API; custom CBLs
+are Reading Lists under the current runtime.
+
+## Write contract
+
+`POST /api/v2/reading-lists` and `PUT /api/v2/reading-lists/{list_id}` accept:
 
 - `mode`: `strict` or `loose`; omission preserves the existing mode (new lists default to loose).
 - `entry_intents`: a map from member Issue ID to `{gate, skipped}`. Gates are `none`, `hold`,
   or `after_previous`. Omitted members retain their intent; new members default to none/unskipped.
   Supplying an intent replaces both values for that member; omitted values use those defaults.
-- `confirmed_predecessor_changes`: PUT-only acknowledgement of a rejected preview; POST rejects
-  this field, including an empty array.
+- `checkpoint_issue_ids` / `checkpoint_targets`: existing checkpoint metadata, independent of
+  positional gates and preserved across old-client saves.
+- `confirmed_predecessor_changes`: PUT-only acknowledgement of a rejected preview. POST rejects
+  any present value with HTTP 422 `reading_list_confirmation_put_only`.
 
 Any update that changes stored positional requirements (including mode-only and gate-only edits)
 returns HTTP 409 with `detail.code = reading_list_predecessor_confirmation_required` and
@@ -53,23 +61,31 @@ ownership/membership and enum validation, database uniqueness/foreign keys, expl
 404, stranded-prerequisite 422, and cycle 422. The API does not accept client snapshots or IDs for
 new entry identities; those internal invariants cannot be authored through this write contract.
 
-Existing checkpoint target metadata remains independent of positional gates and survives unchanged
-old-client saves. These authoring fields do not activate Option E in Roll or Queue and do not
-compile list adjacency into Dependencies. Production conversion and activation remain separate,
-owner-approved operations under #3676.
+## Activation boundary
+
+Authoring persists reader intent; it does not compile list adjacency into Dependencies or change
+global read state. `GET /api/v2/reading-lists/{list_id}/reader` always projects availability from
+the canonical Rust evaluator.
+
+Roll, Queue, thread list and detail, Roll bootstrap, thread issues, ordering and lifecycle handlers
+use that same evaluator only when the owner-approved rollout setting is effective
+(`OPTION_E_ENABLED` truthy plus a non-blank `OPTION_E_APPROVED_PREVIEW`, parsed once into
+`AppState::option_e`). When it is not effective, those handlers keep the legacy stored
+`threads.is_blocked` authority. Enabling the setting is a separate, owner-approved operational
+decision, not an authoring-side flag.
 
 ## Frontend authoring flow
 
-The existing list builder exposes strict/loose modes, per-entry waits and list-local skips,
+The list builder exposes strict/loose modes, per-entry waits and list-local skips,
 409 preview/confirmation, strict-mode coverage warnings, and actionable 422 cycle feedback (#3668).
 Issue search returns canonical library issues. After searching, ArrowUp/ArrowDown move between
 result buttons, Enter adds the focused issue, and Escape returns to search. Enter in the search
 field with results already visible moves focus to the first result without adding an issue or
 resubmitting. Added entries remain unsaved until Save; changing the query hides stale results.
 
-These editor controls do not activate Option E execution. Production conversion and activation
-still require the separately reviewed, owner-approved operation under #3676.
-
 CI runs `pnpm --filter frontend run check:api-types` with explicit `ENVIRONMENT=test` to enforce
-schema/client freshness, including the environment-gated `/api/v1/debug/log` route. This setting
-does not depend on `.env.test` being present or on the runner's inherited environment.
+schema/client freshness. This setting does not depend on `.env.test` being present or on the
+runner's inherited environment.
+
+See [Reading List runtime](../READING_LIST_RUNTIME.md) for eligibility, blockers and the reader
+projection.

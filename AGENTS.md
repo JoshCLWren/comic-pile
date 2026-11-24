@@ -47,7 +47,7 @@ For **Roll bootstrap GET only**, the owner explicitly chose to retire the old pu
 
 The `v1`, `v2`, etc. segments in public HTTP paths refer **only to API contract versions**, not Python, Rust, a new server, or a migration phase. Both Python and Rust can implement any API version. Never describe an operation as "Python v1" or "Rust v2" without explicitly distinguishing the exact path from its **observed/current** runtime.
 
-**A Rust cutover replaces the implementation behind the same HTTP method, URL and aliases.** First trace the live frontend/background/recovery callers to that precise path, its existing FastAPI handler, its generated OpenAPI operation and its actual PostgreSQL statements and transaction behavior. Keep the client's URL and wire contract unchanged; never redirect `/api/v1/...` to `/api/v2/...` as a shortcut to reach Rust. Changing API versions is a separate, deliberate API change, not a language replacement.
+**A Rust cutover replaces the implementation behind the same HTTP method, URL and aliases.** First trace the live frontend/background/recovery callers to that precise path, its existing handler, its generated OpenAPI operation and its actual PostgreSQL statements and transaction behavior. Keep the client's URL and wire contract unchanged; never redirect `/api/v1/...` to `/api/v2/...` as a shortcut to reach Rust. Changing API versions is a separate, deliberate API change, not a language replacement.
 
 PR A must verify the same-path routing, generated contract, focused caller transport and SQL/bind/transaction semantics. After deployment, verify a successful real authenticated production request ran in Rust rather than Python, not just a health check, 401, response header, or READY deployment. PR B removes the **same-path** Python implementation only after proof, with exact-head green required CI and independent factory semantic/acceptance review for both PRs. Greptile is optional: its availability, credits, check, and confidence score are not merge gates. Existing actionable findings still require fixes or evidence-backed rebuttals. Do not infer runtime from a URL version, and do not claim migration from an unused parallel endpoint. Coordinate with active factory claims and permitted production bug fixes; do not bundle unrelated API refactors.
 
@@ -131,7 +131,7 @@ If a test is failing:
 - **Update documentation** when you find gaps or outdated information
 
 
-## MANDATORY: Full-repo ruff, ty, and hardcoded-ID guard before every Python push
+## MANDATORY: Full-repo ruff and ty before every Python push
 
 CI jobs `python-lint` and `python-typecheck` run exactly:
 
@@ -140,19 +140,19 @@ ruff check .
 ty check --error-on-warning
 ```
 
-**Path-filtered ruff or ty is not a valid CI substitute.** Those two commands, with no path arguments, are the required lint/type pair. `bash scripts/check-python-ci-lint.sh` and `make python-ci-lint` run that pair **plus** `pytest tests/test_hardcoded_ids.py` (shrink-only guard against new hardcoded primary-key literals). Prefer the script as the local push gate.
+**Path-filtered ruff or ty is not a valid CI substitute.** Those two commands, with no path arguments, are the required lint/type pair. `bash scripts/lint.sh` runs that pair plus frontend ESLint; prefer it (or the two commands directly) as the local push gate.
 
 **Forbidden as a push gate:**
 - `ruff check` or `ty check` limited to a file list
 - A lint run from before the last Python edit
 - `--no-verify` or any hook bypass
-- New `User(id=<int>)` / `user_id=<int>` test Call literals, or new `user_id=1` in `app/` (see “Test identity validation” below)
+- Any lint, type, test or build failure left for CI to discover
 
 **Required:**
 1. Before the first Python commit of a session, run `bash scripts/install-git-hooks.sh` so Cursor's remapped `core.hooksPath` can still chain to `.git/hooks/pre-commit`.
-2. After the last Python edit, run `bash scripts/check-python-ci-lint.sh` against the whole repo.
-3. Re-run after every later Python edit. A green run is invalid the moment sources change.
-4. Fix every ruff, ty, and hardcoded-ID finding locally. Do not use CI to discover them.
+2. After the last Python edit, run `bash scripts/lint.sh` (or `ruff check .` and `ty check --error-on-warning`) against the whole repo.
+3. Re-run after every later edit. A green run is invalid the moment sources change.
+4. Fix every ruff and ty finding locally. Do not use CI to discover them.
 
 ## CORE PRINCIPLE: PR FEEDBACK TASKS ARE NOT DONE UNTIL PUSHED
 
@@ -171,12 +171,11 @@ If you edit files and run tests but stop before pushing, you have **not complete
 
 Run only targeted tests locally: select the test files or cases covering the changed behavior,
 including focused regression tests for bugs and focused Chromium tests for browser behavior.
-Leave full backend/frontend suites to CI. The Python API is frozen during the Rust cutover, so
-backend pytest no longer gates pushes or merge to main; the pre-push hook runs lint, frontend
-unit tests, and the UI audit only. Python coverage thresholds are retired during the Rust
-cutover; frontend and Rust gates remain authoritative. Do not run bare `pytest`,
-`make test`, `make pytest`, `pnpm test`, or `pnpm run test:coverage` locally unless Josh explicitly
-requests a full local run. A CI failure calls for targeted local reproduction and repair, not a
+Leave full backend/frontend suites to CI. There is no Python application code to test;
+repository tooling tests under `tests/` are run per affected file. The pre-push hook runs lint,
+frontend unit tests, and the UI audit only. Python coverage thresholds are retired; frontend and
+Rust gates remain authoritative. Do not run bare `pytest`, `pnpm test`, `cargo test --workspace`,
+or `pnpm run test:coverage` locally unless Josh explicitly requests a full local run. A CI failure calls for targeted local reproduction and repair, not a
 full local suite rerun.
 
 This rule overrides full-local-suite requirements elsewhere in repository guidance and skills.
@@ -192,9 +191,9 @@ For autonomous factory work, [docs/AUTONOMOUS_FACTORY_POLICY.md](docs/AUTONOMOUS
 Before pushing Python changes from a normal local checkout:
 1. Run `ruff check .` with no path arguments. Path-filtered ruff is not a valid CI substitute.
 2. Run `ty check --error-on-warning` with no path arguments. CI treats ty **warnings as failures**.
-3. Prefer `bash scripts/check-python-ci-lint.sh` so ruff, ty, and the hardcoded-ID guard run as one gate.
-4. Run the focused pytest files that cover the change.
-5. Fix every ruff, ty, hardcoded-ID, and pytest failure before pushing.
+3. Prefer `bash scripts/lint.sh` so ruff, ty, and frontend lint run as one gate.
+4. Run the focused Rust tests and frontend test files that cover the change.
+5. Fix every lint, type, test, and build failure before pushing.
 
 Before pushing frontend changes from a normal local checkout:
 1. Run `cd frontend && pnpm run lint && pnpm run typecheck`.
@@ -210,9 +209,10 @@ Never skip meaningful tests or use CI as a substitute for debugging a locally re
 ## Project Overview
 
 Comic Pile is a dice-driven comic reading tracker built with:
-- **Backend**: Python 3.14, FastAPI, SQLAlchemy, PostgreSQL
+- **Backend**: native Rust (`native/roll-service`, axum, `tokio-postgres`), deployed through `api/native_roll.rs`; no Python application code remains
 - **Frontend**: React 19, Vite, Tailwind CSS
-- **Package managers**: `uv` (Python), `pnpm` (frontend)
+- **Database**: PostgreSQL, migrated by the Rust refinery runner (`native/migrate`); Alembic is retired
+- **Package managers**: `cargo`, `pnpm` (frontend), `uv` (Python tooling scripts and repository checks only)
 
 ## Database query efficiency (owner rule, November 15, 2026)
 
@@ -220,44 +220,40 @@ Write efficient PostgreSQL queries by construction. No SQL inside loops over row
 
 **The blanket per-route SQL-budget program is canceled by the owner.** Never require numeric statement ceilings, a `sql_budget` entry, `pg_stat_statements` proof for every endpoint, small/large fixture quotas, or SQL-budget coverage tickets as a prerequisite for a Rust migration. Do not revive, split, or recreate #4737, #4988, or #5146–#5151 without explicit owner direction. Existing focused regressions for known query failures remain valuable; do not strip legitimate performance safeguards outside this discontinued program.
 
-## CRITICAL: Async PostgreSQL Only in Application Code
+## Database access (native runtime)
 
-**Application code must use asyncpg (async PostgreSQL) ONLY. Never use synchronous database drivers in `app/` or `comic_pile/`.**
+**Application database access is asynchronous Rust.** The service uses `deadpool-postgres`
+with `tokio-postgres`; shared pool and SQL helpers live in
+`native/roll-service/src/db.rs`. The retired Python API's asyncpg/SQLAlchemy rules no longer
+apply to any shipped code path.
 
-**Database Access Rules**:
-- ✅ **USE in app code**: `asyncpg` (async), `create_async_engine()`, `AsyncSession`
-- ❌ **NEVER USE in app code**: `psycopg2`, `create_engine()` (sync), `Session` (sync), or any sync DB driver
+- Do not add synchronous database drivers or blocking pool calls to handlers.
+- Keep queries set-based and bounded; see the Database query efficiency rule above.
+- Python dependencies remain only for repository tooling and
+  `scripts/ops/refresh_torque_qa_mirror.py`; that script may use asyncpg/SQLAlchemy but is never
+  part of the deployed runtime.
 
-**The ONE exception — `psycopg` is permitted inside `alembic/` ONLY for migrations**:
-- `psycopg[binary]` (the psycopg v3 sync driver) is a core dependency, but its sync use is confined to `alembic/env.py`. <!-- docs-path-check: ignore -->
-- `alembic/env.py` converts the app's `postgresql+asyncpg://` URL to `postgresql+psycopg://` so Alembic can run migrations synchronously. <!-- docs-path-check: ignore -->
-- `app/config.py` converts any `postgresql+psycopg://` URL back to `postgresql+asyncpg://` at runtime, so the application never runs sync DB access. <!-- docs-path-check: ignore -->
-
-**Why async-only in app code?** Weeks of refactoring converted the codebase to async. Mixing sync/async causes event loop conflicts and greenlet errors. Sync DB access in `app/` or `comic_pile/` WILL BREAK the application.
-
-**If you need to create tables in tests**: Use module-scoped `@pytest_asyncio.fixture` with `create_async_engine()`, call `await conn.run_sync(Base.metadata.create_all)`. See `tests_e2e/conftest.py:_create_database_tables` for example.
-
-**Violating this rule will undo weeks of work and break the application.**
+**Historical note:** the former `app/`, `comic_pile/`, and `alembic/` trees were deleted with the
+Rust cutover. Do not recreate them or reintroduce Python application modules.
 
 ## Build/Lint/Test Commands
 
 ### Linting
 ```bash
-make lint                    # All linters (Python + JS + HTML)
-make python-ci-lint          # ruff check . + ty check --error-on-warning + hardcoded-ID guard
-ruff check .                 # Python style only — not sufficient by itself
-ty check --error-on-warning  # Required Python type check; warnings fail CI
+make lint                    # ruff + ty + frontend ESLint (scripts/lint.sh)
+ruff check .                 # Python tooling style; CI runs the whole repo
+ty check --error-on-warning  # Required Python tooling type check; warnings fail CI
 cd frontend && pnpm run lint  # Frontend ESLint
+cargo check --workspace      # Rust API and migration runner
 ```
 
 ### Testing
 ```bash
-pytest                                          # All Python tests
-make test                                       # With coverage
-pytest tests/test_roll_api.py -v                # Single file
-pytest tests/test_roll_api.py::test_roll_success -v  # Single function
-pytest -k "roll" -v                             # Pattern matching
+cargo test --workspace                          # Rust API + migration runner tests
+cargo test -p comicpile-roll-service roll_offer # Single module/filter
+pytest tests/test_markdown_docs.py -v           # Repository tooling test file
 cd frontend && pnpm test                         # Frontend unit tests (vitest)
+cd frontend && pnpm exec vitest run src/unit/<file>.test.ts  # Single frontend file
 cd frontend && pnpm run typecheck                # Frontend TypeScript check
 ```
 
@@ -348,16 +344,17 @@ return RollResponse(
 
 ## API Patterns
 
-### Layering Rule (House Standard): Router → Service → Repository
-Routers validate and delegate; services decide; repositories persist.
+### Layering Rule (Native Rust)
+Handlers validate and delegate; domain modules decide; persistence stays behind shared DB helpers.
 
-- **Routers (`app/api/`)** do request validation, auth dependencies, exactly one service call, and HTTP status/error mapping. **No query construction, no business rules, no persistence** — routers must not import or call `select`, `insert`, `update`, `delete`, `func`, `text`, `or_`/`and_`, loader options like `selectinload`, or session execution methods (`execute`, `scalars`, `scalar`, `stream`).
-- **Services (`app/services/`)** own all business logic and orchestration and coordinate repositories.
-- **Repositories (`app/repositories/`)** own ALL query construction and persistence for a model family. They return ORM models or plain tuples/dicts — never HTTP types or response schemas.
+- **Handlers** live in `native/roll-service/src/lib.rs` and per-resource modules (`roll_offer.rs`, `continuity_plans.rs`, ...). They parse and validate the request, apply auth and ownership checks, call domain logic, and map outcomes to HTTP statuses. Handlers must not open ad-hoc connections or hand-roll repeated SQL plumbing.
+- **Domain modules** own business rules and transaction boundaries for their resource family.
+- **Persistence** uses the bounded pool and SQL helpers in `native/roll-service/src/db.rs`; request/response DTOs derive `serde`/`utoipa` and stay aligned with the generated contract.
 
-New backend code must follow this layering without exceptions. Legacy modules are being migrated incrementally; the conformance test `tests/test_router_layering_conformance.py` enforces that router violations never grow beyond `tests/router_layering_baseline.json`, and every migrated module must shrink that baseline file. <!-- docs-path-check: ignore -->
+New backend code follows this layout without exceptions. Every native route module requires a DB-backed HTTP test; the `native-route-db-test-guard` CI job enforces that with `node scripts/check_native_route_db_tests.mjs`. The former Python router/service/repository layout and its conformance baseline were retired with the Python API.
 
-Remember the MissingGreenlet rule above when services/repositories commit: extract model attributes BEFORE `await db.commit()`.
+The MissingGreenlet notes below are historical: they applied to the retired SQLAlchemy
+sessions. No shipped code path commits a SQLAlchemy session.
 
 ### Domain Nouns With Multiple Meanings (House Standard)
 
@@ -365,45 +362,42 @@ A domain noun that also names something else must be qualified at every boundary
 domain concept to application code under a bare, ambiguous name when a second meaning exists in the
 same codebase.
 
-- The durable reading-history model is `ReadingSession` (`app/models/reading_session.py`), reached through `app/repositories/reading_session_repository.py` and, in the Rust runtime, `native/roll-service/src/reading_session.rs`. It is never `Session`, `sessions`, or `SessionModel`. <!-- docs-path-check: ignore -->
+- The durable reading-history model is the Rust `ReadingSession` resource (`native/roll-service/src/reading_session.rs`), backed by the `sessions` table. It is never `Session`, `sessions`, or `SessionModel` in code. <!-- docs-path-check: ignore -->
 - Auth state has its own precise names: access token, refresh token, `password_changed_at` (credential epoch), `revoked_tokens`, and `password_reset_tokens`. There is no auth-session persistence model, and none may be added just to make naming symmetrical.
-- Auth modules (`app/auth.py`, `native/roll-service/src/auth/`, and the auth-state repositories) must not import or call reading-history persistence. Revoke credentials with auth state; reading history is not a credential. <!-- docs-path-check: ignore -->
+- Auth modules (`native/roll-service/src/auth/`) must not import or call reading-history persistence. Revoke credentials with auth state; reading history is not a credential. <!-- docs-path-check: ignore -->
 - Storage/API edges may keep familiar wire names (`sessions` table, `/api/session/`, `SessionListItem`) because clients and migrations depend on them. Ambiguity is resolved in code, not on the wire.
-- The static guard `tests/test_reading_session_naming_guard.py` enforces the boundary; a password reset must preserve populated reading history. <!-- docs-path-check: ignore -->
+- A password reset must preserve populated reading history; the Rust auth module operates only on auth state.
 
 See [`docs/READING_SESSION_NAMING.md`](docs/READING_SESSION_NAMING.md) for the full convention, the
 retained-ambiguity inventory, and the rationale from the #2996 password-reset incident.
 
-### Pydantic Schemas
-All API input/output uses Pydantic models in `app/schemas/`:
-```python
-class ThreadCreate(BaseModel):
-    """Schema for creating a new thread."""
-    title: str = Field(..., min_length=1)
-    format: str = Field(..., min_length=1)
-    issues_remaining: int = Field(..., ge=0)
-    notes: str | None = None
+### Request and Response DTOs
+All API input/output uses Rust structs that derive `Serialize`, `Deserialize` and the
+applicable `utoipa::ToSchema` in the resource module:
+```rust
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ThreadCreate {
+    pub title: String,
+    pub format: String,
+    pub issues_remaining: i32,
+    pub notes: Option<String>,
+}
 ```
+Validate bounded fields explicitly (length, range, checked arithmetic) before use; there is no
+Pydantic-style declarative validator layer.
 
-### SQLAlchemy Models
-Models in `app/models/` use `Mapped` type annotations:
-```python
-class Thread(Base):
-    __tablename__ = "threads"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    last_rating: Mapped[float | None] = mapped_column(Float, nullable=True)
-```
+### Database Rows
+Table columns are read through `tokio-postgres` in `native/roll-service/src/db.rs` and the
+resource modules. Read PostgreSQL `int4` columns as `i32` (or cast `::bigint` in SQL); never
+`row.get::<i64>` on an `int4` column.
 
 ### Error Handling
-Use FastAPI's HTTPException with appropriate status codes:
-```python
-if not thread or thread.user_id != current_user.id:
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Thread {thread_id} not found",
-    )
+Map domain failures to explicit HTTP statuses inside the handler and return a JSON `detail`
+body. Ownership failures return `404` rather than confirming another account's resource exists.
+```rust
+if thread.user_id != current_user.id {
+    return Err(ApiError::not_found(format!("Thread {thread_id} not found")));
+}
 ```
 
  ## Testing Patterns
@@ -553,7 +547,7 @@ in `frontend/src/query/` (see `queryKeys.ts`, `queryClient.ts`, `cacheEffects.ts
 ## Database Migrations
 
 ```bash
-# Create migration: append native/migrate/migrations/V<n>__description.sql (Alembic is frozen)
+# Create migration: append native/migrate/migrations/V<n>__description.sql (append-only; never edit an applied migration)
 make migrate  # Run migrations (or: cargo run --locked -p comicpile-migrate -- up)
 ```
 
@@ -656,14 +650,9 @@ Before ending a turn involving an issue or PR:
 
 Never wait for the user to request these routine label corrections.
 
-## Test identity validation
+## Native route test coverage
 
-Synthetic migration fixtures must isolate production Step 14+ classification
-lookups: those maps are keyed by real dependency IDs, so an auto-assigned test
-id such as `101` can be misclassified as `needs_review`. Isolate with an
-explicit test double or advance sequences past the classification map (see
-`tests/test_reader_order_migration_coordinator.py`). <!-- docs-path-check: ignore -->
-
-`bash scripts/check-python-ci-lint.sh` runs this guard after ruff/ty. Cursor
-agents also have always-on rules in `.cursor/rules/hardcoded-ids.mdc` and
-`.cursor/rules/python-ci-lint.mdc`.
+Every native route module must have a DB-backed HTTP test. CI runs
+`node scripts/check_native_route_db_tests.mjs` in the `native-route-db-test-guard` job and fails
+when a route module has no corresponding test. Add the test with the route; do not add the route
+first and leave coverage for later.

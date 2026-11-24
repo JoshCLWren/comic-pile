@@ -1,7 +1,12 @@
 # Option E conversion preview and rollback rehearsal
 
-Issue #3675 supplies a planner only. Production execution and list activation remain
-manual-only under #3676 and require approval of a fresh exact preview.
+> **Status: historical, superseded (2026-11-24).** This runbook documents the
+> retired Python conversion planner. `scripts.plan_option_e_conversion` was
+> deleted with the Python API; there is no replacement CLI and no apply or commit
+> command. The current Reading List runtime is documented in
+> [Reading List runtime](../READING_LIST_RUNTIME.md). The intent schema and
+> rehearsal rules are retained as the record of the reviewed conversion approach;
+> do not follow the commands below.
 
 Run from the repository root with the project Python environment:
 

@@ -27,11 +27,12 @@ and ratings.
 | `threads.catalog_series_id` | nullable column | indexed; `ON DELETE SET NULL` |
 | `issues.catalog_issue_id` | nullable column | indexed; `ON DELETE SET NULL` |
 
-Migration: `alembic/versions/m5d300000001_add_catalog_identity_tables.py` <!-- docs-path-check: ignore -->
-(revises `f2a3b4c5d6e7`). The migration is purely additive: it creates the two
-new tables, adds the two nullable columns, and creates the matching indexes.
-It does not scan or backfill personal rows, does not delete data, and makes no
-provider network calls.
+Migration: the tables and nullable links are part of the schema baseline in
+`native/migrate/migrations/V1__baseline.sql`. The change is purely additive: it
+creates the two tables, adds the two nullable columns, and creates the matching
+indexes. It does not scan or backfill personal rows, does not delete data, and
+makes no provider network calls. Alembic is retired; new changes are appended as
+new `native/migrate/migrations/V<n>__*.sql` files.
 
 ## Identity authority
 
@@ -111,11 +112,15 @@ introduce catalog-scoped search behind a separate, explicitly reviewed change.
 
 ## Application rollback
 
-The migration is additive-only. Application rollback is:
+The schema change is additive-only, and the migration runner has no downgrade
+path. Application rollback is:
 
-1. `alembic downgrade f2a3b4c5d6e7` drops the two nullable columns (indexes
-   first) and then the two catalog tables in reverse dependency order.
-2. Revert the model, repository, and service code.
+1. Redeploy the previous application revision, which ignores the new nullable
+   columns and tables.
+2. If the schema itself must be removed, restore a pre-migration backup (see
+   [`DATABASE_SAVE_LOAD.md`](DATABASE_SAVE_LOAD.md)) or write a new forward
+   migration that drops the two nullable columns (indexes first) and then the
+   two catalog tables in reverse dependency order.
 
 No personal data is migrated, so rollback is safe and does not scan or rewrite
 reader libraries. Existing `external_identities`, `issues`, and `threads`
@@ -123,12 +128,12 @@ content other than the two new nullable columns is unchanged.
 
 ## Verification
 
-- `tests/test_migration_graph_integrity.py::test_migration_history_has_a_single_head` <!-- docs-path-check: ignore -->
-  enforces one Alembic head.
-- `tests/test_catalog_migration.py` exercises upgrade and downgrade against a <!-- docs-path-check: ignore -->
-  populated temporary PostgreSQL schema and asserts personal rows survive both
-  directions.
-- `tests/test_catalog_models.py`, `tests/test_catalog_repository.py`, and <!-- docs-path-check: ignore -->
-  `tests/test_catalog_service.py` cover identity invariants, confirmed-only <!-- docs-path-check: ignore -->
-  creation, concurrency-safe get-or-create, and additive series linking.
-- Full-repo Python CI pair: `bash scripts/check-python-ci-lint.sh`.
+- Rust tests in `native/roll-service` cover catalog identity invariants,
+  confirmed-only creation, concurrency-safe get-or-create, and additive series
+  linking (`cargo test -p comicpile-roll-service catalog`).
+- The migration runner must plan clean after `up`:
+  `cargo run --locked -p comicpile-migrate -- plan`.
+- CI requires a DB-backed HTTP test for every native route module
+  (`node scripts/check_native_route_db_tests.mjs`).
+- Whole-repo Python tooling checks: `ruff check .` and
+  `ty check --error-on-warning`.

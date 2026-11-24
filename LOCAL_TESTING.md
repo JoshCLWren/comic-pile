@@ -12,105 +12,126 @@ When running tests locally:
 
 Local testing is your opportunity to catch issues before they reach CI. Take advantage of it.
 
-## Quick Start
+## What runs where
 
-### Option 1: Seed Your Dev Database (Recommended)
+Comic Pile has no Python application runtime. Testing is split across three
+surfaces:
 
-The fastest way to get test data locally:
+| Surface | Location | Command |
+| --- | --- | --- |
+| Rust API behavior | `native/roll-service` (unit + DB-backed HTTP tests) | `cargo test --workspace` |
+| Frontend unit/contract tests | `frontend/src/unit`, colocated `*.test.ts(x)` | `pnpm --filter frontend test` |
+| Browser E2E (Chromium) | `frontend/src/test` (Playwright, TypeScript) | `make verify-e2e` |
+| Repository tooling | `tests/` (pytest, Node test files) | focused `pytest tests/test_<name>.py` |
+
+The legacy Python pytest/Playwright suite under `tests_e2e/` was removed with
+the Python API. `tests_e2e/README.md` now only points at the maintained
+browser suite.
+
+## Quick start
+
+### 1. Local database
 
 ```bash
-python scripts/seed_dev_db.py
+make db-up        # PostgreSQL on host port 5435
+make db-down      # stop it without deleting data
 ```
 
-This creates:
-- **User**: `testuser` / `testpass123` (email `test@example.com`; login uses the username)
-- **5 Threads**: Superman, Batman, Wonder Woman, The Flash, Aquaman
-- **Active Session**: Start die = 6
-
-The script is idempotent - run it again to refresh the data.
-
-### Option 2: Run E2E Tests
-
-E2E tests automatically create a test server with seeded data:
+The local defaults in `.env.example` already point at this database. The
+migration runner reads `MIGRATE_DATABASE_URL`, falling back to `DATABASE_URL`;
+load `.env` into the shell first, because neither the Make targets nor the Rust
+binaries read `.env` themselves:
 
 ```bash
-# Run all E2E tests
-make test-integration
-# or
-pytest tests_e2e/
-
-# Run specific test
-pytest tests_e2e/test_api_workflows.py::test_roll_dice_updates_session -v
+set -a; . ./.env; set +a
+make migrate
 ```
 
-**Test credentials**: `test_user@example.com` / `testpassword`
+### 2. Create an account instead of seeding
 
-### Option 3: Use Unit Test Fixtures
+There is no seed command. Start the app with `make dev`, then register through
+the UI to create a user and queue. The read-only guest Demo page at `/demo`
+serves fabricated fixtures and writes nothing.
 
-Unit tests use the `auth_api_client_async` fixture which auto-creates a test user:
+### 3. Run the API for browser tests
 
-```python
-async def test_my_feature(auth_api_client_async: AsyncClient, async_db: AsyncSession):
-    # auth_api_client_async is already authenticated as test_user@example.com
-    # async_db is a test database session
-    response = await auth_api_client_async.get("/api/v1/threads/completed/threads")
-    assert response.status_code == 200
+Playwright specs run against a same-origin server. Start the native service
+against a disposable database, never a shared or production one:
+
+```bash
+RUST_ROLL_BIND=127.0.0.1:8010 \
+RUST_ROLL_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5437/comic_pile_test" \
+RUST_ROLL_JWT_SECRET="test-secret-key-for-testing-only" \
+cargo run --locked -p comicpile-roll-service
 ```
 
-## Key Fixtures
+`make docker-test-up` builds the frontend and starts the maintained test
+topology (PostgreSQL on 5437, Redis, the native service behind nginx on 8000).
+See [`docs/E2E_CHROMIUM_REGRESSION.md`](docs/E2E_CHROMIUM_REGRESSION.md) for the
+full ingress contract and the inventory-driven regression lane.
 
-### Unit Test Fixtures (`tests/conftest.py`) <!-- docs-path-check: ignore -->
+### 4. Run tests
 
-| Fixture | Scope | Description |
-|---------|-------|-------------|
-| `db` | function | Sync wrapper around async DB session |
-| `client` | function | FastAPI test client with auth override |
-| `sample_user` | function | Test user with 3 threads |
+```bash
+# Rust: all workspace tests
+cargo test --workspace
 
-## Common Patterns
+# Rust: one focused test or module
+cargo test -p comicpile-roll-service roll_offer
 
-### Creating Test Threads
+# Frontend: unit tests (Vitest, plus style/sitemap/SEO audits)
+pnpm --filter frontend test
 
-```python
-from app.models import Thread
+# Frontend: one focused file
+pnpm --filter frontend exec vitest run src/unit/queryKeys.test.ts
 
-thread = Thread(
-    title="Test Comic",
-    format="Comic",
-    issues_remaining=5,
-    queue_position=1,
-    user_id=user.id,
-)
-async_db.add(thread)
-await async_db.commit()
+# Browser: Chromium Playwright (builds first)
+make verify-e2e
+
+# Repository tooling: one test file
+pytest tests/test_markdown_docs.py -v
 ```
 
-### Making Authenticated Requests
+Full suites run in CI. Run only the files or cases that cover your change
+locally, plus focused regressions for a bug you are fixing.
 
-```python
-response = await auth_api_client_async.post("/api/roll/")
-assert response.status_code == 200
+## Common patterns
+
+### Rust request test
+
+Handler tests build the router from `native/roll-service/src/lib.rs` and call it
+with `tower::ServiceExt::oneshot`. Every native route module is expected to have
+a DB-backed HTTP test; the `native-route-db-test-guard` CI job enforces that
+coverage with `node scripts/check_native_route_db_tests.mjs`.
+
+```rust
+let response = app
+    .clone()
+    .oneshot(Request::builder().uri("/api/v2/health").body(Body::empty())?)
+    .await?;
+assert_eq!(response.status(), StatusCode::OK);
 ```
 
-### Querying the Database
+### Frontend query test
 
-```python
-from sqlalchemy import select
-
-result = await async_db.execute(select(Thread).where(Thread.user_id == user_id))
-threads = result.scalars().all()
-```
+Unit tests mock the service layer with `msw` and render through the shared
+`QueryClient`. Follow the cache-effect and query-key rules in
+[`docs/REACT_ARCHITECTURE.md`](docs/REACT_ARCHITECTURE.md).
 
 ## Troubleshooting
 
-**Database connection errors?**
-- Ensure PostgreSQL is running: `psql postgres -c "SELECT 1"`
-- Check your `.env` file has `DATABASE_URL` set
+**Native service exits at startup?**
+- It requires `RUST_ROLL_DATABASE_URL` and `RUST_ROLL_JWT_SECRET`. It does not
+  read `.env`.
+- `RUST_ROLL_DATABASE_URL` must be a plain `postgresql://` URL (no `+asyncpg`).
+- In development the bind address must be loopback.
 
-**Test isolation issues?**
-- E2E tests use transaction rollback - data doesn't persist
-- Use `seed_dev_db.py` for persistent data across test runs <!-- docs-path-check: ignore -->
+**Migrations say "set MIGRATE_DATABASE_URL or DATABASE_URL"?**
+- Export the environment first: `set -a; . ./.env; set +a`.
+
+**Database connection errors?**
+- Ensure PostgreSQL is running (`make db-up`) and the URL points at port 5435.
 
 **Port conflicts?**
-- E2E tests auto-find free ports
-- Check `.pytest_cache` for stuck test servers
+- Dev PostgreSQL 5435, test PostgreSQL 5437, local native API 8010, Vite 5173.
+  The Docker test topology serves the frontend through nginx on 8000.

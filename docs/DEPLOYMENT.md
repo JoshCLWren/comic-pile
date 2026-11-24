@@ -5,7 +5,12 @@ ComicPile's maintained production deployment runs on Vercel from the `main` bran
 ## Production architecture
 
 - Vercel serves the built React/Vite frontend as static output.
-- FastAPI handles the intentional API routes and OpenAPI document.
+- A single native Rust function (`api/native_roll.rs`) serves every deployed
+  `/api/*` route; unknown API paths get a Rust JSON 404.
+- The OpenAPI contract is generated and checked in
+  (`native/contracts/v2-runtime.openapi.json`, merged into
+  `frontend/src/generated/openapi.json`). There is no runtime `/docs`,
+  `/redoc` or `/openapi.json` endpoint.
 - Neon provides PostgreSQL.
 
 - Pull requests are validated locally and in GitHub Actions. ComicPile does not provision or maintain Vercel Preview environments.
@@ -44,7 +49,7 @@ ENVIRONMENT=production
 CORS_ORIGINS=https://your-comic-pile.example
 ```
 
-ComicPile accepts `postgresql://`, `postgres://`, and `postgresql+asyncpg://` URLs. Application startup normalizes standard Postgres URLs to SQLAlchemy's `asyncpg` driver, while Alembic converts the same database URL to `psycopg` for synchronous migrations.
+ComicPile accepts `postgresql://`, `postgres://`, and SQLAlchemy-style URLs. The native runtime normalizes them for `tokio-postgres`; the Rust migration runner accepts the same forms and strips `+asyncpg`/`+psycopg` suffixes. Production startup requires `sslmode=require`.
 
 For the closest match to the maintained production setup, use Neon's pooled connection for application traffic and a direct Neon connection for schema migrations. The production migration tooling can resolve a direct URL through `NEON_PROJECT_ID` and `NEON_API_KEY`, or it can use an explicit `NEON_DIRECT_DATABASE_URL`; see [`.env.example`](../.env.example) for those variables.
 
@@ -62,7 +67,11 @@ The migration must target the same Neon database that the deployed application w
 
 The maintained hosting target is Vercel. Configure the production environment variables there, including `DATABASE_URL`, `SECRET_KEY`, `ENVIRONMENT=production`, and `CORS_ORIGINS`, then deploy from `main`.
 
-After deployment, `GET /api/v1/health/dependencies` can be used to verify the application's database dependency independently from the lightweight liveness endpoint.
+After deployment, `GET /api/v2/health` verifies process liveness without opening a database connection and returns the `X-ComicPile-API-Runtime: rust` header. Confirm database readiness with a real data request or with the migration planner:
+
+```bash
+MIGRATE_DATABASE_URL="postgresql://..." cargo run --locked -p comicpile-migrate -- plan
+```
 
 ### Password-reset outbound email (Gmail SMTP)
 
@@ -115,7 +124,7 @@ Neon is not only an incidental development database in this project:
 
 - Production application data is stored in Neon PostgreSQL.
 - The production delivery workflow runs database migrations before deploying the application.
-- Runtime database access uses SQLAlchemy with `asyncpg`, with pooled connections supported for application traffic.
+- Runtime database access uses the Rust `deadpool-postgres` pool over `tokio-postgres`.
 - Migration tooling supports direct Neon connections and the Neon API integration described in `.env.example`.
 - Operational health checks report database dependency health separately from process liveness.
 - The repository includes Neon-specific operational and performance documentation, including production-to-local data workflows and connection-pool measurements.
@@ -132,7 +141,7 @@ Do not add Fly.io, Railway, or another maintained hosting target without a new p
 
 ## Local development
 
-Use `make setup` for the local environment, `make dev` for the frontend and API development servers, and `make verify` for the complete local verification suite. Local development and GitHub Actions remain independent from production deployment configuration.
+Use `make setup` for the local environment and `make dev` for the Vite frontend (`:5173`) and native Rust API (`:8010`). Verify changes with `make lint`, `cargo test --workspace`, the frontend lint/typecheck/build/test scripts, and `make verify-e2e` when browser behavior is affected. Local development and GitHub Actions remain independent from production deployment configuration.
 
 
 ### Automatic deployment repair

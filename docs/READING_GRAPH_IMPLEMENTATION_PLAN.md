@@ -1,8 +1,11 @@
 # Reading Graph Implementation Plan
 
 **Date:** 2026-09-17  
-**Status:** Proposed execution plan  
+**Status:** Superseded historical plan
 **Authority:** `docs/READING_GRAPH_ADR.md`  
+**Superseded by:** [Reading List runtime](READING_LIST_RUNTIME.md) and the
+[Reading List ADR](READING_LIST_EXECUTION_ADR.md). Its Reading Graph sequence and
+`/api/v1/custom-cbls` references are not current instructions.
 **Inputs:** `docs/READING_GRAPH_PERSISTENCE_DESIGN.md`, corrected `docs/CBL_TEMPLATE_LIBRARY_AUDIT.md`, and the repaired `docs/READING_GRAPH_RUNTIME_AUDIT.md`
 
 ## Purpose
