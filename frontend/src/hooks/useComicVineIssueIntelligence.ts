@@ -17,7 +17,7 @@ export function useComicVineIssueIntelligence(
   options?: { enabled?: boolean },
 ): ComicVineIssueIntelligenceState {
   const enabled = !!issueId && (options?.enabled ?? true)
-  const { data, isPending, refetch: queryRefetch } = useQuery({
+  const { data, isPending, isError, error, refetch: queryRefetch } = useQuery({
     queryKey: issueId ? queryKeys.comicVine.issueIntelligence(issueId) : [],
     queryFn: () => comicVineApi.getIssueIntelligence(issueId!),
     enabled,

@@ -9,6 +9,8 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IssueIdentityResponse } from '../services/api-comicvine'
+import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
 
 const { searchSeriesSpy, getIssueIdentitySpy, confirmIdentitySpy, replaceIdentitySpy, removeIdentitySpy } =
   vi.hoisted(() => ({
@@ -207,6 +209,10 @@ describe('ComicIssueMappingAction', () => {
     fireEvent.click(screen.getByTestId('comic-mapping-remove'))
     fireEvent.click(await screen.findByText('Remove mapping'))
     await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
+    await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.comicVine.issueIntelligence(77),
+      exact: true,
+    }))
     await waitFor(() => expect(onMapped).toHaveBeenCalled())
   })
 })

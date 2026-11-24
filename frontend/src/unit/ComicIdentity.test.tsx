@@ -459,12 +459,19 @@ describe('ComicIdentity', () => {
     await waitFor(() => expect(container).toBeEmptyDOMElement())
   })
 
-  it('fails closed when metadata loading fails', async () => {
-    getIntelligence.mockRejectedValue(new Error('metadata unavailable'))
+  it('shows a retryable error when metadata loading fails and recovers', async () => {
+    getIntelligence
+      .mockRejectedValueOnce(new Error('metadata unavailable'))
+      .mockResolvedValueOnce(null)
     const { container } = renderWithToast(<ComicIdentity issueId={3} />)
-    await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(3))
-    await waitFor(() => expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument())
-    expect(container).toBeEmptyDOMElement()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not load comic details: metadata unavailable',
+    )
+    expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry comic details' }))
+    await waitFor(() => expect(getIntelligence).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(container).toBeEmptyDOMElement())
   })
 
   it('ignores a response that arrives after the component unmounts', async () => {

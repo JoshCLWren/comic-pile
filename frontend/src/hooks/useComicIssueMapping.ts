@@ -198,6 +198,7 @@ export function useComicIssueMapping({
     try {
       await comicVineApi.removeIdentity(issueId)
       setIsRemoveDialogOpen(false)
+      await invalidateComicVineIssueIntelligenceMany(queryClient, [issueId])
       await invalidateComicVineIssueIdentity(queryClient, issueId)
       await fetchIdentity()
       await invalidateAfterIssueMappingChange(queryClient)

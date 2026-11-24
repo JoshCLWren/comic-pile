@@ -132,6 +132,21 @@ describe('manual read surface roll parity', () => {
     expect(actionCard).toHaveAttribute('data-show-cover', 'false')
   })
 
+  it('shows a retryable provider error without hiding the issue tags', async () => {
+    intelligence
+      .mockRejectedValueOnce(new Error('creators offline'))
+      .mockResolvedValueOnce(metadata)
+    setup()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not load comic details: creators offline',
+    )
+    expect(await screen.findByText('Physical')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry comic details' }))
+    expect(await screen.findByText('Fiona Staples')).toBeVisible()
+    expect(intelligence).toHaveBeenCalledTimes(2)
+  })
+
   it('renders creators and tags while a read issue\'s saved rating is loading', async () => {
     getIssue.mockResolvedValue({ ...issue, status: 'read' })
     let resolveCards!: (cards: IssueCard[]) => void
