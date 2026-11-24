@@ -4,7 +4,9 @@
 > is retired. Current factory delivery boundaries are in
 > `docs/AUTONOMOUS_FACTORY_POLICY.md`.
 
-<!-- docs-path-check: historical --> implementation status
+<!-- docs-path-check: historical -->
+
+## Implementation status
 
 Coordination issue: "Use the existing Factory to implement the first Latticery extraction slice."
 
