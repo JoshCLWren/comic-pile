@@ -37,7 +37,10 @@ const issue: Issue = {
   thread_id: 7,
   issue_number: '3',
   status: 'unread',
-} as Issue
+  position: 3,
+  created_at: '2026-11-24T00:00:00Z',
+  read_at: null,
+}
 
 const card: IssueCard = {
   issue_id: 91,
@@ -69,7 +72,7 @@ const metadata: ComicVineIssueIntelligence = {
   metadata_status: 'deep_fetched',
 }
 
-const tag = {
+const tag: Tag = {
   id: 4,
   name: 'Physical',
   normalized_name: 'physical',
@@ -84,9 +87,7 @@ const tags: EffectiveTagsResponse = {
   target_type: 'Issue',
   target_id: 91,
   direct_tags: [tag],
-  // SAFETY: an effective entry for the same direct tag; the chip component only
-  // reads the tag identity, the direct flag and the inheritance sources.
-  effective_tags: [{ tag, direct: true, sources: [] } as unknown as EffectiveTagsResponse['effective_tags'][number]],
+  effective_tags: [{ tag, direct: true, sources: [] }],
 }
 
 function setup() {
