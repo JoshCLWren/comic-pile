@@ -307,9 +307,7 @@ describe('Roll optional reading cards interaction (#2764)', () => {
         readingBoundaryError: true,
       }),
     )
-    const error = screen.getByRole('alert')
-    expect(error).toHaveAttribute('role', 'alert')
-    expect(screen.getByText('Reading boundaries could not be loaded.')).toBeInTheDocument()
+    expect(screen.getByText('Reading boundaries could not be loaded.').closest('[role="alert"]')).toHaveAttribute('role', 'alert')
     expect(screen.getByRole('button', { name: 'Retry reading boundaries' })).toBeEnabled()
     expect(screen.queryByTestId('reading-context-error')).not.toBeInTheDocument()
     expect(screen.getByRole('slider')).toBeEnabled()

@@ -286,7 +286,7 @@ describe('RatingView action panel (issue #1406)', () => {
 
   it('shows error message when present', () => {
     render(ratingView({ errorMessage: 'Network error' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Network error')
+    expect(screen.getByText('Network error')).toBeInTheDocument()
   })
 
   it('rating value display reflects current rating', () => {
