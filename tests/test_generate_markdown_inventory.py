@@ -64,7 +64,7 @@ def test_docs_hub_contracts_are_kept_with_code() -> None:
         assert replacement == "—"
 
 
-def test_issue_plans_are_marked_for_archive() -> None:
+def test_issue_plans_are_marked_historical() -> None:
     """Completed issue plans should not silently remain active documentation."""
     _, overlap, action, replacement = default_disposition("docs/issue-plans/123.md")
 
