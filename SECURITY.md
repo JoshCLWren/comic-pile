@@ -1,75 +1,41 @@
 # Security Documentation
 
-## Docker Security Configuration
+## Runtime Security Architecture
 
-### Non-Root User
-The application runs as a non-root user (`appuser`) for security:
+The application runtime is a static React/Vite frontend and a single native Rust
+API function (`api/native_roll.rs`) deployed on Vercel, with PostgreSQL hosted by
+Neon. The retired Python/FastAPI application no longer exists; guidance that
+references it is historical.
 
-```dockerfile
-RUN useradd --create-home --shell /bin/bash appuser
-USER appuser
 ```
-
-**Benefits:**
-- If container is compromised, attacker has limited privileges
-- Prevents privilege escalation attacks
-- Follows security best practices
-
-### Secrets Management
-
-#### Development Environment
-- `docker-compose.yml` contains hardcoded development passwords (acceptable for local development only)
-- `postgres_password` and `pgadmin_password` are placeholder credentials
-
-#### Production Environment
-- Production runs on Vercel + Neon; secrets are configured as Vercel project environment variables and GitHub Actions secrets
-- `.env.production` remains in `.gitignore` to prevent committing secrets locally
-- Strong secrets must be generated with: `openssl rand -base64 32`
-
-**Best Practices:**
-1. Never commit `.env.production` to version control
-2. Use different passwords for development and production
-3. Rotate secrets regularly
-4. Use strong, randomly generated secrets (32+ bytes)
-
-### Image Security
-
-#### Base Image
-- Uses official `python:3.14-slim` image
-- Slim variants reduce attack surface by excluding unnecessary packages
-
-#### Dependencies
-- Minimal system packages installed (`libpq5`, `curl`)
-- `apt` cache cleaned after installation
-- Multi-stage build reduces final image size
-
-### Network Security
-
-#### Production Architecture
-```
-Internet → Vercel edge (TLS termination) → FastAPI API function → Neon PostgreSQL
+Internet → Vercel edge (TLS termination) → static frontend + native Rust API function → Neon PostgreSQL
 ```
 
 **Security Features:**
 - TLS termination handled by the Vercel platform
-- Security headers applied by application middleware (`app/middleware/security_headers.py`) <!-- docs-path-check: ignore -->
-- Rate limiting enforced at the application layer (`app/middleware/rate_limit.py`) <!-- docs-path-check: ignore -->
-- Database reachable only through the configured Neon connection URL
+- Security headers applied at the Vercel ingress on the static frontend routes
+  (generated `vercel.json` route `headers`; do not hand-edit that file)
+- Authentication rate limiting, durable login lockout, and outbound-provider
+  backoff enforced inside the native Rust service (see [docs/rate_limiting.md](docs/rate_limiting.md))
+- Database reachable only through the configured Neon connection URL;
+  production startup rejects a database URL without `sslmode=require`
 
 ### SSL/TLS Configuration
 
 TLS certificates are provisioned and renewed automatically by the Vercel platform;
-no certificate files are stored in this repository. Application responses also declare
-HSTS via `SecurityHeadersMiddleware`
-(`max-age=63072000; includeSubDomains; preload` in production environments).
+no certificate files are stored in this repository. Frontend responses declare HSTS
+via the ingress headers
+(`max-age=63072000; includeSubDomains; preload`). Production database connections
+require `sslmode=require`.
 
 ### Security Headers
 
-The FastAPI application sets security headers through `SecurityHeadersMiddleware`
-(`app/middleware/security_headers.py`): <!-- docs-path-check: ignore -->
+The generated `vercel.json` applies these headers to the static frontend routes
+(`/`, SPA fallback, and fingerprinted assets get cache rules; HTML routes get the
+full set):
 
 ```http
-Content-Security-Policy: default-src 'self'; ...
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; frame-src 'none';
 Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
@@ -87,60 +53,84 @@ Permissions-Policy: camera=(), microphone=(), geolocation=()
 - **Referrer-Policy**: Controls referrer information
 - **Permissions-Policy**: Disables sensitive browser capabilities
 
-### Rate Limiting
+Recorded gap: the native Rust API responses do not currently emit this header set
+themselves; the ingress-level headers above cover the static frontend routes. Treat
+API-response security headers as an open runtime work item, not an implemented
+control.
 
-API endpoints are rate-limited in the application using slowapi
-(`app/middleware/rate_limit.py`, registered in `app/main.py`): <!-- docs-path-check: ignore -->
+### Authentication and Abuse Controls
 
-**Configuration:**
-- Limits are applied per endpoint via the shared limiter
-- Requests are keyed by client IP address
-- Rate limiting responses return HTTP 429
+- Browser clients authenticate with a bearer access token, an HttpOnly refresh
+  cookie, and a double-submit CSRF cookie/header on state-changing requests
+  (see [docs/API.md](docs/API.md#authentication-and-csrf)).
+- Authentication endpoints use a process-local rate limiter keyed by client IP or
+  token digest, with a bounded key map; failed logins are additionally locked out
+  durably in PostgreSQL and survive restarts
+  (see [docs/rate_limiting.md](docs/rate_limiting.md)).
+- Outbound bug-report filing and ComicVine provider calls apply their own rate
+  limits and backoff with `429` + `Retry-After` behavior.
+
+### Secrets Management
+
+#### Development Environment
+- `docker-compose.yml` contains hardcoded development passwords (acceptable for local development only)
+- `comicpile_password` and `pgadmin_password` are placeholder credentials
+
+#### Production Environment
+- Production runs on Vercel + Neon; secrets are configured as Vercel project environment variables and GitHub Actions secrets
+- `.env.production` remains in `.gitignore` to prevent committing secrets locally
+- Strong secrets must be generated with: `openssl rand -base64 32`
+
+**Best Practices:**
+1. Never commit `.env.production` to version control
+2. Use different passwords for development and production
+3. Rotate secrets regularly
+4. Use strong, randomly generated secrets (32+ bytes)
+
+### Container Security
+
+Comic Pile does not ship a production application container. Docker is used for:
+
+- Local PostgreSQL (`docker-compose.yml`, `postgres:16-alpine`, placeholder
+  development credentials) and optional pgAdmin.
+- The same-origin test topology (`docker-compose.test.yml`).
+- The CI tooling image (`Dockerfile.ci`), which packages Python/Node/Playwright
+  tooling for GitHub Actions jobs — it is not a production runtime.
+
+Keep production credentials out of all Compose files; they are for local and test
+databases only.
 
 ### Health Checks
 
-All services have health checks:
+- The native service exposes dependency-free liveness at `GET /api/v2/health`
+  (local standalone also at `GET /health`); it opens no database connection
+  (see [docs/OPERATIONAL_HEALTH.md](docs/OPERATIONAL_HEALTH.md)).
+- The local database container declares a `pg_isready` healthcheck in
+  `docker-compose.yml`.
 
-**App Container:**
-```dockerfile
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-```
-
-**Database Container:**
-```yaml
-healthcheck:
-  test: ["CMD-SHELL", "pg_isready -U comicpile"]
-  interval: 10s
-  timeout: 5s
-  retries: 5
-```
-
-### Container Hardening Checklist
+### Security Checklist
 
 ✅ **Implemented:**
-- [x] Non-root user
-- [x] Minimal base image (slim)
-- [x] Multi-stage build
-- [x] Health checks on containers
 - [x] Secrets in environment variables (not code)
-- [x] .env.production in .gitignore
+- [x] `.env.production` in `.gitignore`
 - [x] TLS terminated by the Vercel platform
-- [x] Security headers in application middleware
-- [x] Rate limiting on API (slowapi)
+- [x] Security headers on static frontend routes at the Vercel ingress
+- [x] Authentication rate limiting and durable login lockout
+- [x] Production database connections require `sslmode=require`
+- [x] Dependency-free liveness endpoint with no infrastructure detail
 - [x] No direct database exposure
-- [x] Read-only file system where possible
+
+⚠️ **Known gaps (recorded, not implemented):**
+- [ ] Security headers on native Rust API responses (ingress covers the static routes)
+- [ ] Automated secret scanning in CI
 
 ### Vulnerability Scanning
 
 Run vulnerability scans before deployment:
 
 ```bash
-# Scan Docker image
-docker scout cves comic-pile:latest
-
-# Scan base image
-docker scout cves python:3.14-slim
+# Scan the CI tooling image
+docker scout cves comic-pile-ci:latest
 
 # Check for exposed secrets
 git-secrets --scan
