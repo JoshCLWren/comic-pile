@@ -954,14 +954,8 @@ describe('CustomCBLBuilder', () => {
     ).toBeInTheDocument()
   })
 
-  it('replaces only the selected Reading List and preserves saved after_previous intent through undo', async () => {
+  it('replaces only the selected Reading List from a global CBL and undoes list membership only', async () => {
     const user = userEvent.setup()
-    const gatedList = {
-      ...existingList,
-      entries: existingList.entries.map((entry) =>
-        entry.issue_id === 30001 ? { ...entry, gate: 'after_previous' as const } : entry,
-      ),
-    }
     cblMocks.discover.mockResolvedValue([
       {
         id: 101,
@@ -1035,43 +1029,53 @@ describe('CustomCBLBuilder', () => {
         },
       ],
     })
-    const replacementEntry = {
-      id: 94,
-      position: 1,
-      issue_id: 30002,
-      thread_id: 9002,
-      series_name: 'JSA',
-      issue_number: '1',
-      status: 'unread',
-      is_checkpoint: false,
-      gate: 'none',
-      skipped: false,
-    }
     mocks.update.mockResolvedValue({
-      ...gatedList,
+      ...existingList,
       updated_at: '2026-09-14T03:10:00Z',
       issue_count: 3,
       entries: [
-        { ...gatedList.entries[0], position: 0 },
-        replacementEntry,
-        { ...gatedList.entries[1], position: 2 },
+        { ...existingList.entries[0], position: 0 },
+        {
+          id: 94,
+          position: 1,
+          issue_id: 30002,
+          thread_id: 9002,
+          series_name: 'JSA',
+          issue_number: '1',
+          status: 'unread',
+          is_checkpoint: false,
+          gate: 'none',
+          skipped: false,
+        },
+        { ...existingList.entries[1], position: 2 },
       ],
     })
     const replacedList = {
-      ...gatedList,
+      ...existingList,
       updated_at: '2026-09-14T03:10:00Z',
       issue_count: 3,
       entries: [
-        { ...gatedList.entries[0], position: 0 },
-        replacementEntry,
-        { ...gatedList.entries[1], position: 2 },
+        { ...existingList.entries[0], position: 0 },
+        {
+          id: 94,
+          position: 1,
+          issue_id: 30002,
+          thread_id: 9002,
+          series_name: 'JSA',
+          issue_number: '1',
+          status: 'unread',
+          is_checkpoint: false,
+          gate: 'none',
+          skipped: false,
+        },
+        { ...existingList.entries[1], position: 2 },
       ],
     }
     // Detail load, then the replacement's stale-review check read the original
     // version; Undo must see the version the replacement wrote.
     mocks.get
-      .mockResolvedValueOnce(gatedList)
-      .mockResolvedValueOnce(gatedList)
+      .mockResolvedValueOnce(existingList)
+      .mockResolvedValueOnce(existingList)
       .mockResolvedValue(replacedList)
 
     renderBuilder()
@@ -1101,7 +1105,7 @@ describe('CustomCBLBuilder', () => {
         entry_intents: {
           26360: { gate: 'none', skipped: false },
           30002: { gate: 'none', skipped: false },
-          30001: { gate: 'after_previous', skipped: false },
+          30001: { gate: 'none', skipped: false },
         },
         checkpoint_issue_ids: [],
       }),
@@ -1118,7 +1122,7 @@ describe('CustomCBLBuilder', () => {
         issue_ids: [26360, 30001],
         entry_intents: {
           26360: { gate: 'none', skipped: false },
-          30001: { gate: 'after_previous', skipped: false },
+          30001: { gate: 'none', skipped: false },
         },
         checkpoint_issue_ids: [],
       }),
