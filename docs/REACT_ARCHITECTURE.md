@@ -274,7 +274,10 @@ actions) is documented in [`REACT_INTERACTION_POLICY.md`](REACT_INTERACTION_POLI
   `useSessionSnapshots`; the current Roll session/pending projection comes from
   the roll bootstrap. The old `SessionContext` global session mirror and the
   Map-based `CacheContext` were deleted in #2573 — there is exactly one
-  server-state cache (TanStack Query).
+  server-state cache (TanStack Query). The session list/get methods in
+  `frontend/src/services/api-sessions.ts` still target retired v1 paths; the
+  details/snapshots methods use current v2 resources. See the recorded
+  reconciliation gap in [`API.md`](API.md#recorded-reconciliation-gaps).
 
 ## API Service Layer
 

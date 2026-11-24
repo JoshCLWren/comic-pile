@@ -268,7 +268,7 @@ cd frontend && pnpm run typecheck                # Frontend TypeScript check
 cd frontend && pnpm run build
 BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium
 # Full suite only when explicitly requested:
-BASE_URL=http://localhost:5173 make verify-e2e
+cd .. && BASE_URL=http://localhost:5173 make verify-e2e
 ```
 
 **Why build first?** `make verify-e2e` runs the frontend build before Playwright.

@@ -31,9 +31,15 @@ What’s New is backed by the release API and Neon release ledger. A dedicated p
 - [Historical changelog](changelog.md): frozen pre-release-ledger source retained for provenance and auditability.
 - [Release writer](RELEASE_WRITER.md): post-merge publication and reconciliation contract for the database release ledger.
 - [API documentation](API.md): REST API contracts and examples.
+- [Operational health](OPERATIONAL_HEALTH.md): native liveness, identity evidence, logging, and database-readiness checks.
+- [Reading List runtime](READING_LIST_RUNTIME.md): canonical reading order, Roll eligibility, manual Read/Rate, and current rollout-setting behavior.
+- [Reading List authoring](api/READING_LIST_AUTHORING.md): v2 write contract, graph validation, confirmation, and known cycle-response discrepancy.
+- [Roll bootstrap contract](RUST_ROLL_BOOTSTRAP_CONTRACT.md): current read-only Bootstrap payload, explicit session initialization, and scoped-resource migration status.
+- [Shared catalog identity](SHARED_CATALOG_CONTRACT.md): catalog identity tables, current native readers, and the accepted future-writer invariants.
+- [Rate limiting](rate_limiting.md): native auth lockout/limiter and provider backoff behavior.
 - [React architecture](REACT_ARCHITECTURE.md): frontend architecture, TanStack Query server-state layer, and build structure.
 - [Database save/load](DATABASE_SAVE_LOAD.md): backup, import/export, and recovery procedures.
-- [Comic dependencies guide](COMIC_DEPENDENCIES_GUIDE.md): guide to the dependency model.
+- [Historical comic dependencies guide](COMIC_DEPENDENCIES_GUIDE.md): Python-era dependency design retained as provenance; use [Reading List runtime](READING_LIST_RUNTIME.md) for current execution rules.
 - [Production-to-local clone workflow](prod-clone-workflow.md): production Neon export and safe local restore procedure.
 - [Git hooks](GIT_HOOKS.md): repository quality hooks.
 - [GitHub Wiki handoff](WIKI_HANDOFF.md): the exact owner-only steps and required Wiki navigation for completing #879 when the Wiki remote cannot be managed by the factory connector.
@@ -60,5 +66,7 @@ The inventory generator remains available for audits through the Documentation w
 Do not commit `docs/MARKDOWN_INVENTORY.md`; generate the inventory locally or download the Documentation workflow artifact when an audit requires it. <!-- docs-path-check: ignore -->
 
 Link and code-path checks do not prove semantic accuracy. When runtime behavior changes, reconcile active documents against the router, generated contracts, real callers, configuration and workflows; record unresolved contradictions in the existing issue or PR handoff rather than presenting them as intended behavior.
+
+For a full documentation reconciliation, classify every tracked Markdown file as active, historical/superseded, generated/fixture, frozen changelog provenance, or issue-scoped. The inventory generator's #879 disposition is ownership advice, not lifecycle proof. Correct active guidance in place; give stale historical material an explicit status and replacement link; keep issue plans and frozen changelogs as provenance rather than current instructions.
 
 Historical implementation notes and explorations should live in the Wiki or Git history, not beside current operational instructions.
