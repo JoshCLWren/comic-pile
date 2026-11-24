@@ -1674,6 +1674,137 @@ async fn rollable_threads(conn: &Conn, user_id: i32, count: usize) -> Vec<i32> {
     ordered
 }
 
+#[tokio::test]
+async fn bootstrap_displays_browser_snoozes_and_matches_the_scoped_pool() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("roll-cookie", true).await;
+    let (_, _, other_user) = register_extra_user(&state, "roll-cookie-other").await;
+    let (ids, foreign) = {
+        let conn = state.pool.get().await.unwrap();
+        let ids = rollable_threads(&conn, user_id, 22).await;
+        let foreign = thread(&conn, other_user, "Other reader's series").await;
+        conn.execute(
+            "INSERT INTO sessions (user_id, started_at, start_die, snoozed_thread_ids)
+             VALUES ($1, NOW(), 6, $2::text::json)",
+            &[&user_id, &json!([ids[0]]).to_string()],
+        )
+        .await
+        .unwrap();
+        (ids, foreign)
+    };
+    let snoozed = vec![ids[1], ids[3], ids[7], ids[14]];
+    let mut cookie_ids = snoozed.clone();
+    cookie_ids.push(foreign);
+    let query_ids = cookie_ids
+        .iter()
+        .map(i32::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    let cookie = format!(
+        "csrf_token={csrf}; comicpile_roll_snoozes={}",
+        json!(cookie_ids)
+    );
+
+    for (die, count) in [(6, 4), (8, 5), (20, 16)] {
+        let (status, body) = send(
+            &state,
+            post(
+                "/api/v2/roll/dice-command",
+                &token,
+                &csrf,
+                Some(json!({
+                    "kind": "manual_select",
+                    "die": die,
+                    "idempotency_key": format!("roll-cookie-die-{die}")
+                })),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body:?}");
+
+        let mut request = get("/api/v2/roll/bootstrap", &token, &csrf);
+        request
+            .headers_mut()
+            .insert(header::COOKIE, cookie.parse().unwrap());
+        let (status, bootstrap) = send(&state, request).await;
+        assert_eq!(status, StatusCode::OK, "{bootstrap:?}");
+        assert_eq!(bootstrap["snoozed_count"], json!(4));
+        assert_eq!(bootstrap["snoozed_thread_ids"], json!(snoozed));
+        let displayed_snoozes: Vec<_> = bootstrap["snoozed_threads"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["id"].as_i64().unwrap() as i32)
+            .collect();
+        assert_eq!(displayed_snoozes, snoozed);
+
+        let visible: Vec<_> = bootstrap["rollable"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["thread"]["id"].as_i64().unwrap() as i32)
+            .collect();
+        let expected: Vec<_> = ids
+            .iter()
+            .take(die as usize)
+            .filter(|id| !snoozed.contains(id))
+            .copied()
+            .collect();
+        assert_eq!(visible.len(), count);
+        assert_eq!(visible, expected);
+        assert!(visible.contains(&ids[0]), "legacy session snooze leaked");
+
+        let (status, scoped) = send(
+            &state,
+            get(
+                &format!("/api/v2/roll/eligible-issue-ids?snoozed={query_ids}"),
+                &token,
+                &csrf,
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{scoped:?}");
+        assert_eq!(scoped["thread_ids"], json!(visible));
+    }
+
+    let (status, offer) = send(
+        &state,
+        post(
+            "/api/v2/roll/offer",
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "roll-cookie-offer-001",
+                "snoozed_thread_ids": snoozed
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{offer:?}");
+    let selected = offer["thread_id"].as_i64().unwrap() as i32;
+    assert!(ids[..20].contains(&selected));
+    assert!(!snoozed.contains(&selected));
+
+    let (status, reset) = send(
+        &state,
+        post(
+            "/api/v2/roll/reset",
+            &token,
+            &csrf,
+            Some(json!({"idempotency_key": "roll-cookie-reset-001"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reset:?}");
+    assert_eq!(reset["die"], json!(6));
+    // The browser clears its cookie after the successful reset response.
+    let (status, cleared) = send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{cleared:?}");
+    assert_eq!(cleared["snoozed_count"], json!(0));
+    assert_eq!(cleared["snoozed_thread_ids"], json!([]));
+    assert_eq!(cleared["rollable"].as_array().unwrap().len(), 6);
+    assert!(cleared["pending_thread_id"].is_null());
+}
+
 async fn offer_value(
     state: &Arc<AppState>,
     token: &str,

@@ -3748,8 +3748,8 @@ export interface components {
             /** Format: int64 */
             snoozed_count: number;
             /**
-             * @description Every owned thread the session currently has snoozed, uncapped, so
-             *     consumers such as Queue can resolve per-row snooze state.
+             * @description Every owned thread in this browser's temporary snooze set, uncapped
+             *     within the cookie limit, so Queue can resolve per-row snooze state.
              */
             snoozed_thread_ids: number[];
             /**
