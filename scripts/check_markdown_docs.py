@@ -44,13 +44,14 @@ def tracked_markdown_files(root: Path) -> list[Path] | None:
         ).stdout
     except (OSError, subprocess.CalledProcessError):
         return None
-    return sorted(
-        candidate
-        for line in listing.splitlines()
-        if line.endswith(".md")
-        for candidate in [root / line]
-        if candidate.is_file()
-    )
+    files: list[Path] = []
+    for line in listing.splitlines():
+        if not line.endswith(".md"):
+            continue
+        candidate = root / line
+        if candidate.is_file():
+            files.append(candidate)
+    return sorted(files)
 
 
 def iter_markdown_files(root: Path) -> list[Path]:
