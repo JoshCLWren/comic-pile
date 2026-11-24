@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T16:24:19.562842+00:00",
+  "generated_at": "2026-11-24T16:32:28.844465+00:00",
   "models": [
     {
       "health": {
@@ -22782,12 +22782,65 @@
     "7d": "7 days"
   },
   "db_usage": {
-    "checked_at": "2026-11-24T16:24:19.698794+00:00",
+    "allowance_source": "turso plan starter",
+    "blocked": {
+      "reads": false,
+      "writes": false
+    },
+    "checked_at": "2026-11-24T16:32:28.965919+00:00",
+    "days_elapsed": 23.689,
+    "days_in_month": 30.0,
+    "days_left": 6.31,
     "in_use": false,
     "label": "not in use yet",
-    "reasons": [
-      "not configured: FACTORY_TURSO_API_TOKEN, FACTORY_TURSO_URL missing"
-    ],
-    "status": "not_configured"
+    "metrics": {
+      "bytes_synced": {
+        "allowance": 3000000000,
+        "database": 0,
+        "organization": 0,
+        "owner_target": null,
+        "projected_database": 0,
+        "projected_organization": 0,
+        "projected_share": 0.0,
+        "share_used": 0.0
+      },
+      "rows_read": {
+        "allowance": 500000000,
+        "database": 0,
+        "organization": 0,
+        "owner_target": 50000000,
+        "projected_database": 0,
+        "projected_organization": 0,
+        "projected_share": 0.0,
+        "share_used": 0.0
+      },
+      "rows_written": {
+        "allowance": 10000000,
+        "database": 0,
+        "organization": 0,
+        "owner_target": 1000000,
+        "projected_database": 0,
+        "projected_organization": 0,
+        "projected_share": 0.0,
+        "share_used": 0.0
+      },
+      "storage_bytes": {
+        "allowance": 5000000000,
+        "database": 0,
+        "organization": 0,
+        "owner_target": 250000000,
+        "projected_database": 0,
+        "projected_organization": 0,
+        "projected_share": 0.0,
+        "share_used": 0.0
+      }
+    },
+    "month_start": "2026-11-01T00:00:00+00:00",
+    "organization_source": "factory database only (organization list missing)",
+    "overages": false,
+    "reasons": [],
+    "reset_hour_verified": false,
+    "resets_at": "2026-12-01T00:00:00+00:00",
+    "status": "ok"
   }
 }
