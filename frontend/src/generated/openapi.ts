@@ -4554,6 +4554,8 @@ export interface components {
         };
         ContinuityReleaseSourceResponse: {
             created_at: string;
+            /** Format: int32 */
+            custom_cbl_list_id?: number | null;
             enabled: boolean;
             /** Format: int32 */
             external_identity_id: number;
@@ -7827,6 +7829,8 @@ export interface components {
             visibility: string;
         };
         ReleaseSourceCreate: {
+            /** Format: int32 */
+            custom_cbl_list_id?: number | null;
             /** Format: int32 */
             external_identity_id: number;
             /** Format: int32 */

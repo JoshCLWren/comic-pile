@@ -175,6 +175,7 @@ export interface ReadingPlanReleaseCandidate {
 export interface ReadingPlanReleaseSource {
   id: number
   plan_id: number
+  custom_cbl_list_id: number | null
   thread_id: number
   external_identity_id: number
   provider: string
@@ -191,6 +192,7 @@ export interface ReleaseSourceCreateRequest {
   plan_id: number
   thread_id: number
   external_identity_id: number
+  custom_cbl_list_id?: number | null
 }
 
 export interface ReadingPlanReaderView {

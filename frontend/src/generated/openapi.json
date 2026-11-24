@@ -3446,6 +3446,13 @@
           "created_at": {
             "type": "string"
           },
+          "custom_cbl_list_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -14027,6 +14034,13 @@
       "ReleaseSourceCreate": {
         "additionalProperties": false,
         "properties": {
+          "custom_cbl_list_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "external_identity_id": {
             "format": "int32",
             "type": "integer"

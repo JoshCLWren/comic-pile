@@ -184,6 +184,8 @@ pub struct ReleaseSourceCreate {
     pub thread_id: i32,
     #[serde(rename = "external_identity_id")]
     pub external_identity_id: i32,
+    #[serde(rename = "custom_cbl_list_id", default)]
+    pub custom_cbl_list_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
@@ -200,6 +202,8 @@ pub struct ReleaseSourceUpdate {
 pub struct ReleaseSourceResponse {
     pub id: i32,
     pub plan_id: i32,
+    #[serde(rename = "custom_cbl_list_id", default)]
+    pub custom_cbl_list_id: Option<i32>,
     pub thread_id: i32,
     #[serde(rename = "external_identity_id")]
     pub external_identity_id: i32,
@@ -3368,6 +3372,40 @@ pub async fn create_release_source(
     let provider_volume_id: String = mapping.get(3);
     let metadata_json: Option<serde_json::Value> = mapping.get(4);
 
+    // Resolve authoritative custom CBL list association (non-destructive).
+    // Explicit list wins after ownership validation; otherwise auto-associate
+    // from unambiguous same-owner ReadingPlanSource provenance.
+    let resolved_list_id: Option<i32> = if let Some(list_id) = payload.custom_cbl_list_id {
+        tx.query_opt(
+            "SELECT id FROM custom_cbl_lists WHERE id = $1 AND user_id = $2",
+            &[&list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| not_found(format!("Reading List {} not found", list_id)))?;
+        Some(list_id)
+    } else {
+        let rows = tx
+            .query(
+                "SELECT DISTINCT src.custom_cbl_list_id \
+                 FROM reading_plan_sources src \
+                 JOIN custom_cbl_lists l ON l.id = src.custom_cbl_list_id AND l.user_id = $2 \
+                 WHERE src.plan_id = $1 AND src.custom_cbl_list_id IS NOT NULL",
+                &[&payload.plan_id, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let ids: Vec<i32> = rows
+            .iter()
+            .filter_map(|r| r.get::<_, Option<i32>>(0))
+            .collect();
+        if ids.len() == 1 {
+            Some(ids[0])
+        } else {
+            None
+        }
+    };
+
     // Check for existing release source (idempotent create)
     let existing = tx
         .query_opt(
@@ -3379,16 +3417,17 @@ pub async fn create_release_source(
 
     let source_id: i32;
     let created_at: String;
-    let updated_at: String;
+    let mut updated_at: String;
     let mut last_synced_at: Option<String> = None;
     let mut enabled = true;
+    let mut final_list_id: Option<i32> = resolved_list_id;
 
     if let Some(row) = existing {
         source_id = row.get(0);
         // Fetch the existing source details
         let source_row = tx
             .query_one(
-                "SELECT created_at::text, updated_at::text, last_synced_at::text, enabled FROM reading_plan_release_sources WHERE id = $1",
+                "SELECT created_at::text, updated_at::text, last_synced_at::text, enabled, custom_cbl_list_id FROM reading_plan_release_sources WHERE id = $1",
                 &[&source_id],
             )
             .await
@@ -3397,16 +3436,31 @@ pub async fn create_release_source(
         updated_at = source_row.get(1);
         last_synced_at = source_row.get(2);
         enabled = source_row.get(3);
+        let existing_list: Option<i32> = source_row.get(4);
+        // Non-destructive association: fill list link if missing.
+        if existing_list.is_none() && resolved_list_id.is_some() {
+            let associated = tx
+                .query_one(
+                    "UPDATE reading_plan_release_sources SET custom_cbl_list_id = $1, updated_at = NOW() WHERE id = $2 RETURNING updated_at::text",
+                    &[&resolved_list_id, &source_id],
+                )
+                .await
+                .map_err(db::query_error)?;
+            updated_at = associated.get(0);
+            final_list_id = resolved_list_id;
+        } else {
+            final_list_id = existing_list.or(resolved_list_id);
+        }
     } else {
         // Create new release source
         let row = tx
             .query_one(
                 r#"
-                INSERT INTO reading_plan_release_sources (plan_id, thread_id, external_identity_id, enabled, created_at, updated_at)
-                VALUES ($1, $2, $3, TRUE, NOW(), NOW())
+                INSERT INTO reading_plan_release_sources (plan_id, thread_id, external_identity_id, enabled, custom_cbl_list_id, created_at, updated_at)
+                VALUES ($1, $2, $3, TRUE, $4, NOW(), NOW())
                 RETURNING id, created_at::text, updated_at::text
                 "#,
-                &[&payload.plan_id, &payload.thread_id, &payload.external_identity_id],
+                &[&payload.plan_id, &payload.thread_id, &payload.external_identity_id, &resolved_list_id],
             )
             .await
             .map_err(db::query_error)?;
@@ -3427,6 +3481,7 @@ pub async fn create_release_source(
     let response = ReleaseSourceResponse {
         id: source_id,
         plan_id: payload.plan_id,
+        custom_cbl_list_id: final_list_id,
         thread_id: payload.thread_id,
         external_identity_id: payload.external_identity_id,
         provider,
@@ -3484,7 +3539,7 @@ pub async fn list_release_sources(
     let rows = conn
         .query(
             r#"
-            SELECT rprs.id, rprs.plan_id, rprs.thread_id, rprs.external_identity_id,
+            SELECT rprs.id, rprs.plan_id, rprs.custom_cbl_list_id, rprs.thread_id, rprs.external_identity_id,
                    rprs.enabled, rprs.last_synced_at::text, rprs.created_at::text, rprs.updated_at::text,
                    ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
             FROM reading_plan_release_sources rprs
@@ -3501,7 +3556,7 @@ pub async fn list_release_sources(
     let sources: Vec<ReleaseSourceResponse> = rows
         .iter()
         .map(|row| {
-            let metadata_json: Option<serde_json::Value> = row.get(11);
+            let metadata_json: Option<serde_json::Value> = row.get(12);
             let provider_title = metadata_json.as_ref().and_then(|m| {
                 let name_str = m.get("name").and_then(|v| v.as_str());
                 let title_str = m.get("title").and_then(|v| v.as_str());
@@ -3511,15 +3566,16 @@ pub async fn list_release_sources(
             ReleaseSourceResponse {
                 id: row.get(0),
                 plan_id: row.get(1),
-                thread_id: row.get(2),
-                external_identity_id: row.get(3),
-                provider: row.get(8),
-                provider_volume_id: row.get(10),
+                custom_cbl_list_id: row.get(2),
+                thread_id: row.get(3),
+                external_identity_id: row.get(4),
+                provider: row.get(9),
+                provider_volume_id: row.get(11),
                 provider_title,
-                enabled: row.get(4),
-                last_synced_at: row.get(5),
-                created_at: row.get(6),
-                updated_at: row.get(7),
+                enabled: row.get(5),
+                last_synced_at: row.get(6),
+                created_at: row.get(7),
+                updated_at: row.get(8),
             }
         })
         .collect();
@@ -3658,7 +3714,7 @@ pub async fn update_release_source(
     let source_row = tx
         .query_opt(
             r#"
-            SELECT rprs.id, rprs.plan_id, rprs.thread_id, rprs.external_identity_id,
+            SELECT rprs.id, rprs.plan_id, rprs.custom_cbl_list_id, rprs.thread_id, rprs.external_identity_id,
                    rprs.enabled, rprs.last_synced_at::text, rprs.created_at::text, rprs.updated_at::text,
                    ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
             FROM reading_plan_release_sources rprs
@@ -3672,9 +3728,9 @@ pub async fn update_release_source(
         .map_err(db::query_error)?
         .ok_or_else(|| not_found(format!("Release source {source_id} not found")))?;
 
-    let thread_id: i32 = source_row.get(2);
-    let external_identity_id: i32 = source_row.get(3);
-    let currently_enabled: bool = source_row.get(4);
+    let thread_id: i32 = source_row.get(3);
+    let external_identity_id: i32 = source_row.get(4);
+    let currently_enabled: bool = source_row.get(5);
 
     // If enabling, revalidate the mapping is still confirmed
     if payload.enabled && !currently_enabled {
@@ -3717,7 +3773,7 @@ pub async fn update_release_source(
     let updated_row = conn
         .query_one(
             r#"
-            SELECT rprs.id, rprs.plan_id, rprs.thread_id, rprs.external_identity_id,
+            SELECT rprs.id, rprs.plan_id, rprs.custom_cbl_list_id, rprs.thread_id, rprs.external_identity_id,
                    rprs.enabled, rprs.last_synced_at::text, rprs.created_at::text, rprs.updated_at::text,
                    ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
             FROM reading_plan_release_sources rprs
@@ -3730,7 +3786,7 @@ pub async fn update_release_source(
         .await
         .map_err(db::query_error)?;
 
-    let metadata_json: Option<serde_json::Value> = updated_row.get(11);
+    let metadata_json: Option<serde_json::Value> = updated_row.get(12);
     let provider_title = metadata_json.as_ref().and_then(|m| {
         let name_str = m.get("name").and_then(|v| v.as_str());
         let title_str = m.get("title").and_then(|v| v.as_str());
@@ -3740,15 +3796,16 @@ pub async fn update_release_source(
     let response = ReleaseSourceResponse {
         id: updated_row.get(0),
         plan_id: updated_row.get(1),
-        thread_id: updated_row.get(2),
-        external_identity_id: updated_row.get(3),
-        provider: updated_row.get(8),
-        provider_volume_id: updated_row.get(10),
+        custom_cbl_list_id: updated_row.get(2),
+        thread_id: updated_row.get(3),
+        external_identity_id: updated_row.get(4),
+        provider: updated_row.get(9),
+        provider_volume_id: updated_row.get(11),
         provider_title,
-        enabled: updated_row.get(4),
-        last_synced_at: updated_row.get(5),
-        created_at: updated_row.get(6),
-        updated_at: updated_row.get(7),
+        enabled: updated_row.get(5),
+        last_synced_at: updated_row.get(6),
+        created_at: updated_row.get(7),
+        updated_at: updated_row.get(8),
     };
 
     Ok(Json(response))
@@ -4380,6 +4437,139 @@ mod tests {
             !obj.contains_key("checkpoint_target_ref_ids"),
             "checkpoint_target_ref_ids should be omitted when empty (Python exclude_if)"
         );
+    }
+
+    #[tokio::test]
+    async fn release_source_list_association_is_owner_scoped_unambiguous_and_retry_safe() {
+        let (state, user, _guard) = plan_db_fixture().await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (4839, 'other-list-owner');
+                 INSERT INTO continuity_plans
+                   (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+                 VALUES (483881, 4838, 'Ambiguous provenance', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),
+                        (483882, 4838, 'Single provenance', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),
+                        (483883, 4838, 'Explicit list', 'informational', '[]'::json, '[]'::json, NOW(), NOW());
+                 INSERT INTO custom_cbl_lists
+                   (id, user_id, name, description, mode, created_at, updated_at)
+                 VALUES (483831, 4838, 'List A', NULL, 'loose', NOW(), NOW()),
+                        (483832, 4838, 'List B', NULL, 'loose', NOW(), NOW()),
+                        (483833, 4839, 'Foreign list', NULL, 'loose', NOW(), NOW());
+                 INSERT INTO reading_plan_sources (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+                 VALUES (483881, 'custom-cbl:a', 483831, NOW()),
+                        (483881, 'custom-cbl:b', 483832, NOW()),
+                        (483882, 'custom-cbl:b', 483832, NOW()),
+                         (483882, 'custom-cbl:foreign', 483833, NOW());
+                 INSERT INTO external_identities
+                   (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                 VALUES (483810, 'comicvine', 'series', '4050-4838', '{}'::json, NOW(), NOW());
+                 INSERT INTO thread_external_series_mappings
+                   (thread_id, external_identity_id, status, created_at, updated_at)
+                 VALUES (4838, 483810, 'confirmed', NOW(), NOW());",
+            )
+            .await
+            .expect("seed release-source list fixtures");
+        drop(connection);
+
+        let payload = |plan_id, custom_cbl_list_id| ReleaseSourceCreate {
+            plan_id,
+            thread_id: 4838,
+            external_identity_id: 483810,
+            custom_cbl_list_id,
+        };
+        let (_, Json(ambiguous)) =
+            create_release_source(State(state.clone()), user, Json(payload(483881, None)))
+                .await
+                .expect("ambiguous provenance remains unlinked");
+        assert_eq!(ambiguous.custom_cbl_list_id, None);
+
+        let connection = db::checkout(&state).await.expect("disable connection");
+        connection
+            .execute(
+                "UPDATE reading_plan_release_sources \
+                 SET enabled = FALSE, last_synced_at = '2024-01-02T03:04:05Z' WHERE id = $1",
+                &[&ambiguous.id],
+            )
+            .await
+            .expect("preserve existing subscription state");
+        drop(connection);
+
+        let (_, Json(associated)) = create_release_source(
+            State(state.clone()),
+            user,
+            Json(payload(483881, Some(483831))),
+        )
+        .await
+        .expect("explicit reassociation");
+        assert_eq!(associated.id, ambiguous.id);
+        assert_eq!(associated.custom_cbl_list_id, Some(483831));
+        assert_eq!(associated.created_at, ambiguous.created_at);
+        assert!(!associated.enabled, "retry must preserve disabled state");
+        assert!(associated.last_synced_at.is_some());
+
+        let (_, Json(retry)) = create_release_source(
+            State(state.clone()),
+            user,
+            Json(payload(483881, Some(483832))),
+        )
+        .await
+        .expect("retry keeps established association");
+        assert_eq!(retry.id, ambiguous.id);
+        assert_eq!(retry.custom_cbl_list_id, Some(483831));
+        assert_eq!(retry.last_synced_at, associated.last_synced_at);
+        assert!(!retry.enabled);
+
+        let foreign = create_release_source(
+            State(state.clone()),
+            user,
+            Json(payload(483881, Some(483833))),
+        )
+        .await
+        .expect_err("another reader's list must not be associated");
+        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
+
+        let (_, Json(inferred)) =
+            create_release_source(State(state.clone()), user, Json(payload(483882, None)))
+                .await
+                .expect("single same-owner provenance");
+        assert_eq!(inferred.custom_cbl_list_id, Some(483832));
+        let (_, Json(explicit)) = create_release_source(
+            State(state.clone()),
+            user,
+            Json(payload(483883, Some(483831))),
+        )
+        .await
+        .expect("explicit list-native creation");
+        assert_eq!(explicit.custom_cbl_list_id, Some(483831));
+
+        let connection = db::checkout(&state).await.expect("verify connection");
+        let source_count: i64 = connection
+            .query_one("SELECT count(*) FROM reading_plan_release_sources", &[])
+            .await
+            .expect("retry-safe source count")
+            .get(0);
+        assert_eq!(source_count, 3);
+        let persisted_updated_at: String = connection
+            .query_one(
+                "SELECT updated_at::text FROM reading_plan_release_sources WHERE id = $1",
+                &[&ambiguous.id],
+            )
+            .await
+            .expect("association timestamp")
+            .get(0);
+        assert_eq!(associated.updated_at, persisted_updated_at);
+        let preserved: bool = connection
+            .query_one(
+                "SELECT enabled = FALSE AND last_synced_at = '2024-01-02T03:04:05Z' \
+                   AND custom_cbl_list_id = 483831 \
+                 FROM reading_plan_release_sources WHERE id = $1",
+                &[&ambiguous.id],
+            )
+            .await
+            .expect("preserved subscription")
+            .get(0);
+        assert!(preserved);
     }
 
     #[tokio::test]
