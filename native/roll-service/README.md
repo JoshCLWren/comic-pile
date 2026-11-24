@@ -56,15 +56,15 @@ URL normalization.
 | `RUST_ROLL_REQUEST_TIMEOUT_MS` | `10000` | Ordinary request deadline, 1–60000 ms |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `720` | Access-token lifetime |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh-token and refresh-cookie lifetime |
-| `OPTION_E_ENABLED` | falsy | Existing owner-approved Reading List rollout setting; see below |
+| `OPTION_E_ENABLED` / `OPTION_E_APPROVED_PREVIEW` | obsolete | Legacy branches still present in code; not supported configuration |
 
-`OPTION_E_ENABLED` is effective only when it is truthy and
-`OPTION_E_APPROVED_PREVIEW` contains a non-blank owner-approval reference.
-[`option_e_setting.rs`](src/option_e_setting.rs) parses the pair once at startup
-into `AppState::option_e`; handlers do not read the environment independently.
-When ineffective, the runtime retains the existing stored-blocker compatibility
-path. See [Reading List runtime](../../docs/READING_LIST_RUNTIME.md) for the
-product contract and rollout evidence requirements.
+The owner's 2026-11-23 correction requires one canonical Reading List evaluator
+with no mode switch, approval gate or legacy fallback. The checked-in
+[`option_e_setting.rs`](src/option_e_setting.rs) and `AppState::option_e` branches
+are an implementation discrepancy tracked by #3676/#5525, not approved runtime
+behavior. Do not configure or rely on them. See
+[Reading List runtime](../../docs/READING_LIST_RUNTIME.md) for the binding
+manual-versus-automatic eligibility contract.
 
 ## Request lifecycle and operations
 

@@ -8,84 +8,77 @@ are Reading Lists under the current runtime.
 
 `POST /api/v2/reading-lists` and `PUT /api/v2/reading-lists/{list_id}` accept:
 
-- `mode`: `strict` or `loose`; omission preserves the existing mode (new lists default to loose).
-- `entry_intents`: a map from member Issue ID to `{gate, skipped}`. Gates are `none`, `hold`,
-  or `after_previous`. Omitted members retain their intent; new members default to none/unskipped.
-  Supplying an intent replaces both values for that member; omitted values use those defaults.
-- `checkpoint_issue_ids` / `checkpoint_targets`: existing checkpoint metadata, independent of
-  positional gates and preserved across old-client saves.
-- `confirmed_predecessor_changes`: PUT-only acknowledgement of a rejected preview. POST rejects
-  any present value with HTTP 422 `reading_list_confirmation_put_only`.
+- `mode`: `strict` or `loose`; omission preserves the existing mode (new lists
+  default to loose).
+- `entry_intents`: a map from member Issue ID to `{gate, skipped}`. Gates are
+  `none`, `hold` or `after_previous`. Omitted members retain their intent; new
+  members default to none/unskipped. Supplying an intent replaces both values for
+  that member.
+- `checkpoint_issue_ids` / `checkpoint_targets`: existing checkpoint metadata,
+  independent of positional gates and preserved across old-client saves.
+- `confirmed_predecessor_changes`: PUT-only acknowledgement of a rejected preview.
+  POST rejects any present value with HTTP 422
+  `reading_list_confirmation_put_only`.
 
-Any update that changes stored positional requirements (including mode-only and gate-only edits)
-returns HTTP 409 with `detail.code = reading_list_predecessor_confirmation_required` and
-`detail.predecessor_changes`. Each change names the affected Issue and its before/after source
-Issues. Display the changes for reader confirmation, then resubmit the same write with those
-Issue-ID relationships as `confirmed_predecessor_changes`. A changed Issue-ID diff requires a new
-confirmation. Display names and array ordering do not participate in consent matching. Rejected
-previews do not persist metadata, membership, gates, or skips. Successful PUT responses also
-include `predecessor_changes` and `warnings` for strict lists that omit unread Issues from a
-partially represented Thread. Coverage excludes skipped entries, including when the only placement
-for a Thread is skipped. Omitted Issues receive no new constraints. Warnings are bounded to ten
-Threads plus a remaining-Thread count; each includes the omitted count and at most five sample
-names (each name/title truncated to 80 characters), followed by a remaining-Issue count.
+An update that changes stored positional requirements, including mode-only and
+gate-only edits, can return HTTP 409 with
+`detail.code = reading_list_predecessor_confirmation_required` and
+`detail.predecessor_changes`. Display the changes and resubmit the same write with
+those Issue-ID relationships as `confirmed_predecessor_changes`. A changed diff
+requires fresh confirmation. Rejected previews persist nothing. Successful PUT
+responses include `predecessor_changes` and bounded strict-list coverage warnings.
+GET returns `warnings: []` and does not rerun global authoring validation.
 
-Warnings are write-time diagnostics returned by POST/PUT only. GET returns `warnings: []`; it does
-not run global authoring validation. Reopening a list does not imply that coverage was rechecked.
+Previews describe stored authoring constraints, including globally excluded
+Issues, consistent with cycle validation. Eligibility evaluation later ignores
+globally excluded entries. List-local skipped entries are omitted from stored-order
+checks and previews.
 
-Previews describe **stored authoring constraints**, including globally excluded Issues, consistent
-with cycle validation. Eligibility evaluation later ignores globally excluded entries; a constraint
-can therefore appear in this preview without currently blocking Roll. Retaining and confirming
-those stored relationships protects against latent cycles and silent retargeting when exclusions
-are removed. List-local skipped entries are omitted from both stored-order checks and previews.
+## Validation and error shapes
 
-All list writes for a reader serialize on the reader row. Before commit, validation checks the
-complete resulting graph: natural series order, overlapping strict/loose lists and gates, and
-currently enforced explicit/historical dependencies. Read Issues participate in cycle validation.
-Collection exclusions resolve by owned Issue, Thread, canonical volume, or confirmed external
-volume mapping. An excluded prerequisite source fails closed. Cycles return HTTP 422 with
-`reading_list_cycle`, a readable path, and edge origins. No historical dependency is classified,
-retired, or rewritten by this API; cycle diagnostics explicitly label unknown historical provenance
-rather than inferring reader authorship from an absent generated marker. Inert `cbl-order:` rows
-are not execution inputs. Each structured cycle-path edge also carries `prerequisite_origin`
-(`reader`, `converted`, or null for non-prerequisite edges) and `provenance` (an array). Each edge
-additionally carries `source_issue_name` and `target_issue_name`, the canonical Thread-title plus
-issue-number for its endpoints, so clients can name every cycle node — including Issues that are
-not members of the edited list (overlapping lists, series order, prerequisites). The authoring
-adapter marks historical rows as `converted` with `historical classification unknown` provenance;
-this is not proof of approved conversion or reader authorship.
+All list writes for a reader serialize on the reader row. Before commit,
+validation checks natural series order, overlapping strict/loose lists, positional
+gates and **explicit `origin=reader` prerequisites only**. Read Issues participate.
+Historical/unclassified and `origin=converted` rows are inert audit data and never
+enter canonical validation.
 
-Snapshot identity/reference failures indicate persisted-state corruption and intentionally surface
-as server errors, rather than a user-edit 422. Ordinary request errors are validated earlier:
-ownership/membership and enum validation, database uniqueness/foreign keys, explicit missing-list
-404, stranded-prerequisite 422, and cycle 422. The API does not accept client snapshots or IDs for
-new entry identities; those internal invariants cannot be authored through this write contract.
+List CRUD uses `reading_graph::cycle_conflict`:
 
-## Activation boundary
+- A canonical cycle returns HTTP 409 with a string `detail` naming the cycle path
+  and stating that nothing changed.
+- An invalid internal snapshot returns HTTP 422 with the mapper's detail string.
+- Ownership/membership and enum validation happen before the write; missing lists
+  return 404; database uniqueness/foreign-key failures follow the native error
+  boundary.
 
-Authoring persists reader intent; it does not compile list adjacency into Dependencies or change
-global read state. `GET /api/v2/reading-lists/{list_id}/reader` always projects availability from
-the canonical Rust evaluator.
+The separate custom-CBL apply/overlap/adoption operations retain their structured
+HTTP 422 `reading_list_cycle` contract (`detail.code` / `detail.path`). Do not
+present that response shape as the list CRUD cycle contract.
 
-Roll, Queue, thread list and detail, Roll bootstrap, thread issues, ordering and lifecycle handlers
-use that same evaluator only when the owner-approved rollout setting is effective
-(`OPTION_E_ENABLED` truthy plus a non-blank `OPTION_E_APPROVED_PREVIEW`, parsed once into
-`AppState::option_e`). When it is not effective, those handlers keep the legacy stored
-`threads.is_blocked` authority. Enabling the setting is a separate, owner-approved operational
-decision, not an authoring-side flag.
+## Single-engine boundary
+
+Authoring persists reader intent; it does not compile list adjacency into
+Dependencies or change global read state. The reader endpoint always projects
+availability from the canonical Rust evaluator.
+
+The owner's 2026-11-23 correction requires one canonical engine for automatic
+Roll, with no `OPTION_E_ENABLED` / `OPTION_E_APPROVED_PREVIEW` gate and no legacy
+fallback ([#3676](https://github.com/JoshCLWren/comic-pile/issues/3676),
+[#5525](https://github.com/JoshCLWren/comic-pile/issues/5525)). The checked-in
+runtime still contains those obsolete branches; that is an implementation
+discrepancy, not a supported authoring or deployment mode. See
+[Reading List runtime](../READING_LIST_RUNTIME.md).
+
+Direct manual exact-issue reads and ratings remain independent of automatic-Roll
+eligibility and do not mutate pending Roll, die or queue state until saved.
 
 ## Frontend authoring flow
 
-The list builder exposes strict/loose modes, per-entry waits and list-local skips,
-409 preview/confirmation, strict-mode coverage warnings, and actionable 422 cycle feedback (#3668).
-Issue search returns canonical library issues. After searching, ArrowUp/ArrowDown move between
-result buttons, Enter adds the focused issue, and Escape returns to search. Enter in the search
-field with results already visible moves focus to the first result without adding an issue or
-resubmitting. Added entries remain unsaved until Save; changing the query hides stale results.
+The list builder exposes strict/loose modes, per-entry waits, list-local skips,
+409 preview/confirmation, coverage warnings and actionable cycle feedback. Issue
+search returns canonical library issues. ArrowUp/ArrowDown move between result
+buttons, Enter adds the focused Issue, and Escape returns to search. Added entries
+remain unsaved until Save; changing the query hides stale results.
 
-CI runs `pnpm --filter frontend run check:api-types` with explicit `ENVIRONMENT=test` to enforce
-schema/client freshness. This setting does not depend on `.env.test` being present or on the
-runner's inherited environment.
-
-See [Reading List runtime](../READING_LIST_RUNTIME.md) for eligibility, blockers and the reader
-projection.
+CI runs `pnpm --filter frontend run check:api-types` to enforce schema/client
+freshness. Generated contracts, not this narrative, remain the wire authority.
