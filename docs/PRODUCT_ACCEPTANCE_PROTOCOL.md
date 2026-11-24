@@ -130,7 +130,7 @@ Post a durable GitHub comment on the parent issue containing:
 - The commit SHA or branch tested against.
 - Each acceptance criterion with its pass/fail/not-applicable result.
 - Evidence references (test runs, CI links, screenshots).
-- Any follow-up issues created for failed criteria.
+- Any explicitly owner-authorized follow-up issues created for failed criteria, or the existing issue/PR where each gap is recorded.
 - Overall verdict: acceptance passed or acceptance failed.
 
 Use this comment structure:
