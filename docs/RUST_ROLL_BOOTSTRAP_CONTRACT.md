@@ -5,9 +5,10 @@ unversioned bootstrap GET aliases are retired. API version identifies the wire
 contract, not the implementation language.
 
 The authoritative schema is `BootstrapResponseV2` in
-`native/contracts/v2-runtime.openapi.json`. The frontend UI type in
-`frontend/src/types/rollV2.ts` is derived from that contract. Do not introduce a
-second field inventory or hand-edit generated output.
+`native/contracts/v2-runtime.openapi.json`. `frontend/src/types/rollV2.ts` is a
+hand-maintained UI projection over that payload, not generated output. Keep its
+differences explicit; do not introduce a second wire schema or hand-edit generated
+OpenAPI/TypeScript artifacts.
 
 ## Sessionless Roll and explicit history initialization
 
@@ -33,7 +34,9 @@ history initializer.
    existence and password-change epoch. Reading-history sessions are not login
    credentials.
 2. Resolve existing session context read-only. If no applicable history exists,
-   return the sessionless projection rather than creating one.
+   return `404 {"detail":"No active session"}` rather than creating one. The
+   frontend handles that 404 by explicitly calling `POST /api/v2/reading-sessions`
+   and retrying the bootstrap read.
 3. Load and validate the canonical Reading List inputs. Only natural series
    order, current lists/gates/exclusions and explicit `origin=reader`
    prerequisites govern automatic-Roll eligibility. Historical/converted edges

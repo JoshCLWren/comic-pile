@@ -2,8 +2,9 @@
 
 > **Historical rollout record:** The product rules and rationale below remain
 > useful, but the staged “implementation pending” phases are not current runbook
-> steps. The checked-in runtime and its owner-approved rollout setting are
-> documented in [Reading List runtime](READING_LIST_RUNTIME.md). Do not recreate
+> steps. The owner's 2026-11-23 single-engine correction and the checked-in
+> runtime discrepancy are documented in
+> [Reading List runtime](READING_LIST_RUNTIME.md). Do not recreate
 > retired Reading Plan compiler or migration machinery from this ADR.
 
 <!-- docs-path-check: historical -->

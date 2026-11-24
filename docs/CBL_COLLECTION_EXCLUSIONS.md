@@ -35,7 +35,8 @@ Changed collection constraints invalidate an older adoption receipt, so a retry
 cannot replay obsolete Include results. New and targeted adoption paths share this boundary. Reconciliation's separate
 identity report also leaves excluded entries unchosen with an explanation.
 
-No production backfill, automatic exclusion creation, Roll authority change or
-release-sync behavior is part of #3670. Release sync enforcement is tracked by
-#3671. These import guards protect explicit reader intent while the separately
-approved Option E conversion and activation remain pending.
+No production backfill or automatic exclusion creation is part of #3670. These
+import guards protect explicit reader intent. The owner's 2026-11-23 correction
+makes the canonical Reading List evaluator the sole automatic-Roll engine; there
+is no pending Option E activation switch. See
+[Reading List runtime](READING_LIST_RUNTIME.md).

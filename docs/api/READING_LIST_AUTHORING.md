@@ -51,9 +51,10 @@ List CRUD uses `reading_graph::cycle_conflict`:
   return 404; database uniqueness/foreign-key failures follow the native error
   boundary.
 
-The separate custom-CBL apply/overlap/adoption operations retain their structured
-HTTP 422 `reading_list_cycle` contract (`detail.code` / `detail.path`). Do not
-present that response shape as the list CRUD cycle contract.
+The separate custom-CBL apply/overlap operations retain their structured HTTP 422
+`reading_list_cycle` contract (`detail.code` / `detail.path`). Adoption commits use
+a different 422 `detail.code = "adoption_error"` boundary. Do not present either
+response shape as the list CRUD cycle contract.
 
 ## Single-engine boundary
 

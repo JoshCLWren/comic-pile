@@ -96,13 +96,17 @@ strict/loose list mode, list-local gates and explicitly reader-authored
 prerequisites determine eligibility. Historical/converted dependency rows are
 audit evidence, not execution authority. See
 [READING_LIST_RUNTIME.md](READING_LIST_RUNTIME.md) for modes, overlap decisions,
-exclusions, manual selection and the existing owner-approved rollout setting.
+exclusions and the owner's single-engine correction. The obsolete
+`OPTION_E_ENABLED` / `OPTION_E_APPROVED_PREVIEW` gate is an implementation
+discrepancy, not supported configuration.
 
 Roll is sessionless at the product boundary. `GET /api/v2/roll/bootstrap` is the
 read projection; `POST /api/v2/reading-sessions` initializes durable history when
-required. Manual selection uses `POST /api/v2/roll/override`; rating uses the
-issue update path. Do not reintroduce a Python session or rate endpoint from an
-old example.
+required. Direct manual Read/Rate uses
+`PATCH /api/v2/issues/{issue_id}` with `source: "direct"`; it is not an
+eligibility-gated pending Roll selection. `POST /api/v2/roll/override` remains a
+specialized Roll-offer operation. Do not reintroduce a Python session or rate
+endpoint from an old example.
 
 ## Errors and ownership
 
@@ -121,9 +125,10 @@ upstream error payloads.
 ## Configuration
 
 The standalone native process reads `RUST_ROLL_DATABASE_URL`,
-`RUST_ROLL_JWT_SECRET`, `RUST_ROLL_ENV`, `RUST_ROLL_BIND`, pool/timeout settings
-and the existing Reading List rollout variables. The Vercel entrypoint also
-accepts `DATABASE_URL` / `SECRET_KEY` and normalizes supported driver URL forms.
+`RUST_ROLL_JWT_SECRET`, `RUST_ROLL_ENV`, `RUST_ROLL_BIND` and pool/timeout
+settings. The Vercel entrypoint also accepts `DATABASE_URL` / `SECRET_KEY` and
+normalizes supported driver URL forms. The obsolete Reading List rollout variables
+are not supported configuration.
 See [the native service README](../native/roll-service/README.md) for the exact
 configuration table.
 
