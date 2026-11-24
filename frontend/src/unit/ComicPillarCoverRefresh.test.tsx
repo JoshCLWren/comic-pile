@@ -237,7 +237,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     expect(container).toBeInTheDocument()
   })
 
-  it('removing a mapping clears cached provider details without remount', async () => {
+  it('removing a mapping clears cached provider details even when refresh fails', async () => {
     getIssueIdentitySpy
       .mockResolvedValueOnce({
         has_confirmed_identity: true,
@@ -261,7 +261,9 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
       })
     getIntelligenceSpy
       .mockResolvedValueOnce(staleIntelligence('https://images.example/stale-cover.jpg'))
-      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(Object.assign(new Error('metadata refresh unavailable'), {
+        response: { status: 400 },
+      }))
 
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
     expect((await screen.findByAltText('')).getAttribute('src')).toBe(
@@ -277,6 +279,9 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
       queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(77)),
     ).toBeNull())
     expect(screen.queryByAltText('')).not.toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not load comic details: metadata refresh unavailable',
+    )
     expect(await screen.findByText('Not mapped')).toBeInTheDocument()
   })
 

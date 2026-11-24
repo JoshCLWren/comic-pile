@@ -4,6 +4,7 @@ import type { ComicVineIssueCandidate, IssueIdentityResponse } from '../services
 import { queryClient } from '../query/queryClient'
 import {
   applyComicVineCorrectionOptimistically,
+  clearComicVineIssueIntelligence,
   invalidateAfterIssueMappingChange,
   invalidateComicVineIssueIdentity,
   invalidateComicVineIssueIntelligenceMany,
@@ -198,7 +199,7 @@ export function useComicIssueMapping({
     try {
       await comicVineApi.removeIdentity(issueId)
       setIsRemoveDialogOpen(false)
-      await invalidateComicVineIssueIntelligenceMany(queryClient, [issueId])
+      await clearComicVineIssueIntelligence(queryClient, issueId)
       await invalidateComicVineIssueIdentity(queryClient, issueId)
       await fetchIdentity()
       await invalidateAfterIssueMappingChange(queryClient)
