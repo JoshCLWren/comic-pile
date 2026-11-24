@@ -22,6 +22,16 @@ _GITHUB_API_BASE = "https://api.github.com"
 _SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 _MAX_DISCOVERY_PAGES = 3
 _DISCOVERY_PAGE_SIZE = 100
+# Bounded changed-file page used by `changed_file_names`; a full page may be truncated.
+_CHANGED_FILES_PAGE_SIZE = 100
+# Test-only paths (`tests/`/`test/` directories, `*.test.*`/`*.spec.*` files). A
+# complete bounded file list consisting solely of these proves a developer-only
+# diff, which can never be published as a public reader-facing note.
+_TEST_FILE_PATTERN = re.compile(
+    r"(?:^|/)(?:tests?|__tests__)(?:/|$)|\.(?:test|spec)\.[^/]+$",
+    re.IGNORECASE,
+)
+_MAX_CANDIDATE_BYTES = 32768
 
 
 class RecoveryError(RuntimeError):
@@ -213,6 +223,99 @@ def select_missing_source(
     return None
 
 
+def is_public_publication(payload: object) -> bool:
+    """Return True when a candidate defaults to a public, published note."""
+    return (
+        isinstance(payload, dict)
+        and payload.get("visibility", "public") == "public"
+        and payload.get("status", "published") == "published"
+    )
+
+
+def test_only_public_violation(payload: object, filenames: Sequence[str]) -> str | None:
+    """Return a blocking message when a complete test-only diff is public.
+
+    A full changed-file page may be truncated, so only a strictly smaller,
+    non-empty list proves that every changed file is a test file. Provenance
+    prose cannot override this: developer-only work is never reader-facing.
+
+    Args:
+        payload: Staged release candidate payload.
+        filenames: Changed-file names from one bounded GitHub page.
+
+    Returns:
+        The blocking message, or None when the candidate stays eligible.
+    """
+    if not is_public_publication(payload):
+        return None
+    if not 0 < len(filenames) < _CHANGED_FILES_PAGE_SIZE:
+        return None
+    if all(_TEST_FILE_PATTERN.search(name) for name in filenames):
+        return (
+            "merged diff changes only test files; classify this change as "
+            "internal instead of publishing a public reader-facing note"
+        )
+    return None
+
+
+def changed_file_names(repository: str, number: int) -> list[str]:
+    """Return the bounded changed-file names for one pull request.
+
+    Args:
+        repository: Owner/name repository string.
+        number: Pull request number.
+
+    Returns:
+        The changed-file names from one bounded GitHub page.
+
+    Raises:
+        RecoveryError: When the GitHub response is not a valid file list.
+    """
+    owner, name = _repository_parts(repository)
+    query = urllib.parse.urlencode({"per_page": _CHANGED_FILES_PAGE_SIZE})
+    result = _github_request(f"/repos/{owner}/{name}/pulls/{number}/files?{query}")
+    if not isinstance(result, list):
+        raise RecoveryError("GitHub changed-file response must be a list")
+    filenames: list[str] = []
+    for item in result:
+        if not isinstance(item, dict) or not isinstance(item.get("filename"), str):
+            raise RecoveryError("GitHub changed-file response returned an invalid entry")
+        filenames.append(item["filename"])
+    return filenames
+
+
+def _read_candidate(path: str) -> object:
+    candidate = Path(path)
+    if (
+        candidate.is_symlink()
+        or not candidate.is_file()
+        or candidate.stat().st_size > _MAX_CANDIDATE_BYTES
+    ):
+        raise RecoveryError("invalid or oversized release candidate")
+    try:
+        return json.loads(candidate.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RecoveryError("release candidate is not valid JSON") from exc
+
+
+def _verify_public(args: argparse.Namespace) -> int:
+    payload = _read_candidate(args.candidate)
+    if not isinstance(payload, dict):
+        raise RecoveryError("release candidate must be a JSON object")
+    claimed = payload.get("source_pr_number")
+    if isinstance(claimed, int) and not isinstance(claimed, bool) and claimed != args.pr:
+        raise RecoveryError("candidate source_pr_number does not match the selected PR")
+    if not is_public_publication(payload):
+        _write_outputs({"guard": "ok", "reason": "not_public"})
+        return 0
+    filenames = changed_file_names(args.repository, args.pr)
+    violation = test_only_public_violation(payload, filenames)
+    if violation is not None:
+        raise RecoveryError(violation)
+    _write_outputs({"guard": "ok", "changed_files": len(filenames)})
+    return 0
+
+
 def _existing_source_rows(
     repository: str,
     sources: Sequence[Source],
@@ -339,6 +442,13 @@ def _parser() -> argparse.ArgumentParser:
     verify = commands.add_parser("verify-deployed", help="require a merge SHA in live production")
     verify.add_argument("--merge-sha", required=True)
     verify.set_defaults(handler=_verify_deployed)
+    guard = commands.add_parser(
+        "verify-public", help="reject a public candidate whose complete diff is test-only"
+    )
+    guard.add_argument("--candidate", required=True)
+    guard.add_argument("--repository", required=True)
+    guard.add_argument("--pr", type=int, required=True)
+    guard.set_defaults(handler=_verify_public)
     return parser
 
 

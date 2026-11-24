@@ -232,6 +232,21 @@ jobs:
           python scripts/release_recovery.py verify-deployed \
             --merge-sha "$INPUT_MERGE_SHA"
 
+      - name: Reject test-only public candidates
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_PR: ${{ needs.discover.outputs.pr_number }}
+        run: |
+          set -Eeuo pipefail
+          # A complete bounded merged diff of only test files is developer-only
+          # work; it must never become a public reader-facing note. This guard
+          # runs before any database credential is loaded.
+          python scripts/release_recovery.py verify-public \
+            --candidate "$RUNNER_TEMP/release-candidate/candidate.json" \
+            --repository "$GITHUB_REPOSITORY" \
+            --pr "$INPUT_PR"
+
       - name: Validate and publish directly to Neon
         shell: bash
         env:
