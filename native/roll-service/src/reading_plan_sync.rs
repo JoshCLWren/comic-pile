@@ -2288,17 +2288,26 @@ mod tests {
         );
         drop(connection);
 
+        let mut retry_rosters = list_sync_rosters();
+        retry_rosters["3874"]
+            .as_array_mut()
+            .expect("retry roster array")
+            .push(serde_json::json!({
+                "id": "9001",
+                "issue_number": "1",
+                "store_date": "2024-01-01"
+            }));
         let retry = sync_released_issues_for_user_with_rosters(
             &state,
             LIST_SYNC_USER_ID,
             list_sync_as_of(),
-            Some(list_sync_rosters()),
+            Some(retry_rosters),
         )
         .await
         .expect("idempotent retry");
         assert_eq!(retry.failed_sources, 0);
         assert_eq!(retry.created_issues, 0);
-        assert_eq!(retry.reused_issues, 3);
+        assert_eq!(retry.reused_issues, 4);
         let connection = crate::db::checkout(&state).await.expect("retry connection");
         let entry_count: i64 = connection
             .query_one(
@@ -2317,6 +2326,116 @@ mod tests {
             .expect("retry issues")
             .get(0);
         assert_eq!((entry_count, issue_count), (3, 3));
+    }
+
+    #[tokio::test]
+    async fn legacy_release_sync_appends_multiple_issues_without_rewriting_existing_nodes() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        seed_list_sync_fixture(&connection, false).await;
+        connection
+            .execute(
+                "UPDATE reading_plan_release_sources SET custom_cbl_list_id = NULL WHERE id = $1",
+                &[&LIST_SYNC_SOURCE_ID],
+            )
+            .await
+            .expect("use legacy unlinked source");
+        drop(connection);
+
+        let report = sync_released_issues_for_user_with_rosters(
+            &state,
+            LIST_SYNC_USER_ID,
+            list_sync_as_of(),
+            Some(list_sync_rosters()),
+        )
+        .await
+        .expect("legacy release sync");
+        assert_eq!(report.failed_sources, 0);
+        assert_eq!(report.created_issues, 2);
+        assert_eq!(report.reused_issues, 1);
+
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("verify connection");
+        let nodes_json: Value = connection
+            .query_one(
+                "SELECT nodes_json FROM continuity_plans WHERE id = $1",
+                &[&LIST_SYNC_PLAN_ID],
+            )
+            .await
+            .expect("legacy plan JSON")
+            .get(0);
+        let nodes = nodes_json.as_array().expect("plan nodes");
+        assert_eq!(nodes.len(), 4);
+        assert_eq!(nodes[0]["id"], "legacy-sentinel");
+        assert_eq!(nodes[0]["position"], 0);
+        let second_issue_id: i32 = connection
+            .query_one(
+                "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = '2'",
+                &[&LIST_SYNC_THREAD_ID],
+            )
+            .await
+            .expect("second issue")
+            .get(0);
+        let third_issue_id: i32 = connection
+            .query_one(
+                "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = '3'",
+                &[&LIST_SYNC_THREAD_ID],
+            )
+            .await
+            .expect("third issue")
+            .get(0);
+        let expected_refs = [
+            i64::from(LIST_SYNC_THREAD_ID),
+            i64::from(LIST_SYNC_FIRST_ISSUE_ID),
+            i64::from(second_issue_id),
+            i64::from(third_issue_id),
+        ];
+        for (index, node) in nodes.iter().enumerate() {
+            assert_eq!(node["position"], index as i64);
+            assert_eq!(node["ref_id"], expected_refs[index]);
+        }
+        let membership_count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM reading_plan_issues WHERE plan_id = $1",
+                &[&LIST_SYNC_PLAN_ID],
+            )
+            .await
+            .expect("rebuilt membership")
+            .get(0);
+        assert_eq!(membership_count, 3);
+        let list_entry_count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM custom_cbl_entries WHERE list_id = $1",
+                &[&LIST_SYNC_LIST_ID],
+            )
+            .await
+            .expect("unlinked source does not append to list")
+            .get(0);
+        assert_eq!(list_entry_count, 1);
+        drop(connection);
+
+        let retry = sync_released_issues_for_user_with_rosters(
+            &state,
+            LIST_SYNC_USER_ID,
+            list_sync_as_of(),
+            Some(list_sync_rosters()),
+        )
+        .await
+        .expect("legacy retry");
+        assert_eq!(retry.created_issues, 0);
+        let connection = crate::db::checkout(&state).await.expect("retry connection");
+        let retry_nodes: Value = connection
+            .query_one(
+                "SELECT nodes_json FROM continuity_plans WHERE id = $1",
+                &[&LIST_SYNC_PLAN_ID],
+            )
+            .await
+            .expect("retry plan JSON")
+            .get(0);
+        assert_eq!(retry_nodes, nodes_json);
     }
 
     #[tokio::test]
@@ -2401,11 +2520,16 @@ mod tests {
 
         let (report, sibling) = tokio::join!(sync, sibling);
         sibling.expect("sibling writer task");
-        let report = report.expect("sync task").expect("serialized linked list sync");
+        let report = report
+            .expect("sync task")
+            .expect("serialized linked list sync");
         assert_eq!(report.failed_sources, 0);
         assert_eq!(report.created_issues, 2);
         let description: Option<String> = observer
-            .query_one("SELECT description FROM custom_cbl_lists WHERE id = $1", &[&LIST_SYNC_LIST_ID])
+            .query_one(
+                "SELECT description FROM custom_cbl_lists WHERE id = $1",
+                &[&LIST_SYNC_LIST_ID],
+            )
             .await
             .expect("sibling update persisted")
             .get(0);
