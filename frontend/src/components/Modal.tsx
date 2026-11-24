@@ -148,10 +148,26 @@ export default function Modal({
       // Only restore focus when this modal was the topmost layer. Closing a
       // lower modal must not steal focus from the modal rendered above it.
       if (wasTopmost) {
-        previousFocusRef.current?.focus()
+        const returnTarget = returnFocusRefValue.current?.current
+        if (returnTarget?.isConnected) {
+          returnTarget.focus()
+        } else {
+          previousFocusRef.current?.focus()
+        }
       }
     }
   }, [autoFocus, isOpen, overlayElement])
+
+  // A pending action can disable the currently focused control. Recompute the
+  // live focus boundary after every render so focus never falls to document.body
+  // and escapes the dialog while it remains open.
+  useLayoutEffect(() => {
+    if (!isOpen || !overlayElement) return
+    const modal = modalRef.current
+    if (!modal || modal.contains(document.activeElement)) return
+    const focusTarget = getModalFocusableElements(modal)[0] ?? modal
+    focusTarget.focus()
+  })
 
   // Lock the #root scroller while a modal is open (fixes iOS scroll-bleed).
   // The dialog itself is portaled to document.body, so locking #root no longer
@@ -188,7 +204,7 @@ export default function Modal({
         <div
           className="absolute inset-0 bg-[#110e0a]/60 surface-glass touch-none"
           onClick={() => {
-            if (isTopmostModal(modalIdRef.current!)) onClose()
+            if (!closeDisabled && isTopmostModal(modalIdRef.current!)) onClose()
           }}
           aria-hidden="true"
         ></div>
@@ -212,7 +228,8 @@ export default function Modal({
               ref={closeButtonRef}
               type="button"
               onClick={onClose}
-              className="text-stone-500 hover:text-stone-300 transition-colors text-2xl leading-none py-1"
+              disabled={closeDisabled}
+              className="text-stone-500 hover:text-stone-300 transition-colors text-2xl leading-none py-1 disabled:opacity-50"
               aria-label="Close modal"
             >
               &times;
