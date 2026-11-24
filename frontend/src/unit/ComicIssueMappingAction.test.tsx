@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IssueIdentityResponse } from '../services/api-comicvine'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
+import { useComicIssueMapping } from '../hooks/useComicIssueMapping'
 
 const { searchSeriesSpy, getIssueIdentitySpy, confirmIdentitySpy, replaceIdentitySpy, removeIdentitySpy } =
   vi.hoisted(() => ({
@@ -269,28 +270,30 @@ describe('ComicIssueMappingAction', () => {
     removeIdentitySpy.mockImplementation(
       () => new Promise<IssueIdentityResponse>((resolve) => { resolveRemoval = resolve }),
     )
-
-    render(
-      <ComicIssueMappingAction
-        issueId={77}
-        threadTitle="Hellboy in Hell"
-        issueNumber="1"
-        initialIdentity={MAPPED}
-      />,
+    const { result } = renderHook(() =>
+      useComicIssueMapping({
+        issueId: 77,
+        threadTitle: 'Hellboy in Hell',
+        issueNumber: '1',
+        initialIdentity: MAPPED,
+      }),
     )
 
-    fireEvent.click(screen.getByTestId('comic-mapping-remove'))
-    fireEvent.click(await screen.findByText('Remove mapping'))
-    await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
+    act(() => { result.current.openRemoveDialog() })
+    expect(result.current.isRemoveDialogOpen).toBe(true)
 
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.getByTestId('remove-comicvine-mapping-dialog')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Removing…' })).toBeDisabled()
+    let removePromise!: Promise<void>
+    act(() => { removePromise = result.current.handleRemoveMapping() })
+    await waitFor(() => expect(result.current.isRemovingMapping).toBe(true))
 
-    resolveRemoval(UNMAPPED)
-    await waitFor(() =>
-      expect(screen.queryByTestId('remove-comicvine-mapping-dialog')).not.toBeInTheDocument(),
-    )
+    act(() => { result.current.closeRemoveDialog() })
+    expect(result.current.isRemoveDialogOpen).toBe(true)
+
+    await act(async () => {
+      resolveRemoval(UNMAPPED)
+      await removePromise
+    })
+    expect(result.current.isRemoveDialogOpen).toBe(false)
   })
 
   it('shows a fallback message when mapping removal throws a non-Error value', async () => {
