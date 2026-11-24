@@ -45,11 +45,22 @@ At minimum, a production installation needs the database connection plus the ord
 ```dotenv
 DATABASE_URL=postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require
 SECRET_KEY=<generate-a-long-random-value>
+RUST_ROLL_ENV=production
 ENVIRONMENT=production
-CORS_ORIGINS=https://your-comic-pile.example
 ```
 
-ComicPile accepts `postgresql://`, `postgres://`, and SQLAlchemy-style URLs. The native runtime normalizes them for `tokio-postgres`; the Rust migration runner accepts the same forms and strips `+asyncpg`/`+psycopg` suffixes. Production startup requires `sslmode=require`.
+The Vercel entrypoint accepts `DATABASE_URL` and `SECRET_KEY`, defaults to the
+production environment, and normalizes supported SQLAlchemy URL prefixes for
+`tokio-postgres`. `RUST_ROLL_ENV` controls native runtime validation;
+`ENVIRONMENT=production` is also used by the password-reset mailer to select the
+default production link origin. A standalone native process instead requires
+`RUST_ROLL_DATABASE_URL` and `RUST_ROLL_JWT_SECRET`; it does not normalize driver
+prefixes. The Rust migration runner accepts `MIGRATE_DATABASE_URL` or
+`DATABASE_URL` and strips `+asyncpg`/`+psycopg` suffixes. Production database
+connections require `sslmode=require`.
+
+`CORS_ORIGINS` and `SESSION_GAP_HOURS` remain in `.env.example` for historical
+compatibility but are not read by the current native configuration.
 
 For the closest match to the maintained production setup, use Neon's pooled connection for application traffic and a direct Neon connection for schema migrations. The production migration tooling can resolve a direct URL through `NEON_PROJECT_ID` and `NEON_API_KEY`, or it can use an explicit `NEON_DIRECT_DATABASE_URL`; see [`.env.example`](../.env.example) for those variables.
 
@@ -65,7 +76,7 @@ The migration must target the same Neon database that the deployed application w
 
 ### 4. Deploy the application
 
-The maintained hosting target is Vercel. Configure the production environment variables there, including `DATABASE_URL`, `SECRET_KEY`, `ENVIRONMENT=production`, and `CORS_ORIGINS`, then deploy from `main`.
+The maintained hosting target is Vercel. Configure the production environment variables there, including `DATABASE_URL`, `SECRET_KEY`, `RUST_ROLL_ENV=production`, and `ENVIRONMENT=production` for password-reset links, then deploy from `main`.
 
 After deployment, `GET /api/v2/health` verifies process liveness without opening a database connection and returns the `X-ComicPile-API-Runtime: rust` header. Confirm database readiness with a real data request or with the migration planner:
 
@@ -126,7 +137,7 @@ Neon is not only an incidental development database in this project:
 - The production delivery workflow runs database migrations before deploying the application.
 - Runtime database access uses the Rust `deadpool-postgres` pool over `tokio-postgres`.
 - Migration tooling supports direct Neon connections and the Neon API integration described in `.env.example`.
-- Operational health checks report database dependency health separately from process liveness.
+- Process liveness is checked independently at `/api/v2/health`; database readiness is verified with a real data request or the migration planner.
 - The repository includes Neon-specific operational and performance documentation, including production-to-local data workflows and connection-pool measurements.
 
 The core application remains portable PostgreSQL software. Neon is the maintained managed-Postgres integration and the production reference implementation.
@@ -135,13 +146,13 @@ The core application remains portable PostgreSQL software. Neon is the maintaine
 
 Merges to `main` are the production source. The production workflow runs the required database migration against Neon before deploying the application to Vercel.
 
-Factory merges made with the built-in `GITHUB_TOKEN` fire no push event, so the two factory merge drains (Factory Ready Merge Drain and the Fixed Model Factory Dispatcher's ready drain) dispatch Deploy Production themselves, once per drain run after the last merge. Factory workers do not merge. A queued manual redeploy can be superseded by a later pending run (GitHub keeps only the newest pending run), so see the note in [Overlapping runs](VERCEL_DEPLOYMENT.md#overlapping-runs). See [Bot merges dispatch the deploy](VERCEL_DEPLOYMENT.md#bot-merges-dispatch-the-deploy).
+Factory merges made with the built-in `GITHUB_TOKEN` fire no push event, so the existing factory ready-merge drains dispatch Deploy Production after the last merge. Factory workers may merge only after every exact-head gate in the autonomous policy is satisfied. A queued manual redeploy can be superseded by a later pending run (GitHub keeps only the newest pending run), so see the note in [Overlapping runs](VERCEL_DEPLOYMENT.md#overlapping-runs). See [Bot merges dispatch the deploy](VERCEL_DEPLOYMENT.md#bot-merges-dispatch-the-deploy).
 
 Do not add Fly.io, Railway, or another maintained hosting target without a new product decision and an explicit migration plan. Historical references in the changelog describe past deployments and are not active operating instructions.
 
 ## Local development
 
-Use `make setup` for the local environment and `make dev` for the Vite frontend (`:5173`) and native Rust API (`:8010`). Verify changes with `make lint`, `cargo test --workspace`, the frontend lint/typecheck/build/test scripts, and `make verify-e2e` when browser behavior is affected. Local development and GitHub Actions remain independent from production deployment configuration.
+Use `make setup` for the local environment and `make dev` for the Vite frontend (`:5173`) and native Rust API (`:8010`). Run `make lint`, the full-repo Ruff/ty pair for Python tooling, focused Rust and frontend tests, and `BASE_URL=http://localhost:5173 make verify-e2e` when browser behavior is affected. Full suites run in CI unless explicitly requested. Local development and GitHub Actions remain independent from production deployment configuration.
 
 
 ### Automatic deployment repair

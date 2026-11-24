@@ -105,10 +105,12 @@ DATABASE_URL=postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/co
 | `COMICVINE_API_KEY` | Optional | Enables live ComicVine provider calls from the native service; not listed in `.env.example` |
 
 Production startup also accepts the existing `DATABASE_URL` and `SECRET_KEY`
-names for the native service. See `.env.example` for additional optional
-settings (token lifetimes, logging, rating system, password-reset email, etc.).
-Do not invent variable names; only names present in `.env.example`, the native
-configuration, or existing docs are supported.
+names in the Vercel entrypoint. The standalone native binary instead requires
+`RUST_ROLL_DATABASE_URL` and `RUST_ROLL_JWT_SECRET`; it does not read `.env` or
+normalize SQLAlchemy URL prefixes. The migration runner accepts
+`MIGRATE_DATABASE_URL` or `DATABASE_URL` and normalizes the supported driver
+prefixes. Do not invent variable names; use only names present in `.env.example`,
+the native configuration, or current docs.
 
 ### 3. Start PostgreSQL and bootstrap
 
@@ -152,29 +154,15 @@ for the same-origin ingress used by Playwright.
 
 ### ComicVine API key (optional)
 
-Comic Vine integration is optional for a basic local run; the app works without it. A key is only needed for live ComicVine hydration/backfill (see [`docs/COMICVINE_HYDRATOR.md`](docs/COMICVINE_HYDRATOR.md)).
+ComicVine integration is optional for a basic local run. Set `COMICVINE_API_KEY`
+in the native service environment to enable live provider calls used by the
+in-app search, import, identity and metadata endpoints. Without a key, those
+provider-dependent operations are unavailable, but local reading and Roll still
+work.
 
-To obtain a key:
-
-1. Create an account and sign in at [comicvine.gamespot.com](https://comicvine.gamespot.com).
-2. Open your account/API key page and request an API key.
-3. Set it in your environment when running the hydrator/backfill scripts:
-
-```bash
-COMICVINE_API_KEY=your-key uv run python scripts/hydrate_comicvine_issues.py --user-id 1 --live-refresh --output .cache/comicvine-hydrator/user-1-live.json
-```
-
-For local-first runs you can also point at a local ComicVine SQLite snapshot (`COMICVINE_LOCAL_DB` / `COMICPILE_COMICVINE_SQLITE_PATH`) and skip the API key entirely.
-
-For local-first runs with the hydrator script, use the `--comicvine-db` parameter and omit `--live-refresh` to avoid requiring an API key:
-
-```bash
-uv run python scripts/hydrate_comicvine_issues.py --user-id 1 --comicvine-db ./localcv.db --output .cache/comicvine-hydrator/user-1-report.json
-```
-
-Other scripts use environment variables for local snapshots:
-- `scripts/backfill_read_comicvine.py` uses `COMICVINE_LOCAL_DB` <!-- docs-path-check: ignore -->
-- `comic_pile/local_comicvine.py` uses `COMICPILE_COMICVINE_SQLITE_PATH` <!-- docs-path-check: ignore -->
+The former Python hydrator/backfill CLIs and local SQLite snapshot workflow were
+retired with the Python application. No replacement operator CLI is shipped;
+do not follow historical hydrator commands as current instructions.
 
 ### 5. Verify the app is up
 
@@ -196,7 +184,13 @@ Neon remains the maintained production database. For self-hosting on Neon, follo
 
 Comic Pile is a PostgreSQL application, so local development can use the bundled local database while a hosted installation can use Neon. The maintained production deployment runs on Neon.
 
-The application accepts standard `postgresql://`, `postgres://`, and SQLAlchemy-style URLs and normalizes them to a plain PostgreSQL connection for the Rust runtime. The migration runner accepts the same forms. See [the deployment guide](docs/DEPLOYMENT.md#self-hosting-with-neon) for a complete Neon setup path.
+The Vercel entrypoint accepts standard `postgresql://`, `postgres://`, and
+SQLAlchemy-style URLs and normalizes them for the Rust runtime. The standalone
+native binary requires a plain `postgresql://` URL in
+`RUST_ROLL_DATABASE_URL`. The migration runner accepts the supported driver
+prefixes through `MIGRATE_DATABASE_URL` or `DATABASE_URL`. See
+[the deployment guide](docs/DEPLOYMENT.md#self-hosting-with-neon) for the complete
+Neon setup path.
 
 ## Stack
 
