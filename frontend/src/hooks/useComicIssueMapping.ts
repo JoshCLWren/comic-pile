@@ -197,7 +197,11 @@ export function useComicIssueMapping({
     setRemoveMappingError(null)
     setIsRemovingMapping(true)
     try {
-      await comicVineApi.removeIdentity(issueId)
+      const removedIdentity = await comicVineApi.removeIdentity(issueId)
+      // The DELETE response is authoritative. Keep the successful removal
+      // visible even if the follow-up identity reconciliation cannot load.
+      setIdentityState(removedIdentity)
+      setIdentityError(false)
       setIsRemoveDialogOpen(false)
       await clearComicVineIssueIntelligence(queryClient, issueId)
       await invalidateComicVineIssueIdentity(queryClient, issueId)
