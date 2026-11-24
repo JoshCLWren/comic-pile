@@ -15,12 +15,14 @@ for (const viewport of [{ width: 1280, height: 900 }]) {
     expect(token).toBeTruthy()
     const csrfResponse = await page.request.get('/api/v2/auth/csrf', { headers: { Authorization: `Bearer ${token}` } })
     expect(csrfResponse.ok()).toBeTruthy()
+    // SAFETY: csrf endpoint returns { csrf_token: string } on success; checked by ok() above.
     const csrf = await csrfResponse.json() as { csrf_token: string }
     const headers = { Authorization: `Bearer ${token}`, 'X-CSRF-Token': csrf.csrf_token }
 
     // Create a custom CBL to delete
     const listResponse = await page.request.post('/api/v2/reading-lists', { headers, data: { name: `Prereq Survival List ${suffix}`, issue_ids: [] } })
     expect(listResponse.ok(), await listResponse.text()).toBeTruthy()
+    // SAFETY: reading-lists POST returns created list object with numeric id on success.
     const list = await listResponse.json() as { id: number }
 
     // Open canonical editor
@@ -38,6 +40,7 @@ for (const viewport of [{ width: 1280, height: 900 }]) {
 
     // Verify list is gone
     const afterDelete = await page.request.get('/api/v2/reading-lists', { headers })
+    // SAFETY: GET /api/v2/reading-lists returns an array of list objects with numeric id.
     const afterDeleteBody = await afterDelete.json() as Array<{ id: number }>
     expect(afterDeleteBody.some((item) => item.id === list.id)).toBe(false)
 
