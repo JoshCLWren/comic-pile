@@ -40,6 +40,18 @@ function getModalFocusableElements(modal: HTMLElement): HTMLElement[] {
   )).filter(element => element.tabIndex >= 0 && !element.matches(':disabled, [hidden], [aria-hidden="true"]'))
 }
 
+function restoreModalFocus(
+  returnFocusRef: RefObject<HTMLElement | null> | undefined,
+  previousFocus: HTMLElement | null,
+) {
+  const returnTarget = returnFocusRef?.current
+  if (returnTarget?.isConnected) {
+    returnTarget.focus()
+  } else if (previousFocus?.isConnected) {
+    previousFocus.focus()
+  }
+}
+
 export default function Modal({
   isOpen,
   title,
