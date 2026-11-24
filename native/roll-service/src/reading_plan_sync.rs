@@ -770,74 +770,74 @@ async fn rebuild_plan_issues_from_nodes_json_batch(
         let mut seen_issue_ids: std::collections::HashSet<i32> = std::collections::HashSet::new();
 
         for node in &nodes {
-        if node.get("node_type").and_then(Value::as_str) != Some("issue") {
-            continue;
-        }
-        let Some(ref_id) = node.get("ref_id").and_then(Value::as_i64) else {
-            continue;
-        };
-        let issue_id = i32::try_from(ref_id).unwrap_or(-1);
-        if issue_id <= 0 || !seen_issue_ids.insert(issue_id) {
-            continue;
-        }
-        let occurrence_id = node
-            .get("id")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| format!("release-{issue_id}"));
-        let lane_id = node
-            .get("lane_id")
-            .and_then(Value::as_str)
-            .unwrap_or("unread-tail")
-            .to_string();
-        let display_position = node.get("position").and_then(Value::as_i64).unwrap_or(0) as i32;
-        let label = node
-            .get("label")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string());
-        let reader_role = node
-            .get("reader_role")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string());
-        let reader_optional = node.get("reader_optional").and_then(Value::as_bool);
-        let is_checkpoint = node
-            .get("is_checkpoint")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+            if node.get("node_type").and_then(Value::as_str) != Some("issue") {
+                continue;
+            }
+            let Some(ref_id) = node.get("ref_id").and_then(Value::as_i64) else {
+                continue;
+            };
+            let issue_id = i32::try_from(ref_id).unwrap_or(-1);
+            if issue_id <= 0 || !seen_issue_ids.insert(issue_id) {
+                continue;
+            }
+            let occurrence_id = node
+                .get("id")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| format!("release-{issue_id}"));
+            let lane_id = node
+                .get("lane_id")
+                .and_then(Value::as_str)
+                .unwrap_or("unread-tail")
+                .to_string();
+            let display_position = node.get("position").and_then(Value::as_i64).unwrap_or(0) as i32;
+            let label = node
+                .get("label")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string());
+            let reader_role = node
+                .get("reader_role")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string());
+            let reader_optional = node.get("reader_optional").and_then(Value::as_bool);
+            let is_checkpoint = node
+                .get("is_checkpoint")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
 
-        // Collect source metadata annotations similar to normalization service.
-        let mut meta = serde_json::Map::new();
-        if let Some(v) = node.get("source_role") {
-            if !v.is_null() {
-                meta.insert("source_role".into(), v.clone());
+            // Collect source metadata annotations similar to normalization service.
+            let mut meta = serde_json::Map::new();
+            if let Some(v) = node.get("source_role") {
+                if !v.is_null() {
+                    meta.insert("source_role".into(), v.clone());
+                }
             }
-        }
-        if let Some(v) = node.get("source_confidence") {
-            if !v.is_null() {
-                meta.insert("source_confidence".into(), v.clone());
+            if let Some(v) = node.get("source_confidence") {
+                if !v.is_null() {
+                    meta.insert("source_confidence".into(), v.clone());
+                }
             }
-        }
-        if let Some(v) = node.get("source_explanation") {
-            if !v.is_null() {
-                meta.insert("source_explanation".into(), v.clone());
+            if let Some(v) = node.get("source_explanation") {
+                if !v.is_null() {
+                    meta.insert("source_explanation".into(), v.clone());
+                }
             }
-        }
-        if let Some(v) = node.get("source_story_arc_ids") {
-            if !v.is_null() {
-                meta.insert("source_story_arc_ids".into(), v.clone());
+            if let Some(v) = node.get("source_story_arc_ids") {
+                if !v.is_null() {
+                    meta.insert("source_story_arc_ids".into(), v.clone());
+                }
             }
-        }
-        if let Some(v) = node.get("source_target_story_arc_id") {
-            if !v.is_null() {
-                meta.insert("source_target_story_arc_id".into(), v.clone());
+            if let Some(v) = node.get("source_target_story_arc_id") {
+                if !v.is_null() {
+                    meta.insert("source_target_story_arc_id".into(), v.clone());
+                }
             }
-        }
-        let source_metadata_json: Option<Value> = if meta.is_empty() {
-            None
-        } else {
-            Some(Value::Object(meta))
-        };
+            let source_metadata_json: Option<Value> = if meta.is_empty() {
+                None
+            } else {
+                Some(Value::Object(meta))
+            };
 
             rebuilt.push(serde_json::json!({
                 "plan_id": plan_id,
@@ -963,7 +963,9 @@ async fn extend_adopted_issues_to_following_plans(
                         continue;
                     }
                     position = position.checked_add(1).ok_or_else(|| {
-                        ApiError::Unprocessable(format!("Reading List {list_id} has no append position"))
+                        ApiError::Unprocessable(format!(
+                            "Reading List {list_id} has no append position"
+                        ))
                     })?;
                     appended.push(serde_json::json!({
                         "list_id": list_id,
@@ -999,8 +1001,11 @@ async fn extend_adopted_issues_to_following_plans(
                     .iter()
                     .map(|list| (list.list_id, list.name.clone()))
                     .collect();
-                crate::reading_constraints::ValidatedReadingInputs::new(inputs.clone(), &list_names)
-                    .map_err(|e| ApiError::Unprocessable(format!("cycle validation failed: {e:?}")))?;
+                crate::reading_constraints::ValidatedReadingInputs::new(
+                    inputs.clone(),
+                    &list_names,
+                )
+                .map_err(|e| ApiError::Unprocessable(format!("cycle validation failed: {e:?}")))?;
             }
         }
     }
@@ -1063,7 +1068,9 @@ async fn extend_adopted_issues_to_following_plans(
                     continue;
                 }
                 let position = next_position.ok_or_else(|| {
-                    ApiError::Unprocessable(format!("Reading Plan {plan_id} has no append position"))
+                    ApiError::Unprocessable(format!(
+                        "Reading Plan {plan_id} has no append position"
+                    ))
                 })?;
                 nodes.push(serde_json::json!({
                     "id": format!("release-{issue_id}"),
@@ -2348,7 +2355,8 @@ mod tests {
                     &[&queue_lock_namespace, &LIST_SYNC_USER_ID],
                 )
                 .await
-                .expect("inspect reader lock waiters");
+                .expect("inspect reader lock waiters")
+                .get(0);
             if waiters > 0 {
                 observed_waiter = true;
                 break;
