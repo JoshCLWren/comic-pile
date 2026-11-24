@@ -397,14 +397,14 @@
       "methods": [
         "PATCH"
       ],
-      "dest": "/api/native_issue.rs"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/v2/issues/cards$",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_issue.rs"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api(?:/.*)?",
