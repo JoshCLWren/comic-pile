@@ -1,5 +1,10 @@
 # Production E2E data safety
 
+> **Status: historical lifecycle contract.** The scheduled disposable-account
+> workflow and cleanup scripts described here are not tracked. Do not present them
+> as an active production safety boundary until the tooling is restored.
+<!-- docs-path-check: historical -->
+
 Production browser monitoring creates a disposable account through the real registration UI for every run. It must never use a personal account.
 
 ## Disposable account contract

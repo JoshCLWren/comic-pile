@@ -1,5 +1,10 @@
 # Unversioned alias retirement
 
+> **Status: historical issue-slice record.** The remaining-scope list is stale.
+> Use [API.md](API.md), the same-path generated contract, and
+> [the route inventory](api/v2-route-inventory.json) for current aliases.
+<!-- docs-path-check: historical -->
+
 Owner objective: reduce the Rust cutover surface by retiring unused aliases,
 after checking actual callers. API versions identify contracts, not languages.
 

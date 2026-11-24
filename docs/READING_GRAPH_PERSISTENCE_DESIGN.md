@@ -1,5 +1,11 @@
 # Reading Graph persistence design
 
+> **Status: historical Python-era design.** The ORM paths and compiler behavior
+> below are retained as provenance. Current authority is the
+> [Reading List ADR](READING_LIST_EXECUTION_ADR.md) and
+> [Reading List runtime](READING_LIST_RUNTIME.md).
+<!-- docs-path-check: historical -->
+
 **Date:** 2026-09-17  
 **Scope:** Documentation-only deliverable for issue #2537.  
 **Authority:** [READING_GRAPH_ADR.md](READING_GRAPH_ADR.md), accepted 2026-09-16.

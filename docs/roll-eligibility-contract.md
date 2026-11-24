@@ -1,5 +1,11 @@
 # ComicPile Roll Eligibility Contract (Josh, 2026-10-12, authoritative)
 
+> **Status: superseded historical contract.** The later Reading List ADR and Rust
+> runtime replace its compiler/stored-flag authority. See
+> [READING_LIST_EXECUTION_ADR.md](READING_LIST_EXECUTION_ADR.md) and
+> [READING_LIST_RUNTIME.md](READING_LIST_RUNTIME.md).
+<!-- docs-path-check: historical -->
+
 **Architecture update (2026-10-13):** [Reading List Execution ADR](READING_LIST_EXECUTION_ADR.md) is the **accepted replacement contract**. The below describes existing runtime/safety behavior **until cutover**, not the desired final design. In particular, strict Reading Lists will directly enforce list order without compiling adjacency edges.
 
 

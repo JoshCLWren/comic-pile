@@ -1,36 +1,14 @@
 # Requested creator summary reads
 
-`GET /api/v1/creators/summaries` uses
-`load_creator_summary_inputs_for_creators` in
-`app/repositories/creator_summary.py`. The full-library reader remains available <!-- docs-path-check: ignore -->
-for creator discovery and detail callers that need all owned issues.
+The current browser caller uses native `GET /api/v2/creators/summaries`, implemented in `native/roll-service/src/creators_v2.rs`. The retained `/api/v1/creators/summaries` compatibility path also runs in native Rust; it is not the retired Python repository path.
 
-The requested summary reader runs two user-scoped statements:
+The v2 reader scopes stored manual credits and provider credits to the authenticated reader, computes global rated/read-unrated/upcoming coverage in PostgreSQL, and returns only requested creator attribution with effective ratings. Confirmed credits suppress manual fallback independently of the requested IDs. Queries are set-based and bounded; unrelated owned issues are not materialized for a small requested set.
 
-1. Read stored manual credits once per thread. Existing normalized-name hashing
-   supplies stable manual IDs; no new provider identities are invented.
-2. Count global rated, read-unrated and upcoming coverage in PostgreSQL. Coverage
-   recognizes usable confirmed credits even when their creator was not requested.
-   The same statement returns only requested provider credits and applicable manual-credit issues,
-   with their latest effective rating. A usable confirmed credit suppresses
-   manual fallback independently of the requested IDs. Malformed credit arrays
-   are guarded before JSONB expansion.
+Current DB-backed coverage lives in `native/roll-service/tests/creators_v2_http.rs` and the focused creator tests. Run a targeted case with:
 
-Global coverage is a single six-count aggregate joined to the requested rows;
-when no requested creator matches, an outer join still returns the counts. Unrelated owned issues and their
-ratings are not transferred to Python. Manual credits remain one read per
-thread, rather than being repeated on each issue. Requested attribution rows
-still scale with the number of matching issues and credits, not just the number
-of requested people. Both projection and coverage share materialized CTEs within
-one statement, so PostgreSQL extracts the large source JSON only once.
+```bash
+RUST_ROLL_TEST_DATABASE_URL=postgresql://... \
+  cargo test --locked -p comicpile-roll-service --test creators_v2_http <filter>
+```
 
-`tests/test_creator_read_performance_regression.py::test_summary_projection_bounds_transferred_rows` <!-- docs-path-check: ignore -->
-compares the full and requested projections for 100/1,000 issues and 1/2/5/20
-requested keys. It checks exact credit parity, returned issue/rating sets,
-constant query count, actual driver row counts and global coverage, and prints measured durations and
-Python profile call counts for both readers. The fixture analyzes local tables
-because autovacuum cannot analyze uncommitted fixture rows. For one requested
-creator the 1,000-issue fixture returns 50 matching issues instead of loading all
-1,000 issues and their ratings. Local profiled timings are diagnostic, not a
-production latency guarantee; reduced transferred rows alone do not establish
-an end-to-end latency improvement.
+The former `app/repositories/creator_summary.py` implementation and Python performance test are historical. Reduced transferred rows alone are not an end-to-end latency guarantee; profile a demonstrated regression before changing query shape.

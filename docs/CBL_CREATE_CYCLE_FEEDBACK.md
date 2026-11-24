@@ -1,5 +1,11 @@
 # Custom CBL Create cycle feedback
 
+> **Status: intended-feedback design, not current core runtime behavior.** Core
+> Reading List POST/PUT currently returns a plain 409 cycle detail; the structured
+> 422 fixture/design below remains the target contract. See
+> [Reading List authoring](api/READING_LIST_AUTHORING.md#current-cycle-response-discrepancy).
+<!-- docs-path-check: historical -->
+
 An empty Custom CBL can be rejected when the reader's existing constraints already form a cycle.
 Create now decodes the same structured cycle response used by Save, displays the named comics,
 preserves the attempted name, and explains that no new list was saved. It does not blame an empty
