@@ -86,7 +86,6 @@ export default function CustomCBLBuilder({
   const pendingProgressRevealRef = useRef<number | null>(null)
   const pendingUnreadRevealRef = useRef<number | null>(null)
   const [readerOpen, setReaderOpen] = useState(false)
-  const [deleteCompleted, setDeleteCompleted] = useState(false)
   const [open, setOpen] = useState(initialListId !== undefined)
   const [selectedId, setSelectedId] = useState<number | null>(initialListId ?? null)
   const [loadedListId, setLoadedListId] = useState<number | null>(null)
@@ -217,7 +216,7 @@ export default function CustomCBLBuilder({
     onSuccess: async () => {
       if (selectedId) await applyDeletedCustomCBL(queryClient, selectedId)
       saveMutation.reset()
-      setDeleteCompleted(true)
+      deleteReturnFocusRef.current = customCBLHeadingRef.current
       setConfirmDeleteOpen(false)
       setSelectedId(null)
       setLoadedListId(null)
@@ -1102,7 +1101,7 @@ export default function CustomCBLBuilder({
                 <button type="button" onClick={() => saveMutation.mutate(null)} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
                 {planId && (<button type="button" onClick={() => applyMutation.mutate()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50">{applyMutation.isPending ? 'Applying…' : 'Apply to this Reading Plan'}</button>)}
                 <button type="button" onClick={() => void exportList()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Export .cbl</button>
-                <button type="button" onClick={() => { deleteMutation.reset(); setDeleteCompleted(false); setConfirmDeleteOpen(true) }} disabled={disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-danger)] px-4 text-sm font-bold text-[var(--theme-danger)] disabled:opacity-50">Delete</button>
+                <button type="button" onClick={() => { deleteMutation.reset(); deleteReturnFocusRef.current = null; setConfirmDeleteOpen(true) }} disabled={disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-danger)] px-4 text-sm font-bold text-[var(--theme-danger)] disabled:opacity-50">Delete</button>
               </div>
               {dirty && <p className="text-xs text-[var(--theme-warning)]">Save this custom CBL before applying or exporting it.</p>}
             </div>
@@ -1141,7 +1140,7 @@ export default function CustomCBLBuilder({
         pendingLabel="Deleting…"
         onConfirm={() => { if (selectedId) deleteMutation.mutate(selectedId) }}
         onCancel={() => { if (!deleteMutation.isPending) { deleteMutation.reset() } setConfirmDeleteOpen(false) }}
-        returnFocusRef={deleteCompleted ? customCBLHeadingRef : undefined}
+        returnFocusRef={deleteReturnFocusRef}
         testId="delete-custom-cbl-dialog"
       >
         <p className="text-sm text-[var(--theme-text-muted)]">
