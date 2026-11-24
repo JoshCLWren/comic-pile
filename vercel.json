@@ -22,10 +22,6 @@
       "use": "@vercel/rust"
     },
     {
-      "src": "api/native_issue.rs",
-      "use": "@vercel/rust"
-    },
-    {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
@@ -390,25 +386,18 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "/api/_native_issue/health",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_issue.rs"
-    },
-    {
       "src": "^/api/v2/issues/[0-9]+$",
       "methods": [
         "PATCH"
       ],
-      "dest": "/api/native_issue.rs"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/v2/issues/cards$",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_issue.rs"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/(?:openapi\\.json|docs|redoc|health)$",
