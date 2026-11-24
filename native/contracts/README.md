@@ -99,9 +99,10 @@ removed in #5162. The frontend caller
 `/v1/bug-reports/` unchanged.
 
 The unified Rust-derived contract and generated TS client are owned by #4457; this
-repository does not hand-author a second analytics schema. The merged generated
-client schema temporarily retains the legacy Python v1/bare analytics operation
-until #4348's authenticated production proof permits the post-proof cleanup.
+repository does not hand-author a second analytics schema. The analytics metrics
+routes are not registered in the native router and the merged generated client
+schema contains no analytics operations; the frontend `/analytics` route
+redirects to `/`.
 
 `preferences-v1.openapi.json` is the generated native contract for the
 remaining same-path Taste Bank signal surface in #4834:
@@ -119,40 +120,23 @@ cargo run -p comicpile-roll-service --example preferences_openapi > ../contracts
 ```
 
 Its checked-in drift test is
-`preferences::tests::checked_in_openapi_contract_is_current`. The Python
-handlers stay mounted until authenticated production proof permits their
-removal; the schemas here match the Python `TasteSignal*` and
-`TasteVerdictRequest` contracts field for field.
-
-To compare an independently generated Rust OpenAPI operation:
-
-```sh
-python scripts/rust_endpoint_oracle.py check \
-  --schema /tmp/rust-generated-openapi.json \
-  --contract native/contracts/roll-bootstrap-v1.openapi.json
-```
-
-The comparison includes the full referenced component closure, not only the
-top-level response. It must receive actual native-generated output. The frozen
-Python file alone does not establish native parity, runtime behavior, or a
-production cutover.
+`preferences::tests::checked_in_openapi_contract_is_current`. The same-path
+native handlers serve the retained paths; the schemas here preserve the retired
+Python `TasteSignal*` and
+`TasteVerdictRequest` wire contracts field for field.
 
 The retired `tests/test_roll_bootstrap_port_oracle.py` <!-- docs-path-check: ignore --> executed the original
 Python v1 handler, validated its response against the frozen schema and recorded
 the emitted SQL, bind shapes and connection transaction events as
 `roll-bootstrap-v1.sql.json` in the CI `rust-sql-oracle-*` artifact. The oracle was removed with the Python handler (#4397); its transcript is
-historical evidence only.
+historical evidence only. No live Python oracle tooling exists; to compare a
+freshly generated Rust operation, diff the generator output against the checked-in
+JSON.
 
 The captured transcript covered one representative existing-session path, not a
 complete SQL inventory: new-session creation, pending recovery, and timezone
 updates still needed targeted captures. Do not substitute those queries for the
 unrecorded branches or treat the file as proof they are equivalent.
-
-Run the focused reference check:
-
-```sh
-pytest tests/test_rust_endpoint_oracle.py --no-cov
-```
 
 This infrastructure does not change ingress. The Python bootstrap handlers and
 read model are removed (#4397, #4350); deleting the native Rust v2 handler
@@ -162,8 +146,9 @@ remains #4299's scope.
 
 `same-path-runtime.openapi.json` is generated from Rust utoipa declarations and
 actual request/response DTOs for the native v1 and unversioned handlers. The
-Python schema exporter merges it before the canonical v2 document, so retiring
-shadowed Python handlers does not remove TypeScript client contracts.
+Node schema exporter (`scripts/export_openapi_schema.mjs`) merges it before the
+canonical v2 document, so the retained TypeScript client contracts never depend
+on a live Python handler.
 
 ```bash
 cargo run --manifest-path native/roll-service/Cargo.toml --example same_path_openapi > native/contracts/same-path-runtime.openapi.json

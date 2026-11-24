@@ -9,13 +9,15 @@ Use GitHub Issues as the only backlog and status source of truth. Do not maintai
 
 ## Select work
 
-From the repository root, run:
+Inspect the open issue queue with GitHub and apply the selection priority in
+[docs/AUTONOMOUS_FACTORY_POLICY.md](../../../docs/AUTONOMOUS_FACTORY_POLICY.md).
+This adopter checkout provides no `make next-task` or `make start-task`
+targets; do not invent or depend on them.
 
-```bash
-make next-task
-```
-
-Use the issue selected by that command unless the user explicitly names another issue. The selector prefers open issues with `ralph-status:pending`, highest `ralph-priority:*`, and no unresolved issue dependencies. Epics, blocked issues, issues already in progress/review, duplicates, and issues with unresolved dependencies are not selected.
+Prefer open issues labeled `ralph-status:pending` with the highest
+`ralph-priority:*` and no unresolved issue dependencies. Epics, blocked issues,
+issues already in progress/review, duplicates, and issues with unresolved
+dependencies are not selected.
 
 Then read the selected issue body, the files it names, `AGENTS.md`, and
 `docs/ISSUE_EXECUTION_PROTOCOL.md`. For factory work, also read
