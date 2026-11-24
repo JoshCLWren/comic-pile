@@ -267,8 +267,25 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   expect(applyResponse.ok(), await applyResponse.text()).toBeTruthy()
   const beforeGuardedList = await getReadingList(page, guardedList.id)
   const rejectedDelete = await page.request.delete(`/api/v2/reading-lists/${guardedList.id}`, { headers })
-  expect(rejectedDelete.status(), await rejectedDelete.text()).toBe(409)
+  const rejectedDeleteBody = await rejectedDelete.text()
+  expect(rejectedDelete.status(), rejectedDeleteBody).toBe(409)
+  expect(rejectedDeleteBody).toContain('nothing was changed')
   expect(await getReadingList(page, guardedList.id)).toEqual(beforeGuardedList)
+
+  const beforeSurvivingReader = await getReadingListReader(page, survivingList.id)
+  expect(beforeSurvivingReader.execution_mode).toBe('option_e')
+  const blockedEntry = beforeSurvivingReader.entries.find(
+    (entry) => entry.issue_id === blockedTargetIssueId,
+  )
+  expect(blockedEntry).toMatchObject({
+    availability: 'blocked',
+    explanation: { is_blocked: true },
+  })
+  expect(blockedEntry?.explanation?.blocking_dependencies).toContainEqual(expect.objectContaining({
+    issue_id: sourceIssueId,
+    thread_id: source.id,
+    label: expect.stringContaining('Reader prerequisite'),
+  }))
 
   await page.goto(`/reading-lists/${deletedList.id}`)
   await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(deletedList.name)
