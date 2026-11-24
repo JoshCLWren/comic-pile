@@ -744,6 +744,7 @@ it('lists a circular dependency once instead of under both directions (#3239)', 
 
 it('states a circular dependency as the blocker when only cycle blockers exist (#3518)', async () => {
   vi.mocked(readingBoundariesApi.batch).mockResolvedValue({
+    evaluator: 'unavailable',
     threads: { 1: {
       thread_id: 1,
       state: 'blocked',

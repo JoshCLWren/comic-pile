@@ -10,7 +10,7 @@ interface IngressRoute {
 export function createApiDestinationResolver(routes: readonly IngressRoute[]) {
   const rules = routes.flatMap((route) => {
     if (!route.src || !route.dest ||
-      !['/api/native_roll.rs', '/api/index.py'].includes(route.dest)) {
+      !/^\/api\/native_[a-z]+\.rs$|^\/api\/index\.py$/.test(route.dest)) {
       return []
     }
     return [{ ...route, pattern: new RegExp(`^(?:${route.src})$`) }]
