@@ -228,7 +228,7 @@ describe('ComicIssueMappingAction', () => {
   it('keeps a successful removal visible when identity reconciliation fails', async () => {
     const onMapped = vi.fn().mockResolvedValue(undefined)
     getIssueIdentitySpy.mockRejectedValue(new Error('identity refresh offline'))
-    render(
+    const { rerender } = render(
       <ComicIssueMappingAction
         issueId={77}
         threadTitle="Hellboy in Hell"
@@ -242,6 +242,15 @@ describe('ComicIssueMappingAction', () => {
     fireEvent.click(await screen.findByText('Remove mapping'))
 
     await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
+    rerender(
+      <ComicIssueMappingAction
+        issueId={77}
+        threadTitle="Hellboy in Hell"
+        issueNumber="1"
+        initialIdentity={{ ...MAPPED }}
+        onMapped={onMapped}
+      />,
+    )
     await waitFor(() =>
       expect(screen.getByTestId('comic-mapping-status')).toHaveTextContent('Not mapped'),
     )

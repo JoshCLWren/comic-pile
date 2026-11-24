@@ -123,10 +123,8 @@ export function useComicIssueMapping({
       const state = await comicVineApi.getIssueIdentity(issueId)
       setIdentityState(state)
       setIdentityError(false)
-      if (
-        removalIdentityRef.current?.issueId === issueId
-        && statusFor(state) === statusFor(removalIdentityRef.current.identity)
-      ) {
+      const removal = removalIdentityRef.current
+      if (removal?.issueId === issueId && statusFor(state) === statusFor(removal.identity)) {
         removalIdentityRef.current = null
       }
     } catch {
@@ -143,7 +141,10 @@ export function useComicIssueMapping({
     }
     if (initialIdentity !== undefined && initialIdentity !== null) {
       const removal = removalIdentityRef.current
-      if (removal?.issueId === issueId && statusFor(initialIdentity) !== statusFor(removal.identity)) {
+      if (
+        removal?.issueId === issueId
+        && statusFor(initialIdentity) !== statusFor(removal.identity)
+      ) {
         // A failed card refresh can replay the pre-removal projection. Keep
         // the committed DELETE result until reconciliation catches up.
         return
@@ -157,7 +158,7 @@ export function useComicIssueMapping({
       return
     }
     void fetchIdentity()
-  }, [initialIdentity, fetchEnabled, fetchIdentity])
+  }, [initialIdentity, fetchEnabled, fetchIdentity, issueId])
 
   const handleIdentityConfirmed = useCallback(
     async (selected?: ComicVineIssueCandidate | null) => {
@@ -178,7 +179,9 @@ export function useComicIssueMapping({
 
   const handleSiblingsMapped = useCallback(
     async (confirmedIssueIds: number[]) => {
-      if (issueId && confirmedIssueIds.includes(issueId)) removalIdentityRef.current = null
+      if (issueId && confirmedIssueIds.includes(issueId)) {
+        removalIdentityRef.current = null
+      }
       if (confirmedIssueIds.length > 0) {
         await invalidateComicVineIssueIntelligenceMany(queryClient, confirmedIssueIds)
         await Promise.all(
@@ -190,7 +193,7 @@ export function useComicIssueMapping({
       await invalidateAfterIssueMappingChange(queryClient)
       await onMappedRef.current?.()
     },
-    [],
+    [issueId],
   )
 
   const openMappingDialog = useCallback((mode: 'confirm' | 'replace' = 'confirm') => {
