@@ -1,5 +1,11 @@
 # Unversioned alias retirement
 
+> **Historical cutover record:** This PR-era snapshot describes the Python
+> retirement sequence. Use `docs/API_V1_CANONICAL.md`, the native same-path
+> contract and route registry for current retained aliases.
+
+<!-- docs-path-check: historical -->
+
 Owner objective: reduce the Rust cutover surface by retiring unused aliases,
 after checking actual callers. API versions identify contracts, not languages.
 

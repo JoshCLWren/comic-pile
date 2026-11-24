@@ -1,5 +1,11 @@
 # Frontend/Backend Asset Coupling Audit
 
+> **Historical FastAPI asset audit (2026-02-17):** The Python static-serving paths
+> below are retired. Current static/native boundaries are in
+> `docs/VERCEL_ARCHITECTURE.md` and `SECURITY.md`.
+
+<!-- docs-path-check: historical -->
+
 Date: 2026-02-17
 Scope: FastAPI static asset serving, frontend build/deploy flow, CI/deploy guardrails, and related test/doc drift.
 

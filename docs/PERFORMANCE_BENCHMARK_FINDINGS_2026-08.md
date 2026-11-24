@@ -1,5 +1,11 @@
 # August 2026 ComicPile performance benchmark findings
 
+> **Historical FastAPI benchmark:** These measurements describe the retired
+> Python runtime. Current native performance guidance is in
+> `docs/OPERATIONAL_HEALTH.md` and `native/roll-service/README.md`.
+
+<!-- docs-path-check: historical -->
+
 ## Purpose
 
 Record the controlled measurements that led to the current Vercel + Neon optimization work so future performance changes have a concrete baseline.

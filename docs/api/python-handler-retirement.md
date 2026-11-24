@@ -1,5 +1,12 @@
 # Retired shadowed Python handlers
 
+> **Historical cleanup record:** FastAPI and Python handlers no longer exist.
+> This document preserves the #5431 cleanup rationale. Current native contracts
+> are in `native/contracts/README.md` and `docs/API.md`; do not use the old
+> FastAPI route table or Python exception as current guidance.
+
+<!-- docs-path-check: historical -->
+
 The owner requested removal of the unused Python implementations, their obsolete
 tests, and confirmed test-only code in one PR. The public API operations remain
 implemented by the existing Rust router; this cleanup does not retire their URLs.

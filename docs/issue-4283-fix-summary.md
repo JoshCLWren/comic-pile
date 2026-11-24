@@ -1,5 +1,10 @@
 # Fix for Issue #4283: Reading Plans list page returns 409 after list deletion
 
+> **Historical Python fix summary:** The `app/` paths below are retired. Current
+> Reading List behavior is in `docs/READING_LIST_RUNTIME.md`.
+
+<!-- docs-path-check: historical -->
+
 ## Problem
 
 When a user adopts a CBL source (creating a plan and a linked Reading List), then deletes that list, the Reading Plans list page (`/continuity-plans`) returns HTTP 409 with no entries. Individual plan detail pages continue to work correctly.

@@ -1,5 +1,10 @@
 # ADR: Reader execution is Threads + Issues + issue dependencies
 
+> **Superseded architecture record:** Retained for the September 2026 decision
+> history. Current canonical behavior is [Reading List runtime](READING_LIST_RUNTIME.md).
+
+<!-- docs-path-check: historical -->
+
 **Architecture update (2026-10-13):** [Reading List Execution ADR](READING_LIST_EXECUTION_ADR.md) supersedes this document as the **accepted target architecture (Option E)**. This ADR documents the **currently deployed, transitional Reading Plan/Dependency design** until the guarded in-place cutover. Do not add new canonical-Reading-Plan compiler work on the authority of this document.
 
 

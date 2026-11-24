@@ -1,5 +1,11 @@
 # Frontend request-efficiency audit — parent #4499
 
+> **Historical audit matrix:** Counts and endpoint names are point-in-time
+> evidence. Current request budgets live in `frontend/src/test/network-budget/`;
+> current API paths are in `docs/API.md`.
+
+<!-- docs-path-check: historical -->
+
 View-by-view before/after matrix for the repo-wide duplicate/unused API
 request audit. Scope is every route in `frontend/src/App.tsx`, including
 overlays, tabs, and the shared authenticated shell. The CI inventory guard

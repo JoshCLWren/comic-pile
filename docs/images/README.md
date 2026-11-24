@@ -1,5 +1,11 @@
 # Documentation images
 
+> **Historical capture notes:** The seed script, port and FastAPI references below
+> describe older screenshots. New captures must follow `LOCAL_TESTING.md` and
+> `docs/VERCEL_ARCHITECTURE.md`; do not treat these notes as current setup.
+
+<!-- docs-path-check: historical -->
+
 ## `roll-hero.png`
 
 The README hero: a screenshot of the Comic Pile **Roll** page.

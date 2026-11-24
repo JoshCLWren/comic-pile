@@ -1,5 +1,11 @@
 # Pool Configuration Benchmark Results
 
+> **Historical Python/SQLAlchemy benchmark:** Retained for provenance only. The
+> deployed runtime uses the native Rust pool documented in
+> `native/roll-service/README.md` and `docs/OPERATIONAL_HEALTH.md`.
+
+<!-- docs-path-check: historical -->
+
 ## Experiment Overview
 
 **Goal**: Find the lowest-latency, low-memory SQLAlchemy pool configuration for ComicPile on Vercel Fluid Compute.

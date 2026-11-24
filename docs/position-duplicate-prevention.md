@@ -1,5 +1,11 @@
 # Position Duplicate Prevention - Implementation Report
 
+> **Historical Python implementation report:** The `app/` paths and pytest
+> commands below are retired. Current queue ordering is native Rust; see
+> `docs/API.md` and `native/roll-service/src/queue.rs`.
+
+<!-- docs-path-check: historical -->
+
 ## Executive Summary
 
 **Status**: ✅ COMPLETED - Option 2 (Application Validation with Monitoring)

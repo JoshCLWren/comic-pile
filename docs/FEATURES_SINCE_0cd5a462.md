@@ -1,5 +1,11 @@
 # New Features Guide (Since `0cd5a462ef405f96f591ec31abb66531a1e99a9e`)
 
+> **Historical feature snapshot:** Several routes and product terms below were
+> retired or renamed. Use `README.md`, `docs/API.md` and
+> `docs/READING_LIST_RUNTIME.md` for current behavior.
+
+<!-- docs-path-check: historical -->
+
 This guide covers the major user-facing features added after commit `0cd5a462ef405f96f591ec31abb66531a1e99a9e`.
 
 ## What Was Added

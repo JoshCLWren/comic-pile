@@ -1,5 +1,11 @@
 # Issue #2842 — Vercel Python bundle reduction evidence
 
+> **Historical Python bundle audit:** The `api/index.py` / FastAPI deployment and
+> Alembic paths below no longer exist. Current production topology is documented
+> in `docs/VERCEL_ARCHITECTURE.md`.
+
+<!-- docs-path-check: historical -->
+
 ## Mechanism verified
 - `.vercelignore` is the supported exclusion mechanism for the existing `builds` (`@vercel/python`) deployment configuration. `vercel.json` `functions.excludeFiles` is not compatible with `builds` and is not used.
 - Validated `vercel.json` remains unchanged from `main` (no `functions` block) and parses as JSON.

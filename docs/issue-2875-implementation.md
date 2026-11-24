@@ -1,4 +1,10 @@
-# Issue #2875 implementation status
+# Issue #2875
+
+> **Historical Python implementation record:** The `app/` delivery runtime below
+> is retired. Current factory delivery boundaries are in
+> `docs/AUTONOMOUS_FACTORY_POLICY.md`.
+
+<!-- docs-path-check: historical --> implementation status
 
 Coordination issue: "Use the existing Factory to implement the first Latticery extraction slice."
 
