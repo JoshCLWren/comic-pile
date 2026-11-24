@@ -242,6 +242,9 @@ describe('ComicIssueMappingAction', () => {
     fireEvent.click(await screen.findByText('Remove mapping'))
 
     await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
+    await waitFor(() =>
+      expect(screen.getByTestId('comic-mapping-status')).toHaveTextContent('Not mapped'),
+    )
     rerender(
       <ComicIssueMappingAction
         issueId={77}
