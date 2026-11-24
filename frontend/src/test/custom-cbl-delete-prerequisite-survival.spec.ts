@@ -247,24 +247,29 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   expect(await getReadingList(page, deletedList.id)).toEqual(beforeDeletedList)
 
   // A real owner-side rejection must also leave the authoritative list untouched.
+  // Plan creation rebuilds normalized source membership from this persisted
+  // provenance, producing the reading_plan_sources row protected by deletion.
   const guardedList = await createReadingList(page, `Plan Linked List ${suffix}`, [sourceIssueId])
+  const guardedSourcePath = `custom-cbl:${guardedList.id}`
   const planResponse = await page.request.post('/api/v2/continuity-plans/', {
     headers,
     data: {
       name: `Linked Plan ${suffix}`,
       ordering_mode: 'informational',
       lanes: [{ id: 'main', name: 'Main', order: 0 }],
-      nodes: [],
+      nodes: [{
+        id: `linked-issue-${sourceIssueId}`,
+        node_type: 'issue',
+        ref_id: sourceIssueId,
+        lane_id: 'main',
+        position: 0,
+        label: `Prerequisite Source ${suffix} #1`,
+        source_paths: [guardedSourcePath],
+        source_cbl_placements: [{ source_path: guardedSourcePath, position: 0 }],
+      }],
     },
   })
-  expect(planResponse.ok(), await planResponse.text()).toBeTruthy()
-  // SAFETY: successful plan creation returns its numeric ID.
-  const linkedPlan = (await planResponse.json()) as { id: number }
-  const applyResponse = await page.request.post(
-    `/api/v2/reading-lists/${guardedList.id}/reading-plans/${linkedPlan.id}/applications`,
-    { headers, data: { lane_id: 'main' } },
-  )
-  expect(applyResponse.ok(), await applyResponse.text()).toBeTruthy()
+  expect(planResponse.status(), await planResponse.text()).toBe(201)
   const beforeGuardedList = await getReadingList(page, guardedList.id)
   const rejectedDelete = await page.request.delete(`/api/v2/reading-lists/${guardedList.id}`, { headers })
   const rejectedDeleteBody = await rejectedDelete.text()
