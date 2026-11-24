@@ -79,6 +79,7 @@ export default function CustomCBLBuilder({
   const issueSearchResults = useRef<HTMLDivElement>(null)
   const listNavigationRef = useRef<HTMLDivElement>(null)
   const pendingNavigationFocusRef = useRef<number | null>(null)
+  const listSelectRef = useRef<HTMLSelectElement>(null)
   const currentIssueRef = useRef<HTMLLIElement>(null)
   const currentUnreadIssueRef = useRef<HTMLLIElement>(null)
   const pendingProgressRevealRef = useRef<number | null>(null)
@@ -757,6 +758,7 @@ export default function CustomCBLBuilder({
             <label className="block text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
               Custom CBL
               <select
+                ref={listSelectRef}
                 aria-label="Custom CBL"
                 value={selectedId ?? ''}
                 onChange={(event) => chooseList(event.target.value)}
@@ -1135,8 +1137,9 @@ export default function CustomCBLBuilder({
         error={deleteMutation.error ? messageFor(deleteMutation.error, 'Unable to delete this Reading List.') : null}
         confirmLabel="Delete custom CBL"
         pendingLabel="Deleting…"
+        restoreFocusRef={listSelectRef}
         onConfirm={() => { if (selectedId) deleteMutation.mutate(selectedId) }}
-        onCancel={() => { if (!deleteMutation.isPending) { deleteMutation.reset() } setConfirmDeleteOpen(false) }}
+        onCancel={() => { if (deleteMutation.isPending) return; deleteMutation.reset(); setConfirmDeleteOpen(false) }}
         testId="delete-custom-cbl-dialog"
       >
         <p className="text-sm text-[var(--theme-text-muted)]">

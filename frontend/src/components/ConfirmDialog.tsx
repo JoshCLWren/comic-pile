@@ -1,5 +1,5 @@
 import Modal from './Modal'
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
 
 interface ConfirmDialogProps {
   isOpen: boolean
@@ -16,6 +16,8 @@ interface ConfirmDialogProps {
   onConfirm: () => void
   onCancel: () => void
   testId?: string
+  /** Focus target used on close when the pre-open element is no longer stable. */
+  restoreFocusRef?: RefObject<HTMLElement | null>
 }
 
 /**
@@ -38,9 +40,10 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
   testId,
+  restoreFocusRef,
 }: ConfirmDialogProps) {
   return (
-    <Modal isOpen={isOpen} title={title} onClose={onCancel} data-testid={testId}>
+    <Modal isOpen={isOpen} title={title} onClose={onCancel} closeDisabled={isPending} restoreFocusRef={restoreFocusRef} data-testid={testId}>
       <div className="space-y-4">
         {children}
         {error && (
@@ -50,6 +53,11 @@ export default function ConfirmDialog({
             data-testid={testId ? `${testId}-error` : undefined}
           >
             {error}
+          </p>
+        )}
+        {isPending && pendingLabel && (
+          <p role="status" className="sr-only">
+            {pendingLabel}
           </p>
         )}
         <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
@@ -65,6 +73,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={isPending}
+            aria-busy={isPending}
             data-testid={testId ? `confirm-${testId}` : undefined}
             className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-sm font-black text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
           >
