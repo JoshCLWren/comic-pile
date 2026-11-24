@@ -131,10 +131,10 @@ export default function ImageWithLoading({
               sizes={source.sizes}
             />
           ))}
-          <img {...imgProps} />
+          <img {...imgProps} ref={imgRef} />
         </picture>
       ) : (
-        <img {...imgProps} />
+        <img {...imgProps} ref={imgRef} />
       )}
     </div>
   )
