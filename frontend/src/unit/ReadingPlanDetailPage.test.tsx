@@ -385,8 +385,14 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Read next issue' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Edit plan' })).toBeInTheDocument()
     expect(screen.queryByText(/ContinuityRule/i)).not.toBeInTheDocument()
-    // Release following is secondary, hidden until explicitly requested.
+    // Release following is secondary, but its current state remains visible in the summary.
     expect(screen.queryByRole('heading', { name: 'New releases' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('release-tracking-summary')).toHaveTextContent(
+      'Current subscriptions: X-Men (following)',
+    )
+    expect(screen.getByText(/Follow only checks ComicVine/)).toHaveTextContent(
+      'It does not change your reading order, eligibility, or progress.',
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Manage release tracking' }))
     expect(screen.getByRole('heading', { name: 'New releases' })).toBeInTheDocument()
     const newRelease = within(screen.getByTestId('new-release-source'))
