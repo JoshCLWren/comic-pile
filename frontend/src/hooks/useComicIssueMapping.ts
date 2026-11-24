@@ -123,8 +123,9 @@ export function useComicIssueMapping({
       const state = await comicVineApi.getIssueIdentity(issueId)
       setIdentityState(state)
       setIdentityError(false)
-      const removal = removalIdentityRef.current
-      if (removal?.issueId === issueId && statusFor(state) === statusFor(removal.identity)) {
+      // A completed GET is authoritative, including a concurrent remap. The
+      // removal guard only bridges failed or still-pending reconciliation.
+      if (removalIdentityRef.current?.issueId === issueId) {
         removalIdentityRef.current = null
       }
     } catch {

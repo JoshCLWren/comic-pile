@@ -258,7 +258,7 @@ describe('ComicIssueMappingAction', () => {
       expect(screen.getByTestId('comic-mapping-status')).toHaveTextContent('Not mapped'),
     )
     expect(screen.getByTestId('comic-mapping-map')).toHaveTextContent('Map comic')
-    expect(screen.getByTestId('comic-mapping-retry')).toBeVisible()
+    expect(screen.queryByTestId('comic-mapping-retry')).not.toBeInTheDocument()
     expect(screen.queryByTestId('comic-mapping-change')).not.toBeInTheDocument()
     expect(screen.queryByTestId('comic-mapping-remove')).not.toBeInTheDocument()
     await waitFor(() => expect(onMapped).toHaveBeenCalled())
