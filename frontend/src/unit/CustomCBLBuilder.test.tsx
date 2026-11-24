@@ -58,12 +58,12 @@ function renderBuilder(onApplied = vi.fn()) {
       mutations: { retry: false },
     },
   })
-  render(
+  const rendered = render(
     <QueryClientProvider client={client}>
       <MemoryRouter><CustomCBLBuilder planId={18} onApplied={onApplied} /></MemoryRouter>
     </QueryClientProvider>,
   )
-  return { client, onApplied }
+  return { client, onApplied, rerender: rendered.rerender }
 }
 
 const globalSource = {
@@ -588,7 +588,7 @@ describe('CustomCBLBuilder', () => {
     mocks.delete.mockImplementation(() => new Promise<void>((resolve) => {
       finishDelete = resolve
     }))
-    renderBuilder()
+    const { client, onApplied, rerender } = renderBuilder()
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
