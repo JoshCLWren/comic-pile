@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import type { RefObject } from 'react'
 import OverlayPortal from './OverlayPortal'
 
 interface ModalProps {
@@ -13,7 +14,7 @@ interface ModalProps {
   /** When true, Escape, backdrop click and the close button do not dismiss. */
   closeDisabled?: boolean
   /** Focus target used on close when the pre-open element is no longer stable. */
-  restoreFocusRef?: React.RefObject<HTMLElement | null>
+  restoreFocusRef?: RefObject<HTMLElement | null>
 }
 
 // Module-level lock counter so nested/overlapping modals don't prematurely
