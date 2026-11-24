@@ -1,5 +1,14 @@
 # ComicVine hydrator
 
+> **Historical Python operator tool:** The `scripts/hydrate_comicvine_issues.py`
+> and `scripts/backfill_read_comicvine.py` commands below were removed with the
+> Python application. Do not run or recreate them. Current mapping and hydration
+> are native Rust product workflows documented in
+> [COMICVINE_RUNTIME_FALLBACK.md](COMICVINE_RUNTIME_FALLBACK.md) and
+> [ISSUE_CARD_MOUNT_INVENTORY.md](ISSUE_CARD_MOUNT_INVENTORY.md).
+
+<!-- docs-path-check: historical -->
+
 The ComicVine hydrator inspects comics that already exist in ComicPile and writes a machine-readable JSON report. It does not modify threads, issues, reading progress, ratings, dependencies, continuity rules, or confirmed provider mappings.
 
 ## Read-issue identity and creator backfill

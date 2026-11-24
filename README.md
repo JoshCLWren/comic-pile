@@ -31,7 +31,7 @@ Prerequisites:
 - Docker (for PostgreSQL)
 - A Rust toolchain (`rustup`; the workspace pins its toolchain in `rust-toolchain.toml`)
 - Node.js and `pnpm` (the repository pins `pnpm@10.15.0`)
-- Python 3.14 and `uv` only for the repository's Python lint/type/tooling checks
+- Python 3.14 and `uv` for repository tooling checks (optional for running the app; run `make sync` before lint/type tooling)
 
 ```bash
 git clone https://github.com/JoshCLWren/comic-pile.git
@@ -102,14 +102,13 @@ DATABASE_URL=postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/co
 | `SECRET_KEY` / `RUST_ROLL_JWT_SECRET` | Yes | JWT signing secret. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `RUST_ROLL_ENV` | No (defaults) | `development` / `production`; development must bind to a loopback address |
 | `RUST_ROLL_BIND` | No | Defaults to `127.0.0.1:8010` |
-| `CORS_ORIGINS` | Required in production | Comma-separated origins |
-| `COMICVINE_API_KEY` | Optional | Used by ComicVine hydration/backfill scripts (`docs/COMICVINE_HYDRATOR.md`); not listed in `.env.example` |
+| `COMICVINE_API_KEY` | Optional | Server-side key for live ComicVine mapping/metadata calls; never expose it to the frontend |
 
-Production startup also accepts the existing `DATABASE_URL` and `SECRET_KEY`
-names for the native service. See `.env.example` for additional optional
-settings (token lifetimes, logging, rating system, password-reset email, etc.).
-Do not invent variable names; only names present in `.env.example`, the native
-configuration, or existing docs are supported.
+The Vercel entrypoint also accepts the existing `DATABASE_URL` and `SECRET_KEY`
+names and normalizes supported driver URL forms. The standalone process uses the
+`RUST_ROLL_*` names above. `CORS_ORIGINS` and `ENVIRONMENT` are not read by the
+current native config; use `RUST_ROLL_ENV` and the same-origin Vite proxy. See
+`.env.example` and `native/roll-service/src/config.rs` for supported settings.
 
 ### 3. Start PostgreSQL and bootstrap
 
@@ -153,29 +152,25 @@ for the same-origin ingress used by Playwright.
 
 ### ComicVine API key (optional)
 
-Comic Vine integration is optional for a basic local run; the app works without it. A key is only needed for live ComicVine hydration/backfill (see [`docs/COMICVINE_HYDRATOR.md`](docs/COMICVINE_HYDRATOR.md)).
+ComicVine integration is optional for a basic local run. Set
+`COMICVINE_API_KEY` in the native service environment only when you need live
+provider search, import or metadata refresh. Never put it in a frontend
+environment variable.
 
-To obtain a key:
+Current mapping and hydration run through native Rust:
 
-1. Create an account and sign in at [comicvine.gamespot.com](https://comicvine.gamespot.com).
-2. Open your account/API key page and request an API key.
-3. Set it in your environment when running the hydrator/backfill scripts:
+1. Open the exact Issue's shared card and use **Map comic** / **Change mapping**.
+2. Confirm the exact ComicVine Issue identity; a thread/series match never
+   silently becomes an issue identity.
+3. Commit the mapping. Rust stores the confirmed identity and schedules bounded
+   metadata hydration; provider failure does not block reading or Roll.
 
-```bash
-COMICVINE_API_KEY=your-key uv run python scripts/hydrate_comicvine_issues.py --user-id 1 --live-refresh --output .cache/comicvine-hydrator/user-1-live.json
-```
-
-For local-first runs you can also point at a local ComicVine SQLite snapshot (`COMICVINE_LOCAL_DB` / `COMICPILE_COMICVINE_SQLITE_PATH`) and skip the API key entirely.
-
-For local-first runs with the hydrator script, use the `--comicvine-db` parameter and omit `--live-refresh` to avoid requiring an API key:
-
-```bash
-uv run python scripts/hydrate_comicvine_issues.py --user-id 1 --comicvine-db ./localcv.db --output .cache/comicvine-hydrator/user-1-report.json
-```
-
-Other scripts use environment variables for local snapshots:
-- `scripts/backfill_read_comicvine.py` uses `COMICVINE_LOCAL_DB` <!-- docs-path-check: ignore -->
-- `comic_pile/local_comicvine.py` uses `COMICPILE_COMICVINE_SQLITE_PATH` <!-- docs-path-check: ignore -->
+The product endpoints are under `/api/v2/comicvine/*` and
+`GET /api/v2/issues/{issue_id}/comicvine`. See
+[`docs/COMICVINE_RUNTIME_FALLBACK.md`](docs/COMICVINE_RUNTIME_FALLBACK.md) and
+[`docs/ISSUE_CARD_MOUNT_INVENTORY.md`](docs/ISSUE_CARD_MOUNT_INVENTORY.md).
+The old Python hydrator/backfill scripts and local SQLite snapshot workflow were
+removed; do not recreate or invoke them.
 
 ### 5. Verify the app is up
 
@@ -197,7 +192,11 @@ Neon remains the maintained production database. For self-hosting on Neon, follo
 
 Comic Pile is a PostgreSQL application, so local development can use the bundled local database while a hosted installation can use Neon. The maintained production deployment runs on Neon.
 
-The application accepts standard `postgresql://`, `postgres://`, and SQLAlchemy-style URLs and normalizes them to a plain PostgreSQL connection for the Rust runtime. The migration runner accepts the same forms. See [the deployment guide](docs/DEPLOYMENT.md#self-hosting-with-neon) for a complete Neon setup path.
+The migration runner accepts standard `postgresql://`, `postgres://`, and
+historical SQLAlchemy-style URLs. The Vercel native entrypoint also normalizes
+supported URL forms; the standalone native process requires a plain
+`postgresql://` URL. See [the deployment guide](docs/DEPLOYMENT.md#self-hosting-with-neon)
+for a complete Neon setup path.
 
 ## Stack
 
@@ -217,8 +216,9 @@ make dev-native    # native Rust Roll/auth service only, on :8010
 make migrate    # run migrations (refinery runner, native/migrate)
 make db-up      # start local PostgreSQL
 make db-down    # stop local PostgreSQL without deleting data
-make lint       # repository lint/type checks
-make verify-e2e # Chromium browser validation when required
+make lint       # syntax/ignore/Any + frontend ESLint (run ruff/ty separately)
+make sync       # Python tooling environment for ruff/ty/pytest
+make verify-e2e # Chromium browser validation; set BASE_URL to a test ingress
 make tidy       # sweep local generated artifacts
 ```
 

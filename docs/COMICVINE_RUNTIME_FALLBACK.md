@@ -1,100 +1,71 @@
-# ComicVine runtime metadata fallback
+# ComicVine runtime mapping and metadata hydration
 
-ComicPile serves issue intelligence from Postgres first. The product may request a best-effort
-ComicVine refresh only when the requested ComicPile issue already has a **confirmed issue-level
-ComicVine identity** and its stored singular-issue metadata is missing or stale.
+ComicPile serves issue intelligence from PostgreSQL first. Live ComicVine work is
+limited to explicit provider search/import, exact Issue identity confirmation and
+bounded metadata hydration. There is no Python hydrator or local SQLite provider
+runtime.
 
-## Runtime behavior
+## Issue intelligence read
 
-`GET /api/v1/issues/{issue_id}/comicvine` keeps the current database-backed response on the request
-path. It never waits for ComicVine. When a confirmed mapping needs deeper metadata, the service
-schedules a bounded refresh and returns whatever trusted data is already stored.
+`GET /api/v2/issues/{issue_id}/comicvine` returns the owned Issue's stored
+intelligence without waiting for a provider request. A missing mapping or
+incomplete metadata remains visible as such; the read does not guess identity
+from title, issue number or Thread mapping.
 
-The fallback does not search ComicVine by title, issue number, or thread mapping. A thread-to-volume
-mapping is never promoted into an issue identity. Provider relationship data remains informational
-metadata and cannot create dependencies or change Roll eligibility.
+The retained `GET /api/v1/issues/{issue_id}/comicvine` alias calls the same native
+handler for existing clients. New clients use v2.
 
-Concurrent refreshes are deduplicated in-process and with a PostgreSQL advisory transaction lock so
-separate application instances do not intentionally fan out the same confirmed issue lookup. The
-provider call uses the existing ComicVine client, a five-second network timeout, one bounded retry
-for ordinary provider failures, and no immediate retry after rate limiting. Failures are logged and
-do not fail the Roll or rating experience.
+## Exact identity mapping
 
-Successful refreshes flow through `app.comicvine_hydration.hydrate_issue`, which normalizes curated
-fields and retains the full singular provider payload in `external_identities.metadata_json`.
+Use the shared Issue card's **Map comic** / **Change mapping** action. The native
+flow is:
 
-## Production configuration
+1. Search or import a provider volume/roster.
+2. Preview exact Issue-number matches and conflicts.
+3. Confirm or replace the exact ComicVine Issue ID with ownership, stale-preview,
+   conflict and idempotency checks.
+4. Commit the mapping and roster metadata in one transaction.
 
-`COMICVINE_API_KEY` must be configured in the **Vercel production project environment** for the
-application runtime. A GitHub Actions repository secret with the same name is available only to
-GitHub Actions and is not automatically injected into Vercel functions.
+A confirmed series/volume mapping is context, not proof of an Issue identity.
+Provider relationship data is informational and cannot create Dependencies or
+change automatic-Roll eligibility.
 
-Optional `COMICVINE_CACHE_DIR` controls the existing provider client's response cache and rolling
-request ledger. The runtime default is `/tmp/comicpile-comicvine`, which is suitable as a
-best-effort serverless cache but must not be treated as durable application state. Postgres remains
-the durable metadata store and the cross-instance deduplication boundary.
+Current endpoints live under `/api/v2/comicvine/*`, including
+`identity:confirm`, `identity:replace`, `metadata:refresh`, series import and
+issue import. See [API documentation](API.md) and the generated v2 contract.
 
-Never place the API key in frontend environment variables, source files, logs, screenshots, or
-artifacts.
+## Bounded hydration
 
-## Operations and observability
+After a confirmed mapping or metadata-refresh request, native Rust performs
+bounded post-commit hydration:
 
-The fallback emits structured log messages prefixed with `comicvine_fallback_` for successful
-hydration, deduplication, missing configuration, rate-limit deferral, ineligible identities, and
-bounded provider failures. Logged context contains internal/external numeric IDs and error types,
-not credentials or provider URLs containing credentials.
+- Stored provider evidence is normalized before any network call.
+- Existing populated/deep metadata is preserved.
+- Provider work has network timeouts, bounded retries and durable repair leases.
+- HTTP 420/429 responses defer work with bounded backoff rather than hot-looping.
+- Cross-process deduplication uses PostgreSQL locks/leases; a provider failure
+  does not fail Roll, Queue or rating.
 
-For explicit bulk research or repair work, continue to use the existing
-`scripts/hydrate_comicvine_issues.py` workflow. The runtime fallback is deliberately narrow: it <!-- docs-path-check: ignore -->
-repairs metadata for confirmed issue identities encountered by the product rather than becoming a
-candidate-discovery or bulk-import mechanism.
+The durable metadata store is PostgreSQL. Temporary caches are best-effort only
+and must not be treated as application state.
 
-### Individual identity confirmation
+## Configuration and operations
 
-Individual ComicVine confirmation and replacement commit the owned issue's explicit provider
-identity before refreshing metadata through the same bounded fallback used by sibling approval.
-Stored raw issue evidence is normalized first, so an existing provider cover can be recovered
-without a network request. Complete fresh metadata, including an explicit provider response with
-no cover, does not trigger another lookup. Missing metadata uses the confirmed issue ID and the
-existing timeout, retry, and deduplication controls. Provider failure leaves the confirmed mapping
-intact; Roll and rating continue to serve stored data through their existing nonblocking reads.
-The origin remains excluded from sibling approval.
+Set `COMICVINE_API_KEY` only in the native service's server-side environment. A
+GitHub Actions secret is not automatically injected into Vercel. Never expose
+the key to frontend variables, source, logs, screenshots or artifacts.
 
-### Series mapping and incomplete confirmed identities
+Authenticated maintenance routes under `/api/v2/maintenance/comicvine-metadata-*`
+and the maintained GitHub Actions repair workflow process bounded backlogs. They
+are operator tooling, not a candidate-discovery or bulk-remapping shortcut.
 
-A confirmed mapping records an external ID; it does not prove that ComicPile has usable
-issue metadata. Queue's mapping-health projection separately reports
-`metadata_missing_count`, so a thread with confirmed IDs but missing issue numbers or series
-names keeps its **Map series** action. Roll's corrections menu exposes the same series flow
-directly, without requiring removal of the current issue's identity.
+## Reader-facing behavior
 
-Series previews compare the actual selected ComicVine volume roster with local issue numbers
-and external IDs. Existing IDs that agree with the roster but lack usable metadata are shown
-as **Missing details** and can be approved for an **Update** alongside new exact matches.
-The signed preview binds that refresh eligibility; commit recomputes it and retains ownership,
-conflict, expiry, stale-preview, and idempotency checks. An existing confirmation by itself
-does not authorize an update to a different provider ID.
+Every relevant Issue-card surface must render the exact Issue's confirmed
+ComicVine CDN artwork or a nonblocking placeholder and keep **Map comic**
+available when identity/details are missing. See
+[`docs/ISSUE_CARD_MOUNT_INVENTORY.md`](ISSUE_CARD_MOUNT_INVENTORY.md) for the mount
+contract.
 
-Commit saves the already-fetched roster's issue, volume and cover metadata in the same
-transaction as the approved mappings, preserving existing populated/deep metadata. This
-provides usable basic data even if the bounded post-commit singular-issue hydration cannot
-complete. Deep creator/story-arc enrichment still follows the normal runtime fallback.
-
-An all-confirmed volume with verified roster agreement retains its rows and counts rather
-than returning an empty “unsafe scope.” Mixed reading threads may contain annuals, specials,
-and other titles; those rows remain visible as unmatched, conflicting, or requiring review.
-Bootstrap provider failures return a retryable 503 instead of pretending the reader's series
-has no safe scope. A missing local series name is nullable at the response boundary and is
-filled from live provider data when available.
-
-Regression evidence is in `tests/test_comicvine_production_mapping_cases.py` and <!-- docs-path-check: ignore -->
-`tests/fixtures/comicvine/production_mapping_cases.json`. <!-- docs-path-check: ignore --> The fixture replays public provider
-rosters and the Tom Strong/Starman mapping shapes captured on 2026-10-19; it excludes account
-IDs, credentials, reading progress and history. The original Tom Strong case had 36 confirmed
-IDs, 29 with empty metadata, and a nameless series stub that caused preview response validation
-to fail. Starman combined a confirmed main volume with other titles, causing the old
-“no new exact matches” path to erase the useful classification details.
-
-Confirmation preserves an existing identity's metadata timestamp when only its URL or local
-normalization changes. Those edits are not a provider refresh: stale evidence must remain stale
-through the post-commit fallback's own freshness check.
+Historical Python fixtures and hydrator reports remain provenance only. Current
+regressions live with the native ComicVine handlers and shared issue-card tests.
