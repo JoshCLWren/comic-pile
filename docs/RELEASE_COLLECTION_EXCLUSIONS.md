@@ -32,7 +32,7 @@ Extension flushes within the caller's transaction and never commits internally.
 This keeps the exclusion lock held across adoption and extension and lets a caller
 roll both back together. API callers continue to commit the completed sync run.
 
-This is #3671's guard on existing release tracking, not an Option E activation or
-new scheduler. It does not infer list modes, add workers, create exclusions or
-extend the retiring compiler. The existing transitional extension remains in force
-until the separately reviewed Reading List cutover.
+This is #3671's guard on existing release tracking, not a new scheduler. It does
+not infer list modes, add workers, create exclusions, or extend a retired
+compiler. The current native runtime and its remaining compatibility surfaces are
+documented in [READING_LIST_RUNTIME.md](READING_LIST_RUNTIME.md).
