@@ -289,6 +289,12 @@ export default function ReadingPlanDetailPage() {
   const percent = progressPercent(view.progress.read_issues, view.progress.total_issues)
   const remaining = Math.max(view.progress.total_issues - view.progress.read_issues, 0)
   const continueIssue = view.available_now[0] ?? null
+  const followedReleaseSummary = (view.release_sources ?? [])
+    .map((source) => {
+      const title = source.provider_title?.trim() || `ComicVine volume ${source.provider_volume_id}`
+      return `${title} (${source.enabled ? 'following' : 'paused'})`
+    })
+    .join(', ')
   const upcoming = view.lanes.flatMap((lane) =>
     lane.issues.filter((issue) => issue.availability === 'later'),
   )
