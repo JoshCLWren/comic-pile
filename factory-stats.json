@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T18:12:40.151207+00:00",
+  "generated_at": "2026-11-24T18:28:45.044054+00:00",
   "models": [
     {
       "health": {
@@ -3083,23 +3083,25 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
-          "failures": {},
+          "failed": 1,
+          "failures": {
+            "work_failure": 1
+          },
           "idle": 0,
-          "runs": 0
+          "runs": 1
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 21,
+          "failed": 22,
           "failures": {
             "agent_timeout": 1,
             "control_plane_failure": 3,
             "provider_throttle": 1,
-            "work_failure": 16
+            "work_failure": 17
           },
           "idle": 13,
-          "runs": 34
+          "runs": 35
         }
       }
     },
@@ -3225,13 +3227,13 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 8,
+          "failed": 6,
           "failures": {
-            "agent_timeout": 7,
+            "agent_timeout": 5,
             "control_plane_failure": 1
           },
           "idle": 0,
-          "runs": 8
+          "runs": 6
         },
         "7d": {
           "completed": 4,
@@ -4915,8 +4917,8 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 6,
-          "delivered": 6,
+          "completed": 7,
+          "delivered": 7,
           "failed": 14,
           "failures": {
             "control_plane_failure": 1,
@@ -4924,11 +4926,11 @@
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 21
+          "runs": 22
         },
         "7d": {
-          "completed": 6,
-          "delivered": 6,
+          "completed": 7,
+          "delivered": 7,
           "failed": 14,
           "failures": {
             "control_plane_failure": 1,
@@ -4936,7 +4938,7 @@
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 21
+          "runs": 22
         }
       }
     },
@@ -22609,16 +22611,16 @@
         "24h": {
           "completed": 16,
           "delivered": 15,
-          "failed": 103,
+          "failed": 102,
           "idle": 29,
-          "runs": 148
+          "runs": 147
         },
         "7d": {
           "completed": 55,
           "delivered": 53,
-          "failed": 599,
+          "failed": 600,
           "idle": 283,
-          "runs": 937
+          "runs": 938
         }
       }
     },
@@ -22645,18 +22647,18 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 13,
-          "delivered": 13,
+          "completed": 14,
+          "delivered": 14,
           "failed": 67,
           "idle": 33,
-          "runs": 113
+          "runs": 114
         },
         "7d": {
-          "completed": 54,
-          "delivered": 44,
+          "completed": 55,
+          "delivered": 45,
           "failed": 374,
           "idle": 83,
-          "runs": 511
+          "runs": 512
         }
       }
     },
@@ -22786,10 +22788,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T18:12:40.276216+00:00",
-    "days_elapsed": 23.759,
+    "checked_at": "2026-11-24T18:28:45.159634+00:00",
+    "days_elapsed": 23.77,
     "days_in_month": 30.0,
-    "days_left": 6.24,
+    "days_left": 6.23,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
