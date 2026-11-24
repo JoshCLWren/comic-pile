@@ -1354,6 +1354,127 @@ mod tests {
     }
 
     #[test]
+    fn after_previous_uses_the_nearest_included_predecessor() {
+        let mut source = inputs();
+        source.core.threads = vec![
+            ReadingThread {
+                id: 1,
+                status: "active".into(),
+                title: "Included predecessor".into(),
+            },
+            ReadingThread {
+                id: 2,
+                status: "active".into(),
+                title: "Excluded adjacent entry".into(),
+            },
+            ReadingThread {
+                id: 3,
+                status: "active".into(),
+                title: "Gated series".into(),
+            },
+        ];
+        source.core.issues = vec![
+            ReadingIssue {
+                id: 1,
+                thread_id: 1,
+                position: 1,
+                status: "unread".into(),
+                issue_number: "1".into(),
+            },
+            ReadingIssue {
+                id: 2,
+                thread_id: 2,
+                position: 1,
+                status: "unread".into(),
+                issue_number: "1".into(),
+            },
+            ReadingIssue {
+                id: 3,
+                thread_id: 3,
+                position: 1,
+                status: "unread".into(),
+                issue_number: "1".into(),
+            },
+        ];
+        source.core.stored = vec![
+            StoredThreadEligibility {
+                thread_id: 1,
+                next_issue_id: Some(1),
+                is_blocked: false,
+                queue_position: 1,
+            },
+            StoredThreadEligibility {
+                thread_id: 2,
+                next_issue_id: Some(2),
+                is_blocked: false,
+                queue_position: 2,
+            },
+            StoredThreadEligibility {
+                thread_id: 3,
+                next_issue_id: Some(3),
+                is_blocked: false,
+                queue_position: 3,
+            },
+        ];
+        source.lists.push(ReadingList {
+            list_id: 4199,
+            mode: "loose".into(),
+            name: "Loose crossover".into(),
+            entries: vec![
+                ReadingEntry {
+                    issue_id: 1,
+                    gate: "none".into(),
+                    skipped: false,
+                },
+                ReadingEntry {
+                    issue_id: 2,
+                    gate: "none".into(),
+                    skipped: false,
+                },
+                ReadingEntry {
+                    issue_id: 3,
+                    gate: "after_previous".into(),
+                    skipped: false,
+                },
+            ],
+            overlap_decisions: vec![],
+        });
+        source.excluded_issue_ids = BTreeSet::from([2]);
+
+        let validated = ValidatedReadingInputs::new(source.clone(), &BTreeMap::new()).unwrap();
+        let frontiers = validated.frontier_blockers().unwrap();
+        let gated = frontiers
+            .iter()
+            .find(|frontier| frontier.issue_id == 3)
+            .expect("gated frontier");
+        assert_eq!(gated.unsatisfied.len(), 1);
+        assert_eq!(gated.unsatisfied[0].source_issue_id, 1);
+        assert!(gated.unsatisfied[0].origin.contains("after_previous"));
+        assert!(frontiers.iter().all(|frontier| frontier.issue_id != 2));
+        assert_eq!(
+            validated
+                .eligible_frontiers()
+                .unwrap()
+                .into_iter()
+                .map(|frontier| frontier.issue_id)
+                .collect::<Vec<_>>(),
+            vec![1]
+        );
+
+        source.core.issues[0].status = "read".into();
+        let validated = ValidatedReadingInputs::new(source, &BTreeMap::new()).unwrap();
+        assert_eq!(
+            validated
+                .eligible_frontiers()
+                .unwrap()
+                .into_iter()
+                .map(|frontier| frontier.issue_id)
+                .collect::<Vec<_>>(),
+            vec![3]
+        );
+    }
+
+    #[test]
     fn execution_capability_checks_cycles_read_and_excluded_nodes_and_unresolved_references() {
         let valid = ValidatedReadingInputs::new(inputs(), &BTreeMap::new())
             .ok()
