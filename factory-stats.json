@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T17:53:48.843224+00:00",
+  "generated_at": "2026-11-24T18:12:40.151207+00:00",
   "models": [
     {
       "health": {
@@ -2988,7 +2988,7 @@
     {
       "health": {
         "cooldown_until": null,
-        "last_outcome": "work_failure",
+        "last_outcome": "no_work",
         "status": "healthy"
       },
       "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
@@ -2999,8 +2999,8 @@
           "delivered": 0,
           "failed": 0,
           "failures": {},
-          "idle": 0,
-          "runs": 0
+          "idle": 1,
+          "runs": 1
         },
         "7d": {
           "completed": 0,
@@ -3010,8 +3010,8 @@
             "control_plane_failure": 3,
             "work_failure": 16
           },
-          "idle": 4,
-          "runs": 23
+          "idle": 5,
+          "runs": 24
         }
       }
     },
@@ -3177,12 +3177,12 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 31,
+          "failed": 30,
           "failures": {
-            "control_plane_failure": 31
+            "control_plane_failure": 30
           },
           "idle": 30,
-          "runs": 61
+          "runs": 60
         }
       }
     },
@@ -4917,24 +4917,26 @@
         "24h": {
           "completed": 6,
           "delivered": 6,
-          "failed": 13,
+          "failed": 14,
           "failures": {
             "control_plane_failure": 1,
+            "provider_throttle": 1,
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 20
+          "runs": 21
         },
         "7d": {
           "completed": 6,
           "delivered": 6,
-          "failed": 13,
+          "failed": 14,
           "failures": {
             "control_plane_failure": 1,
+            "provider_throttle": 1,
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 20
+          "runs": 21
         }
       }
     },
@@ -22608,14 +22610,14 @@
           "completed": 16,
           "delivered": 15,
           "failed": 103,
-          "idle": 28,
-          "runs": 147
+          "idle": 29,
+          "runs": 148
         },
         "7d": {
           "completed": 55,
           "delivered": 53,
-          "failed": 600,
-          "idle": 282,
+          "failed": 599,
+          "idle": 283,
           "runs": 937
         }
       }
@@ -22645,16 +22647,16 @@
         "24h": {
           "completed": 13,
           "delivered": 13,
-          "failed": 66,
+          "failed": 67,
           "idle": 33,
-          "runs": 112
+          "runs": 113
         },
         "7d": {
           "completed": 54,
           "delivered": 44,
-          "failed": 373,
+          "failed": 374,
           "idle": 83,
-          "runs": 510
+          "runs": 511
         }
       }
     },
@@ -22784,10 +22786,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T17:53:48.966280+00:00",
-    "days_elapsed": 23.746,
+    "checked_at": "2026-11-24T18:12:40.276216+00:00",
+    "days_elapsed": 23.759,
     "days_in_month": 30.0,
-    "days_left": 6.25,
+    "days_left": 6.24,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
