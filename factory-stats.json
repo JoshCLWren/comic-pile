@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T17:19:41.793603+00:00",
+  "generated_at": "2026-11-24T17:37:11.182346+00:00",
   "models": [
     {
       "health": {
@@ -4915,26 +4915,26 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 5,
-          "delivered": 5,
+          "completed": 6,
+          "delivered": 6,
           "failed": 13,
           "failures": {
             "control_plane_failure": 1,
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 19
+          "runs": 20
         },
         "7d": {
-          "completed": 5,
-          "delivered": 5,
+          "completed": 6,
+          "delivered": 6,
           "failed": 13,
           "failures": {
             "control_plane_failure": 1,
             "work_failure": 12
           },
           "idle": 1,
-          "runs": 19
+          "runs": 20
         }
       }
     },
@@ -11541,12 +11541,10 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 1,
-          "failures": {
-            "provider_quota": 1
-          },
+          "failed": 0,
+          "failures": {},
           "idle": 0,
-          "runs": 1
+          "runs": 0
         },
         "7d": {
           "completed": 0,
@@ -22645,18 +22643,18 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 12,
-          "delivered": 12,
+          "completed": 13,
+          "delivered": 13,
           "failed": 65,
           "idle": 33,
-          "runs": 110
+          "runs": 111
         },
         "7d": {
-          "completed": 53,
-          "delivered": 43,
+          "completed": 54,
+          "delivered": 44,
           "failed": 373,
           "idle": 83,
-          "runs": 509
+          "runs": 510
         }
       }
     },
@@ -22704,9 +22702,9 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 3,
+          "failed": 2,
           "idle": 16,
-          "runs": 19
+          "runs": 18
         },
         "7d": {
           "completed": 0,
@@ -22786,10 +22784,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T17:19:41.964914+00:00",
-    "days_elapsed": 23.722,
+    "checked_at": "2026-11-24T17:37:11.351091+00:00",
+    "days_elapsed": 23.734,
     "days_in_month": 30.0,
-    "days_left": 6.28,
+    "days_left": 6.27,
     "in_use": false,
     "label": "not in use yet",
     "metrics": {
