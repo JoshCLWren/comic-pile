@@ -185,6 +185,7 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   const beforeCard = await getIssueCard(page, targetIssueId)
   const beforeHistory = await getIssueHistory(page, targetIssueId)
   const beforeDependencies = await getIssueDependencies(page, targetIssueId)
+  const beforeDeletedList = await getReadingList(page, deletedList.id)
   const beforeSurvivingList = await getReadingList(page, survivingList.id)
   expect(beforeCard).toEqual(rating.issue)
   expect(beforeHistory).toHaveLength(1)
