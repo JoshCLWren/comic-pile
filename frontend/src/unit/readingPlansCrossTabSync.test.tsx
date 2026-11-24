@@ -161,6 +161,34 @@ it('supersedes an initial list request when another tab changes a plan (#5686)',
   expect(screen.queryByText('QA-F-Order')).not.toBeInTheDocument()
 })
 
+it('supersedes an initial list request on visibility without BroadcastChannel (#5686)', async () => {
+  vi.stubGlobal('BroadcastChannel', undefined)
+  let finishInitial: (plans: Array<typeof plan>) => void = () => undefined
+  const initialRequest = new Promise<Array<typeof plan>>((resolve) => {
+    finishInitial = resolve
+  })
+  mockList.mockReturnValueOnce(initialRequest)
+  mockList.mockResolvedValue([{ ...plan, name: 'QA-F-Order-Visible' }])
+  renderPlansIndex()
+  await waitFor(() => expect(mockList).toHaveBeenCalledTimes(1))
+
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'))
+    await Promise.resolve()
+  })
+
+  // Focus recovery must not join a request that started before the remote commit.
+  await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2))
+  expect(await screen.findByText('QA-F-Order-Visible')).toBeInTheDocument()
+
+  await act(async () => {
+    finishInitial([plan])
+    await initialRequest
+  })
+  expect(screen.getByText('QA-F-Order-Visible')).toBeInTheDocument()
+  expect(screen.queryByText('QA-F-Order')).not.toBeInTheDocument()
+})
+
 it('reconciles the plans list when another tab creates a plan (#5686)', async () => {
   const created = { ...plan, id: 2, name: 'QA-F-Order-New' }
   mockList.mockResolvedValueOnce([plan])

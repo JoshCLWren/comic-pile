@@ -27,7 +27,7 @@ export default function ContinuityPlansIndexPage() {
   const plansQuery = useReadingPlans()
   // Plan writes committed in another tab (and a tab regaining focus) refresh
   // this list instead of leaving a renamed, added, or deleted plan stale (#5686).
-  useReadingPlansCrossTabSync(plansQuery.refetch)
+  useReadingPlansCrossTabSync()
   const deletePlan = useDeleteReadingPlan()
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null)
   const [cblChooserOpen, setCblChooserOpen] = useState(false)

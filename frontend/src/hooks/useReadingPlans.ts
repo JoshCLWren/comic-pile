@@ -44,11 +44,10 @@ export function useReadingPlans() {
  * cross-tab data channel, so another tab invalidates the plan queries instead
  * of waiting out the 30s `staleTime` (or requiring a manual reload).
  * Re-focusing the tab also refreshes the list, covering browsers without
- * `BroadcastChannel` and tabs that missed a message while suspended.
- *
- * @param refetch - Refetches the rendered plans list.
+ * `BroadcastChannel` and tabs that missed a message while suspended. Both
+ * paths cancel an older pending read so they cannot reuse pre-commit data.
  */
-export function useReadingPlansCrossTabSync(refetch: () => void): void {
+export function useReadingPlansCrossTabSync(): void {
   const client = useQueryClient()
 
   useEffect(
@@ -64,7 +63,7 @@ export function useReadingPlansCrossTabSync(refetch: () => void): void {
   useEffect(() => {
     function onTabFocus(): void {
       if (document.visibilityState !== 'visible') return
-      refetch()
+      void invalidateReadingPlansAfterCrossTabChange(client)
     }
     document.addEventListener('visibilitychange', onTabFocus)
     window.addEventListener('focus', onTabFocus)
@@ -72,7 +71,7 @@ export function useReadingPlansCrossTabSync(refetch: () => void): void {
       document.removeEventListener('visibilitychange', onTabFocus)
       window.removeEventListener('focus', onTabFocus)
     }
-  }, [refetch])
+  }, [client])
 }
 
 export function useReadingPlanReader(
