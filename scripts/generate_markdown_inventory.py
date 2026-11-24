@@ -57,7 +57,13 @@ def tracked_markdown_files() -> list[str]:
 def _linked_markdown_targets(root: Path) -> set[str]:
     """Return repository Markdown targets linked from canonical entry points."""
     targets: set[str] = set()
-    for source in ("README.md", "AGENTS.md", "CONTRIBUTING.md", "LOCAL_TESTING.md", "docs/README.md"):
+    for source in (
+        "README.md",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "LOCAL_TESTING.md",
+        "docs/README.md",
+    ):
         source_path = root / source
         if not source_path.is_file():
             continue

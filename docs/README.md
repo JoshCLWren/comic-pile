@@ -51,7 +51,9 @@ The migration replaces several competing or obsolete entry points with one repos
 | Markdown files had no exhaustive ownership record | Documentation CI renders the exhaustive Markdown inventory on demand without committing shared generated state | CI artifact |
 | Human-facing architecture and troubleshooting material competed with code-coupled contracts | `docs/WIKI_HANDOFF.md` defines the structured Wiki and links code-coupled topics back here | Wiki / Repository |
 
-The inventory generator remains available for audits through the Documentation workflow's `markdown-inventory` artifact. The rendered inventory is intentionally not committed: Markdown files can still change concurrently, and a tracked generated inventory would turn unrelated pull requests into conflicts over shared generated state.
+The inventory generator remains available for audits through the Documentation workflow's `markdown-inventory` artifact. It classifies explicit historical markers and dated recovery/report records as historical, detects supersession notices, and treats Markdown linked from the root/docs entry points as active. Unlinked documents require content review instead of an automatic Wiki move. The generated `docs/MARKDOWN_INVENTORY.md` is excluded from its own input so regeneration stays idempotent.
+
+The rendered inventory is intentionally not committed: Markdown files can still change concurrently, and a tracked generated inventory would turn unrelated pull requests into conflicts over shared generated state.
 
 ## Documentation maintenance
 
