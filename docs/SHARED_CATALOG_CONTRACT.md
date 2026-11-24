@@ -1,6 +1,7 @@
 # Shared Catalog Identity Contract
 
-**Issue:** #3220 (child of #3216)  
+**Issue:** #3220 (child of #3216)
+
 **Status:** Accepted schema contract; implementation notes below distinguish
 current native behavior from the retired Python design.
 

@@ -39,7 +39,7 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 **Key Points**:
 
 - New client resources are added under `/api/v2/*`
-- Older `/api/v1/*` and unversioned aliases survive only where the generated inventory lists an active contract
+- Older `/api/v1/*` and unversioned aliases survive only where the router, generated same-path contract, and ingress still publish them; the v2 inventory is not an exhaustive compatibility-route registry
 - Every deployed `/api/*` operation is served by native Rust; an API version is a wire contract, not a runtime
 - `docs/api/v2-route-inventory.json` is the authoritative per-operation inventory of consumers and ingress destinations
 - Route source fragments live in `docs/api/route-fragments/`; `vercel.json` and the inventory are generated and bot-owned
@@ -75,7 +75,7 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 **Key Points**:
 
 - Frontend built as static output served from `/static/react/`
-- `vercel.json` routes every `/api/*` request to `api/native_roll.rs`; unknown API paths return a Rust JSON 404
+- The production workflow generates Rust-only ingress for `api/native_roll.rs`; unknown API paths return a Rust JSON 404. The checked-in generated `vercel.json` can retain retired function entries until bot-owned regeneration lands
 - Production deployments from `main` branch only
 - Vercel Preview environments intentionally unsupported
 - Database hosted externally (Neon PostgreSQL)
