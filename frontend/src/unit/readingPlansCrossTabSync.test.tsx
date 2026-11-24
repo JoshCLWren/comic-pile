@@ -244,6 +244,25 @@ it('refreshes the plans list when the tab regains focus (#5686)', async () => {
   expect(mockList).toHaveBeenCalledTimes(2)
 })
 
+it('ignores focus refresh when the tab is hidden (#5686)', async () => {
+  mockList.mockResolvedValueOnce([plan])
+  renderPlansIndex()
+  expect(await screen.findByText('QA-F-Order')).toBeInTheDocument()
+
+  const original = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+  try {
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+    })
+    expect(mockList).toHaveBeenCalledTimes(1)
+  } finally {
+    if (original) Object.defineProperty(document, 'visibilityState', original)
+  }
+})
+
 it('announces a committed plan delete to other tabs (#5686)', async () => {
   mockDelete.mockResolvedValue(undefined)
   const changes: string[] = []
