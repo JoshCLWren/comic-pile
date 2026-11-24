@@ -126,7 +126,7 @@ async function registerForeignHeaders(
 /**
  * MQA-LIST-004 / #4186: canonical list deletion is owner-scoped and removes only
  * that list. A real reader prerequisite, durable read/rating history, and a
- * second list sharing the same issues must all survive byte-for-byte.
+ * second list sharing the same issues must all survive exactly.
  */
 test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading List deletion', async ({
   authenticatedPage: page,
