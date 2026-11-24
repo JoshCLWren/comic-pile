@@ -164,7 +164,14 @@ export default function Modal({
   useLayoutEffect(() => {
     if (!isOpen || !overlayElement || !isTopmostModal(modalIdRef.current!)) return
     const modal = modalRef.current
-    if (!modal || modal.contains(document.activeElement)) return
+    const activeElement = document.activeElement
+    if (
+      modal
+      && activeElement instanceof HTMLElement
+      && modal.contains(activeElement)
+      && !activeElement.matches(':disabled, [hidden], [aria-hidden="true"]')
+    ) return
+    if (!modal) return
     const focusTarget = getModalFocusableElements(modal)[0] ?? modal
     focusTarget.focus()
   })
