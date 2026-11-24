@@ -7,7 +7,9 @@ startup snapshot tools were removed with the Python application.
 ## Backup
 
 `make backup-postgres` loads `.env`, reads `DATABASE_URL`, writes a compressed
-plain-text dump and keeps the newest `MAX_BACKUPS` files (default 10).
+plain-text dump and keeps the newest `MAX_BACKUPS` files (default 10). Its shell
+URL parser requires an explicit `host:port` and does not remove query parameters,
+so use the direct `pg_dump` command below for standard Neon URLs.
 
 ```bash
 make backup-postgres
@@ -31,6 +33,19 @@ backups/postgres/postgres_backup_comicpile_20261124_164700.sql.gz
 Backups contain reader libraries and account rows. Treat them as production
 data: never commit or upload them. The script verifies gzip integrity but that
 is not a substitute for a restore rehearsal.
+
+For a standard Neon URL (often no explicit port and with `?sslmode=...` query
+parameters), use `pg_dump`'s URL support directly instead of the shell parser:
+
+```bash
+mkdir -p backups/postgres
+pg_dump --dbname="$NEON_DIRECT_DATABASE_URL" --no-owner --no-acl \
+  | gzip > "backups/postgres/postgres_backup_neondb_$(date +%Y%m%d_%H%M%S).sql.gz"
+gzip -t backups/postgres/postgres_backup_neondb_*.sql.gz
+```
+
+Keep the URL in the environment, not in source, logs or issue comments. The
+result is the same plain-text gzip format accepted by the local restore script.
 
 `pg_dump` and `psql` must be installed and match or exceed the server's major
 version. On Debian/Ubuntu, install `postgresql-client`; on macOS, install the
