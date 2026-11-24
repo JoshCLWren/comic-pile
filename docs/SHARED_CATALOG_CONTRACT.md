@@ -1,5 +1,15 @@
 # Shared Catalog Identity Contract
 
+> **Historical implementation contract:** The catalog tables and nullable links
+> below remain in the schema baseline, but the Python service/repository/test
+> workflow described here is retired. No native catalog get-or-create service or
+> equivalent Rust test suite exists at this head. Do not present those Python
+> entry points as current. Current identity/mapping behavior is documented in
+> [COMICVINE_RUNTIME_FALLBACK.md](COMICVINE_RUNTIME_FALLBACK.md) and
+> [API.md](API.md); any catalog runtime work requires separate authorization.
+
+<!-- docs-path-check: historical -->
+
 **Issue:** #3220 (child of #3216)
 **Status:** Accepted (v1)
 **Owners:** DB-scale campaign (#3216)

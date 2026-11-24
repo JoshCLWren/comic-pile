@@ -1,152 +1,122 @@
-# Database Save/Load Guide
+# Database save/load and recovery
 
-Backup, restore, and schema migration for Comic Pile's PostgreSQL database.
+ComicPile uses PostgreSQL-native `pg_dump` / `psql` for backup and restore and
+the Rust refinery runner for schema changes. The Python JSON import/export and
+startup snapshot tools were removed with the Python application.
 
-The Python-era JSON export/import scripts and the in-process startup snapshot
-writer were removed with the Python application. The maintained mechanism is
-PostgreSQL-native `pg_dump`/`psql` through the scripts below, plus the Rust
-migration runner for schema changes.
+## Backup
 
-## PostgreSQL native backups (recommended)
-
-Both scripts read `.env` from the repository root and accept
-`postgresql+asyncpg://`, `postgresql+psycopg://`, `postgresql://`, and
-`postgres://` URLs.
-
-### Quick start
+`make backup-postgres` loads `.env`, reads `DATABASE_URL`, writes a compressed
+plain-text dump and keeps the newest `MAX_BACKUPS` files (default 10).
 
 ```bash
-# Create a compressed backup (default dir: backups/postgres, keeps 10)
 make backup-postgres
-
-# List backups
 make list-postgres-backups
-
-# Restore a specific backup
-make restore-postgres FILE=backups/postgres/postgres_backup_YYYYMMDD_HHMMSS.sql.gz
 ```
-
-### Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | required, from `.env` | Source/target database |
+| `DATABASE_URL` | required from `.env` | Source database |
 | `BACKUP_DIR` | `backups/postgres` | Output directory |
-| `MAX_BACKUPS` | `10` | Rotation count kept by the backup script |
+| `MAX_BACKUPS` | `10` | Rotated backup count |
 
-Backups are gzip-compressed `pg_dump` output named
-`postgres_backup_<timestamp>.sql.gz`. Treat them as production data: they
-contain reader libraries and account rows. Do not commit or upload them.
+The script names files
+`postgres_backup_<database>_<YYYYMMDD_HHMMSS>.sql.gz`. For the local `comicpile`
+database, for example:
 
-### Manual restore procedure
-
-```bash
-# Stop the app dev servers first (Ctrl-C in the make dev terminal)
-
-# Decompress and restore into the configured database
-gunzip -c backups/postgres/postgres_backup_YYYYMMDD_HHMMSS.sql.gz \
-  | psql "postgresql://comicpile:comicpile_password@localhost:5435/comicpile"
-
-# Re-apply migrations to confirm the schema is current
-set -a; . ./.env; set +a
-make migrate
+```text
+backups/postgres/postgres_backup_comicpile_20261124_164700.sql.gz
 ```
 
-Restoring over a live database replaces its contents. Use a disposable
-database for rehearsals; see [`prod-clone-workflow.md`](prod-clone-workflow.md)
-before loading production data locally.
-
-### Prerequisites
+Backups contain reader libraries and account rows. Treat them as production
+data: never commit or upload them. The script verifies gzip integrity but that
+is not a substitute for a restore rehearsal.
 
 `pg_dump` and `psql` must be installed and match or exceed the server's major
-version.
+version. On Debian/Ubuntu, install `postgresql-client`; on macOS, install the
+matching PostgreSQL client package.
+
+## Restore into an empty local database
+
+`make restore-postgres` is deliberately restricted to loopback/local PostgreSQL
+hosts. It refuses Neon, Vercel or any other non-loopback target and has no
+override. It pipes the dump into `psql`; it does **not** drop/recreate the target
+database, and the backup is not created with `--clean`/`--if-exists`. Restoring
+over an existing schema therefore produces duplicate-object errors rather than
+replacing its contents.
+
+Use an empty disposable/local database for restore:
 
 ```bash
-# Ubuntu/Debian
-sudo apt-get install postgresql-client
+# 1. Stop local app/dev servers that use the target.
+# 2. Create an empty target database with your local PostgreSQL tooling.
+# 3. Point DATABASE_URL in .env at that empty loopback database.
+# 4. Restore the selected file.
+make restore-postgres FILE=backups/postgres/postgres_backup_comicpile_YYYYMMDD_HHMMSS.sql.gz
 
-# macOS
-brew install postgresql@16
-
-# RHEL/CentOS
-sudo dnf install postgresql
-```
-
-### Disaster recovery
-
-```bash
-# 1. Stop application traffic
-# 2. Back up the current (possibly broken) database first
-make backup-postgres
-
-# 3. Restore the last known-good backup
-make restore-postgres FILE=backups/postgres/<last-good>.sql.gz
-
-# 4. Verify migrations report no pending work
+# 5. Confirm the schema is current.
 set -a; . ./.env; set +a
 cargo run --locked -p comicpile-migrate -- plan
 ```
 
-### Troubleshooting
+For a manual local restore, the equivalent pipe is:
 
 ```bash
-# Is the database reachable?
-pg_isready -h localhost -p 5435 -U comicpile -d comicpile
-
-# Verify an archive is intact
-gzip -t backups/postgres/postgres_backup_YYYYMMDD_HHMMSS.sql.gz
-
-# Check disk space
-df -h .
+gunzip -c backups/postgres/postgres_backup_comicpile_YYYYMMDD_HHMMSS.sql.gz \
+  | psql "postgresql://comicpile:comicpile_password@localhost:5435/comicpile"
 ```
 
-- `ERROR: .env file not found` — run from a repository checkout that has `.env`.
-- `ERROR: DATABASE_URL not set in .env` — add it (see `.env.example`).
-- Authentication failures — the scripts derive `PGUSER`/`PGPASSWORD` from
-  `DATABASE_URL`; URL-encoded passwords must stay encoded.
-- Permission failures — check ownership of `backups/postgres`.
+That command has the same empty-target requirement. Use
+[`prod-clone-workflow.md`](prod-clone-workflow.md) for the sanctioned production
+export to a fresh local database.
+
+## Production disaster recovery
+
+Do not use `make restore-postgres` against production: it rejects non-loopback
+hosts by design. Production recovery must use the authorized Neon/Vercel operator
+procedure and a verified backup or point-in-time restore target. Preserve the
+current possibly broken database before any destructive action, verify schema
+compatibility with the deployed revision, and keep reader data out of ad-hoc
+local scripts.
+
+The maintained production deployment workflow does not restore dumps. It runs
+the migration planner, applies pending migrations when required, deploys the
+exact `main` SHA and verifies production probes. There is no automatic database
+downgrade.
 
 ## Schema migrations
 
-Schema changes are append-only SQL under `native/migrate/migrations/`, applied
-by the Rust refinery runner. Alembic is retired; do not recreate an `alembic/`
-tree.
+Schema changes are append-only SQL under `native/migrate/migrations/`, applied by
+the Rust refinery runner. Alembic is retired; do not recreate an `alembic/` tree
+or edit an applied migration.
 
 ```bash
-# Append a migration: native/migrate/migrations/V<n>__description.sql
-
-# Apply migrations
 set -a; . ./.env; set +a
-make migrate            # cargo run --locked -p comicpile-migrate -- up
+make migrate
 
-# Verify no work remains (non-zero exit when migrations are pending)
+# Exit 0: current. Exit 10: pending. Other nonzero: failed closed.
 cargo run --locked -p comicpile-migrate -- plan
 
-# Target another database (for example a direct Neon URL)
+# Explicit alternate target, such as a direct Neon URL:
 MIGRATE_DATABASE_URL="postgresql://..." cargo run --locked -p comicpile-migrate -- up
 ```
 
 The runner reads `MIGRATE_DATABASE_URL`, falling back to `DATABASE_URL`, and
-strips SQLAlchemy `+asyncpg`/`+psycopg` suffixes.
+strips historical `+asyncpg` / `+psycopg` suffixes. Production startup requires
+TLS. See [`native/migrate/README.md`](../native/migrate/README.md).
 
-There is no downgrade path. To roll back an applied migration, restore a
-pre-migration backup (above) or write a new forward migration. The production
-deploy workflow runs `up` and then `plan` against Neon before deploying.
+There is no downgrade command. Roll back an applied schema change with a new
+forward migration or an authorized pre-migration backup restore. A previous
+Vercel deployment is not proof of compatibility with the current Neon schema.
 
-## Related commands
+## Troubleshooting
 
-```bash
-make migrate                 # apply migrations
-make backup-postgres         # pg_dump backup
-make restore-postgres FILE=… # restore a backup
-make list-postgres-backups   # list backups
-make prod-migrate            # apply migrations to Neon production
-make dev                     # frontend + native API
-```
-
-## Production-to-local copies
-
-Use [`prod-clone-workflow.md`](prod-clone-workflow.md) for the sanctioned
-export/import path when reproducing production data locally. It covers Neon
-export, safe local restore, and cleanup, and replaces the old ad-hoc JSON
-export/import instructions.
+- `.env` missing or `DATABASE_URL` unset: run from a configured checkout.
+- Restore refuses the host: the script permits only loopback/local targets.
+- Duplicate-object errors: the target was not empty; use a fresh disposable
+  database instead of treating the dump as a replacement archive.
+- Authentication failures: URL-encoded credentials must remain encoded; the
+  scripts derive `PGUSER` / `PGPASSWORD` from `DATABASE_URL`.
+- Permission failures: check ownership of `backups/postgres`.
+- Migration planner exit 10: pending migrations remain; apply them before serving
+  the new application revision.

@@ -5,11 +5,12 @@ distinguish process availability from database readiness.
 
 ## Production liveness
 
-`GET /api/v2/health` is the production liveness probe. It returns HTTP 200
-with `{"status":"ok"}` and the `X-ComicPile-API-Runtime: rust` response
-header, without opening a PostgreSQL connection. Production deployment smoke
-checks status, body and runtime marker, as well as a separate rejected-login
-request.
+`GET /api/v2/health` is the production liveness probe. It returns HTTP 200 with
+`status`, `runtime`, `service`, `build` and `process` objects plus the
+`X-ComicPile-API-Runtime: rust` header, without opening a PostgreSQL connection.
+The build/process fields identify the executable, source revision, compiler,
+lock hash, OS and architecture. Production deployment smoke checks status, body,
+revision and runtime marker, plus a separate rejected-login request.
 
 The public bare `/health`, `/docs`, `/redoc` and `/openapi.json` paths return
 **404 at Vercel ingress** (see the explicit rewrite in `vercel.json`). They do
@@ -38,18 +39,22 @@ same database:
 MIGRATE_DATABASE_URL="postgresql://..." cargo run --locked -p comicpile-migrate -- plan
 ```
 
-`plan` exits non-zero when pending migrations remain, which is the maintained
-deployment gate. The CI `migration-health` job and the production deploy
-workflow use the same runner.
+`plan` exits 0 when current, 10 when migrations are pending, and another nonzero
+code when the check fails closed. The production workflow applies `up` only for
+exit 10. The CI `migration-health` job uses the same runner against disposable
+PostgreSQL.
 
 ## Response semantics
 
-- `200 ok`: the process can serve a request.
+- `200 ok`: the process can serve a request; this does not prove database readiness.
 - `401`: authentication is enforced on protected paths; the health route is public.
-- `503` or a connection failure: the process is unavailable.
+- `503`: a request handler or dependency is unavailable. Database transport
+  failures can return 503 while the process remains alive and healthy.
+- Connection failure or no listener: the process/network path is unavailable.
 
-Responses contain only status fields. They never include connection strings,
-hostnames, credentials, exception text, user data, or queried records.
+Responses and logs never include connection strings, credentials, exception text,
+user data or queried records. Health build metadata is intentional and contains
+no secret values.
 
 ## Logging
 
