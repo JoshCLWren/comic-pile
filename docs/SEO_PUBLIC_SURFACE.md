@@ -36,8 +36,8 @@ The policy is expressed in one place per surface. None of them duplicates anothe
 - `frontend/scripts/generate-route-html.mjs` — prerenders per-route HTML metadata from the
   same table so crawlers see route-specific title, description, canonical, and robots tags
   without executing JavaScript.
-- `app/main.py` — serves the built artifacts and emits `X-Robots-Tag: noindex, nofollow` <!-- docs-path-check: ignore -->
-  for every SPA path except `/`.
+- `vercel.json` — serves built artifacts and applies `X-Robots-Tag: noindex, nofollow`
+  to non-indexable SPA HTML routes.
 
 ## Automated regression coverage
 
@@ -50,18 +50,18 @@ The policy is enforced across artifacts, so drift fails CI rather than shipping:
 - `frontend/src/unit/sitemap.test.ts` and `frontend/scripts/generate-sitemap.test.mjs` — the
   sitemap lists exactly the indexable routes and nothing else.
 - `frontend/src/unit/seoHtmlGeneration.test.ts` — the prerendered metadata generator.
-- `tests/test_seo_crawlability.py` — the served HTTP surface: `X-Robots-Tag` policy, <!-- docs-path-check: ignore -->
-  `robots.txt` content and cache headers, the sitemap, and the no-JavaScript landing HTML.
+- Frontend artifact tests and `frontend/scripts/seo-launch-audit.test.mjs` — the
+  served `X-Robots-Tag` / meta policy, `robots.txt`, sitemap, cache headers and
+  no-JavaScript landing HTML.
 - `frontend/src/test/issue-3068-seo-route-cleanup.spec.ts` — browser-level crawlability and
   redirect-chain behavior.
 
 ## Production launch audit
 
-The regression suites above cover the build output and the FastAPI surface. They
-cannot cover the deployed origin, because the production routing layer (Vercel's
-catch-all) can serve a different document than the backend would. Issue #3905
-is that class of defect: the per-route HTML was built correctly, but the
-deployment never served it.
+The regression suites above cover the build output and route policy. They cannot
+prove what the deployed Vercel origin serves, because ingress can serve a
+different document than the build produced. Issue #3905 was that class of defect:
+the per-route HTML was correct, but deployment did not serve it.
 
 `frontend/scripts/seo-launch-audit.mjs` audits a live origin against the same
 canonical table and reports what the deployment actually serves:

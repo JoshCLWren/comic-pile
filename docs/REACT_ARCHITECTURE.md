@@ -269,11 +269,13 @@ actions) is documented in [`REACT_INTERACTION_POLICY.md`](REACT_INTERACTION_POLI
 - **Client-side (non-server) state** stays in dedicated providers:
   `ToastProvider`, `NavCollapseProvider`, `BugReportRestoreProvider`,
   `PositionMenuProvider`. Dice selection and similar UI state is local.
-- **Session data is server state**: the authoritative current session comes from
-  React Query via `useSession` / `queryKeys.session.*` and the roll bootstrap.
-  The old `SessionContext` global session mirror and the Map-based
-  `CacheContext` were deleted in #2573 — there is exactly one server-state cache
-  (TanStack Query) and one session source (the roll bootstrap).
+- **Reading-history data is server state**: React Query uses `useSessions`,
+  `useSessionDetails`, `useSessionSnapshots`, `queryKeys.session.*` and the
+  service modules in `frontend/src/services/api-sessions.ts` / `api-undo.ts`.
+  Roll's current pending/die/bootstrap state comes from the Roll resource hooks,
+  not a nonexistent `useSession`. The old `SessionContext` global mirror and
+  Map-based `CacheContext` were deleted in #2573 — TanStack Query is the single
+  server-state cache.
 
 ## API Service Layer
 

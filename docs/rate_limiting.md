@@ -22,9 +22,10 @@ authentication requests:
 
 Failed logins are also recorded in PostgreSQL (`failed_login_attempts`) and
 checked per username and per client IP under advisory locks. This durable
-lockout — not the in-process limiter — is the authoritative control and survives
-process restarts. A password reset or successful login clears the applicable
-state according to the auth flow.
+lockout — not the in-process limiter — is authoritative and survives process
+restarts. A successful login clears the username's failure row; password reset
+changes credentials and the credential epoch but does not itself delete all
+username/IP lockout rows.
 
 ## Outbound GitHub issue filing
 
