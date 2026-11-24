@@ -135,31 +135,18 @@ export function DirectReadIssuePanel({
             </p>
           )}
           {canShowEditor && (
-            <div className="space-y-4" data-testid="direct-read-comic-details">
-              {/* Roll parity (#5751): the manual read surface renders the same
-                  provider detail the post-roll pillar does, beside this exact
-                  issue's tags. The card keeps the mapping and read/rate actions
-                  and drops its cover because the provider art is already shown. */}
-              <ComicIdentity issueId={issue.id} />
-              <div className="min-w-0" data-testid="direct-read-issue-tags">
-                <TagSection
-                  targetType="Issue"
-                  targetId={issue.id}
-                  targetLabel={`${threadTitle} #${issue.issue_number}`}
-                />
-              </div>
-              <ComicIssueCard
-                key={issue.id}
-                issueId={issue.id}
-                card={card}
-                threadTitle={threadTitle}
-                issueNumber={String(issue.issue_number)}
-                status={issue.status}
-                variant="compact"
-                showCover={false}
-              />
-            </div>
+            <ComicIssueCard
+              key={issue.id}
+              issueId={issue.id}
+              card={card}
+              threadTitle={threadTitle}
+              issueNumber={String(issue.issue_number)}
+              status={issue.status}
+              variant="compact"
+              showCover={false}
+            />
           )}
+        </div>
         </>
       )}
       {!lookup.isPending && !lookup.isError && !issue && (
