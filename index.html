@@ -59,6 +59,7 @@
 .priority-inline select{background:#111a25;color:var(--text);padding:8px;border:1px solid var(--line);border-radius:8px}
 @media(max-width:740px){.main{padding:16px 12px 32px}.model-list{grid-template-columns:1fr}.kpi{padding:10px}.kpi .value{font-size:23px}.advanced summary .hint{display:none}}
 .recap-h{font-size:13px;margin:18px 0 6px}.recap-verdict{font-size:17px}
+.step-error{color:#ffb6c1}.step-live{display:inline-block;width:9px;height:9px;margin-right:7px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-1px}
 </style>
 <meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; script-src &#39;unsafe-inline&#39;; style-src &#39;unsafe-inline&#39;; connect-src https://raw.githubusercontent.com https://comic-pile.vercel.app; img-src data:; base-uri &#39;none&#39;; form-action &#39;none&#39;; frame-ancestors &#39;none&#39;"></head>
 <body>
@@ -128,6 +129,9 @@
   <section class="panel spaced"><div class="panel-header"><div><h2>Label doctor</h2><p class="section-desc">Audits claim and lifecycle labels in a GitHub Actions run. A dry run changes nothing.</p></div></div><div class="panel-body"><div class="page-controls"><button class="button" id="labels-dry-run">Start dry run</button><button class="button danger" id="labels-repair">Start repair</button></div><p class="hint">Each button starts a GitHub run and returns. Open the run link to read its report.</p></div></section></section>
  <div class="footer">Rotisserie Control Room · GitHub Pages · Published snapshot for public views · Live views and operator actions run in GitHub Actions after sign-in</div>
 </main></div>
+<script>
+const TOKEN=null, REPO="JoshCLWren/comic-pile";
+</script>
 <script>
 "use strict";
 (function () {
@@ -445,8 +449,20 @@ function progress(label, run) {
   const text = label + ": GitHub run " + (run.run_id || "") + " " +
     String(run.status || "queued").replace(/_/g, " ") + "…";
   const status = document.getElementById("operation-status");
-  if (label.startsWith("Operator") && status) status.textContent = text;
-  else liveLine(text);
+  if (!label.startsWith("Operator") || !status) {
+    liveLine(text);
+    return;
+  }
+  status.textContent = text;
+  // Show the run link while the write is still running, not only when it ends.
+  if (/^https:\/\/github\.com\//.test(run.run_url || "") && document.createElement) {
+    const anchor = document.createElement("a");
+    anchor.href = run.run_url;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    anchor.textContent = "Open the GitHub run";
+    status.append(" ", anchor);
+  }
 }
 
 async function waitForRun(accepted, label, limitMs) {
@@ -627,7 +643,6 @@ bootstrapSession();
 </script>
 <script>
 "use strict";
-const TOKEN=null, REPO="JoshCLWren/comic-pile";
 const el=id=>document.getElementById(id);
 const h=x=>String(x==null?"":x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const link=(url,label)=>{try{const u=new URL(url);if(u.protocol!=="https:"||u.hostname!=="github.com")return h(label);return '<a href="'+h(u.href)+'" target="_blank" rel="noopener noreferrer">'+h(label)+'</a>'}catch{return h(label)}};
@@ -637,25 +652,30 @@ const empty=(txt)=>'<div class="empty">'+h(txt)+'</div>';
 const raw=(obj)=>'<pre class="raw">'+h(JSON.stringify(obj,null,2))+'</pre>';
 const state={page:"overview",providers:[],queue:null,status:null,report:null,recap:null,doctor:null,catalogModels:[],mutating:false};
 const modelCache=new Map();
+const LOCAL=TOKEN!==null,JOB_KEY="rotisserie-web-job";
 let modelRequestSeq=0;
 let statusRequest=null;
 const titles={overview:["Control room","Start work and monitor the factory."],queue:["Work queue","Which issues are ready and why others are waiting."],workers:["Workers","Real runs and active lease ownership."],outcomes:["Run history","What work was attempted, delivered or failed."],models:["Models","Browse real, provider-discovered model IDs."],settings:["Settings","Factory limits and priorities."],health:["Diagnostics","Find problems before assigning more workers."]};
 function notice(message,error=false){const box=el("message");box.className="message visible"+(error?" error":"");box.textContent=message;}
 async function request(path,body){return window.hostedRequest(path,body)}
 async function get(name,params={}){const qs=new URLSearchParams(params);const path="/api/"+name+(qs.size?"?"+qs:"");return request(path)}
-async function act(body,source){
+async function act(body,source,resumed){
  if(state.mutating)return;
- state.mutating=true;
+ state.mutating=true;state.lastJob=null;
  const button=source&&source.tagName==="BUTTON"?source:null;
- const operation=({claim:"Requesting claim",finish:"Finishing claim",labels:"Starting label doctor",incident_start:"Starting incident",incident_stop:"Ending incident",provider_switch:"Switching provider",model_switch:"Switching model",run:"Submitting worker request",unstick:"Preparing recovery",cancel:"Stopping worker",sync:"Synchronizing PR",doctor_fix:"Applying safe repairs",release_expired:"Releasing expired leases",settings:"Saving setting",close:"Closing pull request",backoffs_reset:"Resetting quota backoffs",prioritize:"Setting priority"})[body.operation]||"Applying change";
+ const operation=({claim:"Requesting claim",finish:"Finishing claim",labels:"Starting label doctor",incident_start:"Starting incident",incident_stop:"Ending incident",provider_switch:"Switching provider",model_switch:"Switching model",run:"Submitting worker request",unstick:"Unblocking work",cancel:"Stopping worker",sync:"Synchronizing PR",doctor_fix:"Applying safe repairs",release_expired:"Releasing expired leases",settings:"Saving setting",close:"Closing pull request",backoffs_reset:"Resetting quota backoffs",prioritize:"Setting priority"})[body.operation]||"Applying change";
  if(button){button.disabled=true;button.classList.add("is-loading");}
  el("operation-status").textContent=operation+"…";
  el("message").className="message";
  try{
-  const data=await request("/api/command",body);
-  if(data.exit_code!==0)throw Error(data.error||(data.status?data.target+": "+data.status+(data.reason?" ("+data.reason+")":""):"")||"Rotisserie returned "+(data.result||"an error")+" (exit "+data.exit_code+")");
+  let data=resumed?await track(resumed,body.operation,operation):await send(body,operation);
+  if(data.superseded)return;
+  const unstuck=body.operation==="unstick"&&data.plan;
+  if(unstuck)el("unstick-plan").innerHTML=renderUnstick(data);
+  else if(data.exit_code!==0)throw Error(data.error||(data.status?data.target+": "+data.status+(data.reason?" ("+data.reason+")":""):"")||"Rotisserie returned "+(data.result||"an error")+" (exit "+data.exit_code+")");
   const message=el("message");
-  if(data.scheduler_url){
+  if(unstuck)notice(unstickHeadline(data),data.exit_code!==0&&data.exit_code!==3);
+  else if(data.scheduler_url){
    message.className="message visible";
    message.innerHTML="Request submitted. Worker start is not yet confirmed. "+link(data.scheduler_url,"Track GitHub run");
   }else if(data.bridge&&data.bridge.url){
@@ -856,7 +876,7 @@ async function estimateNeon(){
  const t=itemTarget(),box=el("item-content");if(!t){notice("Enter an issue or PR number.",true);return}
  box.innerHTML=empty("Starting the Neon history run for "+t+"…");
  try{
-  const started=ok(await request("/api/command",{operation:"estimate_neon",target:t}));
+  const started=ok(await send({operation:"estimate_neon",target:t},"Starting the Neon history run").finally(()=>{el("operation-status").textContent=""}));
   const run=started.bridge&&started.bridge.run_id;
   if(!run){box.innerHTML=empty("The run was requested. This page cannot read its result here; use the local control room or the CLI with --run.");return}
   for(let i=0;i<60;i++){
@@ -878,24 +898,82 @@ const switchButton=(off,provider,model)=>off?'<button class="button small"'+swit
 function switchBody(b,enabled,reason){const body={operation:b.dataset.model?"model_switch":"provider_switch",provider:b.dataset.provider,enabled,reason};if(b.dataset.model)body.model=b.dataset.model;return body}
 function renderSwitches(){el("provider-switches").innerHTML=state.providers.length?'<div class="table-wrap"><table class="table"><thead><tr><th>Provider</th><th>Setup</th><th>Switch</th><th>Working</th><th>Action</th></tr></thead><tbody>'+state.providers.map(p=>'<tr><td>'+h(p.provider)+'<small>'+h(p.name)+'</small></td><td>'+h(p.setup)+'</td><td>'+badge(switchText(p.disabled,p.disabled_reason),p.disabled?"bad":"good")+'</td><td>'+h(p.working_now??"")+'</td><td>'+switchButton(p.disabled,p.provider)+'</td></tr>').join("")+'</tbody></table></div>':empty("No providers found.")}
 async function loadLeases(){try{const d=await get("leases");el("leases-content").innerHTML=sourceNote(d)+'<div class="hint" style="margin-bottom:12px">Source: '+h(d.source||"unavailable")+' · '+h(d.note||"")+'</div>'+(d.rows||[]).map(x=>'<div class="item"><div class="item-head"><div><div class="item-title">'+h(x.target)+' · '+h(x.holder)+'</div><div class="meta">Expires '+h(x.expires_at||"not recorded")+'</div></div>'+badge(x.active?"Active":"Expired",x.active?"good":"")+'</div></div>').join("")||empty("No lease rows found.")}catch(err){el("leases-content").innerHTML=empty(err.message)}}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const secs=v=>{const s=Math.round(Number(v)||0);return s<60?s+" s":Math.floor(s/60)+" min "+String(s%60).padStart(2,"0")+" s"};
+function remember(job,kind){try{sessionStorage.setItem(JOB_KEY,JSON.stringify({job,kind}))}catch{}}
+function forget(){try{sessionStorage.removeItem(JOB_KEY)}catch{}}
+function recalled(){try{const v=JSON.parse(sessionStorage.getItem(JOB_KEY)||"null");return v&&typeof v.job==="string"&&typeof v.kind==="string"?v:null}catch{return null}}
+function stepRows(view){const rows=[];for(const s of (view&&view.steps)||[]){const last=rows[rows.length-1];if(last&&s.phase===last.phase&&s.total!=null&&last.total!=null)rows[rows.length-1]=s;else rows.push(s)}return rows}
+function renderSteps(view){
+ const rows=stepRows(view),running=view.state==="running";
+ return '<div class="info">'+(running?"Working for ":"Finished in ")+h(secs(view.elapsed))+(running?". The command keeps running if you leave or reload this page.":"")+'</div>'+(rows.map((s,i)=>'<div class="plan-row'+(s.error?" step-error":"")+'">'+(running&&i===rows.length-1?'<span class="step-live"></span>':"")+h(s.step)+(s.url?" · "+link(s.url,"GitHub run"):"")+'<span class="meta"> · '+h(secs(s.at))+'</span></div>').join("")||'<div class="plan-row"><span class="step-live"></span>Starting the factory command…</div>');
+}
+function stepLog(){const v=state.lastJob;return v&&(v.steps||[]).length?'<details class="plan-details"><summary>'+h(stepRows(v).length)+' steps in '+h(secs(v.elapsed))+'</summary>'+renderSteps(v)+'</details>':""}
+async function send(body,label){const data=await request("/api/command",body);return data.job?track(data,body.operation,label):data}
+async function track(view,kind,label){
+ const box=/^unstick/.test(kind)?el("unstick-plan"):null,job=view.job;
+ let misses=0;
+ if(box)state.panel=job;
+ if(kind!=="estimate_neon")remember(job,kind);
+ try{
+  for(;;){
+   if(box&&state.panel!==job)return {superseded:true};
+   state.lastJob=view;
+   const rows=stepRows(view),last=rows[rows.length-1];
+   el("operation-status").textContent=label+"… "+secs(view.elapsed)+(last?" · "+last.step:"");
+   if(box)box.innerHTML=renderSteps(view);
+   if(view.state!=="running")break;
+   await sleep(1000);
+   try{view=await request("/api/jobs/"+encodeURIComponent(view.job));misses=0}
+   catch(err){if(++misses>=3||/no longer known/.test(err.message))throw err}
+  }
+ }finally{const saved=recalled();if(saved&&saved.job===job)forget()}
+ if(view.state==="failed")throw Error((view.result&&view.result.error)||"The factory command failed.");
+ return view.result||{};
+}
+async function resumeJob(){
+ const saved=LOCAL&&recalled();if(!saved)return;
+ let view;try{view=await request("/api/jobs/"+encodeURIComponent(saved.job))}catch{forget();return}
+ if(saved.kind==="unstick-plan")showPlan(el("view-plan"),view);
+ else act({operation:saved.kind},saved.kind==="unstick"?el("unstick"):null,view);
+}
+function unstickHeadline(d){
+ const s=(d.started||[]).length,y=(d.synced||[]).filter(x=>x.ok).length,f=(d.failed||[]).length+(d.not_attempted||[]).length;
+ if(!s&&!y&&!f)return d.error||((d.plan&&d.plan.problems)||[])[0]||"Nothing was started.";
+ return "Unblock work: "+[s?s+" worker"+(s===1?"":"s")+" started":"",y?y+" pull request"+(y===1?"":"s")+" synced with main":"",f?f+" not started because of errors":""].filter(Boolean).join(", ")+".";
+}
+function renderUnstick(d){
+ const p=d.plan||{},by=new Map((p.assignments||[]).map(a=>[a.task&&a.task.target,a]));
+ const row=(title,meta,cls)=>'<div class="plan-row'+(cls?" "+cls:"")+'">'+title+(meta?'<div class="meta">'+meta+'</div>':"")+'</div>';
+ const part=(t,rows)=>rows.length?'<h3 class="recap-h">'+h(t)+'</h3>'+rows.join(""):"";
+ const started=(d.started||[]).map(x=>{const a=by.get(x.target)||{};return row('<strong>'+h(String((a.task&&a.task.action)||"work").replace(/-/g," "))+' '+gh(x.target)+'</strong> · '+(x.url?link(x.url,"GitHub run"):"run not found yet"),h(a.model||""))});
+ const synced=(d.synced||[]).map(x=>row(h(x.text),"",x.ok?"":"step-error"));
+ const errors=[...(d.failed||[]).map(x=>row('<strong>'+gh(x.target)+' not started</strong>',h(x.error),"step-error")),...(d.not_attempted||[]).map(t=>row(gh(t)+" not attempted",h(d.stopped||""),"step-error"))];
+ const skipped=[...(p.held||[]),...(p.needs_person||[]),...(p.waiting_on_main||[]),...(p.obsolete||[])].map(x=>row(h(x.text)));
+ if(p.left_out)skipped.push(row(h(p.left_out+" more could start; the worker limit left them out.")));
+ if(!(d.started||[]).length&&!(d.synced||[]).length)for(const x of p.problems||[])skipped.push(row(h(x)));
+ return '<div class="info">'+h(unstickHeadline(d))+'</div>'+part("Started",started)+part("Synced with main",synced)+part("Errors",errors)+part("Not started, and why",skipped)+stepLog();
+}
 function renderPlan(plan){
  const p=plan||{}, assignments=p.assignments||[], syncs=p.syncs||[],held=p.held||[],problems=p.problems||[],diagnosis=p.diagnosis||[];
  const total=assignments.length+syncs.length;
  let html='<div class="info">'+total+' proposed action'+(total===1?"":"s")+(p.needed_to_reopen_intake?" · "+p.needed_to_reopen_intake+" review slots need clearing":"")+'. The plan will be recalculated on execution.</div>';
  if(assignments.length)html+='<div class="spaced">'+assignments.map(a=>'<div class="plan-row"><strong>'+h((a.task?.action||"advance").replace(/-/g," "))+' '+gh(a.task?.target||"issue:0")+'</strong> · '+h(a.task?.title||"")+'<div class="meta">'+h(a.provider||"")+" · "+h(a.model||"Auto")+(a.task?.why?" · "+h(a.task.why):"")+'</div></div>').join("")+'</div>';
- if(syncs.length)html+='<div class="spaced">'+syncs.map(x=>'<div class="plan-row"><strong>Sync '+gh(x.target||x.ref||"pr:0")+'</strong><div class="meta">'+h(x.why||"Update branch against main")+'</div></div>').join("")+'</div>';
+ if(syncs.length)html+='<div class="spaced">'+syncs.map(x=>'<div class="plan-row"><strong>Sync '+gh("pr:"+x.pr)+'</strong><div class="meta">'+h(x.why||"Update branch against main")+'</div></div>').join("")+'</div>';
  if(!total)html+='<div class="empty">No safe immediate actions. Existing claims remain protected.</div>';
  const details=[...diagnosis.map(x=>x.text),...held.map(x=>x.text),...problems.map(x=>typeof x==="string"?x:x.text||x.message||"Unclassified diagnostic")].filter(Boolean);
  if(details.length)html+='<details class="plan-details"><summary>'+details.length+' waiting conditions and other diagnostics</summary>'+details.map(x=>'<div class="plan-row">'+h(x)+'</div>').join("")+'</details>';
  return html;
 }
-async function showPlan(source){
+async function showPlan(source,resumed){
+ if(state.mutating){notice("Wait for the running change to finish.",true);return}
  const button=source||el("view-plan");
  button.disabled=true;button.classList.add("is-loading");
+ state.lastJob=null;
  el("unstick-plan").innerHTML=empty("Calculating safe actions and checking current claims…");
- try{const d=await get("unstick");el("unstick-plan").innerHTML=renderPlan(d.plan||{});}
- catch(err){el("unstick-plan").innerHTML=empty("Could not prepare recovery plan: "+err.message);}
- finally{button.disabled=false;button.classList.remove("is-loading");}
+ try{let d=resumed||await get("unstick",LOCAL?{background:"1"}:{});if(d.job)d=await track(d,"unstick-plan","Reading the factory");if(d.superseded)return;if(!d.plan)throw Error(d.error||"Rotisserie returned "+(d.result||"no plan"));el("unstick-plan").innerHTML=renderPlan(d.plan)+stepLog();}
+ catch(err){el("unstick-plan").innerHTML=empty("Could not prepare recovery plan: "+err.message)+stepLog();}
+ finally{button.disabled=false;button.classList.remove("is-loading");el("operation-status").textContent="";}
 }
 function target(){const kind=el("work-kind").value;const number=el("target-number").value;return kind==="next"?"":kind+":"+number}
 function preview(){const kind=el("work-kind").value;el("target-field").hidden=kind==="next";el("action-field").hidden=kind!=="pr";el("take-over").disabled=kind==="next";if(kind==="next")el("take-over").checked=false;const args=["rotisserie","factory","run",el("provider").value||"PROVIDER",el("model").value||"auto"];if(kind!=="next")args.push("--target",target()||kind+":NUMBER");if(kind==="pr"&&el("action").value!=="advance")args.push("--action",el("action").value);if(el("force").checked)args.push("--force");if(el("take-over").checked)args.push("--take-over");if(el("slot").value)args.push("--slot",el("slot").value);args.push("--no-wait");el("command-preview").textContent=args.join(" ");el("force-hint").textContent=el("force").checked?"Override bypasses scheduler pacing and capacity limits, but not another active claim. Takeover is a separate explicit action.":"Normal scheduling respects factory limits and existing leases. Overrides never silently steal another worker's claim."}
@@ -975,6 +1053,6 @@ el("doctor-fix").onclick=()=>act({operation:"doctor_fix"},el("doctor-fix"));
 el("release-expired").onclick=()=>act({operation:"release_expired"},el("release-expired"));
 el("queue-explain").onclick=()=>{const number=el("queue-explain-number").value;if(/^[1-9][0-9]*$/.test(number))explain(number);else notice("Enter an issue number to explain.",true)};
 setInterval(()=>{if(!document.hidden&&!state.mutating&&(state.page==="overview"||state.page==="workers"))loadStatus()},30000);
-loadProviders();refresh();preview();
+resumeJob();loadProviders();refresh();preview();
 </script>
 </body></html>
