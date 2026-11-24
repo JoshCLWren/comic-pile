@@ -1035,8 +1035,11 @@ pub async fn bootstrap_v2(
 
     let skipped = session.skipped_thread_ids.clone().unwrap_or_default();
     let legacy_snoozed = session.snoozed_thread_ids.clone().unwrap_or_default();
-    let mut legacy_excluded: HashSet<i32> =
-        skipped.iter().chain(legacy_snoozed.iter()).copied().collect();
+    let mut legacy_excluded: HashSet<i32> = skipped
+        .iter()
+        .chain(legacy_snoozed.iter())
+        .copied()
+        .collect();
     let snoozed = browser_snooze_ids(&excluded);
     let candidate_thread_ids: Vec<i32> = candidates.iter().map(|c| c.thread_id).collect();
     let durable = durable_snoozed(&conn, user, &candidate_thread_ids).await?;
