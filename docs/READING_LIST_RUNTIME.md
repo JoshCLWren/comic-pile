@@ -63,9 +63,15 @@ or missing ComicVine mapping as permission vetoes.
 
 The direct write is `PATCH /api/v2/issues/{issue_id}` with `source: "direct"` and
 an idempotency key. Opening the shared issue card is read-only; nothing persists
-until Save. A direct manual read/rating does not change the die, queue order or an
-existing pending random Roll offer. Only completion of a genuine random Roll offer
-uses the separate automatic-Roll event semantics and its die/queue effects.
+until Save. The owner requires a direct manual read/rating not to change the die,
+queue order or an existing pending random Roll offer. Only completion of a
+genuine random Roll offer uses the separate automatic-Roll event semantics and
+its die/queue effects.
+
+**Known implementation discrepancy:** the direct handler still contains a
+completed-Thread reactivation branch in `native/roll-service/src/issue_service.rs`
+that can change queue placement. That conflicts with the owner's queue-isolation
+requirement and must be repaired under #5525; it is not intended product behavior.
 
 ## Prerequisites and exclusions
 
