@@ -64,13 +64,14 @@ ComicPile should not adopt a generated HTTP client as part of the type-generatio
 
 Use the repository's existing OpenAPI generation and stale-artifact checks. Never edit `frontend/src/generated/openapi.ts` directly. Backend schema changes should regenerate the artifact, and generated aliases should make incompatible transport drift visible through frontend type checking.
 
-The generated schema now covers the deployed native Rust `/api/v2` operations as
-well as the remaining Python/FastAPI routes. `scripts/export_openapi_schema.mjs` (Node, no
-Python needed) merges the Rust-generated `native/contracts/v2-runtime.openapi.json` into the
-frozen Python snapshot `native/contracts/python-legacy.openapi.json` (the former
-`app.openapi()` output; delete its entries as Python handlers are retired);
+The generated schema covers the deployed native Rust operations plus the frozen
+legacy compatibility DTOs. `scripts/export_openapi_schema.mjs` (Node, no
+Python needed) merges the Rust-generated `native/contracts/v2-runtime.openapi.json`
+and `native/contracts/same-path-runtime.openapi.json` over the frozen snapshot
+`native/contracts/python-legacy.openapi.json` (a frozen schema input for legacy
+compatibility DTOs; it is not a live Python handler and is not regenerated);
 a differing native component name is published as `Native<Name>` so a native
-operation never silently references a same-named Python schema. The same run
+schema never silently overwrites a same-named legacy schema. The same run
 also emits `frontend/src/generated/nativeV2Client.ts`, a thin typed request
 client generated from the native operation set and the merged operation types.
 It delegates every call to the existing `HttpClient`; it is not a new transport
