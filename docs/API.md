@@ -158,6 +158,6 @@ These are recorded discrepancies, not supported API guidance:
   session list/get paths even though the router retains only v2 details and
   snapshots. This caller drift requires a separate focused repair.
 - Checked-in `vercel.json` still contains generated references to the removed
-  `api/native_issue.rs` function. The production workflow regenerates routes and
+  `api/native_issue.rs` function. <!-- docs-path-check: ignore --> The production workflow regenerates routes and
   then strips the retired function; route artifacts are bot-owned and must be
   regenerated through that workflow, not hand-edited in a documentation PR.

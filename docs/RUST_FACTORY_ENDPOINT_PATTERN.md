@@ -54,8 +54,7 @@ node scripts/generate_openapi_types.mjs --check
 requiring `RUST_ROLL_TEST_DATABASE_URL` must use disposable PostgreSQL. Full
 workspace, migration and frontend suites run in CI.
 
-Do not claim the retired `tests/test_native_roll_live_ingress.py`,
-`tests/test_native_roll_write_test_guard.py` or `tests/test_vercel_deployment.py`
+Do not claim the retired native-ingress, write-guard or Vercel-deployment pytest
 files still exist; they were removed with the Python runtime.
 
 ## Branch drift

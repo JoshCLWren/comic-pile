@@ -68,5 +68,5 @@ node scripts/generate_openapi_types.mjs --check
 ```
 
 Rust drift tests compare the checked-in same-path document with current DTOs.
-There is no `tests/test_api_v1_canonical_contract.py` file at this head; do not
-claim that deleted test enforces this document.
+The deleted canonical-contract pytest file is not present at this head; do not
+claim that retired test enforces this document.
