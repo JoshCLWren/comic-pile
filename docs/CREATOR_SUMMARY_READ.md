@@ -11,4 +11,4 @@ RUST_ROLL_TEST_DATABASE_URL=postgresql://... \
   cargo test --locked -p comicpile-roll-service --test creators_v2_http <filter>
 ```
 
-The former `app/repositories/creator_summary.py` implementation and Python performance test are historical. Reduced transferred rows alone are not an end-to-end latency guarantee; profile a demonstrated regression before changing query shape.
+The former `app/repositories/creator_summary.py` implementation and Python performance test are historical. <!-- docs-path-check: ignore --> Reduced transferred rows alone are not an end-to-end latency guarantee; profile a demonstrated regression before changing query shape.
