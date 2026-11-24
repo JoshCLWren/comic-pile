@@ -158,10 +158,12 @@ do not apply to local sessions. Detailed Codex routing lives in
 Factory ownership is a connection-pool lock around the next action, not a permanent assignment to the model or worker that first touched the issue or PR.
 
 - Exactly one active owner label may hold an issue or PR at a time.
-- **Inactivity is bounded.** A local `factory:local` lease uses the configured local
-  TTL (default 60 minutes) without GitHub-recorded target activity; a numbered
-  fixed-model lease uses the configured fixed TTL (default 15 minutes) when there
-  is no active workflow run. The controller
+- **Inactivity is bounded.** A local `factory:local` lease uses `FACTORY_LOCAL_LEASE_TTL_SECONDS`
+  (current runtime default 86400 seconds / 24 hours) without GitHub-recorded target
+  activity; a numbered fixed-model lease uses `FACTORY_FIXED_LEASE_TTL_SECONDS`
+  (current runtime default 7500 seconds / 125 minutes) when there is no active
+  workflow run. Older 60-minute/15-minute values in historical guidance are not
+  the current runtime defaults. The controller
   considers trusted lease markers and the target's `updatedAt` timestamp,
   so missing or untrusted marker comments cannot keep an otherwise inactive
   claim alive forever. Do not use the issue's `createdAt` as a lease clock,
@@ -663,7 +665,7 @@ Use the existing canonical marker schemas:
 - issue claim: `<!-- comic-pile-factory-implement-claim-v3:issue-<n>:<worker>:<epoch>:attempt-<n> -->`
 - issue progress: `<!-- comic-pile-factory-implement-progress-v3:issue-<n>:<worker>:<epoch> -->`
 - review claim: `<!-- comic-pile-factory-review-claim-v2:<sha>:<worker>:<epoch> -->`
-- current semantic review verdict: `<!-- comic-pile-factory-semantic-review-v1:pr-<pr>:head-<sha>:reviewer-<worker>:producer-<worker-or-unknown>:verdict-<pass-or-repair> -->`
+- current semantic review verdict: `<!-- comic-pile-factory-semantic-review-v1:pr-<pr>:head-<sha>:reviewer-<worker>:producer-<worker-or-unknown>:verdict-<approve-or-repair> -->`
 - legacy review pass verdict: `<!-- comic-pile-factory-review-v2:<sha>:pass -->`
 - legacy review changes-required verdict: `<!-- comic-pile-factory-review-v2:<sha>:changes-required -->`
 - repair claim: `<!-- comic-pile-factory-fix-claim-v3:<sha>:<worker>:<epoch>:attempt-<n> -->`
@@ -695,7 +697,7 @@ Updated by: <durable worker ID and UTC timestamp>
 
 Record observed facts, distinguish local checks from CI, include no secrets, and keep the packet short. A takeover worker reads the current packet before reconstructing context, verifies that its recorded head still matches, and updates or discards stale claims instead of trusting them blindly. The packet is operational state, not a substitute for commits, tests, review markers, issue acceptance criteria, or truthful labels. Completed and verified work does not require a packet.
 
-Review leases default to 45 minutes. Repair and implementation leases default to 60 minutes after the latest real progress; fixed-model and local TTLs are configurable through `FACTORY_FIXED_LEASE_TTL_SECONDS` and `FACTORY_LOCAL_LEASE_TTL_SECONDS`. Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
+Review leases default to 45 minutes. Repair and implementation leases default to 60 minutes after the latest real progress. Fixed-model and local owner leases use the configurable runtime TTLs documented above (defaults 7500 and 86400 seconds respectively). Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
 
 ## Z.AI free account quota backoff
 
