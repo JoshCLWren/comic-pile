@@ -194,8 +194,8 @@ pub struct BootstrapResponseV2 {
     /// for the complete snooze set.
     pub snoozed_threads: Vec<BootstrapThreadSummary>,
     pub snoozed_count: i64,
-    /// Every owned thread the session currently has snoozed, uncapped, so
-    /// consumers such as Queue can resolve per-row snooze state.
+    /// Every owned thread in this browser's temporary snooze set, uncapped
+    /// within the cookie limit, so Queue can resolve per-row snooze state.
     pub snoozed_thread_ids: Vec<i32>,
     pub skipped_thread_ids: Vec<i32>,
     pub skipped_threads: Vec<BootstrapThreadSummary>,
@@ -992,6 +992,12 @@ pub async fn initialize_session(
     }))
 }
 
+fn browser_snooze_ids(excluded: &HashSet<i32>) -> Vec<i32> {
+    let mut ids: Vec<i32> = excluded.iter().copied().collect();
+    ids.sort_unstable();
+    ids
+}
+
 pub async fn bootstrap_v2(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1018,8 +1024,8 @@ pub async fn bootstrap_v2(
     let native_die = crate::dice_state::bootstrap_die_after_native_command(&conn, user).await?;
     // The die is no longer serialized; it still bounds the offer pool.
     let current_die = native_die.unwrap_or(active.current_die);
-    // Match the offer's browser-owned exclusions before the die limit.
-    // GET remains read-only; legacy durable backoff is display-only below.
+    // Match the offer: bound the eligible pool before removing the browser's
+    // temporary snoozes. The same cookie supplies the displayed snooze IDs.
     let excluded = crate::roll_pool::browser_snoozes(&headers);
     let eligible = crate::roll_pool::offer_frontiers(&candidates, &excluded, current_die);
     // A single reason, derived from the same validated inputs, keeps the empty
@@ -1028,8 +1034,10 @@ pub async fn bootstrap_v2(
     let ids: Vec<i32> = eligible.iter().map(|item| item.issue_id).collect();
 
     let skipped = session.skipped_thread_ids.clone().unwrap_or_default();
-    let snoozed = session.snoozed_thread_ids.clone().unwrap_or_default();
-    let mut legacy_excluded: HashSet<i32> = skipped.iter().chain(snoozed.iter()).copied().collect();
+    let legacy_snoozed = session.snoozed_thread_ids.clone().unwrap_or_default();
+    let mut legacy_excluded: HashSet<i32> =
+        skipped.iter().chain(legacy_snoozed.iter()).copied().collect();
+    let snoozed = browser_snooze_ids(&excluded);
     let candidate_thread_ids: Vec<i32> = candidates.iter().map(|c| c.thread_id).collect();
     let durable = durable_snoozed(&conn, user, &candidate_thread_ids).await?;
     legacy_excluded.extend(&durable);
@@ -1079,9 +1087,8 @@ pub async fn bootstrap_v2(
     }
     let last_read = latest_session_read(&conn, user, session.id).await?;
 
-    // Legacy snooze/skip chips require only their referenced threads. Query
-    // those owner-scoped IDs rather than scanning the whole library to build
-    // blocked, inactive and stale diagnostics that Roll no longer displays.
+    // Resolve only the cookie snoozes and retained skip IDs against the owner.
+    // Never display stale session snoozes as current browser exclusions.
     let display_ids: Vec<i32> = snoozed.iter().chain(skipped.iter()).copied().collect();
     let summary_rows = if display_ids.is_empty() {
         Vec::new()
@@ -1468,6 +1475,34 @@ mod pool_parity_tests {
             thread_id,
             issue_id: thread_id * 100,
             queue_position: thread_id,
+        }
+    }
+
+    #[test]
+    fn displayed_snoozes_use_the_same_cookie_as_the_pool() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            axum::http::header::COOKIE,
+            "comicpile_roll_snoozes=%5B2%2C4%2C8%2C15%5D"
+                .parse()
+                .unwrap(),
+        );
+        let excluded = crate::roll_pool::browser_snoozes(&headers);
+        let candidates: Vec<_> = (1..=30).map(frontier).collect();
+        assert_eq!(super::browser_snooze_ids(&excluded), vec![2, 4, 8, 15]);
+        for (die, count) in [(6, 4), (8, 5), (20, 16)] {
+            let pool = crate::roll_pool::offer_frontiers(&candidates, &excluded, die);
+            assert_eq!(pool.len(), count);
+            assert!(pool.iter().all(|item| !excluded.contains(&item.thread_id)));
+        }
+        headers.remove(axum::http::header::COOKIE);
+        let cleared = crate::roll_pool::browser_snoozes(&headers);
+        assert!(super::browser_snooze_ids(&cleared).is_empty());
+        for die in [6, 8, 20] {
+            assert_eq!(
+                crate::roll_pool::offer_frontiers(&candidates, &cleared, die).len(),
+                die as usize
+            );
         }
     }
 
