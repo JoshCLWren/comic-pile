@@ -885,6 +885,13 @@ async fn extend_adopted_issues_to_following_plans(
     if issue_ids.is_empty() {
         return Ok(());
     }
+    let mut seen_issue_ids = std::collections::HashSet::new();
+    let issue_ids: Vec<i32> = issue_ids
+        .iter()
+        .copied()
+        .filter(|issue_id| seen_issue_ids.insert(*issue_id))
+        .collect();
+    let issue_ids = issue_ids.as_slice();
 
     // Extend enabled sibling sources following the same thread+volume for this user.
     // Linked sources append to authoritative Reading Lists; unlinked legacy sources
