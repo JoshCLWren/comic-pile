@@ -41,6 +41,7 @@ describe('isStaleBrowsePosition', () => {
 
   it('hides an older search while a new one loads', () => {
     expect(isStaleBrowsePosition(search('ultimate'), true, '', 'Batman', 1)).toBe(true)
+    expect(isStaleBrowsePosition({ ...search('ultimate'), query: null }, true, '', 'Batman', 1)).toBe(true)
   })
 
   it('keeps a matching search or folder visible while fetching', () => {
