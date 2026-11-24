@@ -277,7 +277,7 @@ The Docker/nginx and rendered-audit paths serve `static/react`, so tests fail wi
 server serves source assets instead; the build step still runs but is not the
 served bundle.
 
-**Inventory-driven Chromium regression lane** (`make verify-e2e-regression`, `pnpm test:e2e:regression`, scheduled `e2e-chromium-regression` workflow): before running, fixing, or triaging it, load the `e2e-chromium-regression` skill (`.agents/skills/e2e-chromium-regression/SKILL.md`) — it documents the mandatory `TEST_ENVIRONMENT=true` backend contract, scope rules (P0 must stay green; P1/P2 reds reconcile into one canonical issue), and the verified failure-class triage table.
+**Inventory-driven Chromium regression lane** (`make verify-e2e-regression`, `pnpm test:e2e:regression`, scheduled `e2e-chromium-regression` workflow): before running, fixing, or triaging it, load the `e2e-chromium-regression` skill (`.agents/skills/e2e-chromium-regression/SKILL.md`) — it documents the mandatory `TEST_ENVIRONMENT=true` backend contract, scope rules (P0 must stay green; P1/P2 evidence attaches to an existing issue/PR, and a new issue requires explicit owner authorization), and the verified failure-class triage table.
 
 ## Python tooling style
 
