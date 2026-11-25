@@ -1279,10 +1279,11 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
     )
     .await
     .unwrap();
+    let read_ids = issue_ids[..3].to_vec();
     conn.execute(
         "UPDATE issues SET status = 'read', read_at = '2026-11-05T05:02:02.019Z' \
          WHERE id = ANY($1)",
-        &[&issue_ids[..3]],
+        &[&read_ids],
     )
     .await
     .unwrap();
