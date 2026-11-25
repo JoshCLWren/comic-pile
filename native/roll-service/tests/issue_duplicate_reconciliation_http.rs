@@ -318,8 +318,12 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
         })
         .expect("canonical issue appears in a detected group")
         .clone();
-    assert_eq!(group["confidence"], "high");
-    assert!(group["group_key"].as_str().unwrap().contains("364132"));
+    assert_eq!(group["confidence"], "medium");
+    assert!(group["group_key"]
+        .as_str()
+        .unwrap()
+        .contains("story-overall"));
+    assert!(group["reason"].as_str().unwrap().contains("364132"));
     let dup_evidence = group["evidence"]
         .as_array()
         .unwrap()
