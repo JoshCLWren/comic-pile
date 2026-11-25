@@ -1126,7 +1126,8 @@ async fn prepare_identity_edit(
     let alias_matches = alias
         .as_ref()
         .is_none_or(|requested| current_alias.as_deref() == requested.as_deref());
-    let identity_matches = current_identity.as_deref() == Some(comicvine_issue_id.to_string().as_str());
+    let identity_matches =
+        current_identity.as_deref() == Some(comicvine_issue_id.to_string().as_str());
     if alias_matches && identity_matches {
         return Ok(false);
     }
@@ -1258,7 +1259,8 @@ async fn link_confirmed(
     issue_id: i32,
     comicvine_issue_id: i32,
 ) -> Result<(), ApiError> {
-    let identity_id = link_with_source(tx, user_id, issue_id, comicvine_issue_id, "user_confirmed").await?;
+    let identity_id =
+        link_with_source(tx, user_id, issue_id, comicvine_issue_id, "user_confirmed").await?;
     tx.batch_execute("SAVEPOINT comicvine_hydration_enqueue")
         .await
         .map_err(db::query_error)?;
@@ -1638,30 +1640,44 @@ pub async fn replace_identity(
     if reason_too_long(request.reason.as_deref()) {
         return Err(unprocessable("reason is too long"));
     }
+    let alias = requested_alias(request.overall_issue_number.as_deref())?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     crate::queue::lock_queue(&tx, user.id()).await?;
     lock_owned_issue(&tx, user.id(), issue_id).await?;
-    // Python `reason or "replaced by user"`.
-    let reason = request
-        .reason
-        .filter(|reason| !reason.is_empty())
-        .unwrap_or_else(|| "replaced by user".to_owned());
-    tx.execute(
-        "UPDATE issue_external_identity_mappings m \
-         SET status = 'rejected', rejection_reason = $2, updated_at = now() \
-         FROM external_identities e \
-         WHERE m.external_identity_id = e.id AND m.issue_id = $1 \
-           AND m.status = 'confirmed' AND e.provider = 'comicvine'",
-        &[&issue_id, &reason],
+    let changed = prepare_identity_edit(
+        &tx,
+        issue_id,
+        request.comicvine_issue_id,
+        request.expected_version,
+        &alias,
     )
-    .await
-    .map_err(db::query_error)?;
-    link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
+    .await?;
+    if changed {
+        // Python `reason or "replaced by user"`.
+        let reason = request
+            .reason
+            .filter(|reason| !reason.is_empty())
+            .unwrap_or_else(|| "replaced by user".to_owned());
+        tx.execute(
+            "UPDATE issue_external_identity_mappings m \
+             SET status = 'rejected', rejection_reason = $2, updated_at = now() \
+             FROM external_identities e \
+             WHERE m.external_identity_id = e.id AND m.issue_id = $1 \
+               AND m.status = 'confirmed' AND e.provider = 'comicvine'",
+            &[&issue_id, &reason],
+        )
+        .await
+        .map_err(db::query_error)?;
+        link_confirmed(&tx, user.id(), issue_id, request.comicvine_issue_id).await?;
+        finish_identity_edit(&tx, issue_id).await?;
+    }
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     drop(connection);
-    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
+    if changed {
+        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
+    }
     Ok(Json(response))
 }
 
@@ -2051,8 +2067,14 @@ pub async fn import_issue(
         .map_err(db::query_error)?;
     let issue_id: i32 = issue_row.get(0);
     // Python `confirm_comicvine_identity` (no post-commit hydration on import).
-    let external_identity_id =
-        link_with_source(&tx, user.id(), issue_id, request.comicvine_issue_id, "user_confirmed").await?;
+    let external_identity_id = link_with_source(
+        &tx,
+        user.id(),
+        issue_id,
+        request.comicvine_issue_id,
+        "user_confirmed",
+    )
+    .await?;
     // #5592: single-issue adoption is an import commit too — durably enqueue
     // deep-metadata work without waiting for a Roll read. Scheduling runs in a
     // savepoint (same contract as `link_confirmed`): its failure never undoes
