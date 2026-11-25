@@ -76,6 +76,7 @@ const RegisterPage = lazyRoute('register')
 const ForgotPasswordPage = lazyRoute('forgotPassword')
 const ResetPasswordPage = lazyRoute('resetPassword')
 const IdentityInboxPage = lazyRoute('identityInbox')
+const DuplicateReconciliationPage = lazyRoute('duplicateReconciliation')
 const LandingPage = lazyRoute('landing')
 const DemoRollPage = lazyRoute('demoRoll')
 const NotFoundPage = lazyRoute('notFound')
@@ -749,6 +750,15 @@ function AppRoutes() {
             <ServiceUnavailableWrapper>
               <AuthenticatedLayout onBugReportSubmit={submit}>
                 <IdentityInboxPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/duplicate-reconciliation" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <DuplicateReconciliationPage />
               </AuthenticatedLayout>
             </ServiceUnavailableWrapper>
           </ProtectedRoute>
