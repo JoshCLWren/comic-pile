@@ -662,11 +662,9 @@ fn encode_query(value: &str) -> String {
     encoded
 }
 
+/// Delegates to the one credential boundary in [`crate::comicvine_repair`].
 fn provider_key() -> Option<String> {
-    std::env::var("COMICVINE_API_KEY")
-        .ok()
-        .map(|key| key.trim().to_owned())
-        .filter(|key| !key.is_empty())
+    crate::comicvine_repair::provider_api_key()
 }
 
 // ---------------------------------------------------------------------------
@@ -1463,7 +1461,7 @@ async fn hydrate_confirmed_identity_if_configured(
     issue_id: i32,
     started: Instant,
 ) {
-    let Ok(api_key) = std::env::var("COMICVINE_API_KEY") else {
+    let Some(api_key) = crate::comicvine_repair::provider_api_key() else {
         return;
     };
     hydrate_confirmed_identity_inline(
