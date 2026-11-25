@@ -1172,6 +1172,33 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     expect(screen.getByTestId('creator-status-failed')).toHaveTextContent('Refresh failed')
   })
 
+  it('offers manual refresh recovery for failed creator metadata (#5695)', async () => {
+    getIntelligence
+      .mockResolvedValueOnce(
+        intelligenceResponse({
+          comicvine_issue_id: '601',
+          metadata_status: 'refresh_failed',
+          refresh_retry_after_seconds: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        intelligenceResponse({
+          comicvine_issue_id: '601',
+          metadata_status: 'complete',
+          creators: [{ name: 'Recovered Writer', roles: ['writer'] }],
+        }),
+      )
+    refreshMetadata.mockResolvedValue({ issue_id: 1, refreshed: true, comicvine_issue_id: '601' } as never)
+
+    renderIdentity()
+    await waitForLoaded()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }))
+
+    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(screen.getByText('Recovered Writer')).toBeInTheDocument())
+  })
+
   it('shows "ComicVine currently has no creator credits" when metadata_status is deep_fetched_no_credits', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '700',
