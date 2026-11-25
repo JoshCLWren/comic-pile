@@ -15,6 +15,7 @@ import type { ContinuityPlan } from '../services/api-continuity-plans'
 import { cblSourcesApi, type CBLSourceListDiscoveryItem } from '../services/api-cbl-sources'
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
+import CustomCBLChangePreview from './CustomCBLChangePreview'
 import { ComicIssueCover } from './ComicIssueCard'
 import ReadingListSeriesSkipControls from './ReadingListSeriesSkipControls'
 import { buildReplacementModel } from '../utils/readingListReplacementModel'
@@ -32,7 +33,6 @@ import {
   normalizePositions,
   sameEntries,
 } from './customCBLBuilderHelpers'
-
 interface CustomCBLBuilderProps {
   planId?: number
   initialListId?: number
@@ -42,11 +42,9 @@ interface CustomCBLBuilderProps {
   onApplied?: (plan: ContinuityPlan) => void
   onPendingChange?: (pending: boolean) => void
 }
-
 const DEFAULT_MODE: ReadingListMode = 'loose'
 const DEFAULT_GATE: ReadingListGate = 'none'
 const ENTRY_PAGE_SIZE = 30
-
 /**
  * Raised when the owned list changed after the reader opened the replacement
  * review, so the reviewed before/after would no longer describe the target.
@@ -57,7 +55,6 @@ class StaleReadingListReviewError extends Error {
     this.name = 'StaleReadingListReviewError'
   }
 }
-
 /**
  * Raised when another save changed the list after the replacement Undo snapshot
  * was taken. Applying that snapshot would silently discard the later edits.
@@ -68,7 +65,6 @@ class StaleReadingListUndoError extends Error {
     this.name = 'StaleReadingListUndoError'
   }
 }
-
 export default function CustomCBLBuilder({
   planId,
   initialListId,
@@ -125,7 +121,6 @@ export default function CustomCBLBuilder({
   >(null)
   const [replaceError, setReplaceError] = useState<string | null>(null)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
-
   const listsQuery = useQuery({
     queryKey: queryKeys.customCBLs.list(),
     queryFn: customCBLApi.list,
@@ -159,7 +154,6 @@ export default function CustomCBLBuilder({
     },
     enabled: open && replaceOpen && cblSource !== null,
   })
-
   useEffect(() => {
     const list = detailQuery.data
     if (!list) return
@@ -190,7 +184,6 @@ export default function CustomCBLBuilder({
     setMessage(null)
     setExportError(null)
   }, [detailQuery.data, loadedListId])
-
   const createMutation = useMutation({
     mutationFn: () => customCBLApi.create({ name: newName.trim(), issue_ids: [] }),
     onSuccess: async (created) => {
@@ -391,13 +384,11 @@ export default function CustomCBLBuilder({
       setReplaceError(messageFor(error, 'Unable to undo this Reading List replacement.'))
     },
   })
-
   const isPending = createMutation.isPending || saveMutation.isPending || deleteMutation.isPending || applyMutation.isPending || replaceMutation.isPending || undoReplacementMutation.isPending
   useEffect(() => {
     onPendingChange?.(isPending)
     return () => onPendingChange?.(false)
   }, [isPending, onPendingChange])
-
   // The draft and its concurrency token must describe the same revision. A
   // background refetch can update the cache without reseeding the draft.
   const persisted = draftBaseline?.id === selectedId ? draftBaseline : null
@@ -410,14 +401,12 @@ export default function CustomCBLBuilder({
       !sameEntries(entries, persisted.entries)
     )
   }, [description, entries, mode, name, persisted])
-
   const entryNames = useMemo(() => {
     const names = new Map<number, string>()
     for (const entry of entries) names.set(entry.issue_id, `${entry.series_name} #${entry.issue_number}`)
     return names
   }, [entries])
   const nameFor = useCallback((issueId: number): string => entryNames.get(issueId) ?? `Issue #${issueId}`, [entryNames])
-
   const requirements = useMemo(() => computeEntryRequirements(mode, entries), [mode, entries])
   const persistedRequirements = useMemo(
     () => (persisted ? computeEntryRequirements(persisted.mode ?? DEFAULT_MODE, persisted.entries) : new Map<number, number[]>()),
@@ -427,7 +416,6 @@ export default function CustomCBLBuilder({
     () => computeSemanticPreview(entries, persisted, dirty, requirements, persistedRequirements),
     [dirty, entries, persisted, persistedRequirements, requirements],
   )
-
   const saveErrorDetail = useMemo(
     () => (saveMutation.error ? decodeCustomCBLError(saveMutation.error) : null),
     [saveMutation.error],
@@ -460,7 +448,6 @@ export default function CustomCBLBuilder({
   const staleWriteError = saveErrorDetail?.code === 'reading_list_stale_write'
     ? (saveErrorDetail.message ?? 'This Reading List changed since you loaded it. Refresh to review the latest version, then reapply your edit.')
     : null
-
   const matchedEntries = useMemo(() => findMatchedEntries(entries, entrySearch), [entries, entrySearch])
   const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
   const currentPage = Math.min(entryPage, pageCount - 1)
@@ -526,7 +513,6 @@ export default function CustomCBLBuilder({
     setEntryPage(targetPage)
     focusListStart()
   }
-
   const searchResults = (issueQuery.trim() === submittedIssueQuery ? issueSearchQuery.data ?? [] : [])
     .filter((candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id))
     .sort((a, b) => a.series_name.localeCompare(b.series_name) || a.thread_id - b.thread_id)
@@ -871,10 +857,7 @@ export default function CustomCBLBuilder({
               <p id="custom-cbl-search-help" className="text-xs text-[var(--theme-text-muted)]">Find issues, then use the arrow keys to choose a result and Enter to add it. Escape returns to search.</p>
               {insertAt && entries[insertAt.index] && (
                 <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--theme-continuity-accent)]/50 px-3 py-2 text-xs text-[var(--theme-text-primary)]">
-                  <span>
-                    Next added issue will be inserted {insertAt.position} position {insertAt.index + 1}
-                    {' '}({entries[insertAt.index]?.series_name} #{entries[insertAt.index]?.issue_number}).
-                  </span>
+                  <span>Next added issue will be inserted {insertAt.position} position {insertAt.index + 1} ({entries[insertAt.index]?.series_name} #{entries[insertAt.index]?.issue_number}).</span>
                   <button type="button" onClick={() => setInsertAt(null)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-semibold">Cancel insert point</button>
                 </div>
               )}
@@ -1179,28 +1162,7 @@ export default function CustomCBLBuilder({
                   <p role="alert" className="text-sm text-[var(--theme-danger)]">{replaceError}</p>
                 )}
               </div>
-              {semanticPreview && semanticPreview.totalChanged > 0 && (
-                <div className="rounded-xl border border-[var(--theme-border)] p-3" aria-live="polite">
-                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">Pending change preview</p>
-                  <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
-                    First unread before save: {semanticPreview.oldFirstUnread ?? 'None'}. After save: {semanticPreview.newFirstUnread ?? 'None'}.
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Cross-list cycle: checked on save; the save is rejected if a new cross-list cycle would be created.</p>
-                  <ul className="mt-2 space-y-2 text-xs text-[var(--theme-text-primary)]">
-                    {semanticPreview.changed.map((change) => (
-                      <li key={change.issueId} className="rounded-lg border border-[var(--theme-border)] p-2">
-                        <p className="font-semibold">{change.label} {change.isNew ? '(inserted)' : change.moved ? '(moved)' : '(updated)'}</p>
-                        <p>Position: {change.oldPosition ? `#${change.oldPosition}` : 'new'} → #{change.newPosition}</p>
-                        <p>Former immediate predecessor: {change.oldPrev ?? 'None'}. New immediate predecessor: {change.newPrev ?? 'None'}.</p>
-                        <p>Wait impact: {change.oldWait.length > 0 ? change.oldWait.join(', ') : 'None'} → {change.newWait.length > 0 ? change.newWait.join(', ') : 'None'}.</p>
-                      </li>
-                    ))}
-                  </ul>
-                  {semanticPreview.totalChanged > semanticPreview.changed.length && (
-                    <p className="mt-2 text-xs text-[var(--theme-text-muted)]">Showing first {semanticPreview.changed.length} of {semanticPreview.totalChanged} changed entries.</p>
-                  )}
-                </div>
-              )}
+              {semanticPreview && semanticPreview.totalChanged > 0 && <CustomCBLChangePreview preview={semanticPreview} />}
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => saveMutation.mutate({ confirmed: null, undo: persisted ? buildWritePayload(persisted.name, persisted.description ?? '', persisted.mode ?? DEFAULT_MODE, persisted.entries, null, checkpointTargetsFor(persisted.entries)) : null })} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
                 <button type="button" onClick={() => { saveMutation.reset(); setMessage(null); setLoadedListId(null); }} disabled={!dirty || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Cancel</button>
@@ -1234,10 +1196,7 @@ export default function CustomCBLBuilder({
           {staleWriteError && (
             <div role="alert" className="space-y-2 rounded-xl border border-[var(--theme-warning)]/60 p-3">
               <p className="text-sm text-[var(--theme-warning)]">{staleWriteError}</p>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => { void detailQuery.refetch().then((result) => { if (result.isSuccess) { saveMutation.reset(); setLoadedListId(null) } }) }} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)]">Refresh latest list</button>
-                <p className="self-center text-xs text-[var(--theme-text-muted)]">Refreshing loads the latest saved list. Copy any edits you need before refreshing.</p>
-              </div>
+              <button type="button" onClick={() => { void detailQuery.refetch().then((result) => { if (result.isSuccess) { saveMutation.reset(); setLoadedListId(null) } }) }} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)]">Refresh latest list</button>
             </div>
           )}
           {message && <p role="status" className="text-sm text-emerald-300">{message}</p>}
