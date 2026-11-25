@@ -9,6 +9,34 @@ vi.mock('../components/ComicIssueMappingAction', () => ({
   default: ({ issueId }: { issueId: number | null }) => <span data-testid="shared-map-action">{issueId}</span>,
 }))
 
+vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
+  useComicVineIssueIntelligence: () => ({
+    metadata: { image_url: 'https://comicvine.gamespot.com/a/hellboy9.jpg' },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
+
+vi.mock('../pages/RollPage/components/ComicIdentity', () => ({
+  ComicIdentity: ({ issueId }: { issueId: number | null | undefined }) => (
+    <div data-testid="direct-read-comic-identity">{issueId}</div>
+  ),
+}))
+
+vi.mock('../components/Tags/TagSection', () => ({
+  TagSection: ({ targetType, targetId, targetLabel }: {
+    targetType: string
+    targetId: number
+    targetLabel: string
+  }) => (
+    <div data-testid="direct-read-tag-section" data-target={`${targetType}:${targetId}`}>
+      {targetLabel}
+    </div>
+  ),
+}))
+
 const card: IssueCard = {
   issue_id: 37, thread_id: 10, thread_title: 'Hellboy', issue_number: '9',
   status: 'unread', rating: null, read_at: null,
@@ -111,7 +139,9 @@ describe('compact shared issue entry across dense lists', () => {
     expect(screen.getByRole('button', { name: 'Reading and mapping actions for B.P.R.D. #Annual 2' })).toBeEnabled()
     expect(screen.queryByRole('img', { name: 'Cover for Hellboy #9' })).not.toBeInTheDocument()
     expect(screen.getByTestId('comic-issue-card')).toHaveAttribute('aria-label', 'Issue B.P.R.D. #Annual 2')
-    expect(screen.getAllByTestId('comic-issue-cover-placeholder')).toHaveLength(2)
+    // With key={issueId} on the inner card, React remounts instead of updating,
+    // so only the new issue's placeholder exists (no stale cover during transition).
+    expect(screen.getAllByTestId('comic-issue-cover-placeholder')).toHaveLength(1)
   })
 
   it('offers retry after a failed metadata batch but keeps manual action available', async () => {
