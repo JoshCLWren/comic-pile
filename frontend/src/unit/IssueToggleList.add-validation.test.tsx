@@ -296,6 +296,8 @@ describe('IssueToggleList Add box validation (#3586)', () => {
 
     fireEvent.change(input, { target: { value: '19-24' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     expect(ref.current?.hasPendingMutations()).toBe(true)
 
     cleanup()
