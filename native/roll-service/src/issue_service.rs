@@ -1618,6 +1618,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("read".into()),
                 rating: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-unblock-01".into(),
                 source: None,
             },
@@ -1661,6 +1662,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("unread".into()),
                 rating: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-reblock-01".into(),
                 source: None,
             },
@@ -1698,6 +1700,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("unread".into()),
                 rating: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-reactivate-01".into(),
                 source: None,
             },
@@ -1756,6 +1759,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("read".into()),
                 rating: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-default-01".into(),
                 source: None,
             },
