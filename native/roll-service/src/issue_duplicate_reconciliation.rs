@@ -345,7 +345,11 @@ struct DetectedPair {
 }
 
 fn normalized_pair(a: i32, b: i32) -> (i32, i32) {
-    if a < b { (a, b) } else { (b, a) }
+    if a < b {
+        (a, b)
+    } else {
+        (b, a)
+    }
 }
 
 /// Load every verified duplicate relationship for one reader.
@@ -893,8 +897,13 @@ pub async fn preview_reconciliation(
 
     // An arbitrary pair of owned issues is never a reconciliation candidate:
     // re-run the same verified predicate detection uses (#4653).
-    require_detected_pairs(&tx, user.id(), req.canonical_issue_id, &req.duplicate_issue_ids)
-        .await?;
+    require_detected_pairs(
+        &tx,
+        user.id(),
+        req.canonical_issue_id,
+        &req.duplicate_issue_ids,
+    )
+    .await?;
 
     let canonical = load_issue_evidence(&tx, user.id(), req.canonical_issue_id).await?;
     let mut duplicates = Vec::new();
@@ -1046,8 +1055,13 @@ pub async fn apply_reconciliation(
 
     // Re-run detection for the submitted pair set. Row ownership is already
     // proven above, so a non-detected pair is a conflict rather than a 404.
-    require_detected_pairs(&tx, user.id(), req.canonical_issue_id, &req.duplicate_issue_ids)
-        .await?;
+    require_detected_pairs(
+        &tx,
+        user.id(),
+        req.canonical_issue_id,
+        &req.duplicate_issue_ids,
+    )
+    .await?;
 
     // Load evidence and validate token
     let canonical = load_issue_evidence(&tx, user.id(), req.canonical_issue_id).await?;

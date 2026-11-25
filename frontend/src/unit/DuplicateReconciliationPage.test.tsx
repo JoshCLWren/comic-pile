@@ -276,13 +276,16 @@ describe('DuplicateReconciliationPage', () => {
     expect(await screen.findByText('Undid reconciliation 55')).toBeInTheDocument()
   })
 
-  it('keeps a distinct option when the preview is not applicable', async () => {
+  it('explains why Apply is disabled and keeps choices reversible when a preview is not applicable', async () => {
     await renderWithGroup()
     preview.mockResolvedValue(previewResponse({ can_apply: false }))
 
     await userEvent.click(screen.getByRole('button', { name: 'Preview resolution' }))
 
     expect(await screen.findByRole('button', { name: 'Apply reconciliation' })).toBeDisabled()
+    expect(
+      screen.getByText(/Apply is disabled until every flagged alias has an explicit/),
+    ).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByText('Artificial suppression timestamp excluded')).not.toBeInTheDocument()
   })
