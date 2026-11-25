@@ -5,6 +5,7 @@ import { useUndo } from '../hooks/useUndo'
 import { formatDateTime, formatDateTimeWithSeconds } from '../utils/dateFormat'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Breadcrumbs from '../components/Breadcrumbs'
+import { ReadingGraphProblemCard } from '../components/ReadingGraphProblemCard'
 import { useToast } from '../contexts/useToast'
 import { invalidateAfterUndo } from '../query/cacheEffects'
 
@@ -283,6 +284,7 @@ export default function SessionPage() {
         <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Session Details</h1>
         <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Session #{details.session_id}</p>
       </header>
+      <ReadingGraphProblemCard />
 
       <div className="surface-panel p-4 md:p-6 space-y-4 md:space-y-6">
         <div className="grid gap-3 md:gap-4 md:grid-cols-2">

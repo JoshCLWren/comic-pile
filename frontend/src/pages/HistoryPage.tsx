@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useActivity } from '../hooks/useActivity'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
+import { ReadingGraphProblemCard } from '../components/ReadingGraphProblemCard'
 import type { ActivityItem } from '../services/api-activity'
 import { formatDate, formatTime } from '../utils/dateFormat'
 
@@ -159,6 +160,7 @@ export default function HistoryPage() {
             <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
           </div>
         </header>
+        <ReadingGraphProblemCard />
         <div className="text-center text-stone-500">No activity yet</div>
       </div>
     )
@@ -172,6 +174,7 @@ export default function HistoryPage() {
           <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
         </div>
       </header>
+      <ReadingGraphProblemCard />
 
       <div
         id="activity-list"
