@@ -1458,7 +1458,11 @@ async fn query_page(
     let connection = db::checkout(state).await?;
     PAGE_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
     let row = db::query_one_optional(state, connection, &sql, &bindings)
-        .await?
+        .await
+        .map_err(|error| {
+            eprintln!("thread page query failed: {error:?}; sql={sql}");
+            error
+        })?
         .ok_or_else(|| ApiError::Internal("Internal Server Error".to_string()))?;
     let payload: String = row.try_get(0).map_err(db::query_error)?;
     let payload: PagePayload = serde_json::from_str(&payload).map_err(|e| {
