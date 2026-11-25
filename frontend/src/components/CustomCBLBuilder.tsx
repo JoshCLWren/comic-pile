@@ -1,5 +1,5 @@
 import { ReadingListReader } from './ReadingListReader'
-import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL, applyDeletedCustomCBL } from '../query/cacheEffects'
@@ -8,13 +8,14 @@ import { queryKeys } from '../query/queryKeys'
 import Modal from './Modal'
 import { requestSemanticScroll } from '../scroll/scrollCoordinator'
 import {
-  customCBLApi, type CustomCBLEntry, type CustomCBLIssueSearchResult, type CustomCBLWrite,
+  customCBLApi, type CustomCBL, type CustomCBLEntry, type CustomCBLIssueSearchResult, type CustomCBLWrite,
   type ReadingListEntryIntent, type ReadingListGate, type ReadingListMode, type ReadingListPredecessorChange,
 } from '../services/api-custom-cbl'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import { cblSourcesApi, type CBLSourceListDiscoveryItem } from '../services/api-cbl-sources'
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
+import CustomCBLChangePreview from './CustomCBLChangePreview'
 import { ComicIssueCover } from './ComicIssueCard'
 import ReadingListSeriesSkipControls from './ReadingListSeriesSkipControls'
 import { buildReplacementModel } from '../utils/readingListReplacementModel'
@@ -24,12 +25,14 @@ import { computeEntryRequirements, decodeCustomCBLError, describeCyclePath, desc
 import {
   buildWritePayload,
   checkpointTargetsFor,
+  computeSemanticPreview,
   draftEntry,
+  findMatchedEntries,
   messageFor,
+  moveEntryRelativeToEntry,
   normalizePositions,
   sameEntries,
 } from './customCBLBuilderHelpers'
-
 interface CustomCBLBuilderProps {
   planId?: number
   initialListId?: number
@@ -43,11 +46,9 @@ interface CustomCBLBuilderProps {
   onApplied?: (plan: ContinuityPlan) => void
   onPendingChange?: (pending: boolean) => void
 }
-
 const DEFAULT_MODE: ReadingListMode = 'loose'
 const DEFAULT_GATE: ReadingListGate = 'none'
 const ENTRY_PAGE_SIZE = 30
-
 /**
  * Raised when the owned list changed after the reader opened the replacement
  * review, so the reviewed before/after would no longer describe the target.
@@ -58,7 +59,6 @@ class StaleReadingListReviewError extends Error {
     this.name = 'StaleReadingListReviewError'
   }
 }
-
 /**
  * Raised when another save changed the list after the replacement Undo snapshot
  * was taken. Applying that snapshot would silently discard the later edits.
@@ -69,7 +69,6 @@ class StaleReadingListUndoError extends Error {
     this.name = 'StaleReadingListUndoError'
   }
 }
-
 export default function CustomCBLBuilder({
   planId,
   initialListId,
@@ -95,6 +94,7 @@ export default function CustomCBLBuilder({
   const [open, setOpen] = useState(initiallyOpen || initialListId !== undefined)
   const [selectedId, setSelectedId] = useState<number | null>(initialListId ?? null)
   const [loadedListId, setLoadedListId] = useState<number | null>(null)
+  const [draftBaseline, setDraftBaseline] = useState<CustomCBL | null>(null)
   const [newName, setNewName] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -105,8 +105,10 @@ export default function CustomCBLBuilder({
   const [jumpPosition, setJumpPosition] = useState('')
   const [expandedEntryOptions, setExpandedEntryOptions] = useState<number | null>(null)
   const [moveDestinations, setMoveDestinations] = useState<Record<number, string>>({})
+  const [moveTargets, setMoveTargets] = useState<Record<number, string>>({})
   const [issueQuery, setIssueQuery] = useState('')
   const [submittedIssueQuery, setSubmittedIssueQuery] = useState('')
+  const [insertAt, setInsertAt] = useState<{ index: number; position: 'before' | 'after' } | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [exportError, setExportError] = useState<Error | null>(null)
   const [replaceOpen, setReplaceOpen] = useState(false)
@@ -125,7 +127,6 @@ export default function CustomCBLBuilder({
   >(null)
   const [replaceError, setReplaceError] = useState<string | null>(null)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
-
   const listsQuery = useQuery({
     queryKey: queryKeys.customCBLs.list(),
     queryFn: customCBLApi.list,
@@ -159,7 +160,6 @@ export default function CustomCBLBuilder({
     },
     enabled: open && replaceOpen && cblSource !== null,
   })
-
   useEffect(() => {
     const list = detailQuery.data
     if (!list) return
@@ -168,6 +168,7 @@ export default function CustomCBLBuilder({
     // run this effect triggers via setLoadedListId); reseeding then would discard
     // in-progress mode/gate/skip edits before the reader saves them.
     if (list.id === loadedListId) return
+    setDraftBaseline(list)
     setName(list.name)
     setDescription(list.description ?? '')
     setMode(list.mode ?? DEFAULT_MODE)
@@ -183,11 +184,12 @@ export default function CustomCBLBuilder({
     setJumpPosition('')
     setExpandedEntryOptions(null)
     setMoveDestinations({})
+    setMoveTargets({})
+    setInsertAt(null)
     setLoadedListId(list.id)
     setMessage(null)
     setExportError(null)
   }, [detailQuery.data, loadedListId])
-
   const createMutation = useMutation({
     mutationFn: () => customCBLApi.create({ name: newName.trim(), issue_ids: [] }),
     onSuccess: async (created) => {
@@ -203,21 +205,27 @@ export default function CustomCBLBuilder({
     },
   })
   const saveMutation = useMutation({
-    mutationFn: (confirmed: ReadingListPredecessorChange[] | null) => {
+    mutationFn: ({ confirmed }: { confirmed: ReadingListPredecessorChange[] | null; undo?: CustomCBLWrite | null }) => {
       if (!selectedId) throw new Error('Choose a custom CBL first.')
       return customCBLApi.update(
         selectedId,
-        buildWritePayload(name, description, mode, entries, confirmed),
+        buildWritePayload(name, description, mode, entries, confirmed, null, persisted?.updated_at ?? null),
       )
     },
-    onSuccess: async (saved) => {
+    onSuccess: async (saved, variables) => {
       await applyUpdatedCustomCBL(queryClient, saved)
+      setDraftBaseline(saved)
+      setName(saved.name)
+      setDescription(saved.description ?? '')
       setEntries(normalizePositions(saved.entries))
       setMode(saved.mode ?? DEFAULT_MODE)
-      // A later save makes the replacement snapshot stale: undoing it would
-      // silently discard the membership change that was just saved.
-      setUndoPayload(null)
-      setUndoBaseline(null)
+      if (variables.undo) {
+        setUndoPayload(variables.undo)
+        setUndoBaseline(saved.updated_at)
+      } else {
+        setUndoPayload(null)
+        setUndoBaseline(null)
+      }
       setMessage('Custom CBL saved.')
     },
   })
@@ -271,7 +279,7 @@ export default function CustomCBLBuilder({
       if (replaceBaseline !== null && current.updated_at !== replaceBaseline) {
         throw new StaleReadingListReviewError()
       }
-      const savedByIssue = new Map(persisted.entries.map((entry) => [entry.issue_id, entry]))
+      const savedByIssue = new Map(current.entries.map((entry) => [entry.issue_id, entry]))
       const entryIntents: Record<number, ReadingListEntryIntent> = {}
       const checkpointIssueIds: number[] = []
       for (const issueId of selectedIssueIds) {
@@ -280,12 +288,12 @@ export default function CustomCBLBuilder({
         if (saved?.is_checkpoint) checkpointIssueIds.push(issueId)
       }
       const undo = buildWritePayload(
-        persisted.name,
-        persisted.description ?? '',
-        persisted.mode ?? DEFAULT_MODE,
-        persisted.entries,
+        current.name,
+        current.description ?? '',
+        current.mode ?? DEFAULT_MODE,
+        current.entries,
         null,
-        checkpointTargetsFor(persisted.entries),
+        checkpointTargetsFor(current.entries),
       )
       const payload: CustomCBLWrite = {
         name: name.trim(),
@@ -294,6 +302,7 @@ export default function CustomCBLBuilder({
         issue_ids: selectedIssueIds,
         entry_intents: entryIntents,
         checkpoint_issue_ids: checkpointIssueIds,
+        expected_updated_at: current.updated_at,
       }
       if (confirmed) payload.confirmed_predecessor_changes = confirmed
       const saved = await customCBLApi.update(selectedId, payload)
@@ -301,6 +310,9 @@ export default function CustomCBLBuilder({
     },
     onSuccess: async ({ saved, undo, sourceLabel }) => {
       await applyUpdatedCustomCBL(queryClient, saved)
+      setDraftBaseline(saved)
+      setName(saved.name)
+      setDescription(saved.description ?? '')
       setEntries(normalizePositions(saved.entries))
       setMode(saved.mode ?? DEFAULT_MODE)
       setUndoPayload(undo)
@@ -340,18 +352,21 @@ export default function CustomCBLBuilder({
       confirmed: ReadingListPredecessorChange[] | null
     }) => {
       if (!selectedId) throw new Error('Choose a custom CBL first.')
-      if (undoBaseline !== null) {
-        const current = await customCBLApi.get(selectedId)
-        if (current.updated_at !== undoBaseline) throw new StaleReadingListUndoError()
+      const current = await customCBLApi.get(selectedId)
+      if (undoBaseline !== null && current.updated_at !== undoBaseline) {
+        throw new StaleReadingListUndoError()
       }
       // Restoring a snapshot can re-change stored waits (for example, undoing a
       // confirmed strict reorder), so the same confirmation contract applies.
-      const body: CustomCBLWrite = { ...payload }
+      const body: CustomCBLWrite = { ...payload, expected_updated_at: current.updated_at }
       if (confirmed) body.confirmed_predecessor_changes = confirmed
       return customCBLApi.update(selectedId, body)
     },
     onSuccess: async (saved) => {
       await applyUpdatedCustomCBL(queryClient, saved)
+      setDraftBaseline(saved)
+      setName(saved.name)
+      setDescription(saved.description ?? '')
       setEntries(normalizePositions(saved.entries))
       setMode(saved.mode ?? DEFAULT_MODE)
       setUndoPayload(null)
@@ -379,14 +394,14 @@ export default function CustomCBLBuilder({
       setReplaceError(messageFor(error, 'Unable to undo this Reading List replacement.'))
     },
   })
-
   const isPending = createMutation.isPending || saveMutation.isPending || deleteMutation.isPending || applyMutation.isPending || replaceMutation.isPending || undoReplacementMutation.isPending
   useEffect(() => {
     onPendingChange?.(isPending)
     return () => onPendingChange?.(false)
   }, [isPending, onPendingChange])
-
-  const persisted = detailQuery.data
+  // The draft and its concurrency token must describe the same revision. A
+  // background refetch can update the cache without reseeding the draft.
+  const persisted = draftBaseline?.id === selectedId ? draftBaseline : null
   const dirty = useMemo(() => {
     if (!persisted) return false
     return (
@@ -396,16 +411,21 @@ export default function CustomCBLBuilder({
       !sameEntries(entries, persisted.entries)
     )
   }, [description, entries, mode, name, persisted])
-
   const entryNames = useMemo(() => {
     const names = new Map<number, string>()
     for (const entry of entries) names.set(entry.issue_id, `${entry.series_name} #${entry.issue_number}`)
     return names
   }, [entries])
-  const nameFor = (issueId: number): string => entryNames.get(issueId) ?? `Issue #${issueId}`
-
+  const nameFor = useCallback((issueId: number): string => entryNames.get(issueId) ?? `Issue #${issueId}`, [entryNames])
   const requirements = useMemo(() => computeEntryRequirements(mode, entries), [mode, entries])
-
+  const persistedRequirements = useMemo(
+    () => (persisted ? computeEntryRequirements(persisted.mode ?? DEFAULT_MODE, persisted.entries) : new Map<number, number[]>()),
+    [persisted],
+  )
+  const semanticPreview = useMemo(
+    () => computeSemanticPreview(entries, persisted, dirty, requirements, persistedRequirements),
+    [dirty, entries, persisted, persistedRequirements, requirements],
+  )
   const saveErrorDetail = useMemo(
     () => (saveMutation.error ? decodeCustomCBLError(saveMutation.error) : null),
     [saveMutation.error],
@@ -435,14 +455,10 @@ export default function CustomCBLBuilder({
     const resolveName = (issueId: number) => entryNames.get(issueId) ?? `Issue #${issueId}`
     return describeCyclePath(saveErrorDetail.cyclePath, resolveName)
   }, [entryNames, saveErrorDetail])
-
-  const matchedEntries = useMemo(() => {
-    const query = entrySearch.trim().toLocaleLowerCase()
-    return entries.flatMap((entry, index) => {
-      const label = `${entry.series_name} #${entry.issue_number}`
-      return !query || label.toLocaleLowerCase().includes(query) ? [{ entry, index }] : []
-    })
-  }, [entries, entrySearch])
+  const staleWriteError = saveErrorDetail?.code === 'reading_list_stale_write'
+    ? (saveErrorDetail.message ?? 'This Reading List changed since you loaded it. Refresh to review the latest version, then reapply your edit.')
+    : null
+  const matchedEntries = useMemo(() => findMatchedEntries(entries, entrySearch), [entries, entrySearch])
   const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
   const currentPage = Math.min(entryPage, pageCount - 1)
   const visibleEntries = matchedEntries.slice(currentPage * ENTRY_PAGE_SIZE, (currentPage + 1) * ENTRY_PAGE_SIZE)
@@ -472,7 +488,7 @@ export default function CustomCBLBuilder({
       target.scrollIntoView?.({ block: 'center' })
       target.focus({ preventScroll: true })
     })
-  }, [entries, currentPage, entrySearch])
+  }, [entries, currentPage, entrySearch, progressIndex])
   useLayoutEffect(() => {
     if (!nextUnreadIssueId) return
     if (pendingUnreadRevealRef.current !== nextUnreadIssueId) return
@@ -507,7 +523,6 @@ export default function CustomCBLBuilder({
     setEntryPage(targetPage)
     focusListStart()
   }
-
   const searchResults = (issueQuery.trim() === submittedIssueQuery ? issueSearchQuery.data ?? [] : [])
     .filter((candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id))
     .sort((a, b) => a.series_name.localeCompare(b.series_name) || a.thread_id - b.thread_id)
@@ -537,10 +552,29 @@ export default function CustomCBLBuilder({
     setSubmittedIssueQuery(next)
   }
   const addIssue = (candidate: CustomCBLIssueSearchResult) => {
-    setEntries((current) => [...current, draftEntry(candidate, current.length)])
-    setMessage(`Added ${candidate.series_name} #${candidate.issue_number} to this list. Save to keep your changes.`)
+    const anchor = insertAt
+    let targetIndex = entries.length
+    if (anchor) {
+      const base = anchor.position === 'before' ? anchor.index : anchor.index + 1
+      targetIndex = Math.max(0, Math.min(entries.length, base))
+    }
+    setEntries((current) => {
+      const next = [...current]
+      const insertIndex = anchor
+        ? Math.max(0, Math.min(current.length, anchor.position === 'before' ? anchor.index : anchor.index + 1))
+        : current.length
+      next.splice(insertIndex, 0, draftEntry(candidate, insertIndex))
+      return normalizePositions(next)
+    })
+    const label = `${candidate.series_name} #${candidate.issue_number}`
+    setMessage(
+      anchor
+        ? `Inserted ${label} at position ${targetIndex + 1}. Save to keep your changes.`
+        : `Added ${label} to this list. Save to keep your changes.`,
+    )
     setEntrySearch('')
-    setEntryPage(Math.floor(entries.length / ENTRY_PAGE_SIZE))
+    setEntryPage(Math.floor(targetIndex / ENTRY_PAGE_SIZE))
+    setInsertAt(null)
     issueSearchInput.current?.focus()
   }
   const focusSearchResult = (event: KeyboardEvent<HTMLElement>, fromInput = false) => {
@@ -594,6 +628,17 @@ export default function CustomCBLBuilder({
     })
     setEntrySearch('')
     setEntryPage(Math.floor(target / ENTRY_PAGE_SIZE))
+    focusListStart()
+    setExpandedEntryOptions(null)
+    setMessage(null)
+  }
+  const moveIssueRelativeToIssue = (index: number, issueId: number, placement: 'before' | 'after') => {
+    const targetPosition = Number(moveTargets[issueId])
+    const result = moveEntryRelativeToEntry(entries, index, targetPosition, placement)
+    if (!result) return
+    setEntries(result.entries)
+    setEntrySearch('')
+    setEntryPage(Math.floor(result.finalIndex / ENTRY_PAGE_SIZE))
     focusListStart()
     setExpandedEntryOptions(null)
     setMessage(null)
@@ -695,7 +740,7 @@ export default function CustomCBLBuilder({
     }
   }
 
-  const structuredSaveError = confirmationChanges !== null || cycleError !== null
+  const structuredSaveError = confirmationChanges !== null || cycleError !== null || staleWriteError !== null
   const error =
     exportError ??
     (createCycleError ? null : createMutation.error) ??
@@ -824,6 +869,12 @@ export default function CustomCBLBuilder({
               </form>
 
               <p id="custom-cbl-search-help" className="text-xs text-[var(--theme-text-muted)]">Find issues, then use the arrow keys to choose a result and Enter to add it. Escape returns to search.</p>
+              {insertAt && entries[insertAt.index] && (
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--theme-continuity-accent)]/50 px-3 py-2 text-xs text-[var(--theme-text-primary)]">
+                  <span>Next added issue will be inserted {insertAt.position} position {insertAt.index + 1} ({entries[insertAt.index]?.series_name} #{entries[insertAt.index]?.issue_number}).</span>
+                  <button type="button" onClick={() => setInsertAt(null)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-semibold">Cancel insert point</button>
+                </div>
+              )}
 
               {searchResults.length > 0 && (
                 <div ref={issueSearchResults} className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-[var(--theme-border)] p-2" aria-label="Custom CBL issue search results">
@@ -854,6 +905,11 @@ export default function CustomCBLBuilder({
                     )}
                     <p className="text-xs text-[var(--theme-text-muted)]">Changes are saved with the list.</p>
                   </div>
+                  <p className="text-xs text-[var(--theme-text-muted)]" aria-live="polite">
+                    {nextUnreadIssueId && progressIssue
+                      ? `Current position: next unread is #${progressIndex + 1} · ${progressIssue.series_name} #${progressIssue.issue_number} (${progressIssue.status}).`
+                      : 'Current position: all issues in this list are read or skipped.'}
+                  </p>
                   <label className="block text-sm text-[var(--theme-text-primary)]">
                     Find an issue already in this list
                     <input
@@ -917,6 +973,8 @@ export default function CustomCBLBuilder({
                     nameOf={nameFor}
                     expanded={expandedEntryOptions === entry.issue_id}
                     moveDestination={moveDestinations[entry.issue_id] ?? ''}
+                    moveTarget={moveTargets[entry.issue_id] ?? ''}
+                    insertActive={insertAt?.index === index ? insertAt.position : null}
                     disabled={disabled || isPending}
                     onCheckpoint={() => toggleCheckpoint(entry.issue_id)}
                     onMoveEarlier={() => moveIssue(index, -1)}
@@ -927,6 +985,11 @@ export default function CustomCBLBuilder({
                     onSkip={() => toggleSkipped(entry.issue_id)}
                     onDestinationChange={(value) => setMoveDestinations((current) => ({ ...current, [entry.issue_id]: value }))}
                     onMoveToPosition={() => moveIssueToPosition(index, entry.issue_id)}
+                    onMoveTargetChange={(value) => setMoveTargets((current) => ({ ...current, [entry.issue_id]: value }))}
+                    onMoveBeforeIssue={() => moveIssueRelativeToIssue(index, entry.issue_id, 'before')}
+                    onMoveAfterIssue={() => moveIssueRelativeToIssue(index, entry.issue_id, 'after')}
+                    onInsertBefore={() => { setInsertAt({ index, position: 'before' }); issueSearchInput.current?.focus() }}
+                    onInsertAfter={() => { setInsertAt({ index, position: 'after' }); issueSearchInput.current?.focus() }}
                   />
                 ))}
               </ol>
@@ -1102,10 +1165,10 @@ export default function CustomCBLBuilder({
                       disabled={disabled || isPending || dirty}
                       className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50"
                     >
-                      {undoReplacementMutation.isPending ? 'Undoing…' : 'Undo last replacement'}
+                      {undoReplacementMutation.isPending ? 'Undoing…' : 'Undo last save'}
                     </button>
                     <span className="text-xs text-[var(--theme-text-muted)]">
-                      Restores list membership and order only; read history and ratings stay.
+                      Restores the previous saved list state; read history and ratings stay.
                     </span>
                   </div>
                 )}
@@ -1113,8 +1176,10 @@ export default function CustomCBLBuilder({
                   <p role="alert" className="text-sm text-[var(--theme-danger)]">{replaceError}</p>
                 )}
               </div>
+              {semanticPreview && semanticPreview.totalChanged > 0 && <CustomCBLChangePreview preview={semanticPreview} />}
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => saveMutation.mutate(null)} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
+                <button type="button" onClick={() => saveMutation.mutate({ confirmed: null, undo: persisted ? buildWritePayload(persisted.name, persisted.description ?? '', persisted.mode ?? DEFAULT_MODE, persisted.entries, null, checkpointTargetsFor(persisted.entries)) : null })} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
+                <button type="button" onClick={() => { saveMutation.reset(); setMessage(null); setLoadedListId(null); }} disabled={!dirty || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Cancel</button>
                 {planId && (<button type="button" onClick={() => applyMutation.mutate()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50">{applyMutation.isPending ? 'Applying…' : 'Apply to this Reading Plan'}</button>)}
                 <button type="button" onClick={() => void exportList()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Export .cbl</button>
                 <button type="button" onClick={() => { deleteMutation.reset(); deleteReturnFocusRef.current = null; setConfirmDeleteOpen(true) }} disabled={disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-danger)] px-4 text-sm font-bold text-[var(--theme-danger)] disabled:opacity-50">Delete</button>
@@ -1142,6 +1207,12 @@ export default function CustomCBLBuilder({
             </div>
           )}
           {cycleError && <p role="alert" className="text-sm text-[var(--theme-warning)]">{cycleError}</p>}
+          {staleWriteError && (
+            <div role="alert" className="space-y-2 rounded-xl border border-[var(--theme-warning)]/60 p-3">
+              <p className="text-sm text-[var(--theme-warning)]">{staleWriteError}</p>
+              <button type="button" onClick={() => { void detailQuery.refetch().then((result) => { if (result.isSuccess) { saveMutation.reset(); setLoadedListId(null) } }) }} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)]">Refresh latest list</button>
+            </div>
+          )}
           {message && <p role="status" className="text-sm text-emerald-300">{message}</p>}
           {errorText && <p role="alert" className="text-sm text-red-300">{errorText}</p>}
         </div>
@@ -1178,7 +1249,7 @@ export default function CustomCBLBuilder({
           </ul>
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" onClick={() => saveMutation.reset()} disabled={saveMutation.isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Cancel</button>
-            <button type="button" onClick={() => saveMutation.mutate(saveErrorDetail?.predecessorChanges ?? null)} disabled={saveMutation.isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Confirm and save'}</button>
+            <button type="button" onClick={() => saveMutation.mutate({ confirmed: saveErrorDetail?.predecessorChanges ?? null, undo: persisted ? buildWritePayload(persisted.name, persisted.description ?? '', persisted.mode ?? DEFAULT_MODE, persisted.entries, null, checkpointTargetsFor(persisted.entries)) : null })} disabled={saveMutation.isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Confirm and save'}</button>
           </div>
         </div>
       </Modal>

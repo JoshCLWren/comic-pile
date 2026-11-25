@@ -136,6 +136,7 @@ owned_issues AS MATERIALIZED (
     SELECT i.id, i.thread_id, i.position, i.status, i.issue_number,
            i.catalog_issue_id
     FROM issues i JOIN owned_threads t ON t.id = i.thread_id
+    WHERE i.merged_into_issue_id IS NULL
 ),
 owned_lists AS (
     SELECT id, mode, name FROM custom_cbl_lists WHERE user_id = (SELECT user_id FROM me)

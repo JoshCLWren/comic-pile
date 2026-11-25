@@ -143,6 +143,7 @@ describe('saved-list editor series skip controls', () => {
           30001: { gate: 'none', skipped: false },
         },
         checkpoint_issue_ids: [],
+        expected_updated_at: existingList.updated_at,
       })
     })
   })

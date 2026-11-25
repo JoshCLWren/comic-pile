@@ -128,6 +128,10 @@ pub struct ReadingListWrite {
     /// them. A present value is rejected exactly like the Python create path.
     #[serde(default)]
     pub confirmed_predecessor_changes: Option<serde_json::Value>,
+    /// Optimistic concurrency token. When present on update, the write is
+    /// rejected if the list changed since the client last read it.
+    #[serde(default)]
+    pub expected_updated_at: Option<String>,
 }
 
 /// Documentation-only operation for the Reading List collection.
@@ -772,7 +776,7 @@ pub async fn update_reading_list(
     lock_reader(&tx, user.id()).await?;
     let row = tx
         .query_opt(
-            "SELECT name,description,mode,created_at::text FROM custom_cbl_lists
+            "SELECT name,description,mode,created_at::text,updated_at::text FROM custom_cbl_lists
          WHERE id=$1 AND user_id=$2 FOR UPDATE",
             &[&list_id, &user.id()],
         )
@@ -780,6 +784,22 @@ pub async fn update_reading_list(
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
     let current_mode: String = row.get(2);
+    let current_updated_at: String = row.get(4);
+    if let Some(expected) = request.expected_updated_at.as_deref() {
+        if expected != current_updated_at {
+            return Ok((
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({
+                    "detail": {
+                        "code": "reading_list_stale_write",
+                        "message": "This Reading List changed since you loaded it. Refresh to review the latest version, then reapply your edit.",
+                        "updated_at": current_updated_at,
+                    }
+                })),
+            )
+                .into_response());
+        }
+    }
     let mode = validate_mode(request.mode.as_deref().or(Some(&current_mode)))?;
     let old_entries = load_entries(&tx, list_id).await?;
     let old_requirements = stored_requirements(&current_mode, &old_entries);

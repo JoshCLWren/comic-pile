@@ -80,9 +80,9 @@ pub struct ThreadIssueDependenciesResponse {
     pub issues: Vec<IssueDependenciesResponse>,
 }
 
-const DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'), to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2";
+const DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'), to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2 AND i.merged_into_issue_id IS NULL";
 
-const OWNED_SQL: &str = "SELECT i.id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2";
+const OWNED_SQL: &str = "SELECT i.id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2 AND i.merged_into_issue_id IS NULL";
 
 const INCOMING_SQL: &str = "SELECT d.id, si.id, si.issue_number, si.thread_id, st.title FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id WHERE d.target_issue_id = $1 AND st.user_id = $2 ORDER BY d.id";
 
@@ -91,7 +91,7 @@ const OUTGOING_SQL: &str = "SELECT d.id, ti.id, ti.issue_number, ti.thread_id, t
 const THREAD_SQL: &str = "SELECT t.id FROM threads t WHERE t.id = $1 AND t.user_id = $2";
 
 const THREAD_ISSUES_SQL: &str =
-    "SELECT i.id FROM issues i WHERE i.thread_id = $1 ORDER BY i.position, i.id";
+    "SELECT i.id FROM issues i WHERE i.thread_id = $1 AND i.merged_into_issue_id IS NULL ORDER BY i.position, i.id";
 
 const THREAD_INCOMING_SQL: &str = "SELECT d.id, d.target_issue_id, si.id, si.issue_number, si.thread_id, st.title FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id WHERE d.target_issue_id = ANY($1::int[]) AND st.user_id = $2 ORDER BY d.id";
 

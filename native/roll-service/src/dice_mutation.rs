@@ -238,6 +238,7 @@ pub async fn persist_in_transaction(
                 "SELECT i.id FROM issues i
                  JOIN threads t ON t.id = i.thread_id
                  WHERE i.id = $1 AND i.thread_id = $2 AND t.user_id = $3
+                   AND i.merged_into_issue_id IS NULL
                  FOR SHARE OF i, t",
                 &[&issue_id, &command.thread_id(), &user.id()],
             )
