@@ -12881,6 +12881,13 @@
               "null"
             ]
           },
+          "expected_updated_at": {
+            "description": "Optimistic concurrency token. When present on update, the write is\nrejected if the list changed since the client last read it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "issue_ids": {
             "items": {
               "format": "int32",
