@@ -637,3 +637,411 @@ async fn stale_preview_token_and_cross_owner_issue_are_rejected() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
 }
+
+/// Seed the incident shape with configurable timestamps and mapping status.
+/// Returns `(canonical, duplicate, external_identity_id)`.
+async fn seed_pair(
+    ctx: &Ctx,
+    canonical_created: &str,
+    duplicate_created: &str,
+    mapping_status: &str,
+) -> (i32, i32, i32) {
+    let conn = ctx.state.pool.get().await.unwrap();
+    let canonical_thread: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at) \
+             VALUES ($1, 'Story', 'comic', 1, 1, 'active', NOW()) RETURNING id",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let duplicate_thread: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at) \
+             VALUES ($1, 'Overall', 'comic', 1, 2, 'active', NOW()) RETURNING id",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let canonical: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
+             VALUES ($1, '3', 0, 'unread', $2::timestamptz) RETURNING id",
+            &[&canonical_thread, &canonical_created],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let duplicate: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
+             VALUES ($1, '100', 0, 'unread', $2::timestamptz) RETURNING id",
+            &[&duplicate_thread, &duplicate_created],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let identity_id: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'issue', '777001', \
+                     '{\"volume_id\":4050,\"issue_number\":\"100\",\"story_arc_number\":\"3\"}'::json, \
+                     NOW(), NOW()) RETURNING id",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings \
+         (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at) \
+         VALUES ($1, $2, $3, 'test', '{}'::json, NOW(), NOW())",
+        &[&duplicate, &identity_id, &mapping_status],
+    )
+    .await
+    .unwrap();
+    (canonical, duplicate, identity_id)
+}
+
+async fn preview_pair(ctx: &Ctx, canonical: i32, duplicate: i32) -> (StatusCode, Value) {
+    send(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/issue-duplicate-reconciliation/preview",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({
+                "canonical_issue_id": canonical,
+                "duplicate_issue_ids": [duplicate],
+            })),
+        ),
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn candidate_only_mapping_is_not_verified_identity() {
+    let ctx = setup("dupr-candidate").await;
+    let (canonical, duplicate, _) = seed_pair(
+        &ctx,
+        "2026-01-01T00:00:00Z",
+        "2026-11-05T05:11:33Z",
+        "candidate",
+    )
+    .await;
+
+    let (status, detected) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v2/issue-duplicate-reconciliation/detect",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{detected:?}");
+    let groups = detected["groups"].as_array().unwrap();
+    assert!(
+        groups.iter().all(|group| {
+            !group["evidence"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|e| e["issue_id"] == canonical || e["issue_id"] == duplicate)
+        }),
+        "an unreviewed candidate mapping must not be offered as verified identity: {detected:?}"
+    );
+
+    let (status, body) = preview_pair(&ctx, canonical, duplicate).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unrelated_owned_issues_cannot_be_collapsed() {
+    let ctx = setup("dupr-unrelated").await;
+    let (canonical, duplicate, _) = seed_pair(
+        &ctx,
+        "2026-01-01T00:00:00Z",
+        "2026-01-02T00:00:00Z",
+        "confirmed",
+    )
+    .await;
+    // Break the story/overall relationship: no metadata number matches this
+    // issue number and the two numbers differ.
+    let conn = ctx.state.pool.get().await.unwrap();
+    conn.execute(
+        "UPDATE issues SET issue_number = '999' WHERE id = $1",
+        &[&canonical],
+    )
+    .await
+    .unwrap();
+
+    let (status, body) = preview_pair(&ctx, canonical, duplicate).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body:?}");
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/issue-duplicate-reconciliation/apply",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({
+                "canonical_issue_id": canonical,
+                "duplicate_issue_ids": [duplicate],
+                "preview_token": "fabricated-token",
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn suppressed_alias_is_absent_from_roll_candidates() {
+    let ctx = setup("dupr-roll-candidate").await;
+    let (canonical, duplicate, _) = seed_pair(
+        &ctx,
+        "2026-01-01T00:00:00Z",
+        "2026-11-05T05:11:33Z",
+        "confirmed",
+    )
+    .await;
+
+    let (status, eligible) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v2/roll/eligible-issue-ids",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{eligible:?}");
+    let before = eligible["issue_ids"].as_array().unwrap();
+    assert!(before.contains(&json!(canonical)), "{eligible:?}");
+    assert!(before.contains(&json!(duplicate)), "{eligible:?}");
+
+    let (status, preview) = preview_pair(&ctx, canonical, duplicate).await;
+    assert_eq!(status, StatusCode::OK, "{preview:?}");
+    let token = preview["preview_token"].as_str().unwrap().to_owned();
+    let (status, applied) = send(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/issue-duplicate-reconciliation/apply",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({
+                "canonical_issue_id": canonical,
+                "duplicate_issue_ids": [duplicate],
+                "preview_token": token,
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{applied:?}");
+
+    let (status, eligible) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v2/roll/eligible-issue-ids",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{eligible:?}");
+    let after = eligible["issue_ids"].as_array().unwrap();
+    assert!(after.contains(&json!(canonical)), "{eligible:?}");
+    assert!(!after.contains(&json!(duplicate)), "{eligible:?}");
+
+    let (status, bootstrap) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v2/roll/bootstrap",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{bootstrap:?}");
+    let rollable = bootstrap["rollable"].as_array().unwrap();
+    assert!(
+        rollable
+            .iter()
+            .any(|row| row["issue"]["id"].as_i64() == Some(i64::from(canonical))),
+        "{bootstrap:?}"
+    );
+    assert!(
+        rollable
+            .iter()
+            .all(|row| row["issue"]["id"].as_i64() != Some(i64::from(duplicate))),
+        "{bootstrap:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn mixed_read_events_preview_and_apply_agree_per_event() {
+    let ctx = setup("dupr-mixed-reads").await;
+    // The duplicate is older than the canonical: its genuine read predates the
+    // canonical's creation and must survive the canonical-state reconciliation.
+    let (canonical, duplicate, _) = seed_pair(
+        &ctx,
+        "2026-11-10T00:00:00Z",
+        "2026-01-01T00:00:00Z",
+        "confirmed",
+    )
+    .await;
+    let conn = ctx.state.pool.get().await.unwrap();
+    let synthetic: i32 = conn
+        .query_one(
+            "INSERT INTO events (type, timestamp, user_id, issue_id, issue_number) \
+             VALUES ('issue_read', '2025-12-01T00:00:00Z', $1, $2, '100') RETURNING id",
+            &[&ctx.user_id, &duplicate],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let genuine: i32 = conn
+        .query_one(
+            "INSERT INTO events (type, timestamp, user_id, issue_id, issue_number) \
+             VALUES ('issue_read', '2026-06-01T00:00:00Z', $1, $2, '100') RETURNING id",
+            &[&ctx.user_id, &duplicate],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let (status, preview) = preview_pair(&ctx, canonical, duplicate).await;
+    assert_eq!(status, StatusCode::OK, "{preview:?}");
+    let kinds: Vec<&str> = preview["actions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["kind"].as_str().unwrap())
+        .collect();
+    assert!(kinds.contains(&"suppress_synthetic_read_events"), "{kinds:?}");
+    assert!(kinds.contains(&"move_read_events"), "{kinds:?}");
+    let synthetic_evidence = preview["duplicates"][0]["read_events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_id"] == synthetic)
+        .unwrap()
+        .clone();
+    assert_eq!(synthetic_evidence["is_synthetic"], true);
+    let genuine_evidence = preview["duplicates"][0]["read_events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_id"] == genuine)
+        .unwrap()
+        .clone();
+    assert_eq!(genuine_evidence["is_synthetic"], false);
+
+    let token = preview["preview_token"].as_str().unwrap().to_owned();
+    let (status, applied) = send(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/issue-duplicate-reconciliation/apply",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({
+                "canonical_issue_id": canonical,
+                "duplicate_issue_ids": [duplicate],
+                "preview_token": token,
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{applied:?}");
+    let moved = applied["moved_event_ids"].as_array().unwrap();
+    assert!(moved.contains(&json!(genuine)), "{applied:?}");
+    assert!(!moved.contains(&json!(synthetic)), "{applied:?}");
+    let read_at: chrono::DateTime<chrono::Utc> = conn
+        .query_one("SELECT read_at FROM issues WHERE id = $1", &[&canonical])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(read_at.to_rfc3339(), "2026-06-01T00:00:00+00:00");
+    let synthetic_owner: i32 = conn
+        .query_one("SELECT issue_id FROM events WHERE id = $1", &[&synthetic])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(synthetic_owner, duplicate);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn apply_serializes_with_the_shared_queue_lock_before_row_locks() {
+    let ctx = setup("dupr-lock-order").await;
+    let (canonical, duplicate, _) = seed_pair(
+        &ctx,
+        "2026-01-01T00:00:00Z",
+        "2026-11-05T05:11:33Z",
+        "confirmed",
+    )
+    .await;
+    let (status, preview) = preview_pair(&ctx, canonical, duplicate).await;
+    assert_eq!(status, StatusCode::OK, "{preview:?}");
+    let token = preview["preview_token"].as_str().unwrap().to_owned();
+
+    // A sibling writer holds the same queue lock every queue/dice writer takes.
+    let conn = ctx.state.pool.get().await.unwrap();
+    let mut held = conn.build_transaction().start().await.unwrap();
+    held.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&699001i32, &ctx.user_id],
+    )
+    .await
+    .unwrap();
+
+    let state = ctx.state.clone();
+    let token_header = ctx.token.clone();
+    let csrf = ctx.csrf.clone();
+    let mut apply = Box::pin(async move {
+        send(
+            &state,
+            authed(
+                "POST",
+                "/api/v2/issue-duplicate-reconciliation/apply",
+                &token_header,
+                &csrf,
+                Some(json!({
+                    "canonical_issue_id": canonical,
+                    "duplicate_issue_ids": [duplicate],
+                    "preview_token": token,
+                })),
+            ),
+        )
+        .await
+    });
+    tokio::select! {
+        _ = tokio::time::sleep(std::time::Duration::from_millis(300)) => {}
+        result = &mut apply => panic!("apply did not wait for the shared queue lock: {result:?}"),
+    }
+    held.commit().await.unwrap();
+    let (status, applied) = apply.await;
+    assert_eq!(status, StatusCode::OK, "{applied:?}");
+    let merged: Option<i32> = conn
+        .query_one(
+            "SELECT merged_into_issue_id FROM issues WHERE id = $1",
+            &[&duplicate],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(merged, Some(canonical));
+}
