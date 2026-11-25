@@ -301,7 +301,12 @@ describe('CblBrowserPage catalog', () => {
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /DC/ })).not.toBeInTheDocument()
     })
-    expect(screen.getByRole('status')).toHaveTextContent('Loading matching source lists…')
+    expect(screen.getByText('Loading matching source lists…')).toBeInTheDocument()
+    // #3614 adds a result-count live region, so a pending search must announce
+    // the updating count instead of leaving the previous key's numbers on screen.
+    expect(screen.getByTestId('cbl-result-count')).toHaveTextContent(
+      'Updating source list count…',
+    )
     // The banner names the query once; the loading line does not repeat it.
     expect(screen.getAllByText(/Searching every shared CBL for “Batman”/)).toHaveLength(1)
     expect(screen.queryByTestId('cbl-browse-results')).not.toBeInTheDocument()
