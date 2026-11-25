@@ -92,21 +92,55 @@ const DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, NULLIF(BTRIM
 
 const OWNED_SQL: &str = "SELECT i.id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2";
 
-const INCOMING_SQL: &str = "SELECT d.id, si.id, si.issue_number, si.thread_id, st.title FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id WHERE d.target_issue_id = $1 AND st.user_id = $2 ORDER BY d.id";
+const INCOMING_SQL: &str = "SELECT d.id, si.id, si.issue_number, NULLIF(BTRIM(si.issue_number_alias), ''), si.thread_id, st.title FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id WHERE d.target_issue_id = $1 AND st.user_id = $2 ORDER BY d.id";
 
-const OUTGOING_SQL: &str = "SELECT d.id, ti.id, ti.issue_number, ti.thread_id, tt.title FROM dependencies d JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE d.source_issue_id = $1 AND tt.user_id = $2 ORDER BY d.id";
+const OUTGOING_SQL: &str = "SELECT d.id, ti.id, ti.issue_number, NULLIF(BTRIM(ti.issue_number_alias), ''), ti.thread_id, tt.title FROM dependencies d JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE d.source_issue_id = $1 AND tt.user_id = $2 ORDER BY d.id";
 
 const THREAD_SQL: &str = "SELECT t.id FROM threads t WHERE t.id = $1 AND t.user_id = $2";
 
 const THREAD_ISSUES_SQL: &str =
     "SELECT i.id FROM issues i WHERE i.thread_id = $1 ORDER BY i.position, i.id";
 
-const THREAD_INCOMING_SQL: &str = "SELECT d.id, d.target_issue_id, si.id, si.issue_number, si.thread_id, st.title FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id WHERE d.target_issue_id = ANY($1::int[]) AND st.user_id = $2 ORDER BY d.id";
+const THREAD_INCOMING_SQL: &str = "SELECT d.id, d.target_issue_id, si.id, si.issue_number, NULLIF(BTRIM(si.issue_number_alias), ''), si.thread_id, st.title FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id WHERE d.target_issue_id = ANY($1::int[]) AND st.user_id = $2 ORDER BY d.id";
 
-const THREAD_OUTGOING_SQL: &str = "SELECT d.id, d.source_issue_id, ti.id, ti.issue_number, ti.thread_id, tt.title FROM dependencies d JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE d.source_issue_id = ANY($1::int[]) AND tt.user_id = $2 ORDER BY d.id";
+const THREAD_OUTGOING_SQL: &str = "SELECT d.id, d.source_issue_id, ti.id, ti.issue_number, NULLIF(BTRIM(ti.issue_number_alias), ''), ti.thread_id, tt.title FROM dependencies d JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE d.source_issue_id = ANY($1::int[]) AND tt.user_id = $2 ORDER BY d.id";
 
 fn not_found(issue_id: i32) -> ApiError {
     ApiError::with_status(StatusCode::NOT_FOUND, format!("Issue {issue_id} not found"))
+}
+
+fn edge_from_row(row: &tokio_postgres::Row) -> IssueDependencyEdge {
+    let source_issue_number: String = row.get(2);
+    let source_issue_number_alias: Option<String> = row.get(3);
+    IssueDependencyEdge {
+        dependency_id: row.get(0),
+        source_issue_id: row.get(1),
+        source_display_issue_number: crate::issue_service::display_issue_number(
+            &source_issue_number,
+            source_issue_number_alias.as_deref(),
+        ),
+        source_issue_number,
+        source_issue_number_alias,
+        source_thread_id: row.get(4),
+        source_thread_title: row.get(5),
+    }
+}
+
+fn thread_edge_from_row(row: &tokio_postgres::Row) -> IssueDependencyEdge {
+    let source_issue_number: String = row.get(3);
+    let source_issue_number_alias: Option<String> = row.get(4);
+    IssueDependencyEdge {
+        dependency_id: row.get(0),
+        source_issue_id: row.get(2),
+        source_display_issue_number: crate::issue_service::display_issue_number(
+            &source_issue_number,
+            source_issue_number_alias.as_deref(),
+        ),
+        source_issue_number,
+        source_issue_number_alias,
+        source_thread_id: row.get(5),
+        source_thread_title: row.get(6),
+    }
 }
 
 /// `GET /api/v2/issues/{issue_id}` — one owner-scoped issue row.
@@ -161,26 +195,8 @@ pub async fn get_issue_dependencies(
         .query(OUTGOING_SQL, &[&issue_id, &user.id()])
         .await
         .map_err(db::query_error)?;
-    let incoming = incoming_rows
-        .iter()
-        .map(|row| IssueDependencyEdge {
-            dependency_id: row.get(0),
-            source_issue_id: row.get(1),
-            source_issue_number: row.get(2),
-            source_thread_id: row.get(3),
-            source_thread_title: row.get(4),
-        })
-        .collect();
-    let outgoing = outgoing_rows
-        .iter()
-        .map(|row| IssueDependencyEdge {
-            dependency_id: row.get(0),
-            source_issue_id: row.get(1),
-            source_issue_number: row.get(2),
-            source_thread_id: row.get(3),
-            source_thread_title: row.get(4),
-        })
-        .collect();
+    let incoming = incoming_rows.iter().map(edge_from_row).collect();
+    let outgoing = outgoing_rows.iter().map(edge_from_row).collect();
     Ok(Json(IssueDependenciesResponse {
         issue_id,
         incoming,
@@ -228,13 +244,7 @@ pub async fn get_thread_issue_dependencies(
         incoming
             .entry(target_issue_id)
             .or_default()
-            .push(IssueDependencyEdge {
-                dependency_id: row.get(0),
-                source_issue_id: row.get(2),
-                source_issue_number: row.get(3),
-                source_thread_id: row.get(4),
-                source_thread_title: row.get(5),
-            });
+            .push(thread_edge_from_row(&row));
     }
 
     let mut outgoing = std::collections::HashMap::<i32, Vec<IssueDependencyEdge>>::new();
@@ -247,13 +257,7 @@ pub async fn get_thread_issue_dependencies(
         outgoing
             .entry(source_issue_id)
             .or_default()
-            .push(IssueDependencyEdge {
-                dependency_id: row.get(0),
-                source_issue_id: row.get(2),
-                source_issue_number: row.get(3),
-                source_thread_id: row.get(4),
-                source_thread_title: row.get(5),
-            });
+            .push(thread_edge_from_row(&row));
     }
 
     let issues = issue_ids
