@@ -128,7 +128,9 @@ async fn alembic_managed_at_head(client: &Client) {
         .await
         .unwrap();
     client
-        .batch_execute(include_str!("../migrations/V3__release_subscriptions_target_reading_lists.sql"))
+        .batch_execute(include_str!(
+            "../migrations/V3__release_subscriptions_target_reading_lists.sql"
+        ))
         .await
         .unwrap();
     client.batch_execute("RESET ALL").await.unwrap();

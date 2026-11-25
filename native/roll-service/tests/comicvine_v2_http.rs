@@ -1258,8 +1258,19 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
     )
     .await;
     let mut issue_ids = Vec::with_capacity(incident_fixtures::RETURN_MASTER_ORIGINAL_IDS.len());
-    for (index, _source_id) in incident_fixtures::RETURN_MASTER_ORIGINAL_IDS.iter().enumerate() {
-        issue_ids.push(issue(&conn, thread_id, &(index + 1).to_string(), 135 + index as i32).await);
+    for (index, _source_id) in incident_fixtures::RETURN_MASTER_ORIGINAL_IDS
+        .iter()
+        .enumerate()
+    {
+        issue_ids.push(
+            issue(
+                &conn,
+                thread_id,
+                &(index + 1).to_string(),
+                135 + index as i32,
+            )
+            .await,
+        );
     }
     conn.execute(
         "UPDATE threads SET total_issues = 5, issues_remaining = 2, status = 'active', \
@@ -1335,7 +1346,13 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
     });
     let (status, body) = send(
         &state,
-        call("POST", &format!("{base}/identity:confirm"), &token, &csrf, Some(confirm.clone())),
+        call(
+            "POST",
+            &format!("{base}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(confirm.clone()),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -1343,12 +1360,21 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
     assert_eq!(body["overall_issue_number"], "100");
     assert_eq!(body["provider_issue_number"], "100");
     assert_eq!(body["identity_version"], 2);
-    assert_eq!(before, stable_physical_state(&conn, thread_id, list_id).await);
+    assert_eq!(
+        before,
+        stable_physical_state(&conn, thread_id, list_id).await
+    );
 
     // An exact retry is idempotent even though its observed version is now old.
     let (status, body) = send(
         &state,
-        call("POST", &format!("{base}/identity:confirm"), &token, &csrf, Some(confirm)),
+        call(
+            "POST",
+            &format!("{base}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(confirm),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -1367,8 +1393,14 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT, "{body:?}");
-    assert!(body["detail"].as_str().unwrap().contains("reload version 2"));
-    assert_eq!(before, stable_physical_state(&conn, thread_id, list_id).await);
+    assert!(body["detail"]
+        .as_str()
+        .unwrap()
+        .contains("reload version 2"));
+    assert_eq!(
+        before,
+        stable_physical_state(&conn, thread_id, list_id).await
+    );
 
     // One provider issue cannot silently become two owned physical issues.
     let duplicate = issue_ids[1];
@@ -1469,7 +1501,10 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["identity_version"], 2);
-    assert_eq!(before, stable_physical_state(&conn, thread_id, list_id).await);
+    assert_eq!(
+        before,
+        stable_physical_state(&conn, thread_id, list_id).await
+    );
 
     let (status, cards) = send(
         &state,
@@ -1488,14 +1523,36 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
     for (index, card) in cards.iter().enumerate() {
         assert_eq!(card["issue_id"], issue_ids[index]);
         assert_eq!(card["issue_number"], (index + 1).to_string());
-        assert_eq!(card["overall_issue_number"], if index >= 2 { json!((98 + index).to_string()) } else { Value::Null });
-        assert_eq!(card["identity_version"], if index == 3 { 3 } else if index >= 2 { 2 } else { 1 });
+        assert_eq!(
+            card["overall_issue_number"],
+            if index >= 2 {
+                json!((98 + index).to_string())
+            } else {
+                Value::Null
+            }
+        );
+        assert_eq!(
+            card["identity_version"],
+            if index == 3 {
+                3
+            } else if index >= 2 {
+                2
+            } else {
+                1
+            }
+        );
     }
     assert_eq!(cards[2]["provider_issue_number"], "100");
     assert_eq!(cards[3]["provider_issue_number"], "101");
     assert_eq!(cards[4]["provider_issue_number"], "102");
-    assert_eq!(cards[3]["cover_image_url"], "https://comicvine.example/101.jpg");
-    assert_eq!(cards[4]["cover_image_url"], "https://comicvine.example/102.jpg");
+    assert_eq!(
+        cards[3]["cover_image_url"],
+        "https://comicvine.example/101.jpg"
+    );
+    assert_eq!(
+        cards[4]["cover_image_url"],
+        "https://comicvine.example/102.jpg"
+    );
 }
 
 #[tokio::test]
@@ -1707,6 +1764,7 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     assert_eq!(body["thread_id"], t);
     assert_eq!(body["thread_title"], "Saga");
     assert_eq!(body["has_confirmed_identity"], false);
+    assert_eq!(body["identity_version"], 1);
     assert_eq!(body["comicvine_issue_id"], Value::Null);
     assert_eq!(body["confirmed_mappings"], json!([]));
     assert_eq!(body["has_unresolved"], false);
@@ -1737,6 +1795,7 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["has_confirmed_identity"], true);
+    assert_eq!(body["identity_version"], 2);
     assert_eq!(body["comicvine_issue_id"], "1111");
     let mapping = &body["confirmed_mappings"][0];
     assert_eq!(mapping["provider"], "comicvine");
@@ -1810,6 +1869,7 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["comicvine_issue_id"], "2222");
+    assert_eq!(body["identity_version"], 3);
     assert_eq!(body["confirmed_mappings"].as_array().unwrap().len(), 1);
     let rejected: (String, Option<String>) = {
         let row = conn
@@ -1854,6 +1914,7 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["has_confirmed_identity"], false);
+    assert_eq!(body["identity_version"], 4);
     assert_eq!(body["has_unresolved"], true);
     let (status, body) = send(
         &state,
