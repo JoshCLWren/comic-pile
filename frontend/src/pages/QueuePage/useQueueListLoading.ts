@@ -1,23 +1,19 @@
 import { useIsFetching } from '@tanstack/react-query'
-import { queryKeys } from '../../query/queryKeys'
+import type { QueryKey } from '@tanstack/react-query'
 
 /**
- * True while the Queue list is fetching any page.
+ * True while the currently applied Queue page query is fetching.
  *
  * The Queue loader keeps previously loaded rows available through
- * `keepPreviousData` while a new search key loads (see `useQueueThreads`).
- * QueuePage hides those previous-key rows because the server owns filtering.
- * The empty presentation list during that window does not mean "no match"
- * yet — it means the matching page has not arrived (issue #3912). Reading the
- * cache's fetch status here lets the list show loading instead of a false
- * zero-match result.
+ * `keepPreviousData` while a new search key loads. QueuePage hides those
+ * previous-key rows and uses this flag to distinguish loading from a settled
+ * zero-match. Only the current search/sort key owns that presentation state:
+ * an older request that settles late must not keep a newer zero-result view
+ * stuck on "Loading" (#3614).
  *
- * The filter is the canonical `queue.pages` key prefix, so it ignores the
- * search-independent active-count query and every unrelated fetch.
- *
- * Returns:
- *   True while any Queue page query has a fetch in flight.
+ * @param queryKey - Exact canonical key for the currently applied Queue page.
+ * @returns True while the matching Queue page query is in flight.
  */
-export function useQueueListLoading(): boolean {
-  return useIsFetching({ queryKey: queryKeys.queue.pages() }) > 0
+export function useQueueListLoading(queryKey: QueryKey): boolean {
+  return useIsFetching({ queryKey }) > 0
 }
