@@ -1,52 +1,26 @@
-import Tooltip from '../../components/Tooltip'
-
 interface QueueThreadActionsProps {
   title: string
-  readDisabled?: boolean
-  readDisabledReason?: string
   onRead: () => void
 }
 
-export default function QueueThreadActions({
-  title,
-  readDisabled = false,
-  readDisabledReason,
-  onRead,
-}: QueueThreadActionsProps) {
-  const stopCardClick = (action: () => void) => (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation()
-    action()
-  }
-
+/**
+ * Opening an exact owned-issue editor is not a Roll eligibility decision.
+ * Prerequisites only control automatic offers, never this manual action.
+ */
+export default function QueueThreadActions({ title, onRead }: QueueThreadActionsProps) {
   return (
-    <div
-      className="flex flex-wrap items-center gap-2"
-      role="group"
-      aria-label={`Actions for ${title}`}
-    >
-      {readDisabled ? (
-        <Tooltip content={readDisabledReason ?? 'Blocked by a prerequisite'}>
-          <button
-            type="button"
-            aria-label="Read & Rate"
-            disabled
-            title={readDisabledReason ?? 'Blocked by a prerequisite'}
-            onClick={(event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()}
-            className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg bg-[var(--theme-primary-action)]/25 px-4 text-sm font-bold text-white/60 hover:bg-[var(--theme-primary-action)]/25 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Read & Rate
-          </button>
-        </Tooltip>
-      ) : (
-        <button
-          type="button"
-          aria-label="Read & Rate"
-          onClick={stopCardClick(onRead)}
-          className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 text-sm font-bold text-white hover:bg-[var(--theme-primary-action-hover)] transition-colors"
-        >
-          Read & Rate
-        </button>
-      )}
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`Actions for ${title}`}>
+      <button
+        type="button"
+        aria-label="Read & Rate"
+        onClick={(event) => {
+          event.stopPropagation()
+          onRead()
+        }}
+        className="inline-flex h-11 @2xl:h-9 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 text-sm font-bold text-white hover:bg-[var(--theme-primary-action-hover)] transition-colors"
+      >
+        Read & Rate
+      </button>
     </div>
   )
 }

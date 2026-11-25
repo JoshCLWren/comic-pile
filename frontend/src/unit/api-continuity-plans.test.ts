@@ -51,6 +51,33 @@ describe('continuityPlansApi', () => {
     })
   })
 
+  it('forwards an explicit authoritative Reading List association when following a volume', async () => {
+    const payload = {
+      plan_id: 12,
+      thread_id: 4,
+      external_identity_id: 77,
+      custom_cbl_list_id: 34,
+    }
+    const source = {
+      id: 901,
+      plan_id: 12,
+      custom_cbl_list_id: 34,
+      thread_id: 4,
+      external_identity_id: 77,
+      provider: 'comicvine',
+      provider_volume_id: '4050-77',
+      provider_title: 'X-Men',
+      enabled: true,
+      last_synced_at: null,
+      created_at: '2026-11-23T00:00:00Z',
+      updated_at: '2026-11-23T00:00:00Z',
+    }
+    client.post.mockResolvedValueOnce(source)
+
+    await expect(continuityPlansApi.createReleaseSource(payload)).resolves.toEqual(source)
+    expect(client.post).toHaveBeenCalledWith('/v2/continuity-plans/release-sources/', payload)
+  })
+
   it('loads a plan by id', async () => {
     client.get.mockResolvedValueOnce(basePlan)
 

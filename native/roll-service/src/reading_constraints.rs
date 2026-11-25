@@ -428,12 +428,19 @@ fn constraint_edges(snapshot: &Snapshot) -> Result<BTreeSet<ConstraintEdge>, Val
                 ));
             }
             if entry.gate == "after_previous" && index > 0 {
-                edges.insert(ConstraintEdge::in_list(
-                    entries[index - 1].issue_id,
-                    entry.issue_id,
-                    &format!("list {name} after_previous"),
-                    l.list_id,
-                ));
+                // Skip excluded entries when finding the predecessor for after_previous.
+                if let Some(pred_entry) = entries[..index]
+                    .iter()
+                    .rev()
+                    .find(|e| !snapshot.excluded_issue_ids.contains(&e.issue_id))
+                {
+                    edges.insert(ConstraintEdge::in_list(
+                        pred_entry.issue_id,
+                        entry.issue_id,
+                        &format!("list {name} after_previous"),
+                        l.list_id,
+                    ));
+                }
             }
             if entry.gate == "hold" {
                 for source in since_hold.drain(..) {
@@ -570,6 +577,17 @@ pub struct EligibleFrontier {
     pub thread_id: i32,
     pub issue_id: i32,
     pub queue_position: i32,
+}
+
+/// One active queued Thread's live frontier plus every unsatisfied Option E
+/// edge that targets it. Shared by [`ValidatedReadingInputs::eligible_frontiers`]
+/// and the read-only frontier audit (#4198) so both read one frontier authority.
+#[derive(Debug, Clone)]
+pub struct FrontierBlockers {
+    pub thread_id: i32,
+    pub issue_id: i32,
+    pub queue_position: i32,
+    pub unsatisfied: Vec<ConstraintEdge>,
 }
 
 /// Why the Roll pool has no in-play faces.
@@ -1144,22 +1162,26 @@ impl ValidatedReadingInputs {
     /// the validated dependency graph and issue statuses are authoritative.
     /// Exactly one next unread issue per active queue thread can be eligible.
     pub fn eligible_frontiers(&self) -> Result<Vec<EligibleFrontier>, ValidationError> {
+        Ok(self
+            .frontier_blockers()?
+            .into_iter()
+            .filter(|frontier| frontier.unsatisfied.is_empty())
+            .map(|frontier| EligibleFrontier {
+                thread_id: frontier.thread_id,
+                issue_id: frontier.issue_id,
+                queue_position: frontier.queue_position,
+            })
+            .collect())
+    }
+
+    /// Every active queued Thread's live frontier with the unsatisfied Option E
+    /// edges that target it. The frontier set, the edge set and the candidate
+    /// filters come from this evaluator — the one Option E authority — so the
+    /// read-only frontier audit (#4198) sees exactly what Roll, Queue and the
+    /// reading-boundary resources see, including which frontiers stay blocked.
+    pub fn frontier_blockers(&self) -> Result<Vec<FrontierBlockers>, ValidationError> {
         let edges = self.unsatisfied_edges()?;
         let excluded = &self.inputs.excluded_issue_ids;
-        let incomplete: HashSet<i32> = self
-            .inputs
-            .core
-            .issues
-            .iter()
-            .filter(|issue| issue.status != "read" && !excluded.contains(&issue.id))
-            .map(|issue| issue.id)
-            .collect();
-        let blocked: HashSet<i32> = edges
-            .iter()
-            .filter(|edge| incomplete.contains(&edge.source_issue_id))
-            .map(|edge| edge.target_issue_id)
-            .collect();
-
         let mut next_unread: BTreeMap<i32, (i32, i32)> = BTreeMap::new();
         for issue in &self.inputs.core.issues {
             if issue.status != "unread"
@@ -1183,7 +1205,7 @@ impl ValidatedReadingInputs {
             .map(|thread| thread.id)
             .collect();
 
-        let mut candidates: Vec<EligibleFrontier> = self
+        let mut frontiers: Vec<FrontierBlockers> = self
             .inputs
             .core
             .stored
@@ -1196,15 +1218,21 @@ impl ValidatedReadingInputs {
             })
             .filter_map(|stored| {
                 let (_, issue_id) = next_unread.get(&stored.thread_id)?;
-                (!blocked.contains(issue_id)).then_some(EligibleFrontier {
+                let unsatisfied = edges
+                    .iter()
+                    .filter(|edge| edge.target_issue_id == *issue_id)
+                    .cloned()
+                    .collect();
+                Some(FrontierBlockers {
                     thread_id: stored.thread_id,
                     issue_id: *issue_id,
                     queue_position: stored.queue_position,
+                    unsatisfied,
                 })
             })
             .collect();
-        candidates.sort_by_key(|candidate| (candidate.queue_position, candidate.thread_id));
-        Ok(candidates)
+        frontiers.sort_by_key(|frontier| (frontier.queue_position, frontier.thread_id));
+        Ok(frontiers)
     }
 }
 
@@ -1935,6 +1963,249 @@ mod tests {
                 .map(|frontier| frontier.issue_id)
                 .collect::<Vec<_>>(),
             vec![11, 21]
+        );
+    }
+
+    #[test]
+    fn after_previous_skips_excluded_predecessor_in_constraints() {
+        // Issue #4199: after_previous must wait for the immediately preceding
+        // *included* entry. An excluded predecessor is skipped.
+        let mut source = inputs();
+        source.core.threads[0].status = "active".into();
+        // issues: 12(read,excluded), 13(unread) exist; add 14,15
+        source.core.issues.push(ReadingIssue {
+            id: 14,
+            thread_id: 8,
+            position: 3,
+            status: "unread".into(),
+            issue_number: "3".into(),
+        });
+        source.core.issues.push(ReadingIssue {
+            id: 15,
+            thread_id: 8,
+            position: 4,
+            status: "unread".into(),
+            issue_number: "4".into(),
+        });
+        source.core.stored = vec![StoredThreadEligibility {
+            thread_id: 8,
+            next_issue_id: None,
+            is_blocked: false,
+            queue_position: 1,
+        }];
+        // Exclude issue 14 (middle), 12 already excluded by inputs()
+        source.excluded_issue_ids.insert(14);
+        source.lists.push(ReadingList {
+            list_id: 99,
+            mode: "loose".into(),
+            name: "Loose".into(),
+            entries: vec![
+                ReadingEntry {
+                    issue_id: 13,
+                    gate: "none".into(),
+                    skipped: false,
+                },
+                ReadingEntry {
+                    issue_id: 14,
+                    gate: "none".into(),
+                    skipped: false,
+                }, // excluded
+                ReadingEntry {
+                    issue_id: 15,
+                    gate: "after_previous".into(),
+                    skipped: false,
+                },
+            ],
+            overlap_decisions: vec![],
+        });
+        let contained = ValidatedReadingInputs::contained(source, &BTreeMap::new()).unwrap();
+        assert!(contained.graph_problem().is_none());
+        let frontiers = contained.eligible_frontiers().unwrap();
+        // 13 is unread and unblocked; 15 waits for 13 (skipping excluded 14)
+        assert_eq!(
+            frontiers.iter().map(|f| f.issue_id).collect::<Vec<_>>(),
+            vec![13]
+        );
+    }
+
+    #[test]
+    fn loose_list_after_previous_named_handoff_issue_4199() {
+        // Issue #4199: loose multi-series list. Independent titles advance,
+        // but an entry with after_previous waits for the immediately preceding
+        // included entry. Here: Ultimate Black Panther #19 (bp19) before
+        // Ultimate Spider-Man #20 (sm20). Other loose-list series not stalled.
+        //
+        // Threads: USM (thread 1), UBP (thread 2), UXM (thread 3, independent)
+        // USM:  #19 read (sm19), #20 unread (sm20, after_previous behind bp19)
+        // UBP:  #11 unread (bp11), #19 unread (bp19)
+        // UXM:  #5  unread (xm5) - independent, gate none
+        let source = OptionInputs {
+            core: CoreReadingInputs {
+                threads: vec![
+                    ReadingThread {
+                        id: 1,
+                        status: "active".into(),
+                        title: "Ultimate Spider-Man".into(),
+                    },
+                    ReadingThread {
+                        id: 2,
+                        status: "active".into(),
+                        title: "Ultimate Black Panther".into(),
+                    },
+                    ReadingThread {
+                        id: 3,
+                        status: "active".into(),
+                        title: "Ultimate X-Men".into(),
+                    },
+                ],
+                issues: vec![
+                    ReadingIssue {
+                        id: 101,
+                        thread_id: 1,
+                        position: 19,
+                        status: "read".into(),
+                        issue_number: "19".into(),
+                    },
+                    ReadingIssue {
+                        id: 102,
+                        thread_id: 1,
+                        position: 20,
+                        status: "unread".into(),
+                        issue_number: "20".into(),
+                    },
+                    ReadingIssue {
+                        id: 201,
+                        thread_id: 2,
+                        position: 11,
+                        status: "unread".into(),
+                        issue_number: "11".into(),
+                    },
+                    ReadingIssue {
+                        id: 219,
+                        thread_id: 2,
+                        position: 19,
+                        status: "unread".into(),
+                        issue_number: "19".into(),
+                    },
+                    ReadingIssue {
+                        id: 301,
+                        thread_id: 3,
+                        position: 5,
+                        status: "unread".into(),
+                        issue_number: "5".into(),
+                    },
+                ],
+                stored: vec![
+                    StoredThreadEligibility {
+                        thread_id: 1,
+                        next_issue_id: None,
+                        is_blocked: false,
+                        queue_position: 1,
+                    },
+                    StoredThreadEligibility {
+                        thread_id: 2,
+                        next_issue_id: None,
+                        is_blocked: false,
+                        queue_position: 2,
+                    },
+                    StoredThreadEligibility {
+                        thread_id: 3,
+                        next_issue_id: None,
+                        is_blocked: false,
+                        queue_position: 3,
+                    },
+                ],
+            },
+            thread_volumes: BTreeMap::new(),
+            lists: vec![ReadingList {
+                list_id: 1000008,
+                mode: "loose".into(),
+                name: "Ultimate Universe".into(),
+                entries: vec![
+                    ReadingEntry {
+                        issue_id: 101,
+                        gate: "none".into(),
+                        skipped: false,
+                    }, // SM #19 read
+                    ReadingEntry {
+                        issue_id: 201,
+                        gate: "none".into(),
+                        skipped: false,
+                    }, // BP #11
+                    ReadingEntry {
+                        issue_id: 219,
+                        gate: "none".into(),
+                        skipped: false,
+                    }, // BP #19
+                    ReadingEntry {
+                        issue_id: 102,
+                        gate: "after_previous".into(),
+                        skipped: false,
+                    }, // SM #20 waits for BP #19
+                    ReadingEntry {
+                        issue_id: 301,
+                        gate: "none".into(),
+                        skipped: false,
+                    }, // UXM #5 independent
+                ],
+                overlap_decisions: vec![],
+            }],
+            prerequisites: vec![],
+            excluded_issue_ids: BTreeSet::new(),
+            unresolved: vec![],
+        };
+
+        // Before BP #19 is read: SM #20 blocked by after_previous on BP #19.
+        // BP #19 itself is behind BP #11 by natural series order, so BP #11 is
+        // the BP frontier; BP #11 remains eligible/snoozable (not stalled).
+        let contained =
+            ValidatedReadingInputs::contained(source.clone(), &BTreeMap::new()).unwrap();
+        assert!(contained.graph_problem().is_none());
+        let frontiers: Vec<i32> = contained
+            .eligible_frontiers()
+            .unwrap()
+            .into_iter()
+            .map(|f| f.issue_id)
+            .collect();
+        assert!(
+            frontiers.contains(&201),
+            "BP #11 should be eligible/snoozable: {frontiers:?}"
+        );
+        assert!(
+            !frontiers.contains(&219),
+            "BP #19 blocked by natural order behind BP #11: {frontiers:?}"
+        );
+        assert!(
+            frontiers.contains(&301),
+            "UXM #5 should be eligible (independent loose-list series): {frontiers:?}"
+        );
+        assert!(
+            !frontiers.contains(&102),
+            "SM #20 must NOT be rollable before BP #19 read: {frontiers:?}"
+        );
+
+        // After BP #11 and BP #19 are read in natural order: SM #20 becomes eligible.
+        let mut after = source;
+        for id in [201, 219] {
+            if let Some(issue) = after.core.issues.iter_mut().find(|i| i.id == id) {
+                issue.status = "read".into();
+            }
+        }
+        let contained_after = ValidatedReadingInputs::contained(after, &BTreeMap::new()).unwrap();
+        assert!(contained_after.graph_problem().is_none());
+        let frontiers_after: Vec<i32> = contained_after
+            .eligible_frontiers()
+            .unwrap()
+            .into_iter()
+            .map(|f| f.issue_id)
+            .collect();
+        assert!(
+            frontiers_after.contains(&102),
+            "SM #20 should be eligible after BP #19 read: {frontiers_after:?}"
+        );
+        assert!(
+            frontiers_after.contains(&301),
+            "UXM #5 still eligible: {frontiers_after:?}"
         );
     }
 }

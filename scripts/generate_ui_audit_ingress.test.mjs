@@ -6,7 +6,7 @@ test('audit ingress preserves production method/path routing and native priority
   const config = {routes: [
     {src: '^/api/v1/auth/login$', methods: ['POST'], dest: '/api/native_roll.rs'},
     {src: '^/api/v1/threads/[^/]+/restore$', methods: ['POST', 'OPTIONS'], dest: '/api/native_roll.rs'},
-    {src: '^/api/v1/threads/[^/]+/issues$', methods: ['GET'], dest: '/api/native_issue.rs'},
+    {src: '^/api/v1/threads/[^/]+/issues$', methods: ['GET'], dest: '/api/native_roll.rs'},
     {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
   ]};
   const nginx = renderAuditIngress(config);

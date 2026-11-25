@@ -81,14 +81,10 @@ async function openManualPicker(page: Page): Promise<void> {
 }
 
 async function enterDeterministicRatingState(page: Page): Promise<void> {
-  await openManualPicker(page)
-  const dialog = page.getByRole('dialog', { name: 'Pick manually' })
-  const picker = dialog.getByRole('combobox')
-  await picker.click()
-  await expect.poll(async () => dialog.getByRole('option').count()).toBeGreaterThan(1)
-  await dialog.getByRole('option').first().click()
-  await dialog.getByRole('button', { name: 'Pick this series' }).click()
-  await expect(page.getByTestId('rating-pillars-grid')).toBeVisible()
+  // The Roll rating workspace belongs exclusively to an actual random offer.
+  // Pick manually now opens the shared direct issue card, not that workspace.
+  await page.getByRole('button', { name: 'Roll the dice' }).click()
+  await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 30000 })
   await expect(page.getByTestId('rating-actions')).toBeVisible()
   await page.locator('#rating-input').fill('4')
 }
