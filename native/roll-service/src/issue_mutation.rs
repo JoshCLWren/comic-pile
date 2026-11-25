@@ -719,6 +719,23 @@ pub struct PreviewIssueItem {
     pub is_duplicate: bool,
 }
 
+/// When a requested issue number already exists in the series and identity
+/// evidence shows it is mapped, offer an alias/mapping alternative instead of
+/// silently discarding it or creating a duplicate (#4654 A5).
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct IssueEditAliasOffer {
+    /// The number the reader requested to add.
+    pub requested_issue_number: String,
+    /// Existing issue that already occupies this number in the series.
+    pub existing_issue_id: i32,
+    pub existing_issue_number: String,
+    pub series_title: String,
+    pub is_mapped: bool,
+    /// Human-readable reason this is offered as an alias/mapping instead of a
+    /// new issue.
+    pub reason: String,
+}
+
 /// Set-based metadata gathered once per previewed thread (never per row) and
 /// keyed by issue id. `new` issues have no entry and use neutral defaults.
 #[derive(Debug, Clone, Default)]
@@ -837,6 +854,11 @@ pub struct IssueEditPreviewResponse {
     pub requested_strategy: IssuePlacementStrategy,
     pub default_outcome: IssueEditPreviewOutcome,
     pub numeric_resort_outcome: Option<IssueEditPreviewOutcome>,
+    /// Requested numbers that already exist as mapped issues in the series.
+    /// The reader must explicitly choose an alias/mapping before commit; the
+    /// server never silently creates a duplicate (#4654 A5).
+    #[serde(default)]
+    pub alias_offers: Vec<IssueEditAliasOffer>,
 }
 
 fn build_after_items(
