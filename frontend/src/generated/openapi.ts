@@ -5997,6 +5997,42 @@ export interface components {
         IssueOrderValidationResponse: {
             warnings: string[];
         };
+        /** @description One issue affected by a bulk read/unread operation. */
+        IssueReadOperationItem: {
+            /**
+             * Format: int32
+             * @description Owned issue identifier.
+             */
+            issue_id: number;
+            /** Exact issue number within the run. */
+            issue_number: string;
+            /** Stored read state (``read`` or ``unread``). */
+            previous_status: string;
+            /**
+             * Format: int32
+             * @description Owning thread identifier.
+             */
+            thread_id: number;
+        };
+        /** @description Reviewable, reversible record of a bulk read/unread operation (#4655). */
+        IssueReadOperationResponse: {
+            /**
+             * Format: int64
+             * @description Owned operation identifier.
+             */
+            id: number;
+            operation_type: string;
+            created_at: string;
+            items: components["schemas"]["IssueReadOperationItem"][];
+            /** UTC timestamp when the operation was undone, if undone. */
+            undone_at?: string | null;
+        };
+        /** @description Result of undoing a bulk read/unread operation (#4655). */
+        IssueReadOperationUndoResponse: {
+            operation: components["schemas"]["IssueReadOperationResponse"];
+            undone_issue_ids: number[];
+            skipped_issue_ids: number[];
+        };
         IssueReadRateRequest: {
             /** @description Client-generated retry key. Same key/payload replays the same receipt. */
             idempotency_key: string;
