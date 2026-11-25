@@ -2040,7 +2040,7 @@ pub async fn import_issue(
     let issue_id: i32 = issue_row.get(0);
     // Python `confirm_comicvine_identity` (no post-commit hydration on import).
     let external_identity_id =
-        link_with_source(&tx, issue_id, request.comicvine_issue_id, "user_confirmed").await?;
+        link_with_source(&tx, user.id(), issue_id, request.comicvine_issue_id, "user_confirmed").await?;
     // #5592: single-issue adoption is an import commit too — durably enqueue
     // deep-metadata work without waiting for a Roll read. Scheduling runs in a
     // savepoint (same contract as `link_confirmed`): its failure never undoes
