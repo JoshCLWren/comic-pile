@@ -8,24 +8,22 @@ import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api-c
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import { tagsApi, type EffectiveTagsResponse, type Tag } from '../services/api-tags'
 import type { Issue } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 // The action card has its own suite; this suite proves the reading surface
 // renders the post-roll provider detail and tags for the exact selected issue.
-vi.mock('../components/ComicIssueCard', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../components/ComicIssueCard')>()
-  return {
-    // Only the action card is replaced: the provider cover the post-roll pillar
-    // renders is the real shared component.
-    ...actual,
-    ComicIssueCard: ({ issueId, showCover }: { issueId: number; showCover?: boolean }) => (
-      <article
-        data-testid="direct-read-action-card"
-        data-issue-id={issueId}
-        data-show-cover={String(showCover)}
-      />
-    ),
-  }
-})
+await injectModuleDoubles(await import('../components/ComicIssueCard'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  // Only the action card is replaced: the provider cover the post-roll pillar
+  // renders is the real shared component.
+  ComicIssueCard: ({ issueId, showCover }: { issueId: number; showCover?: boolean }) => (
+    <article
+      data-testid="direct-read-action-card"
+      data-issue-id={issueId}
+      data-show-cover={String(showCover)}
+    />
+  ),
+}))
 
 const getIssue = vi.spyOn(issuesApi, 'get')
 const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
