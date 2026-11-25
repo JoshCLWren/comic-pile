@@ -47,7 +47,7 @@ SELECT c.id, c.external_identity_id, c.attempts, e.external_id,
 FROM claimed c LEFT JOIN external_identities e ON e.id=c.external_identity_id
 "#;
 const RECONCILE_ORPHANED: &str = r#"
-SELECT e.id, e.metadata_json::text
+SELECT e.id
 FROM external_identities e
 WHERE e.provider = 'comicvine'
   AND e.entity_type = 'issue'
