@@ -99,8 +99,10 @@ export default function CustomCBLBuilder({
   const [jumpPosition, setJumpPosition] = useState('')
   const [expandedEntryOptions, setExpandedEntryOptions] = useState<number | null>(null)
   const [moveDestinations, setMoveDestinations] = useState<Record<number, string>>({})
+  const [moveTargets, setMoveTargets] = useState<Record<number, string>>({})
   const [issueQuery, setIssueQuery] = useState('')
   const [submittedIssueQuery, setSubmittedIssueQuery] = useState('')
+  const [insertAt, setInsertAt] = useState<{ index: number; position: 'before' | 'after' } | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [exportError, setExportError] = useState<Error | null>(null)
   const [replaceOpen, setReplaceOpen] = useState(false)
@@ -530,10 +532,29 @@ export default function CustomCBLBuilder({
     setSubmittedIssueQuery(next)
   }
   const addIssue = (candidate: CustomCBLIssueSearchResult) => {
-    setEntries((current) => [...current, draftEntry(candidate, current.length)])
-    setMessage(`Added ${candidate.series_name} #${candidate.issue_number} to this list. Save to keep your changes.`)
+    const anchor = insertAt
+    let targetIndex = entries.length
+    if (anchor) {
+      const base = anchor.position === 'before' ? anchor.index : anchor.index + 1
+      targetIndex = Math.max(0, Math.min(entries.length, base))
+    }
+    setEntries((current) => {
+      const next = [...current]
+      const insertIndex = anchor
+        ? Math.max(0, Math.min(current.length, anchor.position === 'before' ? anchor.index : anchor.index + 1))
+        : current.length
+      next.splice(insertIndex, 0, draftEntry(candidate, insertIndex))
+      return normalizePositions(next)
+    })
+    const label = `${candidate.series_name} #${candidate.issue_number}`
+    setMessage(
+      anchor
+        ? `Inserted ${label} at position ${targetIndex + 1}. Save to keep your changes.`
+        : `Added ${label} to this list. Save to keep your changes.`,
+    )
     setEntrySearch('')
-    setEntryPage(Math.floor(entries.length / ENTRY_PAGE_SIZE))
+    setEntryPage(Math.floor(targetIndex / ENTRY_PAGE_SIZE))
+    setInsertAt(null)
     issueSearchInput.current?.focus()
   }
   const focusSearchResult = (event: KeyboardEvent<HTMLElement>, fromInput = false) => {

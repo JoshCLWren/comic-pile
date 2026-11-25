@@ -53,7 +53,9 @@ interface Props {
   nameOf: (issueId: number) => string
   expanded: boolean
   moveDestination: string
+  moveTarget: string
   disabled: boolean
+  insertActive: 'before' | 'after' | null
   onCheckpoint: () => void
   onMoveEarlier: () => void
   onMoveLater: () => void
@@ -63,6 +65,11 @@ interface Props {
   onSkip: () => void
   onDestinationChange: (value: string) => void
   onMoveToPosition: () => void
+  onMoveTargetChange: (value: string) => void
+  onMoveBeforeIssue: () => void
+  onMoveAfterIssue: () => void
+  onInsertBefore: () => void
+  onInsertAfter: () => void
   /** Batched owner-scoped projection; enriches cover/rating/mapping when present. */
   card?: IssueCard | null
   /** Reconciles staged-entry read status after a direct action without reseeding list edits. */
