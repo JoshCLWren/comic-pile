@@ -3,7 +3,7 @@ import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
 import { issuesApi } from '../services/api-issues'
-import type { IssueListParams, IssueReadOperationResponse } from '../services/api-issues'
+import type { IssueListParams, IssueReadOperationResponse, IssueReadOperationUndoResponse } from '../services/api-issues'
 import { issueDependenciesApi } from '../services/api-dependencies'
 import type { Issue, IssueListResponse } from '../types'
 
@@ -16,8 +16,8 @@ export interface IssueCorrectionIssuesApi {
   ) => Promise<IssueListResponse>
   markRead: (issueId: number) => Promise<void>
   markUnread: (issueId: number) => Promise<void>
-  bulkMarkRead: (issueIds: number[]) => Promise<unknown>
-  bulkMarkUnread: (issueIds: number[]) => Promise<unknown>
+  bulkMarkRead: (issueIds: number[]) => Promise<IssueReadOperationResponse>
+  bulkMarkUnread: (issueIds: number[]) => Promise<IssueReadOperationResponse>
   move: (issueId: number, afterIssueId: number | null) => Promise<void>
 }
 
@@ -180,9 +180,8 @@ export default function IssueCorrectionDialog({
       let operation: IssueReadOperationResponse | null = null
       if (unreadBeforeTarget.length > 0) {
         const result = await issuesService.bulkMarkRead(unreadBeforeTarget.map((issue) => issue.id))
-        if (result && typeof result === 'object' && 'id' in result) {
-          operation = result as IssueReadOperationResponse
-        }
+        // SAFETY: bulkMarkRead is typed to return IssueReadOperationResponse.
+        operation = result
       }
 
       if (targetIssue.status === 'read') {
@@ -216,6 +215,7 @@ export default function IssueCorrectionDialog({
       if (!targetIssue) {
         // New issue will be created; preview based on current ordering plus target insertion at end/start/after.
         // For simplicity, treat as no existing affected issues before creation except by position.
+        // SAFETY: partial issue placeholder used only for preview; id is sentinel -1.
         targetIssue = { id: -1, issue_number: targetNumber, status: 'unread' } as Issue
       }
       const targetIndex = orderedIssues.findIndex((issue) => issue.issue_number === targetNumber)
@@ -269,7 +269,8 @@ export default function IssueCorrectionDialog({
     setIsUndoing(true)
     setError(null)
     try {
-      const svc = issuesService as IssueCorrectionIssuesApi & { undoReadOperation?: (id: number) => Promise<unknown> }
+      // SAFETY: issuesService is injectable; widen only to probe optional undoReadOperation.
+      const svc = issuesService as IssueCorrectionIssuesApi & { undoReadOperation?: (id: number) => Promise<IssueReadOperationUndoResponse> }
       if (svc.undoReadOperation) {
         await svc.undoReadOperation(lastOperation.id)
       } else {
