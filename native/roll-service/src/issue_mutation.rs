@@ -965,13 +965,14 @@ async fn preview_outcome(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
     thread_id: i32,
+    thread_title: &str,
     existing: &[(i32, String, i32)],
     new_numbers: &[String],
     request: &PreviewIssuesRequest,
     strategy: IssuePlacementStrategy,
+    facts: &BTreeMap<i32, IssueFacts>,
 ) -> Result<IssueEditPreviewOutcome, ApiError> {
     let (merged, preserves) = planned_merge(existing, new_numbers, request, strategy)?;
-    let (before, after) = build_after_items(existing, &merged);
 
     let savepoint = format!(
         "sp_preview_{}",
@@ -1003,6 +1004,15 @@ async fn preview_outcome(
     let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
     let validated = option_inputs::validated_contained(inputs.clone())?;
     let graph = crate::reading_graph::project(&inputs, &validated, None);
+    let (before, after) = build_after_items(
+        existing,
+        &merged,
+        &inputs,
+        &graph,
+        thread_title,
+        thread_id,
+        facts,
+    );
     let can_commit = graph.status == "ok";
     let conflict_message = if can_commit {
         None
@@ -1068,6 +1078,36 @@ pub async fn preview_issue_create(
         .iter()
         .map(|row| (row.get(0), row.get(1), row.get(2)))
         .collect();
+    // One owner-scoped statement for every read/rating/mapping fact shown in
+    // the preview. Never query per issue or per row (#4654).
+    let fact_rows = tx
+        .query(
+            "SELECT i.id,
+                    i.read_at IS NOT NULL,
+                    EXISTS (SELECT 1 FROM events e WHERE e.issue_id=i.id AND e.rating IS NOT NULL),
+                    i.catalog_issue_id IS NOT NULL OR EXISTS (
+                        SELECT 1 FROM issue_external_identity_mappings m
+                        WHERE m.issue_id=i.id AND m.status='confirmed')
+             FROM issues i JOIN threads t ON t.id=i.thread_id
+             WHERE t.user_id=$1",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let facts: BTreeMap<i32, IssueFacts> = fact_rows
+        .iter()
+        .map(|row| {
+            (
+                row.get::<_, i32>(0),
+                IssueFacts {
+                    has_read_history: row.get(1),
+                    has_rating: row.get(2),
+                    is_mapped: row.get(3),
+                },
+            )
+        })
+        .collect();
+
     let existing_numbers: BTreeSet<String> = existing.iter().map(|(_, n, _)| n.clone()).collect();
     let new_numbers: Vec<String> = requested
         .into_iter()
@@ -1083,10 +1123,12 @@ pub async fn preview_issue_create(
         &tx,
         user,
         thread_id,
+        &thread_title,
         &existing,
         &new_numbers,
         &request,
         IssuePlacementStrategy::SafeDefault,
+        &facts,
     )
     .await?;
 
@@ -1096,10 +1138,12 @@ pub async fn preview_issue_create(
                 &tx,
                 user,
                 thread_id,
+                &thread_title,
                 &existing,
                 &new_numbers,
                 &request,
                 IssuePlacementStrategy::NumericResort,
+                &facts,
             )
             .await?;
             if resort.preserves_existing_relative_order
