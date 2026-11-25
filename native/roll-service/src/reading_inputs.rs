@@ -33,6 +33,11 @@ pub struct CoreReadingInputs {
     pub stored: Vec<StoredThreadEligibility>,
 }
 
+/// Shared Roll/Queue visibility rule (#4653): a reconciled alias is *not* a
+/// separate rollable identity and must not contribute to read counts. Every
+/// roll/queue/count read filters on this predicate.
+pub(crate) const ROLLABLE_ISSUE_PREDICATE: &str = "merged_into_issue_id IS NULL";
+
 // Include inactive threads and read issues; natural position defines series order.
 pub(crate) async fn load_core_transaction(
     tx: &Transaction<'_>,
@@ -55,7 +60,9 @@ pub(crate) async fn load_core_transaction(
             queue_position: row.try_get(5)?,
         });
     }
-    let rows = tx.query("SELECT i.id, i.thread_id, i.position, i.status, i.issue_number FROM issues i JOIN threads t ON t.id = i.thread_id WHERE t.user_id = $1 ORDER BY i.thread_id, i.position, i.id", &[&user_id]).await?;
+    // A suppressed duplicate is an alias of its canonical issue, never a
+    // second rollable identity (see ROLLABLE_ISSUE_PREDICATE).
+    let rows = tx.query("SELECT i.id, i.thread_id, i.position, i.status, i.issue_number FROM issues i JOIN threads t ON t.id = i.thread_id WHERE t.user_id = $1 AND i.merged_into_issue_id IS NULL ORDER BY i.thread_id, i.position, i.id", &[&user_id]).await?;
     let mut issues = Vec::with_capacity(rows.len());
     for row in rows {
         issues.push(ReadingIssue {

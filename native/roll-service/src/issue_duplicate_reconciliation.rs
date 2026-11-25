@@ -1711,6 +1711,7 @@ mod tests {
             event_id: 1,
             timestamp: "2026-11-05T05:02:02Z".to_string(),
             issue_number: Some("101".to_string()),
+            is_synthetic: true,
         });
         let (actions, warnings, can_apply) =
             build_preview_actions(&canonical, &[dup], &HashMap::new());

@@ -361,7 +361,7 @@ fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, BootstrapRollableIt
 const CANDIDATES: &str = r#"
 SELECT t.id, t.title, t.format, t.last_activity_at::text, i.id, i.issue_number,
  mapping.metadata::text, mapping.status, series_mapping.status,
- (SELECT count(*) FROM issues owned WHERE owned.thread_id=t.id AND owned.status='read'),
+ (SELECT count(*) FROM issues owned WHERE owned.thread_id=t.id AND owned.status='read' AND owned.merged_into_issue_id IS NULL),
  (SELECT count(*) FROM issues owned WHERE owned.thread_id=t.id),
  (SELECT e.rating::double precision FROM events e JOIN sessions s ON s.id=e.session_id
     WHERE s.user_id=$1 AND e.thread_id=t.id AND e.type='rate' AND e.rating IS NOT NULL
