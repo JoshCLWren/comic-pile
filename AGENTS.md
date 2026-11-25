@@ -555,7 +555,7 @@ The following rules in `.greptile/config.json` are enforced by Greptile during P
 - Run the required lint/typecheck/build gates and targeted tests before committing; leave full test suites and aggregate coverage to CI
 - Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft.
 - **Do not add or repair changelog Markdown for implementation PRs.** Release notes are published after merge by the dedicated release writer to the database-backed release ledger. `docs/changelog.md` and `docs/changelog.d/` are frozen historical provenance only; release-note publication delays do not block implementation merges.
-- **Local factory sessions**: before the first commit of any issue-driven session, load the [local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session) skill ([local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session/SKILL.md)). It covers hook installation and the inert-`core.hooksPath` caveat, exporting `OPENCODE_MODEL` and verifying the `Model:` commit trailer, atomic label reconciliation, review-fleet pickup state (`factory:review` + `factory:unowned`), and the 24h stale-expiration bot.
+- **Local factory sessions**: before the first commit of any issue-driven session, load the [local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session/SKILL.md) skill. It covers hook installation and the inert-`core.hooksPath` caveat, exporting `OPENCODE_MODEL` and verifying the `Model:` commit trailer, atomic label reconciliation, review-fleet pickup state (`factory:review` + `factory:unowned`), and the diagnostic-only stale-PR decay guard.
 
 ## Factory runtime (Rotisserie)
 
@@ -583,8 +583,8 @@ selection priority in [docs/AUTONOMOUS_FACTORY_POLICY.md](docs/AUTONOMOUS_FACTOR
 This adopter checkout does not provide `make next-task` or `make start-task`
 targets; do not invent or depend on them.
 
-For a complete copy-paste execution prompt, read
-[prompts/agent-next-task.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/prompts/agent-next-task.md).
+For a complete copy-paste execution prompt, read the maintained local
+[prompts/agent-next-task.md](prompts/agent-next-task.md).
 
 **Local factory sessions**: load the [local-factory-next-task](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-next-task) skill
 ([local-factory-next-task](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-next-task/SKILL.md)) for the full startup flow — private
