@@ -195,21 +195,24 @@ export default function CustomCBLBuilder({
     },
   })
   const saveMutation = useMutation({
-    mutationFn: (confirmed: ReadingListPredecessorChange[] | null) => {
+    mutationFn: ({ confirmed }: { confirmed: ReadingListPredecessorChange[] | null; undo?: CustomCBLWrite | null }) => {
       if (!selectedId) throw new Error('Choose a custom CBL first.')
       return customCBLApi.update(
         selectedId,
         buildWritePayload(name, description, mode, entries, confirmed, null, persisted?.updated_at ?? null),
       )
     },
-    onSuccess: async (saved) => {
+    onSuccess: async (saved, variables) => {
       await applyUpdatedCustomCBL(queryClient, saved)
       setEntries(normalizePositions(saved.entries))
       setMode(saved.mode ?? DEFAULT_MODE)
-      // A later save makes the replacement snapshot stale: undoing it would
-      // silently discard the membership change that was just saved.
-      setUndoPayload(null)
-      setUndoBaseline(null)
+      if (variables.undo) {
+        setUndoPayload(variables.undo)
+        setUndoBaseline(saved.updated_at)
+      } else {
+        setUndoPayload(null)
+        setUndoBaseline(null)
+      }
       setMessage('Custom CBL saved.')
     },
   })
@@ -903,6 +906,11 @@ export default function CustomCBLBuilder({
                     )}
                     <p className="text-xs text-[var(--theme-text-muted)]">Changes are saved with the list.</p>
                   </div>
+                  <p className="text-xs text-[var(--theme-text-muted)]" aria-live="polite">
+                    {nextUnreadIssueId && progressIssue
+                      ? `Current position: next unread is #${progressIndex + 1} · ${progressIssue.series_name} #${progressIssue.issue_number} (${progressIssue.status}).`
+                      : 'Current position: all issues in this list are read or skipped.'}
+                  </p>
                   <label className="block text-sm text-[var(--theme-text-primary)]">
                     Find an issue already in this list
                     <input
@@ -1158,10 +1166,10 @@ export default function CustomCBLBuilder({
                       disabled={disabled || isPending || dirty}
                       className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50"
                     >
-                      {undoReplacementMutation.isPending ? 'Undoing…' : 'Undo last replacement'}
+                      {undoReplacementMutation.isPending ? 'Undoing…' : 'Undo last save'}
                     </button>
                     <span className="text-xs text-[var(--theme-text-muted)]">
-                      Restores list membership and order only; read history and ratings stay.
+                      Restores the previous saved list state; read history and ratings stay.
                     </span>
                   </div>
                 )}
@@ -1170,7 +1178,7 @@ export default function CustomCBLBuilder({
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => saveMutation.mutate(null)} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
+                <button type="button" onClick={() => saveMutation.mutate({ confirmed: null, undo: persisted ? buildWritePayload(persisted.name, persisted.description ?? '', persisted.mode ?? DEFAULT_MODE, persisted.entries, null, checkpointTargetsFor(persisted.entries)) : null })} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
                 {planId && (<button type="button" onClick={() => applyMutation.mutate()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50">{applyMutation.isPending ? 'Applying…' : 'Apply to this Reading Plan'}</button>)}
                 <button type="button" onClick={() => void exportList()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Export .cbl</button>
                 <button type="button" onClick={() => { deleteMutation.reset(); deleteReturnFocusRef.current = null; setConfirmDeleteOpen(true) }} disabled={disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-danger)] px-4 text-sm font-bold text-[var(--theme-danger)] disabled:opacity-50">Delete</button>
@@ -1253,7 +1261,7 @@ export default function CustomCBLBuilder({
           </ul>
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" onClick={() => saveMutation.reset()} disabled={saveMutation.isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Cancel</button>
-            <button type="button" onClick={() => saveMutation.mutate(saveErrorDetail?.predecessorChanges ?? null)} disabled={saveMutation.isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Confirm and save'}</button>
+            <button type="button" onClick={() => saveMutation.mutate({ confirmed: saveErrorDetail?.predecessorChanges ?? null, undo: persisted ? buildWritePayload(persisted.name, persisted.description ?? '', persisted.mode ?? DEFAULT_MODE, persisted.entries, null, checkpointTargetsFor(persisted.entries)) : null })} disabled={saveMutation.isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Confirm and save'}</button>
           </div>
         </div>
       </Modal>
