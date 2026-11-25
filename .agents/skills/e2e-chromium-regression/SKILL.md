@@ -38,6 +38,14 @@ Parallel sessions share host ports. Claim the smallest free slot `N` under the l
    nohup env NATIVE_ROLL_URL="http://127.0.0.1:${E2E_NATIVE_PORT}" \
      INGRESS_PORT="$E2E_BACKEND_PORT" python3 scripts/e2e_native_ingress.py \
      > "/tmp/opencode/comicpile-e2e-ingress-${E2E_BACKEND_PORT}.log" 2>&1 &
+   deadline=$((SECONDS + 60))
+   until curl -fsS "http://127.0.0.1:${E2E_NATIVE_PORT}/api/v2/health" >/dev/null; do
+     if (( SECONDS >= deadline )); then
+       echo "Native service did not become ready; inspect the slot-specific log." >&2
+       exit 1
+     fi
+     sleep 1
+   done
    curl -fsS "http://127.0.0.1:${E2E_NATIVE_PORT}/api/v2/health"
    test "$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/v2/threads")" = 401
    ```
