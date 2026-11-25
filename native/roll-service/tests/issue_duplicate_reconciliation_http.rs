@@ -999,8 +999,8 @@ async fn apply_serializes_with_the_shared_queue_lock_before_row_locks() {
     let token = preview["preview_token"].as_str().unwrap().to_owned();
 
     // A sibling writer holds the same queue lock every queue/dice writer takes.
-    let conn = ctx.state.pool.get().await.unwrap();
-    let mut held = conn.build_transaction().start().await.unwrap();
+    let mut conn = ctx.state.pool.get().await.unwrap();
+    let held = conn.build_transaction().start().await.unwrap();
     held.execute(
         "SELECT pg_advisory_xact_lock($1, $2)",
         &[&699001i32, &ctx.user_id],
