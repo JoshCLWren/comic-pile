@@ -253,6 +253,22 @@ describe('issue-specific cover and shared rating input', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
 
+  it('honors an explicit loading override on a compact Queue cover so virtualized rows fetch (#5692)', () => {
+    const url = 'https://comicvine.gamespot.com/a/queue-cover.jpg'
+    render(<ComicIssueCover coverImageUrl={url} threadTitle="Queue Series" issueNumber="" variant="compact" loading="eager" />)
+    const img = screen.getByRole('img', { name: 'Cover for Queue Series' })
+    expect(img).toHaveAttribute('src', url)
+    expect(img).toHaveAttribute('loading', 'eager')
+  })
+
+  it('keeps the variant-derived default when no loading override is given', () => {
+    const url = 'https://comicvine.gamespot.com/a/queue-cover.jpg'
+    render(<ComicIssueCover coverImageUrl={url} threadTitle="Queue Series" issueNumber="" variant="compact" />)
+    expect(screen.getByRole('img', { name: 'Cover for Queue Series' })).toHaveAttribute('loading', 'lazy')
+    render(<ComicIssueCover coverImageUrl={url} threadTitle="Roll Face" issueNumber="" variant="featured" />)
+    expect(screen.getByRole('img', { name: 'Cover for Roll Face' })).toHaveAttribute('loading', 'eager')
+  })
+
   it('supports host-owned labels and value presentation without duplicate slider descriptions', () => {
     const change = vi.fn()
     const { rerender } = render(<ComicIssueRatingSlider value={3.5} onChange={change} showValue={false} showScaleNote={false} describedBy="host-description" inputId="host-input" />)
