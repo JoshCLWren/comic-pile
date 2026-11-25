@@ -1,6 +1,6 @@
 import type { Ref } from 'react'
 import type { CustomCBLEntry, ReadingListGate, ReadingListMode } from '../services/api-custom-cbl'
-import { ComicIssueCard } from './ComicIssueCard'
+import { ComicIssueReadingCard } from './ComicIssueReadingCard'
 import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi'
 
 const GATE_ORDER: ReadingListGate[] = ['none', 'after_previous', 'hold']
@@ -156,7 +156,7 @@ export default function ReadingListEntryCard({
                       {waitText && <p className={`mt-2 break-words text-xs text-[var(--theme-text-muted)] sm:pl-10 ${expanded ? 'block' : 'hidden sm:block'}`}>{waitText}</p>}
                       {/* Direct reading is separate from staged list edits:
                           reading never commits or discards unsaved edits. */}
-                      <ComicIssueCard
+                      <ComicIssueReadingCard
                         issueId={entry.issue_id}
                         card={resolvedCard}
                         threadTitle={entry.series_name}
