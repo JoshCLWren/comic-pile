@@ -1113,6 +1113,8 @@ async fn identity_state_reads_seeded_mappings_like_python() {
     assert_eq!(
         body,
         json!({"issue_id": i, "thread_id": t, "thread_title": "Saga",
+               "issue_number": "1", "overall_issue_number": null, "identity_version": 1,
+               "provider_issue_number": null,
                "has_confirmed_identity": false, "comicvine_issue_id": null,
                "confirmed_mappings": [], "candidate_mappings": [], "has_unresolved": false})
     );
@@ -1135,6 +1137,13 @@ async fn identity_state_reads_seeded_mappings_like_python() {
         "2026-01-02T03:04:05.123456Z",
     )
     .await;
+    conn.execute(
+        "UPDATE external_identities SET metadata_json = '{\"issue_number\":\"100\"}'::jsonb \
+         WHERE id = $1",
+        &[&confirmed],
+    )
+    .await
+    .unwrap();
     let unscored = mapping(&conn, i, "400", "candidate", None, "2026-01-02T03:04:05.5Z").await;
     let high = mapping(
         &conn,
@@ -1164,6 +1173,8 @@ async fn identity_state_reads_seeded_mappings_like_python() {
     assert_eq!(
         body,
         json!({"issue_id": i, "thread_id": t, "thread_title": "Saga",
+               "issue_number": "1", "overall_issue_number": null, "identity_version": 1,
+               "provider_issue_number": "100",
                "has_confirmed_identity": true, "comicvine_issue_id": "100",
                "confirmed_mappings": [
                    {"external_identity_id": confirmed, "provider": "comicvine", "comicvine_id": "100",

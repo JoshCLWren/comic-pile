@@ -204,8 +204,8 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
         .get(0);
     let issue_ten_id: i32 = conn
         .query_one(
-            "INSERT INTO issues (thread_id, issue_number, position, status, read_at, created_at)
-             VALUES ($1, '10', 10, 'read', '2026-01-02T03:04:05.123456Z'::timestamptz, NOW()) RETURNING id",
+            "INSERT INTO issues (thread_id, issue_number, overall_issue_number, position, status, read_at, created_at)
+             VALUES ($1, '10', '100', 10, 'read', '2026-01-02T03:04:05.123456Z'::timestamptz, NOW()) RETURNING id",
             &[&hellboy_id],
         )
         .await
