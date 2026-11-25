@@ -14,6 +14,75 @@ export interface PersistedBulkReadOperation {
   operation: IssueReadOperationResponse
 }
 
+interface BulkReadReceipt {
+  key: string
+  threadId: number
+  operationId: number
+}
+
+/**
+ * Receipts are keyed by operation id, not just thread id, so a second bulk read
+ * in the same series cannot orphan the first undoable operation (#4655 F4).
+ */
+export function bulkReadReceiptKey(threadId: number, operationId: number): string {
+  return `${BULK_READ_OPERATION_KEY_PREFIX}${threadId}:${operationId}`
+}
+
+export function writeBulkReadReceipt(threadId: number, operationId: number): void {
+  window.localStorage.setItem(bulkReadReceiptKey(threadId, operationId), '1')
+}
+
+function parseReceipt(key: string, value: string | null): BulkReadReceipt | null {
+  const suffix = key.slice(BULK_READ_OPERATION_KEY_PREFIX.length)
+  const parts = suffix.split(':')
+  if (parts.length === 2) {
+    const threadId = Number(parts[0])
+    const operationId = Number(parts[1])
+    if (Number.isInteger(threadId) && threadId > 0 && Number.isInteger(operationId) && operationId > 0) {
+      return { key, threadId, operationId }
+    }
+    return null
+  }
+  // Legacy one-receipt-per-thread key retained so in-flight undos survive an upgrade.
+  const threadId = Number(suffix)
+  const operationId = Number(value)
+  if (Number.isInteger(threadId) && threadId > 0 && Number.isInteger(operationId) && operationId > 0) {
+    return { key, threadId, operationId }
+  }
+  return null
+}
+
+function allReceipts(): BulkReadReceipt[] {
+  const storage = window.localStorage
+  const keys: string[] = []
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index)
+    if (key?.startsWith(BULK_READ_OPERATION_KEY_PREFIX)) keys.push(key)
+  }
+  const receipts: BulkReadReceipt[] = []
+  for (const key of keys) {
+    const receipt = parseReceipt(key, storage.getItem(key))
+    if (receipt) receipts.push(receipt)
+    else storage.removeItem(key)
+  }
+  return receipts
+}
+
+/** Most recent still-recorded operation for one series, if any. */
+export function findBulkReadReceipt(threadId: number): BulkReadReceipt | null {
+  return allReceipts()
+    .filter((receipt) => receipt.threadId === threadId)
+    .sort((a, b) => b.operationId - a.operationId)[0] ?? null
+}
+
+export function clearBulkReadReceipt(threadId: number, operationId: number): void {
+  window.localStorage.removeItem(bulkReadReceiptKey(threadId, operationId))
+  const legacyKey = `${BULK_READ_OPERATION_KEY_PREFIX}${threadId}`
+  if (window.localStorage.getItem(legacyKey) === String(operationId)) {
+    window.localStorage.removeItem(legacyKey)
+  }
+}
+
 /** Named contract for the discovery hook so exported callers keep inference. */
 export interface BulkReadOperationsResult {
   operations: PersistedBulkReadOperation[]
@@ -42,28 +111,16 @@ export function useBulkReadOperations(
     let active = true
     const discover = async () => {
       const found: PersistedBulkReadOperation[] = []
-      const storage = window.localStorage
-      const keys: string[] = []
-      for (let index = 0; index < storage.length; index += 1) {
-        const key = storage.key(index)
-        if (key?.startsWith(BULK_READ_OPERATION_KEY_PREFIX)) keys.push(key)
-      }
-      for (const key of keys) {
-        const threadId = Number(key.slice(BULK_READ_OPERATION_KEY_PREFIX.length))
-        const operationId = Number(storage.getItem(key))
-        if (!Number.isFinite(threadId) || !Number.isFinite(operationId)) {
-          storage.removeItem(key)
-          continue
-        }
+      for (const receipt of allReceipts()) {
         try {
-          const operation = await issuesApi.getReadOperation(operationId)
+          const operation = await issuesApi.getReadOperation(receipt.operationId)
           if (operation.undone_at) {
-            storage.removeItem(key)
+            window.localStorage.removeItem(receipt.key)
           } else {
-            found.push({ threadId, operation })
+            found.push({ threadId: receipt.threadId, operation })
           }
         } catch {
-          storage.removeItem(key)
+          window.localStorage.removeItem(receipt.key)
         }
       }
       if (active) setOperations(found)
@@ -81,7 +138,7 @@ export function useBulkReadOperations(
     setMessage(null)
     try {
       const result = await issuesApi.undoReadOperation(operationId)
-      window.localStorage.removeItem(`${BULK_READ_OPERATION_KEY_PREFIX}${threadId}`)
+      clearBulkReadReceipt(threadId, operationId)
       setOperations((current) => current.filter((entry) => entry.operation.id !== operationId))
       setMessage(
         result.skipped_issue_ids.length > 0

@@ -6,6 +6,11 @@ import { issuesApi } from '../services/api-issues'
 import type { IssueListParams, IssueReadOperationResponse, IssueReadOperationUndoResponse } from '../services/api-issues'
 import { issueCardsApi } from '../services/issueCardsApi'
 import { issueDependenciesApi } from '../services/api-dependencies'
+import {
+  clearBulkReadReceipt,
+  findBulkReadReceipt,
+  writeBulkReadReceipt,
+} from '../hooks/useBulkReadOperations'
 import type { Issue, IssueListResponse } from '../types'
 
 export interface IssueCorrectionIssuesApi {
@@ -235,10 +240,10 @@ export default function IssueCorrectionDialog({
     }
   }, [isOpen, currentIssueNumber, fetchIssues, threadId, issuesService])
 
-  // The reviewed IDs are passed explicitly: `preview` is not a stable dependency
-  // of this callback, so reading it from the closure would silently skip the
-  // staleness check after the preview is set (#4655 review R3).
-  const applyCorrection = useCallback(async (reviewedIds?: number[]) => {
+  // Preview state is not a stable callback dependency, so the reviewed ids and
+  // version are passed explicitly. Both are validated against freshly loaded
+  // pre-mutation state BEFORE any create/move/write (#4655 review F3/R3).
+  const applyCorrection = useCallback(async (reviewed?: ReviewedCorrection) => {
     const targetNumber = selectedIssueNumber.trim()
     if (!targetNumber) {
       setError('Please enter an issue identifier')
@@ -249,45 +254,45 @@ export default function IssueCorrectionDialog({
     setError(null)
 
     try {
-      let targetIssue = allIssues.find((issue) => issue.issue_number === targetNumber)
-      if (!targetIssue) {
-        const insertAfterIssueId =
-          insertPosition !== 'start' && insertPosition !== 'end' ? Number(insertPosition) : null
-        const createdIssues = await issuesService.create(threadId, targetNumber, {
-          insert_after_issue_id: insertAfterIssueId,
-        })
-        targetIssue = createdIssues.issues.find((issue) => issue.issue_number === targetNumber)
+      const projection = projectCorrection(await loadAllIssues(), targetNumber, insertPosition)
+      const version = correctionVersion(projection, targetNumber, insertPosition)
+      const targetIndex = projection.orderedIssues.findIndex(
+        (issue) => issue.id === projection.targetIssue.id,
+      )
+      const unreadBeforeTarget = (targetIndex === -1 ? [] : projection.orderedIssues.slice(0, targetIndex))
+        .filter((issue) => issue.status !== 'read')
 
-        if (!targetIssue) {
+      if (
+        reviewed &&
+        (reviewed.version !== version ||
+          reviewed.ids.join(',') !== unreadBeforeTarget.map((issue) => issue.id).join(','))
+      ) {
+        setError('Issues changed since review. Please review changes again.')
+        return
+      }
+
+      let targetIssue = projection.targetIssue
+      if (targetIssue.id === -1) {
+        const createdIssues = await issuesService.create(threadId, targetNumber, {
+          insert_after_issue_id: projection.createAfterIssueId,
+        })
+        const createdTarget = createdIssues.issues.find(
+          (issue) => issue.issue_number === targetNumber,
+        )
+        if (!createdTarget) {
           throw new Error('Created issue was not returned by the API')
         }
-
+        targetIssue = createdTarget
         if (insertPosition === 'start') {
           await issuesService.move(targetIssue.id, null)
         }
       }
 
-      const orderedIssues = await loadAllIssues()
-      const targetIndex = orderedIssues.findIndex((issue) => issue.id === targetIssue.id)
-
-      if (targetIndex === -1) {
-        throw new Error('Issue not found after update')
-      }
-
-      const issuesBeforeTarget = orderedIssues.slice(0, targetIndex)
-      const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
-
-      // Bind confirmation to the exact reviewed set; reject stale changes.
-      if (reviewedIds && reviewedIds.join(',') !== unreadBeforeTarget.map((i) => i.id).join(',')) {
-        setError('Issues changed since review. Please review changes again.')
-        return
-      }
-
+      // Bind the bulk write to the reviewed projection; do not recompute the
+      // affected set after the create shifted rows around.
       let operation: IssueReadOperationResponse | null = null
       if (unreadBeforeTarget.length > 0) {
-        const result = await issuesService.bulkMarkRead(unreadBeforeTarget.map((issue) => issue.id))
-        // SAFETY: bulkMarkRead is typed to return IssueReadOperationResponse.
-        operation = result
+        operation = await issuesService.bulkMarkRead(unreadBeforeTarget.map((issue) => issue.id))
       }
 
       if (targetIssue.status === 'read') {
@@ -296,10 +301,7 @@ export default function IssueCorrectionDialog({
 
       setLastOperation(operation)
       if (operation) {
-        const persist = issuesService.getReadOperation
-        if (persist) {
-          try { window.localStorage.setItem(`issueReadOperation:${threadId}`, String(operation.id)) } catch { /* ignore */ }
-        }
+        try { writeBulkReadReceipt(threadId, operation.id) } catch { /* ignore */ }
       }
       setPreview(null)
       onSuccess()
@@ -309,7 +311,7 @@ export default function IssueCorrectionDialog({
     } finally {
       setIsLoading(false)
     }
-  }, [selectedIssueNumber, allIssues, insertPosition, threadId, loadAllIssues, issuesService, onSuccess, onClose])
+  }, [selectedIssueNumber, insertPosition, threadId, loadAllIssues, issuesService, onSuccess, onClose])
 
 
   const buildPreview = useCallback(async () => {
@@ -322,30 +324,12 @@ export default function IssueCorrectionDialog({
     setIsLoading(true)
     setError(null)
     try {
-      let targetIssue = allIssues.find((issue) => issue.issue_number === targetNumber)
-      let orderedIssues = await loadAllIssues()
-      let projectedIssues = orderedIssues
-      if (!targetIssue) {
-        // SAFETY: partial issue placeholder used only for preview; id is sentinel -1.
-        targetIssue = { id: -1, issue_number: targetNumber, status: 'unread' } as Issue
-        projectedIssues = [...orderedIssues]
-        if (insertPosition === 'start') {
-          projectedIssues.unshift(targetIssue)
-        } else if (insertPosition === 'end' || insertPosition === '') {
-          projectedIssues.push(targetIssue)
-        } else {
-          const anchorIndex = projectedIssues.findIndex((issue) => issue.id === Number(insertPosition))
-          if (anchorIndex >= 0) {
-            projectedIssues.splice(anchorIndex + 1, 0, targetIssue)
-          } else {
-            projectedIssues.push(targetIssue)
-          }
-        }
-      }
-      const targetIndex = projectedIssues.findIndex((issue) => issue.id === targetIssue!.id)
-      const effectiveIndex = targetIndex === -1 ? projectedIssues.length : targetIndex
-      const issuesBeforeTarget = projectedIssues.slice(0, effectiveIndex)
-      const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
+      const projection = projectCorrection(await loadAllIssues(), targetNumber, insertPosition)
+      const projectedIssues = projection.orderedIssues
+      const targetIssue = projection.targetIssue
+      const targetIndex = projectedIssues.findIndex((issue) => issue.id === targetIssue.id)
+      const unreadBeforeTarget = (targetIndex === -1 ? [] : projectedIssues.slice(0, targetIndex))
+        .filter((issue) => issue.status !== 'read')
 
       // Read state alone cannot distinguish marked read from read & rated, so
       // fetch the affected ratings in one bounded batch for the review panel.
@@ -375,14 +359,15 @@ export default function IssueCorrectionDialog({
         // best-effort preview
       }
 
+      // Project the FINAL state, including the target: applyCorrection always
+      // leaves the target unread, so it keeps the series active (#4655 R4).
+      const finalStatus = (issue: Issue): string => {
+        if (issue.id === targetIssue.id) return 'unread'
+        if (unreadBeforeTarget.some((unread) => unread.id === issue.id)) return 'read'
+        return issue.status
+      }
       const willCompleteSeries = projectedIssues.length > 0
-        && projectedIssues.every((issue) => {
-            // The target is explicitly left unread (or marked unread) by applyCorrection,
-            // so it keeps the series active regardless of the other issues.
-            if (issue.id === targetIssue!.id) return false
-            if (issue.status === 'read') return true
-            return unreadBeforeTarget.some((u) => u.id === issue.id)
-          })
+        && projectedIssues.every((issue) => finalStatus(issue) === 'read')
 
       // Always present the review step, even when no issue is about to be bulk
       // read: creating or moving the target is itself a correction the reader
@@ -394,13 +379,14 @@ export default function IssueCorrectionDialog({
         affectedRatings,
         willCompleteSeries,
         dependentFrontier,
+        version: correctionVersion(projection, targetNumber, insertPosition),
       })
     } catch {
       setError('Failed to prepare issue correction preview. Please try again.')
     } finally {
       setIsLoading(false)
     }
-  }, [selectedIssueNumber, allIssues, insertPosition, threadId, loadAllIssues, depsService, cardsService])
+  }, [selectedIssueNumber, insertPosition, threadId, loadAllIssues, depsService, cardsService])
 
 
   const handleSubmit = useCallback(async () => {
