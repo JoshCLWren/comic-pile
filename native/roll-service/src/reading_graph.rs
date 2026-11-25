@@ -751,6 +751,32 @@ pub async fn repair(
     };
     let action = request.action()?;
     if !repair_target_exists(&inputs, &action) {
+        if request.confirm {
+            // Idempotent retry: the constraint is already gone. Report the
+            // persisted graph state so clients can safely retry after a lost
+            // response without treating success as a 404.
+            let fresh = option_inputs::load_option_diagnostics(&state, user).await?;
+            let after = option_inputs::validated_contained(fresh)?;
+            let status_after = if after.graph_problem().is_some() {
+                "cycle"
+            } else {
+                "ok"
+            };
+            tracing::info!(
+                user_id = user.id(),
+                action = request.action.as_str(),
+                status_before = status_before,
+                status_after = status_after,
+                "reading_graph repair retry: constraint already absent"
+            );
+            return Ok(Json(ReadingGraphRepairResponse {
+                applied: false,
+                status_before: status_before.to_string(),
+                status_after: status_after.to_string(),
+                removed: "Constraint already removed".to_string(),
+                graph: project(after.inputs(), &after, None),
+            }));
+        }
         return Err(crate::ApiError::NotFound(
             "Constraint not found".to_string(),
         ));
@@ -768,11 +794,33 @@ pub async fn repair(
         let deleted = delete_owned(&tx, user.id(), &action).await?;
         if deleted == 0 {
             tx.rollback().await.map_err(db::query_error)?;
+            if request.confirm {
+                let fresh = option_inputs::load_option_diagnostics(&state, user).await?;
+                let after = option_inputs::validated_contained(fresh)?;
+                let status_after = if after.graph_problem().is_some() {
+                    "cycle"
+                } else {
+                    "ok"
+                };
+                return Ok(Json(ReadingGraphRepairResponse {
+                    applied: false,
+                    status_before: status_before.to_string(),
+                    status_after: status_after.to_string(),
+                    removed: "Constraint already removed".to_string(),
+                    graph: project(after.inputs(), &after, None),
+                }));
+            }
             return Err(crate::ApiError::NotFound(
                 "Constraint not found".to_string(),
             ));
         }
         tx.commit().await.map_err(db::query_error)?;
+        tracing::info!(
+            user_id = user.id(),
+            action = request.action.as_str(),
+            status_before = status_before,
+            "reading_graph repair applied"
+        );
     }
 
     if request.confirm {
@@ -780,14 +828,22 @@ pub async fn repair(
         // pre-transaction snapshot with an in-memory deletion applied.
         let fresh = option_inputs::load_option_diagnostics(&state, user).await?;
         let after = option_inputs::validated_contained(fresh)?;
+        let status_after = if after.graph_problem().is_some() {
+            "cycle"
+        } else {
+            "ok"
+        };
+        tracing::info!(
+            user_id = user.id(),
+            action = request.action.as_str(),
+            status_before = status_before,
+            status_after = status_after,
+            "reading_graph repair confirmed"
+        );
         return Ok(Json(ReadingGraphRepairResponse {
             applied: true,
             status_before: status_before.to_string(),
-            status_after: if after.graph_problem().is_some() {
-                "cycle".to_string()
-            } else {
-                "ok".to_string()
-            },
+            status_after: status_after.to_string(),
             removed,
             graph: project(after.inputs(), &after, None),
         }));
