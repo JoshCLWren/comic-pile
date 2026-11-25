@@ -12,6 +12,15 @@ import { issueCardsApi, type IssueCard, type IssueReadRateResponse } from '../se
 import { queryKeys } from '../query/queryKeys'
 
 vi.mock('../services/api-custom-cbl', () => ({ customCBLApi: { getReader: vi.fn() } }))
+vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
+  useComicVineIssueIntelligence: () => ({
+    metadata: null,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
 vi.mock('../services/api-issues', () => ({ issuesApi: { markRead: vi.fn(), markUnread: vi.fn() } }))
 vi.mock('../services/api-tags', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
