@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T21:37:55+00:00",
+  "generated_at": "2026-11-25T21:53:22.058145+00:00",
   "models": [
     {
       "health": {
@@ -4395,7 +4395,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-25T20:31:30+00:00",
+        "cooldown_until": "2026-11-25T21:50:02+00:00",
         "last_outcome": "provider_throttle",
         "status": "cooling"
       },
@@ -5399,9 +5399,9 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-25T20:34:31+00:00",
-        "last_outcome": "provider_throttle",
-        "status": "cooling"
+        "cooldown_until": "2026-11-25T21:54:18+00:00",
+        "last_outcome": "model_unavailable",
+        "status": "unavailable"
       },
       "model": "hungerg-free",
       "source": "opencode-free",
@@ -5516,25 +5516,25 @@
     {
       "health": {
         "cooldown_until": null,
-        "last_outcome": "no_work",
+        "last_outcome": "success",
         "status": "healthy"
       },
       "kept_hot": {
-        "successes": 28,
-        "trials": 73
+        "successes": 41,
+        "trials": 91
       },
       "model": "hy4-flash-free",
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 25,
-          "delivered": 12,
-          "failed": 13,
+          "completed": 38,
+          "delivered": 16,
+          "failed": 18,
           "failures": {
             "control_plane_failure": 3,
-            "provider_failure": 1,
+            "provider_failure": 2,
             "unknown_failure": 1,
-            "work_failure": 8
+            "work_failure": 12
           },
           "idle": 2,
           "kinds": {
@@ -5547,40 +5547,40 @@
               "runs": 1
             },
             "review": {
-              "completed": 18,
-              "delivered": 5,
-              "failed": 12,
+              "completed": 29,
+              "delivered": 7,
+              "failed": 16,
               "failures": {
                 "control_plane_failure": 3,
-                "provider_failure": 1,
+                "provider_failure": 2,
                 "unknown_failure": 1,
-                "work_failure": 7
+                "work_failure": 10
               },
               "idle": 0,
-              "runs": 30
+              "runs": 45
             },
             "review-findings": {
-              "completed": 6,
-              "delivered": 6,
-              "failed": 1,
+              "completed": 8,
+              "delivered": 8,
+              "failed": 2,
               "failures": {
-                "work_failure": 1
+                "work_failure": 2
               },
               "idle": 2,
-              "runs": 9
+              "runs": 12
             }
           },
-          "runs": 40
+          "runs": 58
         },
         "7d": {
-          "completed": 28,
-          "delivered": 15,
-          "failed": 56,
+          "completed": 41,
+          "delivered": 19,
+          "failed": 61,
           "failures": {
             "control_plane_failure": 11,
-            "provider_failure": 2,
+            "provider_failure": 3,
             "unknown_failure": 2,
-            "work_failure": 41
+            "work_failure": 45
           },
           "idle": 5,
           "kinds": {
@@ -5593,30 +5593,30 @@
               "runs": 1
             },
             "review": {
-              "completed": 18,
-              "delivered": 5,
-              "failed": 12,
+              "completed": 29,
+              "delivered": 7,
+              "failed": 16,
               "failures": {
                 "control_plane_failure": 3,
-                "provider_failure": 1,
+                "provider_failure": 2,
                 "unknown_failure": 1,
-                "work_failure": 7
+                "work_failure": 10
               },
               "idle": 0,
-              "runs": 30
+              "runs": 45
             },
             "review-findings": {
-              "completed": 6,
-              "delivered": 6,
-              "failed": 1,
+              "completed": 8,
+              "delivered": 8,
+              "failed": 2,
               "failures": {
-                "work_failure": 1
+                "work_failure": 2
               },
               "idle": 2,
-              "runs": 9
+              "runs": 12
             }
           },
-          "runs": 89
+          "runs": 107
         }
       }
     },
@@ -23658,18 +23658,18 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 76,
-          "delivered": 53,
-          "failed": 74,
+          "completed": 89,
+          "delivered": 57,
+          "failed": 79,
           "idle": 17,
-          "runs": 167
+          "runs": 185
         },
         "7d": {
-          "completed": 128,
-          "delivered": 99,
-          "failed": 423,
+          "completed": 141,
+          "delivered": 103,
+          "failed": 428,
           "idle": 98,
-          "runs": 649
+          "runs": 667
         }
       }
     },
@@ -23793,9 +23793,9 @@
     "24h": "24 hours",
     "7d": "7 days"
   },
-  "counts_generated_at": "2026-11-25T20:43:02.753756+00:00",
+  "counts_generated_at": "2026-11-25T21:53:22.058145+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-25T21:37:56Z",
+    "generated_at": "2026-11-25T21:53:23Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23805,6 +23805,9 @@
         "nvidia/nemotron-3-nano-30b-a3b",
         "stepfun-ai/step-3.7-flash",
         "z-ai/glm-5.3"
+      ],
+      "opencode-free": [
+        "hungerg-free"
       ],
       "openrouter-free": [
         "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -23904,10 +23907,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-25T21:37:56.514881+00:00",
-    "days_elapsed": 24.901,
+    "checked_at": "2026-11-25T21:53:23.426941+00:00",
+    "days_elapsed": 24.912,
     "days_in_month": 30.0,
-    "days_left": 5.1,
+    "days_left": 5.09,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23923,31 +23926,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 22139822,
-        "organization": 22139822,
+        "database": 22769577,
+        "organization": 22769577,
         "owner_target": 50000000,
-        "projected_database": 26673413,
-        "projected_organization": 26673413,
-        "projected_share": 0.0533,
-        "share_used": 0.0443
+        "projected_database": 27420011,
+        "projected_organization": 27420011,
+        "projected_share": 0.0548,
+        "share_used": 0.0455
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 134457,
-        "organization": 134457,
+        "database": 134803,
+        "organization": 134803,
         "owner_target": 1000000,
-        "projected_database": 161990,
-        "projected_organization": 161990,
+        "projected_database": 162335,
+        "projected_organization": 162335,
         "projected_share": 0.0162,
-        "share_used": 0.0134
+        "share_used": 0.0135
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 19017728,
-        "organization": 19017728,
+        "database": 19038208,
+        "organization": 19038208,
         "owner_target": 250000000,
-        "projected_database": 19017728,
-        "projected_organization": 19017728,
+        "projected_database": 19038208,
+        "projected_organization": 19038208,
         "projected_share": 0.0038,
         "share_used": 0.0038
       }
@@ -23961,7 +23964,7 @@
     "status": "ok"
   },
   "schema": {
-    "checked_at": "2026-11-25T21:37:59+00:00",
+    "checked_at": "2026-11-25T21:53:26+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24139,7 +24142,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-25T21:37:59Z",
+    "generated_at": "2026-11-25T21:53:26Z",
     "groups": [
       {
         "count": 1,
@@ -24189,236 +24192,23 @@
   },
   "ready": {
     "cycles": [],
-    "generated_at": "2026-11-25T21:28:49+00:00",
+    "generated_at": "2026-11-25T21:51:27+00:00",
     "items": [
-      {
-        "action": "review-findings",
-        "lane": 3,
-        "priority": 0,
-        "rank": 1,
-        "stage": "factory:changes-requested",
-        "target": "pr:5781",
-        "title": "Post-Rust: bulk read/complete actions must be reviewable and reversible from Queue/History"
-      },
       {
         "action": "merge-conflict",
         "lane": 3,
         "priority": 1,
-        "rank": 2,
+        "rank": 1,
         "stage": "factory:review",
         "target": "pr:5681",
         "title": "anti-slop: fix all `no-module-mocking` findings, then enforce the rule (455)"
-      },
-      {
-        "action": "review",
-        "lane": 3,
-        "priority": 0,
-        "rank": 3,
-        "stage": "factory:review",
-        "target": "pr:5791",
-        "title": "ci: remove Python uv sync from shared CI Docker image"
       }
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-25T21:38:00Z",
+    "generated_at": "2026-11-25T21:53:28Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795641130,
-          "buckets": {
-            "reader": 11,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4991,
-            "reset": 1795644691
-          },
-          "cache_hits": 0,
-          "github": 16,
-          "label": "dispatch pr:5780",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ],
-            [
-              "api GET repos/R/actions/runs",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795641188,
-          "buckets": {
-            "reader": 23,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4931,
-            "reset": 1795644691
-          },
-          "cache_hits": 0,
-          "github": 28,
-          "label": "dispatch issue:5680",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              11
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795641252,
-          "buckets": {
-            "reader": 11,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4823,
-            "reset": 1795644691
-          },
-          "cache_hits": 0,
-          "github": 16,
-          "label": "dispatch pr:5781",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ],
-            [
-              "api GET repos/R/actions/runs",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795641381,
-          "buckets": {
-            "reader": 102,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4667,
-            "reset": 1795644691
-          },
-          "cache_hits": 21,
-          "github": 107,
-          "label": "dispatch pr:5789",
-          "paginated": 15,
-          "top": [
-            [
-              "api GET repos/R/issues",
-              49
-            ],
-            [
-              "api GET repos/R/issues/N",
-              34
-            ],
-            [
-              "gh pr checks",
-              23
-            ],
-            [
-              "api GET repos/R/issues/N/comments paginate",
-              12
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795641605,
-          "buckets": {
-            "reader": 231,
-            "workflow": 44
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4121,
-            "reset": 1795644691
-          },
-          "cache_hits": 21,
-          "github": 275,
-          "label": "dispatch roster",
-          "paginated": 58,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              91
-            ],
-            [
-              "gh pr checks",
-              37
-            ],
-            [
-              "api GET repos/R/issues/N/comments paginate",
-              35
-            ],
-            [
-              "api GET repos/R/issues",
-              22
-            ],
-            [
-              "api GET repos/R/pulls/N",
-              17
-            ]
-          ],
-          "writes": 17
-        },
         {
           "at": 1795641836,
           "buckets": {
@@ -24691,48 +24481,204 @@
             ]
           ],
           "writes": 2
-        }
-      ],
-      "merge": [
+        },
         {
-          "at": 1795629317,
+          "at": 1795642696,
           "buckets": {
-            "reader": 0,
-            "workflow": 20
+            "reader": 11,
+            "workflow": 5
           },
           "budget": {
             "limit": 5000,
-            "remaining": 2294,
-            "reset": 1795630263
+            "remaining": 3174,
+            "reset": 1795644691
           },
           "cache_hits": 0,
-          "github": 20,
-          "label": "merge drain",
-          "paginated": 14,
+          "github": 16,
+          "label": "dispatch pr:5790",
+          "paginated": 4,
           "top": [
             [
-              "api GET repos/R/issues/N/comments paginate",
-              10
-            ],
-            [
-              "api GET repos/R/pulls paginate",
+              "api GET repos/R/issues/N",
               3
             ],
             [
-              "api GET repos/R/actions/workflows/ci.yml/runs",
+              "api GET repos/R/issues",
               2
             ],
             [
-              "gh pr list",
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
               1
             ],
             [
-              "api GET repos/R/issues",
+              "api GET repos/R/actions/runs",
               1
             ]
           ],
           "writes": 0
         },
+        {
+          "at": 1795642952,
+          "buckets": {
+            "reader": 525,
+            "workflow": 10
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 2993,
+            "reset": 1795644691
+          },
+          "cache_hits": 104,
+          "github": 535,
+          "label": "dispatch issue:5738",
+          "paginated": 75,
+          "top": [
+            [
+              "api GET repos/R/issues/N",
+              296
+            ],
+            [
+              "api GET repos/R/issues",
+              134
+            ],
+            [
+              "gh pr checks",
+              109
+            ],
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              72
+            ],
+            [
+              "api GET repos/R/pulls/N",
+              13
+            ]
+          ],
+          "writes": 2
+        },
+        {
+          "at": 1795643297,
+          "buckets": {
+            "reader": 541,
+            "workflow": 10
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 2860,
+            "reset": 1795644691
+          },
+          "cache_hits": 103,
+          "github": 551,
+          "label": "dispatch issue:4655",
+          "paginated": 81,
+          "top": [
+            [
+              "api GET repos/R/issues/N",
+              300
+            ],
+            [
+              "api GET repos/R/issues",
+              135
+            ],
+            [
+              "gh pr checks",
+              110
+            ],
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              78
+            ],
+            [
+              "api GET repos/R/pulls/N",
+              15
+            ]
+          ],
+          "writes": 2
+        },
+        {
+          "at": 1795643488,
+          "buckets": {
+            "reader": 166,
+            "workflow": 46
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 2755,
+            "reset": 1795644691
+          },
+          "cache_hits": 17,
+          "github": 212,
+          "label": "dispatch roster",
+          "paginated": 37,
+          "top": [
+            [
+              "api GET repos/R/issues/N",
+              75
+            ],
+            [
+              "gh pr checks",
+              26
+            ],
+            [
+              "api GET repos/R/issues",
+              20
+            ],
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              20
+            ],
+            [
+              "api GET repos/R/pulls/N",
+              18
+            ]
+          ],
+          "writes": 15
+        },
+        {
+          "at": 1795643531,
+          "buckets": {
+            "reader": 11,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 2739,
+            "reset": 1795644691
+          },
+          "cache_hits": 0,
+          "github": 16,
+          "label": "dispatch pr:5791",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ],
+            [
+              "api GET repos/R/actions/runs",
+              1
+            ]
+          ],
+          "writes": 0
+        }
+      ],
+      "merge": [
         {
           "at": 1795629878,
           "buckets": {
@@ -25161,6 +25107,45 @@
             ]
           ],
           "writes": 8
+        },
+        {
+          "at": 1795643446,
+          "buckets": {
+            "reader": 35,
+            "workflow": 7
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 4726,
+            "reset": 1795645041
+          },
+          "cache_hits": 0,
+          "github": 42,
+          "label": "merge drain",
+          "paginated": 15,
+          "top": [
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              11
+            ],
+            [
+              "api GET repos/R/actions/workflows/ci.yml/runs",
+              5
+            ],
+            [
+              "api GET repos/R/actions/workflows/fixed-model-pr-repair-guard.yml/runs",
+              4
+            ],
+            [
+              "api GET repos/R/pulls paginate",
+              3
+            ],
+            [
+              "gh pr view",
+              3
+            ]
+          ],
+          "writes": 1
         }
       ]
     }
