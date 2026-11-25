@@ -116,9 +116,9 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Go to position' }))
 
     const entry84 = screen.getAllByTestId('reading-list-entry').find((el) => within(el).getByTestId('reading-list-entry-title').textContent?.includes('#84'))
-    expect(entry84).toBeTruthy()
-    await user.click(within(entry84 as HTMLElement).getByRole('button', { name: /Show settings for/ }))
-    await user.click(within(entry84 as HTMLElement).getByRole('button', { name: 'Insert before' }))
+    if (!entry84) throw new Error('Expected to find Julix entry #84 after jumping to position 84')
+    await user.click(within(entry84).getByRole('button', { name: /Show settings for/ }))
+    await user.click(within(entry84).getByRole('button', { name: 'Insert before' }))
 
     await user.type(screen.getByLabelText('Search issues for custom CBL'), 'JLA Classified')
     await user.click(screen.getByRole('button', { name: 'Find issues' }))
