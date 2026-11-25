@@ -93,11 +93,31 @@ async function renderImmediate() {
   })
 }
 
+function buildPreviewResponse(range: string) {
+  return {
+    thread_id: 99,
+    thread_title: "Test",
+    requested_strategy: "safe_default" as const,
+    default_outcome: {
+      strategy: "safe_default" as const,
+      can_commit: true,
+      preserves_existing_relative_order: true,
+      before: BASE_ISSUES.map((i, idx) => ({ issue_id: i.id, issue_number: i.issue_number, position: idx + 1, is_new: false })),
+      after: [...BASE_ISSUES.map((i, idx) => ({ issue_id: i.id, issue_number: i.issue_number, position: idx + 1, is_new: false })), { issue_id: null, issue_number: range, position: BASE_ISSUES.length + 1, is_new: true }],
+      added_issue_numbers: [range],
+      graph: { status: "ok", cycles: [] },
+      conflict_message: null,
+    },
+    numeric_resort_outcome: null,
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 
   mockedIssuesApi.list.mockResolvedValue(buildListResponse())
   mockedIssuesApi.create.mockResolvedValue(buildListResponse([]))
+  mockedIssuesApi.previewCreate.mockImplementation(async (_threadId: number, range: string) => buildPreviewResponse(range))
   mockedIssuesApi.markRead.mockResolvedValue()
   mockedIssuesApi.markUnread.mockResolvedValue()
   mockedIssuesApi.reorder.mockResolvedValue()
@@ -189,12 +209,15 @@ describe('IssueToggleList Add box validation (#3586)', () => {
     expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
   })
 
-  it('stages a numeric range as a pending issue chip', async () => {
+  it('stages a numeric range as a pending issue chip after preview confirm', async () => {
     const ref = await renderDeferred()
     const input = screen.getByTestId('issue-add-input')
 
     fireEvent.change(input, { target: { value: '19-24' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
 
     expect(screen.getByTestId('pending-creates')).toHaveTextContent('19-24')
     expect(ref.current?.hasPendingMutations()).toBe(true)
@@ -202,22 +225,25 @@ describe('IssueToggleList Add box validation (#3586)', () => {
     await act(async () => {
       await ref.current?.flush()
     })
-    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '19-24')
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '19-24', { strategy: 'safe_default' })
   })
 
-  it('stages a named issue such as Annual 1 as a pending issue chip', async () => {
+  it('stages a named issue such as Annual 1 as a pending issue chip after preview confirm', async () => {
     const ref = await renderDeferred()
     const input = screen.getByTestId('issue-add-input')
 
     fireEvent.change(input, { target: { value: 'Annual 1' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
 
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
+
     expect(screen.getByTestId('pending-creates')).toHaveTextContent('Annual 1')
 
     await act(async () => {
       await ref.current?.flush()
     })
-    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, 'Annual 1')
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, 'Annual 1', { strategy: 'safe_default' })
   })
 
   it('keeps a whitespace-only entry from staging a chip', async () => {
