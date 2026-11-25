@@ -40,7 +40,9 @@ use axum::{
     body::Bytes,
     extract::{rejection::PathRejection, Path, State},
     http::StatusCode,
+    Json,
 };
+use serde::Serialize;
 use serde_json::Value;
 use std::sync::Arc;
 use tokio_postgres::Transaction;
