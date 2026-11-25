@@ -28,7 +28,9 @@ from merged PRs in the last 72 hours. Each run is serialized through the
    deployment does not start discovery. A bounded Actions cache records only
    attempted merge SHAs and timestamps before generation. Never-attempted sources
    take priority, then the least recently attempted; the cache is a scheduling
-   hint, not publication evidence or a source of credentials.
+   hint, not publication evidence or a source of credentials. If the cache is
+   evicted or an attempt-hint file is invalid, hints are lost and recovery falls
+   back to oldest-first ordering by merge time.
 2. Each unprivileged generate matrix job invokes the restricted OpenCode agent
    for one selected source, with at most two running in parallel. The release_writer.py helper validates content and
    classification and writes one local JSON candidate. No Neon credential or

@@ -251,13 +251,16 @@ def _load_attempts(path: Path, now: int) -> dict[str, int]:
     if not path.exists():
         return {}
     if path.is_symlink() or not path.is_file() or path.stat().st_size > 131072:
-        raise RecoveryError("invalid release recovery attempt cache")
+        print("::warning::invalid release recovery attempt cache; treating as empty")
+        return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RecoveryError("invalid release recovery attempt cache") from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        print("::warning::invalid release recovery attempt cache; treating as empty")
+        return {}
     if not isinstance(payload, dict) or len(payload) > _MAX_ATTEMPT_RECORDS:
-        raise RecoveryError("invalid release recovery attempt cache")
+        print("::warning::invalid release recovery attempt cache; treating as empty")
+        return {}
     return {
         sha: timestamp
         for sha, timestamp in payload.items()
@@ -273,7 +276,9 @@ def _save_attempts(path: Path, attempts: dict[str, int], selected: Sequence[Sour
     attempts.update({source.merge_commit_sha: now for source in selected})
     bounded = dict(sorted(attempts.items(), key=lambda item: item[1], reverse=True)[:_MAX_ATTEMPT_RECORDS])
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(bounded, separators=(",", ":")) + "\n", encoding="utf-8")
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps(bounded, separators=(",", ":")) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
 
 
 def is_public_publication(payload: object) -> bool:
