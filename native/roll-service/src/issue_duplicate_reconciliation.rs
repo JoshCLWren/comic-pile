@@ -710,7 +710,7 @@ fn build_preview_actions(
     for action in &actions {
         if action.requires_decision {
             if let Some(key) = &action.decision_key {
-                if !_decisions.contains_key(key) {
+                if !decisions.contains_key(key) {
                     can_apply = false;
                 }
             }
