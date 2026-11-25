@@ -40,6 +40,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 unicode-casefold = "0.2"
 utoipa = "6"
 html-escape = "0.3"
+miniz_oxide = "0.9"
+url = "2"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
