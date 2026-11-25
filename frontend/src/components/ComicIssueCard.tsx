@@ -214,6 +214,8 @@ export interface ComicIssueCardProps {
   children?: ReactNode
   /** Notified after a committed mutation so parents can reconcile snapshots. */
   onMutated?: (response: IssueReadRateResponse) => void
+  /** Request the shared provider/tag reading details when an editor opens. */
+  onReadingDetailsRequest?: () => void
   /** Hide the mapping control (provider-only entries use Add to ComicPile instead). */
   showMapping?: boolean
   /**
