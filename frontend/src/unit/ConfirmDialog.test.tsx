@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { fireEvent, render, screen } from './testingLibrary'
+=======
+import { fireEvent, render, screen } from '@testing-library/react'
+>>>>>>> 219968b69f453ab91e435981b5d1ce55ba1b4d97
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import ConfirmDialog from '../components/ConfirmDialog'
