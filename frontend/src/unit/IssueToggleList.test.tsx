@@ -117,6 +117,22 @@ beforeEach(() => {
 
   mockedIssuesApi.list.mockResolvedValue(buildListResponse())
   mockedIssuesApi.create.mockResolvedValue(buildListResponse([]))
+  mockedIssuesApi.previewCreate.mockImplementation(async (_threadId: number, range: string) => ({
+    thread_id: 99,
+    thread_title: 'Test',
+    requested_strategy: 'safe_default',
+    default_outcome: {
+      strategy: 'safe_default',
+      can_commit: true,
+      preserves_existing_relative_order: true,
+      before: BASE_ISSUES.map((i, idx) => ({ issue_id: i.id, issue_number: i.issue_number, position: idx + 1, is_new: false })),
+      after: [...BASE_ISSUES.map((i, idx) => ({ issue_id: i.id, issue_number: i.issue_number, position: idx + 1, is_new: false })), { issue_id: null, issue_number: range, position: BASE_ISSUES.length + 1, is_new: true }],
+      added_issue_numbers: [range],
+      graph: { status: 'ok', cycles: [] },
+      conflict_message: null,
+    },
+    numeric_resort_outcome: null,
+  }))
   mockedIssuesApi.markRead.mockResolvedValue()
   mockedIssuesApi.markUnread.mockResolvedValue()
   mockedIssuesApi.reorder.mockResolvedValue()
@@ -1004,6 +1020,9 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     fireEvent.change(input, { target: { value: '4-5' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
 
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
+
     // No API call yet — the create is queued as a draft.
     expect(mockedIssuesApi.create).not.toHaveBeenCalled()
     // Pending create is visible in the UI.
@@ -1013,7 +1032,7 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     await act(async () => {
       await ref.current?.flush()
     })
-    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4-5')
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4-5', { strategy: 'safe_default' })
     expect(ref.current?.hasPendingMutations()).toBe(false)
   })
 
@@ -1022,6 +1041,8 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     const input = screen.getByTestId('issue-add-input')
     fireEvent.change(input, { target: { value: '4-5' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     expect(ref.current?.hasPendingMutations()).toBe(true)
 
     // Unmount without flushing (dialog X/close).
@@ -1048,16 +1069,22 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     // Add first issue range
     fireEvent.change(input, { target: { value: '7' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     expect(screen.getByTestId('pending-creates')).toHaveTextContent('7')
 
     // Add second issue range
     fireEvent.change(input, { target: { value: 'Annual 2' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     expect(screen.getByTestId('pending-creates')).toHaveTextContent('Annual 2')
 
     // Add third issue range
     fireEvent.change(input, { target: { value: '10-12' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     expect(screen.getByTestId('pending-creates')).toHaveTextContent('10-12')
 
     // Verify all three are queued
@@ -1071,8 +1098,8 @@ describe('IssueToggleList deferred mode (#3267)', () => {
 
     // Verify all three create calls were made
     expect(mockedIssuesApi.create).toHaveBeenCalledTimes(3)
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7')
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2')
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7', { strategy: 'safe_default' })
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2', { strategy: 'safe_default' })
     expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(3, 99, '10-12')
     expect(ref.current?.hasPendingMutations()).toBe(false)
   })
