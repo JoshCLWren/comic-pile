@@ -221,6 +221,12 @@ pub struct MetadataRefreshResponse {
 pub struct ConfirmIdentityRequest {
     #[serde(deserialize_with = "de_lax_i32")]
     pub comicvine_issue_id: i32,
+    /// Optional overall-series alias committed with the exact identity.
+    #[serde(default)]
+    pub overall_issue_number: Option<String>,
+    /// Last identity version observed by the editor; enables safe retries.
+    #[serde(default)]
+    pub expected_version: Option<i64>,
 }
 
 /// Python `ReplaceIdentityRequest` (`reason` `max_length=500`).
