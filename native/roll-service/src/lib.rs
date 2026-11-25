@@ -38,6 +38,7 @@ pub mod issue_handler;
 pub mod issue_identity;
 pub mod issue_identity_adoption_preview;
 pub mod issue_identity_cbl_reading_graph_preview;
+pub mod issue_duplicate_reconciliation;
 pub mod issue_mutation;
 pub mod issue_read;
 pub mod issue_read_state;

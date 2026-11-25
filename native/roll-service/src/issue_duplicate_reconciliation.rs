@@ -301,6 +301,7 @@ async fn load_issue_evidence(
         status: issue_row.get(4),
         read_at,
         created_at,
+        merged_into_issue_id,
         comicvine_issue_id,
         comicvine_volume_id,
         comicvine_issue_number,
@@ -808,14 +809,24 @@ pub async fn apply_reconciliation(
     // Load evidence and validate token
     let canonical = load_issue_evidence(&tx, user.id(), req.canonical_issue_id).await?;
     let mut duplicates = Vec::new();
+    let mut pre_warnings: Vec<String> = Vec::new();
     for id in &req.duplicate_issue_ids {
         let dup = load_issue_evidence(&tx, user.id(), *id).await?;
-        if dup.merged_into_issue_id().is_some() {
-            // already merged - idempotent if same target
+        if let Some(merged_into) = dup.merged_into_issue_id {
+            if merged_into == req.canonical_issue_id {
+                pre_warnings.push(format!("Issue {} is already merged into canonical {}; skipping.", dup.issue_id, merged_into));
+                duplicates.push(dup);
+                continue;
+            }
+            return Err(conflict(format!(
+                "Issue {} is already merged into a different canonical {}",
+                dup.issue_id, merged_into
+            )));
         }
         duplicates.push(dup);
     }
     let (actions, mut warnings, can_apply) = build_preview_actions(&canonical, &duplicates, &req.decisions);
+    warnings.extend(pre_warnings);
     if !can_apply {
         return Err(conflict("Preview has unresolved decisions; resolve them before applying".to_string()));
     }
@@ -841,6 +852,10 @@ pub async fn apply_reconciliation(
     let canonical_has_cv = canonical.comicvine_issue_id.is_some();
 
     for dup in &duplicates {
+        if dup.merged_into_issue_id == Some(req.canonical_issue_id) {
+            suppressed_duplicate_issue_ids.push(dup.issue_id);
+            continue;
+        }
         // Move comicvine mappings: reassign issue_external_identity_mappings from dup to canonical
         let mapping_rows = tx
             .query(
