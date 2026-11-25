@@ -80,4 +80,40 @@ describe('useBulkReadOperations', () => {
     await waitFor(() => expect(result.current.operations).toHaveLength(0))
     expect(window.localStorage.getItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`)).toBeNull()
   })
+
+  it('discards malformed receipts without calling the API', async () => {
+    window.localStorage.setItem(`${BULK_READ_OPERATION_KEY_PREFIX}not-a-thread`, '7')
+    window.localStorage.setItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`, 'not-an-id')
+    const api = fakeApi()
+    const { result } = renderHook(() => useBulkReadOperations(api))
+
+    await waitFor(() => expect(result.current.operations).toHaveLength(0))
+    expect(api.getReadOperation).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem(`${BULK_READ_OPERATION_KEY_PREFIX}not-a-thread`)).toBeNull()
+    expect(window.localStorage.getItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`)).toBeNull()
+  })
+
+  it('discards a receipt whose operation can no longer be loaded', async () => {
+    window.localStorage.setItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`, '11')
+    const api = fakeApi()
+    api.getReadOperation.mockRejectedValueOnce(new Error('operation gone'))
+    const { result } = renderHook(() => useBulkReadOperations(api))
+
+    await waitFor(() => expect(window.localStorage.getItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`)).toBeNull())
+    expect(result.current.operations).toHaveLength(0)
+  })
+
+  it('reports a failed undo while keeping the receipt for a retry', async () => {
+    window.localStorage.setItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`, '12')
+    const api = fakeApi()
+    api.undoReadOperation.mockRejectedValueOnce(new Error('network'))
+    const { result } = renderHook(() => useBulkReadOperations(api))
+    await waitFor(() => expect(result.current.operations).toHaveLength(1))
+
+    await act(async () => { await result.current.undo(42, 12) })
+
+    expect(result.current.message).toMatch(/failed to undo/i)
+    expect(window.localStorage.getItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`)).toBe('12')
+    expect(result.current.operations).toHaveLength(1)
+  })
 })

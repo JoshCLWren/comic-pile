@@ -310,4 +310,49 @@ describe('IssueCorrectionDialog', () => {
     patchIssue.mockRestore()
   })
 
+  it('previews and confirms a new issue appended at the end', async () => {
+    const existing = [issue({ id: 1, issue_number: '1' }), issue({ id: 2, issue_number: '2' })]
+    const created = issue({ id: 3, issue_number: 'Annual 1' })
+    list
+      .mockResolvedValueOnce(listResponse(existing))
+      .mockResolvedValueOnce(listResponse(existing))
+      .mockResolvedValueOnce(listResponse([...existing, created]))
+    create.mockResolvedValueOnce(listResponse([created]))
+
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Annual 1')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+
+    expect(await screen.findByTestId('bulk-read-preview')).toHaveTextContent('Marking 2 issues')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
+
+    await waitFor(() => expect(create).toHaveBeenCalledWith(42, 'Annual 1', { insert_after_issue_id: null }))
+    await waitFor(() => expect(bulkMarkRead).toHaveBeenCalledWith([1, 2]))
+  })
+
+  it('projects an end insertion when the selected anchor is no longer present', async () => {
+    const existing = [issue({ id: 1, issue_number: '1' }), issue({ id: 2, issue_number: '2' })]
+    const created = issue({ id: 3, issue_number: 'Annual 1' })
+    list
+      .mockResolvedValueOnce(listResponse(existing))
+      .mockResolvedValueOnce(listResponse(existing))
+      .mockResolvedValueOnce(listResponse([...existing, created]))
+    create.mockResolvedValueOnce(listResponse([created]))
+
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Annual 1')
+    fireEvent.change(screen.getByLabelText(/place new issue/i), { target: { value: '999' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+
+    expect(await screen.findByTestId('bulk-read-preview')).toHaveTextContent('Marking 2 issues')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
+
+    await waitFor(() => expect(create).toHaveBeenCalledWith(42, 'Annual 1', { insert_after_issue_id: 999 }))
+    await waitFor(() => expect(bulkMarkRead).toHaveBeenCalledWith([1, 2]))
+  })
+
 })
