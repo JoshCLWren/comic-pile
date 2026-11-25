@@ -150,6 +150,136 @@ describe('DuplicateReconciliationPage', () => {
     })
   })
 
+  it('shows preview error', async () => {
+    const user = userEvent.setup()
+    mockDetect.mockResolvedValue({ groups: [group()] })
+    mockPreview.mockRejectedValue(new Error('preview boom'))
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Same Comic Vine identity')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Same Comic Vine identity'))
+    await user.click(screen.getByRole('button', { name: 'Preview resolution' }))
+    await waitFor(() => {
+      expect(screen.getByText('preview boom')).toBeInTheDocument()
+    })
+  })
+
+
+  it('applies reconciliation with null undo id', async () => {
+    const user = userEvent.setup()
+    mockDetect.mockResolvedValue({ groups: [group()] })
+    mockPreview.mockResolvedValue(previewResponse())
+    mockApply.mockResolvedValue({
+      canonical_issue_id: 10,
+      merged_issue_ids: [20],
+      moved_event_ids: [],
+      moved_mapping_ids: [],
+      moved_list_entry_ids: [],
+      suppressed_duplicate_issue_ids: [],
+      undo_snapshot_id: null,
+      warnings: [],
+    })
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Same Comic Vine identity')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Same Comic Vine identity'))
+    await user.click(screen.getByRole('button', { name: 'Preview resolution' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Apply reconciliation' })).toBeEnabled()
+    })
+    await user.click(screen.getByRole('button', { name: 'Apply reconciliation' }))
+    await waitFor(() => {
+      expect(screen.getByText('Reconciled. Undo ID: n/a')).toBeInTheDocument()
+    })
+  })
+
+  it('shows apply error', async () => {
+    const user = userEvent.setup()
+    mockDetect.mockResolvedValue({ groups: [group()] })
+    mockPreview.mockResolvedValue(previewResponse())
+    mockApply.mockRejectedValue(new Error('apply boom'))
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Same Comic Vine identity')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Same Comic Vine identity'))
+    await user.click(screen.getByRole('button', { name: 'Preview resolution' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Apply reconciliation' })).toBeEnabled()
+    })
+    await user.click(screen.getByRole('button', { name: 'Apply reconciliation' }))
+    await waitFor(() => {
+      expect(screen.getByText('apply boom')).toBeInTheDocument()
+    })
+  })
+
+  it('shows undo error', async () => {
+    const user = userEvent.setup()
+    mockDetect.mockResolvedValue({ groups: [group()] })
+    mockPreview.mockResolvedValue(previewResponse())
+    mockApply.mockResolvedValue({
+      canonical_issue_id: 10,
+      merged_issue_ids: [20],
+      moved_event_ids: [],
+      moved_mapping_ids: [],
+      moved_list_entry_ids: [],
+      suppressed_duplicate_issue_ids: [],
+      undo_snapshot_id: 7,
+      warnings: [],
+    })
+    mockUndo.mockRejectedValue(new Error('undo boom'))
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Same Comic Vine identity')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Same Comic Vine identity'))
+    await user.click(screen.getByRole('button', { name: 'Preview resolution' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Apply reconciliation' })).toBeEnabled()
+    })
+    await user.click(screen.getByRole('button', { name: 'Apply reconciliation' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Undo #7' })).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: 'Undo #7' }))
+    await waitFor(() => {
+      expect(screen.getByText('undo boom')).toBeInTheDocument()
+    })
+  })
+
+  it('selects canonical via button', async () => {
+    const user = userEvent.setup()
+    mockDetect.mockResolvedValue({ groups: [group()] })
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Same Comic Vine identity')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Same Comic Vine identity'))
+    await user.click(screen.getByRole('button', { name: /Canonical: #101 \(20\)/ }))
+    expect(screen.getByText('Preview resolution')).toBeInTheDocument()
+  })
+
+  it('renders null evidence fields and related label', async () => {
+    const user = userEvent.setup()
+    const relatedGroup = group({
+      evidence: [
+        evidence({ issue_id: 10, read_at: null, comicvine_issue_id: null }),
+        evidence({ issue_id: 20, issue_number: '101' }),
+        evidence({ issue_id: 30, issue_number: '102' }),
+      ],
+    })
+    mockDetect.mockResolvedValue({ groups: [relatedGroup] })
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Same Comic Vine identity')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Same Comic Vine identity'))
+    expect(screen.getByText('Related')).toBeInTheDocument()
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+  })
+
   it('renders a detected group and selects it', async () => {
     const user = userEvent.setup()
     mockDetect.mockResolvedValue({ groups: [group()] })
@@ -200,9 +330,11 @@ describe('DuplicateReconciliationPage', () => {
       expect(screen.getByText('Same Comic Vine identity')).toBeInTheDocument()
     })
     await user.click(screen.getByText('Same Comic Vine identity'))
-    const checkbox = screen.getAllByRole('checkbox')[0]
-    await user.click(checkbox)
-    expect(checkbox).toBeInTheDocument()
+    const checkboxes = screen.getAllByRole('checkbox')
+    const enabledCheckbox = checkboxes.find((cb) => !cb.hasAttribute('disabled'))!
+    await user.click(enabledCheckbox)
+    await user.click(enabledCheckbox)
+    expect(enabledCheckbox).toBeInTheDocument()
   })
 
   it('applies reconciliation and undoes it', async () => {
