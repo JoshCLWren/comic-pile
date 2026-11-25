@@ -1435,7 +1435,7 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
             &format!("{fourth_base}/identity:confirm"),
             &token,
             &csrf,
-            Some(json!({"comicvine_issue_id": 9000101, "expected_version": 1})),
+            Some(json!({"comicvine_issue_id": 370314, "expected_version": 1})),
         ),
     )
     .await;
