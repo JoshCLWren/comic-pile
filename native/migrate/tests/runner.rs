@@ -4,12 +4,29 @@
 //! `MIGRATE_TEST_DATABASE_URL`.
 
 use comicpile_migrate::{
-    connect, needs_work, run, BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD,
+    connect, embedded_versions, needs_work, run, BASELINE_ALEMBIC_HEAD,
+    BASELINE_SCHEMA_ALEMBIC_HEAD,
 };
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio_postgres::Client;
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
+
+/// Migration versions at or below `through`, adopted from Alembic-managed DBs.
+fn versions_through(through: i32) -> Vec<i32> {
+    embedded_versions()
+        .into_iter()
+        .filter(|version| *version <= through)
+        .collect()
+}
+
+/// Migration versions above `after`, applied by the Rust runner.
+fn versions_after(after: i32) -> Vec<i32> {
+    embedded_versions()
+        .into_iter()
+        .filter(|version| *version > after)
+        .collect()
+}
 
 /// P0 guard (2026-11-18 production wipe): this harness creates and drops
 /// databases, so the server must be local. It connects to a server-level

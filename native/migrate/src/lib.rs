@@ -125,6 +125,19 @@ fn runner() -> refinery::Runner {
     runner
 }
 
+/// Versions of every embedded migration, in application order.
+///
+/// Tests use this instead of hard-coded version lists so a branch that has not
+/// yet merged newer migrations and the PR merge ref (which has) both assert the
+/// same truth: all migrations this binary knows about are accounted for.
+pub fn embedded_versions() -> Vec<i32> {
+    runner()
+        .get_migrations()
+        .iter()
+        .map(|migration| migration.version)
+        .collect()
+}
+
 /// Bring the database to the latest migration. See the module docs.
 pub async fn run(client: &mut Client) -> Result<Report, MigrateError> {
     apply_session_timeouts(client).await?;
