@@ -115,7 +115,7 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     fireEvent.change(screen.getByLabelText('Jump to reading list position'), { target: { value: '84' } })
     fireEvent.click(screen.getByRole('button', { name: 'Go to position' }))
 
-    const entry84 = screen.getAllByTestId('reading-list-entry').find((el) => within(el).queryByText(/#84/))
+    const entry84 = screen.getAllByTestId('reading-list-entry').find((el) => within(el).getByTestId('reading-list-entry-title').textContent?.includes('#84'))
     expect(entry84).toBeTruthy()
     await user.click(within(entry84 as HTMLElement).getByRole('button', { name: /Show settings for/ }))
     await user.click(within(entry84 as HTMLElement).getByRole('button', { name: 'Insert before' }))
@@ -127,7 +127,7 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     // Move tail (position 467 now, original 466) to position 83
     fireEvent.change(screen.getByLabelText('Jump to reading list position'), { target: { value: '467' } })
     fireEvent.click(screen.getByRole('button', { name: 'Go to position' }))
-    const tailEntry = screen.getAllByTestId('reading-list-entry').find((el) => within(el).queryByText(/#466/))
+    const tailEntry = screen.getAllByTestId('reading-list-entry').find((el) => within(el).getByTestId('reading-list-entry-title').textContent?.includes('#466'))
     expect(tailEntry).toBeTruthy()
     await user.click(within(tailEntry as HTMLElement).getByRole('button', { name: /Show settings for/ }))
     const moveInput = within(tailEntry as HTMLElement).getByLabelText(/Move .* to position/)

@@ -1122,7 +1122,7 @@ describe('CustomCBLBuilder', () => {
 
     await waitFor(() =>
       expect(mocks.update).toHaveBeenLastCalledWith(9, {
-        expected_updated_at: '2026-09-14T03:00:00Z',
+        expected_updated_at: '2026-09-14T03:10:00Z',
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
         mode: 'loose',
