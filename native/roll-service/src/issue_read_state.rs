@@ -1563,6 +1563,8 @@ mod tests {
             "/api/v2/issues/{issue_id}/position",
             "/api/v2/issue-read-markers",
             "/api/v2/issue-read-marker-removals",
+            "/api/v2/issue-read-operations/{operation_id}",
+            "/api/v2/issue-read-operations/{operation_id}/undo",
             "/api/v2/issues/{issue_id}/reader-context",
         ] {
             assert!(document["paths"].get(path).is_some(), "{path}");
