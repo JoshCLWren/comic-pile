@@ -221,19 +221,15 @@ export default function IssueCorrectionDialog({
       const discover = async () => {
         const getOperation = issuesService.getReadOperation
         if (!getOperation) return
-        let stored: string | null = null
-        try { stored = window.localStorage.getItem(`issueReadOperation:${threadId}`) } catch { stored = null }
-        if (!stored) return
-        const id = Number(stored)
-        if (!Number.isFinite(id)) return
+        let receipt: ReturnType<typeof findBulkReadReceipt> = null
+        try { receipt = findBulkReadReceipt(threadId) } catch { return }
+        if (!receipt) return
         try {
-          const op = await getOperation(id)
+          const op = await getOperation(receipt.operationId)
           if (!op.undone_at) setLastOperation(op)
-          else {
-            try { window.localStorage.removeItem(`issueReadOperation:${threadId}`) } catch { /* ignore */ }
-          }
+          else window.localStorage.removeItem(receipt.key)
         } catch {
-          try { window.localStorage.removeItem(`issueReadOperation:${threadId}`) } catch { /* ignore */ }
+          window.localStorage.removeItem(receipt.key)
         }
       }
       void discover()
@@ -391,7 +387,7 @@ export default function IssueCorrectionDialog({
 
   const handleSubmit = useCallback(async () => {
     if (preview) {
-      await applyCorrection(preview.affectedIds)
+      await applyCorrection({ ids: preview.affectedIds, version: preview.version })
       return
     }
     await buildPreview()
@@ -410,7 +406,7 @@ export default function IssueCorrectionDialog({
       } else {
         undoResponse = await issuesApi.undoReadOperation(lastOperation.id)
       }
-      try { window.localStorage.removeItem(`issueReadOperation:${threadId}`) } catch { /* ignore */ }
+      try { clearBulkReadReceipt(threadId, lastOperation.id) } catch { /* ignore */ }
       if (undoResponse && undoResponse.skipped_issue_ids.length > 0) {
         setError(`Undo skipped ${undoResponse.skipped_issue_ids.length} issue(s) changed later.`)
       }
