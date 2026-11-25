@@ -28,7 +28,7 @@ describe('useQueueListLoading', () => {
       .fetchQuery({ queryKey: queueListKey('Saga'), queryFn: () => pending })
       .catch(() => undefined)
 
-    const { result } = renderHook(() => useQueueListLoading(), {
+    const { result } = renderHook(() => useQueueListLoading('Saga'), {
       wrapper: makeWrapper(client),
     })
 
@@ -48,7 +48,7 @@ describe('useQueueListLoading', () => {
       })
       .catch(() => undefined)
 
-    const { result } = renderHook(() => useQueueListLoading(), {
+    const { result } = renderHook(() => useQueueListLoading('Spawn'), {
       wrapper: makeWrapper(client),
     })
 
