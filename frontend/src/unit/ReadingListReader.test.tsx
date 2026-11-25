@@ -15,6 +15,16 @@ vi.mock('../services/api-custom-cbl', () => ({ customCBLApi: { getReader: vi.fn(
 vi.mock('../services/api-issues', () => ({ issuesApi: { markRead: vi.fn(), markUnread: vi.fn() } }))
 vi.mock('../services/api-tags', () => ({ tagsApi: { threadIssuesEffective: vi.fn().mockResolvedValue({ issues: [] }) } }))
 
+vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
+  useComicVineIssueIntelligence: () => ({
+    metadata: null,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: async () => {},
+  }),
+}))
+
 const view: ReaderView = {
   list_id: 2, name: 'Julix', mode: 'strict', execution_mode: 'option_e', entries: [
     { id: 1, position: 1, issue_id: 10, thread_id: 1, series_name: 'The Dead Remembered', issue_number: '2', status: 'unread', gate: 'none', skipped: false, is_checkpoint: false, availability: 'available', checkpoint_target_issue_ids: [] },
