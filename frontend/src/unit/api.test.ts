@@ -187,7 +187,7 @@ it('uses only v2 session detail/snapshot paths and v2 undo paths', async () => {
   expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/snapshots')
   expect(post).toHaveBeenCalledWith('/v2/undo/7/snapshots/3/restore')
   expect(get).toHaveBeenCalledWith('/v2/undo/7/snapshots')
-  expect(get.mock.calls.some(([url]) => typeof url === 'string' && url.includes('/v1/sessions'))).toBe(false)
+  expect(get.mock.calls.map(([url]) => String(url)).join(' ')).not.toContain('/v1/sessions')
 })
 
 it('keeps retired session list/single/lifecycle methods off the session service (#4839, #4343)', () => {

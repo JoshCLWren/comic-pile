@@ -47,8 +47,8 @@ describe('retired session/undo callers (#4839)', () => {
   it('has no shipped caller of a retired v1 session or undo path', () => {
     const violations = liveSourceFiles().flatMap((path) => {
       const source = readFileSync(path, 'utf-8')
-      return RETIRED_CALLS.filter(({ pattern }) => pattern.test(source)).map(
-        ({ label }) => `${path.replace(`${srcRoot}/`, '')}: ${label}`,
+      return RETIRED_CALLS.flatMap(({ label, pattern }) =>
+        pattern.test(source) ? [`${path.replace(`${srcRoot}/`, '')}: ${label}`] : [],
       )
     })
 
