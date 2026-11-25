@@ -1902,6 +1902,8 @@ async fn reading_graph_repair_confirm_is_idempotent_after_success() {
     };
     let (token, csrf, owner) = register(&state, "repair-idempotent").await;
     let auth = (token.as_str(), csrf.as_str());
+    let (other_token, other_csrf, _other) = register(&state, "repair-idempotent-other").await;
+    let other_auth = (other_token.as_str(), other_csrf.as_str());
 
     let (_thread, ids) =
         seed_thread(&state, owner, "B.P.R.D.: Hell on Earth", 1, &["130", "142"]).await;
