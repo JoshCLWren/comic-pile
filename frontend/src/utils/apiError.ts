@@ -7,8 +7,10 @@ export type ApiErrorPayload = {
 export type ApiLikeError = { response?: { status?: number; data?: ApiErrorPayload } }
 
 function errorDetail(detail: ApiErrorPayload['detail']): string | null {
-  if (typeof detail === 'string') return detail
-  if (detail && typeof detail.message === 'string') return detail.message
+  if (isString(detail)) return detail
+  if (isNonNullObject(detail) && hasProperty(detail, 'message') && isString(detail.message)) {
+    return detail.message
+  }
   return null
 }
 

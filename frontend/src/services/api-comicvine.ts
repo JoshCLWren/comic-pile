@@ -224,12 +224,14 @@ export interface IssueIdentityEdit {
 }
 
 function identityEditFields(edit: IssueIdentityEdit = {}) {
-  return {
-    ...(edit.overallIssueNumber !== undefined
-      ? { overall_issue_number: edit.overallIssueNumber }
-      : {}),
-    ...(edit.expectedVersion !== undefined ? { expected_version: edit.expectedVersion } : {}),
+  const fields: { overall_issue_number?: string; expected_version?: number } = {}
+  if (edit.overallIssueNumber !== undefined) {
+    fields.overall_issue_number = edit.overallIssueNumber
   }
+  if (edit.expectedVersion !== undefined) {
+    fields.expected_version = edit.expectedVersion
+  }
+  return fields
 }
 
 export interface MetadataRefreshResponse {
