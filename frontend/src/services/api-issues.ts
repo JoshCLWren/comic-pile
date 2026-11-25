@@ -20,6 +20,27 @@ export interface ThreadIssueCreatorsResponse {
   issues: { issue_id: number; creators: ThreadIssueCreatorCredit[] }[]
 }
 
+export interface IssueReadOperationItem {
+  issue_id: number
+  thread_id: number
+  issue_number: string
+  previous_status: string
+}
+
+export interface IssueReadOperationResponse {
+  id: number
+  operation_type: 'bulk_mark_read' | 'bulk_mark_unread'
+  created_at: string
+  undone_at?: string | null
+  items: IssueReadOperationItem[]
+}
+
+export interface IssueReadOperationUndoResponse {
+  operation: IssueReadOperationResponse
+  undone_issue_ids: number[]
+  skipped_issue_ids: number[]
+}
+
 export interface SetCurrentIssueResponse {
   thread_id: number
   title: string
@@ -134,12 +155,20 @@ export function createIssuesApi(client: HttpClient) {
       await client.delete(`/v2/issues/${issueId}/read-markers`)
     },
 
-    bulkMarkRead: async (issueIds: number[]): Promise<void> => {
-      await client.post(`/v2/issue-read-markers`, { issue_ids: issueIds })
+    bulkMarkRead: async (issueIds: number[]): Promise<IssueReadOperationResponse> => {
+      return client.post(`/v2/issue-read-markers`, { issue_ids: issueIds })
     },
 
-    bulkMarkUnread: async (issueIds: number[]): Promise<void> => {
-      await client.post(`/v2/issue-read-marker-removals`, { issue_ids: issueIds })
+    bulkMarkUnread: async (issueIds: number[]): Promise<IssueReadOperationUndoResponse | IssueReadOperationResponse> => {
+      return client.post(`/v2/issue-read-marker-removals`, { issue_ids: issueIds })
+    },
+
+    getReadOperation: async (operationId: number): Promise<IssueReadOperationResponse> => {
+      return client.get(`/v2/issue-read-operations/${operationId}`)
+    },
+
+    undoReadOperation: async (operationId: number): Promise<IssueReadOperationUndoResponse> => {
+      return client.post(`/v2/issue-read-operations/${operationId}/undo`)
     },
 
     /**

@@ -15,8 +15,8 @@ export interface IssueCorrectionIssuesApi {
   ) => Promise<IssueListResponse>
   markRead: (issueId: number) => Promise<void>
   markUnread: (issueId: number) => Promise<void>
-  bulkMarkRead: (issueIds: number[]) => Promise<void>
-  bulkMarkUnread: (issueIds: number[]) => Promise<void>
+  bulkMarkRead: (issueIds: number[]) => Promise<unknown>
+  bulkMarkUnread: (issueIds: number[]) => Promise<unknown>
   move: (issueId: number, afterIssueId: number | null) => Promise<void>
 }
 
