@@ -1584,7 +1584,7 @@ mod tests {
     fn preview_token_changes_with_state() {
         let canonical = evidence(10, "unread", None, "2026-01-01T00:00:00Z");
         let dup = evidence(20, "unread", None, "2026-01-02T00:00:00Z");
-        let t1 = compute_preview_token(1, 10, &[20], &canonical, &[dup.clone()]);
+        let t1 = compute_preview_token(1, 10, &[20], &canonical, std::slice::from_ref(&dup));
         let mut dup2 = dup;
         dup2.status = "read".to_string();
         let t2 = compute_preview_token(1, 10, &[20], &canonical, &[dup2]);

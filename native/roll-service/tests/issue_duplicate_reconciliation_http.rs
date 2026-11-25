@@ -373,7 +373,7 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
         applied["suppressed_duplicate_issue_ids"],
         json!([duplicate])
     );
-    assert!(applied["moved_mapping_ids"].as_array().unwrap().len() >= 1);
+    assert!(!applied["moved_mapping_ids"].as_array().unwrap().is_empty());
     let moved_events = applied["moved_event_ids"].as_array().unwrap();
     assert!(moved_events.contains(&json!(duplicate_rating_event)));
     assert!(!moved_events.contains(&json!(synthetic_read_event)));
