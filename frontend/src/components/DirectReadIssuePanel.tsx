@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { ComicIssueCard } from './ComicIssueCard'
+import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
+import { TagSection } from './Tags/TagSection'
 import { useIssueCards } from '../hooks/useIssueCards'
+import { useComicVineIssueIntelligence } from '../hooks/useComicVineIssueIntelligence'
 import { issuesApi } from '../services/api-issues'
 import { queryKeys } from '../query/queryKeys'
 import { getApiErrorDetail } from '../utils/apiError'
@@ -22,9 +25,14 @@ interface DirectReadIssuePanelProps {
  *
  * Opening this panel and choosing an issue perform only authenticated reads.
  * Neither the next-unread lookup nor the optional all-issues picker checks
- * automatic Roll eligibility. Only ComicIssueCard Save writes, through the
- * owner-scoped, idempotent Rust v2 direct command. That command never creates
- * or consumes a pending random Roll offer.
+ * automatic Roll eligibility. ComicIssueCard Save writes through the
+ * owner-scoped, idempotent Rust v2 direct command, which never creates or
+ * consumes a pending random Roll offer. The reused provider and tag detail
+ * components retain their own explicit edit actions; none run on open.
+ *
+ * The selected issue opens the same provider details a completed roll shows
+ * (cover, summary, creators with roles, story arcs) plus that exact issue's
+ * tags, so mappings and credits can be inspected without rolling first (#5751).
  */
 export function DirectReadIssuePanel({
   threadId,
@@ -80,6 +88,11 @@ export function DirectReadIssuePanel({
   const issue = selectedIssue ?? initialIssue ?? null
   const cards = useIssueCards(issue ? [issue.id] : [], { enabled: issue != null })
   const card = cards.data?.find((item) => item.issue_id === issue?.id) ?? null
+  // ComicIdentity owns the provider-art request. Share its query here only to
+  // decide whether the action card must retain a local/No Cover placeholder
+  // when provider details are absent or fail; React Query deduplicates the read.
+  const intelligence = useComicVineIssueIntelligence(issue?.id)
+  const showLocalCover = intelligence.isError || (!intelligence.isLoading && intelligence.metadata == null)
   const wrongThread = issue != null && issue.thread_id !== threadId
   // A previously read issue's rating is only available in the authoritative
   // card projection. Opening Edit rating before that fetch resolves would
@@ -128,15 +141,31 @@ export function DirectReadIssuePanel({
                 : 'Saved rating details are unavailable. Retry details before editing.'}
             </p>
           )}
-          {canShowEditor && <ComicIssueCard
-            key={issue.id}
-            issueId={issue.id}
-            card={card}
-            threadTitle={threadTitle}
-            issueNumber={String(issue.issue_number)}
-            status={issue.status}
-            variant="compact"
-          />}
+          <div className="space-y-4" data-testid="direct-read-comic-details">
+            {/* Roll parity (#5751): provider details and tags are independent
+                of the saved-rating projection, so a card failure cannot hide
+                the creators or tags the reader opened this panel to inspect. */}
+            <ComicIdentity issueId={issue.id} />
+            <div className="min-w-0" data-testid="direct-read-issue-tags">
+              <TagSection
+                targetType="Issue"
+                targetId={issue.id}
+                targetLabel={`${threadTitle} #${issue.issue_number}`}
+              />
+            </div>
+            {canShowEditor && (
+              <ComicIssueCard
+                key={issue.id}
+                issueId={issue.id}
+                card={card}
+                threadTitle={threadTitle}
+                issueNumber={String(issue.issue_number)}
+                status={issue.status}
+                variant="compact"
+                showCover={showLocalCover}
+              />
+            )}
+          </div>
         </>
       )}
       {!lookup.isPending && !lookup.isError && !issue && (
