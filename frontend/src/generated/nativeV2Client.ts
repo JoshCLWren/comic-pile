@@ -134,10 +134,10 @@ export interface ConfirmIdentityRequest {
   path: {
     issue_id: number
   }
-  body: components['schemas']['ConfirmIdentityRequest']
+  body: components['schemas']['NativeConfirmIdentityRequest']
 }
 
-export type ConfirmIdentityResponse = components['schemas']['IssueIdentityResponse']
+export type ConfirmIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
 
 export interface ContinuityPlansAdoptReadingOrderRequest {
   body: components['schemas']['ReadingOrderAdoptRequest']
@@ -434,7 +434,7 @@ export interface GetIssueRequest {
   }
 }
 
-export type GetIssueResponse = components['schemas']['IssueDetailResponse']
+export type GetIssueResponse = components['schemas']['NativeIssueDetailResponse']
 
 export interface GetIssueDependenciesRequest {
   path: {
@@ -450,7 +450,7 @@ export interface GetIssueIdentityRequest {
   }
 }
 
-export type GetIssueIdentityResponse = components['schemas']['IssueIdentityResponse']
+export type GetIssueIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
 
 export interface GetLegacyDependencyRequest {
   path: {
@@ -544,7 +544,7 @@ export interface IssueCardsRequest {
   body: components['schemas']['IssueCardsRequest']
 }
 
-export type IssueCardsResponse = components['schemas']['IssueCardsResponse']
+export type IssueCardsResponse = components['schemas']['NativeIssueCardsResponse']
 
 export interface IssueIntelligenceDocsRequest {
   path: {
@@ -570,7 +570,7 @@ export interface IssueReadRateRequest {
   body: components['schemas']['IssueReadRateRequest']
 }
 
-export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
+export type IssueReadRateResponse = components['schemas']['NativeIssueReadRateResponse']
 
 export interface IssueReadStateBulkMarkReadRequest {
   body: components['schemas']['IssueBulkRequest']
@@ -668,7 +668,7 @@ export interface ListThreadIssuesRequest {
   }
 }
 
-export type ListThreadIssuesResponse = components['schemas']['ThreadIssueListResponse']
+export type ListThreadIssuesResponse = components['schemas']['NativeThreadIssueListResponse']
 
 export interface ListThreadsRequest {
   query?: {
@@ -938,7 +938,7 @@ export interface RemoveIdentityRequest {
   }
 }
 
-export type RemoveIdentityResponse = components['schemas']['IssueIdentityResponse']
+export type RemoveIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
 
 export interface RepairRequest {
   body: components['schemas']['ReadingGraphRepairRequest']
@@ -950,10 +950,10 @@ export interface ReplaceIdentityRequest {
   path: {
     issue_id: number
   }
-  body: components['schemas']['ReplaceIdentityRequest']
+  body: components['schemas']['NativeReplaceIdentityRequest']
 }
 
-export type ReplaceIdentityResponse = components['schemas']['IssueIdentityResponse']
+export type ReplaceIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
 
 export interface ResetRequest {
   body: components['schemas']['ResetDiceRequest']
