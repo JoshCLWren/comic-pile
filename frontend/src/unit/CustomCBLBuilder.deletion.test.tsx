@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
 import { issueCardsApi } from '../services/issueCardsApi'
 import { existingList } from './fixtures/customCblFixture'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -17,21 +18,15 @@ const mocks = vi.hoisted(() => ({
   exportXml: vi.fn(),
 }))
 
-vi.mock('../services/api-custom-cbl', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-custom-cbl')>(
-    '../services/api-custom-cbl',
-  )
-  return { ...actual, customCBLApi: mocks }
-})
-
 const cblMocks = vi.hoisted(() => ({ discover: vi.fn(), preview: vi.fn() }))
 
-vi.mock('../services/api-cbl-sources', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-cbl-sources')>(
-    '../services/api-cbl-sources',
-  )
-  return { ...actual, cblSourcesApi: cblMocks }
-})
+await injectModuleDoubles(await import('../services/api-custom-cbl'), () => ({
+  customCBLApi: mocks,
+}))
+
+await injectModuleDoubles(await import('../services/api-cbl-sources'), () => ({
+  cblSourcesApi: cblMocks,
+}))
 
 function renderCanonicalBuilder() {
   const client = new QueryClient({
