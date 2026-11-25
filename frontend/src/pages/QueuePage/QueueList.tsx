@@ -51,7 +51,34 @@ export function QueueList({
   useVirtualizer,
   onAddSeries,
   isLoading = false,
+  isError = false,
+  onRetry,
 }: QueueListProps) {
+  if (isError && filteredThreads.length === 0) {
+    return (
+      <div
+        role="alert"
+        className="space-y-2 py-8 text-center text-[var(--theme-error)]"
+        data-testid="queue-load-error"
+      >
+        <p>
+          {isSearching
+            ? "Couldn't load series matching your search."
+            : "Couldn't load your queue."}
+        </p>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mx-auto block min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
+          >
+            Try again
+          </button>
+        )}
+      </div>
+    )
+  }
+
   // The current filtered page can be empty while its replacement request is
   // still loading. Use the whole-queue total, not the loaded row count, to
   // distinguish that pending state from a settled empty Queue (#3912/#3614).
