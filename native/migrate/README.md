@@ -1,33 +1,23 @@
 # comicpile-migrate
 
-Rust database migration runner (successor to Alembic, which is frozen), backed by
-[refinery](https://crates.io/crates/refinery).
+Native Rust migration runner backed by [refinery](https://crates.io/crates/refinery). Alembic is retired; new schema changes are append-only SQL under `migrations/`.
 
 ```sh
-MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -- up
+MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -p comicpile-migrate -- up
+MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -p comicpile-migrate -- plan
 ```
 
-- `migrations/V1__baseline.sql` is a cleaned `pg_dump --schema-only` of the
-  Alembic head `i5378deferred01` (`make roll-test-schema` regenerates it). That
-  revision is a no-op schema repair on top of `c44050000002`, so the baseline
-  SQL is unchanged. Never edit an applied migration; append `V2__*.sql` etc.
-- `migrations/V2__queue_exclusion_groups.sql` adds the queue-exclusion group
-  schema introduced for container bulk remove/restore in Queue (#5435), bringing
-  the schema to the current Alembic head `m54i537800001`.
-- `BASELINE_ALEMBIC_HEAD` in `src/lib.rs` is the current Alembic head and must
-  stay in sync with Alembic/parity checks. Each new Alembic revision must be
-  mirrored by a new refinery migration (or a regenerated baseline) before the
-  pin advances.
-- Empty database: all migrations run and `alembic_version` is stamped with the
-  current head.
-- Alembic database whose `alembic_version` is at the baseline schema head
-  (`c44050000002`/`i5378deferred01`): V1 is recorded as adopted and V2 runs.
-  Alembic database already at the queue-exclusion or merged head: both migrations
-  are recorded as adopted without executing, using refinery's own
-  `Target::FakeVersion` guarded by `alembic_version`. Any other revision or
-  unmanaged schema is refused.
-- Stale external-identity status checks predating the deferred-repair revision
-  are repaired idempotently before the current head is stamped.
-- CI (`rust-roll.yml`) builds an Alembic database and a Rust database and fails
-  on any normalized `pg_dump` difference
-  (`scripts/check_rust_migration_parity.py`). <!-- docs-path-check: ignore -->
+The runner reads `MIGRATE_DATABASE_URL`, falling back to `DATABASE_URL`, and strips supported SQLAlchemy `+asyncpg`/`+psycopg` URL prefixes. `plan` exits 0 when no migrations are pending and 10 when work remains; other failures exit non-zero with a sanitized message.
+
+## Migration history
+
+- `V1__baseline.sql` reproduces the former Alembic baseline schema.
+- `V2__queue_exclusion_groups.sql` is the last schema change covered by the Alembic adoption stamp.
+- `V3` and later migrations are Rust-only and always execute on an adopted Alembic database.
+- Never edit an applied migration. Append `V<n>__description.sql` and let refinery embed it at build time.
+
+The runner adopts supported Alembic-managed databases by recording V1/V2 as already applied without executing them, guarded by `alembic_version`. The historical heads `c44050000002` and `i5378deferred01` adopt V1 and run V2; `m54i537800001` adopts both. Any other revision, or a non-empty schema without `alembic_version`, is refused. An empty database is initialized by running all migrations and stamping the historical Alembic head. A session advisory lock serializes concurrent migration runs.
+
+CI applies the committed Rust migrations to disposable PostgreSQL databases. There is no Alembic parity build, `make roll-test-schema` target, or Python migration runtime.
+
+See `docs/DATABASE_SAVE_LOAD.md` for backup/restore and `docs/DEPLOYMENT.md` for the production plan-then-conditional-up workflow.

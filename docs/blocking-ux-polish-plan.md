@@ -1,5 +1,10 @@
 # Blocking UX Polish Plan
 
+> **Status: historical issue plan.** Commands and implementation state below are
+> point-in-time provenance; use current GitHub issue state and
+> [Reading List runtime](READING_LIST_RUNTIME.md).
+<!-- docs-path-check: historical -->
+
 **Branch:** `feature/thread-blocking-usability-overhaul`  
 **Goal:** Make the dependency/blocking feature feel intuitive before merge.  
 **Scope:** Frontend-only changes. No backend/API/schema changes.

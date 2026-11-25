@@ -227,7 +227,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
 
   const isActive = (path: string) =>
     location.pathname === path || (path !== '/' && location.pathname.startsWith(`${path}/`)) ||
-    (path === '/continuity-plans' && location.pathname.startsWith('/reading-lists/'))
+    (path === '/continuity-plans' && (location.pathname === '/reading-lists' || location.pathname.startsWith('/reading-lists/')))
   const isMoreRoute = visibleSecondaryNavItems.some((item) => isActive(item.path))
 
   const toggleMoreMenu = () => {

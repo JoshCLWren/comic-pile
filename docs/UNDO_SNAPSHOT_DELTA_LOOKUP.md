@@ -1,5 +1,10 @@
 # Undo snapshot delta lookup (issue #3218)
 
+> **Status: historical Python implementation note.** The service/repository paths
+> below are retained for design provenance. Current undo behavior is implemented in
+> `native/roll-service/src/undo_apply.rs` and `native/roll-service/src/undo_snapshots.rs`.
+<!-- docs-path-check: historical -->
+
 ## What changed
 
 `get_latest_delta_snapshot` selected the newest supported unconsumed delta by

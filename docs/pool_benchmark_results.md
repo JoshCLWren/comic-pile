@@ -1,5 +1,9 @@
 # Pool Configuration Benchmark Results
 
+> **Status: historical Python/SQLAlchemy benchmark.** Current native pool settings
+> and operational guidance are in [OPERATIONAL_HEALTH.md](OPERATIONAL_HEALTH.md).
+<!-- docs-path-check: historical -->
+
 ## Experiment Overview
 
 **Goal**: Find the lowest-latency, low-memory SQLAlchemy pool configuration for ComicPile on Vercel Fluid Compute.

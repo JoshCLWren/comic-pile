@@ -13,14 +13,14 @@ The user wants to delegate a task to another model via opencode. $ARGUMENTS cont
 2. **Never use ScheduleWakeup.** Not for CI polling, not for "checking back later," not for anything.
 3. **Never take over a failed handoff.** If opencode exits non-zero or the agent didn't finish: write a second handoff to a different model and launch that. If two handoffs both fail, report the failure to the user and stop. Do not start doing the work yourself.
 4. **Never perform the delegated work directly.** If you find yourself writing code, running tests, or editing files to complete the task — stop. That is the agent's job.
-5. **CI / PR monitoring always goes to a free model.** If the task involves watching CI, polling GitHub, or waiting for CodeRabbit: the handoff prompt must tell the agent to do that work. You do not watch CI yourself.
+5. **Delegate monitoring only when the user requested delegation.** If the task involves watching CI, polling GitHub, or waiting for CodeRabbit, the handoff prompt must assign that work to the selected configured model. Do not watch it yourself or require a static free/cheap model.
 
 ## Step 1 — Pick a model
 
 Run `opencode models 2>/dev/null`.
 
 - If $ARGUMENTS names a model: fuzzy-match it and use the best single match.
-- If no model is named: default to the cheapest tool-capable model available. Look for NIM GLM 4.5 first, then other free/cheap models. Avoid paid Claude/GPT models unless the task explicitly requires them.
+- If no model is named: choose from the runtime-discovered, configured tool-capable models using the active provider policy. Do not use a static model preference list or request paid/unconfigured capacity.
 - If the match is ambiguous, show the top 3 and ask before continuing.
 
 ## Step 2 — Write the handoff file
@@ -39,13 +39,13 @@ Model: <resolved model id>
 <what has already been done; current state of the repo/PR/CI>
 
 ## What done looks like
-<specific, verifiable completion criteria — e.g. "all CI checks green", "PR merged", "make pytest passes">
+<specific, verifiable completion criteria — e.g. "focused checks pass", "required exact-head CI is green", "PR merged">
 
 ## Key files
 <files most relevant to the task>
 
 ## Constraints
-- Run `make lint` before every commit
+- Follow the required focused lint/type/test checks in `AGENTS.md` before every commit
 - Use conventional commits
 - Do not use ScheduleWakeup
 - Do not hand back to Claude — complete the task or write a _done.md explaining what's left
@@ -59,8 +59,8 @@ Model: <resolved model id>
 The prompt must be self-contained. Include:
 - `Read .opencode_handoff/<filename>.md` as the first instruction
 - The primary task in one sentence
-- A reference to `CLAUDE.md` for project conventions
-- `make lint` reminder before commits
+- A reference to `AGENTS.md` for project conventions
+- The required focused checks from `AGENTS.md` before commits
 - End with: "When finished, write `.opencode_handoff/<filename>_done.md` with a one-paragraph summary of what was done."
 
 ## Step 4 — Launch
@@ -71,18 +71,9 @@ The prompt must be self-contained. Include:
 
 Show output as it streams. When done:
 - If `_done.md` exists: print its contents and stop.
-- If `_done.md` does not exist and exit code is non-zero: write a second handoff to the next cheapest model and launch it (one retry only).
+- If `_done.md` does not exist and exit code is non-zero: write a second handoff to the next eligible configured model under the active provider policy and launch it (one retry only). Do not silently substitute paid or unconfigured capacity.
 - If both attempts fail: tell the user what failed and stop.
 
-## Model preference order (cheapest first)
+## Model discovery
 
-When no model is specified, try in this order:
-1. NIM GLM 4.5 (free)
-2. Any other NIM free-tier model with tool use
-3. zai-coding-plan / GLM-5 (check rate limit status in `.opencode_logs/timesheet.jsonl`)
-4. Only escalate to a paid model if the task explicitly requires it and the user has approved cost
-
-## Notes
-- Timesheet: `.opencode_logs/timesheet.jsonl` — check recent model activity before picking
-- Tool-verified models: `.opencode_logs/model_tool_test_results.txt`
-- Worktrees: `~/.opencode-worktrees/comic-pile/issue_N`
+Use the runtime catalog and configured provider policy. For factory work, `scripts/factory-run --providers` and `scripts/factory-run --models <provider>` expose current discovery. Missing, ambiguous, paid, or unconfigured capacity is not permission to substitute silently; ask the user or preserve a blocker.

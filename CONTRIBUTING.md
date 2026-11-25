@@ -24,25 +24,39 @@ ready. Every new push requires review and checks for the new commit. Enrollment
 alone never approves or authorizes merging your code. Fork CI runs without
 repository secrets or permission to publish container images.
 
+Do not create new GitHub issues or sub-issues for defects found during a PR
+without explicit owner authorization. Record out-of-scope discoveries in the
+existing issue or PR handoff.
+
 ## Pre-commit hook
 
-A pre-commit hook is installed in `.git/hooks/pre-commit` that automatically runs:
+The repository provides pre-commit and pre-push hooks. Install them once per
+checkout with `bash scripts/install-git-hooks.sh` (see
+[`docs/GIT_HOOKS.md`](docs/GIT_HOOKS.md)). The pre-commit hook automatically runs:
 - Check for type/linter ignores in staged files
 - Run the shared lint script (`scripts/lint.sh`)
 
 The lint script runs:
-- Python compilation check
-- Full-repo ruff linting (`ruff check .`)
-- Any type usage check (ruff ANN401 rule)
-- Full-repo ty type checking (`ty check --error-on-warning`). Warnings fail this check, including `redundant-cast`. Do not recast a value after `isinstance` has already narrowed it.
+- Python compilation and prohibited-ignore/`Any` checks
+- JavaScript and frontend ESLint
+- HTML lint when legacy HTML templates are present
 
-Path-filtered ruff or ty is not a valid CI substitute. Use
-`bash scripts/check-python-ci-lint.sh` or `make python-ci-lint` before every
-Python push. Re-run after every later Python edit.
+It does **not** run Ruff or ty. CI runs the required full-repo pair:
+
+```bash
+ruff check .
+ty check --error-on-warning
+```
+
+Path-filtered Ruff or ty is not a valid CI substitute. Run both after your last
+Python edit and re-run after later edits. Warnings from ty fail the check,
+including `redundant-cast`; do not recast a value after `isinstance` has already
+narrowed it.
 
 The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: ignore`, or `# pylint: ignore`.
 
-To test the hook manually: `make githook` or `bash scripts/lint.sh`
+To test the shared lint checks manually: `make githook` or `bash scripts/lint.sh`.
+Run `ruff check .` and `ty check --error-on-warning` separately for Python changes.
 
 ## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
 
@@ -75,25 +89,41 @@ Fix the problem instead.
 
 ### Getting Started
 
-1. Copy `.env.example` to `.env`.
-2. Run `make setup` to install dependencies, start local PostgreSQL, run migrations, and seed demo data.
-3. Run `make dev` and open the app at `http://localhost:5173`.
-4. API docs are available at `http://localhost:8000/docs`.
+1. Copy `.env.example` to `.env` and replace `SECRET_KEY` with a long random value.
+2. Export the environment for the migration runner and native service (neither loads `.env`):
 
-Production migrations install dependencies with `uv sync --locked --no-dev`.
-This keeps the `migrate` and `server` default groups but excludes development
-tools. Keep `sqlalchemy[asyncio]` in the project dependencies: both the async
-application and Alembic's model imports require greenlet. The Production
-Runtime Migrations CI job tests this install separately from the dev image,
-where Playwright can otherwise mask a missing greenlet dependency.
+   ```bash
+   set -a; . ./.env; set +a
+   export RUST_ROLL_DATABASE_URL=postgresql://comicpile:comicpile_password@localhost:5435/comicpile
+   export RUST_ROLL_JWT_SECRET="$SECRET_KEY"
+   ```
+
+3. Run `make setup` to install frontend dependencies, start local PostgreSQL, and apply migrations.
+4. For Python tooling tests or git hooks, create the tooling environment with `uv venv && uv sync --all-extras`. This is not required to run the application.
+5. Run `make dev` and open the app at `http://localhost:5173`. The native Rust API serves `http://localhost:8010`.
+6. There is no seed command: register an account in the running app to create your first queue.
+
+Production deploys run the same Rust migration runner (`native/migrate`) against
+Neon before the Vercel deployment. It reads `MIGRATE_DATABASE_URL`, falling back
+to `DATABASE_URL`, and accepts SQLAlchemy `+asyncpg`/`+psycopg` URL suffixes. The
+Production Runtime Migrations CI job tests that runner; there is no Python
+application runtime to install.
 
 ### API Development
 
-- REST endpoints are defined in `app/api/`
-- Request/response schemas in `app/schemas/` using Pydantic
-- Database models in `app/models/` using SQLAlchemy
-- Test endpoints with httpx.AsyncClient before building UI
-- Use FastAPI's automatic OpenAPI docs at `/docs`
+- HTTP handlers live in `native/roll-service/src/`, registered in
+  `native/roll-service/src/lib.rs` and reached through the Vercel entrypoint
+  `api/native_roll.rs`.
+- Request/response types are Rust `serde`/`utoipa` DTOs. Generated native contracts
+  are checked in under `native/contracts/`; the merged client contract is
+  `frontend/src/generated/openapi.json`.
+- Database access uses `deadpool-postgres`/`tokio-postgres`; shared pool and SQL
+  helpers live in `native/roll-service/src/db.rs`.
+- Add new client resources under `/api/v2/*`. Route ingress is bot-owned
+  (`docs/api/route-fragments/*.json`); never hand-edit `vercel.json`.
+- Verify the contract with `pnpm --filter frontend run check:api-types` and
+  `node scripts/export_openapi_schema.mjs --check`, then run the Rust tests for
+  the route module you changed.
 
 ### Route fragments and generated routing files
 
@@ -102,29 +132,30 @@ Contributors edit only `docs/api/route-fragments/*.json` source fragments
 `vercel.json`, `docs/api/v2-route-inventory.json`, the `AGENTS.md`
 `<!-- route-burndown -->` section, or `docs/api/route-fragments/vercel-rewrites.json` in a PR.
 Those files are bot-owned and are regenerated post-merge by
-`.github/workflows/regenerate-routes.yml` (runs
-`node scripts/generate_route_burndown.mjs` then
-`node scripts/generate_vercel_routes.mjs`). The `route-fragment-guard`
-workflow fails PRs that include generated files. `vercel.json` stays on
+`.github/workflows/regenerate-routes.yml` runs
+`node scripts/generate_route_burndown.mjs`, then
+`node scripts/generate_vercel_routes.mjs`, then the burndown generator again so
+its enrichment is preserved. Both `--check` gates must pass. The
+`route-fragment-guard` workflow fails PRs that include generated files. `vercel.json` stays on
 `main` for Vercel deploy (do not gitignore it); the previous `main` copy
 remains valid until the bot lands.
 
 ### Frontend Development
 
-- Install deps:    `pnpm install`
-- Dev server:      `make dev` (starts Vite and FastAPI together)
+- Install deps:    `pnpm install --frozen-lockfile`
+- Dev server:      `make dev` (starts Vite on :5173 and the native Rust API on :8010)
 - Build:           `pnpm --filter frontend run build` (outputs to `static/react/`)
 - Lint:            `pnpm --filter frontend run lint`
-- Unit tests:      `pnpm --filter frontend test` (vitest, no server needed)
-- E2E tests:       `pnpm --filter frontend run test:e2e` (requires backend server)
+- Unit tests:      `pnpm --filter frontend exec vitest run <file>` (focused, no server needed)
+- E2E tests:       from `frontend/`, run `pnpm run build`, then `BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium` while `make dev` is running; after `make docker-test-up`, use `BASE_URL=http://localhost:8000` with the same focused Playwright command
 
-React components live in `frontend/src/` with JSX syntax. Style with Tailwind CSS (mobile-first, touch targets ≥44px).
+React components live in `frontend/src/` as TypeScript/TSX. Style with Tailwind CSS (mobile-first, touch targets ≥44px).
 
 ### Database Migrations
 
 ```bash
 # Create a new migration: append native/migrate/migrations/V<n>__description.sql
-# (Alembic is frozen; never edit an applied migration)
+# (append-only; never edit an applied migration)
 
 # Run migrations (refinery runner, comicpile-migrate)
 make migrate  # or: cargo run --locked -p comicpile-migrate -- up
@@ -133,11 +164,14 @@ make migrate  # or: cargo run --locked -p comicpile-migrate -- up
 ## Code quality standards
 
 - Run linting after each change:
-  - `make lint` or `bash scripts/lint.sh` (Python)
-  - `pnpm --filter frontend run lint` (JavaScript/JSX)
+  - `ruff check .` and `ty check --error-on-warning` for Python tooling
+  - `bash scripts/lint.sh` for the other repository static checks
+  - `pnpm --filter frontend run lint && pnpm --filter frontend run typecheck` (TypeScript)
 - Use specific types instead of `Any` in type annotations (ruff ANN401 rule)
-- Run tests when you touch logic or input handling:
-  - `pytest` or `make pytest`
+- Run focused tests when you touch logic or input handling:
+  - `cargo test -p comicpile-roll-service <filter>` (Rust API)
+  - `pnpm --filter frontend exec vitest run <file>` (frontend)
+  - `uv run python -m pytest tests/test_<name>.py` (repository tooling)
 - Always write a regression test when fixing a bug.
 - If you break something while fixing it, fix both in the same PR.
 - Do not check in sample data or proprietary content.
@@ -146,26 +180,26 @@ make migrate  # or: cargo run --locked -p comicpile-migrate -- up
 
 ## Testing guidelines
 
-- Automated tests live in `tests/` and run with `pytest` (or `make pytest`).
-- Use httpx.AsyncClient for API integration tests
-- Test both success and error paths for all API endpoints
-- Test business logic (dice ladder, queue management, session detection) independently
-- Maintain 94% coverage threshold
+- Rust API behavior lives in `native/roll-service`; run `cargo test -p comicpile-roll-service <filter>` for one module or case. Full workspace suites run in CI unless explicitly requested.
+- Frontend unit tests use Vitest (`pnpm --filter frontend exec vitest run <file>`); browser coverage uses Playwright specs in `frontend/src/test/`.
+- Repository tooling tests live in `tests/` and run with focused `uv run python -m pytest tests/test_<name>.py`.
+- Test both success and error paths, including ownership and auth failures.
+- Frontend coverage thresholds are enforced in CI through `frontend/vitest.config.ts`; Python coverage thresholds are retired.
 
 ## Style guidelines
 
 - Keep helpers explicit and descriptive (snake_case), and annotate public
-  functions with precise types.
-- Use Pydantic schemas for API validation
-- Use SQLAlchemy models for database operations
-- Follow PEP 8 spacing (4 spaces, 100-character soft wrap)
+  Python tooling functions with precise types.
+- API validation and DTOs are Rust `serde`/`utoipa` types; database access is
+  asynchronous Rust through `deadpool-postgres`/`tokio-postgres`.
+- Follow PEP 8 spacing (4 spaces, 100-character soft wrap) for Python tooling.
 
 ## Branch workflow
 
-- Always create a phase branch from `main` before making changes:
-  - `git checkout main && git checkout -b phase/2-database-models`
-- Use descriptive branch names like `phase/2-database-models`
-- When phase is complete, merge to main via the merge-phaseX make target
+- Branch from `main` with a descriptive name (`git checkout -b fix/queue-reorder`).
+- Open a ready-for-review PR against `main`; do not open draft PRs unless asked.
+- The `make create-phaseX` / `make merge-phaseX` targets are historical leftovers
+  from the original nine-phase build and are not part of the current flow.
 
 ## Pull request guidelines
 
@@ -220,4 +254,6 @@ The factory merge drain refuses the PR when the reviewer model authored the
 current head, the review SHA is stale, or required CI is red. Every model the
 head's author records name is excluded, even when the records disagree. A
 sync merge of `main` carries the author of the commit it merged into. A head
-with no author record (a human push) excludes no model.
+with no author record (a human push) excludes no model. Where agent IDs match
+but the executed reviewer model differs, the 2026-11-24 current-head model rule
+controls; reviewer-worker identity alone is not the exclusion.

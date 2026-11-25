@@ -1,5 +1,11 @@
 # Stable explicit prerequisites
 
+> **Status: unimplemented historical API design.** `/api/v1/prerequisites/` is not
+> registered. Current reader-authored prerequisites use the v2 dependency write
+> contract and Reading List evaluator; see [API.md](../API.md) and
+> [Reading List runtime](../READING_LIST_RUNTIME.md).
+<!-- docs-path-check: historical -->
+
 `/api/v1/prerequisites/` authors stable Issue-to-Issue requirements on the existing
 `dependencies` table. It does not activate Option E, convert historical rows, or
 change reading progress. A requirement has no owning list: list placement, reordering,

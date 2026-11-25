@@ -1,5 +1,10 @@
 # Reader Workflow Recovery — Temporary Resume Checklist
 
+> **Status: historical recovery checklist.** The Python commands and migration state
+> below are retained for provenance; use current GitHub state and
+> [READING_LIST_RUNTIME.md](../READING_LIST_RUNTIME.md).
+<!-- docs-path-check: historical -->
+
 > Temporary handoff file created on 2026-09-12. Delete this file when the reader-workflow
 > recovery is complete and the production cutover has been verified.
 

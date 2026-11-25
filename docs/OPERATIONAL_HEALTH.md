@@ -1,94 +1,73 @@
 # Operational health endpoints
 
-ComicPile exposes separate bounded endpoints so monitoring can distinguish process startup from dependency availability.
+ComicPile exposes a dependency-free liveness endpoint so monitoring can
+distinguish process availability from database readiness.
 
-## Production Rust liveness
+## Production liveness
 
-`GET /api/v2/health` is the production liveness probe. It returns HTTP 200
-with `{"status":"ok"}` and the `X-ComicPile-API-Runtime: rust` response
-header, without opening a PostgreSQL connection. Production deployment smoke
-checks status, body and runtime marker, as well as a separate rejected-login
-request. The public bare `/health`, `/docs`, `/redoc` and `/openapi.json`
-endpoints return 404 at Vercel ingress instead of waking Python; the checked-in
-generated OpenAPI contracts remain available for developers.
+`GET /api/v2/health` is the production liveness probe. It returns HTTP 200 with
+`status: "ok"`, `runtime: "rust"`, service/build/process identity fields, and the
+`X-ComicPile-API-Runtime: rust` response header, without opening a PostgreSQL
+connection. Production deployment smoke checks the status, source revision,
+package/compiler identity and runtime marker, as well as a separate rejected-login
+request.
 
-## Transitional and local FastAPI probes
+The public bare `/health`, `/docs`, `/redoc` and `/openapi.json` paths return
+**404 from Vercel's explicit legacy-path rule**, before the SPA fallback. They do
+not start a database-backed runtime or serve the SPA shell. Use `/api/v2/health`
+for production liveness, and read the
+checked-in generated contracts
+(`native/contracts/v2-runtime.openapi.json`,
+`frontend/src/generated/openapi.json`) for the API surface.
 
-The following legacy endpoints are still registered in local FastAPI and may
-remain on transitional versioned production paths until their migration under
-#4335. **Do not use them for production deployment smoke or new uptime checks.**
+## Local development
 
-- `GET /api/v1/health/live` confirms only that the FastAPI process can serve a request. It does not query Neon or Upstash and is the correct liveness probe.
-- `GET /api/v1/health/dependencies` checks Neon and Upstash independently with a two-second timeout per dependency. Use it for dependency alerts and diagnosis.
-- `GET /api/v1/health/warmup` exercises the same cheap, read-only database and cache path used by dependency monitoring. Use it when intentionally warming an idle deployment.
-- `GET /api/v1/health/cache-quota` reports the monthly cache command budget snapshot (issue #1751): `status` (`ok` / `near-limit` / `over-budget`), `observed_commands`, `budget`, `remaining`, `usage_ratio`, `alerted`, and `throttling`. It is purely in-process — no database or cache connection and no alert side effects — so monitoring can poll it freely to watch for the near-limit band before the hard budget is reached. The guardrail rules live in the cache budget implementation; the retired `docs/CACHE_COMMAND_BUDGET.md` is no longer maintained. <!-- docs-path-check: ignore -->
-- `GET /api/health` remains a hidden legacy liveness alias for existing callers. Its handler does not query Neon, but a cold staging or development app still opens the database during initialization. Use `/api/v2/health` for dependency-free liveness in production; the bare `/health` path is for local FastAPI development.
-- `GET /health` and the legacy keepalive endpoint (`GET /api/v1/keepalive`, retained only for old clients and reported as `{"status": "disabled"}`) are public, dependency-free probes. Local development/test probes may poll them without opening a billable Neon connection (issue #4129), but production monitors must use the native Rust `/api/v2/health` route. Use `/api/v1/health/dependencies` when a database readiness check is actually intended.
+The native service serves `GET /health` and `GET /api/v2/health` locally on
+`:8010`. Neither touches the database. There is no local Swagger/ReDoc surface;
+the checked-in OpenAPI contracts are the reference.
 
-For as long as transitional FastAPI operational routes remain deployed, set `HEALTH_CHECK_TOKEN` in production and send it as `X-Health-Token` to access the detailed dependency, warm-up, and cache-quota endpoints. Missing or invalid tokens receive a generic 404 so operational detail is not advertised. The liveness endpoint remains public because it contains no infrastructure detail.
+The former Python `/api/v1/health/*` probes (dependency, warmup, cache-quota,
+keepalive) were retired with the Python API. There is no cache dependency in the
+current runtime.
+
+## Database readiness
+
+Liveness intentionally does not prove database availability. Verify readiness
+with a real request that reads data, or run the migration planner against the
+same database:
+
+```bash
+MIGRATE_DATABASE_URL="postgresql://..." cargo run --locked -p comicpile-migrate -- plan
+```
+
+`plan` exits non-zero when pending migrations remain, which is the maintained
+deployment gate. The CI `migration-health` job and the production deploy
+workflow use the same runner.
 
 ## Response semantics
 
-- `200 healthy`: database and cache both responded within their bounds.
-- `207 degraded`: the database is healthy but the cache is unavailable or timed out. ComicPile can continue through its cache fallback path.
-- `503 unhealthy`: the database is unavailable or timed out.
+- Production `200 ok`: the process can serve a request and reports its build/process identity.
+- Local `200 {"status":"ok"}`: the standalone native process can serve a request.
+- `401`: authentication is enforced on protected paths; the health route is public.
+- `503` or a connection failure: the process is unavailable.
 
-Responses contain only status and duration fields. They never include connection strings, hostnames, credentials, exception text, user data, or queried records.
+Liveness responses contain no connection strings, hostnames, credentials,
+exception text, user data, or queried records. Build/process fields are
+operational identity evidence, not cryptographic attestation.
 
-Structured logs emit the aggregate status, each dependency status, each dependency duration, and total duration. Compare these fields with request-level timing to separate function startup latency from Neon, Upstash, and route execution latency.
+## Logging
+
+The native service emits structured `tracing` logs; set the filter with
+`RUST_ROLL_LOG` (default `info`). Logs report request outcomes and bounded
+error kinds without credential values. The Python-era request middleware
+metrics (`Server-Timing`, performance-to-GitHub filing) no longer exist in the
+runtime; `PERF_ALARM_*` variables are retained only for older deployment
+configuration and have no effect on the native service.
 
 ## Regression thresholds
 
-Investigate repeated database or cache probe durations above 500 ms while warm. A timeout always warrants investigation. Cold invocations may be slower, but the endpoint remains bounded and identifies the dependency responsible rather than allowing one hung provider to consume the whole monitoring request.
-
-## Performance telemetry and GitHub filing
-
-**Automatic performance-to-GitHub issue filing is disabled by default** (issue #3726).
-`PERF_ALARM_GITHUB_ISSUES_ENABLED=false` prevents automatic GitHub lookups,
-comments, claims, and issue creation for request samples and readiness-critical
-coroutine timeouts, including severe events. It does not disable diagnostics,
-logging, request warnings, error-level budget violations, startup timing, DB query
-counts/execution time, timeout enforcement, or health monitoring. Startup
-readiness samples already log separately without filing. Existing
-`perf_alarm_counters` and `perf_alarm_incidents` rows are preserved.
-
-Treat the `Server-Timing: app;dur=...` value as the **request middleware's
-total span**, not an isolated route/business-logic timer. The `db;dur` metric
-measures instrumented SQL execution only; it does not include waiting for a
-connection, middleware, other awaits, or platform overhead outside the measured
-span. The remainder (`app;dur - db;dur`) is **unattributed**, not proof
-that application code is slow or that the platform is responsible. Compare
-warm/cold classification, DB queries and execution time, request/deployment
-identifiers, process/startup diagnostics, actual error/timeout evidence, and
-repeated requests before assigning an owner.
-
-Actionable investigations include reproducible warm regressions with supporting
-timing breakdowns, an unusual query count or high measured DB execution time,
-hard timeouts, and user-visible outages. File and triage these as focused,
-human-reviewed GitHub issues with evidence of recurrence or impact. A single
-marginal overrun of the 1000 ms budget is not itself a factory task. Hard failures
-remain visible through logs and health/monitoring surfaces when filing is off.
-
-**Optional legacy opt-in:** Set `PERF_ALARM_GITHUB_ISSUES_ENABLED=true` only
-after explicitly accepting the older automatic-filing behavior. When enabled:
-
-- **Fingerprint.** One open issue per `kind + method + route template`. Warm/cold,
-  workload class and dominant phase are evidence, not distinct issues. Legacy
-  hashes and method/route identity are checked for reuse.
-- **Durable counters.** Warm hits and incident identity are shared in Postgres.
-- **Never file under budget.** Request timings at or below 1000 ms do not file;
-  500-999 ms warnings are still logged.
-- **Cold/startup.** Cold requests and startup-readiness samples never file.
-  Hard startup failures log at WARNING.
-- **Daily breach threshold.** `PERF_ALARM_DAILY_BREACH_THRESHOLD` defaults to 3
-  warm over-budget hits per route per UTC day (valid 1-100). Closed regressions
-  require the same threshold.
-- **Comment throttle.** At most one comment per fingerprint per hour.
-- **Coroutine timeouts.** Readiness-critical coroutine hard timeouts are an
-  **immediate filing exception**, bypassing the daily threshold when opt-in is
-  enabled. They still raise/log normally with filing disabled.
-
-Opt-in can again produce noisy, high-priority factory issues on repeated threshold
-breaches; it is not a recommended substitute for investigating performance.
-The existing 500 ms warning, 1000 ms request-violation, and startup hard-deadline
-budgets are unchanged by this switch.
+Investigate repeated request latency or pool timeouts. The pool is bounded by
+`RUST_ROLL_POOL_SIZE` (default 4, max 32) with
+`RUST_ROLL_POOL_TIMEOUT_MS` (default 2000) and a per-request timeout of
+`RUST_ROLL_REQUEST_TIMEOUT_MS` (default 10000). A timeout always warrants
+investigation; raising a bound is not a fix for a slow query.

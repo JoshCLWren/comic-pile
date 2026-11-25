@@ -63,6 +63,13 @@ export default function ContinuityPlansIndexPage() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            onClick={() => navigate('/reading-lists')}
+            className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
+          >
+            Reading Lists
+          </button>
+          <button
+            type="button"
             onClick={() => navigate('/continuity-plans/new')}
             className="min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-black hover:bg-[var(--theme-primary-action-hover)]"
           >

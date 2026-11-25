@@ -241,16 +241,66 @@ describe('issue-specific cover and shared rating input', () => {
   it('keeps the provider URL unchanged, replaces broken art, and recovers on mapping change', () => {
     const first = 'https://comicvine.gamespot.com/a/cover.jpg?size=original'
     const second = 'https://comicvine.gamespot.com/b/annual.jpg'
+    const onImageLoad = vi.fn<(img: HTMLImageElement) => void>()
     const { rerender } = render(<ComicIssueCover coverImageUrl={first} threadTitle="Cable" issueNumber="Annual 1" variant="featured" />)
-    expect(screen.getByRole('img')).toHaveAttribute('src', first)
-    expect(screen.getByRole('img')).toHaveAttribute('loading', 'eager')
-    fireEvent.error(screen.getByRole('img'))
+    const firstImage = screen.getByRole('img')
+    expect(firstImage).toHaveAttribute('src', first)
+    expect(firstImage).toHaveAttribute('loading', 'eager')
+    fireEvent.error(firstImage)
     expect(screen.getByTestId('comic-issue-cover-placeholder')).toHaveAttribute('aria-label', 'No cover for Cable #Annual 1')
-    rerender(<ComicIssueCover coverImageUrl={second} threadTitle="Cable" issueNumber="Annual 1" variant="compact" />)
-    expect(screen.getByRole('img')).toHaveAttribute('src', second)
-    expect(screen.getByRole('img')).toHaveAttribute('loading', 'lazy')
+
+    rerender(<ComicIssueCover coverImageUrl={second} threadTitle="Cable" issueNumber="Annual 1" variant="compact" onImageLoad={onImageLoad} />)
+    const secondImage = screen.getByRole('img')
+    expect(secondImage).not.toBe(firstImage)
+    expect(secondImage).toHaveAttribute('src', second)
+    expect(secondImage).toHaveAttribute('loading', 'lazy')
+    expect(secondImage).toHaveClass('opacity-0')
+
+    fireEvent.error(firstImage)
+    expect(screen.queryByTestId('comic-issue-cover-placeholder')).not.toBeInTheDocument()
+    expect(secondImage).toHaveClass('opacity-0')
+    fireEvent.load(secondImage)
+    expect(secondImage).toHaveClass('opacity-100')
+    expect(onImageLoad).toHaveBeenCalledOnce()
+    expect(onImageLoad).toHaveBeenCalledWith(secondImage)
+
+    rerender(<ComicIssueCover coverImageUrl={first} threadTitle="Cable" issueNumber="Annual 1" variant="compact" onImageLoad={onImageLoad} />)
+    const retriedFirst = screen.getByRole('img')
+    expect(retriedFirst).not.toBe(secondImage)
+    expect(retriedFirst).toHaveAttribute('src', first)
+    expect(retriedFirst).toHaveClass('opacity-0')
+    fireEvent.load(retriedFirst)
+    expect(retriedFirst).toHaveClass('opacity-100')
+    expect(onImageLoad).toHaveBeenCalledTimes(2)
+    expect(onImageLoad).toHaveBeenLastCalledWith(retriedFirst)
+
     rerender(<ComicIssueCover coverImageUrl="" threadTitle="Cable" issueNumber="Annual 1" />)
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
+  })
+
+  it('retries a failed cover after an intervening source change before loading', () => {
+    const first = 'https://comicvine.gamespot.com/a/cover.jpg?size=original'
+    const second = 'https://comicvine.gamespot.com/b/annual.jpg'
+    const { rerender } = render(<ComicIssueCover coverImageUrl={first} threadTitle="Cable" issueNumber="Annual 1" />)
+    const firstImage = screen.getByRole('img')
+    fireEvent.error(firstImage)
+    expect(screen.getByTestId('comic-issue-cover-placeholder')).toBeInTheDocument()
+
+    rerender(<ComicIssueCover coverImageUrl={second} threadTitle="Cable" issueNumber="Annual 1" />)
+    const pendingSecond = screen.getByRole('img')
+    expect(pendingSecond).toHaveAttribute('src', second)
+    expect(pendingSecond).toHaveClass('opacity-0')
+
+    rerender(<ComicIssueCover coverImageUrl={first} threadTitle="Cable" issueNumber="Annual 1" />)
+    const retriedFirst = screen.getByRole('img')
+    expect(retriedFirst).not.toBe(firstImage)
+    expect(retriedFirst).not.toBe(pendingSecond)
+    expect(retriedFirst).toHaveAttribute('src', first)
+    expect(retriedFirst).toHaveClass('opacity-0')
+    expect(screen.queryByTestId('comic-issue-cover-placeholder')).not.toBeInTheDocument()
+
+    fireEvent.load(retriedFirst)
+    expect(retriedFirst).toHaveClass('opacity-100')
   })
 
   it('supports host-owned labels and value presentation without duplicate slider descriptions', () => {

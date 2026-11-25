@@ -72,7 +72,7 @@
 
 **Test:** Open Pick manually, type a partial title and identifying year/volume when available; exercise keyboard navigation, no matches, clear, and selection of either same-named Thread.
 
-**Expected:** Results filter responsively with accessible focus and controls; each choice identifies the correct existing Thread, not just its displayed title. Series choices use the shared cover component with the exact thread's representative confirmed cover (or its no-cover fallback), including the Snoozed group. Typing or clearing never rolls, rates, marks read, or changes the die. A confirmed manual choice records the exact canonical issue identity and is labeled Picked manually, never a fabricated result such as Rolled 0 of d6.
+**Expected:** Results filter responsively with accessible focus and controls; each choice identifies the correct existing Thread, not just its displayed title. Series choices use the shared cover component with the exact thread's representative confirmed cover (or its no-cover fallback), including the Snoozed group. Typing or clearing never rolls, rates, marks read, or changes the die. Pick manually opens the exact-issue direct Read/Rate editor; it does not create or consume a pending Roll offer, fabricate a die result, step the die, or reposition the Queue.
 
 ## MQA-ROLL-010: Covers, high zoom, and action accessibility
 
@@ -118,7 +118,7 @@
 
 **Original wording superseded:** "Snoozed series leave the pool before the die limit is applied; later eligible series fill the open faces."
 
-**Unsnooze (UPDATE 2026-11-18, [#4589](https://github.com/JoshCLWren/comic-pile/issues/4589)):** Roll again persists each snooze on the session. Unsnooze (Roll shelf or Queue) removes the chosen snooze and clears its browser cookie id. When it is the most recent snooze and no later action (manual pick, die choice, rating, undo, reset) happened since, it also restores that series as the pending roll and returns the die to its pre-snooze size; otherwise only the snooze is removed and the current pending roll and die are left alone. Unsnoozing an already-removed snooze succeeds without changes (safe retry after a lost response). Reset Dice clears the saved snoozes. Unsnooze failures show a visible error. MQA-ROLL-007, MQA-ROLL-008 and the Queue snooze scenario MQA-QUEUE-003: contract unchanged apart from the unsnooze behavior described here.
+**Unsnooze (UPDATE 2026-11-18, [#4589](https://github.com/JoshCLWren/comic-pile/issues/4589)):** Roll again persists each snooze for the signed-in reader/browser contract. Unsnooze (Roll shelf or Queue) removes the chosen snooze and clears its browser cookie id. When it is the most recent snooze and no later action (manual pick, die choice, rating, undo, reset) happened since, it also restores that series as the pending roll and returns the die to its pre-snooze size; otherwise only the snooze is removed and the current pending roll and die are left alone. Unsnoozing an already-removed snooze succeeds without changes (safe retry after a lost response). Reset Dice clears the saved snoozes. Unsnooze failures show a visible error. MQA-ROLL-007, MQA-ROLL-008 and the Queue snooze scenario MQA-QUEUE-003: contract unchanged apart from the unsnooze behavior described here.
 
 ## MQA-ROLL-015: Undo rating restores the die step
 
@@ -142,4 +142,4 @@
 
 **Test:** Use Mark Read from a Thread/Issue card; the rating slider defaults to 3.5; save with several ratings including below 4.0. Repeat on a blocked issue.
 
-**Expected:** A rating is always recorded (default 3.5 or edited), durable read progress is saved, and neither the die nor the queue position changes regardless of the chosen rating. Direct reading and rating of an owned issue is never vetoed by eligibility, queue rank, holds or prerequisites (manual read allowed even when blocked, #4708). A Roll-flow rating (threshold 4.0) does move the die and then rolls the next comic. Source: #4405.
+**Expected:** A rating is always recorded (default 3.5 or edited), durable read progress is saved, and neither the die nor the queue position changes regardless of the chosen rating. Direct reading and rating of an owned issue is never vetoed by eligibility, queue rank, holds or prerequisites (manual read allowed even when blocked, #4708). A Roll-flow rating (threshold 4.0) does move the die and then rolls the next comic. Source: #4405; direct Read/Rate wording reconciled with #5751/#5756.

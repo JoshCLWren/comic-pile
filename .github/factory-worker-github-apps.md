@@ -5,7 +5,9 @@ Provenance key is the worker number, not the App slug. A model swap keeps the sa
 Worker 48 is provisioned as **Mark Cordova** (`mark-cordova[bot]`), App ID
 `5275306`, installation ID `170306933`. The installation is scoped only to
 `JoshCLWren/comic-pile`, and the three worker-48 repository secrets are configured.
-Workers other than 48 keep using `PR_REBASE_TOKEN` for push and pull-request creation.
+Worker 48 uses this App only when its mapping and all three App secrets exist. Otherwise any worker, including 48, uses the shared factory App when its three secrets exist, then falls back to `PR_REBASE_TOKEN` for push and pull-request creation.
+
+The helper commands below are supplied by the Rotisserie overlay and are not tracked in this repository. Install the current overlay once per checkout before running them; see `AGENTS.md` → Factory runtime.
 
 ## Bootstrap (already done for worker 48)
 
@@ -54,16 +56,17 @@ available if manifest registration cannot be used.
    - `FACTORY_WORKER_48_APP_PRIVATE_KEY` (PEM)
 10. Optionally commit `app_id`, `app_login`, and `installation_id` into the worker 48 mapping entry. Do not re-roll `display_name`.
 
-When all three secrets exist, only worker 48 switches push and PR creation onto a
-short-lived installation token. Missing any secret fails back to `PR_REBASE_TOKEN`.
-No other worker consults this mapping.
+When worker 48's mapping and all three secrets exist, push and PR creation use a
+short-lived Mark Cordova installation token. If any are missing, the selector
+tries the shared factory App; without either App it uses `PR_REBASE_TOKEN`.
+No other worker consults worker 48's mapping.
 
 Worker Apps stay off every trusted-marker author path. `TRUSTED_FACTORY_APP_SLUGS` remains `github-actions` only. A worker App comment is not trusted even if GitHub reports a trusted association.
 
 ## Readable handoffs (#3135)
 
-When worker 48's App secrets are all present, human-readable implementation,
-repair, and review handoff comments are posted with the App installation token
-(Mark Cordova[bot]). Machine/trusted marker comments stay on github-actions[bot]
-and never use the worker App token. Missing any secret keeps every identity on
-the current path. This does not create the App.
+Human-readable implementation, repair, and review handoff comments use worker
+48's App when its mapping and secrets are present, otherwise the shared factory
+App when configured. Machine/trusted marker comments stay on
+`github-actions[bot]` and never use a worker App token. Without either App no new
+readable handoff is posted. This does not create an App.

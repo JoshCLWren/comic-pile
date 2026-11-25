@@ -130,6 +130,8 @@ When fewer than four substantive implementation PRs are open and executable uncl
 
 OmniRoute's shared free coding pool cannot absorb a full roster tick. Fixed-model Entry sessions that smoke or run `auto/coding:free` are limited to at most three concurrent in-flight units (active Entry runs plus equivalent fixed-model leases). Dispatcher, completion drain, and capacity refill must refuse new Entry assignments when that cap is exhausted. The four-PR throughput floor remains the selection preference; it does not override the free-pool cap.
 
+> **Known policy/runtime mismatch:** the runtime exposes `FACTORY_OMNIROUTE_FREE_ENTRY_CAP` with a default of three. That setting does not authorize changing the owner policy's hard cap of three; reconcile runtime configuration through the authorized automation process rather than silently redefining policy in documentation.
+
 A substantive implementation PR changes product behavior, correctness, performance, architecture, deployment behavior, data, or meaningful automated coverage required by its issue. Comments, labels, reviews, PR metadata, help text, and optional test embellishment do not count toward this floor.
 
 ## Lease semantics
@@ -177,13 +179,13 @@ Factory ownership is a connection-pool lock around the next action, not a perman
 - Cross-worker takeover and merge are allowed after the prior lease is released.
 - A factory that creates or advances a PR releases active ownership when its implementation attempt ends, including while CI or review is pending.
 - Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so another worker can try later. Review independence is based on factory identity and exact-head provenance.
-- Review independence excludes every factory worker that authored the exact head under review, not only the worker that opened the PR. Factory pushes share one Git identity, so contributor identity comes from the controller-authored `comic-pile-factory-head-contributor-v1` record written at every push or repair, unioned with the declared branch/body producer and with every other record on the same pull request, because repairs stack onto the previous head instead of rewriting it. A head is authorized by one independent reviewer only when a record exists for that exact head; when one does not, it fails closed to two distinct eligible reviewers instead of assuming the apparent reviewer is independent. Queue selection excludes recorded contributors from semantic-review assignment so a head reaches another eligible reviewer on its own; refusing a contributor's verdict is a backstop, not the routing mechanism.
+- Exact-head contributor provenance comes from the controller-authored `comic-pile-factory-head-contributor-v1` record written at every push or repair, unioned with the declared branch/body producer and every other record on the same pull request, because repairs stack onto earlier heads instead of rewriting them. Reviewer eligibility and queue selection use the shared current-head model resolver below; contributor history alone does not exclude an earlier-head author once a later head exists.
 - **2026-11-24 owner decision (model rule):** only the model that authored the **current head** may not review it. A model that authored an earlier head may review once a later commit by someone else is the head. The head author is every controller author-model marker for that exact head (all of them when they disagree), else the head commit's `Model:` trailer. A sync (a merge of `main` with no change of its own) carries the author of the commit it merged into, even over a `human` record on the merge. A conflict-resolving merge does not. A head that a factory worker pushed without a model record, a merge that cannot be proven to be a clean sync, or more than five syncs in a row excludes every recorded author. A `human` record, or no record at all, excludes no model. An approval counts only for the exact head it reviewed. A reviewer worker whose executed model is not the head author is independent even if the same worker contributed earlier with another model. Rotisserie's shared review-exclusion resolver implements the rule (JoshCLWren/rotisserie#279).
 - A controller claim is not durable until the worker reaches an executable session. Smoke, executor-selection, credential, and other pre-session failures release the owner to `factory:unowned` immediately, preserve the truthful stage, and post `comic-pile-factory-claim-released-v3`. Do not wait for the 900s stale-lease TTL.
   The reusable runner records when the worker session starts. If it never starts,
   a separate trusted-main cleanup job releases the lease before the per-worker
   concurrency lock ends; started sessions keep their existing wrapper lifecycle.
-- Exact-head review assignments use the multi-provider Entry path (`nvidia`, `opencode-free`, `openrouter-free`, `kilo-auto`) while OmniRoute is dark; they must not smoke `auto/reasoning:free` or `auto/coding:free`.
+- Exact-head review assignments use the configured multi-provider Entry path. Provider/model choice is runtime catalog driven; no fixed provider list or route alias authorizes capacity, and review work must not smoke a coding route as a substitute for a review session.
 - UPDATE (2026-11-16): Runtime model selection is catalog driven across registered providers, with no fixed price or free-name eligibility gate. Actual execution determines model usability.
 - INCIDENT (2026-09-06): OmniRoute can remain disabled by its existing provider-health control. The other registered provider lanes operate independently and select models at runtime.
 - A takeover worker continues the current branch/head rather than creating a replacement solely because another model authored the existing commits.
@@ -234,9 +236,9 @@ Repeat until the selected issue reaches closure or a valid blocker:
 
 `inspect contract -> implement closure-critical behavior -> focused validation -> commit -> push -> inspect exact SHA -> account for all review feedback -> repair blockers -> verify merge gates -> merge when eligible -> verify issue closure`
 
-Python focused validation must include the exact CI pair `ruff check .` and
-`ty check --error-on-warning` against the whole repo
-(`bash scripts/check-python-ci-lint.sh`). Path-filtered ruff or ty is not a valid CI substitute.
+Python tooling validation must include the exact CI pair `ruff check .` and
+`ty check --error-on-warning` against the whole repo, plus `bash scripts/lint.sh`
+and the focused tooling tests. Path-filtered ruff or ty is not a valid CI substitute.
 Re-run that pair after every later Python edit and before every Python push.
 A lint run from before the last edit does not count.
 
@@ -250,7 +252,7 @@ If no ordinary executable issue can be selected, release any stale active lease,
 
 Release notes are asynchronous post-merge infrastructure, not an implementation merge gate. The dedicated release-writer workflow inspects merged pull requests and publishes user-facing changes to the database-backed release ledger. Reconciliation owns missed or retried release records.
 
-Implementation workers must not create, repair, or require `docs/changelog.d` fragments, must not edit `docs/changelog.md` as routine delivery work, and must not block a product PR because release-note publication is delayed. A genuine release-writer or release-ledger defect may become its own executable issue, but fixing that infrastructure must not reintroduce Markdown release-note work into unrelated implementation branches.
+Implementation workers must not create, repair, or require `docs/changelog.d` fragments, must not edit `docs/changelog.md` as routine delivery work, and must not block a product PR because release-note publication is delayed. Record a genuine release-writer or release-ledger defect in the existing issue or PR handoff; creating a separate issue requires explicit owner authorization. Fixing that infrastructure must not reintroduce Markdown release-note work into unrelated implementation branches.
 
 `docs/changelog.md` and the existing files under `docs/changelog.d/` are frozen historical source retained only for provenance and auditability. They are not runtime truth, are not assembled by the frontend build, and ordinary new work must not append to them.
 
@@ -293,7 +295,7 @@ Josh directed on 2026-10-18 that Greptile (`greptile-apps[bot]`) findings be hel
 
 ### Pre-push fast checks
 
-A worker diff is pushed only after the trusted pre-push fast checks pass for the files it touches: `node --check` for `.mjs`/`.cjs`, CI-parity ruff and ty plus targeted pytest for `.py`, and the frontend typecheck plus eslint for `frontend/**/*.ts|tsx|mjs`. Backend Python changes, OpenAPI generator changes, and generated OpenAPI artifact changes also invoke `uv run --frozen python scripts/export_openapi_schema.py --check`. A stale schema or broken app import blocks the factory commit/push before CI. Changes to root or frontend package manifests, pnpm lockfiles, or the pnpm workspace manifest trigger the existing frozen pnpm install and frontend typecheck even if no `.ts` or `.tsx` file changed. On failure the wrapper does not push. It resets the tree and leaves a `comic-pile-factory-fast-checks-failed-v1` comment for the next worker (see `docs/FACTORY_GITHUB_VISIBILITY.md`). Agents should run the same checks themselves before ending a run.
+A worker diff is pushed only after the trusted pre-push fast checks pass for the files it touches: `node --check` for `.mjs`/`.cjs`, CI-parity ruff and ty plus targeted pytest for `.py`, frontend typecheck plus eslint for `frontend/**/*.ts|tsx|mjs`, and the pinned Rust format/Clippy/native compile checks for Rust or Cargo changes. Native routing/handler changes also run the retained ingress, write-test, and Vercel deployment contract tests. OpenAPI generator or generated-artifact changes invoke `node scripts/export_openapi_schema.mjs --check`. A stale generated schema blocks the factory commit/push before CI. Changes to root or frontend package manifests, pnpm lockfiles, or the pnpm workspace manifest trigger the existing frozen pnpm install and frontend typecheck even if no `.ts` or `.tsx` file changed. On failure the wrapper does not push. It resets the tree and leaves a `comic-pile-factory-fast-checks-failed-v1` comment for the next worker (see `docs/FACTORY_GITHUB_VISIBILITY.md`). Agents should run the same checks themselves before ending a run.
 
 Every push invalidates prior review, readiness, and merge eligibility. Re-fetch the exact SHA, current review threads, mergeability, and CI after every push.
 
@@ -407,7 +409,10 @@ Apply these states exactly. Reconcile each target with one full label-set replac
 Rules:
 
 - The issue/PR state reconciler enrolls open, non-draft repository PRs missing
-  factory metadata on open/reopen/unlabel events and every 15 minutes. Contributor
+  factory metadata on open/reopen/unlabel events and by its scheduled sweep.
+  Policy requires a 15-minute sweep; the installed workflow currently runs hourly
+  at minute 31, which is a known automation gap rather than permission to claim
+  the faster cadence or mutate the schedule from documentation work. Contributor
   fork PRs participate in the same review, repair, CI, and merge lifecycle as
   factory and local PRs. Dependabot and Renovate are excluded. It preserves unrelated labels and an
   existing owner/stage, defaults missing ownership to `factory:unowned`, and uses
@@ -477,7 +482,7 @@ Rules:
 - A push invalidates `factory:ci` and `factory:ready`; transition the exact new head back to `factory:review` unless review findings already require `factory:changes-requested`.
 - Cross-worker takeover and merge are allowed. The new worker replaces the owner label and may merge work it did not author after every exact-head gate passes.
 - If `gh pr edit` fails because of deprecated Projects Classic GraphQL fields, use the issue-compatible REST label-replacement endpoint with the complete target label set. A POST that only adds labels, or sequential DELETE/POST calls, is not atomic reconciliation.
-- Derived observability labels (currently `factory:merge-conflict`, from GitHub mergeability) are projections, never stages. They never satisfy the workflow-state or owner requirement and never enter `STAGE_LABELS`, stage precedence, `BLOCKED_LABELS`, or queue selection. There is no `factory:approved` label.
+- Derived observability labels (currently `factory:merge-conflict`, from GitHub mergeability) are projections, never stages. They never satisfy the workflow-state or owner requirement and never enter `STAGE_LABELS`, stage precedence, `BLOCKED_LABELS`, or queue selection. `factory:approved` is a separate review-disposition label: it reflects a trusted current-head PASS but is not a stage, owner, merge authorization, or substitute for CI/review evidence.
 - Before ending any turn, compare the issue, PR, review, CI, lease, and merge state and repair any metadata contradiction discovered.
 
 ## Repository safety
@@ -504,10 +509,12 @@ Rules:
   branch code and never execute the fork checkout with their write token.
   Enrollment does not attest provenance, approve code, or bypass exact-head gates.
 
-- Fixed-model PR creation must use `PR_REBASE_TOKEN`, like git pushes. Keep the
-  workflow token for controller comments and labels; creating the PR with that
-  token attributes it to `github-actions[bot]`, which can leave Actions awaiting
-  approval and delay independent review workflows.
+- Fixed-model push and PR creation use `PR_REBASE_TOKEN` unless the worker has a
+  fully configured App. Worker 48 uses its Mark Cordova App when its mapping and
+  all three App secrets exist; otherwise any worker, including 48, uses the shared
+  factory App when its three secrets exist. Without either App it falls back to
+  `PR_REBASE_TOKEN`. Keep the workflow token for trusted controller comments and
+  labels. See [worker App identities](../.github/factory-worker-github-apps.md).
 - Never push directly to `main`.
 - Never create or convert a draft PR unless Josh explicitly requests a draft.
 - Never enable auto-merge.
@@ -613,6 +620,12 @@ This is an attempt-level circuit breaker, not an issue-level failure. The issue 
 
 ## No-progress PR retirement (owner-authorized)
 
+> **Known policy/runtime mismatch:** the owner-authorized threshold below is
+> three trusted records, while the installed runtime setting
+> `FACTORY_NO_DIFF_RETRY_LIMIT` currently defaults to four. Preserve the owner
+> policy and repair the runtime/settings through the authorized automation
+> process; documentation work must not silently change either value.
+
 Three trusted \`repair-no-persisted-change-handoff\` records on the **same unchanged
 PR head**, across the review/changes-requested handoff, exhaust that implementation
 attempt. The serialized dispatcher must close the PR and immediately return its
@@ -659,8 +672,11 @@ Use the existing canonical marker schemas:
 - issue claim: `<!-- comic-pile-factory-implement-claim-v3:issue-<n>:<worker>:<epoch>:attempt-<n> -->`
 - issue progress: `<!-- comic-pile-factory-implement-progress-v3:issue-<n>:<worker>:<epoch> -->`
 - review claim: `<!-- comic-pile-factory-review-claim-v2:<sha>:<worker>:<epoch> -->`
-- review pass verdict: `<!-- comic-pile-factory-review-v2:<sha>:pass -->`
-- review changes-required verdict: `<!-- comic-pile-factory-review-v2:<sha>:changes-required -->`
+- author model: `<!-- comic-pile-agent-model-author-v1:pr-<pr>:head-<sha>:model-<model>:agent-<author-id> -->`
+- reviewer model: `<!-- comic-pile-agent-model-review-v1:pr-<pr>:head-<sha>:author-<author-model>:reviewer-<reviewer-model>:author-agent-<author-id>:reviewer-agent-<reviewer-id>:verdict-approve -->`
+- current semantic review verdict: `<!-- comic-pile-factory-semantic-review-v1:pr-<pr>:head-<sha>:reviewer-<worker>:producer-<worker-or-unknown>:verdict-<approve-or-repair> -->`
+- legacy review pass verdict: `<!-- comic-pile-factory-review-v2:<sha>:pass -->`
+- legacy review changes-required verdict: `<!-- comic-pile-factory-review-v2:<sha>:changes-required -->`
 - repair claim: `<!-- comic-pile-factory-fix-claim-v3:<sha>:<worker>:<epoch>:attempt-<n> -->`
 - repair progress: `<!-- comic-pile-factory-fix-progress-v3:<sha>:<worker>:<epoch> -->`
 - ready: `<!-- comic-pile-factory-ready-v2:<sha> -->`
@@ -692,7 +708,14 @@ Record observed facts, distinguish local checks from CI, include no secrets, and
 
 Review leases last 45 minutes. Repair and implementation leases last 60 minutes after the latest real progress. Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
 
+> **Known policy/runtime mismatch:** runtime settings `FACTORY_LOCAL_LEASE_TTL_SECONDS` and `FACTORY_FIXED_LEASE_TTL_SECONDS` currently default to 86400 and 7500 seconds. Preserve the 60-minute/15-minute policy above and repair runtime/settings through the authorized automation process; documentation work must not silently change either value.
+
 ## Z.AI free account quota backoff
+
+> **Historical lane note:** the worker numbers, slots, and model IDs below are
+> retained as operating-history provenance. Current worker/model capacity is
+> registry/catalog driven; this section does not authorize a static roster or a
+> provider/model substitution.
 
 Worker 97 adds a second `z-ai` / `glm-4.5-flash` lane at :50, thirty minutes
 from worker 54 at :20, using the existing `Z_AI_API_KEY` and `PR_REBASE_TOKEN`.
@@ -706,7 +729,7 @@ assuming the account is available.
 
 ## External scheduled-factory heartbeat
 
-The former registry issue #1093 is retired as factory heartbeat/registry infrastructure (2026-11-16). GitHub refuses new comments on threads with more than 2,500 comments, and GitHub comments must not be operational infrastructure. No worker, workflow, or controller may read, create, or update #1093 comments. Worker lifecycle (started/exit) is written to Neon by the run workflow's trusted jobs, and attempt outcomes, model health, failover and transitions are persisted to Neon from the trusted Actions job log. Neon and those job logs are authoritative. Issue #1093 and the watchdog's alert issue remain protected and non-executable: workers must never claim, implement, label, or close them.
+The former registry issue #1093 is retired as factory heartbeat/registry infrastructure (2026-11-16). GitHub refuses new comments on threads with more than 2,500 comments, and GitHub comments must not be operational infrastructure. No worker, workflow, or controller may read, create, or update #1093 comments. Worker lifecycle (started/exit) is written to the factory state store by the run workflow's trusted jobs, and attempt outcomes, model health, failover and transitions are persisted there from the trusted Actions job log. The store and those job logs are authoritative. Current callers use Turso; the one-time Factory Store Migrate workflow can copy legacy Neon state. Issue #1093 and the watchdog's alert issue remain protected and non-executable: workers must never claim, implement, label, or close them.
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
 
@@ -744,7 +767,7 @@ separate non-quota evidence, such as model removal, revoked authentication or
 repeated invalid output, recorded in its PR. Catalog discovery already protects
 these runtime-only providers from catalog-absence retirement.
 
-The earlier retired identities 48 and 55 remain retired. Post-reset runs
+The earlier provider lanes for worker identities 48 and 55 remain retired; that does not retire worker 48's provisioned GitHub App identity. Post-reset runs
 [41774076436](https://github.com/JoshCLWren/comic-pile/actions/runs/41774076436)
 and [41774209074](https://github.com/JoshCLWren/comic-pile/actions/runs/41774209074)
 on November 4, before #4622 merged, still reported Mistral API budget exhaustion
@@ -770,6 +793,8 @@ Retired and unattributed history remain visible. Immutable merged attribution
 is cached on the existing status branch; unavailable history is not reported as zero.
 
 ### Measured starter/finisher preference
+
+> **Historical roster note:** the source/model examples below describe measured past behavior. Current assignments come from the runtime registry; this preference does not create a static roster or override protected priorities.
 
 Within otherwise eligible work, lanes pinned to `z-ai` / `glm-4.5-flash`
 prefer fresh issues and lanes pinned to `kilo-auto` / `kilo-auto/free` prefer
@@ -804,11 +829,17 @@ duplicate creation; disjoint files remain eligible for separate PRs.
 
 ## Additional provider free-tier lanes (2026-11-15)
 
+> **Dated configuration snapshot:** the model IDs and provider list below are
+> historical provenance, not an authoritative runtime inventory. Current models
+> and capacity come from the provider registry/catalog and source-budget policy.
+
 This fleet uses free-only or evaluation-only credentials. The roster and source caps
 are not equivalent to a provider-side spending limit. API keys MUST belong to
 accounts/projects that cannot auto-bill beyond a free allowance. Missing keys
-skip execution; never substitute a paid model, silently switch to a billed plan,
-or copy a credential into source control.
+skip execution; never substitute a paid model or silently switch to a billed plan
+outside the configured provider-specific allowance, and never copy a credential
+into source control. The Aion free-allowance exception below permits configured
+paid-price inference only within that allowance; it is not a general paid fallback.
 
 - `gemini-free`: `GEMINI_API_KEY`, free-tier Google AI Studio project only;
   `gemini-3.8-flash` and `gemini-3.1-flash-lite`. On the Google free tier,
@@ -839,9 +870,9 @@ calling to paid Pro access. Do not add a fake free contributor slot. Its text-on
 free tier may be considered for a separately implemented independent static
 reviewer, subject to review-stage routing and separate credentials.
 
-Adding worker IDs does not provision provider accounts or secrets. Existing Neon
-model-health exclusions, source cooldowns, account-level budget accounting, and
-runtime authorization must remain authoritative.
+Adding worker IDs does not provision provider accounts or secrets. Existing
+factory-store model-health exclusions, source cooldowns, account-level budget
+accounting, and runtime authorization must remain authoritative.
 
 ## Owner-authorized persisted work PRs (2026-11-15, #5183)
 

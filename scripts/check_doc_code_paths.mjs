@@ -116,10 +116,13 @@ function walk(root, skip) {
   return files;
 }
 
-/** Return Markdown paths (sorted) that participate in documentation checks. */
+/** Return tracked Markdown paths (sorted) that participate in documentation checks. */
 export function iterMarkdownFiles(root) {
-  return walk(root, IGNORED_DIRECTORIES)
+  return trackedFiles(root)
     .filter((file) => file.endsWith('.md'))
+    .map((file) => path.join(root, file))
+    .filter((file) => existsSync(file) && statSync(file).isFile())
+    .filter((file) => !path.relative(root, file).split(path.sep).some((part) => IGNORED_DIRECTORIES.has(part)))
     .sort((a, b) =>
       compareParts(path.relative(root, a).split(path.sep).join('/'), path.relative(root, b).split(path.sep).join('/')),
     );
@@ -128,12 +131,12 @@ export function iterMarkdownFiles(root) {
 /** Return repository-relative tracked file paths, falling back to a directory walk. */
 export function trackedFiles(root) {
   try {
-    const out = execFileSync('git', ['-C', root, 'ls-files'], {
+    const out = execFileSync('git', ['-C', root, 'ls-files', '-z'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
       maxBuffer: 256 * 1024 * 1024,
     });
-    return out.split('\n').filter(Boolean);
+    return out.split('\0').filter(Boolean);
   } catch {
     return walk(root, new Set(['.git'])).map((file) => path.relative(root, file).split(path.sep).join('/'));
   }

@@ -18,11 +18,9 @@ points for pages that are not direct nav items.
 There is no `/tags` route. Tags are managed where they are used: dialogs on
 thread and issue views support adding, removing and colouring tags. A dedicated
 Tags page (global usage counts, rename/merge/color/delete, links to tagged
-items) is deliberately **not** added in this slice. The ComicVine-derived tag
-inventory and the tag-versus-facet decision are an owner decision in #5436,
-which is marked `factory-execution:manual-only`; a Tags page built before that
-decision would bake in the wrong data model. The dialogs are the documented
-entry point until #5436 is resolved.
+items) is deliberately **not** added in this slice. The final no-standalone-Tags-page ruling is recorded in
+[`manual-qa/tags.md`](manual-qa/tags.md). The dialogs remain the documented entry
+point; do not add a competing Tags page.
 
 ## Route inventory
 
