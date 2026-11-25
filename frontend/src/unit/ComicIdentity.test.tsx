@@ -1714,7 +1714,6 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
-    await waitForLoaded()
 
     expect(getIntelligence).toHaveBeenCalledTimes(1)
     expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
