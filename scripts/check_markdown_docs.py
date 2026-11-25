@@ -26,17 +26,18 @@ IGNORED_DIRECTORIES = {".git", ".venv", ".vercel", "node_modules", "archive"}
 
 
 def _tracked_markdown_files(root: Path) -> list[Path] | None:
-    """Return tracked Markdown paths, or ``None`` outside a Git worktree."""
+    """Return existing tracked Markdown paths, or ``None`` outside a Git worktree."""
     try:
         result = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "--", "*.md"],
+            ["git", "-C", str(root), "ls-files", "-z", "--", "*.md"],
             check=True,
             capture_output=True,
             text=True,
         )
     except (OSError, subprocess.CalledProcessError):
         return None
-    return sorted(root / path for path in result.stdout.splitlines() if path)
+    files = [root / path for path in result.stdout.split("\0") if path]
+    return sorted(path for path in files if path.is_file())
 
 
 def iter_markdown_files(root: Path) -> list[Path]:
