@@ -7,7 +7,7 @@
  * mapping mutation.
  */
 import { act, render, renderHook, screen, waitFor, fireEvent } from './testingLibrary'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IssueIdentityResponse } from '../services/api-comicvine'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -80,6 +80,10 @@ beforeEach(() => {
   getIssueIdentitySpy.mockResolvedValue(UNMAPPED)
   confirmIdentitySpy.mockResolvedValue(MAPPED)
   removeIdentitySpy.mockResolvedValue(UNMAPPED)
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 describe('ComicIssueMappingAction', () => {
@@ -194,6 +198,9 @@ describe('ComicIssueMappingAction', () => {
     const onMapped = vi.fn().mockResolvedValue(undefined)
     const intelligenceKey = queryKeys.comicVine.issueIntelligence(77)
     queryClient.setQueryData(intelligenceKey, { image_url: 'https://example.com/stale-cover.jpg' })
+    const intelligenceKey = queryKeys.comicVine.issueIntelligence(77)
+    queryClient.setQueryData(intelligenceKey, { image_url: 'https://example.com/stale-cover.jpg' })
+    const setQueryData = vi.spyOn(queryClient, 'setQueryData')
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
     render(
       <ComicIssueMappingAction
@@ -207,18 +214,10 @@ describe('ComicIssueMappingAction', () => {
     fireEvent.click(screen.getByTestId('comic-mapping-remove'))
     fireEvent.click(await screen.findByText('Remove mapping'))
     await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
-<<<<<<< HEAD
+    await waitFor(() => expect(setQueryData).toHaveBeenCalledWith(intelligenceKey, null))
     await waitFor(() => expect(queryClient.getQueryData(intelligenceKey)).toBeNull())
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: intelligenceKey,
-=======
-    await waitFor(() => expect(queryClient.setQueryData).toHaveBeenCalledWith(
-      queryKeys.comicVine.issueIntelligence(77),
-      null,
-    ))
-    await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.comicVine.issueIntelligence(77),
->>>>>>> origin/main
       exact: true,
     }))
     await waitFor(() => expect(onMapped).toHaveBeenCalled())
@@ -226,10 +225,6 @@ describe('ComicIssueMappingAction', () => {
     expect(screen.getByTestId('comic-mapping-map')).toHaveTextContent('Map comic')
     expect(screen.queryByTestId('comic-mapping-change')).not.toBeInTheDocument()
     expect(screen.queryByTestId('comic-mapping-remove')).not.toBeInTheDocument()
-<<<<<<< HEAD
-    invalidateQueries.mockRestore()
-=======
->>>>>>> origin/main
   })
 
   it('keeps a successful removal visible when identity reconciliation fails', async () => {
