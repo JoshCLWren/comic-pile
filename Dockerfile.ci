@@ -37,7 +37,11 @@ WORKDIR /workspace
 
 # Stage 2: Minimal Python tooling for CI helpers and linters.
 # The Python application runtime was retired; keep only a plain interpreter
-# venv with the CI lint/typecheck tools that existing jobs invoke.
+# venv with the tools the remaining CI jobs invoke. ty checks tests/ (see
+# [tool.ty.src] in pyproject.toml), so pytest and PyYAML must be resolvable
+# there even though no application dependency set is installed. Versions are
+# pinned to the ones in uv.lock so this image stays deterministic without a
+# full `uv sync`.
 FROM base AS python-env
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -46,7 +50,11 @@ ENV PYTHONUNBUFFERED=1 \
 RUN python -m venv .venv && \
     .venv/bin/python -c "import sys; assert sys.version_info[:2] == (3, 14), sys.version" && \
     .venv/bin/pip install --no-cache-dir --upgrade pip && \
-    .venv/bin/pip install --no-cache-dir ruff==0.17.6 ty==0.0.107
+    .venv/bin/pip install --no-cache-dir \
+        ruff==0.17.6 \
+        ty==0.0.107 \
+        pytest==9.2.0 \
+        pyyaml==6.0.3
 
 # Stage 3: Frontend dependencies (no Playwright browsers — installed on-demand).
 FROM python-env AS frontend-deps
