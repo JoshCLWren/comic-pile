@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T07:15:06+00:00",
+  "generated_at": "2026-11-25T07:31:48.694098+00:00",
   "models": [
     {
       "health": {
@@ -2273,12 +2273,12 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 15,
+          "failed": 14,
           "failures": {
             "agent_timeout": 1,
             "provider_throttle": 1,
             "unknown_failure": 3,
-            "work_failure": 10
+            "work_failure": 9
           },
           "idle": 17,
           "kinds": {
@@ -2293,7 +2293,7 @@
               "runs": 1
             }
           },
-          "runs": 32
+          "runs": 31
         }
       }
     },
@@ -2387,12 +2387,12 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 18,
+          "failed": 16,
           "failures": {
-            "control_plane_failure": 18
+            "control_plane_failure": 16
           },
           "idle": 0,
-          "runs": 18
+          "runs": 16
         },
         "7d": {
           "completed": 0,
@@ -2739,13 +2739,13 @@
         "7d": {
           "completed": 3,
           "delivered": 2,
-          "failed": 43,
+          "failed": 42,
           "failures": {
             "agent_timeout": 9,
             "control_plane_failure": 5,
             "provider_quota": 1,
             "unknown_failure": 1,
-            "work_failure": 27
+            "work_failure": 26
           },
           "idle": 4,
           "kinds": {
@@ -2771,7 +2771,7 @@
               "runs": 2
             }
           },
-          "runs": 50
+          "runs": 49
         }
       }
     },
@@ -2804,7 +2804,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-25T06:02:13+00:00",
+        "cooldown_until": "2026-11-25T07:06:10+00:00",
         "last_outcome": "provider_throttle",
         "status": "cooling"
       },
@@ -2814,12 +2814,12 @@
         "24h": {
           "completed": 6,
           "delivered": 6,
-          "failed": 24,
+          "failed": 25,
           "failures": {
             "agent_timeout": 5,
             "control_plane_failure": 7,
-            "provider_throttle": 4,
-            "work_failure": 8
+            "provider_throttle": 6,
+            "work_failure": 7
           },
           "idle": 1,
           "kinds": {
@@ -2836,25 +2836,25 @@
             "merge-conflict": {
               "completed": 1,
               "delivered": 1,
-              "failed": 3,
+              "failed": 4,
               "failures": {
                 "agent_timeout": 1,
-                "provider_throttle": 1,
+                "provider_throttle": 2,
                 "work_failure": 1
               },
               "idle": 0,
-              "runs": 4
+              "runs": 5
             },
             "review": {
               "completed": 1,
               "delivered": 1,
-              "failed": 4,
+              "failed": 5,
               "failures": {
-                "provider_throttle": 2,
+                "provider_throttle": 3,
                 "work_failure": 2
               },
               "idle": 0,
-              "runs": 5
+              "runs": 6
             },
             "review-findings": {
               "completed": 0,
@@ -2867,7 +2867,7 @@
               "runs": 1
             }
           },
-          "runs": 31
+          "runs": 32
         },
         "7d": {
           "completed": 42,
@@ -2896,25 +2896,25 @@
             "merge-conflict": {
               "completed": 1,
               "delivered": 1,
-              "failed": 3,
+              "failed": 4,
               "failures": {
                 "agent_timeout": 1,
-                "provider_throttle": 1,
+                "provider_throttle": 2,
                 "work_failure": 1
               },
               "idle": 0,
-              "runs": 4
+              "runs": 5
             },
             "review": {
               "completed": 1,
               "delivered": 1,
-              "failed": 4,
+              "failed": 5,
               "failures": {
-                "provider_throttle": 2,
+                "provider_throttle": 3,
                 "work_failure": 2
               },
               "idle": 0,
-              "runs": 5
+              "runs": 6
             },
             "review-findings": {
               "completed": 0,
@@ -3120,15 +3120,15 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 18,
+          "failed": 16,
           "failures": {
             "control_plane_failure": 2,
             "provider_failure": 2,
             "provider_throttle": 3,
-            "work_failure": 11
+            "work_failure": 9
           },
           "idle": 1,
-          "runs": 19
+          "runs": 17
         }
       }
     },
@@ -3261,10 +3261,10 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 23,
+          "failed": 21,
           "failures": {
             "control_plane_failure": 3,
-            "work_failure": 20
+            "work_failure": 18
           },
           "idle": 11,
           "kinds": {
@@ -3307,7 +3307,7 @@
               "runs": 1
             }
           },
-          "runs": 34
+          "runs": 32
         }
       }
     },
@@ -3469,12 +3469,12 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 25,
+          "failed": 23,
           "failures": {
-            "control_plane_failure": 25
+            "control_plane_failure": 23
           },
           "idle": 3,
-          "runs": 28
+          "runs": 26
         },
         "7d": {
           "completed": 0,
@@ -5198,7 +5198,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-25T06:24:16+00:00",
+        "cooldown_until": "2026-11-25T07:30:40+00:00",
         "last_outcome": "provider_throttle",
         "status": "cooling"
       },
@@ -5206,11 +5206,11 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 11,
-          "delivered": 11,
-          "failed": 13,
+          "completed": 12,
+          "delivered": 12,
+          "failed": 14,
           "failures": {
-            "provider_throttle": 7,
+            "provider_throttle": 8,
             "work_failure": 6
           },
           "idle": 0,
@@ -5218,13 +5218,13 @@
             "merge-conflict": {
               "completed": 1,
               "delivered": 1,
-              "failed": 7,
+              "failed": 8,
               "failures": {
-                "provider_throttle": 5,
+                "provider_throttle": 6,
                 "work_failure": 2
               },
               "idle": 0,
-              "runs": 8
+              "runs": 9
             },
             "review": {
               "completed": 1,
@@ -5237,23 +5237,23 @@
               "runs": 2
             },
             "review-findings": {
-              "completed": 3,
-              "delivered": 3,
+              "completed": 4,
+              "delivered": 4,
               "failed": 0,
               "failures": {},
               "idle": 0,
-              "runs": 3
+              "runs": 4
             }
           },
-          "runs": 24
+          "runs": 26
         },
         "7d": {
-          "completed": 13,
-          "delivered": 13,
-          "failed": 23,
+          "completed": 14,
+          "delivered": 14,
+          "failed": 24,
           "failures": {
             "control_plane_failure": 1,
-            "provider_throttle": 7,
+            "provider_throttle": 8,
             "work_failure": 15
           },
           "idle": 1,
@@ -5261,13 +5261,13 @@
             "merge-conflict": {
               "completed": 1,
               "delivered": 1,
-              "failed": 7,
+              "failed": 8,
               "failures": {
-                "provider_throttle": 5,
+                "provider_throttle": 6,
                 "work_failure": 2
               },
               "idle": 0,
-              "runs": 8
+              "runs": 9
             },
             "review": {
               "completed": 1,
@@ -5280,15 +5280,15 @@
               "runs": 2
             },
             "review-findings": {
-              "completed": 3,
-              "delivered": 3,
+              "completed": 4,
+              "delivered": 4,
               "failed": 0,
               "failures": {},
               "idle": 0,
-              "runs": 3
+              "runs": 4
             }
           },
-          "runs": 37
+          "runs": 39
         }
       }
     },
@@ -5338,10 +5338,10 @@
         "24h": {
           "completed": 9,
           "delivered": 9,
-          "failed": 44,
+          "failed": 42,
           "failures": {
-            "control_plane_failure": 14,
-            "provider_failure": 3,
+            "control_plane_failure": 13,
+            "provider_failure": 2,
             "work_failure": 27
           },
           "idle": 33,
@@ -5367,14 +5367,14 @@
             "review": {
               "completed": 0,
               "delivered": 0,
-              "failed": 9,
+              "failed": 10,
               "failures": {
                 "control_plane_failure": 1,
                 "provider_failure": 2,
-                "work_failure": 6
+                "work_failure": 7
               },
               "idle": 2,
-              "runs": 11
+              "runs": 12
             },
             "review-findings": {
               "completed": 3,
@@ -5387,18 +5387,18 @@
               "runs": 6
             }
           },
-          "runs": 86
+          "runs": 84
         },
         "7d": {
           "completed": 28,
           "delivered": 28,
-          "failed": 127,
+          "failed": 128,
           "failures": {
             "control_plane_failure": 28,
             "provider_failure": 5,
             "provider_quota": 1,
             "unknown_failure": 1,
-            "work_failure": 92
+            "work_failure": 93
           },
           "idle": 62,
           "kinds": {
@@ -5423,14 +5423,14 @@
             "review": {
               "completed": 0,
               "delivered": 0,
-              "failed": 9,
+              "failed": 10,
               "failures": {
                 "control_plane_failure": 1,
                 "provider_failure": 2,
-                "work_failure": 6
+                "work_failure": 7
               },
               "idle": 2,
-              "runs": 11
+              "runs": 12
             },
             "review-findings": {
               "completed": 3,
@@ -5443,7 +5443,7 @@
               "runs": 6
             }
           },
-          "runs": 217
+          "runs": 218
         }
       }
     },
@@ -6401,12 +6401,12 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 9,
+          "failed": 6,
           "failures": {
-            "control_plane_failure": 9
+            "control_plane_failure": 6
           },
           "idle": 0,
-          "runs": 9
+          "runs": 6
         },
         "7d": {
           "completed": 0,
@@ -12821,12 +12821,10 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 1,
-          "failures": {
-            "provider_quota": 1
-          },
+          "failed": 0,
+          "failures": {},
           "idle": 0,
-          "runs": 1
+          "runs": 0
         },
         "7d": {
           "completed": 0,
@@ -22568,7 +22566,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-24T02:40:34+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22597,7 +22595,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T02:27:22+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22626,7 +22624,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T02:27:22+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22653,7 +22651,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T21:06:12+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22680,7 +22678,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-24T10:11:49+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22711,7 +22709,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T02:27:22+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22738,7 +22736,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T13:03:38+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22767,7 +22765,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-24T00:33:27+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22794,7 +22792,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T02:27:22+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22823,7 +22821,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T02:27:22+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22852,7 +22850,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T23:39:14+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22881,7 +22879,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-24T05:06:48+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22910,7 +22908,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T21:06:12+00:00",
+        "cooldown_until": "2026-11-26T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -23043,16 +23041,16 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 22,
+          "failed": 20,
           "idle": 0,
-          "runs": 22
+          "runs": 20
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 75,
+          "failed": 74,
           "idle": 17,
-          "runs": 92
+          "runs": 91
         }
       }
     },
@@ -23081,16 +23079,16 @@
         "24h": {
           "completed": 7,
           "delivered": 7,
-          "failed": 70,
+          "failed": 69,
           "idle": 15,
-          "runs": 92
+          "runs": 91
         },
         "7d": {
           "completed": 57,
           "delivered": 55,
-          "failed": 589,
+          "failed": 584,
           "idle": 273,
-          "runs": 919
+          "runs": 914
         }
       }
     },
@@ -23117,18 +23115,18 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 20,
-          "delivered": 20,
-          "failed": 68,
+          "completed": 21,
+          "delivered": 21,
+          "failed": 67,
           "idle": 33,
           "runs": 121
         },
         "7d": {
-          "completed": 62,
-          "delivered": 56,
-          "failed": 376,
+          "completed": 63,
+          "delivered": 57,
+          "failed": 378,
           "idle": 87,
-          "runs": 525
+          "runs": 528
         }
       }
     },
@@ -23138,9 +23136,9 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 11,
+          "failed": 8,
           "idle": 0,
-          "runs": 11
+          "runs": 8
         },
         "7d": {
           "completed": 0,
@@ -23176,9 +23174,9 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 1,
+          "failed": 0,
           "idle": 8,
-          "runs": 9
+          "runs": 8
         },
         "7d": {
           "completed": 0,
@@ -23252,9 +23250,9 @@
     "24h": "24 hours",
     "7d": "7 days"
   },
-  "counts_generated_at": "2026-11-25T06:25:23.741248+00:00",
+  "counts_generated_at": "2026-11-25T07:31:48.694098+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-25T07:15:09Z",
+    "generated_at": "2026-11-25T07:31:49Z",
     "sources": {
       "kilo-auto": [
         "kilo-auto/free"
@@ -23317,10 +23315,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-25T07:15:09.293115+00:00",
-    "days_elapsed": 24.302,
+    "checked_at": "2026-11-25T07:31:50.069656+00:00",
+    "days_elapsed": 24.314,
     "days_in_month": 30.0,
-    "days_left": 5.7,
+    "days_left": 5.69,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23336,31 +23334,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 6173889,
-        "organization": 6173889,
+        "database": 6364344,
+        "organization": 6364344,
         "owner_target": 50000000,
-        "projected_database": 7621458,
-        "projected_organization": 7621458,
-        "projected_share": 0.0152,
-        "share_used": 0.0123
+        "projected_database": 7852691,
+        "projected_organization": 7852691,
+        "projected_share": 0.0157,
+        "share_used": 0.0127
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 113867,
-        "organization": 113867,
+        "database": 114129,
+        "organization": 114129,
         "owner_target": 1000000,
-        "projected_database": 140565,
-        "projected_organization": 140565,
+        "projected_database": 140819,
+        "projected_organization": 140819,
         "projected_share": 0.0141,
         "share_used": 0.0114
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 17588224,
-        "organization": 17588224,
+        "database": 17604608,
+        "organization": 17604608,
         "owner_target": 250000000,
-        "projected_database": 17588224,
-        "projected_organization": 17588224,
+        "projected_database": 17604608,
+        "projected_organization": 17604608,
         "projected_share": 0.0035,
         "share_used": 0.0035
       }
