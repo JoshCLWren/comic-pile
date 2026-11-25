@@ -1336,7 +1336,12 @@ pub async fn preview_issue_create(
             graph: crate::reading_graph::ReadingGraphResponse {
                 status: "ok".to_string(),
                 cycles: vec![],
-                lanes: vec![],
+                cyclic_issue_ids: vec![],
+                affected_lists: vec![],
+                affected_threads: vec![],
+                repairs: vec![],
+                unresolved_reference_count: 0,
+                frontier_audit: None,
             },
             conflict_message: None,
         }
