@@ -126,14 +126,48 @@ describe('useBulkReadOperations', () => {
     expect(window.localStorage.getItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`)).toBeNull()
   })
 
-  it('discards a receipt whose operation can no longer be loaded', async () => {
-    window.localStorage.setItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`, '11')
+  it('preserves a receipt on transport failure and recovers it after reconnecting', async () => {
+    writeBulkReadReceipt(42, 11)
     const api = fakeApi()
-    api.getReadOperation.mockRejectedValueOnce(new Error('operation gone'))
+    api.getReadOperation.mockRejectedValueOnce(new Error('Network Error'))
     const { result } = renderHook(() => useBulkReadOperations(api))
 
-    await waitFor(() => expect(window.localStorage.getItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`)).toBeNull())
+    await waitFor(() => expect(result.current.message).toMatch(/receipts were kept/i))
     expect(result.current.operations).toHaveLength(0)
+    expect(window.localStorage.getItem(bulkReadReceiptKey(42, 11))).toBe('1')
+
+    await act(async () => { window.dispatchEvent(new Event('online')) })
+    await waitFor(() => expect(result.current.operations).toEqual([
+      { threadId: 42, operation: operation(11) },
+    ]))
+    expect(result.current.message).toBeNull()
+  })
+
+  it('retains an owner-scoped 404 receipt without showing another account the operation', async () => {
+    writeBulkReadReceipt(42, 13)
+    const api = fakeApi()
+    api.getReadOperation.mockRejectedValueOnce({ response: { status: 404 } })
+    const first = renderHook(() => useBulkReadOperations(api))
+    await waitFor(() => expect(api.getReadOperation).toHaveBeenCalledWith(13))
+    expect(first.result.current.operations).toHaveLength(0)
+    expect(window.localStorage.getItem(bulkReadReceiptKey(42, 13))).toBe('1')
+    first.unmount()
+
+    const owner = renderHook(() => useBulkReadOperations(api))
+    await waitFor(() => expect(owner.result.current.operations).toEqual([
+      { threadId: 42, operation: operation(13) },
+    ]))
+  })
+
+  it('discovers and removes receipts written in the same tab without a reload', async () => {
+    const api = fakeApi()
+    const { result } = renderHook(() => useBulkReadOperations(api))
+    await act(async () => { writeBulkReadReceipt(42, 14) })
+    await waitFor(() => expect(result.current.operations).toEqual([
+      { threadId: 42, operation: operation(14) },
+    ]))
+    await act(async () => { clearBulkReadReceipt(42, 14) })
+    await waitFor(() => expect(result.current.operations).toHaveLength(0))
   })
 
   it('reports a failed undo while keeping the receipt for a retry', async () => {
