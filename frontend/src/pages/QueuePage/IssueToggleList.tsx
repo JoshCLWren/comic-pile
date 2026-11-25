@@ -76,6 +76,10 @@ export interface IssueToggleListHandle {
  * and duplicate risk — not a bare issue number (#4654).
  */
 function PreviewIssueRow({ item }: { item: IssuePreviewItem }) {
+  const sourceLists = item.source_lists ?? []
+  const effect = item.effect ?? (item.is_new
+    ? `new issue #${item.issue_number} inserted at position ${item.position}`
+    : `issue #${item.issue_number} at position ${item.position}`)
   return (
     <div
       className="rounded-md border border-white/10 p-2 space-y-1"
@@ -83,14 +87,14 @@ function PreviewIssueRow({ item }: { item: IssuePreviewItem }) {
     >
       <div className="flex items-start justify-between gap-2">
         <span className={`font-bold ${item.is_new ? 'text-[var(--theme-primary-action)]' : 'text-[var(--theme-text-primary)]'}`}>
-          {item.series_title} #{item.issue_number}{item.is_new ? ' (new)' : ''}
+          {item.series_title ? `${item.series_title} ` : ''}#{item.issue_number}{item.is_new ? ' (new)' : ''}
         </span>
         <span className="shrink-0 text-stone-500">pos {item.position}</span>
       </div>
-      <div className="text-stone-300">{item.effect}</div>
-      {item.source_lists.length > 0 && (
+      <div className="text-stone-300">{effect}</div>
+      {sourceLists.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {item.source_lists.map((listName) => (
+          {sourceLists.map((listName) => (
             <span key={listName} className="rounded bg-white/10 px-1.5 py-0.5" data-testid="preview-source-list">
               List: {listName}
             </span>
