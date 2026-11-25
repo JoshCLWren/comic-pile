@@ -43,6 +43,7 @@ export const routeModules = {
   forgotPassword: () => import('../pages/ForgotPasswordPage'),
   resetPassword: () => import('../pages/ResetPasswordPage'),
   identityInbox: () => import('../pages/IdentityInboxPage'),
+  duplicateReconciliation: () => import('../pages/DuplicateReconciliationPage'),
   landing: () => import('../pages/LandingPage'),
   demoRoll: () => import('../pages/DemoRollPage'),
   notFound: () => import('../pages/NotFoundPage'),
