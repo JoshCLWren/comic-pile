@@ -24,6 +24,34 @@ vi.mock('../components/ComicIssueMappingAction', () => ({
   default: ({ issueId }: { issueId: number | null }) => <span data-testid="shared-map-action">{issueId}</span>,
 }))
 
+vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
+  useComicVineIssueIntelligence: () => ({
+    metadata: { image_url: 'https://comicvine.gamespot.com/a/uploads/original/saga4.jpg' },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
+
+vi.mock('../pages/RollPage/components/ComicIdentity', () => ({
+  ComicIdentity: ({ issueId }: { issueId: number | null | undefined }) => (
+    <div data-testid="direct-read-comic-identity">{issueId}</div>
+  ),
+}))
+
+vi.mock('../components/Tags/TagSection', () => ({
+  TagSection: ({ targetType, targetId, targetLabel }: {
+    targetType: string
+    targetId: number
+    targetLabel: string
+  }) => (
+    <div data-testid="direct-read-tag-section" data-target={`${targetType}:${targetId}`}>
+      {targetLabel}
+    </div>
+  ),
+}))
+
 const sagaCard: IssueCard = {
   issue_id: 1121330,
   thread_id: 3153,
