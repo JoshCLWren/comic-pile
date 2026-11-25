@@ -110,7 +110,7 @@ export default function DuplicateReconciliationPage() {
     onSuccess: async (_data, reconciliationId) => {
       setMessage(`Undid reconciliation ${reconciliationId}`)
       setLastUndoId(null)
-      await queryClient.invalidateQueries({ queryKey: queryKeys.issueDuplicateReconciliation.all })
+      await invalidateAfterDuplicateReconciliation(queryClient)
     },
     onError: (err) => {
       setMessage(err instanceof Error ? err.message : 'Undo failed')
