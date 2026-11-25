@@ -44,8 +44,13 @@ export interface IssueToggleListApi {
   create: (
     threadId: number,
     issueRange: string,
-    options?: { insert_after_issue_id?: number | null },
+    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' },
   ) => Promise<IssueListResponse>
+  previewCreate: (
+    threadId: number,
+    issueRange: string,
+    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' },
+  ) => Promise<import('../../services/api-issues').IssueEditPreviewResponse>
   markRead: (issueId: number) => Promise<void>
   markUnread: (issueId: number) => Promise<void>
   delete: (issueId: number) => Promise<void>

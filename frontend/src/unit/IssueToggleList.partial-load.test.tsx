@@ -23,6 +23,7 @@ import type { Issue, IssueListResponse } from '../types'
 const mockedIssuesApi = {
   list: vi.fn<IssueToggleListApi['list']>(),
   create: vi.fn<IssueToggleListApi['create']>(),
+  previewCreate: vi.fn<IssueToggleListApi['previewCreate']>(),
   markRead: vi.fn<IssueToggleListApi['markRead']>(),
   markUnread: vi.fn<IssueToggleListApi['markUnread']>(),
   delete: vi.fn<IssueToggleListApi['delete']>(),
