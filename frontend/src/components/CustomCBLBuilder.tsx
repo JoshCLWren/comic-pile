@@ -232,7 +232,10 @@ export default function CustomCBLBuilder({
       // Install the stable target before cache changes so every completion
       // render restores focus to a connected element after the trigger unmounts.
       deleteReturnFocusRef.current = customCBLHeadingRef.current
-      if (selectedId) await applyDeletedCustomCBL(queryClient, selectedId)
+      if (selectedId) {
+        if (persisted) writeReadingListUndo(persisted.user_id, selectedId, null)
+        await applyDeletedCustomCBL(queryClient, selectedId)
+      }
       saveMutation.reset()
       setConfirmDeleteOpen(false)
       setSelectedId(null)
