@@ -2,7 +2,11 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BULK_READ_OPERATION_KEY_PREFIX,
+  bulkReadReceiptKey,
+  clearBulkReadReceipt,
+  findBulkReadReceipt,
   useBulkReadOperations,
+  writeBulkReadReceipt,
 } from '../hooks/useBulkReadOperations'
 import type { IssueReadOperationResponse } from '../services/api-issues'
 
@@ -37,6 +41,35 @@ describe('useBulkReadOperations', () => {
     await waitFor(() => expect(result.current.operations).toHaveLength(1))
     expect(api.getReadOperation).toHaveBeenCalledWith(7)
     expect(result.current.operations[0]).toEqual({ threadId: 42, operation: operation(7) })
+  })
+
+  it('discovers two operations in one series without orphaning either', async () => {
+    writeBulkReadReceipt(42, 7)
+    writeBulkReadReceipt(42, 8)
+    const api = fakeApi()
+    const { result } = renderHook(() => useBulkReadOperations(api))
+
+    await waitFor(() => expect(result.current.operations).toHaveLength(2))
+    expect(api.getReadOperation).toHaveBeenCalledWith(7)
+    expect(api.getReadOperation).toHaveBeenCalledWith(8)
+
+    await act(async () => { await result.current.undo(42, 7) })
+
+    expect(result.current.operations).toHaveLength(1)
+    expect(result.current.operations[0].operation.id).toBe(8)
+    expect(window.localStorage.getItem(bulkReadReceiptKey(42, 7))).toBeNull()
+    expect(window.localStorage.getItem(bulkReadReceiptKey(42, 8))).toBe('1')
+  })
+
+  it('finds the most recent receipt for a series and clears only that receipt', () => {
+    writeBulkReadReceipt(42, 7)
+    writeBulkReadReceipt(42, 8)
+    writeBulkReadReceipt(43, 9)
+
+    expect(findBulkReadReceipt(42)?.operationId).toBe(8)
+    clearBulkReadReceipt(42, 8)
+    expect(findBulkReadReceipt(42)?.operationId).toBe(7)
+    expect(window.localStorage.getItem(bulkReadReceiptKey(43, 9))).toBe('1')
   })
 
   it('picks up a receipt written in another tab through the storage event', async () => {

@@ -110,12 +110,10 @@ describe('IssueCorrectionDialog', () => {
       issue({ id: 2, issue_number: '2' }),
     ]
     const createdIssue = issue({ id: 3, issue_number: 'Annual 1' })
-    const updatedIssues = [initialIssues[0], createdIssue, initialIssues[1]]
 
-    list
-      .mockResolvedValueOnce(listResponse(initialIssues))
-      .mockResolvedValueOnce(listResponse(initialIssues))
-      .mockResolvedValueOnce(listResponse(updatedIssues))
+    // The stale-review check runs against pre-mutation state, so every load
+    // before confirmation still sees the original list.
+    list.mockResolvedValue(listResponse(initialIssues))
     create.mockResolvedValueOnce(listResponse([createdIssue]))
 
     const { onSuccess } = renderDialog()
@@ -157,6 +155,57 @@ describe('IssueCorrectionDialog', () => {
     expect(bulkMarkRead).not.toHaveBeenCalled()
   })
 
+  it('rejects a stale review before creating a new issue', async () => {
+    // The reviewed set was correct, but an issue changed before confirmation.
+    // No create, move, or bulk write may happen after a stale review (#4655 F3).
+    const reviewed = [issue({ id: 1, issue_number: '1' }), issue({ id: 2, issue_number: '2' })]
+    const changed = [issue({ id: 1, issue_number: '1', status: 'read' }), issue({ id: 2, issue_number: '2' })]
+    list
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(changed))
+
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Annual 1')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
+
+    expect(await screen.findByText(/issues changed since review/i)).toBeInTheDocument()
+    expect(create).not.toHaveBeenCalled()
+    expect(move).not.toHaveBeenCalled()
+    expect(bulkMarkRead).not.toHaveBeenCalled()
+  })
+
+  it('binds confirmation to the reviewed version when ids alone are unchanged', async () => {
+    const reviewed = [
+      issue({ id: 1, issue_number: '1' }),
+      issue({ id: 2, issue_number: '2', status: 'read' }),
+    ]
+    const changed = [
+      issue({ id: 1, issue_number: '1' }),
+      issue({ id: 2, issue_number: '2', status: 'unread' }),
+    ]
+    list
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(changed))
+
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '2')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
+
+    expect(await screen.findByText(/issues changed since review/i)).toBeInTheDocument()
+    expect(bulkMarkRead).not.toHaveBeenCalled()
+    expect(markUnread).not.toHaveBeenCalled()
+  })
+
   it('retries failed loads and reports update failures', async () => {
     list.mockRejectedValue(new Error('load failed'))
     const { onClose } = renderDialog({ currentIssueNumber: null })
@@ -189,11 +238,7 @@ describe('IssueCorrectionDialog', () => {
     // before the target, so there is nothing to bulk read.
     const existing = [issue({ id: 1, issue_number: '1', status: 'unread' })]
     const created = issue({ id: 2, issue_number: '2', status: 'unread' })
-    let listCalls = 0
-    list.mockImplementation(async () => {
-      listCalls += 1
-      return listResponse(listCalls === 1 ? existing : [created, existing[0]!])
-    })
+    list.mockResolvedValue(listResponse(existing))
     create.mockResolvedValueOnce(listResponse([created]))
 
     const { onSuccess } = renderDialog()
@@ -205,6 +250,7 @@ describe('IssueCorrectionDialog', () => {
     await screen.findByTestId('bulk-read-preview')
     await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
 
+    await waitFor(() => expect(create).toHaveBeenCalledWith(42, '2', { insert_after_issue_id: null }))
     await waitFor(() => expect(move).toHaveBeenCalledWith(2, null))
     await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce())
     expect(bulkMarkRead).not.toHaveBeenCalled()
@@ -313,10 +359,7 @@ describe('IssueCorrectionDialog', () => {
   it('previews and confirms a new issue appended at the end', async () => {
     const existing = [issue({ id: 1, issue_number: '1' }), issue({ id: 2, issue_number: '2' })]
     const created = issue({ id: 3, issue_number: 'Annual 1' })
-    list
-      .mockResolvedValueOnce(listResponse(existing))
-      .mockResolvedValueOnce(listResponse(existing))
-      .mockResolvedValueOnce(listResponse([...existing, created]))
+    list.mockResolvedValue(listResponse(existing))
     create.mockResolvedValueOnce(listResponse([created]))
 
     renderDialog()
@@ -335,10 +378,7 @@ describe('IssueCorrectionDialog', () => {
   it('projects an end insertion when the selected anchor is no longer present', async () => {
     const existing = [issue({ id: 1, issue_number: '1' }), issue({ id: 2, issue_number: '2' })]
     const created = issue({ id: 3, issue_number: 'Annual 1' })
-    list
-      .mockResolvedValueOnce(listResponse(existing))
-      .mockResolvedValueOnce(listResponse(existing))
-      .mockResolvedValueOnce(listResponse([...existing, created]))
+    list.mockResolvedValue(listResponse(existing))
     create.mockResolvedValueOnce(listResponse([created]))
 
     renderDialog()
@@ -351,7 +391,9 @@ describe('IssueCorrectionDialog', () => {
     expect(await screen.findByTestId('bulk-read-preview')).toHaveTextContent('Marking 2 issues')
     await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
 
-    await waitFor(() => expect(create).toHaveBeenCalledWith(42, 'Annual 1', { insert_after_issue_id: 999 }))
+    // A stale/missing anchor is projected to the end in the preview AND in the
+    // create request; the reviewed affected set is what gets written (#4655 F2).
+    await waitFor(() => expect(create).toHaveBeenCalledWith(42, 'Annual 1', { insert_after_issue_id: null }))
     await waitFor(() => expect(bulkMarkRead).toHaveBeenCalledWith([1, 2]))
   })
 
