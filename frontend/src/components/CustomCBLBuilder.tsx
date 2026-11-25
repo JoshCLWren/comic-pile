@@ -268,7 +268,7 @@ export default function CustomCBLBuilder({
       if (replaceBaseline !== null && current.updated_at !== replaceBaseline) {
         throw new StaleReadingListReviewError()
       }
-      const savedByIssue = new Map(persisted.entries.map((entry) => [entry.issue_id, entry]))
+      const savedByIssue = new Map(current.entries.map((entry) => [entry.issue_id, entry]))
       const entryIntents: Record<number, ReadingListEntryIntent> = {}
       const checkpointIssueIds: number[] = []
       for (const issueId of selectedIssueIds) {
@@ -277,12 +277,12 @@ export default function CustomCBLBuilder({
         if (saved?.is_checkpoint) checkpointIssueIds.push(issueId)
       }
       const undo = buildWritePayload(
-        persisted.name,
-        persisted.description ?? '',
-        persisted.mode ?? DEFAULT_MODE,
-        persisted.entries,
+        current.name,
+        current.description ?? '',
+        current.mode ?? DEFAULT_MODE,
+        current.entries,
         null,
-        checkpointTargetsFor(persisted.entries),
+        checkpointTargetsFor(current.entries),
       )
       const payload: CustomCBLWrite = {
         name: name.trim(),
