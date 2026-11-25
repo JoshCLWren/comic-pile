@@ -55,6 +55,10 @@ pub struct IssueReadRateRequest {
     pub status: Option<String>,
     /// Effective issue rating in 0.5-point steps. Omit to keep the stored rating.
     pub rating: Option<f64>,
+    /// Alternate overall/story number for the same physical comic (#4652).
+    /// Set to a string to assign, empty string or null to clear. Omit to leave unchanged.
+    #[serde(default, deserialize_with = "crate::bug_reports::double_option::deserialize")]
+    pub issue_number_alias: Option<Option<String>>,
     /// Client-generated retry key. Same key/payload replays the same receipt.
     pub idempotency_key: String,
     /// Source of the issue action. Omitted or "direct" is a manual read from a
