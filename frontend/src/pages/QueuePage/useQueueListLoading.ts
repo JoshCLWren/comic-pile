@@ -15,5 +15,5 @@ import type { QueryKey } from '@tanstack/react-query'
  * @returns True while the matching Queue page query is in flight.
  */
 export function useQueueListLoading(queryKey: QueryKey): boolean {
-  return useIsFetching({ queryKey }) > 0
+  return useIsFetching({ queryKey, exact: true }) > 0
 }
