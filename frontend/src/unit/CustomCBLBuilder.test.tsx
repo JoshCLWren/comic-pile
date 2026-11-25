@@ -444,6 +444,7 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(9, {
+        expected_updated_at: '2026-09-14T03:00:00Z',
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
         mode: 'loose',
@@ -532,6 +533,7 @@ describe('CustomCBLBuilder', () => {
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(9, {
+        expected_updated_at: '2026-09-14T03:00:00Z',
         name: 'Starman into JSA',
         description: null,
         mode: 'loose',
@@ -612,6 +614,7 @@ describe('CustomCBLBuilder', () => {
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(9, {
+        expected_updated_at: '2026-09-14T03:00:00Z',
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
         mode: 'loose',
@@ -650,6 +653,7 @@ describe('CustomCBLBuilder', () => {
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(9, {
+        expected_updated_at: '2026-09-14T03:00:00Z',
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
         mode: 'strict',
@@ -710,6 +714,7 @@ describe('CustomCBLBuilder', () => {
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenNthCalledWith(2, 9, {
+        expected_updated_at: '2026-09-14T03:00:00Z',
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
         mode: 'loose',
@@ -1098,6 +1103,7 @@ describe('CustomCBLBuilder', () => {
 
     await waitFor(() =>
       expect(mocks.update).toHaveBeenCalledWith(9, {
+        expected_updated_at: '2026-09-14T03:00:00Z',
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
         mode: 'loose',
@@ -1116,6 +1122,7 @@ describe('CustomCBLBuilder', () => {
 
     await waitFor(() =>
       expect(mocks.update).toHaveBeenLastCalledWith(9, {
+        expected_updated_at: '2026-09-14T03:00:00Z',
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
         mode: 'loose',
@@ -1285,6 +1292,7 @@ describe('CustomCBLBuilder', () => {
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenNthCalledWith(2, 9, {
+        expected_updated_at: '2026-09-14T03:00:00Z',
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
         mode: 'loose',
@@ -1458,6 +1466,7 @@ describe('CustomCBLBuilder', () => {
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenLastCalledWith(9, {
+        expected_updated_at: '2026-09-14T03:00:00Z',
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
         mode: 'loose',
