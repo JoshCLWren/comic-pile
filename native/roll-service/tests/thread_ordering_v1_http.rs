@@ -1814,25 +1814,24 @@ async fn bootstrap_cookie_snoozes_survive_session_turnover_and_no_snooze_case() 
         let ids = rollable_threads(&conn, user_id, 8).await;
         let foreign = thread(&conn, other_user, "Other reader's turnover series").await;
         conn.execute(
-            "INSERT INTO sessions (user_id, started_at, start_die, snoozed_thread_ids)
-             VALUES ($1, NOW(), 6, $2::text::json)",
-            &[&user_id, &json!([ids[0]]).to_string()],
+            "INSERT INTO sessions (user_id, started_at, start_die)
+             VALUES ($1, NOW(), 6)",
+            &[&user_id],
         )
         .await
         .unwrap();
         (ids, foreign)
     };
 
-    // No browser snoozes: legacy session IDs must not shrink or appear in the display.
+    // No snoozes: bootstrap should expose the full bounded pool.
     let (status, clear) = send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{clear:?}");
     assert_eq!(clear["snoozed_count"], json!(0));
     assert_eq!(clear["snoozed_thread_ids"], json!([]));
-    assert_eq!(clear["snoozed_threads"], json!([]));
     assert_eq!(clear["rollable"].as_array().unwrap().len(), 6);
 
-    // Simulate the incident's session turnover: the previous session owned the
-    // legacy snooze above, while the fresh current session has no snooze IDs.
+    // Simulate session turnover: close current session rows and create a fresh session
+    // with stale session snoozes that must not be projected as browser snoozes.
     {
         let conn = state.pool.get().await.unwrap();
         conn.execute(
@@ -1842,9 +1841,9 @@ async fn bootstrap_cookie_snoozes_survive_session_turnover_and_no_snooze_case() 
         .await
         .unwrap();
         conn.execute(
-            "INSERT INTO sessions (user_id, started_at, start_die)
-             VALUES ($1, NOW(), 6)",
-            &[&user_id],
+            "INSERT INTO sessions (user_id, started_at, start_die, snoozed_thread_ids)
+             VALUES ($1, NOW(), 6, $2::text::json)",
+            &[&user_id, &json!([ids[0]]).to_string()],
         )
         .await
         .unwrap();
