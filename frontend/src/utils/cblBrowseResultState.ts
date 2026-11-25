@@ -13,6 +13,7 @@ interface CblBrowseResultStateInput {
  * Derive catalog totals only from the response for the currently applied
  * folder/search/page key. Placeholder rows remain renderable, but their counts
  * belong to the previous key and must not be presented as current (#3614).
+ * Same-key refreshes also withhold the previous totals until new ones settle.
  */
 export function cblBrowseResultState({
   browsePage,
