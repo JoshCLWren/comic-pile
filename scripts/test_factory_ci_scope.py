@@ -1,4 +1,5 @@
 """Factory-only CI may not skip application or pipeline changes."""
+import re
 import subprocess
 import sys
 import tempfile
@@ -66,6 +67,54 @@ class FactoryScopeTests(unittest.TestCase):
         self.assertFalse(factory_only([]))
         self.assertFalse(factory_only(["../.github/scripts/factory_a.py"]))
         self.assertFalse(factory_only(["/.github/scripts/factory_a.py"]))
+
+
+
+class RequiredRustGateTests(unittest.TestCase):
+    """Regression for #5617: red Native Rust Roll with green CI Summary."""
+
+    def test_native_suite_is_a_required_same_run_dependency(self) -> None:
+        workflows = Path(__file__).resolve().parents[1] / ".github/workflows"
+        ci = (workflows / "ci.yml").read_text()
+        rust = (workflows / "rust-roll.yml").read_text()
+        caller = ci.split("  native-rust-roll:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("needs: [factory-scope]", caller)
+        self.assertIn("fast_only != 'true'", caller)
+        self.assertIn("uses: ./.github/workflows/rust-roll.yml", caller)
+        summary = ci.split("  check-all-jobs:\n", 1)[1]
+        self.assertIn("native-rust-roll", summary.split("needs: [", 1)[1].split("]", 1)[0])
+        self.assertIn("workflow_call:", rust)
+        self.assertIn("github.event.pull_request.head.sha || github.sha", rust)
+        self.assertIn("cargo test --workspace --locked --all-targets", rust)
+
+    def test_actual_summary_fails_closed_on_missing_or_red_rust(self) -> None:
+        ci = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text()
+        summary = ci.split("  check-all-jobs:\n", 1)[1]
+        script = summary.split("        run: |\n", 1)[1]
+        script = "\n".join(line[10:] for line in script.splitlines())
+        for fast, rust_result, expected in (
+            ("false", "success", 0),
+            ("false", "failure", 1),
+            ("false", "cancelled", 1),
+            ("false", "skipped", 1),
+            ("false", "", 1),
+            ("true", "skipped", 0),
+        ):
+            with self.subTest(fast=fast, rust_result=rust_result):
+                def substitute(match):
+                    expression = match.group(1).strip()
+                    if expression == "needs.factory-scope.outputs.fast_only":
+                        return fast
+                    if expression == "needs.native-rust-roll.result":
+                        return rust_result
+                    self.assertTrue(expression.endswith(".result"), expression)
+                    return "success"
+
+                rendered = re.sub(r"\$\{\{(.*?)\}\}", substitute, script)
+                result = subprocess.run(
+                    ["bash", "-c", rendered], capture_output=True, text=True, check=False,
+                )
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
