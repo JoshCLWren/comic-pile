@@ -1711,6 +1711,9 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     getIntelligence.mockResolvedValueOnce(a).mockResolvedValue(b)
 
     renderWithToast(<ComicIdentity issueId={1} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
     await waitForLoaded()
 
     expect(getIntelligence).toHaveBeenCalledTimes(1)
