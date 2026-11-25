@@ -5,6 +5,12 @@ import VirtualizedThreadList, {
   type UseWindowVirtualizerOptions,
 } from './VirtualizedThreadList'
 
+interface QueueSearchMatch {
+  id: number
+  title: string
+  status: 'completed' | 'excluded'
+}
+
 interface QueueListProps {
   activeThreads: ThreadListItem[]
   filteredThreads: ThreadListItem[]
@@ -14,6 +20,12 @@ interface QueueListProps {
   sentinelRef: React.Ref<HTMLDivElement>
   hasNextPage: boolean
   isLoading?: boolean
+  /** Completed/removed series that match the current search (#4655). */
+  completedMatches?: QueueSearchMatch[]
+  excludedMatches?: QueueSearchMatch[]
+  onOpenCompletedSeries?: (threadId: number) => void
+  onRestoreCompletedSeries?: (threadId: number) => void
+  onOpenExcludedSeries?: (threadId: number) => void
   /**
    * Opens the existing series-create flow. The Queue page wires this to the
    * create modal; direct list consumers (tests, regression harnesses) may
@@ -44,6 +56,11 @@ export function QueueList({
   useVirtualizer,
   onAddSeries,
   isLoading = false,
+  completedMatches = [],
+  excludedMatches = [],
+  onOpenCompletedSeries,
+  onRestoreCompletedSeries,
+  onOpenExcludedSeries,
 }: QueueListProps) {
   // If we're searching and have no results, but there are active threads in the queue
   // and the current search is still loading, show a loading state instead of "No match".
