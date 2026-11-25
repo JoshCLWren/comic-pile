@@ -127,6 +127,7 @@ beforeEach(() => {
   })
   mockedIssuesApiCreate.mockReset()
   mockedIssuesApiPreviewCreate.mockReset()
+  // SAFETY: the stubbed preview response supplies only the fields this view reads
   mockedIssuesApiPreviewCreate.mockResolvedValue({
     thread_id: 1, thread_title: 'Saga', requested_strategy: 'safe_default',
     default_outcome: { strategy: 'safe_default', can_commit: true, preserves_existing_relative_order: true,
