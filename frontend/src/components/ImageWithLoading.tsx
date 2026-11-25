@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import LoadingSpinner from './LoadingSpinner'
 
 export interface ImageSource {
@@ -55,7 +55,14 @@ interface ImageWithLoadingProps {
  * up front to prevent image-driven CLS, and ``loading`` defaults to ``lazy``
  * (use ``eager`` only for the hero/LCP image).
  */
-export default function ImageWithLoading({
+export default function ImageWithLoading(props: ImageWithLoadingProps) {
+  // A changed source selection owns a fresh element and loading lifecycle. This
+  // prevents recycled Queue rows from painting prior art or accepting late events.
+  const requestKey = JSON.stringify([props.src, props.srcSet, props.sizes, props.sources])
+  return <ImageRequest key={requestKey} {...props} />
+}
+
+function ImageRequest({
   src,
   alt,
   className = '',
@@ -71,12 +78,34 @@ export default function ImageWithLoading({
 }: ImageWithLoadingProps) {
   const [isLoaded, setIsLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  const loadedImageRef = useRef<HTMLImageElement | null>(null)
+  const failedImageRef = useRef<HTMLImageElement | null>(null)
+
+  const handleLoad = useCallback((img: HTMLImageElement) => {
+    if (loadedImageRef.current === img) return
+    loadedImageRef.current = img
+    setIsLoaded(true)
+    onLoad?.(img)
+  }, [onLoad])
+
+  const handleError = useCallback((img: HTMLImageElement) => {
+    if (failedImageRef.current === img) return
+    failedImageRef.current = img
+    setHasError(true)
+    setIsLoaded(true)
+    onError?.()
+  }, [onError])
 
   useEffect(() => {
-    // Reset state when src changes
-    setIsLoaded(false)
-    setHasError(false)
-  }, [src])
+    // A complete image with intrinsic dimensions is a cache-hit success. A lazy
+    // image can be complete with zero width while deferred, so only a real error
+    // event may settle that zero-width state as a failure.
+    const img = imgRef.current
+    if (img?.complete && img.naturalWidth > 0) {
+      handleLoad(img)
+    }
+  }, [handleLoad])
 
   const imgProps = {
     src,
@@ -88,13 +117,10 @@ export default function ImageWithLoading({
     sizes,
     className: `${className} transition-opacity duration-300 ${isLoaded && !hasError ? 'opacity-100' : 'opacity-0'} ${hasError ? 'hidden' : ''}`,
     onLoad: (event: React.SyntheticEvent<HTMLImageElement>) => {
-      setIsLoaded(true)
-      onLoad?.(event.currentTarget)
+      handleLoad(event.currentTarget)
     },
-    onError: () => {
-      setHasError(true)
-      setIsLoaded(true)
-      onError?.()
+    onError: (event: React.SyntheticEvent<HTMLImageElement>) => {
+      handleError(event.currentTarget)
     },
   }
 
@@ -118,10 +144,10 @@ export default function ImageWithLoading({
               sizes={source.sizes}
             />
           ))}
-          <img {...imgProps} />
+          <img {...imgProps} ref={imgRef} />
         </picture>
       ) : (
-        <img {...imgProps} />
+        <img {...imgProps} ref={imgRef} />
       )}
     </div>
   )
