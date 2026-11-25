@@ -24,6 +24,24 @@ vi.mock('../components/ComicIssueMappingAction', () => ({
   default: ({ issueId }: { issueId: number | null }) => <span data-testid="shared-map-action">{issueId}</span>,
 }))
 
+vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
+  useComicVineIssueIntelligence: () => ({
+    metadata: null,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
+
+vi.mock('../pages/RollPage/components/ComicIdentity', () => ({
+  ComicIdentity: () => <div data-testid="comic-identity-mock" />,
+}))
+
+vi.mock('../components/Tags/TagSection', () => ({
+  TagSection: () => <div data-testid="tag-section-mock" />,
+}))
+
 const sagaCard: IssueCard = {
   issue_id: 1121330,
   thread_id: 3153,
