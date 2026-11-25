@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ComicIssueCard, ComicIssueCover, type ComicIssueCardVariant } from './ComicIssueCard'
+import { ComicIssueCover, type ComicIssueCardVariant } from './ComicIssueCard'
+import { ComicIssueReadingCard } from './ComicIssueReadingCard'
 import { useIssueCards } from '../hooks/useIssueCards'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi'
@@ -45,7 +46,7 @@ function ExpandedIssueCard({
           >Retry</button>
         </div>
       )}
-      <ComicIssueCard
+      <ComicIssueReadingCard
         issueId={issueId}
         card={resolved}
         threadTitle={title}

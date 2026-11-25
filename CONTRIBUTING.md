@@ -182,9 +182,10 @@ This is the only pre-merge process rule (#3561). Every agent-authored pull
 request — Cursor cloud agents and factory workers — may merge only when both
 are true for the **exact current head**:
 
-1. One thorough code review by a Cursor cloud agent running a **different
-   model** than the PR author. Same-model reviews do not count. A review
-   recorded against a previous SHA does not count after the head moves.
+1. One thorough code review by a model that did **not author the current
+   head**. A review by the head's author model does not count. A model that
+   authored only an earlier head may review (owner decision, 2026-11-24). A
+   review recorded against a previous SHA does not count after the head moves.
 2. CI is green on that head.
 
 There are no extra pre-merge QA, preview, smoke, or migration-rehearsal
@@ -199,8 +200,8 @@ are a distinct identity token, not a substitute for the controller marker.
 
 Only `github-actions[bot]` model markers count. OWNER/MEMBER/COLLABORATOR
 comments — including Cursor agents posting as the repository owner — cannot
-satisfy the gate. A missing author marker, or two author markers that disagree,
-fails closed.
+satisfy the gate. Two author markers for one head that disagree exclude
+every model they name.
 
 Markers (entire comment body, written only by the controller):
 
@@ -215,6 +216,8 @@ uses the model family: a leading `cursor-` prefix and effort/speed suffixes
 `fast`) are stripped, so `cursor-grok-4.6-high-fast` and `cursor-grok-4.6-low`
 are the same model.
 
-The factory merge drain refuses the PR when those markers are missing, the
-author record is missing or conflicting, the models match, the reviewer is
-the authoring agent, the review SHA is stale, or required CI is red.
+The factory merge drain refuses the PR when the reviewer model authored the
+current head, the review SHA is stale, or required CI is red. Every model the
+head's author records name is excluded, even when the records disagree. A
+sync merge of `main` carries the author of the commit it merged into. A head
+with no author record (a human push) excludes no model.

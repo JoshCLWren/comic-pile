@@ -214,8 +214,15 @@ export interface ComicIssueCardProps {
   children?: ReactNode
   /** Notified after a committed mutation so parents can reconcile snapshots. */
   onMutated?: (response: IssueReadRateResponse) => void
+  /** Request the shared provider/tag reading details when an editor opens. */
+  onReadingDetailsRequest?: () => void
   /** Hide the mapping control (provider-only entries use Add to ComicPile instead). */
   showMapping?: boolean
+  /**
+   * Hide the local cover when the host already renders the provider art for
+   * this exact issue (the manual read view mirrors the post-roll pillar).
+   */
+  showCover?: boolean
   /** Opens the Add-to-ComicPile flow for provider-only entries. */
   onAddToLibrary?: () => void
   isOwned?: boolean
@@ -245,7 +252,8 @@ function buildIdentity(card: IssueCard | null | undefined, threadTitle: string):
  * never disabled by availability, blocked, hold, inactive, excluded, later or
  * queue membership. Opening the editor writes nothing; Save commits one direct
  * write with no die/queue effects. The mapping control (#4450) is composed
- * when `showMapping` so an unmapped issue stays readable.
+ * when `showMapping` so an unmapped issue stays readable. It remains available
+ * while the rating editor is open; mapping refreshes never replace the draft.
  */
 export function ComicIssueCard({
   issueId,
@@ -258,7 +266,9 @@ export function ComicIssueCard({
   advisory,
   children,
   onMutated,
+  onReadingDetailsRequest,
   showMapping = true,
+  showCover = true,
   onAddToLibrary,
   isOwned = true,
 }: ComicIssueCardProps) {
@@ -281,6 +291,7 @@ export function ComicIssueCard({
   /** Open the in-card rating editor without writing anything. */
   function openEditor(mode: 'read' | 'edit') {
     actions.reset()
+    onReadingDetailsRequest?.()
     setEditor({ mode, draftRating: resolvedRating ?? DIRECT_RATING_DEFAULT })
   }
 
@@ -326,12 +337,14 @@ export function ComicIssueCard({
     >
       <div className={horizontal ? 'flex items-start gap-3' : ''}>
         <div className={horizontal ? 'flex min-w-0 flex-1 items-start gap-3' : 'flex items-start gap-3'}>
-          <ComicIssueCover
-            coverImageUrl={coverImageUrl}
-            threadTitle={resolvedTitle}
-            issueNumber={resolvedNumber}
-            variant={variant}
-          />
+          {showCover && (
+            <ComicIssueCover
+              coverImageUrl={coverImageUrl}
+              threadTitle={resolvedTitle}
+              issueNumber={resolvedNumber}
+              variant={variant}
+            />
+          )}
           <div className="min-w-0 flex-1 space-y-1">
             <ComicIssueIdentity
               threadTitle={resolvedTitle}
@@ -387,19 +400,6 @@ export function ComicIssueCard({
               </button>
             </>
           )}
-          {showMapping && (
-            <ComicIssueMappingAction
-              issueId={isOwned ? issueId : null}
-              threadTitle={resolvedTitle}
-              issueNumber={resolvedNumber}
-              initialIdentity={identityForMapping}
-              fetchEnabled={card != null}
-              isOwned={isOwned}
-              compact={variant === 'compact'}
-              onAddToLibrary={onAddToLibrary}
-              onMapped={() => invalidateIssueCards(queryClient)}
-            />
-          )}
         </div>
       ) : (
         <div className="mt-2 space-y-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] p-3" data-testid="comic-issue-rating-editor">
@@ -437,6 +437,22 @@ export function ComicIssueCard({
             </button>
           </div>
           <p className="text-xs text-[var(--theme-text-dim)]">Direct read only — no die or queue change.</p>
+        </div>
+      )}
+
+      {showMapping && (
+        <div className="mt-2 flex flex-wrap items-start gap-1" data-testid="comic-issue-mapping">
+          <ComicIssueMappingAction
+            issueId={isOwned ? issueId : null}
+            threadTitle={resolvedTitle}
+            issueNumber={resolvedNumber}
+            initialIdentity={identityForMapping}
+            fetchEnabled={card != null}
+            isOwned={isOwned}
+            compact={variant === 'compact'}
+            onAddToLibrary={onAddToLibrary}
+            onMapped={() => invalidateIssueCards(queryClient)}
+          />
         </div>
       )}
 

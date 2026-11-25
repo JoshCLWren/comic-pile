@@ -634,6 +634,19 @@ export async function invalidateComicVineIssueIntelligence(
 }
 
 /**
+ * Drop provider details for an issue whose mapping was removed, then refetch.
+ * Clearing first prevents stale cover/creator data from surviving a failed
+ * post-removal refresh.
+ */
+export async function clearComicVineIssueIntelligence(
+  client: QueryClient,
+  issueId: number,
+): Promise<void> {
+  client.setQueryData(queryKeys.comicVine.issueIntelligence(issueId), null)
+  await invalidateComicVineIssueIntelligence(client, issueId)
+}
+
+/**
  * Invalidate the `comicVine.issueIntelligence(issueId)` cache bucket for every
  * issue a series-mapping commit confirmed. The sibling mapping offer confirms
  * several issues in one request, so each confirmed issue needs its own bucket

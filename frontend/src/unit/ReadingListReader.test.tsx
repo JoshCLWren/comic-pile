@@ -117,7 +117,7 @@ it('leaves the issue unread after a failed write and offers a retry', async () =
   mount()
   await openFirstEditor()
   await userEvent.click(firstCard().getByRole('button', { name: 'Mark read & save' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('offline')
+  expect(await firstCard().findByRole('alert')).toHaveTextContent('offline')
   expect(firstCard().getByRole('button', { name: 'Mark read & save' })).toBeEnabled()
   expect(customCBLApi.getReader).toHaveBeenCalledTimes(1)
 })

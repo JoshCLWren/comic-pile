@@ -3,6 +3,7 @@ import { FormEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useSt
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CblAdoptionConfirmModal } from '../components/CblAdoptionConfirmModal'
+import { CblBrowsePagination } from '../components/CblBrowsePagination'
 import ReadingGraphOverlapDialog from '../components/ReadingGraphOverlapDialog'
 import ReadingGraphSummary from '../components/ReadingGraphSummary'
 import TriStateCheckbox from '../components/TriStateCheckbox'
@@ -42,9 +43,10 @@ import {
 } from '../utils/cblAdoptionPlan'
 import { identityResolutionReason } from '../utils/cblResolutionReason'
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
-import { catalogSourceCount, catalogTotalLabel, isStaleBrowsePosition } from '../utils/cblCatalogBrowse'
+import { catalogTotalLabel, isStaleBrowsePosition } from '../utils/cblCatalogBrowse'
 import { isObject, isString } from '../utils/runtimeChecks'
 import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
+import { cblBrowseResultState } from '../utils/cblBrowseResultState'
 
 /** Shown when a source list declares neither a readable title nor a usable path. */
 const FALLBACK_SOURCE_TITLE = 'CBL source'
@@ -758,14 +760,20 @@ export default function CblBrowserPage() {
     preview && summary
       ? `${countPhraseWithArticle(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhraseWithArticle(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
       : null
-  const firstShown =
-    browsePage && browsePage.items.length > 0
-      ? (browsePage.page - 1) * browsePage.page_size + 1
-      : 0
-  const lastShown = browsePage
-    ? (browsePage.page - 1) * browsePage.page_size + browsePage.items.length
-    : 0
-  const catalogTotal = browsePage ? catalogSourceCount(browsePage.folders, browsePage.total) : 0
+  const {
+    settledBrowsePage,
+    firstShown,
+    lastShown,
+    resultCountPending,
+    resultCountText,
+    catalogTotal,
+  } = cblBrowseResultState({
+    browsePage,
+    isPlaceholderData: browseQuery.isPlaceholderData || browseStale,
+    isPending: browseQuery.isPending,
+    isFetching: browseQuery.isFetching,
+    hasCatalogError: catalogError !== null,
+  })
 
   const openConfirm = () => {
     if (!selectedSource || !preview || commitBlocked) return
@@ -1191,6 +1199,8 @@ export default function CblBrowserPage() {
         </div>
       ) : (
         <>
+          <p role="status" aria-live="polite" className="min-h-4 text-xs text-[var(--theme-text-muted)]" data-testid="cbl-result-count">{resultCountText}</p>
+
           {submittedQuery && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--theme-text-muted)]">
               <span>Searching every shared CBL for “{submittedQuery}”.</span>
@@ -1243,7 +1253,15 @@ export default function CblBrowserPage() {
 
           {browsePage && !catalogError && !browseStale && (
             <div className="space-y-4" data-testid="cbl-browse-results">
-              {browsePage.scope === 'folder' && !folder && catalogTotal > 0 && <p role="status" data-testid="cbl-catalog-total" className="text-xs text-[var(--theme-text-muted)]">{catalogTotalLabel(catalogTotal, browsePage.folders.length)}</p>}
+              {browsePage.scope === 'folder' && !folder && catalogTotal > 0 && (
+                <p
+                  role="status"
+                  data-testid="cbl-catalog-total"
+                  className="text-xs text-[var(--theme-text-muted)]"
+                >
+                  {catalogTotalLabel(catalogTotal, browsePage.folders.length)}
+                </p>
+              )}
 
               {browsePage.scope === 'folder' && (
                 <nav aria-label="CBL folder path" className="flex flex-wrap items-center gap-1 text-xs">
@@ -1346,41 +1364,22 @@ export default function CblBrowserPage() {
                 </p>
               )}
 
-              {browsePage.items.length === 0 && browsePage.total > 0 && (
+              {settledBrowsePage && settledBrowsePage.items.length === 0 && settledBrowsePage.total > 0 && (
                 <p className="text-sm text-[var(--theme-text-muted)]">
-                  No sources on page {browsePage.page} of {Math.max(browsePage.total_pages, 1)}.
+                  No sources on page {settledBrowsePage.page} of {Math.max(settledBrowsePage.total_pages, 1)}.
                 </p>
               )}
 
               {browsePage.total > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  {browsePage.items.length > 0 && (
-                    <p role="status" className="text-xs text-[var(--theme-text-muted)]">
-                      Showing {firstShown}–{lastShown} of {sourceCountLabel(browsePage.total)}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openPage(page - 1)}
-                      disabled={!browsePage.has_previous || isCommitting || browseQuery.isPlaceholderData}
-                      className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
-                    >
-                      Previous page
-                    </button>
-                    <span className="text-xs text-[var(--theme-text-muted)]">
-                      Page {browsePage.page} of {Math.max(browsePage.total_pages, 1)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => openPage(page + 1)}
-                      disabled={!browsePage.has_next || isCommitting || browseQuery.isPlaceholderData}
-                      className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
-                    >
-                      Next page
-                    </button>
-                  </div>
-                </div>
+                <CblBrowsePagination
+                  settledBrowsePage={settledBrowsePage}
+                  firstShown={firstShown}
+                  lastShown={lastShown}
+                  resultCountPending={resultCountPending}
+                  requestedPage={page}
+                  isCommitting={isCommitting}
+                  onOpenPage={openPage}
+                />
               )}
             </div>
           )}

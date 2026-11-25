@@ -79,7 +79,10 @@ pub struct CBLCatalogBrowseResponse {
     #[schema(value_type = i64)]
     pub page: serde_json::Number,
     pub page_size: i64,
+    /// Total source lists matching the applied folder/search scope.
     pub total: i64,
+    /// Total active source lists in the whole shared catalog, independent of search and folder.
+    pub catalog_total: i64,
     pub total_pages: i64,
     pub has_next: bool,
     pub has_previous: bool,
@@ -495,19 +498,23 @@ async fn browse_items(
     query_text: Option<&str>,
     page: i128,
     page_size: i64,
-) -> Result<(Vec<CBLCatalogListItem>, i64, i128), tokio_postgres::Error> {
+) -> Result<(Vec<CBLCatalogListItem>, i64, i64, i128), tokio_postgres::Error> {
     if let Some(term) = query_text {
         let pattern = format!("%{}%", escape_like(term));
         let count_row = conn
             .query_one(
-                "SELECT COUNT(*)::bigint
+                "SELECT COUNT(*) FILTER (
+                            WHERE l.name ILIKE $1 ESCAPE '\\'
+                               OR l.source_path ILIKE $1 ESCAPE '\\'
+                        )::bigint AS total,
+                        COUNT(*)::bigint AS catalog_total
              FROM cbl_source_lists l
-             WHERE l.active IS TRUE
-               AND (l.name ILIKE $1 ESCAPE '\\' OR l.source_path ILIKE $1 ESCAPE '\\')",
+             WHERE l.active IS TRUE",
                 &[&pattern],
             )
             .await?;
         let total: i64 = count_row.get(0);
+        let catalog_total: i64 = count_row.get(1);
         let effective_page = if total <= 0 {
             1
         } else {
@@ -520,10 +527,10 @@ async fn browse_items(
             }
         };
         if total <= 0 {
-            return Ok((Vec::new(), total, 1));
+            return Ok((Vec::new(), total, catalog_total, 1));
         }
         let Some(offset) = page_offset(effective_page, page_size) else {
-            return Ok((Vec::new(), total, effective_page));
+            return Ok((Vec::new(), total, catalog_total, effective_page));
         };
         let rows = conn
             .query(
@@ -538,7 +545,12 @@ async fn browse_items(
                 &[&pattern, &page_size, &offset],
             )
             .await?;
-        Ok((rows.iter().map(map_item).collect(), total, effective_page))
+        Ok((
+            rows.iter().map(map_item).collect(),
+            total,
+            catalog_total,
+            effective_page,
+        ))
     } else {
         let (folder_like, prefix_len): (Option<String>, i32) = if folder.is_empty() {
             (None, 0)
@@ -550,15 +562,18 @@ async fn browse_items(
         };
         let count_row = conn
             .query_one(
-                "SELECT COUNT(*)::bigint
+                "SELECT COUNT(*) FILTER (
+                            WHERE ($1::text IS NULL OR l.source_path LIKE $1 ESCAPE '\\')
+                              AND strpos(substr(l.source_path, $2::int + 1), '/') = 0
+                        )::bigint AS total,
+                        COUNT(*)::bigint AS catalog_total
              FROM cbl_source_lists l
-             WHERE l.active IS TRUE
-               AND ($1::text IS NULL OR l.source_path LIKE $1 ESCAPE '\\')
-               AND strpos(substr(l.source_path, $2::int + 1), '/') = 0",
+             WHERE l.active IS TRUE",
                 &[&folder_like, &prefix_len],
             )
             .await?;
         let total: i64 = count_row.get(0);
+        let catalog_total: i64 = count_row.get(1);
         let effective_page = if total <= 0 {
             1
         } else {
@@ -571,10 +586,10 @@ async fn browse_items(
             }
         };
         if total <= 0 {
-            return Ok((Vec::new(), total, 1));
+            return Ok((Vec::new(), total, catalog_total, 1));
         }
         let Some(offset) = page_offset(effective_page, page_size) else {
-            return Ok((Vec::new(), total, effective_page));
+            return Ok((Vec::new(), total, catalog_total, effective_page));
         };
         let rows = conn
             .query(
@@ -590,7 +605,12 @@ async fn browse_items(
                 &[&folder_like, &prefix_len, &page_size, &offset],
             )
             .await?;
-        Ok((rows.iter().map(map_item).collect(), total, effective_page))
+        Ok((
+            rows.iter().map(map_item).collect(),
+            total,
+            catalog_total,
+            effective_page,
+        ))
     }
 }
 
@@ -705,7 +725,7 @@ pub async fn browse_cbl_source_catalog(
             )
         };
 
-        let (items, total, effective_page) =
+        let (items, total, catalog_total, effective_page) =
             browse_items(&conn, &folder, query_text.as_deref(), page, page_size).await?;
         let total_pages = if total == 0 {
             0
@@ -731,6 +751,7 @@ pub async fn browse_cbl_source_catalog(
             page: page_number,
             page_size,
             total,
+            catalog_total,
             total_pages,
             has_next: effective_page < i128::from(total_pages),
             has_previous: effective_page > 1,

@@ -570,6 +570,7 @@ describe('core route request budgets', () => {
     render(
       <QueueControls
         activeCount={2}
+        resultCountText="2 of 2 series"
         shuffleDisabled={false}
         shufflePending={false}
         onShuffle={() => undefined}

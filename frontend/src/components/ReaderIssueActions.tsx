@@ -4,7 +4,7 @@ import { useThreadIssuesEffectiveTags } from '../hooks/useTags'
 import { useIssueCards } from '../hooks/useIssueCards'
 import { getApiErrorDetail } from '../utils/apiError'
 import { IssueTagRowChips } from './Tags/IssueTagRowChips'
-import { ComicIssueCard } from './ComicIssueCard'
+import { ComicIssueReadingCard } from './ComicIssueReadingCard'
 import type { IssueCard } from '../services/issueCardsApi'
 
 /**
@@ -72,13 +72,14 @@ export function ReadNowIssueButton({
             </p>
           </div>
         ) : (
-          <ComicIssueCard
+          <ComicIssueReadingCard
             issueId={issueId}
             card={cards.data?.[0] ?? null}
             threadTitle={threadTitle ?? ''}
             issueNumber={issueNumber ?? ''}
             status={displayStatus}
             variant="featured"
+            showReadingDetails
           />
         )}
       </div>
@@ -141,7 +142,7 @@ export function ReaderIssueActions({ issueId, threadId, issueNumber, isRead, ava
     <div className="mt-2 space-y-1">
       {row && <IssueTagRowChips data={row} issueNumber={issueNumber} />}
       {tags.isError && <p className="text-xs text-[var(--theme-text-muted)]">Tags unavailable.</p>}
-      <ComicIssueCard
+      <ComicIssueReadingCard
         issueId={issueId}
         card={resolvedCard}
         threadTitle={resolvedCard?.thread_title ?? seriesTitle ?? ''}
