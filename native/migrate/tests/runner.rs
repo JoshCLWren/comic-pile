@@ -193,6 +193,39 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         "V3 must add custom_cbl_list_id to reading_plan_release_sources"
     );
 
+    let overall_col: bool = client
+        .query_one(
+            "SELECT EXISTS (\
+               SELECT 1 FROM information_schema.columns \
+               WHERE table_schema = 'public' \
+                 AND table_name = 'issues' \
+                 AND column_name = 'overall_issue_number'\
+             )",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(overall_col, "V4 must add overall_issue_number to issues");
+
+    let identity_version_col: bool = client
+        .query_one(
+            "SELECT EXISTS (\
+               SELECT 1 FROM information_schema.columns \
+               WHERE table_schema = 'public' \
+                 AND table_name = 'issues' \
+                 AND column_name = 'identity_version'\
+             )",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(
+        identity_version_col,
+        "V4 must add identity_version to issues"
+    );
+
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
     drop(client);
