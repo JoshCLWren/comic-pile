@@ -44,8 +44,18 @@ interface CreateIssuesPayload {
 export interface IssuePreviewItem {
   issue_id: number | null
   issue_number: string
+  series_title?: string
   position: number
   is_new: boolean
+  read_status?: string
+  source_lists?: string[]
+  constraint_count?: number
+  is_queue_frontier?: boolean
+  is_roll_frontier?: boolean
+  has_read_history?: boolean
+  has_rating?: boolean
+  is_mapped?: boolean
+  potential_duplicate?: boolean
 }
 
 export interface IssueEditPreviewOutcome {

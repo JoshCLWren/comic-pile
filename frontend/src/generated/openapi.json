@@ -10866,7 +10866,29 @@
       },
       "PreviewIssueItem": {
         "properties": {
+          "constraint_count": {
+            "description": "Number of owner-authored prerequisites that constrain this issue.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "has_rating": {
+            "type": "boolean"
+          },
+          "has_read_history": {
+            "type": "boolean"
+          },
+          "is_mapped": {
+            "type": "boolean"
+          },
           "is_new": {
+            "type": "boolean"
+          },
+          "is_queue_frontier": {
+            "description": "This issue is the Queue's current next unread issue for its series.",
+            "type": "boolean"
+          },
+          "is_roll_frontier": {
+            "description": "This issue is a frontier surfaced by the read-only Roll frontier audit.",
             "type": "boolean"
           },
           "issue_id": {
@@ -10882,12 +10904,41 @@
           "position": {
             "format": "int32",
             "type": "integer"
+          },
+          "potential_duplicate": {
+            "description": "Another owned issue shares this issue number; assigning the number to a\nnew row may create a physical duplicate rather than an alias.",
+            "type": "boolean"
+          },
+          "read_status": {
+            "description": "Current read state of an existing issue (`unread` for a new row).",
+            "type": "string"
+          },
+          "series_title": {
+            "description": "Human label of the owning series, so two series sharing an issue number\nare never rendered as the same row (#4654).",
+            "type": "string"
+          },
+          "source_lists": {
+            "description": "Names of the owner's Reading Lists that contain this exact issue.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
           "issue_number",
+          "series_title",
           "position",
-          "is_new"
+          "is_new",
+          "read_status",
+          "source_lists",
+          "constraint_count",
+          "is_queue_frontier",
+          "is_roll_frontier",
+          "has_read_history",
+          "has_rating",
+          "is_mapped",
+          "potential_duplicate"
         ],
         "type": "object"
       },

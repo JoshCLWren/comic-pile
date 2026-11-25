@@ -6839,12 +6839,38 @@ export interface components {
          */
         PotentialDuplicateMatchType: "same_comicvine_volume" | "similar_title";
         PreviewIssueItem: {
+            /**
+             * Format: int32
+             * @description Number of owner-authored prerequisites that constrain this issue.
+             */
+            constraint_count: number;
+            has_rating: boolean;
+            has_read_history: boolean;
+            is_mapped: boolean;
             is_new: boolean;
+            /** @description This issue is the Queue's current next unread issue for its series. */
+            is_queue_frontier: boolean;
+            /** @description This issue is a frontier surfaced by the read-only Roll frontier audit. */
+            is_roll_frontier: boolean;
             /** Format: int32 */
             issue_id?: number | null;
             issue_number: string;
             /** Format: int32 */
             position: number;
+            /**
+             * @description Another owned issue shares this issue number; assigning the number to a
+             *     new row may create a physical duplicate rather than an alias.
+             */
+            potential_duplicate: boolean;
+            /** @description Current read state of an existing issue (`unread` for a new row). */
+            read_status: string;
+            /**
+             * @description Human label of the owning series, so two series sharing an issue number
+             *     are never rendered as the same row (#4654).
+             */
+            series_title: string;
+            /** @description Names of the owner's Reading Lists that contain this exact issue. */
+            source_lists: string[];
         };
         PreviewIssuesRequest: {
             /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
