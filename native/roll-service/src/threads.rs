@@ -998,6 +998,7 @@ struct OptionEProjection {
     candidates: HashSet<i32>,
     unread_counts: HashMap<i32, i32>,
     frontiers: HashMap<i32, Option<i32>>,
+    cover_frontiers: HashMap<i32, Option<i32>>,
     issue_numbers: HashMap<i32, String>,
     issue_threads: HashMap<i32, i32>,
     thread_titles: HashMap<i32, String>,
@@ -1036,10 +1037,28 @@ impl OptionEProjection {
                 *unread_counts.entry(issue.thread_id).or_insert(0) += 1;
             }
         }
+        let stored_frontiers: HashMap<i32, Option<i32>> = inputs
+            .core
+            .stored
+            .iter()
+            .map(|row| (row.thread_id, row.next_issue_id))
+            .collect();
         let mut frontiers = HashMap::new();
+        let mut cover_frontiers = HashMap::new();
         let mut gates = HashMap::new();
         for (thread_id, state) in &evaluated {
             frontiers.insert(*thread_id, state.next_issue_id);
+            // A blocked row has no available evaluated frontier. Keep its stored
+            // frontier representative while readable rows follow the exact issue
+            // whose number is projected from Option E.
+            cover_frontiers.insert(
+                *thread_id,
+                if state.eligible {
+                    state.next_issue_id
+                } else {
+                    stored_frontiers.get(thread_id).copied().flatten()
+                },
+            );
             gates.insert(
                 *thread_id,
                 crate::reading_blocker_projection::describe_blocker_gates(state.blockers.clone())
@@ -1057,6 +1076,7 @@ impl OptionEProjection {
             candidates,
             unread_counts,
             frontiers,
+            cover_frontiers,
             issue_numbers,
             issue_threads,
             thread_titles,
