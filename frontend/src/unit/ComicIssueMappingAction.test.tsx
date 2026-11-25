@@ -198,8 +198,6 @@ describe('ComicIssueMappingAction', () => {
     const onMapped = vi.fn().mockResolvedValue(undefined)
     const intelligenceKey = queryKeys.comicVine.issueIntelligence(77)
     queryClient.setQueryData(intelligenceKey, { image_url: 'https://example.com/stale-cover.jpg' })
-    const intelligenceKey = queryKeys.comicVine.issueIntelligence(77)
-    queryClient.setQueryData(intelligenceKey, { image_url: 'https://example.com/stale-cover.jpg' })
     const setQueryData = vi.spyOn(queryClient, 'setQueryData')
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
     render(
