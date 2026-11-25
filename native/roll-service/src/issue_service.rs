@@ -218,7 +218,8 @@ async fn card(
                     AND e.type='rate' AND e.rating IS NOT NULL
                     ORDER BY e.timestamp DESC, e.id DESC LIMIT 1),
                 COALESCE(mapping.status, 'unmapped'), mapping.external_id,
-                mapping.cover_url
+                mapping.cover_url, i.overall_issue_number, i.identity_version,
+                mapping.provider_issue_number
          FROM issues i
          JOIN threads t ON t.id=i.thread_id
          LEFT JOIN LATERAL (
@@ -274,7 +275,8 @@ pub(crate) async fn cards(
                     AND e.type='rate' AND e.rating IS NOT NULL
                     ORDER BY e.timestamp DESC, e.id DESC LIMIT 1),
                 COALESCE(mapping.status, 'unmapped'), mapping.external_id,
-                mapping.cover_url
+                mapping.cover_url, i.overall_issue_number, i.identity_version,
+                mapping.provider_issue_number
          FROM issues i
          JOIN threads t ON t.id=i.thread_id
          LEFT JOIN LATERAL (
