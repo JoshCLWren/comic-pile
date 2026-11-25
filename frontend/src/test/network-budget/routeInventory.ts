@@ -61,6 +61,7 @@ export const AUDITED_ROUTES: AuditedRoute[] = [
   { path: '/glossary', auth: 'protected', spec: 'test/network-budget/auxiliaryRoutes.network.test.tsx' },
   { path: '/help', auth: 'redirect', redirectTo: '/glossary', spec: 'test/network-budget/auxiliaryRoutes.network.test.tsx' },
   { path: '/identity-inbox', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
+  { path: '/duplicate-reconciliation', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
   { path: '*', auth: 'unknown', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
 ]
 

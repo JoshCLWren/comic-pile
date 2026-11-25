@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { issueDuplicateReconciliationApi } from '../services/api-issue-duplicate-reconciliation'
 import { queryKeys } from '../query/queryKeys'
+import { queryClient } from '../query/queryClient'
 import { invalidateAfterDuplicateReconciliation } from '../query/cacheEffects'
 import type {
   DuplicateCandidateGroup,
@@ -96,7 +97,7 @@ export default function DuplicateReconciliationPage() {
       setMessage(`Reconciled. Undo ID: ${data.undo_snapshot_id ?? 'n/a'}`)
       setLastUndoId(data.undo_snapshot_id)
       setPreview(null)
-      await queryClient.invalidateQueries({ queryKey: queryKeys.issueDuplicateReconciliation.all })
+      await invalidateAfterDuplicateReconciliation(queryClient)
     },
     onError: (err) => {
       setMessage(err instanceof Error ? err.message : 'Apply failed')
@@ -116,7 +117,10 @@ export default function DuplicateReconciliationPage() {
     },
   })
 
-  const groups = detectionsQuery.data?.groups ?? []
+  const groups = useMemo(
+    () => detectionsQuery.data?.groups ?? [],
+    [detectionsQuery.data],
+  )
   const selectedGroup: DuplicateCandidateGroup | undefined = useMemo(
     () => groups.find((g) => g.group_key === selectedGroupKey),
     [groups, selectedGroupKey],
@@ -153,7 +157,7 @@ export default function DuplicateReconciliationPage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[320px,1fr]">
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <section className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">Detected groups</h2>
@@ -176,7 +180,7 @@ export default function DuplicateReconciliationPage() {
                 className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
                   selectedGroupKey === group.group_key
                     ? 'border-[var(--theme-primary-action)] bg-[var(--theme-primary-action)]/10'
-                    : 'border-[var(--theme-border)] bg-[var(--theme-bg-base)]'
+                    : 'border-[var(--theme-border)] bg-[var(--theme-bg-panel)]'
                 }`}
               >
                 <div className="font-medium text-[var(--theme-text-primary)]">{group.reason}</div>
