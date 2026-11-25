@@ -124,6 +124,9 @@ pub struct ThreadListResponse {
     pub threads: Vec<ThreadListItem>,
     pub next_page_token: Option<String>,
     pub active_count: i32,
+    /// Total active Queue rows matching the applied search, independent of the bounded page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filtered_count: Option<i32>,
 }
 
 /// The legacy single-thread response retained for the v1 and bare aliases.
@@ -367,7 +370,7 @@ pub async fn list_threads(
         preauthenticated = Some(user.id());
     }
 
-    let (auth, active_count, list_names, rows) = query_page(
+    let (auth, active_count, filtered_count, list_names, rows) = query_page(
         &state,
         &claims,
         preauthenticated,
@@ -437,6 +440,7 @@ pub async fn list_threads(
         threads,
         next_page_token,
         active_count,
+        filtered_count: Some(filtered_count),
     }))
 }
 
@@ -569,7 +573,7 @@ pub async fn list_completed_threads(
         .filter(|token| !token.is_empty())
         .map(|token| decode_cursor(token, sort, &search, "legacy"))
         .transpose()?;
-    let (auth, _active_count, _list_names, rows) = query_page(
+    let (auth, _active_count, _filtered_count, _list_names, rows) = query_page(
         &state,
         &claims,
         None,
@@ -611,6 +615,7 @@ pub async fn list_completed_threads(
         threads,
         next_page_token,
         active_count: 0,
+        filtered_count: None,
     }))
 }
 
@@ -639,7 +644,7 @@ pub(crate) async fn list_excluded_page(
         .filter(|token| !token.is_empty())
         .map(|token| decode_cursor(token, sort, &search, "legacy"))
         .transpose()?;
-    let (auth, _active_count, _list_names, rows) = query_page(
+    let (auth, _active_count, _filtered_count, _list_names, rows) = query_page(
         state,
         claims,
         None,
@@ -688,6 +693,7 @@ pub(crate) async fn list_excluded_page(
         threads,
         next_page_token,
         active_count: 0,
+        filtered_count: None,
     }))
 }
 
@@ -1147,6 +1153,7 @@ fn blocker_origin(gate: &BlockerGate, list_names: &HashMap<i32, &str>) -> String
 struct PagePayload {
     auth: Option<AuthRow>,
     active_count: i32,
+    filtered_count: i32,
     list_names: Vec<ListName>,
     rows: Vec<PageRow>,
 }
@@ -1276,6 +1283,10 @@ SELECT json_build_object(
     'active_count', (SELECT count(*)::int FROM threads t
                      JOIN me ON t.user_id = me.user_id
                      WHERE t.status = 'active' AND t.queue_position >= 1),
+    'filtered_count', (SELECT count(*)::int FROM threads t
+                       JOIN me ON t.user_id = me.user_id
+                       WHERE t.status = 'active' AND t.queue_position >= 1
+                         AND ($4 = '' OR t.title ILIKE '%' || $4 || '%')),
     'list_names', COALESCE((
         SELECT json_agg(json_build_object('id', l.id, 'name', l.name) ORDER BY l.id)
         FROM custom_cbl_lists l
@@ -1356,7 +1367,7 @@ async fn query_page(
     page_size: i64,
     cursor: Option<&QueueCursor>,
     status: &str,
-) -> Result<(Option<AuthRow>, i32, Vec<ListName>, Vec<PageRow>), ApiError> {
+) -> Result<(Option<AuthRow>, i32, i32, Vec<ListName>, Vec<PageRow>), ApiError> {
     // Reference both mode parameters unconditionally so the statement keeps a
     // stable bind count whether the Option E preview is active or not.
     let blocked = blocked_order_expr("$7", "$8");
@@ -1422,6 +1433,7 @@ async fn query_page(
     Ok((
         payload.auth,
         payload.active_count,
+        payload.filtered_count,
         payload.list_names,
         payload.rows,
     ))
