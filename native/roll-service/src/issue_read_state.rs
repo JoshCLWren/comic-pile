@@ -1323,7 +1323,7 @@ pub fn move_documentation() {}
     operation_id = "issue_read_state_bulk_mark_read",
     request_body = IssueBulkRequest,
     responses(
-        (status = 204, description = "Every issue marked read atomically"),
+        (status = 200, description = "Every issue marked read atomically; returns a reviewable undo operation", body = IssueReadOperationResponse),
         (status = 400, description = "An issue is already marked as read"),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Issue not found"),
@@ -1343,7 +1343,7 @@ pub fn bulk_mark_read_documentation() {}
     operation_id = "issue_read_state_bulk_mark_unread",
     request_body = IssueBulkRequest,
     responses(
-        (status = 204, description = "Every issue marked unread atomically"),
+        (status = 200, description = "Every issue marked unread atomically; returns a reviewable undo operation", body = IssueReadOperationResponse),
         (status = 400, description = "An issue is already marked as unread"),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Issue not found"),
@@ -1354,6 +1354,45 @@ pub fn bulk_mark_read_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn bulk_mark_unread_documentation() {}
+
+/// Documentation-only operation for fetching a bulk issue-read operation.
+#[utoipa::path(
+    get,
+    path = "/api/v2/issue-read-operations/{operation_id}",
+    tag = "issues",
+    operation_id = "issue_read_operation_get",
+    params(("operation_id" = i64, Path, description = "Owned bulk issue-read operation")),
+    responses(
+        (status = 200, description = "Bulk issue-read operation", body = IssueReadOperationResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Operation not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_issue_read_operation_documentation() {}
+
+/// Documentation-only operation for undoing a bulk issue-read operation.
+#[utoipa::path(
+    post,
+    path = "/api/v2/issue-read-operations/{operation_id}/undo",
+    tag = "issues",
+    operation_id = "issue_read_operation_undo",
+    params(("operation_id" = i64, Path, description = "Owned bulk issue-read operation")),
+    responses(
+        (status = 200, description = "Operation undone with compensating events; concurrently changed issues are skipped", body = IssueReadOperationUndoResponse),
+        (status = 400, description = "Operation already undone"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Operation not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn undo_issue_read_operation_documentation() {}
 
 /// Documentation-only operation for reader context.
 #[utoipa::path(
@@ -1388,11 +1427,16 @@ pub fn reader_context_documentation() {}
         move_documentation,
         bulk_mark_read_documentation,
         bulk_mark_unread_documentation,
+        get_issue_read_operation_documentation,
+        undo_issue_read_operation_documentation,
         reader_context_documentation
     ),
     components(schemas(
         IssueMoveRequest,
         IssueBulkRequest,
+        IssueReadOperationItem,
+        IssueReadOperationResponse,
+        IssueReadOperationUndoResponse,
         reader_context::ReaderContextPreviousIssue,
         reader_context::ReaderContextRecentRating,
         reader_context::ReaderContextSeries,
