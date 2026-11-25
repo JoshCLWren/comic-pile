@@ -1556,8 +1556,12 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     assert_eq!(recovered.get::<_, String>(0), "pending");
     assert_eq!(recovered.get::<_, i32>(1), 0);
     assert_eq!(recovered.get::<_, Option<String>>(2), None);
-    assert!(recovered.get::<_, Option<chrono::DateTime<chrono::Utc>>>(3).is_none());
-    assert!(recovered.get::<_, Option<chrono::DateTime<chrono::Utc>>>(4).is_none());
+    assert!(recovered
+        .get::<_, Option<chrono::DateTime<chrono::Utc>>>(3)
+        .is_none());
+    assert!(recovered
+        .get::<_, Option<chrono::DateTime<chrono::Utc>>>(4)
+        .is_none());
     assert!(recovered.get::<_, bool>(5));
 
     // The same recovery inserts durable work if an old identity has no row.
