@@ -1315,7 +1315,13 @@ pub async fn preview_issue_create(
                     } else {
                         None
                     },
-                    effect: describe_effect(number, false, Some(*position), *position, meta.is_some_and(|m| m.is_duplicate)),
+                    effect: describe_effect(
+                        number,
+                        false,
+                        Some(*position),
+                        *position,
+                        meta.is_some_and(|m| m.is_duplicate),
+                    ),
                     is_duplicate: meta.is_some_and(|m| m.is_duplicate),
                 }
             })
@@ -1347,28 +1353,30 @@ pub async fn preview_issue_create(
         .await?
     };
 
-    let mut numeric_resort_outcome =
-        if !new_numbers.is_empty() && request.insert_after_issue_id.is_none() && !request.append_to_end {
-            let resort = preview_outcome(
-                &tx,
-                user,
-                thread_id,
-                &existing,
-                &new_numbers,
-                &request,
-                IssuePlacementStrategy::NumericResort,
-            )
-            .await?;
-            if resort.preserves_existing_relative_order
-                && default_outcome.preserves_existing_relative_order
-            {
-                None
-            } else {
-                Some(resort)
-            }
-        } else {
+    let mut numeric_resort_outcome = if !new_numbers.is_empty()
+        && request.insert_after_issue_id.is_none()
+        && !request.append_to_end
+    {
+        let resort = preview_outcome(
+            &tx,
+            user,
+            thread_id,
+            &existing,
+            &new_numbers,
+            &request,
+            IssuePlacementStrategy::NumericResort,
+        )
+        .await?;
+        if resort.preserves_existing_relative_order
+            && default_outcome.preserves_existing_relative_order
+        {
             None
-        };
+        } else {
+            Some(resort)
+        }
+    } else {
+        None
+    };
 
     if !unaccepted_aliases.is_empty() {
         let msg = format!(
