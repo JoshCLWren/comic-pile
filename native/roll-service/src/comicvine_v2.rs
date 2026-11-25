@@ -236,6 +236,10 @@ pub struct ReplaceIdentityRequest {
     pub comicvine_issue_id: i32,
     #[serde(default)]
     pub reason: Option<String>,
+    #[serde(default)]
+    pub overall_issue_number: Option<String>,
+    #[serde(default)]
+    pub expected_version: Option<i64>,
 }
 
 /// Python `MetadataCorrectionRequest`: unconstrained `str` fields (empty is
