@@ -1146,7 +1146,7 @@ async fn prepare_identity_edit(
         .await
         .map_err(db::query_error)?;
     }
-    Ok(true)
+    Ok((true, !identity_matches))
 }
 
 async fn finish_identity_edit(tx: &Transaction<'_>, issue_id: i32) -> Result<(), ApiError> {
