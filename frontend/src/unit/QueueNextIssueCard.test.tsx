@@ -37,11 +37,7 @@ await injectModuleDoubles(await import('../components/Tags/TagSection'), () => (
   ),
 }))
 
-<<<<<<< HEAD
 await injectModuleDoubles(await import('../components/ComicIssueCard'), async (importOriginal) => {
-=======
-vi.mock('../components/ComicIssueCard', async (importOriginal) => {
->>>>>>> origin/main
   const actual = await importOriginal<typeof import('../components/ComicIssueCard')>()
   return {
     // Keep the shared cover export: the roll-parity details render it for real.
