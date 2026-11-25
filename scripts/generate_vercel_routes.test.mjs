@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {
+  applyStaticCsp,
   fragmentVercelRoutes,
   generateVercel,
   normalizeOperationIds,
   pythonOperations,
   routeRegex,
   sameOperationIds,
+  STATIC_CSP,
   updateInventory,
 } from './generate_vercel_routes.mjs';
 
@@ -34,6 +36,30 @@ function destination(config, method, path) {
   return config.routes.find(route => (!route.methods || route.methods.includes(method))
     && new RegExp(route.src).test(path))?.dest;
 }
+test('static route CSP never permits script eval or inline scripts', () => {
+  const old = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;";
+  const staticRoutes = [
+    {src: '/', dest: '/index.html', headers: {'Content-Security-Policy': old, 'X-ComicPile-Frontend': 'vercel-static'}},
+    {src: '/(login|roll|queue)(\\.html)?', dest: '/$1.html', headers: {'Content-Security-Policy': old, 'X-Robots-Tag': 'noindex, nofollow'}},
+    {src: '/(.*)', dest: '/index.html', headers: {'Content-Security-Policy': old}},
+  ];
+  const config = {routes: [...staticRoutes, {src: '/assets/.+', continue: true, headers: {'Cache-Control': 'immutable'}}]};
+  const generated = applyStaticCsp(config);
+  const headers = generated.routes.filter(route => route.headers?.['Content-Security-Policy'])
+    .map(route => route.headers['Content-Security-Policy']);
+  assert.equal(headers.length, 3);
+  for (const csp of headers) {
+    assert.equal(csp, STATIC_CSP);
+    assert.equal(csp.includes('unsafe-eval'), false);
+    assert.equal(/script-src[^;]*unsafe-inline/.test(csp), false);
+    // Style inline is a separate, independently justified exception.
+    assert.equal(/style-src[^;]*unsafe-inline/.test(csp), true);
+  }
+  assert.deepEqual(generated.routes[0].headers['X-ComicPile-Frontend'], 'vercel-static');
+  assert.deepEqual(generated.routes[1].headers['X-Robots-Tag'], 'noindex, nofollow');
+  assert.deepEqual(generated.routes[3].headers, {'Cache-Control': 'immutable'});
+  assert.equal(applyStaticCsp(generated).routes[0].headers['Content-Security-Policy'], STATIC_CSP);
+});
 test('raw OpenAPI plus hidden API routes, excluding the synthetic FastAPI 404', () => {
   const ops = pythonOperations(metadata());
   assert(ops.some(x => x[1] === '/api/v1/cron/release-sync'));
