@@ -11,7 +11,7 @@ import {
 import type { DragEvent } from 'react'
 import type { Issue, IssueDependenciesResponse, IssueListResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
-import type { IssueListParams } from '../../services/api-issues'
+import type { IssueListParams, IssuePreviewItem } from '../../services/api-issues'
 import { issueDependenciesApi } from '../../services/api-dependencies'
 import type { ThreadIssueDependenciesResponse } from '../../services/api-dependencies'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -20,8 +20,6 @@ import { isWindowDefined, isFunction } from '../../utils/runtimeChecks'
 import Tooltip from '../../components/Tooltip'
 import Modal from '../../components/Modal'
 import DeleteIssueDialog from './DeleteIssueDialog'
-import { IssueEditPreviewModal } from './IssueEditPreviewModal'
-import type { PreviewState } from './IssueEditPreviewModal'
 import CompactIssueCardTrigger from '../../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../../hooks/useIssueCards'
 import type { IssueReadRateResponse } from '../../services/issueCardsApi'
@@ -46,12 +44,12 @@ export interface IssueToggleListApi {
   create: (
     threadId: number,
     issueRange: string,
-    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[]; expected_issue_ids?: number[] },
+    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' },
   ) => Promise<IssueListResponse>
   previewCreate: (
     threadId: number,
     issueRange: string,
-    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[]; expected_issue_ids?: number[] },
+    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' },
   ) => Promise<import('../../services/api-issues').IssueEditPreviewResponse>
   markRead: (issueId: number) => Promise<void>
   markUnread: (issueId: number) => Promise<void>
@@ -70,6 +68,52 @@ export interface IssueToggleListHandle {
   flush: () => Promise<void>
   /** Whether any mutations are queued. */
   hasPendingMutations: () => boolean
+}
+
+/**
+ * One Before/After preview row. Shows the specific series, source-list
+ * memberships, read/identity/rating effects, the affected Queue/Roll frontier
+ * and duplicate risk — not a bare issue number (#4654).
+ */
+function PreviewIssueRow({ item }: { item: IssuePreviewItem }) {
+  const sourceLists = item.source_lists ?? []
+  const effect = item.effect ?? (item.is_new
+    ? `new issue #${item.issue_number} inserted at position ${item.position}`
+    : `issue #${item.issue_number} at position ${item.position}`)
+  return (
+    <div
+      className="rounded-md border border-white/10 p-2 space-y-1"
+      data-testid="preview-issue-row"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className={`font-bold ${item.is_new ? 'text-[var(--theme-primary-action)]' : 'text-[var(--theme-text-primary)]'}`}>
+          {item.series_title ? `${item.series_title} ` : ''}#{item.issue_number}{item.is_new ? ' (new)' : ''}
+        </span>
+        <span className="shrink-0 text-stone-500">pos {item.position}</span>
+      </div>
+      <div className="text-stone-300">{effect}</div>
+      {sourceLists.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {sourceLists.map((listName) => (
+            <span key={listName} className="rounded bg-white/10 px-1.5 py-0.5" data-testid="preview-source-list">
+              List: {listName}
+            </span>
+          ))}
+        </div>
+      )}
+      {(item.is_read || item.has_rating || item.is_mapped || item.is_duplicate || item.frontier_label) && (
+        <div className="flex flex-wrap gap-1 text-stone-400">
+          {item.is_read && <span data-testid="preview-read">Read</span>}
+          {item.has_rating && <span data-testid="preview-rating">Rated</span>}
+          {item.is_mapped && <span data-testid="preview-mapped">Identity mapped</span>}
+          {item.frontier_label && <span data-testid="preview-frontier">{item.frontier_label}</span>}
+          {item.is_duplicate && (
+            <span className="text-[var(--theme-danger)]" data-testid="preview-duplicate">Possible physical duplicate</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export const IssueToggleList = forwardRef<IssueToggleListHandle, {
@@ -123,8 +167,6 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     range: string
     response: import('../../services/api-issues').IssueEditPreviewResponse
     selectedStrategy: 'safe_default' | 'numeric_resort'
-    acceptedAliasIssueNumbers: string[]
-    expectedIssueIds: number[]
   } | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
   /** Preview fetch failure, surfaced in a retryable modal (#4654). */
@@ -308,18 +350,13 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       case 'reorder':
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
         return
-      case 'create': {
-        const options: { strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[]; expected_issue_ids?: number[] } = {}
-        if (mutation.strategy) options.strategy = mutation.strategy
-        if (mutation.acceptedAliasIssueNumbers?.length) options.accepted_alias_issue_numbers = mutation.acceptedAliasIssueNumbers
-        if (mutation.expectedIssueIds?.length) options.expected_issue_ids = mutation.expectedIssueIds
+      case 'create':
         await issuesService.create(
           threadId,
           mutation.issueRange,
-          Object.keys(options).length > 0 ? options : undefined,
+          mutation.strategy ? { strategy: mutation.strategy } : undefined,
         )
         return
-      }
     }
   }, [issuesService, threadId])
 
@@ -334,7 +371,6 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     try {
       while (pendingMutationsRef.current.length > 0) {
         const currentMutation = pendingMutationsRef.current[0]
-        let mutationSucceeded = false
         try {
           await runIssueMutation(currentMutation)
           if (currentMutation.type === 'create') {
@@ -364,12 +400,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
           }
           hadSuccess = true
-          mutationSucceeded = true
         } catch (err: unknown) {
           // A failed mutation stops the queue and is reported to the caller:
           // the mutations that were not applied stay queued so the reader can
           // retry them, and the rejected flush keeps the Edit Series dialog
-          // open instead of closing it over a lost create (#4654 A7).
+          // open instead of closing it over a lost create.
           //
           // The base list is resynchronized with the server first. When that
           // resynchronization is itself incomplete, later mutations would be
@@ -413,11 +448,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           setActionError(getApiErrorDetail(err))
           throw err
         } finally {
-          if (mutationSucceeded) {
-            pendingMutationsRef.current = pendingMutationsRef.current.filter(
-              (mutation) => mutation.id !== currentMutation.id
-            )
-          }
+          pendingMutationsRef.current = pendingMutationsRef.current.filter(
+            (mutation) => mutation.id !== currentMutation.id
+          )
           syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
           notifyPendingMutations()
         }
@@ -591,16 +624,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     if (deferred) {
       setIsPreviewing(true)
       try {
-        const expectedIssueIds = baseIssuesRef.current.map((issue) => issue.id)
-        const response = await issuesService.previewCreate(threadId, range, {
-          expected_issue_ids: expectedIssueIds,
-        })
+        const response = await issuesService.previewCreate(threadId, range)
         setPreviewState({
           range,
           response,
           selectedStrategy: 'safe_default',
-          acceptedAliasIssueNumbers: [],
-          expectedIssueIds,
         })
       } catch (err: unknown) {
         console.error('[IssueToggleList] Error previewing issues:', err)
@@ -625,47 +653,16 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     }
   }
 
-  async function handleToggleAliasOffer(issueNumber: string, accepted: boolean) {
-    if (!previewState) return
-    const nextAccepted = accepted
-      ? Array.from(new Set([...previewState.acceptedAliasIssueNumbers, issueNumber]))
-      : previewState.acceptedAliasIssueNumbers.filter((n) => n !== issueNumber)
-    setIsPreviewing(true)
-    setPreviewError(null)
-    try {
-      const response = await issuesService.previewCreate(threadId, previewState.range, {
-        accepted_alias_issue_numbers: nextAccepted.length > 0 ? nextAccepted : undefined,
-        expected_issue_ids: previewState.expectedIssueIds,
-      })
-      setPreviewState((current) => current ? {
-        ...current,
-        response,
-        acceptedAliasIssueNumbers: nextAccepted,
-        selectedStrategy: current.selectedStrategy,
-      } : current)
-    } catch (err: unknown) {
-      console.error('[IssueToggleList] Error re-previewing alias choice:', err)
-      setPreviewError(getApiErrorDetail(err))
-    } finally {
-      setIsPreviewing(false)
-    }
-  }
-
   function handleConfirmPreview() {
     if (!previewState) return
     const outcome = previewState.selectedStrategy === 'numeric_resort'
       ? previewState.response.numeric_resort_outcome
       : previewState.response.default_outcome
     if (!outcome?.can_commit) return
-    const acceptedAliasIssueNumbers = previewState.acceptedAliasIssueNumbers.length > 0
-      ? previewState.acceptedAliasIssueNumbers
-      : undefined
     enqueueIssueMutation({
       type: 'create',
       issueRange: previewState.range,
       strategy: previewState.selectedStrategy,
-      acceptedAliasIssueNumbers,
-      expectedIssueIds: previewState.expectedIssueIds,
     })
     setAddRange('')
     setPreviewState(null)
@@ -1178,14 +1175,139 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         </Modal>
       )}
       {previewState && (
-        <IssueEditPreviewModal
-          previewState={previewState}
-          isPreviewing={isPreviewing}
+        <Modal
+          isOpen
+          title="Preview issue changes"
           onClose={() => setPreviewState(null)}
-          onToggleAliasOffer={(issueNumber, accepted) => { void handleToggleAliasOffer(issueNumber, accepted) }}
-          onChangeStrategy={(strategy) => setPreviewState((current) => current ? { ...current, selectedStrategy: strategy } : current)}
-          onConfirm={handleConfirmPreview}
-        />
+          data-testid="edit-series-preview-modal"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--theme-text-muted)]">
+              Adding <span className="font-bold text-[var(--theme-text-primary)]">{previewState.range}</span> to {previewState.response.thread_title}.
+              Existing relative issue order is preserved by default.
+            </p>
+
+            <div className="space-y-2">
+              <div className={`rounded-xl border p-3 ${previewState.selectedStrategy === 'safe_default' ? 'border-[var(--theme-primary-action)]' : 'border-white/10'}`}>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="preview-strategy"
+                    checked={previewState.selectedStrategy === 'safe_default'}
+                    onChange={() => setPreviewState({ ...previewState, selectedStrategy: 'safe_default' })}
+                    disabled={!previewState.response.default_outcome.can_commit}
+                  />
+                  <div className="text-sm">
+                    <div className="font-bold">Safe default</div>
+                    <div className="text-xs text-stone-400">
+                      {previewState.response.default_outcome.preserves_existing_relative_order
+                        ? 'Preserves existing relative issue order.'
+                        : 'May change existing relative issue order.'}
+                    </div>
+                    {!previewState.response.default_outcome.can_commit && (
+                      <div className="text-xs text-[var(--theme-danger)] mt-1" role="alert">
+                        {previewState.response.default_outcome.conflict_message ?? 'This change would create a reading-graph cycle.'}
+                      </div>
+                    )}
+                    {previewState.response.default_outcome.graph.cycles.length > 0 && (
+                      <div className="text-xs text-stone-400 mt-1 space-y-1" data-testid="safe-default-cycle-path">
+                        {previewState.response.default_outcome.graph.cycles.map((cycle, idx) => (
+                          <div key={idx}>
+                            {cycle.edges.map((e, i) => (
+                              <span key={i}>
+                                {i > 0 ? ' -> ' : ''}{e.source.series_title} #{e.source.issue_number}
+                                {i === cycle.edges.length - 1 ? ` -> ${e.target.series_title} #${e.target.issue_number}` : ''}
+                              </span>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </label>
+              </div>
+
+              {previewState.response.numeric_resort_outcome && (
+                <div className={`rounded-xl border p-3 ${previewState.selectedStrategy === 'numeric_resort' ? 'border-[var(--theme-primary-action)]' : 'border-white/10'}`}>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="preview-strategy"
+                      checked={previewState.selectedStrategy === 'numeric_resort'}
+                      onChange={() => setPreviewState({ ...previewState, selectedStrategy: 'numeric_resort' })}
+                      disabled={!previewState.response.numeric_resort_outcome.can_commit}
+                    />
+                    <div className="text-sm">
+                      <div className="font-bold">Numeric resort (explicit)</div>
+                      <div className="text-xs text-stone-400">
+                        Re-seats ordinary numeric issues in numeric order. Review before saving.
+                      </div>
+                      {!previewState.response.numeric_resort_outcome.can_commit && (
+                        <div className="text-xs text-[var(--theme-danger)] mt-1" role="alert" data-testid="numeric-resort-cycle">
+                          {previewState.response.numeric_resort_outcome.conflict_message ?? 'This change would create a reading-graph cycle.'}
+                        </div>
+                      )}
+                      {previewState.response.numeric_resort_outcome.graph.cycles.length > 0 && (
+                        <div className="text-xs text-stone-400 mt-1 space-y-1" data-testid="numeric-resort-cycle-path">
+                          {previewState.response.numeric_resort_outcome.graph.cycles.map((cycle, idx) => (
+                            <div key={idx}>
+                              {cycle.edges.map((e, i) => (
+                                <span key={i}>
+                                  {i > 0 ? ' -> ' : ''}{e.source.series_title} #{e.source.issue_number}
+                                  {i === cycle.edges.length - 1 ? ` -> ${e.target.series_title} #${e.target.issue_number}` : ''}
+                                </span>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2" data-testid="preview-before-after">
+              <div>
+                <div className="font-bold text-stone-400 mb-1">Before</div>
+                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-1">
+                  {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.before : previewState.response.default_outcome.before)?.map((item, idx) => (
+                    <PreviewIssueRow key={`${item.issue_id}-${item.issue_number}-${idx}`} item={item} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="font-bold text-stone-400 mb-1">After</div>
+                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-1">
+                  {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.after : previewState.response.default_outcome.after)?.map((item, idx) => (
+                    <PreviewIssueRow key={`${item.issue_id ?? 'new'}-${item.issue_number}-${idx}`} item={item} />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setPreviewState(null)}
+                className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPreview}
+                disabled={!(previewState.selectedStrategy === 'numeric_resort'
+                  ? previewState.response.numeric_resort_outcome?.can_commit
+                  : previewState.response.default_outcome.can_commit)}
+                className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
+                data-testid="confirm-preview-add"
+              >
+                Add issues
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
       <DeleteIssueDialog
         issue={deleteDialogIssue}

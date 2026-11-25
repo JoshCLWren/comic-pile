@@ -48,15 +48,6 @@ pub struct CreateIssuesRequest {
     /// Placement strategy. Defaults to safe_default.
     #[serde(default)]
     pub strategy: IssuePlacementStrategy,
-    /// Requested numbers that already exist as mapped issues and were
-    /// explicitly accepted by the reader as alias/mapping alternatives.
-    /// The server rejects unaccepted mapped-existing numbers (#4654 A5).
-    #[serde(default)]
-    pub accepted_alias_issue_numbers: Vec<String>,
-    /// Expected current issue IDs in order. When provided, the server rejects
-    /// the write if the series changed after the preview was taken (#4654 A7).
-    #[serde(default)]
-    pub expected_issue_ids: Option<Vec<i32>>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -348,40 +339,13 @@ pub async fn create_issues(
         .iter()
         .map(|row| (row.get(0), row.get(1), row.get(2)))
         .collect();
-    if let Some(expected) = &request.expected_issue_ids {
-        let actual: Vec<i32> = existing.iter().map(|(id, _, _)| *id).collect();
-        if &actual != expected {
-            return Err(ApiError::Conflict(
-                "Issue list changed since preview; reload before committing".to_string(),
-            ));
-        }
-    }
     let existing_numbers: BTreeSet<String> = existing
         .iter()
         .map(|(_, number, _)| number.clone())
         .collect();
-    let accepted_aliases: BTreeSet<String> = request
-        .accepted_alias_issue_numbers
-        .iter()
-        .cloned()
-        .collect();
-    let mapped_existing = mapped_existing_for_requested(&tx, thread_id, &requested).await?;
-    let (_alias_offers, unaccepted_aliases) =
-        build_alias_offers("", &mapped_existing, &accepted_aliases);
-    if !unaccepted_aliases.is_empty() {
-        return Err(ApiError::BadRequest(format!(
-            "Mapped existing issues require an explicit alias/mapping choice before commit: {}",
-            unaccepted_aliases
-                .iter()
-                .map(|n| format!("#{n}"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )));
-    }
     let new_numbers: Vec<String> = requested
-        .iter()
-        .filter(|number| !existing_numbers.contains(*number))
-        .cloned()
+        .into_iter()
+        .filter(|number| !existing_numbers.contains(number))
         .collect();
     if new_numbers.is_empty() {
         return Err(ApiError::BadRequest(
@@ -726,14 +690,6 @@ pub struct PreviewIssuesRequest {
     /// Requested placement strategy. Defaults to safe_default.
     #[serde(default)]
     pub strategy: IssuePlacementStrategy,
-    /// Requested numbers that already exist as mapped issues and were
-    /// explicitly accepted by the reader as alias/mapping alternatives.
-    #[serde(default)]
-    pub accepted_alias_issue_numbers: Vec<String>,
-    /// Expected current issue IDs in order. When provided, the server rejects
-    /// the preview if the series changed after the caller last observed it.
-    #[serde(default)]
-    pub expected_issue_ids: Option<Vec<i32>>,
 }
 
 /// Per-issue human-readable context carried in the preview payload so the
@@ -761,23 +717,6 @@ pub struct PreviewIssueItem {
     pub effect: String,
     /// Whether a second physical issue with the same number exists in the series.
     pub is_duplicate: bool,
-}
-
-/// When a requested issue number already exists in the series and identity
-/// evidence shows it is mapped, offer an alias/mapping alternative instead of
-/// silently discarding it or creating a duplicate (#4654 A5).
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-pub struct IssueEditAliasOffer {
-    /// The number the reader requested to add.
-    pub requested_issue_number: String,
-    /// Existing issue that already occupies this number in the series.
-    pub existing_issue_id: i32,
-    pub existing_issue_number: String,
-    pub series_title: String,
-    pub is_mapped: bool,
-    /// Human-readable reason this is offered as an alias/mapping instead of a
-    /// new issue.
-    pub reason: String,
 }
 
 /// Set-based metadata gathered once per previewed thread (never per row) and
@@ -898,79 +837,6 @@ pub struct IssueEditPreviewResponse {
     pub requested_strategy: IssuePlacementStrategy,
     pub default_outcome: IssueEditPreviewOutcome,
     pub numeric_resort_outcome: Option<IssueEditPreviewOutcome>,
-    /// Requested numbers that already exist as mapped issues in the series.
-    /// The reader must explicitly choose an alias/mapping before commit; the
-    /// server never silently creates a duplicate (#4654 A5).
-    #[serde(default)]
-    pub alias_offers: Vec<IssueEditAliasOffer>,
-}
-
-#[derive(Debug, Clone)]
-struct ExistingIssueMapping {
-    id: i32,
-    issue_number: String,
-    is_mapped: bool,
-}
-
-async fn mapped_existing_for_requested(
-    tx: &Transaction<'_>,
-    thread_id: i32,
-    requested: &[String],
-) -> Result<Vec<ExistingIssueMapping>, ApiError> {
-    if requested.is_empty() {
-        return Ok(vec![]);
-    }
-    let rows = tx
-        .query(
-            "SELECT i.id,
-                    i.issue_number,
-                    (i.catalog_issue_id IS NOT NULL OR EXISTS (
-                        SELECT 1 FROM issue_external_identity_mappings m
-                        WHERE m.issue_id = i.id AND m.status = 'confirmed'
-                    )) AS is_mapped
-             FROM issues i
-             WHERE i.thread_id = $1 AND i.issue_number = ANY($2::text[])",
-            &[&thread_id, &requested],
-        )
-        .await
-        .map_err(db::query_error)?;
-    Ok(rows
-        .iter()
-        .map(|row| ExistingIssueMapping {
-            id: row.get(0),
-            issue_number: row.get(1),
-            is_mapped: row.get(2),
-        })
-        .collect())
-}
-
-fn build_alias_offers(
-    series_title: &str,
-    mapped_existing: &[ExistingIssueMapping],
-    accepted: &BTreeSet<String>,
-) -> (Vec<IssueEditAliasOffer>, Vec<String>) {
-    let mut offers = Vec::new();
-    let mut unaccepted = Vec::new();
-    for existing in mapped_existing {
-        if !existing.is_mapped {
-            continue;
-        }
-        if !accepted.contains(&existing.issue_number) {
-            unaccepted.push(existing.issue_number.clone());
-        }
-        offers.push(IssueEditAliasOffer {
-            requested_issue_number: existing.issue_number.clone(),
-            existing_issue_id: existing.id,
-            existing_issue_number: existing.issue_number.clone(),
-            series_title: series_title.to_string(),
-            is_mapped: true,
-            reason: format!(
-                "Issue #{} already exists in this series with identity mapping evidence; choose an alias/mapping instead of creating a duplicate.",
-                existing.issue_number
-            ),
-        });
-    }
-    (offers, unaccepted)
 }
 
 fn build_after_items(
@@ -1266,139 +1132,51 @@ pub async fn preview_issue_create(
         .iter()
         .map(|row| (row.get(0), row.get(1), row.get(2)))
         .collect();
-    if let Some(expected) = &request.expected_issue_ids {
-        let actual: Vec<i32> = existing.iter().map(|(id, _, _)| *id).collect();
-        if &actual != expected {
-            return Err(ApiError::Conflict(
-                "Issue list changed since preview; reload before committing".to_string(),
-            ));
-        }
-    }
     let existing_numbers: BTreeSet<String> = existing.iter().map(|(_, n, _)| n.clone()).collect();
-    let accepted_aliases: BTreeSet<String> = request
-        .accepted_alias_issue_numbers
-        .iter()
-        .cloned()
-        .collect();
-    let mapped_existing = mapped_existing_for_requested(&tx, thread_id, &requested).await?;
-    let (alias_offers, unaccepted_aliases) =
-        build_alias_offers(&thread_title, &mapped_existing, &accepted_aliases);
     let new_numbers: Vec<String> = requested
-        .iter()
-        .filter(|n| !existing_numbers.contains(*n))
-        .cloned()
+        .into_iter()
+        .filter(|n| !existing_numbers.contains(n))
         .collect();
-    if new_numbers.is_empty() && alias_offers.is_empty() {
+    if new_numbers.is_empty() {
         return Err(ApiError::BadRequest(
             "All issues in range already exist".to_string(),
         ));
     }
 
-    let mut default_outcome = if new_numbers.is_empty() {
-        let (series_title, metadata) = load_preview_metadata(&tx, thread_id).await?;
-        let before: Vec<PreviewIssueItem> = existing
-            .iter()
-            .map(|(id, number, position)| {
-                let meta = metadata.get(id);
-                PreviewIssueItem {
-                    issue_id: Some(*id),
-                    issue_number: number.clone(),
-                    position: *position,
-                    is_new: false,
-                    series_title: series_title.clone(),
-                    source_lists: meta.map(|m| m.source_lists.clone()).unwrap_or_default(),
-                    is_read: meta.is_some_and(|m| m.is_read),
-                    is_mapped: meta.is_some_and(|m| m.is_mapped),
-                    has_rating: meta.is_some_and(|m| m.has_rating),
-                    frontier_label: if meta.is_some_and(|m| m.is_frontier) {
-                        Some("current unread (Queue/Roll frontier)".to_string())
-                    } else {
-                        None
-                    },
-                    effect: describe_effect(
-                        number,
-                        false,
-                        Some(*position),
-                        *position,
-                        meta.is_some_and(|m| m.is_duplicate),
-                    ),
-                    is_duplicate: meta.is_some_and(|m| m.is_duplicate),
-                }
-            })
-            .collect();
-        IssueEditPreviewOutcome {
-            strategy: IssuePlacementStrategy::SafeDefault,
-            can_commit: false,
-            preserves_existing_relative_order: true,
-            before: before.clone(),
-            after: before,
-            added_issue_numbers: vec![],
-            graph: crate::reading_graph::ReadingGraphResponse {
-                status: "ok".to_string(),
-                cycles: vec![],
-                cyclic_issue_ids: vec![],
-                affected_lists: vec![],
-                affected_threads: vec![],
-                repairs: vec![],
-                unresolved_reference_count: 0,
-                frontier_audit: None,
-            },
-            conflict_message: None,
-        }
-    } else {
-        preview_outcome(
-            &tx,
-            user,
-            thread_id,
-            &existing,
-            &new_numbers,
-            &request,
-            IssuePlacementStrategy::SafeDefault,
-        )
-        .await?
-    };
+    let default_outcome = preview_outcome(
+        &tx,
+        user,
+        thread_id,
+        &existing,
+        &new_numbers,
+        &request,
+        IssuePlacementStrategy::SafeDefault,
+    )
+    .await?;
 
-    let mut numeric_resort_outcome = if !new_numbers.is_empty()
-        && request.insert_after_issue_id.is_none()
-        && !request.append_to_end
-    {
-        let resort = preview_outcome(
-            &tx,
-            user,
-            thread_id,
-            &existing,
-            &new_numbers,
-            &request,
-            IssuePlacementStrategy::NumericResort,
-        )
-        .await?;
-        if resort.preserves_existing_relative_order
-            && default_outcome.preserves_existing_relative_order
-        {
-            None
+    let numeric_resort_outcome =
+        if request.insert_after_issue_id.is_none() && !request.append_to_end {
+            let resort = preview_outcome(
+                &tx,
+                user,
+                thread_id,
+                &existing,
+                &new_numbers,
+                &request,
+                IssuePlacementStrategy::NumericResort,
+            )
+            .await?;
+            if resort.preserves_existing_relative_order
+                && default_outcome.preserves_existing_relative_order
+            {
+                // Same effective result; no need to show a separate resort option.
+                None
+            } else {
+                Some(resort)
+            }
         } else {
-            Some(resort)
-        }
-    } else {
-        None
-    };
-
-    if !unaccepted_aliases.is_empty() {
-        let msg = format!(
-            "Mapped existing issues require an explicit alias/mapping choice before commit: {}",
-            unaccepted_aliases
-                .iter()
-                .map(|n| format!("#{n}"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-        default_outcome.can_commit = false;
-        default_outcome.conflict_message = Some(msg.clone());
-        if let Some(resort) = numeric_resort_outcome.as_mut() {
-            resort.can_commit = false;
-            resort.conflict_message = Some(msg);
-        }
-    }
+            None
+        };
 
     tx.rollback().await.map_err(db::query_error)?;
     Ok(Json(IssueEditPreviewResponse {
@@ -1407,7 +1185,6 @@ pub async fn preview_issue_create(
         requested_strategy: request.strategy,
         default_outcome,
         numeric_resort_outcome,
-        alias_offers,
     }))
 }
 

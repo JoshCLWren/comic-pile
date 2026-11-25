@@ -14043,27 +14043,9 @@
           "issue_range"
         ],
         "properties": {
-          "accepted_alias_issue_numbers": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Requested numbers that already exist as mapped issues and were\nexplicitly accepted by the reader as alias/mapping alternatives.\nThe server rejects unaccepted mapped-existing numbers (#4654 A5)."
-          },
           "append_to_end": {
             "type": "boolean",
             "description": "Explicit \"At the end\" choice. Distinct from an omitted anchor."
-          },
-          "expected_issue_ids": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "description": "Expected current issue IDs in order. When provided, the server rejects\nthe write if the series changed after the preview was taken (#4654 A7)."
           },
           "insert_after_issue_id": {
             "type": [
@@ -18134,42 +18116,6 @@
           }
         }
       },
-      "IssueEditAliasOffer": {
-        "type": "object",
-        "description": "When a requested issue number already exists in the series and identity\nevidence shows it is mapped, offer an alias/mapping alternative instead of\nsilently discarding it or creating a duplicate (#4654 A5).",
-        "required": [
-          "requested_issue_number",
-          "existing_issue_id",
-          "existing_issue_number",
-          "series_title",
-          "is_mapped",
-          "reason"
-        ],
-        "properties": {
-          "existing_issue_id": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Existing issue that already occupies this number in the series."
-          },
-          "existing_issue_number": {
-            "type": "string"
-          },
-          "is_mapped": {
-            "type": "boolean"
-          },
-          "reason": {
-            "type": "string",
-            "description": "Human-readable reason this is offered as an alias/mapping instead of a\nnew issue."
-          },
-          "requested_issue_number": {
-            "type": "string",
-            "description": "The number the reader requested to add."
-          },
-          "series_title": {
-            "type": "string"
-          }
-        }
-      },
       "IssueEditPreviewOutcome": {
         "type": "object",
         "required": [
@@ -18229,13 +18175,6 @@
           "default_outcome"
         ],
         "properties": {
-          "alias_offers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IssueEditAliasOffer"
-            },
-            "description": "Requested numbers that already exist as mapped issues in the series.\nThe reader must explicitly choose an alias/mapping before commit; the\nserver never silently creates a duplicate (#4654 A5)."
-          },
           "default_outcome": {
             "$ref": "#/components/schemas/IssueEditPreviewOutcome"
           },
@@ -19649,27 +19588,9 @@
           "issue_range"
         ],
         "properties": {
-          "accepted_alias_issue_numbers": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Requested numbers that already exist as mapped issues and were\nexplicitly accepted by the reader as alias/mapping alternatives."
-          },
           "append_to_end": {
             "type": "boolean",
             "description": "Explicit \"At the end\" choice. Distinct from an omitted anchor."
-          },
-          "expected_issue_ids": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "description": "Expected current issue IDs in order. When provided, the server rejects\nthe preview if the series changed after the caller last observed it."
           },
           "insert_after_issue_id": {
             "type": [

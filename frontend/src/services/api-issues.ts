@@ -39,8 +39,6 @@ interface CreateIssuesPayload {
   insert_after_issue_id?: number
   append_to_end?: boolean
   strategy?: 'safe_default' | 'numeric_resort'
-  accepted_alias_issue_numbers?: string[]
-  expected_issue_ids?: number[]
 }
 
 export interface IssuePreviewItem {
@@ -77,22 +75,12 @@ export interface IssueEditPreviewOutcome {
   conflict_message: string | null
 }
 
-export interface IssueEditAliasOffer {
-  requested_issue_number: string
-  existing_issue_id: number
-  existing_issue_number: string
-  series_title: string
-  is_mapped: boolean
-  reason: string
-}
-
 export interface IssueEditPreviewResponse {
   thread_id: number
   thread_title: string
   requested_strategy: 'safe_default' | 'numeric_resort'
   default_outcome: IssueEditPreviewOutcome
   numeric_resort_outcome: IssueEditPreviewOutcome | null
-  alias_offers?: IssueEditAliasOffer[]
 }
 
 /** Query parameters accepted by the thread issue list endpoint. */
@@ -144,7 +132,7 @@ export function createIssuesApi(client: HttpClient) {
     create: async (
       threadId: number,
       issueRange: string,
-      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[]; expected_issue_ids?: number[] }
+      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' }
     ): Promise<IssueListResponse> => {
       const payload: CreateIssuesPayload = {
         issue_range: issueRange,
@@ -159,8 +147,6 @@ export function createIssuesApi(client: HttpClient) {
         }
       }
       if (options?.strategy) payload.strategy = options.strategy
-      if (options?.accepted_alias_issue_numbers?.length) payload.accepted_alias_issue_numbers = options.accepted_alias_issue_numbers
-      if (options?.expected_issue_ids) payload.expected_issue_ids = options.expected_issue_ids
 
       return client.post(`/v2/threads/${threadId}/issues`, payload)
     },
@@ -168,7 +154,7 @@ export function createIssuesApi(client: HttpClient) {
     previewCreate: async (
       threadId: number,
       issueRange: string,
-      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[]; expected_issue_ids?: number[] }
+      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' }
     ): Promise<IssueEditPreviewResponse> => {
       const payload: CreateIssuesPayload = { issue_range: issueRange }
       if (options && 'insert_after_issue_id' in options) {
@@ -176,8 +162,6 @@ export function createIssuesApi(client: HttpClient) {
         else payload.insert_after_issue_id = options.insert_after_issue_id
       }
       if (options?.strategy) payload.strategy = options.strategy
-      if (options?.accepted_alias_issue_numbers?.length) payload.accepted_alias_issue_numbers = options.accepted_alias_issue_numbers
-      if (options?.expected_issue_ids) payload.expected_issue_ids = options.expected_issue_ids
       return client.post(`/v2/threads/${threadId}/issues/preview`, payload)
     },
 

@@ -4631,19 +4631,8 @@ export interface components {
             type: string;
         };
         CreateIssuesRequest: {
-            /**
-             * @description Requested numbers that already exist as mapped issues and were
-             *     explicitly accepted by the reader as alias/mapping alternatives.
-             *     The server rejects unaccepted mapped-existing numbers (#4654 A5).
-             */
-            accepted_alias_issue_numbers?: string[];
             /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
             append_to_end?: boolean;
-            /**
-             * @description Expected current issue IDs in order. When provided, the server rejects
-             *     the write if the series changed after the preview was taken (#4654 A7).
-             */
-            expected_issue_ids?: number[] | null;
             /**
              * Format: int32
              * @description Explicit anchor. Omit for natural placement.
@@ -5957,28 +5946,6 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /**
-         * @description When a requested issue number already exists in the series and identity
-         *     evidence shows it is mapped, offer an alias/mapping alternative instead of
-         *     silently discarding it or creating a duplicate (#4654 A5).
-         */
-        IssueEditAliasOffer: {
-            /**
-             * Format: int32
-             * @description Existing issue that already occupies this number in the series.
-             */
-            existing_issue_id: number;
-            existing_issue_number: string;
-            is_mapped: boolean;
-            /**
-             * @description Human-readable reason this is offered as an alias/mapping instead of a
-             *     new issue.
-             */
-            reason: string;
-            /** @description The number the reader requested to add. */
-            requested_issue_number: string;
-            series_title: string;
-        };
         IssueEditPreviewOutcome: {
             added_issue_numbers: string[];
             after: components["schemas"]["PreviewIssueItem"][];
@@ -5990,12 +5957,6 @@ export interface components {
             strategy: components["schemas"]["IssuePlacementStrategy"];
         };
         IssueEditPreviewResponse: {
-            /**
-             * @description Requested numbers that already exist as mapped issues in the series.
-             *     The reader must explicitly choose an alias/mapping before commit; the
-             *     server never silently creates a duplicate (#4654 A5).
-             */
-            alias_offers?: components["schemas"]["IssueEditAliasOffer"][];
             default_outcome: components["schemas"]["IssueEditPreviewOutcome"];
             numeric_resort_outcome?: components["schemas"]["IssueEditPreviewOutcome"] | null;
             requested_strategy: components["schemas"]["IssuePlacementStrategy"];
@@ -6907,18 +6868,8 @@ export interface components {
             source_lists: string[];
         };
         PreviewIssuesRequest: {
-            /**
-             * @description Requested numbers that already exist as mapped issues and were
-             *     explicitly accepted by the reader as alias/mapping alternatives.
-             */
-            accepted_alias_issue_numbers?: string[];
             /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
             append_to_end?: boolean;
-            /**
-             * @description Expected current issue IDs in order. When provided, the server rejects
-             *     the preview if the series changed after the caller last observed it.
-             */
-            expected_issue_ids?: number[] | null;
             /**
              * Format: int32
              * @description Explicit anchor. Omit for natural placement.

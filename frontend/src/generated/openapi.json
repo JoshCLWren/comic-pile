@@ -3658,27 +3658,9 @@
       "CreateIssuesRequest": {
         "additionalProperties": false,
         "properties": {
-          "accepted_alias_issue_numbers": {
-            "description": "Requested numbers that already exist as mapped issues and were\nexplicitly accepted by the reader as alias/mapping alternatives.\nThe server rejects unaccepted mapped-existing numbers (#4654 A5).",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
           "append_to_end": {
             "description": "Explicit \"At the end\" choice. Distinct from an omitted anchor.",
             "type": "boolean"
-          },
-          "expected_issue_ids": {
-            "description": "Expected current issue IDs in order. When provided, the server rejects\nthe write if the series changed after the preview was taken (#4654 A7).",
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
           },
           "insert_after_issue_id": {
             "description": "Explicit anchor. Omit for natural placement.",
@@ -7933,42 +7915,6 @@
         ],
         "type": "object"
       },
-      "IssueEditAliasOffer": {
-        "description": "When a requested issue number already exists in the series and identity\nevidence shows it is mapped, offer an alias/mapping alternative instead of\nsilently discarding it or creating a duplicate (#4654 A5).",
-        "properties": {
-          "existing_issue_id": {
-            "description": "Existing issue that already occupies this number in the series.",
-            "format": "int32",
-            "type": "integer"
-          },
-          "existing_issue_number": {
-            "type": "string"
-          },
-          "is_mapped": {
-            "type": "boolean"
-          },
-          "reason": {
-            "description": "Human-readable reason this is offered as an alias/mapping instead of a\nnew issue.",
-            "type": "string"
-          },
-          "requested_issue_number": {
-            "description": "The number the reader requested to add.",
-            "type": "string"
-          },
-          "series_title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "requested_issue_number",
-          "existing_issue_id",
-          "existing_issue_number",
-          "series_title",
-          "is_mapped",
-          "reason"
-        ],
-        "type": "object"
-      },
       "IssueEditPreviewOutcome": {
         "properties": {
           "added_issue_numbers": {
@@ -8021,13 +7967,6 @@
       },
       "IssueEditPreviewResponse": {
         "properties": {
-          "alias_offers": {
-            "description": "Requested numbers that already exist as mapped issues in the series.\nThe reader must explicitly choose an alias/mapping before commit; the\nserver never silently creates a duplicate (#4654 A5).",
-            "items": {
-              "$ref": "#/components/schemas/IssueEditAliasOffer"
-            },
-            "type": "array"
-          },
           "default_outcome": {
             "$ref": "#/components/schemas/IssueEditPreviewOutcome"
           },
@@ -11001,27 +10940,9 @@
       "PreviewIssuesRequest": {
         "additionalProperties": false,
         "properties": {
-          "accepted_alias_issue_numbers": {
-            "description": "Requested numbers that already exist as mapped issues and were\nexplicitly accepted by the reader as alias/mapping alternatives.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
           "append_to_end": {
             "description": "Explicit \"At the end\" choice. Distinct from an omitted anchor.",
             "type": "boolean"
-          },
-          "expected_issue_ids": {
-            "description": "Expected current issue IDs in order. When provided, the server rejects\nthe preview if the series changed after the caller last observed it.",
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
           },
           "insert_after_issue_id": {
             "description": "Explicit anchor. Omit for natural placement.",
