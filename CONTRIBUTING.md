@@ -254,10 +254,6 @@ The factory merge drain refuses the PR when the reviewer model authored the
 current head, the review SHA is stale, or required CI is red. Every model the
 head's author records name is excluded, even when the records disagree. A
 sync merge of `main` carries the author of the commit it merged into. A head
-<<<<<<< HEAD
 with no author record (a human push) excludes no model. Where agent IDs match
 but the executed reviewer model differs, the 2026-11-24 current-head model rule
 controls; reviewer-worker identity alone is not the exclusion.
-=======
-with no author record (a human push) excludes no model.
->>>>>>> origin/main
