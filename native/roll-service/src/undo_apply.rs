@@ -2117,7 +2117,7 @@ mod tests {
             .expect("seed prior rating and companion dice event");
         drop(connection);
 
-        undo_to_snapshot(Path((9301, 9401)), user, State(state.clone()))
+        let Json(_) = undo_to_snapshot(Path((9301, 9401)), user, State(state.clone()))
             .await
             .expect("undo applies rating delta");
         let connection = db::checkout(&state).await.expect("post-undo connection");
