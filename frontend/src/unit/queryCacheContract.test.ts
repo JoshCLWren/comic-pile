@@ -17,6 +17,7 @@ import {
   applyDeletedCustomCBL,
   applyCommittedReadingPlan,
   invalidateSessionRecoveryCache,
+  clearComicVineIssueIntelligence,
 } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import type { RateResponsePayload, Thread } from '../types'
@@ -44,11 +45,12 @@ const thread: Thread = {
 function createSpiedClient() {
   const client = new QueryClient()
   const setQueryData = vi.spyOn(client, 'setQueryData')
+  const cancelQueries = vi.spyOn(client, 'cancelQueries').mockResolvedValue()
   const invalidateQueries = vi.spyOn(client, 'invalidateQueries').mockResolvedValue()
   const removeQueries = vi.spyOn(client, 'removeQueries').mockResolvedValue()
   const resetQueries = vi.spyOn(client, 'resetQueries').mockResolvedValue()
 
-  return { client, setQueryData, invalidateQueries, removeQueries, resetQueries }
+  return { client, setQueryData, cancelQueries, invalidateQueries, removeQueries, resetQueries }
 }
 
 describe('canonical query keys', () => {

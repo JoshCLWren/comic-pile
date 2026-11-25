@@ -1188,6 +1188,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
           creators: [{ name: 'Recovered Writer', roles: ['writer'] }],
         }),
       )
+    // SAFETY: the mocked route returns exactly the three response fields consumed by this test.
     refreshMetadata.mockResolvedValue({ issue_id: 1, refreshed: true, comicvine_issue_id: '601' } as never)
 
     renderIdentity()

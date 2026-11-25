@@ -2077,7 +2077,10 @@ mod tests {
         drop(Object::take(connection));
 
         queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
-        let job = claim(&state).await.expect("claim retry").expect("due retry job");
+        let job = claim(&state)
+            .await
+            .expect("claim retry")
+            .expect("due retry job");
         let outcome = process(&state, &job, Some("TESTKEY123"))
             .await
             .expect("process completed");
