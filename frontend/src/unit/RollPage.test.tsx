@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
@@ -19,8 +19,13 @@ import {
 import { useSnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
+import { useResetDice } from '../hooks/useRoll'
 import { threadsApi } from '../services/api-threads'
-import { writeRollSnoozes } from '../services/api-roll'
+import { createRollApi, readRollSnoozes, writeRollSnoozes } from '../services/api-roll'
+import type { RollResourcesApi } from '../services/rollResourcesApi'
+import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
+import { createHttpClientStub } from './httpClientStub'
 import { cast } from '../utils/cast'
 
 const navigateSpy = vi.fn()
@@ -48,7 +53,7 @@ vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn()
 vi.mock('../hooks/useRoll', () => ({
   useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: vi.fn(),
-  useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
+  useResetDice: vi.fn(() => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false })),
   useRoll: vi.fn(),
   useOverrideRoll: vi.fn(),
   useDismissPending: vi.fn(),
@@ -63,7 +68,7 @@ vi.mock('../hooks/useQueue', () => ({
 }))
 vi.mock('../hooks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks')>()
-  return { ...actual, useRate: vi.fn() }
+  return { ...actual, useRate: vi.fn(), useResetDice: vi.fn() }
 })
 vi.mock('../services/api-reading-orders', () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
@@ -161,6 +166,7 @@ beforeEach(() => {
   vi.mocked(useShuffleQueue).mockReturnValue(cast<ReturnType<typeof useShuffleQueue>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useRate; cast is safe because only mutate/isPending are read.
   vi.mocked(useRate).mockReturnValue(cast<ReturnType<typeof useRate>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useResetDice).mockReturnValue(cast<ReturnType<typeof useResetDice>>({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }))
 })
 
 it('renders the bounded bootstrap pool without Collections state', () => {
@@ -426,4 +432,131 @@ it('shows a retry action when bootstrap loading fails', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Retry' }))
   expect(refetch).toHaveBeenCalled()
+})
+
+/**
+ * Wire Roll's reset action to the real mutation, transport and query cache.
+ * A browser-only snooze cookie and a non-d6 die are present; bootstrap still
+ * reports zero snoozes. `emptyPool` seeds the scoped pool as fully hidden by
+ * that cookie so the zero-choice CTA is the visible recovery path.
+ */
+async function setupRealResetHarness(emptyPool: boolean) {
+  let currentDie = 20
+  const rollClient = createHttpClientStub()
+  rollClient.post.mockImplementation(async (path: string) => {
+    if (path === '/v2/roll/reset') {
+      currentDie = 6
+      return { die: 6, replayed: false }
+    }
+    return {}
+  })
+  const resetApi = createRollApi(rollClient)
+  globalThis.sessionStorage?.removeItem('comicpile:roll:pending-reset')
+  writeRollSnoozes([1])
+
+  const resourcesApi: RollResourcesApi = {
+    dieState: vi.fn(async () => ({
+      die: currentDie,
+      ladder: [2, 4, 6, 8, 10, 12, 20],
+      default_die: 6,
+      last_roll: null,
+    })),
+    eligibleIssueIds: vi.fn(async (_snoozed: readonly number[] = []) => ({
+      die: currentDie,
+      issue_ids: readRollSnoozes().length === 0 ? [101] : [],
+      thread_ids: readRollSnoozes().length === 0 ? [1] : [],
+      pool_reason: 'ready' as const,
+    })),
+    issueCards: vi.fn(async () => ({ items: [] })),
+  }
+  const realRollHooks = await vi.importActual<typeof import('../hooks/useRoll')>('../hooks/useRoll')
+  const realResources = await vi.importActual<typeof import('../hooks/useRollResources')>(
+    '../hooks/useRollResources',
+  )
+  vi.mocked(useResetDice).mockImplementation(() => realRollHooks.useResetDice(resetApi))
+  mockedUseRollDieState.mockImplementation(() => realResources.useRollDieState(resourcesApi))
+  mockedUseRollEligibleIssueIds.mockImplementation((snoozed?: readonly number[]) =>
+    realResources.useRollEligibleIssueIds(snoozed, resourcesApi),
+  )
+  mockedUseRollIssueCards.mockImplementation((ids: readonly number[]) =>
+    realResources.useRollIssueCards(ids, resourcesApi),
+  )
+
+  const rollMutate = vi.fn()
+  const rateMutate = vi.fn()
+  const bootstrapRefetch = vi.fn().mockResolvedValue(bootstrap)
+  vi.mocked(useRoll).mockReturnValue(cast<ReturnType<typeof useRoll>>({ mutate: rollMutate, isPending: false }))
+  vi.mocked(useRate).mockReturnValue(cast<ReturnType<typeof useRate>>({ mutate: rateMutate, isPending: false }))
+  mockedUseRollBootstrap.mockReturnValue({
+    data: {
+      ...bootstrap,
+      current_die: 20,
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }],
+      snoozed_threads: [],
+      snoozed_count: 0,
+    },
+    refetch: bootstrapRefetch,
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  queryClient.setQueryData(queryKeys.roll.dieState(), {
+    die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null,
+  })
+  if (emptyPool) {
+    queryClient.setQueryData(queryKeys.roll.eligibleIssueIds([1]), {
+      die: 20, issue_ids: [], thread_ids: [], pool_reason: 'ready',
+    })
+  }
+  return { rollClient, resourcesApi, rollMutate, rateMutate, bootstrapRefetch }
+}
+
+function expectRealResetEffects(
+  harness: Awaited<ReturnType<typeof setupRealResetHarness>>,
+): void {
+  expect(harness.rollClient.post).toHaveBeenCalledWith(
+    '/v2/roll/reset',
+    expect.objectContaining({ idempotency_key: expect.stringMatching(/^roll-[0-9a-f]{32}$/) }),
+  )
+  expect(harness.rollClient.post).toHaveBeenCalledTimes(1)
+  expect(readRollSnoozes()).toEqual([])
+  expect(harness.resourcesApi.eligibleIssueIds).toHaveBeenCalled()
+  expect(harness.rollMutate).not.toHaveBeenCalled()
+  expect(harness.rateMutate).not.toHaveBeenCalled()
+  expect(harness.bootstrapRefetch).not.toHaveBeenCalled()
+  expect(threadsApi.setPending).not.toHaveBeenCalled()
+}
+
+it('recovers the real reset flow from browser-only snoozes at zero choice without reading, rating or rewriting history', async () => {
+  const harness = await setupRealResetHarness(true)
+
+  renderRollPage()
+
+  expect(mockedUseRollEligibleIssueIds).toHaveBeenCalledWith([1])
+  expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
+  const resetButton = screen.getByTestId('reset-dice-zero-choice')
+  expect(resetButton).not.toBeDisabled()
+
+  fireEvent.click(resetButton)
+
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  expect(screen.getByRole('button', { name: /current die d6/i })).toBeInTheDocument()
+  expectRealResetEffects(harness)
+})
+
+it('recovers the idle Roll reset action from the die modal with the real reset mutation', async () => {
+  const harness = await setupRealResetHarness(false)
+
+  renderRollPage()
+  expect(screen.getByText('Saga')).toBeInTheDocument()
+  expect(screen.queryByText('Every series is snoozed')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /^current die d20$/i }))
+  const dieModal = screen.getByRole('dialog', { name: 'Select Die' })
+  const resetButton = within(dieModal).getByTestId('reset-dice')
+  expect(resetButton).not.toBeDisabled()
+  fireEvent.click(resetButton)
+
+  await waitFor(() => expect(screen.getByRole('button', { name: /current die d6/i })).toBeInTheDocument())
+  expectRealResetEffects(harness)
 })
