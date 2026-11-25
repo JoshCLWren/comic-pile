@@ -17,12 +17,23 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 RUNTIME_STEP = "rotisserie-factory-runtime"
+REUSABLE = re.compile(r"^JoshCLWren/rotisserie/\.github/workflows/(?P<name>[a-z0-9-]+\.yml)@main$")
 
 
 def _installed_workflows() -> list[Path]:
     return sorted(
         path for path in WORKFLOWS.glob("*.yml") if RUNTIME_STEP in path.read_text(encoding="utf-8")
     )
+
+
+def _callers() -> dict[Path, dict]:
+    found = {}
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        jobs = workflow.get("jobs") or {}
+        if any(REUSABLE.match(str(job.get("uses", ""))) for job in jobs.values()):
+            found[path] = workflow
+    return found
 
 
 def test_deploy_production_dedupes_factory_dispatches_and_serializes_runs() -> None:
@@ -74,7 +85,6 @@ def test_recovery_workflow_uses_trusted_main_and_heartbeat() -> None:
 def test_main_health_reporting_does_not_create_tickets() -> None:
     """Main health stays an observable CI signal, never a backlog producer."""
     gate = (WORKFLOWS / "main-health-gate.yml").read_text(encoding="utf-8")
-    dispatcher = (WORKFLOWS / "fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
     assert "workflow_run:" in gate
     assert "types: [completed]" in gate
     assert "github.event.workflow_run.conclusion" in gate
@@ -83,14 +93,6 @@ def test_main_health_reporting_does_not_create_tickets() -> None:
     assert "gh issue close" not in gate
     assert "Open or refresh main-breakage" not in gate
     assert "Auto-close main-breakage" not in gate
-    assert "gh issue create" not in dispatcher
-    assert "main-breakage" not in dispatcher
-    # A red main pauses merges in the serialized merge drain (Rotisserie #171),
-    # not in the dispatcher: only the main-repair lane merges onto red main.
-    drain = (WORKFLOWS / "factory-ready-merge-drain.yml").read_text(encoding="utf-8")
-    assert "Check main health before merging" in drain
-    assert '"${MAIN_STATE:-}" == red' in drain
-    assert '*",main-breakage,"*' in drain
 
 
 def test_pr_ci_cancels_superseded_heads_without_canceling_main() -> None:
@@ -132,6 +134,21 @@ def test_installed_factory_workflows_track_rotisserie_main() -> None:
                     assert options["persist-credentials"] is False, path.name
                     assert "ssh-key" not in options, path.name
     assert refs == {"main"}
+
+
+def test_factory_workflows_are_thin_callers_of_rotisserie_main() -> None:
+    """Factory logic lives in Rotisserie; each caller here names its secrets explicitly."""
+    callers = _callers()
+    assert len(callers) > 30
+    for path, workflow in callers.items():
+        assert list(workflow["jobs"]) == ["rotisserie"], path.name
+        job = workflow["jobs"]["rotisserie"]
+        assert set(job) <= {"cache-mode", "uses", "with", "secrets"}, path.name
+        called = REUSABLE.match(job["uses"])
+        assert called is not None and called["name"] == path.name, path.name
+        assert job.get("secrets") != "inherit", path.name
+        assert "permissions" in workflow, path.name
+    assert not (WORKFLOWS / "free-model-factory-run.yml").exists()
 
 
 def test_factory_code_is_not_tracked_here() -> None:
