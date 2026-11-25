@@ -9,7 +9,7 @@ interface ComicVineIssueIntelligenceState {
   isLoading: boolean
   isError: boolean
   error: Error | null
-  refetch: () => Promise<void>
+  refetch: () => Promise<ComicVineIssueIntelligence | null>
 }
 
 export function useComicVineIssueIntelligence(
