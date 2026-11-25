@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
@@ -63,7 +63,7 @@ vi.mock('../hooks/useQueue', () => ({
 }))
 vi.mock('../hooks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks')>()
-  return { ...actual, useRate: vi.fn() }
+  return { ...actual, useRate: vi.fn(), useResetDice: vi.fn() }
 })
 vi.mock('../services/api-reading-orders', () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
@@ -161,6 +161,7 @@ beforeEach(() => {
   vi.mocked(useShuffleQueue).mockReturnValue(cast<ReturnType<typeof useShuffleQueue>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useRate; cast is safe because only mutate/isPending are read.
   vi.mocked(useRate).mockReturnValue(cast<ReturnType<typeof useRate>>({ mutate: vi.fn(), isPending: false }))
+  vi.mocked(useResetDice).mockReturnValue(cast<ReturnType<typeof useResetDice>>({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }))
 })
 
 it('renders the bounded bootstrap pool without Collections state', () => {
@@ -458,7 +459,8 @@ it('recovers from browser snoozes and a non-d6 die through the visible zero-choi
 
   expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
   const resetButton = screen.getByTestId('reset-dice-zero-choice')
-  await user.click(resetButton)
+  expect(resetButton).not.toBeDisabled()
+  fireEvent.click(resetButton)
 
   expect(resetMutate).toHaveBeenCalledTimes(1)
   expect(readRollSnoozes()).toEqual([])
