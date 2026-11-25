@@ -27,6 +27,8 @@ The auth module must not import or call reading-history persistence. Revoke cred
 
 The v1 session list/get operations and their unversioned aliases are retired. `GET /api/v2/roll/bootstrap` reads an already initialized session and never creates one.
 
+**Compatibility discrepancy:** [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405) establishes sessionless Roll with browser-owned pending state, while the current native service still creates six-hour server sessions and stores pending selection in PostgreSQL. The qualified `ReadingSession` name remains necessary for durable history, but the server-session Roll lifecycle is not the intended final product boundary.
+
 Storage/API edges may retain familiar wire names such as `sessions`, `session_id`, `SessionListItem`, or `SessionDetail`. Ambiguity is resolved in code, not by renaming an established wire contract.
 
 ## Historical incident and rationale

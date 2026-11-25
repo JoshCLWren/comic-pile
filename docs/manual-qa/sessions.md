@@ -6,6 +6,8 @@
 
 **Amended 2026-11-18:** Roll is sessionless per [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405) (no six-hour timer, session row lifecycle or automatic session resets). The detail page remains as an event-derived view of recorded activity; `GET /api/v1/sessions/current/` and Restore Session Start were retired by owner directive on #4343 / [#5442](https://github.com/JoshCLWren/comic-pile/pull/5442).
 
+**Recorded implementation discrepancy:** current native code still creates six-hour server sessions and stores pending selection in PostgreSQL. That behavior does not satisfy the sessionless/browser-owned contract above and remains owning product work; do not rewrite the expected scenarios to match it.
+
 ## MQA-SESSION-001: Session details match recorded events
 
 **Test:** Roll, rate, and snooze in one QA session, then open details.

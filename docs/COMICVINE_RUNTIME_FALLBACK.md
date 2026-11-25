@@ -1,6 +1,6 @@
 # ComicVine runtime metadata refresh
 
-Comic Vine issue intelligence is stored reader/catalog data. A normal issue read does not perform synchronous provider I/O. The native service returns stored metadata and, when the issue is eligible, durably enqueues a refresh request.
+Comic Vine issue intelligence is stored reader/catalog data. A normal issue read does not perform synchronous provider I/O. The native service returns stored metadata and, when a confirmed mapping needs refresh, durably enqueues a refresh request. Unmapped issues do not enqueue provider work.
 
 ## Current flow
 

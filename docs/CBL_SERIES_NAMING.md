@@ -6,4 +6,4 @@ A newly created confirmed series uses `CBL: <source series> (<volume year>)` whe
 
 Materialization holds the reader lock throughout title selection and creation. Collision checks are owner-scoped, so another reader's titles never affect a new series name. Existing mapped series and their reader-owned titles are preserved; this change does not rename historical imports or repair production data.
 
-Native adoption tests under `native/roll-service/tests/` cover distinct years, same-year runs, unknown years, exact-identity retries, reader renames, long names, ownership isolation, and the surrounding transaction.
+The naming and transaction behavior is implemented in `native/roll-service/src/issue_identity.rs`. Dedicated native tests for distinct years, same-year runs, unknown years, renames, long names, and ownership isolation are not claimed here; add focused coverage with any future naming change.

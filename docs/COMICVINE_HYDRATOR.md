@@ -1,8 +1,10 @@
 # ComicVine hydrator
 
 > **Status: historical/retired operator CLI.** The Python hydrator/backfill scripts
-> and local SQLite workflow were deleted with the Python application. Current
-> provider work uses the native durable repair queue and maintenance worker; see
+> and local SQLite workflow were deleted with the Python application. There is no
+> replacement operator CLI: search/import/identity/metadata operations run through
+> the native `/api/v2/comicvine` app endpoints, while eligible issue-metadata
+> refreshes use the durable repair queue and maintenance worker. See
 > [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md#comicvine-creator-repair-cadence-4623)
 > and [API.md](API.md). Do not run the commands below.
 <!-- docs-path-check: historical -->

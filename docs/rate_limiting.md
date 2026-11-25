@@ -57,8 +57,8 @@ ComicVine repair defines its own provider backoff
 
 - Rust auth tests cover limiter behavior and the 429 path:
   `cargo test -p comicpile-roll-service auth`.
-- Browser suites run with test-only configuration that disables limits so
-  fixtures can register users at test speed (`.env.test`,
-  `ENABLE_RATE_LIMITING_IN_TESTS=false`).
+- Browser suites run with `TEST_ENVIRONMENT=true` so fixtures can register users
+  at test speed. `ENABLE_RATE_LIMITING_IN_TESTS=true` opts back in when a test
+  specifically exercises throttling.
 - Do not weaken or bypass a limit to make a test pass; fix the test setup
   instead.
