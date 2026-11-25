@@ -608,6 +608,8 @@ mod tests {
                 "id": 7,
                 "thread_id": 3,
                 "issue_number": "12",
+                "overall_issue_number": null,
+                "identity_version": 1,
                 "position": 2,
                 "status": "unread",
                 "read_at": null,
