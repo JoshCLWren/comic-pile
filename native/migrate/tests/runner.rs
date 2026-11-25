@@ -127,6 +127,10 @@ async fn alembic_managed_at_head(client: &Client) {
         .batch_execute(include_str!("../migrations/V2__queue_exclusion_groups.sql"))
         .await
         .unwrap();
+    client
+        .batch_execute(include_str!("../migrations/V3__release_subscriptions_target_reading_lists.sql"))
+        .await
+        .unwrap();
     client.batch_execute("RESET ALL").await.unwrap();
     client
         .execute(
@@ -137,12 +141,47 @@ async fn alembic_managed_at_head(client: &Client) {
         .unwrap();
 }
 
+/// V4 is additive: existing authored numbers, positions and history remain in
+/// place while every issue receives a positive optimistic identity version.
+async fn assert_issue_alias_schema(client: &Client) {
+    let columns = client
+        .query(
+            "SELECT column_name, data_type, is_nullable, column_default \
+             FROM information_schema.columns \
+             WHERE table_schema = 'public' AND table_name = 'issues' \
+               AND column_name IN ('overall_issue_number', 'identity_version') \
+             ORDER BY column_name",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(columns.len(), 2);
+    assert_eq!(columns[0].get::<_, String>(0), "identity_version");
+    assert_eq!(columns[0].get::<_, String>(1), "bigint");
+    assert_eq!(columns[0].get::<_, String>(2), "NO");
+    assert_eq!(columns[0].get::<_, String>(3), "1");
+    assert_eq!(columns[1].get::<_, String>(0), "overall_issue_number");
+    assert_eq!(columns[1].get::<_, String>(1), "character varying");
+    assert_eq!(columns[1].get::<_, String>(2), "YES");
+    assert!(client
+        .query_one(
+            "SELECT EXISTS (SELECT 1 FROM pg_constraint \
+             WHERE conrelid = 'public.issues'::regclass \
+               AND conname = 'ck_issues_identity_version_positive')",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get::<_, bool>(0));
+}
+
 #[tokio::test]
 async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     let report = run(&mut client).await.unwrap();
     assert_eq!((report.applied, report.adopted), (vec![1, 2, 3, 4], vec![]));
+    assert_issue_alias_schema(&client).await;
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
@@ -218,6 +257,7 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
 
     let report = run(&mut client).await.unwrap();
     assert_eq!((report.applied, report.adopted), (vec![3, 4], vec![1, 2]));
+    assert_issue_alias_schema(&client).await;
 
     let recorded: bool = client
         .query_one(
@@ -326,6 +366,7 @@ async fn alembic_database_at_baseline_head_adopts_baseline_and_runs_pending() {
 
     let report = run(&mut client).await.unwrap();
     assert_eq!((report.applied, report.adopted), (vec![2, 3, 4], vec![1]));
+    assert_issue_alias_schema(&client).await;
 
     let queue_groups: bool = client
         .query_one(
@@ -483,6 +524,7 @@ async fn alembic_baseline_with_stale_deferred_checks_is_repaired_before_stamp() 
 
     let report = run(&mut client).await.unwrap();
     assert_eq!((report.applied, report.adopted), (vec![2, 3, 4], vec![1]));
+    assert_issue_alias_schema(&client).await;
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
