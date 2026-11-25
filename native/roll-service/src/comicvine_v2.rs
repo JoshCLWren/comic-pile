@@ -989,6 +989,7 @@ async fn identity_state(
     let mut confirmed = Vec::new();
     let mut candidates = Vec::new();
     let mut has_unresolved = false;
+    let mut provider_issue_number = None;
     for row in &rows {
         let mapping = IssueIdentityMapping {
             external_identity_id: row.get(0),
