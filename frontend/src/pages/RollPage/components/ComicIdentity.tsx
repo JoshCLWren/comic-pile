@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties, useMemo } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, useMemo } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { canonicalCreatorKey, useCreatorSummaries } from '../../../hooks/useCreatorSummaries'
-import type { ComicVineRelatedIssue } from '../../../services/api-comicvine'
+import { comicVineApi, type ComicVineRelatedIssue } from '../../../services/api-comicvine'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
@@ -67,6 +67,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const [showAllRelatedIssues, setShowAllRelatedIssues] = useState<Record<number, boolean>>({})
   const [summaryExpanded, setSummaryExpanded] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isRetryingRefresh, setIsRetryingRefresh] = useState(false)
   const creatorsDetailsRef = useRef<HTMLDetailsElement>(null)
   const storyArcsDetailsRef = useRef<HTMLDetailsElement>(null)
   const { isDesktop } = useResponsive()
@@ -132,6 +133,19 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       clearTimeout(timeoutId)
     }
   }, [issueId, metadata, refetch])
+
+  const handleRetryRefresh = useCallback(async () => {
+    if (!issueId || isRetryingRefresh) return
+    setIsRetryingRefresh(true)
+    try {
+      await comicVineApi.refreshMetadata(issueId)
+    } catch {
+      // Refetch below will surface the current truthful backend state.
+    } finally {
+      setIsRetryingRefresh(false)
+      await refetch()
+    }
+  }, [issueId, isRetryingRefresh, refetch])
 
   const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK
   const coverWidthCapVh = COVER_HEIGHT_CAP_VH * coverAspectRatio
