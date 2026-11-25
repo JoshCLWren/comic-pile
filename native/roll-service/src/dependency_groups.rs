@@ -84,7 +84,7 @@ const THREADS_DETAIL_SQL: &str = "SELECT t.id, t.title, t.format, t.issues_remai
      (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id) \
      AS next_unread_issue_number, t.manual_creator_credits::text AS manual_creator_credits \
      FROM threads t WHERE t.id = ANY($1::int[])";
-const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, \
+const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.overall_issue_number, i.identity_version, i.position, i.status, \
      to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS read_at, \
      to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at \
      FROM issues i WHERE i.id = ANY($1::int[])";
