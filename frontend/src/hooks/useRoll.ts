@@ -45,6 +45,12 @@ export function useDismissPending(api?: RollApi) {
   const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
     mutationFn: () => rollApiInstance.dismissPending(),
+    onSuccess: async () => {
+      // Dismissal restores the pending thread and rewinds the next-offer die.
+      // Refresh the scoped pool as well as bootstrap so its stale projection
+      // cannot keep the cancelled offer out of the visible die faces (#5685).
+      await invalidateAfterRollDieModeUpdate(queryClient)
+    },
   })
 
   return {
