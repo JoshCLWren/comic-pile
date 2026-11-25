@@ -1,12 +1,4 @@
 # Python endpoint references for native ports
-
-`roll-bootstrap-v1.openapi.json` is the transitive operation snapshot from
-`frontend/src/generated/openapi.json` at production commit `cdaa74f`, for
-GET `/api/v1/roll/bootstrap` (#4350). It includes nested models, security
-schemes and query defaults. Arrays retain their original ordering. The Python handler and its PostgreSQL-backed port-oracle test were both
-removed by #4397, so this file is a frozen comparison baseline for the native
-port, not a live oracle.
-
 `issue-v2.openapi.json` is the generated native contract for the new product
 behaviour in #4443: `PATCH /api/v2/issues/{issue_id}` and the bounded
 `POST /api/v2/issues/cards` projection. Regenerate it with:
@@ -122,40 +114,9 @@ handlers stay mounted until authenticated production proof permits their
 removal; the schemas here match the Python `TasteSignal*` and
 `TasteVerdictRequest` contracts field for field.
 
-To compare an independently generated Rust OpenAPI operation:
-
-```sh
-python scripts/rust_endpoint_oracle.py check \
-  --schema /tmp/rust-generated-openapi.json \
-  --contract native/contracts/roll-bootstrap-v1.openapi.json
-```
-
-The comparison includes the full referenced component closure, not only the
-top-level response. It must receive actual native-generated output. The frozen
-Python file alone does not establish native parity, runtime behavior, or a
-production cutover.
-
-The retired `tests/test_roll_bootstrap_port_oracle.py` <!-- docs-path-check: ignore --> executed the original
-Python v1 handler, validated its response against the frozen schema and recorded
-the emitted SQL, bind shapes and connection transaction events as
-`roll-bootstrap-v1.sql.json` in the CI `rust-sql-oracle-*` artifact. The oracle was removed with the Python handler (#4397); its transcript is
-historical evidence only.
-
-The captured transcript covered one representative existing-session path, not a
-complete SQL inventory: new-session creation, pending recovery, and timezone
-updates still needed targeted captures. Do not substitute those queries for the
-unrecorded branches or treat the file as proof they are equivalent.
-
-Run the focused reference check:
-
-```sh
-pytest tests/test_rust_endpoint_oracle.py --no-cov
-```
-
 This infrastructure does not change ingress. The Python bootstrap handlers and
 read model are removed (#4397, #4350); deleting the native Rust v2 handler
 remains #4299's scope.
-
 ## Native operations retaining their original paths
 
 `same-path-runtime.openapi.json` is generated from Rust utoipa declarations and
