@@ -7016,6 +7016,10 @@
             "format": "int32",
             "type": "integer"
           },
+          "is_synthetic": {
+            "description": "Per-event provenance: the event predates its issue's creation and is an\nartificial suppression timestamp, never genuine reading evidence.",
+            "type": "boolean"
+          },
           "issue_number": {
             "type": [
               "string",
@@ -7028,7 +7032,8 @@
         },
         "required": [
           "event_id",
-          "timestamp"
+          "timestamp",
+          "is_synthetic"
         ],
         "type": "object"
       },
