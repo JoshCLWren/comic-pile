@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
@@ -91,21 +91,28 @@ test('ignored directories are excluded from Markdown discovery', () => {
   );
 });
 
-test('Git worktrees exclude untracked and locally excluded overlay Markdown', () => {
+test('Git worktrees validate tracked Markdown without overlay or archive drift', () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'doc-code-paths-git-'));
   try {
     mkdirSync(path.join(root, 'docs'), {recursive: true});
-    writeFileSync(path.join(root, 'README.md'), '# Tracked\n');
+    mkdirSync(path.join(root, 'archive'), {recursive: true});
+    writeFileSync(path.join(root, 'README.md'), 'See `app/gone.py`.\n');
     writeFileSync(path.join(root, 'docs', 'tracked.md'), '# Tracked\n');
-    writeFileSync(path.join(root, 'docs', 'overlay.md'), 'Old `app/gone.py`.\n');
+    writeFileSync(path.join(root, 'docs', 'overlay.md'), 'Old `app/also_gone.py`.\n');
+    writeFileSync(path.join(root, 'archive', 'history.md'), 'Old `app/history.py`.\n');
+    const missing = path.join(root, 'docs', 'missing.md');
+    writeFileSync(missing, '# Missing\n');
     execFileSync('git', ['init', '-q', root]);
-    execFileSync('git', ['-C', root, 'add', 'README.md', 'docs/tracked.md']);
+    execFileSync('git', ['-C', root, 'add', 'README.md', 'docs/tracked.md', 'archive/history.md', 'docs/missing.md']);
+    unlinkSync(missing);
 
     assert.deepEqual(iterMarkdownFiles(root), [
       path.join(root, 'README.md'),
       path.join(root, 'docs', 'tracked.md'),
     ]);
-    assert.deepEqual(findStalePaths(root, iterMarkdownFiles(root)), []);
+    assert.deepEqual(findStalePaths(root, iterMarkdownFiles(root)), [
+      'README.md:1: stale code path: app/gone.py',
+    ]);
   } finally {
     rmSync(root, {recursive: true, force: true});
   }
