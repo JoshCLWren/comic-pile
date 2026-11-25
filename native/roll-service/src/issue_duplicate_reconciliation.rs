@@ -526,7 +526,7 @@ fn compute_preview_token(
         hasher.update((d.list_memberships.len() as i32).to_le_bytes());
     }
     let digest = hasher.finalize();
-    format!("{:x}", digest)
+    digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 fn build_preview_actions(
@@ -828,11 +828,11 @@ pub async fn apply_reconciliation(
     let (actions, mut warnings, can_apply) = build_preview_actions(&canonical, &duplicates, &req.decisions);
     warnings.extend(pre_warnings);
     if !can_apply {
-        return Err(conflict("Preview has unresolved decisions; resolve them before applying".to_string()));
+        return Err(conflict("Preview has unresolved decisions; resolve them before applying"));
     }
     let expected_token = compute_preview_token(user.id(), req.canonical_issue_id, &req.duplicate_issue_ids, &canonical, &duplicates);
     if expected_token != req.preview_token {
-        return Err(conflict("Stale preview token; refresh preview before applying".to_string()));
+        return Err(conflict("Stale preview token; refresh preview before applying"));
     }
 
     // Build undo snapshot
