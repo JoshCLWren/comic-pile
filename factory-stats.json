@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T08:20:27+00:00",
+  "generated_at": "2026-11-25T08:37:27.243892+00:00",
   "models": [
     {
       "health": {
@@ -2739,13 +2739,13 @@
         "7d": {
           "completed": 3,
           "delivered": 2,
-          "failed": 42,
+          "failed": 41,
           "failures": {
             "agent_timeout": 9,
             "control_plane_failure": 5,
             "provider_quota": 1,
             "unknown_failure": 1,
-            "work_failure": 26
+            "work_failure": 25
           },
           "idle": 4,
           "kinds": {
@@ -2771,7 +2771,7 @@
               "runs": 2
             }
           },
-          "runs": 49
+          "runs": 48
         }
       }
     },
@@ -2814,12 +2814,12 @@
         "24h": {
           "completed": 6,
           "delivered": 6,
-          "failed": 25,
+          "failed": 19,
           "failures": {
-            "agent_timeout": 5,
-            "control_plane_failure": 7,
+            "agent_timeout": 3,
+            "control_plane_failure": 4,
             "provider_throttle": 6,
-            "work_failure": 7
+            "work_failure": 6
           },
           "idle": 1,
           "kinds": {
@@ -2846,15 +2846,15 @@
               "runs": 5
             },
             "review": {
-              "completed": 1,
-              "delivered": 1,
+              "completed": 2,
+              "delivered": 2,
               "failed": 5,
               "failures": {
                 "provider_throttle": 3,
                 "work_failure": 2
               },
               "idle": 0,
-              "runs": 6
+              "runs": 7
             },
             "review-findings": {
               "completed": 0,
@@ -2867,17 +2867,17 @@
               "runs": 1
             }
           },
-          "runs": 32
+          "runs": 26
         },
         "7d": {
-          "completed": 42,
-          "delivered": 41,
-          "failed": 147,
+          "completed": 43,
+          "delivered": 42,
+          "failed": 146,
           "failures": {
             "agent_timeout": 59,
             "control_plane_failure": 32,
             "provider_quota": 6,
-            "provider_throttle": 8,
+            "provider_throttle": 7,
             "unknown_failure": 4,
             "work_failure": 38
           },
@@ -2906,15 +2906,15 @@
               "runs": 5
             },
             "review": {
-              "completed": 1,
-              "delivered": 1,
+              "completed": 2,
+              "delivered": 2,
               "failed": 5,
               "failures": {
                 "provider_throttle": 3,
                 "work_failure": 2
               },
               "idle": 0,
-              "runs": 6
+              "runs": 7
             },
             "review-findings": {
               "completed": 0,
@@ -3120,15 +3120,15 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 16,
+          "failed": 14,
           "failures": {
             "control_plane_failure": 2,
             "provider_failure": 2,
-            "provider_throttle": 3,
-            "work_failure": 9
+            "provider_throttle": 2,
+            "work_failure": 8
           },
           "idle": 1,
-          "runs": 17
+          "runs": 15
         }
       }
     },
@@ -3144,12 +3144,10 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 1,
-          "failures": {
-            "control_plane_failure": 1
-          },
-          "idle": 1,
-          "runs": 2
+          "failed": 0,
+          "failures": {},
+          "idle": 0,
+          "runs": 0
         },
         "7d": {
           "completed": 0,
@@ -3261,9 +3259,9 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 21,
+          "failed": 20,
           "failures": {
-            "control_plane_failure": 3,
+            "control_plane_failure": 2,
             "work_failure": 18
           },
           "idle": 11,
@@ -3307,7 +3305,7 @@
               "runs": 1
             }
           },
-          "runs": 32
+          "runs": 31
         }
       }
     },
@@ -3469,12 +3467,12 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 23,
+          "failed": 22,
           "failures": {
-            "control_plane_failure": 23
+            "control_plane_failure": 22
           },
           "idle": 3,
-          "runs": 26
+          "runs": 25
         },
         "7d": {
           "completed": 0,
@@ -4246,8 +4244,8 @@
           "delivered": 0,
           "failed": 0,
           "failures": {},
-          "idle": 19,
-          "runs": 19
+          "idle": 18,
+          "runs": 18
         },
         "7d": {
           "completed": 0,
@@ -5206,12 +5204,12 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 12,
-          "delivered": 12,
-          "failed": 14,
+          "completed": 11,
+          "delivered": 11,
+          "failed": 11,
           "failures": {
             "provider_throttle": 8,
-            "work_failure": 6
+            "work_failure": 3
           },
           "idle": 0,
           "kinds": {
@@ -5245,7 +5243,7 @@
               "runs": 4
             }
           },
-          "runs": 26
+          "runs": 22
         },
         "7d": {
           "completed": 14,
@@ -5336,15 +5334,15 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 9,
-          "delivered": 9,
-          "failed": 42,
+          "completed": 8,
+          "delivered": 8,
+          "failed": 41,
           "failures": {
             "control_plane_failure": 13,
             "provider_failure": 2,
-            "work_failure": 27
+            "work_failure": 26
           },
-          "idle": 33,
+          "idle": 30,
           "kinds": {
             "implement": {
               "completed": 1,
@@ -5357,16 +5355,16 @@
             "merge-conflict": {
               "completed": 0,
               "delivered": 0,
-              "failed": 5,
+              "failed": 6,
               "failures": {
-                "work_failure": 5
+                "work_failure": 6
               },
               "idle": 2,
-              "runs": 7
+              "runs": 8
             },
             "review": {
-              "completed": 0,
-              "delivered": 0,
+              "completed": 1,
+              "delivered": 1,
               "failed": 10,
               "failures": {
                 "control_plane_failure": 1,
@@ -5374,7 +5372,7 @@
                 "work_failure": 7
               },
               "idle": 2,
-              "runs": 12
+              "runs": 13
             },
             "review-findings": {
               "completed": 3,
@@ -5387,18 +5385,18 @@
               "runs": 6
             }
           },
-          "runs": 84
+          "runs": 79
         },
         "7d": {
-          "completed": 28,
-          "delivered": 28,
-          "failed": 128,
+          "completed": 29,
+          "delivered": 29,
+          "failed": 129,
           "failures": {
             "control_plane_failure": 28,
             "provider_failure": 5,
             "provider_quota": 1,
             "unknown_failure": 1,
-            "work_failure": 93
+            "work_failure": 94
           },
           "idle": 62,
           "kinds": {
@@ -5413,16 +5411,16 @@
             "merge-conflict": {
               "completed": 0,
               "delivered": 0,
-              "failed": 5,
+              "failed": 6,
               "failures": {
-                "work_failure": 5
+                "work_failure": 6
               },
               "idle": 2,
-              "runs": 7
+              "runs": 8
             },
             "review": {
-              "completed": 0,
-              "delivered": 0,
+              "completed": 1,
+              "delivered": 1,
               "failed": 10,
               "failures": {
                 "control_plane_failure": 1,
@@ -5430,7 +5428,7 @@
                 "work_failure": 7
               },
               "idle": 2,
-              "runs": 12
+              "runs": 13
             },
             "review-findings": {
               "completed": 3,
@@ -5443,7 +5441,7 @@
               "runs": 6
             }
           },
-          "runs": 218
+          "runs": 220
         }
       }
     },
@@ -21978,12 +21976,12 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 7,
+          "failed": 5,
           "failures": {
-            "control_plane_failure": 7
+            "control_plane_failure": 5
           },
           "idle": 0,
-          "runs": 7
+          "runs": 5
         },
         "7d": {
           "completed": 0,
@@ -23079,16 +23077,16 @@
         "24h": {
           "completed": 7,
           "delivered": 7,
-          "failed": 69,
-          "idle": 15,
-          "runs": 91
+          "failed": 61,
+          "idle": 14,
+          "runs": 82
         },
         "7d": {
-          "completed": 57,
-          "delivered": 55,
-          "failed": 584,
+          "completed": 58,
+          "delivered": 56,
+          "failed": 579,
           "idle": 273,
-          "runs": 914
+          "runs": 910
         }
       }
     },
@@ -23099,8 +23097,8 @@
           "completed": 0,
           "delivered": 0,
           "failed": 0,
-          "idle": 19,
-          "runs": 19
+          "idle": 18,
+          "runs": 18
         },
         "7d": {
           "completed": 0,
@@ -23115,18 +23113,18 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 21,
-          "delivered": 21,
-          "failed": 67,
-          "idle": 33,
-          "runs": 121
+          "completed": 19,
+          "delivered": 19,
+          "failed": 63,
+          "idle": 30,
+          "runs": 112
         },
         "7d": {
-          "completed": 63,
-          "delivered": 57,
-          "failed": 378,
+          "completed": 64,
+          "delivered": 58,
+          "failed": 379,
           "idle": 87,
-          "runs": 528
+          "runs": 530
         }
       }
     },
@@ -23212,9 +23210,9 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 7,
+          "failed": 5,
           "idle": 0,
-          "runs": 7
+          "runs": 5
         },
         "7d": {
           "completed": 0,
@@ -23250,9 +23248,9 @@
     "24h": "24 hours",
     "7d": "7 days"
   },
-  "counts_generated_at": "2026-11-25T07:31:48.694098+00:00",
+  "counts_generated_at": "2026-11-25T08:37:27.243892+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-25T08:20:27Z",
+    "generated_at": "2026-11-25T08:37:27Z",
     "sources": {
       "kilo-auto": [
         "kilo-auto/free"
@@ -23315,10 +23313,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-25T08:20:27.974615+00:00",
-    "days_elapsed": 24.348,
+    "checked_at": "2026-11-25T08:37:27.686125+00:00",
+    "days_elapsed": 24.359,
     "days_in_month": 30.0,
-    "days_left": 5.65,
+    "days_left": 5.64,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23334,21 +23332,21 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 6798265,
-        "organization": 6798265,
+        "database": 6878707,
+        "organization": 6878707,
         "owner_target": 50000000,
-        "projected_database": 8376374,
-        "projected_organization": 8376374,
-        "projected_share": 0.0168,
-        "share_used": 0.0136
+        "projected_database": 8471662,
+        "projected_organization": 8471662,
+        "projected_share": 0.0169,
+        "share_used": 0.0138
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 114405,
-        "organization": 114405,
+        "database": 114429,
+        "organization": 114429,
         "owner_target": 1000000,
-        "projected_database": 140962,
-        "projected_organization": 140962,
+        "projected_database": 140928,
+        "projected_organization": 140928,
         "projected_share": 0.0141,
         "share_used": 0.0114
       },
