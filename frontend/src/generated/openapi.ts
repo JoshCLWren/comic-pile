@@ -15115,12 +15115,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Every issue marked unread atomically */
-            204: {
+            /** @description Every issue marked unread atomically; returns a reviewable undo operation */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationResponse"];
+                };
             };
             /** @description An issue is already marked as unread */
             400: {
@@ -15172,12 +15174,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Every issue marked read atomically */
-            204: {
+            /** @description Every issue marked read atomically; returns a reviewable undo operation */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationResponse"];
+                };
             };
             /** @description An issue is already marked as read */
             400: {
