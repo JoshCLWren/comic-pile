@@ -66,7 +66,7 @@ let threadsValue: typeof threadData | undefined = threadData
 
 await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: () => ({
-    setRestoreAction: vi.fn((restore: () => void) => restore()),
+    setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
   }),
 }))

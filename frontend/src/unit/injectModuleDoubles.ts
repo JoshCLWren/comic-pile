@@ -1,11 +1,16 @@
 import { vi } from 'vitest'
 import { cast } from '../utils/cast'
-import { isFunction } from '../utils/runtimeChecks'
+import { isFunction, isPlainObject } from '../utils/runtimeChecks'
 
 type InjectableFunction = (...args: never[]) => void
 type InjectableFunctionTable = Record<string, InjectableFunction>
 type ImportOriginal = <OriginalModule = object>() => Promise<OriginalModule>
-type ModuleDoubleFactory = (importOriginal: ImportOriginal) => object | Promise<object>
+type ModuleDoubleMap<ModuleExports extends object> = Partial<
+  Record<Extract<keyof ModuleExports, string>, unknown>
+>
+type ModuleDoubleFactory<ModuleExports extends object> = (
+  importOriginal: ImportOriginal,
+) => ModuleDoubleMap<ModuleExports> | Promise<ModuleDoubleMap<ModuleExports>>
 
 /**
  * Installs explicit test doubles on Vitest's configurable ES-module exports.
@@ -17,7 +22,7 @@ type ModuleDoubleFactory = (importOriginal: ImportOriginal) => object | Promise<
  */
 export async function injectModuleDoubles<ModuleExports extends object>(
   moduleExports: ModuleExports,
-  factory: ModuleDoubleFactory,
+  factory: ModuleDoubleFactory<ModuleExports>,
 ): Promise<void> {
   // SAFETY: this is the same generic actual-module boundary exposed by Vitest.
   // Snapshot the exports before installing doubles so wrappers retain the real
@@ -27,7 +32,18 @@ export async function injectModuleDoubles<ModuleExports extends object>(
   const doubles = await factory(importOriginal)
   for (const [exportName, replacement] of Object.entries(doubles)) {
     const descriptor = Object.getOwnPropertyDescriptor(moduleExports, exportName)
-    if (descriptor?.value === replacement) continue
+    if (!descriptor || !descriptor.configurable) {
+      throw new Error(`Cannot inject missing or non-configurable module export "${exportName}"`)
+    }
+    if (descriptor.value === replacement) continue
+
+    if (isPlainObject(descriptor.value) && isPlainObject(replacement)) {
+      for (const memberName of Object.keys(replacement)) {
+        if (!(memberName in descriptor.value)) {
+          throw new Error(`Cannot invent "${exportName}.${memberName}" on a module export`)
+        }
+      }
+    }
 
     if (isFunction(descriptor?.value) && isFunction(replacement)) {
       // SAFETY: both property values were just checked as functions. Vitest's
