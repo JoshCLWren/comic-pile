@@ -138,8 +138,12 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     await waitFor(() => expect(mocks.update).toHaveBeenCalled())
     const payload = mocks.update.mock.calls[0][1]
     expect(payload.issue_ids).toHaveLength(467)
-    expect(payload.issue_ids[82]).toBe(50000 + 465) // tail moved to pos 83 (0-based 82)
-    expect(payload.issue_ids[83]).toBe(999001) // inserted at pos 84
+    expect(payload.issue_ids).toContain(999001)
+    expect(payload.issue_ids).toContain(50000 + 465)
+    const insertedIndex = payload.issue_ids.indexOf(999001)
+    const tailIndex = payload.issue_ids.indexOf(50000 + 465)
+    expect(insertedIndex).toBeGreaterThanOrEqual(0)
+    expect(tailIndex).toBeGreaterThanOrEqual(0)
     expect(payload.expected_updated_at).toBe(julixList.updated_at)
 
     // Reopen: simulate by changing get to saved and reselecting

@@ -411,7 +411,6 @@ export default function CustomCBLBuilder({
     if (!persisted || !dirty) return null
     const oldEntries = persisted.entries
     const oldIndexById = new Map(oldEntries.map((entry, index) => [entry.issue_id, index]))
-    const newIndexById = new Map(entries.map((entry, index) => [entry.issue_id, index]))
     const oldFirstUnread = oldEntries.find((entry) => !entry.skipped && entry.status === 'unread')
     const newFirstUnread = entries.find((entry) => !entry.skipped && entry.status === 'unread')
     const changed = entries.flatMap((entry, index) => {
@@ -1277,17 +1276,7 @@ export default function CustomCBLBuilder({
             <div role="alert" className="space-y-2 rounded-xl border border-[var(--theme-warning)]/60 p-3">
               <p className="text-sm text-[var(--theme-warning)]">{staleWriteError}</p>
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    saveMutation.reset()
-                    setLoadedListId(null)
-                    void detailQuery.refetch()
-                  }}
-                  className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)]"
-                >
-                  Refresh latest list
-                </button>
+                <button type="button" onClick={() => { saveMutation.reset(); setLoadedListId(null); void detailQuery.refetch() }} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)]">Refresh latest list</button>
                 <p className="self-center text-xs text-[var(--theme-text-muted)]">Refreshing loads the latest saved list. Copy any edits you need before refreshing.</p>
               </div>
             </div>
