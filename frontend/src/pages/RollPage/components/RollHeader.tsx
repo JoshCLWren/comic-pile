@@ -239,15 +239,7 @@ export function RollHeader({
                 </div>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onOpenDieModal}
-              disabled={setDiePending}
-              aria-haspopup="dialog"
-              className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-            >
-              Reset Dice
-            </button>
+            {resetDiceButton}
             <ReadingModeControl mode={sessionMode} />
             <Tooltip content="Pick a specific series for the next result.">
               <button
