@@ -969,6 +969,7 @@
           "id",
           "thread_id",
           "issue_number",
+          "identity_version",
           "position",
           "status",
           "created_at"
@@ -981,8 +982,18 @@
             "type": "integer",
             "format": "int32"
           },
+          "identity_version": {
+            "type": "integer",
+            "format": "int64"
+          },
           "issue_number": {
             "type": "string"
+          },
+          "overall_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "position": {
             "type": "integer",
