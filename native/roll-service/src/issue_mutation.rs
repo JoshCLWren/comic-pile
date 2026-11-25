@@ -389,7 +389,9 @@ pub async fn create_issues(
     };
     let append = matches!(request.strategy, IssuePlacementStrategy::SafeDefault)
         && (request.append_to_end
-            || (request.insert_after_issue_id.is_none() && !monotonic && mixed_natural_order.is_none()));
+            || (request.insert_after_issue_id.is_none()
+                && !monotonic
+                && mixed_natural_order.is_none()));
 
     if let Some(anchor) = request.insert_after_issue_id {
         let anchor_position = existing
@@ -776,7 +778,9 @@ fn planned_merge(
 
     let append = matches!(strategy, IssuePlacementStrategy::SafeDefault)
         && (request.append_to_end
-            || (request.insert_after_issue_id.is_none() && !monotonic && mixed_natural_order.is_none()));
+            || (request.insert_after_issue_id.is_none()
+                && !monotonic
+                && mixed_natural_order.is_none()));
 
     if let Some(anchor) = request.insert_after_issue_id {
         let anchor_index = existing
@@ -831,7 +835,10 @@ fn planned_merge(
             let right_value = ordinary(&right.1).unwrap_or(i64::MAX);
             (left_value, &left.1, left.0).cmp(&(right_value, &right.1, right.0))
         });
-        let preserves = existing.iter().zip(merged.iter().filter(|(id, _)| *id != 0)).all(|(e, m)| e.0 == m.0);
+        let preserves = existing
+            .iter()
+            .zip(merged.iter().filter(|(id, _)| *id != 0))
+            .all(|(e, m)| e.0 == m.0);
         return Ok((merged, preserves));
     }
 
@@ -867,9 +874,19 @@ async fn preview_outcome(
     let (merged, preserves) = planned_merge(existing, new_numbers, request, strategy)?;
     let (before, after) = build_after_items(existing, &merged);
 
-    let savepoint = format!("sp_preview_{}", match strategy { IssuePlacementStrategy::SafeDefault => "safe", IssuePlacementStrategy::NumericResort => "resort" });
-    tx.execute(&format!("SAVEPOINT {savepoint}"), &[]).await.map_err(db::query_error)?;
-    tx.execute("SET CONSTRAINTS uq_issue_thread_position DEFERRED", &[]).await.map_err(db::query_error)?;
+    let savepoint = format!(
+        "sp_preview_{}",
+        match strategy {
+            IssuePlacementStrategy::SafeDefault => "safe",
+            IssuePlacementStrategy::NumericResort => "resort",
+        }
+    );
+    tx.execute(&format!("SAVEPOINT {savepoint}"), &[])
+        .await
+        .map_err(db::query_error)?;
+    tx.execute("SET CONSTRAINTS uq_issue_thread_position DEFERRED", &[])
+        .await
+        .map_err(db::query_error)?;
 
     let positions: Vec<(i32, i32)> = merged
         .iter()
@@ -888,10 +905,18 @@ async fn preview_outcome(
     let validated = option_inputs::validated_contained(inputs.clone())?;
     let graph = crate::reading_graph::project(&inputs, &validated, None);
     let can_commit = graph.status == "ok";
-    let conflict_message = if can_commit { None } else { graph.cycles.first().map(|c| c.message.clone()) };
+    let conflict_message = if can_commit {
+        None
+    } else {
+        graph.cycles.first().map(|c| c.message.clone())
+    };
 
-    tx.execute(&format!("ROLLBACK TO SAVEPOINT {savepoint}"), &[]).await.map_err(db::query_error)?;
-    tx.execute(&format!("RELEASE SAVEPOINT {savepoint}"), &[]).await.map_err(db::query_error)?;
+    tx.execute(&format!("ROLLBACK TO SAVEPOINT {savepoint}"), &[])
+        .await
+        .map_err(db::query_error)?;
+    tx.execute(&format!("RELEASE SAVEPOINT {savepoint}"), &[])
+        .await
+        .map_err(db::query_error)?;
 
     Ok(IssueEditPreviewOutcome {
         strategy,
@@ -950,22 +975,45 @@ pub async fn preview_issue_create(
         .filter(|n| !existing_numbers.contains(n))
         .collect();
     if new_numbers.is_empty() {
-        return Err(ApiError::BadRequest("All issues in range already exist".to_string()));
+        return Err(ApiError::BadRequest(
+            "All issues in range already exist".to_string(),
+        ));
     }
 
-    let default_outcome = preview_outcome(&tx, user, thread_id, &existing, &new_numbers, &request, IssuePlacementStrategy::SafeDefault).await?;
+    let default_outcome = preview_outcome(
+        &tx,
+        user,
+        thread_id,
+        &existing,
+        &new_numbers,
+        &request,
+        IssuePlacementStrategy::SafeDefault,
+    )
+    .await?;
 
-    let numeric_resort_outcome = if request.insert_after_issue_id.is_none() && !request.append_to_end {
-        let resort = preview_outcome(&tx, user, thread_id, &existing, &new_numbers, &request, IssuePlacementStrategy::NumericResort).await?;
-        if resort.preserves_existing_relative_order && default_outcome.preserves_existing_relative_order {
-            // Same effective result; no need to show a separate resort option.
-            None
+    let numeric_resort_outcome =
+        if request.insert_after_issue_id.is_none() && !request.append_to_end {
+            let resort = preview_outcome(
+                &tx,
+                user,
+                thread_id,
+                &existing,
+                &new_numbers,
+                &request,
+                IssuePlacementStrategy::NumericResort,
+            )
+            .await?;
+            if resort.preserves_existing_relative_order
+                && default_outcome.preserves_existing_relative_order
+            {
+                // Same effective result; no need to show a separate resort option.
+                None
+            } else {
+                Some(resort)
+            }
         } else {
-            Some(resort)
-        }
-    } else {
-        None
-    };
+            None
+        };
 
     tx.rollback().await.map_err(db::query_error)?;
     Ok(Json(IssueEditPreviewResponse {
