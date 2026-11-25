@@ -19513,44 +19513,12 @@
         "type": "object",
         "required": [
           "issue_number",
-          "series_title",
           "position",
-          "is_new",
-          "read_status",
-          "source_lists",
-          "constraint_count",
-          "is_queue_frontier",
-          "is_roll_frontier",
-          "has_read_history",
-          "has_rating",
-          "is_mapped",
-          "potential_duplicate"
+          "is_new"
         ],
         "properties": {
-          "constraint_count": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Number of owner-authored prerequisites that constrain this issue."
-          },
-          "has_rating": {
-            "type": "boolean"
-          },
-          "has_read_history": {
-            "type": "boolean"
-          },
-          "is_mapped": {
-            "type": "boolean"
-          },
           "is_new": {
             "type": "boolean"
-          },
-          "is_queue_frontier": {
-            "type": "boolean",
-            "description": "This issue is the Queue's current next unread issue for its series."
-          },
-          "is_roll_frontier": {
-            "type": "boolean",
-            "description": "This issue is a frontier surfaced by the read-only Roll frontier audit."
           },
           "issue_id": {
             "type": [
@@ -19565,25 +19533,6 @@
           "position": {
             "type": "integer",
             "format": "int32"
-          },
-          "potential_duplicate": {
-            "type": "boolean",
-            "description": "Another owned issue shares this issue number; assigning the number to a\nnew row may create a physical duplicate rather than an alias."
-          },
-          "read_status": {
-            "type": "string",
-            "description": "Current read state of an existing issue (`unread` for a new row)."
-          },
-          "series_title": {
-            "type": "string",
-            "description": "Human label of the owning series, so two series sharing an issue number\nare never rendered as the same row (#4654)."
-          },
-          "source_lists": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Names of the owner's Reading Lists that contain this exact issue."
           }
         }
       },

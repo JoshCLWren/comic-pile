@@ -692,53 +692,12 @@ pub struct PreviewIssuesRequest {
     pub strategy: IssuePlacementStrategy,
 }
 
-/// Per-issue facts that a preview cannot derive from the projected option
-/// snapshot alone. Loaded in one owner-scoped statement, never per item.
-#[derive(Debug, Clone, Copy, Default)]
-struct IssueFacts {
-    has_read_history: bool,
-    has_rating: bool,
-    is_mapped: bool,
-}
-
-/// Inputs shared by both preview outcomes, grouped so the projection helper
-/// stays within clippy's argument limit without suppressing the lint.
-#[derive(Debug, Clone, Copy)]
-struct PreviewOutcomeInput<'a> {
-    thread_id: i32,
-    thread_title: &'a str,
-    existing: &'a [(i32, String, i32)],
-    new_numbers: &'a [String],
-    request: &'a PreviewIssuesRequest,
-    strategy: IssuePlacementStrategy,
-    facts: &'a BTreeMap<i32, IssueFacts>,
-}
-
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct PreviewIssueItem {
     pub issue_id: Option<i32>,
     pub issue_number: String,
-    /// Human label of the owning series, so two series sharing an issue number
-    /// are never rendered as the same row (#4654).
-    pub series_title: String,
     pub position: i32,
     pub is_new: bool,
-    /// Current read state of an existing issue (`unread` for a new row).
-    pub read_status: String,
-    /// Names of the owner's Reading Lists that contain this exact issue.
-    pub source_lists: Vec<String>,
-    /// Number of owner-authored prerequisites that constrain this issue.
-    pub constraint_count: i32,
-    /// This issue is the Queue's current next unread issue for its series.
-    pub is_queue_frontier: bool,
-    /// This issue is a frontier surfaced by the read-only Roll frontier audit.
-    pub is_roll_frontier: bool,
-    pub has_read_history: bool,
-    pub has_rating: bool,
-    pub is_mapped: bool,
-    /// Another owned issue shares this issue number; assigning the number to a
-    /// new row may create a physical duplicate rather than an alias.
-    pub potential_duplicate: bool,
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -765,107 +724,24 @@ pub struct IssueEditPreviewResponse {
 fn build_after_items(
     existing: &[(i32, String, i32)],
     merged: &[(i32, String)],
-    inputs: &option_inputs::OptionInputs,
-    graph: &crate::reading_graph::ReadingGraphResponse,
-    thread_title: &str,
-    thread_id: i32,
-    facts: &BTreeMap<i32, IssueFacts>,
 ) -> (Vec<PreviewIssueItem>, Vec<PreviewIssueItem>) {
-    let titles: BTreeMap<i32, &str> = inputs
-        .core
-        .threads
-        .iter()
-        .map(|thread| (thread.id, thread.title.as_str()))
-        .collect();
-    let statuses: BTreeMap<i32, &str> = inputs
-        .core
-        .issues
-        .iter()
-        .map(|issue| (issue.id, issue.status.as_str()))
-        .collect();
-    let queue_frontier = inputs
-        .core
-        .stored
-        .iter()
-        .find(|stored| stored.thread_id == thread_id)
-        .and_then(|stored| stored.next_issue_id);
-    let roll_frontiers: BTreeSet<i32> = graph
-        .frontier_audit
-        .as_ref()
-        .map(|audit| {
-            audit
-                .findings
-                .iter()
-                .filter(|finding| finding.thread_id == thread_id)
-                .map(|finding| finding.frontier_issue_id)
-                .collect()
-        })
-        .unwrap_or_default();
-    let mut number_counts: BTreeMap<&str, usize> = BTreeMap::new();
-    for issue in &inputs.core.issues {
-        *number_counts
-            .entry(issue.issue_number.as_str())
-            .or_default() += 1;
-    }
-
-    let project = |id: Option<i32>, number: &str, position: i32, is_new: bool| {
-        let empty = IssueFacts::default();
-        let fact = id.and_then(|id| facts.get(&id)).unwrap_or(&empty);
-        PreviewIssueItem {
-            issue_id: id,
-            issue_number: number.to_string(),
-            series_title: titles
-                .get(&thread_id)
-                .copied()
-                .unwrap_or(thread_title)
-                .to_string(),
-            position,
-            is_new,
-            read_status: id
-                .and_then(|id| statuses.get(&id))
-                .copied()
-                .unwrap_or("unread")
-                .to_string(),
-            source_lists: inputs
-                .lists
-                .iter()
-                .filter(|list| {
-                    id.is_some_and(|id| list.entries.iter().any(|entry| entry.issue_id == id))
-                })
-                .map(|list| list.name.clone())
-                .collect(),
-            constraint_count: id
-                .map(|id| {
-                    inputs
-                        .prerequisites
-                        .iter()
-                        .filter(|edge| edge.source_issue_id == id || edge.target_issue_id == id)
-                        .count() as i32
-                })
-                .unwrap_or(0),
-            is_queue_frontier: id.is_some_and(|id| queue_frontier == Some(id)),
-            is_roll_frontier: id.is_some_and(|id| roll_frontiers.contains(&id)),
-            has_read_history: fact.has_read_history,
-            has_rating: fact.has_rating,
-            is_mapped: fact.is_mapped,
-            potential_duplicate: number_counts.get(number).copied().unwrap_or(0) > 1,
-        }
-    };
-
     let before = existing
         .iter()
-        .map(|(id, number, position)| project(Some(*id), number, *position, false))
+        .map(|(id, number, position)| PreviewIssueItem {
+            issue_id: Some(*id),
+            issue_number: number.clone(),
+            position: *position,
+            is_new: false,
+        })
         .collect();
     let after = merged
         .iter()
         .enumerate()
-        .map(|(index, (id, number))| {
-            project(
-                (*id != 0).then_some(*id),
-                number,
-                index as i32 + 1,
-                *id == 0,
-            )
+        .map(|(index, (id, number))| PreviewIssueItem {
+            issue_id: (*id != 0).then_some(*id),
+            issue_number: number.clone(),
+            position: index as i32 + 1,
+            is_new: *id == 0,
         })
         .collect();
     (before, after)
@@ -982,18 +858,14 @@ fn planned_merge(
 async fn preview_outcome(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
-    input: PreviewOutcomeInput<'_>,
+    thread_id: i32,
+    existing: &[(i32, String, i32)],
+    new_numbers: &[String],
+    request: &PreviewIssuesRequest,
+    strategy: IssuePlacementStrategy,
 ) -> Result<IssueEditPreviewOutcome, ApiError> {
-    let PreviewOutcomeInput {
-        thread_id,
-        thread_title,
-        existing,
-        new_numbers,
-        request,
-        strategy,
-        facts,
-    } = input;
     let (merged, preserves) = planned_merge(existing, new_numbers, request, strategy)?;
+    let (before, after) = build_after_items(existing, &merged);
 
     let savepoint = format!(
         "sp_preview_{}",
@@ -1025,15 +897,6 @@ async fn preview_outcome(
     let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
     let validated = option_inputs::validated_contained(inputs.clone())?;
     let graph = crate::reading_graph::project(&inputs, &validated, None);
-    let (before, after) = build_after_items(
-        existing,
-        &merged,
-        &inputs,
-        &graph,
-        thread_title,
-        thread_id,
-        facts,
-    );
     let can_commit = graph.status == "ok";
     let conflict_message = if can_commit {
         None
@@ -1099,36 +962,6 @@ pub async fn preview_issue_create(
         .iter()
         .map(|row| (row.get(0), row.get(1), row.get(2)))
         .collect();
-    // One owner-scoped statement for every read/rating/mapping fact shown in
-    // the preview. Never query per issue or per row (#4654).
-    let fact_rows = tx
-        .query(
-            "SELECT i.id,
-                    i.read_at IS NOT NULL,
-                    EXISTS (SELECT 1 FROM events e WHERE e.issue_id=i.id AND e.rating IS NOT NULL),
-                    i.catalog_issue_id IS NOT NULL OR EXISTS (
-                        SELECT 1 FROM issue_external_identity_mappings m
-                        WHERE m.issue_id=i.id AND m.status='confirmed')
-             FROM issues i JOIN threads t ON t.id=i.thread_id
-             WHERE t.user_id=$1",
-            &[&user.id()],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let facts: BTreeMap<i32, IssueFacts> = fact_rows
-        .iter()
-        .map(|row| {
-            (
-                row.get::<_, i32>(0),
-                IssueFacts {
-                    has_read_history: row.get(1),
-                    has_rating: row.get(2),
-                    is_mapped: row.get(3),
-                },
-            )
-        })
-        .collect();
-
     let existing_numbers: BTreeSet<String> = existing.iter().map(|(_, n, _)| n.clone()).collect();
     let new_numbers: Vec<String> = requested
         .into_iter()
@@ -1140,26 +973,27 @@ pub async fn preview_issue_create(
         ));
     }
 
-    let outcome_input = PreviewOutcomeInput {
+    let default_outcome = preview_outcome(
+        &tx,
+        user,
         thread_id,
-        thread_title: &thread_title,
-        existing: &existing,
-        new_numbers: &new_numbers,
-        request: &request,
-        strategy: IssuePlacementStrategy::SafeDefault,
-        facts: &facts,
-    };
-    let default_outcome = preview_outcome(&tx, user, outcome_input).await?;
+        &existing,
+        &new_numbers,
+        &request,
+        IssuePlacementStrategy::SafeDefault,
+    )
+    .await?;
 
     let numeric_resort_outcome =
         if request.insert_after_issue_id.is_none() && !request.append_to_end {
             let resort = preview_outcome(
                 &tx,
                 user,
-                PreviewOutcomeInput {
-                    strategy: IssuePlacementStrategy::NumericResort,
-                    ..outcome_input
-                },
+                thread_id,
+                &existing,
+                &new_numbers,
+                &request,
+                IssuePlacementStrategy::NumericResort,
             )
             .await?;
             if resort.preserves_existing_relative_order
