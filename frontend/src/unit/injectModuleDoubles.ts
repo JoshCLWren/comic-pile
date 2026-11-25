@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { beforeEach, vi } from 'vitest'
 import { cast } from '../utils/cast'
 import { isFunction } from '../utils/runtimeChecks'
 
@@ -25,28 +25,36 @@ export async function injectModuleDoubles<ModuleExports extends object>(
   const originalExports = { ...moduleExports }
   const importOriginal = cast<ImportOriginal>(async () => originalExports)
   const doubles = await factory(importOriginal)
-  for (const [exportName, replacement] of Object.entries(doubles)) {
-    const descriptor = Object.getOwnPropertyDescriptor(moduleExports, exportName)
-    if (descriptor?.value === replacement) continue
+  const install = () => {
+    for (const [exportName, replacement] of Object.entries(doubles)) {
+      const descriptor = Object.getOwnPropertyDescriptor(moduleExports, exportName)
+      if (descriptor?.value === replacement) continue
 
-    if (isFunction(descriptor?.value) && isFunction(replacement)) {
-      // SAFETY: both property values were just checked as functions. Vitest's
-      // transformed ES-module namespace is configurable and spyable; the record
-      // view only exposes the string-keyed function table needed by vi.spyOn.
-      const functionExports = cast<InjectableFunctionTable>(moduleExports)
-      // SAFETY: the runtime function check above establishes the callable
-      // contract; the injected implementation keeps the original export's args
-      // and return behavior at each call site.
-      const implementation = cast<InjectableFunction>(replacement)
-      vi.spyOn(functionExports, exportName).mockImplementation(implementation)
-      continue
+      if (isFunction(descriptor?.value) && isFunction(replacement)) {
+        // SAFETY: both property values were just checked as functions. Vitest's
+        // transformed ES-module namespace is configurable and spyable; the record
+        // view only exposes the string-keyed function table needed by vi.spyOn.
+        const functionExports = cast<InjectableFunctionTable>(moduleExports)
+        // SAFETY: the runtime function check above establishes the callable
+        // contract; the injected implementation keeps the original export's args
+        // and return behavior at each call site.
+        const implementation = cast<InjectableFunction>(replacement)
+        vi.spyOn(functionExports, exportName).mockImplementation(implementation)
+        continue
+      }
+
+      Object.defineProperty(moduleExports, exportName, {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value: replacement,
+      })
     }
-
-    Object.defineProperty(moduleExports, exportName, {
-      configurable: true,
-      enumerable: true,
-      writable: true,
-      value: replacement,
-    })
   }
+
+  // Injections are suite-scoped fixtures. Reinstall function spies before each
+  // test because a test's vi.restoreAllMocks() must not remove the fixture and
+  // make later tests silently exercise the real dependency.
+  install()
+  beforeEach(install)
 }
