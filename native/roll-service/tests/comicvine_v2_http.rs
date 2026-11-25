@@ -1318,7 +1318,10 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
         .await
         .unwrap();
     }
-    for (provider_id, provider_number) in [(364132, "100"), (9000101, "101"), (9000102, "102")] {
+    // Verified Comic Vine issue pages in volume 4050-51622: #100 = 4000-364132,
+    // #101 = 4000-370314, #102 = 4000-373281. The volume roster is
+    // #1, #2, #100, #101, #102 only - there is no #4/#5 issue page to map to.
+    for (provider_id, provider_number) in [(364132, "100"), (370314, "101"), (373281, "102")] {
         conn.execute(
             "INSERT INTO external_identities \
                  (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
@@ -1420,8 +1423,9 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
     assert_eq!(body["detail"]["code"], "duplicate_physical_issue");
     assert_eq!(body["detail"]["existing_issue_id"], original_three);
 
-    // Story #4 maps to synthetic provider #101, then receives its overall alias
-    // without rewriting the confirmed mapping's provenance.
+    // Story #4 maps to the verified provider issue 4000-370314 (#101 of volume
+    // 4050-51622), then receives its overall alias without rewriting the
+    // confirmed mapping's provenance.
     let fourth = issue_ids[3];
     let fourth_base = format!("/api/v2/comicvine/issues/{fourth}");
     let (status, body) = send(
@@ -1442,7 +1446,7 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
             "SELECT m.status, m.evidence_source, extract(epoch FROM m.updated_at)::bigint \
              FROM issue_external_identity_mappings m \
              JOIN external_identities e ON e.id = m.external_identity_id \
-             WHERE m.issue_id = $1 AND e.external_id = '9000101'",
+             WHERE m.issue_id = $1 AND e.external_id = '370314'",
             &[&fourth],
         )
         .await
@@ -1460,7 +1464,7 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
             &token,
             &csrf,
             Some(json!({
-                "comicvine_issue_id": 9000101,
+                "comicvine_issue_id": 370314,
                 "overall_issue_number": "101",
                 "expected_version": 2,
                 "reason": "add overall alias only"
@@ -1476,7 +1480,7 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
             "SELECT m.status, m.evidence_source, extract(epoch FROM m.updated_at)::bigint \
              FROM issue_external_identity_mappings m \
              JOIN external_identities e ON e.id = m.external_identity_id \
-             WHERE m.issue_id = $1 AND e.external_id = '9000101'",
+             WHERE m.issue_id = $1 AND e.external_id = '370314'",
             &[&fourth],
         )
         .await
@@ -1496,7 +1500,7 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
             &format!("/api/v2/comicvine/issues/{fifth}/identity:confirm"),
             &token,
             &csrf,
-            Some(json!({"comicvine_issue_id": 9000102, "overall_issue_number": "102", "expected_version": 1})),
+            Some(json!({"comicvine_issue_id": 373281, "overall_issue_number": "102", "expected_version": 1})),
         ),
     )
     .await;
@@ -1554,6 +1558,184 @@ async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_
         cards[4]["cover_image_url"],
         "https://comicvine.example/102.jpg"
     );
+}
+
+/// Verified provider evidence for the incident volume (read from the public
+/// Comic Vine volume page on 2026-11-25).
+///
+/// Volume `4050-51622` publishes only `#1`, `#2`, `#100`, `#101` and `#102`.
+/// Story chapters `#3`/`#4`/`#5` are the *overall* `#100`/`#101`/`#102`, and the
+/// volume has **no `#4`/`#5` issue page**, so a story-local number edit can
+/// never be the right repair and a provider-number candidate for `#4`/`#5` can
+/// never exist. This is the fixture fact the incident regression depends on,
+/// asserted here so the data itself cannot silently drift back to synthetic
+/// numbers.
+#[test]
+fn return_master_provider_volume_publishes_no_story_local_candidates() {
+    let numbers: Vec<u16> = incident_fixtures::RETURN_MASTER_VOLUME_ISSUES
+        .iter()
+        .map(|(number, _)| *number)
+        .collect();
+    assert_eq!(numbers, vec![1, 2, 100, 101, 102]);
+    assert!(!numbers.contains(&4), "volume has no #4 issue page");
+    assert!(!numbers.contains(&5), "volume has no #5 issue page");
+    // Every provider number in the volume has one verified Comic Vine issue ID.
+    for (number, provider_id) in incident_fixtures::RETURN_MASTER_VOLUME_ISSUES {
+        let expected = match number {
+            1 => 354059,
+            2 => 358840,
+            100 => 364132,
+            101 => 370314,
+            102 => 373281,
+            other => panic!("unexpected provider number #{other}"),
+        };
+        assert_eq!(*provider_id, expected, "provider issue ID for #{number}");
+    }
+    // The three incident chapters resolve to the overall #100/#101/#102, whose
+    // provider numbers are exactly the tail of the verified roster.
+    let tail: Vec<u16> = numbers[2..].to_vec();
+    assert_eq!(
+        tail,
+        incident_fixtures::RETURN_MASTER_PHYSICAL_NUMBERS[2..].to_vec()
+    );
+    assert_eq!(
+        incident_fixtures::RETURN_MASTER_COMICVINE_100_ISSUE_ID,
+        364132
+    );
+}
+
+/// *A Cold Day in Hell* fixture (#4667): the source-labelled chapters `#1`/`#2`
+/// are the overall B.P.R.D. `#105`/`#106`. Verified provider evidence:
+/// volume `4050-59183` itself lists `#105 Part 1 of 2` / `#106 Part 2 of 2`,
+/// while the ongoing volume `4050-61307` starts at `#107` and can never supply
+/// them. Comic Vine has not created issue pages for those two numbers, so they
+/// cannot arrive as a local `#1`/`#2` candidate either. Both overall aliases
+/// must therefore live on the two existing physical rows: no renumbering, no
+/// duplicate main-series rows, and no list or history change.
+#[tokio::test]
+async fn cold_day_in_hell_aliases_stay_on_two_source_labelled_rows() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-cold-day").await;
+    set_key(false);
+    let conn = state.pool.get().await.unwrap();
+    let thread_id = thread(
+        &conn,
+        user_id,
+        &format!(
+            "A Cold Day in Hell (source thread {})",
+            incident_fixtures::COLD_DAY_THREAD_SOURCE_ID
+        ),
+    )
+    .await;
+    let mut issue_ids = Vec::new();
+    for (index, label) in ["1", "2"].iter().enumerate() {
+        issue_ids.push(issue(&conn, thread_id, label, 1 + index as i32).await);
+    }
+    conn.execute(
+        "UPDATE threads SET total_issues = 2, issues_remaining = 2, status = 'active', \
+         next_unread_issue_id = $2 WHERE id = $1",
+        &[&thread_id, &issue_ids[0]],
+    )
+    .await
+    .unwrap();
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at) \
+             VALUES ($1, 'Julix source list', 'strict', NOW(), NOW()) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    for (index, issue_id) in issue_ids.iter().enumerate() {
+        conn.execute(
+            "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at) \
+             VALUES ($1, $2, $3, NOW())",
+            &[&list_id, issue_id, &(1 + index as i32)],
+        )
+        .await
+        .unwrap();
+    }
+    // Provider numbers 105/106 are real; the IDs are documented placeholders
+    // because Comic Vine has no issue page for them (see incident_fixtures).
+    for (provider_number, provider_id) in incident_fixtures::COLD_DAY_PLACEHOLDER_PROVIDER_IDS {
+        conn.execute(
+            "INSERT INTO external_identities \
+                 (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'issue', $1, $2, $3::jsonb, NOW(), NOW()) \
+             ON CONFLICT ON CONSTRAINT uq_external_identity_provider_entity \
+             DO UPDATE SET metadata_json = EXCLUDED.metadata_json",
+            &[
+                &provider_id.to_string(),
+                &format!("https://comicvine.gamespot.com/issue/4000-{provider_id}/"),
+                &json!({"issue_number": provider_number.to_string()}),
+            ],
+        )
+        .await
+        .unwrap();
+    }
+    let before = stable_physical_state(&conn, thread_id, list_id).await;
+
+    for (index, (provider_number, provider_id)) in
+        incident_fixtures::COLD_DAY_PLACEHOLDER_PROVIDER_IDS
+            .iter()
+            .enumerate()
+    {
+        let (status, body) = send(
+            &state,
+            call(
+                "POST",
+                &format!(
+                    "/api/v2/comicvine/issues/{}/identity:confirm",
+                    issue_ids[index]
+                ),
+                &token,
+                &csrf,
+                Some(json!({
+                    "comicvine_issue_id": provider_id,
+                    "overall_issue_number": provider_number.to_string(),
+                    "expected_version": 1
+                })),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body:?}");
+        assert_eq!(body["issue_number"], (index + 1).to_string());
+        assert_eq!(body["overall_issue_number"], provider_number.to_string());
+        assert_eq!(body["provider_issue_number"], provider_number.to_string());
+        assert_eq!(body["identity_version"], 2);
+    }
+
+    // Still the same two physical rows in the same list positions.
+    assert_eq!(
+        before,
+        stable_physical_state(&conn, thread_id, list_id).await
+    );
+
+    let (status, cards) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/issues/cards",
+            &token,
+            &csrf,
+            Some(json!({"issue_ids": issue_ids})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{cards:?}");
+    let cards = cards["items"].as_array().unwrap();
+    assert_eq!(cards.len(), 2, "aliases must not create a third row");
+    for (index, card) in cards.iter().enumerate() {
+        assert_eq!(card["issue_number"], (index + 1).to_string());
+        assert_eq!(
+            card["overall_issue_number"],
+            incident_fixtures::COLD_DAY_PHYSICAL_NUMBERS[index].to_string()
+        );
+        assert_eq!(
+            card["provider_issue_number"],
+            incident_fixtures::COLD_DAY_PHYSICAL_NUMBERS[index].to_string()
+        );
+    }
 }
 
 #[tokio::test]

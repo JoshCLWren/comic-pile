@@ -68,6 +68,23 @@ pub const RETURN_MASTER_PHYSICAL_NUMBERS: &[u16] = &[98, 99, 100, 101, 102];
 pub const RETURN_MASTER_COMICVINE_VOLUME: &str = "4050-51622";
 pub const RETURN_MASTER_DUPLICATE_100_ID: i64 = 1121325;
 pub const RETURN_MASTER_COMICVINE_100_ISSUE_ID: i64 = 364132;
+
+/// Verified provider roster for Comic Vine volume `4050-51622`, read from the
+/// public volume page on 2026-11-25
+/// (<https://comicvine.gamespot.com/bprd-hell-on-earth-the-return-of-the-master/4050-51622/>):
+/// `#1` = 4000-354059, `#2` = 4000-358840, `#100` = 4000-364132,
+/// `#101` = 4000-370314, `#102` = 4000-373281.
+///
+/// The volume deliberately skips #3-#99 and has **no #4/#5 issue page**, so a
+/// story-local `#4`/`#5` can only ever resolve through the #101/#102 aliases.
+/// The returned tuple is `(provider issue number, Comic Vine issue ID)`.
+pub const RETURN_MASTER_VOLUME_ISSUES: &[(u16, i64)] = &[
+    (1, 354059),
+    (2, 358840),
+    (100, 364132),
+    (101, 370314),
+    (102, 373281),
+];
 pub const BPRD_DUPLICATE_101_102_IDS: &[i64] = &[1121326, 1121327];
 /// Recorded later legitimate ratings of original story chapters #4/#5.
 /// They are history to preserve, NOT state to rewind in a de-duplication fix.
@@ -79,7 +96,22 @@ pub const RETURN_MASTER_LATER_RATING: f32 = 4.5;
 pub const ABYSS_PHYSICAL_NUMBERS: &[u16] = &[103, 104];
 pub const ABYSS_COMICVINE_VOLUME: &str = "4050-55555";
 pub const COLD_DAY_PHYSICAL_NUMBERS: &[u16] = &[105, 106];
-pub const WASTELAND_PHYSICAL_NUMBERS: &[u16] = &[107, 108, 109];
+pub const COLD_DAY_THREAD_SOURCE_ID: i64 = 18875;
+/// Comic Vine volume that actually carries the overall #105/#106 (verified
+/// 2026-11-25): <https://comicvine.gamespot.com/bprd-hell-on-earth-a-cold-day-in-hell/4050-59183/>.
+/// It lists `#105 Part 1 of 2` and `#106 Part 2 of 2`, i.e. the source-labelled
+/// story chapters `#1`/`#2` are *overall* #105/#106.
+pub const COLD_DAY_COMICVINE_VOLUME: &str = "4050-59183";
+/// The ongoing volume starts at #107, so it can never supply #105/#106.
+pub const HELL_ON_EARTH_ONGOING_VOLUME: &str = "4050-61307";
+pub const HELL_ON_EARTH_ONGOING_FIRST_NUMBER: u16 = 107;
+/// Comic Vine has **not created issue pages** for volume 4050-59183's #105/#106
+/// (the volume page lists both numbers without any `/4000-.../` issue link), so
+/// no real provider issue IDs exist for them. These two values are explicit
+/// placeholders used only to persist/read the overall aliases in a disposable
+/// test database; they are NOT provider evidence. The verified numbers are
+/// `COLD_DAY_PHYSICAL_NUMBERS` above.
+pub const COLD_DAY_PLACEHOLDER_PROVIDER_IDS: &[(u16, i64)] = &[(105, 9100105), (106, 9100106)];
 
 /// Morning QA destructive case: list #1000096, strict Superman 1-3 then
 /// Batman 1-2. The original Superman #2 Issue ID is intentionally NOT known:

@@ -51,6 +51,11 @@ export function ComicPillar({
   const progress = getProgressPercentage(activeRatingThread)
   const { metadata } = useComicVineIssueIntelligence(issueId)
   const storyTitle = metadata?.name ?? null
+  // #4652: one physical comic can carry an authored story-local number, an
+  // alternate overall-series number and the provider volume's own number.
+  // Roll shows the alias beside the confirmed ComicVine identity so a reader
+  // can see why story #4 and overall #101 are the same comic.
+  const overallAlias = identityState?.overall_issue_number?.trim() || null
   // Read counts cannot identify an issue's ordinal when later issues are read.
   // Keep the canonical number until the actual tracked position is available.
   // The publication date is rendered once, beside the cover in ComicIdentity.
@@ -153,8 +158,19 @@ export function ComicPillar({
           {/* Provider eyebrow and title block */}
           <div className="space-y-2">
             {identityState?.has_confirmed_identity && identityState.comicvine_issue_id && (
-              <div className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-comic-accent)' }}>
-                COMICVINE #{identityState.comicvine_issue_id}
+              <div
+                className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-black uppercase tracking-[0.18em]"
+                style={{ color: 'var(--theme-comic-accent)' }}
+              >
+                <span>COMICVINE #{identityState.comicvine_issue_id}</span>
+                {identityState.provider_issue_number ? (
+                  <span data-testid="comic-provider-issue-number">
+                    VOLUME #{identityState.provider_issue_number}
+                  </span>
+                ) : null}
+                {overallAlias ? (
+                  <span data-testid="comic-overall-alias">OVERALL #{overallAlias}</span>
+                ) : null}
               </div>
             )}
             <div className="flex flex-col gap-2">

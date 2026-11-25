@@ -123,6 +123,15 @@ function separatorTexts(progressLine: HTMLElement): string[] {
 describe('Roll header metadata hierarchy (#3011)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // A confirmed identity without an alternate overall number: the baseline
+    // for every test that does not deliberately exercise an alias.
+    getIssueIdentitySpy.mockResolvedValue({
+      has_confirmed_identity: true,
+      comicvine_issue_id: '36956',
+      confirmed_mappings: [],
+      candidate_mappings: [],
+      has_unresolved: false,
+    })
   })
 
   it('separates only the visible metadata items and glues each separator to its item', async () => {
@@ -211,6 +220,42 @@ describe('Roll header metadata hierarchy (#3011)', () => {
     expect(
       storyTitle.compareDocumentPosition(progressLine) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
+  })
+
+  it('renders the overall-series alias and provider volume number for one comic (#4652)', async () => {
+    // Verified incident shape: Return of the Master story chapter #4 is the
+    // overall B.P.R.D. #101, confirmed to Comic Vine issue 4000-370314.
+    getIssueIntelligenceSpy.mockResolvedValue(intelligenceMetadata({ issue_number: '4' }))
+    getIssueIdentitySpy.mockResolvedValue({
+      has_confirmed_identity: true,
+      comicvine_issue_id: '370314',
+      issue_number: '4',
+      overall_issue_number: '101',
+      provider_issue_number: '101',
+      confirmed_mappings: [],
+      candidate_mappings: [],
+      has_unresolved: false,
+    })
+
+    renderPillar({ ...linkedThread, issue_number: '4', next_issue_number: '4' })
+
+    const alias = await screen.findByTestId('comic-overall-alias')
+    expect(alias.textContent).toBe('OVERALL #101')
+    expect(screen.getByTestId('comic-provider-issue-number').textContent).toBe('VOLUME #101')
+    // The authored story-local number stays the canonical label.
+    expect(screen.getByTestId('comic-progress-line')).toHaveTextContent('Issue #4')
+    expect(screen.getByTestId('comic-progress-line')).not.toHaveTextContent('Issue #101')
+    expect(document.body.textContent).toContain('COMICVINE #370314')
+  })
+
+  it('does not invent an alias when the comic has no alternate overall number (#4652)', async () => {
+    getIssueIntelligenceSpy.mockResolvedValue(intelligenceMetadata())
+
+    renderPillar()
+
+    await screen.findByTestId('comic-header-title')
+    await waitFor(() => expect(getIssueIdentitySpy).toHaveBeenCalled())
+    expect(screen.queryByTestId('comic-overall-alias')).toBeNull()
   })
 
   it('omits the story title when ComicVine has no issue name', async () => {
