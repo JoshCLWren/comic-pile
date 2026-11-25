@@ -13402,6 +13402,21 @@
           "comicvine_issue_id": {
             "type": "integer",
             "format": "int32"
+          },
+          "expected_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Last identity version observed by the editor; enables safe retries."
+          },
+          "overall_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional overall-series alias committed with the exact identity."
           }
         }
       },
@@ -17813,6 +17828,7 @@
           "thread_id",
           "thread_title",
           "issue_number",
+          "identity_version",
           "status",
           "has_confirmed_identity",
           "mapping_state"
@@ -17836,6 +17852,11 @@
             "type": "boolean",
             "description": "Whether a confirmed ComicVine issue mapping exists."
           },
+          "identity_version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Optimistic version for atomic numbering/provider-identity edits."
+          },
           "issue_id": {
             "type": "integer",
             "format": "int32",
@@ -17843,11 +17864,25 @@
           },
           "issue_number": {
             "type": "string",
-            "description": "Exact issue number within the run."
+            "description": "Authored story-local issue number within the run."
           },
           "mapping_state": {
             "type": "string",
             "description": "Stored mapping state (``confirmed``, ``candidate``, ...)."
+          },
+          "overall_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Alternate overall-series number for the same physical issue."
+          },
+          "provider_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Actual issue number inside the confirmed provider volume."
           },
           "rating": {
             "type": [
@@ -18017,6 +18052,7 @@
           "id",
           "thread_id",
           "issue_number",
+          "identity_version",
           "position",
           "status",
           "created_at"
@@ -18029,8 +18065,18 @@
             "type": "integer",
             "format": "int32"
           },
+          "identity_version": {
+            "type": "integer",
+            "format": "int64"
+          },
           "issue_number": {
             "type": "string"
+          },
+          "overall_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "position": {
             "type": "integer",
@@ -18100,6 +18146,8 @@
           "issue_id",
           "thread_id",
           "thread_title",
+          "issue_number",
+          "identity_version",
           "has_confirmed_identity",
           "confirmed_mappings",
           "candidate_mappings",
@@ -18130,9 +18178,28 @@
           "has_unresolved": {
             "type": "boolean"
           },
+          "identity_version": {
+            "type": "integer",
+            "format": "int64"
+          },
           "issue_id": {
             "type": "integer",
             "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "overall_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "thread_id": {
             "type": "integer",
@@ -22381,6 +22448,19 @@
           "comicvine_issue_id": {
             "type": "integer",
             "format": "int32"
+          },
+          "expected_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "overall_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "reason": {
             "type": [
