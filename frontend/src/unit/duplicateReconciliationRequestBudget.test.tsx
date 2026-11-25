@@ -206,7 +206,7 @@ describe('duplicate reconciliation request budget', () => {
       expect(calls.some((call) => call.url === '/v2/issue-duplicate-reconciliation/detect')).toBe(true),
     )
 
-    // Apply first so an undo snapshot exists
+    // Select canonical and duplicate, then preview and apply
     const canonicalButton = screen.getByRole('button', { name: /Canonical: #3 \(117355\)/ })
     fireEvent.click(canonicalButton)
 
@@ -227,21 +227,7 @@ describe('duplicate reconciliation request budget', () => {
       expect(calls.some((call) => call.url === '/v2/issue-duplicate-reconciliation/apply')).toBe(true),
     )
 
-    // Clear the preview so the undo button shows
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Cancel/ }))
-    })
-
-    // Re-apply to restore the undo button state
-    fireEvent.click(previewButton)
-    await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v2/issue-duplicate-reconciliation/preview')).toBe(true),
-    )
-    fireEvent.click(applyButton)
-    await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v2/issue-duplicate-reconciliation/apply')).toBe(true),
-    )
-
+    // Undo button is available right after apply (lastUndoId is set)
     const undoButton = screen.getByRole('button', { name: /Undo #1/ })
     fireEvent.click(undoButton)
 
@@ -251,8 +237,8 @@ describe('duplicate reconciliation request budget', () => {
 
     expect(requestCounts(calls)).toEqual({
       'GET /v2/issue-duplicate-reconciliation/detect': 1,
-      'POST /v2/issue-duplicate-reconciliation/preview': 2,
-      'POST /v2/issue-duplicate-reconciliation/apply': 2,
+      'POST /v2/issue-duplicate-reconciliation/preview': 1,
+      'POST /v2/issue-duplicate-reconciliation/apply': 1,
       'POST /v2/issue-duplicate-reconciliation/undo': 1,
     })
   })
