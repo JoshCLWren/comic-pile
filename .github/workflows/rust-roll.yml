@@ -141,7 +141,7 @@ jobs:
           trap 'rm -rf "$bundle"' EXIT
           mkdir -p "$bundle/api" "$bundle/native/roll-service" "$bundle/native/migrate"
           cp Cargo.toml Cargo.lock build.rs "$bundle/"
-          cp api/native_roll.rs api/native_issue.rs "$bundle/api/"
+          cp api/native_roll.rs "$bundle/api/"
           cp native/roll-service/Cargo.toml "$bundle/native/roll-service/"
           cp -R native/roll-service/src "$bundle/native/roll-service/src"
           test ! -e "$bundle/native/roll-service/tests"

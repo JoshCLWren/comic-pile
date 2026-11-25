@@ -6,7 +6,7 @@ WORKDIR /workspace
 # The root Cargo workspace and single root Cargo.lock build both the service and
 # the deployed Vercel ingress from one locked dependency graph.
 COPY Cargo.toml Cargo.lock build.rs ./
-COPY api/native_roll.rs api/native_issue.rs ./api/
+COPY api/native_roll.rs ./api/
 COPY native/roll-service/Cargo.toml ./native/roll-service/
 COPY native/roll-service/src/ ./native/roll-service/src/
 # Cargo loads every workspace member's manifest and target sources before
