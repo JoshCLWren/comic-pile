@@ -63,7 +63,7 @@ and mutation-refresh behavior are covered by the specs listed per row.
 | --- | --- | --- | --- | --- | --- |
 | `/login`, `/register` | Cookieless cold load | auth probe (me + refresh) | **0** | probe before public form | #4509: no-token fast path |
 | `/forgot-password`, `/reset-password` | Cookieless cold load | 2 (me + failed refresh) | **0** | same | #4509 |
-| `/demo` | Cold load | probe + demo roll | 3 (probe + `GET /api/v1/demo/roll`, required) | — | #4509 budget |
+| `/demo` | Cold load | probe + demo roll | 3 (probe + `GET /api/v2/demo-roll`, required) | — | #4509 budget |
 | `/` (guest), `*` (unknown), `/rate`, `/analytics`, `/roll` | Cold load | 2 (me + refresh) | 2 (required; guest has no session to validate) | — | #4509 budget |
 | `/whats-new` | Cold load | shell + releases page | 4 (required) | — | #4509 budget |
 | `/glossary`, `/help` → `/glossary` | Cold load | shell only | 3 (required) | redirect does not duplicate shell reads | #4509 budget |

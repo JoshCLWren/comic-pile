@@ -19,7 +19,7 @@ A recorded row is `METHOD /api/path?sorted-query xCOUNT`:
 ```text
 GET /api/v2/auth/me x1
 GET /api/v2/identity-inbox?limit=1&offset=0 x1
-GET /api/v1/releases/?limit=20&offset=0 x1
+GET /api/v2/releases?limit=20&offset=0 x1
 ```
 
 Query keys and values are sorted, so parameter order never changes a budget.
