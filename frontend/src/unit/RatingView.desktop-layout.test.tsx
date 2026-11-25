@@ -66,6 +66,8 @@ await injectModuleDoubles(await import('../hooks/useComicVineIssueIntelligence')
   useComicVineIssueIntelligence: () => ({
     metadata: comicvineState.metadata,
     isLoading: false,
+    isError: false,
+    error: null,
     refetch: vi.fn(),
   }),
 }))

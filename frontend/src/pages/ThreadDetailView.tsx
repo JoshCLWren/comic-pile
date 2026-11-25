@@ -653,7 +653,21 @@ export default function ThreadDetailView() {
 
                     <div className="space-y-1">
                       <h3 className="text-base font-bold text-stone-400">Recorded incoming prerequisites</h3>
-                      {blockedBy.length === 0 && <p className="text-xs text-stone-500">No recorded incoming prerequisites</p>}
+                      {blockedBy.length === 0 && (() => {
+                        const circularBlockers = circular.filter((t) => t.connection_type.includes('blocked_by'))
+                        const readingBoundary = boundaryQuery.data?.threads[thread.id]
+                        const blockedByReadingCycle =
+                          readingBoundary?.state === 'blocked' &&
+                          (readingBoundary.blockers ?? []).some((blocker) => blocker.kind === 'reading_cycle')
+                        if (circularBlockers.length > 0 && blockedByReadingCycle) {
+                          return (
+                            <p className="text-xs text-[var(--theme-warning)]">
+                              Blocked by the circular {circularBlockers.length === 1 ? 'dependency' : 'dependencies'} listed above.
+                            </p>
+                          )
+                        }
+                        return <p className="text-xs text-stone-500">No recorded incoming prerequisites</p>
+                      })()}
                       {blockedBy.map((t) => (
                         <Link
                           key={`${t.dependency_id}-blocked-by`}

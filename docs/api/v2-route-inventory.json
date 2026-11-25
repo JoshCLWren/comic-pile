@@ -1120,7 +1120,7 @@
         "measured_test_reference": "native/roll-service/parity/test_http_issue_cards_n1.py",
         "runtime_overhead_statements": 2
       },
-      "ingress_destination": "/api/native_issue.rs",
+      "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
     },
@@ -1185,7 +1185,7 @@
         "measurement_status": "partial-branch",
         "measured_test_reference": "native/roll-service/parity/test_http_issue_read_rate_n1.py"
       },
-      "ingress_destination": "/api/native_issue.rs",
+      "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
     },
