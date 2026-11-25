@@ -21,6 +21,10 @@ export interface IssueCorrectionIssuesApi {
   move: (issueId: number, afterIssueId: number | null) => Promise<void>
 }
 
+export interface IssueCorrectionDependenciesApi {
+  listForThread: (threadId: number) => Promise<{ issues?: Array<{ issue_id: number; issue_number?: string; dependencies?: Array<{ source_issue_id?: number }> }> }>
+}
+
 interface IssueCorrectionDialogProps {
   isOpen: boolean
   threadId: number
@@ -36,6 +40,7 @@ interface IssueCorrectionDialogProps {
   onSuccess: (options?: { alreadyRefreshed?: boolean }) => void
   /** Injectable issue-tracking API; defaults to the production issues service. */
   issuesApi?: IssueCorrectionIssuesApi
+  dependenciesApi?: IssueCorrectionDependenciesApi
 }
 
 export default function IssueCorrectionDialog({
@@ -47,6 +52,7 @@ export default function IssueCorrectionDialog({
   onClose,
   onSuccess,
   issuesApi: issuesService = issuesApi,
+  dependenciesApi: depsService = issueDependenciesApi,
 }: IssueCorrectionDialogProps) {
   const [selectedIssueNumber, setSelectedIssueNumber] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
@@ -219,7 +225,7 @@ export default function IssueCorrectionDialog({
 
       let dependentFrontier: string[] = []
       try {
-        const deps = await issueDependenciesApi.listForThread(threadId)
+        const deps = await depsService.listForThread(threadId)
         const affectedIds = new Set(unreadBeforeTarget.map((i) => i.id))
         const frontier = new Set<string>()
         for (const issueDep of deps.issues ?? []) {

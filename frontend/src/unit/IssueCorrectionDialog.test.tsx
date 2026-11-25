@@ -87,7 +87,9 @@ describe('IssueCorrectionDialog', () => {
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
     await userEvent.type(input, 'Annual 1')
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
 
     await waitFor(() => {
       expect(bulkMarkRead).toHaveBeenCalledWith([1])
@@ -117,7 +119,7 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.clear(input)
     await userEvent.type(input, 'Annual 1')
     await userEvent.selectOptions(screen.getByLabelText(/place new issue/i), '1')
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(42, 'Annual 1', {
