@@ -866,7 +866,10 @@ pub async fn apply_reconciliation(
         tx.commit().await.map_err(db_err)?;
         return Ok(Json(ReconcileApplyResponse {
             canonical_issue_id: row.get(1),
-            merged_issue_ids: details.get("merged_issue_ids").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_else(|| row.get(2)),
+            merged_issue_ids: details
+                .get("merged_issue_ids")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_else(|| row.get(2)),
             moved_event_ids: details
                 .get("moved_event_ids")
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
@@ -976,9 +979,10 @@ pub async fn apply_reconciliation(
             continue;
         }
         // Honor explicit "keep_distinct" decisions: leave that issue unmerged.
-        let keep_distinct = req.decisions.iter().any(|(k, v)| {
-            k.ends_with(&format!(":{}", dup.issue_id)) && v == "keep_distinct"
-        });
+        let keep_distinct = req
+            .decisions
+            .iter()
+            .any(|(k, v)| k.ends_with(&format!(":{}", dup.issue_id)) && v == "keep_distinct");
         if keep_distinct {
             warnings.push(format!(
                 "Issue {} kept distinct per decision; not merged into canonical {}.",
