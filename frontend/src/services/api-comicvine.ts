@@ -223,8 +223,13 @@ export interface IssueIdentityEdit {
   expectedVersion?: number
 }
 
+interface IssueIdentityEditFields {
+  overall_issue_number?: string
+  expected_version?: number
+}
+
 function identityEditFields(edit: IssueIdentityEdit = {}) {
-  const fields: { overall_issue_number?: string; expected_version?: number } = {}
+  const fields: IssueIdentityEditFields = {}
   if (edit.overallIssueNumber !== undefined) {
     fields.overall_issue_number = edit.overallIssueNumber
   }

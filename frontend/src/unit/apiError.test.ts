@@ -14,6 +14,40 @@ describe('getApiErrorDetail', () => {
     expect(getApiErrorDetail(error)).toBe('Thread not found')
   })
 
+  it('extracts a structured conflict message from Axios error detail', () => {
+    const error = {
+      isAxiosError: true,
+      response: {
+        status: 409,
+        data: {
+          detail: {
+            code: 'duplicate_physical_issue',
+            message: 'ComicVine issue 364132 already exists as issue 117355',
+          },
+        },
+      },
+      message: 'Request failed',
+    }
+    expect(getApiErrorDetail(error)).toBe('ComicVine issue 364132 already exists as issue 117355')
+  })
+
+  it('extracts structured messages and rejects malformed structured detail', () => {
+    expect(getApiErrorDetail({
+      response: { data: { detail: { code: 'stale_identity', message: 'Reload and retry' } } },
+    })).toBe('Reload and retry')
+    expect(getApiErrorDetail({
+      response: { data: { detail: { code: 'stale_identity' } } },
+    })).toBe('Unknown error')
+    expect(getApiErrorDetail({
+      response: { data: { detail: { message: 409 } } },
+    })).toBe('Unknown error')
+    expect(getApiErrorDetail({
+      isAxiosError: true,
+      response: { data: { detail: { message: '' } } },
+      message: 'Request failed',
+    })).toBe('Request failed')
+  })
+
   it('returns message for Axios error without detail', () => {
     const error = {
       isAxiosError: true,
