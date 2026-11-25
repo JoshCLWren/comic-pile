@@ -28,6 +28,9 @@ interface ThreadPoolProps {
   shuffleIsPending: boolean
   eligibleThreadIds?: number[] | null
   issueCards?: IssueCardsResponse | null
+  onResetDice?: () => void | Promise<void | boolean>
+  resetDicePending?: boolean
+  resetDiceError?: string
 }
 
 export function ThreadPool({
@@ -48,6 +51,9 @@ export function ThreadPool({
   shuffleIsPending,
   eligibleThreadIds,
   issueCards,
+  onResetDice,
+  resetDicePending,
+  resetDiceError,
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
