@@ -79,23 +79,29 @@ function ImageRequest({
   const [isLoaded, setIsLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
   const imgRef = useRef<HTMLImageElement | null>(null)
-  const loadedImageRef = useRef<HTMLImageElement | null>(null)
-  const failedImageRef = useRef<HTMLImageElement | null>(null)
+  const loadedRequestRef = useRef<string | null>(null)
+  const failedRequestRef = useRef<string | null>(null)
+
+  const requestOf = useCallback((img: HTMLImageElement) => img.currentSrc || img.src, [])
 
   const handleLoad = useCallback((img: HTMLImageElement) => {
-    if (loadedImageRef.current === img) return
-    loadedImageRef.current = img
+    const request = requestOf(img)
+    if (loadedRequestRef.current === request) return
+    loadedRequestRef.current = request
+    failedRequestRef.current = null
     setIsLoaded(true)
+    setHasError(false)
     onLoad?.(img)
-  }, [onLoad])
+  }, [onLoad, requestOf])
 
   const handleError = useCallback((img: HTMLImageElement) => {
-    if (failedImageRef.current === img) return
-    failedImageRef.current = img
+    const request = requestOf(img)
+    if (failedRequestRef.current === request) return
+    failedRequestRef.current = request
     setHasError(true)
     setIsLoaded(true)
     onError?.()
-  }, [onError])
+  }, [onError, requestOf])
 
   useEffect(() => {
     // A complete image with intrinsic dimensions is a cache-hit success. A lazy

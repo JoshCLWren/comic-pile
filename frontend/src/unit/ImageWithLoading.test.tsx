@@ -348,3 +348,21 @@ describe('ImageWithLoading accessibility (issue #3069)', () => {
     expect(img).toHaveAttribute('src', 'https://example.com/cover.jpg')
   })
 })
+
+describe('responsive currentSrc changes', () => {
+  it('invokes onLoad again when the same element selects a new currentSrc', () => {
+    const onLoad = vi.fn<(img: HTMLImageElement) => void>()
+    const { container } = render(
+      <ImageWithLoading src="https://example.com/fallback.jpg" srcSet="https://example.com/small.jpg 240w" alt="Cover" onLoad={onLoad} />,
+    )
+    const image = getImage(container)
+    Object.defineProperty(image, 'currentSrc', { value: 'https://example.com/small.jpg', writable: true, configurable: true })
+    fireEvent.load(image)
+    expect(onLoad).toHaveBeenCalledTimes(1)
+
+    Object.defineProperty(image, 'currentSrc', { value: 'https://example.com/large.jpg', writable: true, configurable: true })
+    fireEvent.load(image)
+    expect(onLoad).toHaveBeenCalledTimes(2)
+    expect(onLoad).toHaveBeenLastCalledWith(image)
+  })
+})
