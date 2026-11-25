@@ -37,12 +37,18 @@ struct Ctx {
 }
 
 async fn setup(prefix: &str) -> Ctx {
+    setup_with_option_e(prefix, false).await
+}
+
+async fn setup_with_option_e(prefix: &str, option_e: bool) -> Ctx {
     let url = comicpile_roll_service::test_support::database_url().await;
     let state = Arc::new(test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-thread-series-cover-secret".into()),
             "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            "OPTION_E_ENABLED" if option_e => Some("true".into()),
+            "OPTION_E_APPROVED_PREVIEW" if option_e => Some("injected-by-test".into()),
             _ => None,
         })
         .unwrap(),
