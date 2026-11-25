@@ -3,7 +3,7 @@ import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
 import { issuesApi } from '../services/api-issues'
-import type { IssueListParams, IssueReadOperationResponse } from '../services/api-issues'
+import type { IssueListParams, IssueReadOperationResponse, IssueReadOperationUndoResponse } from '../services/api-issues'
 import { issueDependenciesApi } from '../services/api-dependencies'
 import type { Issue, IssueListResponse } from '../types'
 
@@ -16,8 +16,8 @@ export interface IssueCorrectionIssuesApi {
   ) => Promise<IssueListResponse>
   markRead: (issueId: number) => Promise<void>
   markUnread: (issueId: number) => Promise<void>
-  bulkMarkRead: (issueIds: number[]) => Promise<unknown>
-  bulkMarkUnread: (issueIds: number[]) => Promise<unknown>
+  bulkMarkRead: (issueIds: number[]) => Promise<IssueReadOperationResponse>
+  bulkMarkUnread: (issueIds: number[]) => Promise<IssueReadOperationUndoResponse | IssueReadOperationResponse>
   move: (issueId: number, afterIssueId: number | null) => Promise<void>
 }
 
