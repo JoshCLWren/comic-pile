@@ -367,13 +367,25 @@ async fn concurrent_creates_apply_once_and_retry_is_idempotent() {
         )),
     );
     let statuses = [first.unwrap().status(), second.unwrap().status()];
-    assert_eq!(statuses.iter().filter(|status| **status == StatusCode::CREATED).count(), 1);
     assert_eq!(
-        statuses.iter().filter(|status| **status == StatusCode::BAD_REQUEST).count(),
+        statuses
+            .iter()
+            .filter(|status| **status == StatusCode::CREATED)
+            .count(),
+        1
+    );
+    assert_eq!(
+        statuses
+            .iter()
+            .filter(|status| **status == StatusCode::BAD_REQUEST)
+            .count(),
         1,
         "the losing sibling write must be a retryable duplicate, not a 500"
     );
-    assert_eq!(persisted_order(&state, thread_id).await, vec!["1", "2", "3", "4"]);
+    assert_eq!(
+        persisted_order(&state, thread_id).await,
+        vec!["1", "2", "3", "4"]
+    );
 }
 
 #[tokio::test]
@@ -381,15 +393,24 @@ async fn unrelated_reader_cannot_preview_or_create_another_readers_thread() {
     let (state, _token, _csrf, user_id, _guard) = setup_user("bprd-4654-owner").await;
     let thread_id = seed_thread(&state, user_id, "Private series").await;
     seed_issue(&state, thread_id, "1", 1).await;
-    let (other_token, other_csrf, _) =
-        register_user(&state, &format!("foreign-{}-{}", std::process::id(), unique_suffix())).await;
+    let (other_token, other_csrf, _) = register_user(
+        &state,
+        &format!("foreign-{}-{}", std::process::id(), unique_suffix()),
+    )
+    .await;
 
     for path in [
         format!("/api/v2/threads/{thread_id}/issues/preview"),
         format!("/api/v2/threads/{thread_id}/issues"),
     ] {
         let response = router(state.clone())
-            .oneshot(authed("POST", &path, &other_token, &other_csrf, json!({"issue_range": "2"})))
+            .oneshot(authed(
+                "POST",
+                &path,
+                &other_token,
+                &other_csrf,
+                json!({"issue_range": "2"}),
+            ))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);

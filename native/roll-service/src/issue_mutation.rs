@@ -790,7 +790,9 @@ fn build_after_items(
         .unwrap_or_default();
     let mut number_counts: BTreeMap<&str, usize> = BTreeMap::new();
     for issue in &inputs.core.issues {
-        *number_counts.entry(issue.issue_number.as_str()).or_default() += 1;
+        *number_counts
+            .entry(issue.issue_number.as_str())
+            .or_default() += 1;
     }
 
     let project = |id: Option<i32>, number: &str, position: i32, is_new: bool| {
@@ -824,9 +826,7 @@ fn build_after_items(
                     inputs
                         .prerequisites
                         .iter()
-                        .filter(|edge| {
-                            edge.source_issue_id == id || edge.target_issue_id == id
-                        })
+                        .filter(|edge| edge.source_issue_id == id || edge.target_issue_id == id)
                         .count() as i32
                 })
                 .unwrap_or(0),
@@ -847,7 +847,12 @@ fn build_after_items(
         .iter()
         .enumerate()
         .map(|(index, (id, number))| {
-            project((*id != 0).then_some(*id), number, index as i32 + 1, *id == 0)
+            project(
+                (*id != 0).then_some(*id),
+                number,
+                index as i32 + 1,
+                *id == 0,
+            )
         })
         .collect();
     (before, after)
