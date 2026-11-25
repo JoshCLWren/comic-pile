@@ -157,8 +157,9 @@ export function RollHeader({
               className="mt-2 h-px w-full bg-[var(--theme-comic-accent)] opacity-60"
             />
           </div>
-          {onBackToQueue && (
-            <div className="flex min-w-0 items-start">
+          <div className="flex min-w-0 flex-wrap items-start justify-end gap-2">
+            {resetDiceButton}
+            {onBackToQueue && (
               <button
                 type="button"
                 onClick={onBackToQueue}
@@ -170,8 +171,8 @@ export function RollHeader({
                 </span>
                 Back to queue
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
