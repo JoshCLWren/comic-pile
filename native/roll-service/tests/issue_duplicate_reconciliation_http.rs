@@ -1269,10 +1269,29 @@ async fn three_alias_pairs_leave_one_rollable_identity_and_full_history() {
     .await;
     assert_eq!(status, StatusCode::OK, "{eligible:?}");
     let ids = eligible["issue_ids"].as_array().unwrap();
-    for canonical in [c1, c2, c3] {
-        assert!(ids.contains(&json!(canonical)), "{eligible:?}");
-    }
     for duplicate in [d1, d2, d3] {
         assert!(!ids.contains(&json!(duplicate)), "{eligible:?}");
     }
+    // Each physical comic leaves exactly one unsuppressed identity, with one
+    // audit row each; the aliases are marked, not deleted.
+    let unmerged: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM issues \
+             WHERE id = ANY($1::int[]) AND merged_into_issue_id IS NULL",
+            &[&vec![c1, c2, c3, d1, d2, d3]],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(unmerged, 3, "one canonical identity per physical comic");
+    let suppressed: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM issues \
+             WHERE id = ANY($1::int[]) AND merged_into_issue_id IS NOT NULL",
+            &[&vec![d1, d2, d3]],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(suppressed, 3, "every alias is suppressed, never deleted");
 }
