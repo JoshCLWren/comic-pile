@@ -4464,6 +4464,13 @@ export interface components {
         ConfirmIdentityRequest: {
             /** Format: int32 */
             comicvine_issue_id: number;
+            /**
+             * Format: int64
+             * @description Last identity version observed by the editor; enables safe retries.
+             */
+            expected_version?: number | null;
+            /** @description Optional overall-series alias committed with the exact identity. */
+            overall_issue_number?: string | null;
         };
         /** @description Python `ConnectedThreadInfo`. */
         ConnectedThreadInfo: {
@@ -5840,14 +5847,23 @@ export interface components {
             /** @description Whether a confirmed ComicVine issue mapping exists. */
             has_confirmed_identity: boolean;
             /**
+             * Format: int64
+             * @description Optimistic version for atomic numbering/provider-identity edits.
+             */
+            identity_version: number;
+            /**
              * Format: int32
              * @description Owned issue identifier.
              */
             issue_id: number;
-            /** @description Exact issue number within the run. */
+            /** @description Authored story-local issue number within the run. */
             issue_number: string;
             /** @description Stored mapping state (``confirmed``, ``candidate``, ...). */
             mapping_state: string;
+            /** @description Alternate overall-series number for the same physical issue. */
+            overall_issue_number?: string | null;
+            /** @description Actual issue number inside the confirmed provider volume. */
+            provider_issue_number?: string | null;
             /**
              * Format: double
              * @description Effective per-issue saved rating.
@@ -5916,7 +5932,10 @@ export interface components {
             created_at: string;
             /** Format: int32 */
             id: number;
+            /** Format: int64 */
+            identity_version: number;
             issue_number: string;
+            overall_issue_number?: string | null;
             /** Format: int32 */
             position: number;
             read_at?: string | null;
@@ -5941,8 +5960,13 @@ export interface components {
             confirmed_mappings: components["schemas"]["IssueIdentityMapping"][];
             has_confirmed_identity: boolean;
             has_unresolved: boolean;
+            /** Format: int64 */
+            identity_version: number;
             /** Format: int32 */
             issue_id: number;
+            issue_number: string;
+            overall_issue_number?: string | null;
+            provider_issue_number?: string | null;
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
@@ -6167,18 +6191,6 @@ export interface components {
             /** Format: int32 */
             tracked_issue_count: number;
         };
-        /** @description Python `ConfirmIdentityRequest` (lax `int`). */
-        NativeConfirmIdentityRequest: {
-            /** Format: int32 */
-            comicvine_issue_id: number;
-            /**
-             * Format: int64
-             * @description Last identity version observed by the editor; enables safe retries.
-             */
-            expected_version?: number | null;
-            /** @description Optional overall-series alias committed with the exact identity. */
-            overall_issue_number?: string | null;
-        };
         /** @description Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`. */
         NativeDependencyGroupDetailMemberResponse: {
             issue?: components["schemas"]["IssueDetailResponse"] | null;
@@ -6245,104 +6257,11 @@ export interface components {
             id: number;
             name: string;
         };
-        NativeIssueCard: {
-            /** @description Confirmed provider issue identifier, never a provisional candidate. */
-            comicvine_issue_id?: string | null;
-            /** @description Exact provider-supplied CDN URL. Null when unmapped; never image bytes. */
-            cover_image_url?: string | null;
-            /** @description Whether a confirmed ComicVine issue mapping exists. */
-            has_confirmed_identity: boolean;
-            /**
-             * Format: int64
-             * @description Optimistic version for atomic numbering/provider-identity edits.
-             */
-            identity_version: number;
-            /**
-             * Format: int32
-             * @description Owned issue identifier.
-             */
-            issue_id: number;
-            /** @description Authored story-local issue number within the run. */
-            issue_number: string;
-            /** @description Stored mapping state (``confirmed``, ``candidate``, ...). */
-            mapping_state: string;
-            /** @description Alternate overall-series number for the same physical issue. */
-            overall_issue_number?: string | null;
-            /** @description Actual issue number inside the confirmed provider volume. */
-            provider_issue_number?: string | null;
-            /**
-             * Format: double
-             * @description Effective per-issue saved rating.
-             */
-            rating?: number | null;
-            /** @description UTC read timestamp, when read. */
-            read_at?: string | null;
-            /** @description Stored read state (``read`` or ``unread``). */
-            status: string;
-            /**
-             * Format: int32
-             * @description Owning thread identifier.
-             */
-            thread_id: number;
-            /** @description Display series/run title. */
-            thread_title: string;
-        };
-        NativeIssueCardsResponse: {
-            /** @description Owned cards in first-request order; foreign or missing IDs are omitted. */
-            items: components["schemas"]["NativeIssueCard"][];
-        };
         /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
         NativeIssueCreatorsEntry: {
             creators: components["schemas"]["CreatorCredit"][];
             /** Format: int32 */
             issue_id: number;
-        };
-        /** @description Wire parity with Python `IssueResponse` (`app/schemas/issue.py`). */
-        NativeIssueDetailResponse: {
-            created_at: string;
-            /** Format: int32 */
-            id: number;
-            /** Format: int64 */
-            identity_version: number;
-            issue_number: string;
-            overall_issue_number?: string | null;
-            /** Format: int32 */
-            position: number;
-            read_at?: string | null;
-            status: string;
-            /** Format: int32 */
-            thread_id: number;
-        };
-        NativeIssueIdentityResponse: {
-            candidate_mappings: components["schemas"]["IssueIdentityMapping"][];
-            comicvine_issue_id?: string | null;
-            confirmed_mappings: components["schemas"]["IssueIdentityMapping"][];
-            has_confirmed_identity: boolean;
-            has_unresolved: boolean;
-            /** Format: int64 */
-            identity_version: number;
-            /** Format: int32 */
-            issue_id: number;
-            issue_number: string;
-            overall_issue_number?: string | null;
-            provider_issue_number?: string | null;
-            /** Format: int32 */
-            thread_id: number;
-            thread_title: string;
-        };
-        NativeIssueReadRateResponse: {
-            /**
-             * Format: int32
-             * @description Die after this rating, when source is "roll_offer". Null for "direct" source.
-             */
-            die_after?: number | null;
-            /** Format: double */
-            final_rating?: number | null;
-            issue: components["schemas"]["NativeIssueCard"];
-            rating_event_created: boolean;
-            read_event_created: boolean;
-            replayed: boolean;
-            thread: components["schemas"]["ThreadProgress"];
         };
         /** @description One issue row (Python `IssueResponse`). */
         NativeIssueResponse: {
@@ -6490,15 +6409,6 @@ export interface components {
             /** Format: int32 */
             reading_order_id: number;
         };
-        /** @description Python `ReplaceIdentityRequest` (`reason` `max_length=500`). */
-        NativeReplaceIdentityRequest: {
-            /** Format: int32 */
-            comicvine_issue_id: number;
-            /** Format: int64 */
-            expected_version?: number | null;
-            overall_issue_number?: string | null;
-            reason?: string | null;
-        };
         /** @description Response body: the Python `RollResponse` projection for a manual pick. */
         NativeRollResponse: {
             /** Format: int32 */
@@ -6645,14 +6555,6 @@ export interface components {
             issues: components["schemas"]["NativeIssueCreatorsEntry"][];
             /** Format: int32 */
             thread_id: number;
-        };
-        NativeThreadIssueListResponse: {
-            issues: components["schemas"]["NativeIssueDetailResponse"][];
-            next_page_token?: string | null;
-            /** Format: int64 */
-            page_size: number;
-            /** Format: int64 */
-            total_count: number;
         };
         /** @description Python `ThreadResponse`. */
         NativeThreadResponse: {
@@ -7992,6 +7894,9 @@ export interface components {
         ReplaceIdentityRequest: {
             /** Format: int32 */
             comicvine_issue_id: number;
+            /** Format: int64 */
+            expected_version?: number | null;
+            overall_issue_number?: string | null;
             reason?: string | null;
         };
         /**
@@ -11977,7 +11882,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeThreadIssueListResponse"];
+                    "application/json": components["schemas"]["ThreadIssueListResponse"];
                 };
             };
             /** @description Invalid page token */
@@ -13156,7 +13061,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -13200,7 +13105,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
                 };
             };
             /** @description Identity or correction conflict */
@@ -13252,7 +13157,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeConfirmIdentityRequest"];
+                "application/json": components["schemas"]["ConfirmIdentityRequest"];
             };
         };
         responses: {
@@ -13262,7 +13167,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
                 };
             };
             /** @description Identity or correction conflict */
@@ -13314,7 +13219,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeReplaceIdentityRequest"];
+                "application/json": components["schemas"]["ReplaceIdentityRequest"];
             };
         };
         responses: {
@@ -13324,7 +13229,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
                 };
             };
             /** @description Identity or correction conflict */
@@ -15357,7 +15262,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueCardsResponse"];
+                    "application/json": components["schemas"]["IssueCardsResponse"];
                 };
             };
             /** @description Invalid or unbounded issue id list */
@@ -15387,7 +15292,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueDetailResponse"];
+                    "application/json": components["schemas"]["IssueDetailResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -15484,7 +15389,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueReadRateResponse"];
+                    "application/json": components["schemas"]["IssueReadRateResponse"];
                 };
             };
             /** @description Issue not found for this reader */
