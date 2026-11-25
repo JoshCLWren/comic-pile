@@ -16,6 +16,10 @@ interface QueueListProps {
   sentinelRef: React.Ref<HTMLDivElement>
   hasNextPage: boolean
   isLoading?: boolean
+  /** True when the authoritative list request failed. */
+  isError?: boolean
+  /** Retry the failed authoritative list request. */
+  onRetry?: () => void
   /**
    * Opens the existing series-create flow. The Queue page wires this to the
    * create modal; direct list consumers (tests, regression harnesses) may
@@ -47,6 +51,8 @@ export function QueueList({
   useVirtualizer,
   onAddSeries,
   isLoading = false,
+  isError = false,
+  onRetry,
 }: QueueListProps) {
   // The current filtered page can be empty while its replacement request is
   // still loading. Use the whole-queue total, not the loaded row count, to
@@ -59,6 +65,31 @@ export function QueueList({
         data-testid="queue-search-loading"
       >
         Loading series...
+      </div>
+    )
+  }
+
+  if (isError && filteredThreads.length === 0) {
+    return (
+      <div
+        role="alert"
+        className="space-y-2 text-center text-[var(--theme-error)] py-8"
+        data-testid="queue-load-error"
+      >
+        <p>
+          {isSearching
+            ? 'Couldn\'t load series matching your search.'
+            : 'Couldn\'t load your queue.'}
+        </p>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mx-auto block min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
+          >
+            Try again
+          </button>
+        )}
       </div>
     )
   }
