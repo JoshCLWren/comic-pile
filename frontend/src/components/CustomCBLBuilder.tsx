@@ -425,6 +425,9 @@ export default function CustomCBLBuilder({
     const resolveName = (issueId: number) => entryNames.get(issueId) ?? `Issue #${issueId}`
     return describeCyclePath(saveErrorDetail.cyclePath, resolveName)
   }, [entryNames, saveErrorDetail])
+  const staleWriteError = saveErrorDetail?.code === 'reading_list_stale_write'
+    ? (saveErrorDetail.message ?? 'This Reading List changed since you loaded it. Refresh to review the latest version, then reapply your edit.')
+    : null
 
   const matchedEntries = useMemo(() => {
     const query = entrySearch.trim().toLocaleLowerCase()
@@ -681,7 +684,7 @@ export default function CustomCBLBuilder({
     }
   }
 
-  const structuredSaveError = confirmationChanges !== null || cycleError !== null
+  const structuredSaveError = confirmationChanges !== null || cycleError !== null || staleWriteError !== null
   const error =
     exportError ??
     (createCycleError ? null : createMutation.error) ??
@@ -1128,6 +1131,25 @@ export default function CustomCBLBuilder({
             </div>
           )}
           {cycleError && <p role="alert" className="text-sm text-[var(--theme-warning)]">{cycleError}</p>}
+          {staleWriteError && (
+            <div role="alert" className="space-y-2 rounded-xl border border-[var(--theme-warning)]/60 p-3">
+              <p className="text-sm text-[var(--theme-warning)]">{staleWriteError}</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    saveMutation.reset()
+                    setLoadedListId(null)
+                    void detailQuery.refetch()
+                  }}
+                  className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)]"
+                >
+                  Refresh latest list
+                </button>
+                <p className="self-center text-xs text-[var(--theme-text-muted)]">Refreshing loads the latest saved list. Copy any edits you need before refreshing.</p>
+              </div>
+            </div>
+          )}
           {message && <p role="status" className="text-sm text-emerald-300">{message}</p>}
           {errorText && <p role="alert" className="text-sm text-red-300">{errorText}</p>}
         </div>
