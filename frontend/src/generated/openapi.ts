@@ -3621,7 +3621,7 @@ export interface components {
             threads: components["schemas"]["OrderedExplanations"];
         };
         /** @enum {string} */
-        BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite";
+        BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite" | "reading_cycle";
         /** @enum {string} */
         BlockerOrigin: "reading_list" | "reader_prerequisite";
         /** @description One blocking issue (Python `BlockingDependency`). */
@@ -3748,8 +3748,8 @@ export interface components {
             /** Format: int64 */
             snoozed_count: number;
             /**
-             * @description Every owned thread the session currently has snoozed, uncapped, so
-             *     consumers such as Queue can resolve per-row snooze state.
+             * @description Every owned thread in this browser's temporary snooze set, uncapped
+             *     within the cookie limit, so Queue can resolve per-row snooze state.
              */
             snoozed_thread_ids: number[];
             /**
@@ -4554,6 +4554,8 @@ export interface components {
         };
         ContinuityReleaseSourceResponse: {
             created_at: string;
+            /** Format: int32 */
+            custom_cbl_list_id?: number | null;
             enabled: boolean;
             /** Format: int32 */
             external_identity_id: number;
@@ -7827,6 +7829,8 @@ export interface components {
             visibility: string;
         };
         ReleaseSourceCreate: {
+            /** Format: int32 */
+            custom_cbl_list_id?: number | null;
             /** Format: int32 */
             external_identity_id: number;
             /** Format: int32 */

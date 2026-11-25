@@ -42,6 +42,10 @@ jobs:
         shell: bash
         run: bash .rotisserie/runtime/factory/.github/scripts/install-opencode-v2.sh
 
+      - name: Set up Python 3.14 for Rotisserie scripts
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
       - name: Exchange Go OIDC, verify zero-price model, and make one inference
         shell: bash
         env:
