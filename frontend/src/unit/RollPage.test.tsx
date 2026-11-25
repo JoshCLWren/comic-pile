@@ -22,6 +22,7 @@ import { useRate } from '../hooks'
 import { useResetDice } from '../hooks/useRoll'
 import { threadsApi } from '../services/api-threads'
 import { createRollApi, readRollSnoozes, writeRollSnoozes } from '../services/api-roll'
+import type { RollResourcesApi } from '../services/rollResourcesApi'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { createHttpClientStub } from './httpClientStub'
@@ -449,14 +450,14 @@ it('recovers the real reset flow from browser-only snoozes without reading, rati
 
   // The scoped resources read the same cookie as the offer, so clearing it on
   // a confirmed reset must restore the hidden face on the next scoped refresh.
-  const resourcesApi = {
+  const resourcesApi: RollResourcesApi = {
     dieState: vi.fn(async () => ({
       die: currentDie,
       ladder: [2, 4, 6, 8, 10, 12, 20],
       default_die: 6,
       last_roll: null,
     })),
-    eligibleIssueIds: vi.fn(async (_snoozed: readonly number[]) => ({
+    eligibleIssueIds: vi.fn(async (_snoozed: readonly number[] = []) => ({
       die: currentDie,
       issue_ids: readRollSnoozes().length === 0 ? [101] : [],
       thread_ids: readRollSnoozes().length === 0 ? [1] : [],
@@ -494,6 +495,14 @@ it('recovers the real reset flow from browser-only snoozes without reading, rati
     isPending: false,
     isError: false,
     error: null,
+  })
+  // Seed the exact pre-reset scoped snapshot: d20 and an empty pool caused
+  // only by the browser snooze cookie. Bootstrap still claims zero snoozes.
+  queryClient.setQueryData(queryKeys.roll.dieState(), {
+    die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null,
+  })
+  queryClient.setQueryData(queryKeys.roll.eligibleIssueIds([1]), {
+    die: 20, issue_ids: [], thread_ids: [], pool_reason: 'ready',
   })
 
   renderRollPage()
