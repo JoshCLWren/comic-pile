@@ -253,7 +253,7 @@ function InboxItemCard({
             )}
 
             {item.next_steps && item.next_steps.length > 0 && (
-              <div className="mt-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-base)] p-2">
+              <div className="mt-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-2">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--theme-text-muted)]">
                   Next steps
                 </div>
