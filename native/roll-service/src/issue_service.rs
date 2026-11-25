@@ -821,10 +821,23 @@ pub(crate) async fn persist(
     .await
     .map_err(db::query_error)?;
 
+    let requested_alias = match &request.issue_number_alias {
+        Some(Some(value)) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                Some(None)
+            } else {
+                Some(Some(trimmed.to_string()))
+            }
+        }
+        Some(None) => Some(None),
+        None => None,
+    };
     let payload = json!({
         "issue_id": issue_id,
         "status": request.status,
         "rating": request.rating,
+        "issue_number_alias": requested_alias,
         "source": source,
     });
     // Lock the owner thread before the issue; owner transfers and concurrent
@@ -901,7 +914,8 @@ pub(crate) async fn persist(
 
     let issue = tx
         .query_one(
-            "SELECT status, issue_number, position, read_at::text, catalog_issue_id
+            "SELECT status, issue_number, position, read_at::text, catalog_issue_id,
+                    NULLIF(BTRIM(issue_number_alias), '')
              FROM issues
              WHERE id=$1 AND thread_id=$2 FOR UPDATE",
             &[&issue_id, &thread_id],
@@ -910,9 +924,11 @@ pub(crate) async fn persist(
         .map_err(db::query_error)?;
     let old_status: String = issue.get(0);
     let issue_number: String = issue.get(1);
+    let old_alias: Option<String> = issue.get(5);
     let issue_state = json!({
         "id": issue_id,
         "number": issue_number,
+        "issue_number_alias": old_alias,
         "status": old_status,
         "read_at": issue.get::<_, Option<String>>(3),
         "position": issue.get::<_, i32>(2),
@@ -986,6 +1002,19 @@ pub(crate) async fn persist(
     // Track die_after and source_roll_event_id for roll_offer source
     let mut die_after: Option<i32> = None;
     let mut source_roll_event_id: Option<i32> = None;
+
+    let alias_changed = requested_alias
+        .as_ref()
+        .is_some_and(|new_alias| new_alias.as_deref() != old_alias.as_deref());
+    if alias_changed {
+        let new_alias = requested_alias.clone().unwrap_or(None);
+        tx.execute(
+            "UPDATE issues SET issue_number_alias=$1 WHERE id=$2 AND thread_id=$3",
+            &[&new_alias, &issue_id, &thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
 
     if newly_read {
         tx.execute(
