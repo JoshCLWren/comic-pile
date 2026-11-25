@@ -746,6 +746,19 @@ async fn bulk_mark(
         .await
         .map_err(db::query_error)?;
     }
+    // Record the high-water mark of the events table after this operation so undo
+    // can detect any later read/unread mutation (including ABA sequences).
+    let cursor_row = tx
+        .query_one("SELECT COALESCE(MAX(id), 0)::int FROM events", &[])
+        .await
+        .map_err(db::query_error)?;
+    let applied_event_cursor: i32 = cursor_row.get(0);
+    tx.execute(
+        "UPDATE issue_read_operations SET applied_event_cursor = $1 WHERE id = $2",
+        &[&applied_event_cursor, &operation_id],
+    )
+    .await
+    .map_err(db::query_error)?;
     issue_service::refresh_blocked_threads(&tx, user.id()).await?;
 
     let items = issues
@@ -1021,7 +1034,8 @@ pub async fn undo_issue_read_operation(
         .query_opt(
             "SELECT id, operation_type,
                     to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
-                    to_char(undone_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')
+                    to_char(undone_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                    applied_event_cursor
              FROM issue_read_operations
              WHERE id = $1 AND user_id = $2
              FOR UPDATE",
@@ -1033,6 +1047,7 @@ pub async fn undo_issue_read_operation(
 
     let op_type: String = op.get(1);
     let undone_at: Option<String> = op.get(3);
+    let applied_event_cursor: Option<i32> = op.get(4);
     if undone_at.is_some() {
         return Err(ApiError::BadRequest(format!(
             "Issue read operation {operation_id} has already been undone"
@@ -1042,7 +1057,7 @@ pub async fn undo_issue_read_operation(
     let item_rows = tx
         .query(
             "SELECT item.issue_id, item.thread_id, item.issue_number, item.previous_status,
-                    i.status, i.position
+                    item.previous_read_at, i.status, i.position
              FROM issue_read_operation_items item
              JOIN issues i ON i.id = item.issue_id
              JOIN threads t ON t.id = item.thread_id
@@ -1065,43 +1080,69 @@ pub async fn undo_issue_read_operation(
         }
     };
 
+    // Collect all affected issue ids so a single query can detect any read/unread
+    // event recorded after this operation (concurrent later actions must be
+    // preserved, including read -> unread -> read ABA sequences).
+    let item_issue_ids: Vec<i32> = item_rows.iter().map(|row| row.get(0)).collect();
+    let later_changed: std::collections::HashSet<i32> = if let Some(cursor) = applied_event_cursor {
+        let rows = tx
+            .query(
+                "SELECT DISTINCT issue_id FROM events
+                 WHERE issue_id = ANY($1::int[])
+                   AND type IN ('issue_read', 'issue_unread')
+                   AND id > $2",
+                &[&item_issue_ids, &cursor],
+            )
+            .await
+            .map_err(db::query_error)?;
+        rows.iter().map(|row| row.get(0)).collect()
+    } else {
+        std::collections::HashSet::new()
+    };
+
     let mut undo_issue_ids: Vec<i32> = Vec::new();
     let mut skipped_issue_ids: Vec<i32> = Vec::new();
     let mut undo_thread_ids: Vec<i32> = Vec::new();
     let mut undo_issue_numbers: Vec<String> = Vec::new();
     let mut undo_previous_statuses: Vec<String> = Vec::new();
+    let mut undo_previous_read_ats: Vec<Option<chrono::DateTime<chrono::Utc>>> = Vec::new();
 
     for row in &item_rows {
         let issue_id: i32 = row.get(0);
         let thread_id: i32 = row.get(1);
         let issue_number: String = row.get(2);
         let previous_status: String = row.get(3);
-        let current_status: String = row.get(4);
-        if current_status == applied_status {
+        let previous_read_at: Option<chrono::DateTime<chrono::Utc>> = row.get(4);
+        let current_status: String = row.get(5);
+        // An issue is only reverted when its current state is still exactly what
+        // this bulk operation produced. A later mutation (including an ABA
+        // sequence that lands back on the applied status) leaves a newer event
+        // and must be preserved.
+        if current_status == applied_status && !later_changed.contains(&issue_id) {
             undo_issue_ids.push(issue_id);
             undo_thread_ids.push(thread_id);
             undo_issue_numbers.push(issue_number);
-            undo_previous_statuses.push(previous_status);
+            undo_previous_statuses.push(previous_status.clone());
+            undo_previous_read_ats.push(previous_read_at);
         } else {
             skipped_issue_ids.push(issue_id);
         }
     }
 
     if !undo_issue_ids.is_empty() {
-        // Restore each issue to its previous status. For read->unread undo, clear read_at.
-        // For unread->read undo, we cannot restore the original read_at from the operation
-        // record beyond previous_status; use NOW() only when restoring to read.
+        // Restore each issue to its previous status and its recorded read_at. A
+        // previously read issue keeps its original timestamp; a previously unread
+        // issue has read_at cleared. Never substitute NOW() for a recorded value.
         let statuses: Vec<String> = undo_previous_statuses.clone();
+        let restore_read_ats: Vec<Option<chrono::DateTime<chrono::Utc>>> =
+            undo_previous_read_ats.clone();
         tx.execute(
             "UPDATE issues AS i SET
                  status = u.status,
-                 read_at = CASE
-                     WHEN u.status = 'read' THEN COALESCE(i.read_at, NOW())
-                     ELSE NULL
-                 END
-             FROM unnest($1::int[], $2::text[]) AS u(issue_id, status)
+                 read_at = u.read_at
+             FROM unnest($1::int[], $2::text[], $3::timestamptz[]) AS u(issue_id, status, read_at)
              WHERE i.id = u.issue_id",
-            &[&undo_issue_ids, &statuses],
+            &[&undo_issue_ids, &statuses, &restore_read_ats],
         )
         .await
         .map_err(db::query_error)?;

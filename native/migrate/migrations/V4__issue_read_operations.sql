@@ -8,6 +8,7 @@ CREATE TABLE public.issue_read_operations (
     operation_type character varying(32) NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     undone_at timestamp with time zone,
+    applied_event_cursor integer,
     CONSTRAINT ck_issue_read_operations_type CHECK (((operation_type)::text = ANY ((ARRAY['bulk_mark_read'::character varying, 'bulk_mark_unread'::character varying])::text[])))
 );
 
