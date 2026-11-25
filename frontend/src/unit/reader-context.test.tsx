@@ -40,6 +40,7 @@ const thanosSeries = {
 
 describe('SeriesPanel', () => {
   beforeEach(() => {
+    // SAFETY: mocked hook returns the partial query shape; as never satisfies the full UseQueryResult return type
     vi.mocked(useIssueCards).mockReturnValue({ data: [], isPending: false, isError: false } as never)
   })
 
@@ -130,6 +131,7 @@ describe('SeriesPanel', () => {
   })
 
   it('renders shared covers for previous and recent issues when card data exists', () => {
+    // SAFETY: mocked hook returns the partial query shape; as never satisfies the full UseQueryResult return type
     vi.mocked(useIssueCards).mockReturnValue({
       data: [
         {

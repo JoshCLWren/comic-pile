@@ -55,7 +55,7 @@ Live render-path audit for [#4445](https://github.com/JoshCLWren/comic-pile/issu
 | `pages/ContinuityPlansIndexPage.tsx` | Plan records, not comic/series rows. |
 | `pages/CreatorsPage.tsx` | Creator people records, not comic/series rows. |
 | Native `<select>` option text in `DependencyBuilder` / `continuity/ComicSelectors` | Browser-native controls cannot render images. |
-| Transient copy prompt `RollPage/components/PostRateCopyPrompt.tsx` | Text-only confirmation/copy affordance; no cover data in prompt contract. |
+| Transient copy prompt `pages/RollPage/components/PostRateCopyPrompt.tsx` | Text-only confirmation/copy affordance; no cover data in prompt contract. |
 
 ## Verification
 
