@@ -6,10 +6,10 @@
 #![forbid(unsafe_code)]
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use tokio_postgres::Transaction;
 use utoipa::ToSchema;
@@ -141,10 +141,6 @@ fn conflict(msg: impl Into<String>) -> ApiError {
     ApiError::Conflict(msg.into())
 }
 
-fn internal(msg: &str) -> ApiError {
-    ApiError::Internal(msg.to_string())
-}
-
 fn iso(ts: chrono::DateTime<chrono::Utc>) -> String {
     ts.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
@@ -182,11 +178,12 @@ async fn load_issue_evidence(
     let created_at = required_ts(&issue_row, 6);
     let created_at_dt: chrono::DateTime<chrono::Utc> = issue_row.get(6);
     let merged_into_issue_id: Option<i32> = issue_row.get(7);
-    let is_synthetic_placeholder_read = if let Some(read_dt) = issue_row.get::<_, Option<chrono::DateTime<chrono::Utc>>>(5) {
-        read_dt < created_at_dt
-    } else {
-        false
-    };
+    let is_synthetic_placeholder_read =
+        if let Some(read_dt) = issue_row.get::<_, Option<chrono::DateTime<chrono::Utc>>>(5) {
+            read_dt < created_at_dt
+        } else {
+            false
+        };
 
     // Comic Vine mapping
     let cv_row = tx
@@ -216,10 +213,24 @@ async fn load_issue_evidence(
             let vol_id = vol_id_str
                 .as_deref()
                 .and_then(|s| s.parse::<i32>().ok())
-                .or_else(|| meta.get("volume_id").and_then(|v| v.as_i64()).map(|v| v as i32));
-            let issue_num = meta.get("issue_number").and_then(|v| v.as_str()).map(String::from);
-            let story_num = meta.get("story_arc_number").and_then(|v| v.as_str()).map(String::from)
-                .or_else(|| meta.get("story_number").and_then(|v| v.as_str()).map(String::from));
+                .or_else(|| {
+                    meta.get("volume_id")
+                        .and_then(|v| v.as_i64())
+                        .map(|v| v as i32)
+                });
+            let issue_num = meta
+                .get("issue_number")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let story_num = meta
+                .get("story_arc_number")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+                .or_else(|| {
+                    meta.get("story_number")
+                        .and_then(|v| v.as_str())
+                        .map(String::from)
+                });
             (Some(cv_id), vol_id, issue_num, story_num)
         } else {
             (None, None, None, None)
@@ -455,7 +466,9 @@ async fn detect_duplicates_for_user(
     Ok(groups)
 }
 
-fn suggest_canonical_and_duplicates(evidence: &[DuplicateIssueEvidence]) -> (Option<i32>, Vec<i32>) {
+fn suggest_canonical_and_duplicates(
+    evidence: &[DuplicateIssueEvidence],
+) -> (Option<i32>, Vec<i32>) {
     if evidence.is_empty() {
         return (None, vec![]);
     }
@@ -540,7 +553,8 @@ fn build_preview_actions(
 
     for dup in duplicates {
         // Check for ambiguity - different comicvine volumes with no clear relationship
-        if let (Some(c_cv), Some(d_cv)) = (&canonical.comicvine_volume_id, &dup.comicvine_volume_id) {
+        if let (Some(c_cv), Some(d_cv)) = (&canonical.comicvine_volume_id, &dup.comicvine_volume_id)
+        {
             if c_cv != d_cv {
                 // Different volumes - could be story/overall relationship, warn but allow with decision
                 actions.push(ReconcilePreviewAction {
@@ -604,7 +618,9 @@ fn build_preview_actions(
                     kind: "move_read_events".to_string(),
                     description: format!(
                         "Move {} read event(s) from duplicate {} to canonical {}",
-                        dup.read_events.len(), dup.issue_id, canonical.issue_id
+                        dup.read_events.len(),
+                        dup.issue_id,
+                        canonical.issue_id
                     ),
                     safe: true,
                     requires_decision: false,
@@ -641,7 +657,8 @@ fn build_preview_actions(
     // If canonical has no CV mapping but a duplicate does, that's fine - we move it.
     // Warn if canonical already read and duplicate also has real (non-synthetic) read - potential double-count
     for dup in duplicates {
-        if canonical.status == "read" && dup.status == "read" && !dup.is_synthetic_placeholder_read {
+        if canonical.status == "read" && dup.status == "read" && !dup.is_synthetic_placeholder_read
+        {
             warnings.push(format!(
                 "Both canonical {} and duplicate {} are read with non-synthetic timestamps; reconciliation will preserve the canonical's actual read state and move real events without double-counting.",
                 canonical.issue_id, dup.issue_id
@@ -665,7 +682,12 @@ fn build_preview_actions(
 
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(detect_duplicates, preview_reconciliation, apply_reconciliation, undo_reconciliation),
+    paths(
+        detect_duplicates,
+        preview_reconciliation,
+        apply_reconciliation,
+        undo_reconciliation
+    ),
     components(schemas(
         DuplicateIssueEvidence,
         DuplicateRatingEvent,
@@ -735,7 +757,9 @@ pub async fn preview_reconciliation(
         return Err(bad_request("too many duplicate issues"));
     }
     if req.duplicate_issue_ids.contains(&req.canonical_issue_id) {
-        return Err(bad_request("canonical_issue_id must not be in duplicate_issue_ids"));
+        return Err(bad_request(
+            "canonical_issue_id must not be in duplicate_issue_ids",
+        ));
     }
 
     let mut conn = db::checkout(&state).await?;
@@ -752,8 +776,15 @@ pub async fn preview_reconciliation(
         duplicates.push(load_issue_evidence(&tx, user.id(), *id).await?);
     }
 
-    let (actions, warnings, can_apply) = build_preview_actions(&canonical, &duplicates, &req.decisions);
-    let preview_token = compute_preview_token(user.id(), req.canonical_issue_id, &req.duplicate_issue_ids, &canonical, &duplicates);
+    let (actions, warnings, can_apply) =
+        build_preview_actions(&canonical, &duplicates, &req.decisions);
+    let preview_token = compute_preview_token(
+        user.id(),
+        req.canonical_issue_id,
+        &req.duplicate_issue_ids,
+        &canonical,
+        &duplicates,
+    );
 
     tx.commit().await.map_err(db_err)?;
     Ok(Json(ReconcilePreviewResponse {
@@ -766,13 +797,6 @@ pub async fn preview_reconciliation(
         can_apply,
         preview_token,
     }))
-}
-
-fn is_synthetic_read(read_at: Option<chrono::DateTime<chrono::Utc>>, created_at: chrono::DateTime<chrono::Utc>) -> bool {
-    match read_at {
-        Some(r) => r < created_at,
-        None => false,
-    }
 }
 
 #[utoipa::path(
@@ -801,7 +825,9 @@ pub async fn apply_reconciliation(
         return Err(bad_request("too many duplicate issues"));
     }
     if req.duplicate_issue_ids.contains(&req.canonical_issue_id) {
-        return Err(bad_request("canonical_issue_id must not be in duplicate_issue_ids"));
+        return Err(bad_request(
+            "canonical_issue_id must not be in duplicate_issue_ids",
+        ));
     }
 
     let mut conn = db::checkout(&state).await?;
@@ -813,9 +839,12 @@ pub async fn apply_reconciliation(
         .map_err(db_err)?;
 
     // Lock user row / advisory lock to avoid concurrent reconciliation races
-    tx.execute("SELECT pg_advisory_xact_lock($1, $2)", &[&4653i32, &user.id()])
-        .await
-        .map_err(db_err)?;
+    tx.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&4653i32, &user.id()],
+    )
+    .await
+    .map_err(db_err)?;
 
     // Idempotency: if same preview token already applied, return prior result
     let existing = tx
@@ -837,12 +866,30 @@ pub async fn apply_reconciliation(
         return Ok(Json(ReconcileApplyResponse {
             canonical_issue_id: row.get(0),
             merged_issue_ids: row.get(1),
-            moved_event_ids: details.get("moved_event_ids").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
-            moved_mapping_ids: details.get("moved_mapping_ids").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
-            moved_list_entry_ids: details.get("moved_list_entry_ids").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
-            suppressed_duplicate_issue_ids: details.get("suppressed_duplicate_issue_ids").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
-            undo_snapshot_id: details.get("undo_snapshot_id").and_then(|v| v.as_i64()).map(|v| v as i32),
-            warnings: details.get("warnings").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
+            moved_event_ids: details
+                .get("moved_event_ids")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default(),
+            moved_mapping_ids: details
+                .get("moved_mapping_ids")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default(),
+            moved_list_entry_ids: details
+                .get("moved_list_entry_ids")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default(),
+            suppressed_duplicate_issue_ids: details
+                .get("suppressed_duplicate_issue_ids")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default(),
+            undo_snapshot_id: details
+                .get("undo_snapshot_id")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
+            warnings: details
+                .get("warnings")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default(),
         }));
     }
 
@@ -872,7 +919,10 @@ pub async fn apply_reconciliation(
         let dup = load_issue_evidence(&tx, user.id(), *id).await?;
         if let Some(merged_into) = dup.merged_into_issue_id {
             if merged_into == req.canonical_issue_id {
-                pre_warnings.push(format!("Issue {} is already merged into canonical {}; skipping.", dup.issue_id, merged_into));
+                pre_warnings.push(format!(
+                    "Issue {} is already merged into canonical {}; skipping.",
+                    dup.issue_id, merged_into
+                ));
                 duplicates.push(dup);
                 continue;
             }
@@ -883,14 +933,25 @@ pub async fn apply_reconciliation(
         }
         duplicates.push(dup);
     }
-    let (actions, mut warnings, can_apply) = build_preview_actions(&canonical, &duplicates, &req.decisions);
+    let (_, mut warnings, can_apply) =
+        build_preview_actions(&canonical, &duplicates, &req.decisions);
     warnings.extend(pre_warnings);
     if !can_apply {
-        return Err(conflict("Preview has unresolved decisions; resolve them before applying"));
+        return Err(conflict(
+            "Preview has unresolved decisions; resolve them before applying",
+        ));
     }
-    let expected_token = compute_preview_token(user.id(), req.canonical_issue_id, &req.duplicate_issue_ids, &canonical, &duplicates);
+    let expected_token = compute_preview_token(
+        user.id(),
+        req.canonical_issue_id,
+        &req.duplicate_issue_ids,
+        &canonical,
+        &duplicates,
+    );
     if expected_token != req.preview_token {
-        return Err(conflict("Stale preview token; refresh preview before applying"));
+        return Err(conflict(
+            "Stale preview token; refresh preview before applying",
+        ));
     }
 
     // Build undo snapshot
@@ -908,9 +969,6 @@ pub async fn apply_reconciliation(
     let mut moved_event_origins: Vec<serde_json::Value> = Vec::new();
     let mut moved_mapping_origins: Vec<serde_json::Value> = Vec::new();
     let mut moved_list_entry_origins: Vec<serde_json::Value> = Vec::new();
-
-    // Check if canonical already has a comicvine mapping
-    let canonical_has_cv = canonical.comicvine_issue_id.is_some();
 
     for dup in &duplicates {
         if dup.merged_into_issue_id == Some(req.canonical_issue_id) {
@@ -954,7 +1012,8 @@ pub async fn apply_reconciliation(
             .await
             .map_err(db_err)?;
             moved_mapping_ids.push(mapping_id);
-            moved_mapping_origins.push(json!({"mapping_id": mapping_id, "original_issue_id": dup.issue_id}));
+            moved_mapping_origins
+                .push(json!({"mapping_id": mapping_id, "original_issue_id": dup.issue_id}));
             let _ = status;
         }
 
@@ -987,7 +1046,10 @@ pub async fn apply_reconciliation(
             .await
             .map_err(db_err)?;
         let dup_created_at = tx
-            .query_one("SELECT created_at FROM issues WHERE id = $1", &[&dup.issue_id])
+            .query_one(
+                "SELECT created_at FROM issues WHERE id = $1",
+                &[&dup.issue_id],
+            )
             .await
             .map_err(db_err)?
             .get::<_, chrono::DateTime<chrono::Utc>>(0);
@@ -1039,7 +1101,8 @@ pub async fn apply_reconciliation(
             .await
             .map_err(db_err)?;
             moved_list_entry_ids.push(entry_id);
-            moved_list_entry_origins.push(json!({"entry_id": entry_id, "original_issue_id": dup.issue_id}));
+            moved_list_entry_origins
+                .push(json!({"entry_id": entry_id, "original_issue_id": dup.issue_id}));
         }
 
         // Suppress duplicate - mark as merged, not deleted
@@ -1096,19 +1159,31 @@ pub async fn apply_reconciliation(
             .map_err(db_err)?
             .map(|r| r.get(0));
         let canonical_created: chrono::DateTime<chrono::Utc> = tx
-            .query_one("SELECT created_at FROM issues WHERE id = $1", &[&req.canonical_issue_id])
+            .query_one(
+                "SELECT created_at FROM issues WHERE id = $1",
+                &[&req.canonical_issue_id],
+            )
             .await
             .map_err(db_err)?
             .get(0);
         let canonical_read_at: Option<chrono::DateTime<chrono::Utc>> = tx
-            .query_one("SELECT read_at FROM issues WHERE id = $1", &[&req.canonical_issue_id])
+            .query_one(
+                "SELECT read_at FROM issues WHERE id = $1",
+                &[&req.canonical_issue_id],
+            )
             .await
             .map_err(db_err)?
             .get(0);
-        let canonical_read_is_real = canonical_read_at.map(|r| r >= canonical_created).unwrap_or(false);
+        let canonical_read_is_real = canonical_read_at
+            .map(|r| r >= canonical_created)
+            .unwrap_or(false);
 
         // Only update if we have a better real timestamp or canonical is unread
-        let new_read_at = latest_real_read_ts.or(if canonical_read_is_real { canonical_read_at } else { None });
+        let new_read_at = latest_real_read_ts.or(if canonical_read_is_real {
+            canonical_read_at
+        } else {
+            None
+        });
         if let Some(ts) = new_read_at {
             tx.execute(
                 "UPDATE issues SET status = 'read', read_at = $1 WHERE id = $2",
@@ -1207,9 +1282,12 @@ pub async fn undo_reconciliation(
         .await
         .map_err(db_err)?;
 
-    tx.execute("SELECT pg_advisory_xact_lock($1, $2)", &[&4653i32, &user.id()])
-        .await
-        .map_err(db_err)?;
+    tx.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&4653i32, &user.id()],
+    )
+    .await
+    .map_err(db_err)?;
 
     let row = tx
         .query_opt(
@@ -1242,27 +1320,44 @@ pub async fn undo_reconciliation(
     let mut warnings: Vec<String> = Vec::new();
 
     // Reverse event moves
-    if let Some(origins) = details.get("moved_event_origins").and_then(|v| v.as_array()) {
+    if let Some(origins) = details
+        .get("moved_event_origins")
+        .and_then(|v| v.as_array())
+    {
         for o in origins {
             let event_id = o.get("event_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            let original_issue_id = o.get("original_issue_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let original_issue_id = o
+                .get("original_issue_id")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
             if event_id > 0 && original_issue_id > 0 {
-                let updated = tx.execute(
-                    "UPDATE events SET issue_id = $1 WHERE id = $2 AND issue_id = $3",
-                    &[&original_issue_id, &event_id, &canonical_issue_id],
-                ).await.map_err(db_err)?;
+                let updated = tx
+                    .execute(
+                        "UPDATE events SET issue_id = $1 WHERE id = $2 AND issue_id = $3",
+                        &[&original_issue_id, &event_id, &canonical_issue_id],
+                    )
+                    .await
+                    .map_err(db_err)?;
                 if updated == 0 {
-                    warnings.push(format!("Event {event_id} could not be moved back; it may have changed."));
+                    warnings.push(format!(
+                        "Event {event_id} could not be moved back; it may have changed."
+                    ));
                 }
             }
         }
     }
 
     // Reverse mapping moves
-    if let Some(origins) = details.get("moved_mapping_origins").and_then(|v| v.as_array()) {
+    if let Some(origins) = details
+        .get("moved_mapping_origins")
+        .and_then(|v| v.as_array())
+    {
         for o in origins {
             let mapping_id = o.get("mapping_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            let original_issue_id = o.get("original_issue_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let original_issue_id = o
+                .get("original_issue_id")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
             if mapping_id > 0 && original_issue_id > 0 {
                 // Check for conflict on original issue
                 let conflict_exists = tx.query_opt(
@@ -1270,7 +1365,9 @@ pub async fn undo_reconciliation(
                     &[&mapping_id, &original_issue_id],
                 ).await.map_err(db_err)?;
                 if conflict_exists.is_some() {
-                    warnings.push(format!("Mapping {mapping_id} could not be moved back due to conflict."));
+                    warnings.push(format!(
+                        "Mapping {mapping_id} could not be moved back due to conflict."
+                    ));
                     continue;
                 }
                 let updated = tx.execute(
@@ -1285,10 +1382,16 @@ pub async fn undo_reconciliation(
     }
 
     // Reverse list entry moves
-    if let Some(origins) = details.get("moved_list_entry_origins").and_then(|v| v.as_array()) {
+    if let Some(origins) = details
+        .get("moved_list_entry_origins")
+        .and_then(|v| v.as_array())
+    {
         for o in origins {
             let entry_id = o.get("entry_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            let original_issue_id = o.get("original_issue_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let original_issue_id = o
+                .get("original_issue_id")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
             if entry_id > 0 && original_issue_id > 0 {
                 let updated = tx.execute(
                     "UPDATE custom_cbl_entries SET issue_id = $1 WHERE id = $2 AND issue_id = $3",
@@ -1320,18 +1423,24 @@ pub async fn undo_reconciliation(
                     tx.execute(
                         "UPDATE issues SET status = $1, read_at = $2 WHERE id = $3",
                         &[&status, &ra_utc, &canonical_issue_id],
-                    ).await.map_err(db_err)?;
+                    )
+                    .await
+                    .map_err(db_err)?;
                 } else {
                     tx.execute(
                         "UPDATE issues SET status = $1 WHERE id = $2",
                         &[&status, &canonical_issue_id],
-                    ).await.map_err(db_err)?;
+                    )
+                    .await
+                    .map_err(db_err)?;
                 }
             } else {
                 tx.execute(
                     "UPDATE issues SET status = $1, read_at = NULL WHERE id = $2",
                     &[&status, &canonical_issue_id],
-                ).await.map_err(db_err)?;
+                )
+                .await
+                .map_err(db_err)?;
             }
         }
     }
@@ -1348,12 +1457,24 @@ pub async fn undo_reconciliation(
                             tx.execute(
                                 "UPDATE issues SET status = $1, read_at = $2 WHERE id = $3",
                                 &[&status, &ra_utc, &did],
-                            ).await.map_err(db_err)?;
+                            )
+                            .await
+                            .map_err(db_err)?;
                         } else {
-                            tx.execute("UPDATE issues SET status = $1 WHERE id = $2", &[&status, &did]).await.map_err(db_err)?;
+                            tx.execute(
+                                "UPDATE issues SET status = $1 WHERE id = $2",
+                                &[&status, &did],
+                            )
+                            .await
+                            .map_err(db_err)?;
                         }
                     } else {
-                        tx.execute("UPDATE issues SET status = $1, read_at = NULL WHERE id = $2", &[&status, &did]).await.map_err(db_err)?;
+                        tx.execute(
+                            "UPDATE issues SET status = $1, read_at = NULL WHERE id = $2",
+                            &[&status, &did],
+                        )
+                        .await
+                        .map_err(db_err)?;
                     }
                 }
             }
@@ -1363,7 +1484,9 @@ pub async fn undo_reconciliation(
     tx.execute(
         "UPDATE issue_duplicate_reconciliations SET undone_at = now() WHERE id = $1",
         &[&(req.reconciliation_id as i64)],
-    ).await.map_err(db_err)?;
+    )
+    .await
+    .map_err(db_err)?;
 
     tx.commit().await.map_err(db_err)?;
     Ok(Json(ReconcileUndoResponse {
@@ -1377,7 +1500,12 @@ pub async fn undo_reconciliation(
 mod tests {
     use super::*;
 
-    fn evidence(issue_id: i32, status: &str, read_at: Option<&str>, created_at: &str) -> DuplicateIssueEvidence {
+    fn evidence(
+        issue_id: i32,
+        status: &str,
+        read_at: Option<&str>,
+        created_at: &str,
+    ) -> DuplicateIssueEvidence {
         DuplicateIssueEvidence {
             issue_id,
             thread_id: 1,
@@ -1404,25 +1532,52 @@ mod tests {
 
     #[test]
     fn synthetic_placeholder_read_is_detected() {
-        let e = evidence(1, "read", Some("2026-11-05T05:02:02Z"), "2026-11-05T05:11:33Z");
+        let e = evidence(
+            1,
+            "read",
+            Some("2026-11-05T05:02:02Z"),
+            "2026-11-05T05:11:33Z",
+        );
         assert!(e.is_synthetic_placeholder_read);
     }
 
     #[test]
     fn real_read_is_not_synthetic() {
-        let e = evidence(1, "read", Some("2026-11-05T05:47:59Z"), "2026-11-05T05:11:33Z");
+        let e = evidence(
+            1,
+            "read",
+            Some("2026-11-05T05:47:59Z"),
+            "2026-11-05T05:11:33Z",
+        );
         assert!(!e.is_synthetic_placeholder_read);
     }
 
     #[test]
     fn preview_warns_on_synthetic_read_events() {
-        let canonical = evidence(10, "read", Some("2026-11-05T06:03:08Z"), "2026-01-01T00:00:00Z");
-        let mut dup = evidence(20, "read", Some("2026-11-05T05:02:02Z"), "2026-11-05T05:11:33Z");
-        dup.read_events.push(DuplicateReadEvent { event_id: 1, timestamp: "2026-11-05T05:02:02Z".to_string(), issue_number: Some("101".to_string()) });
-        let (actions, warnings, can_apply) = build_preview_actions(&canonical, &[dup], &HashMap::new());
+        let canonical = evidence(
+            10,
+            "read",
+            Some("2026-11-05T06:03:08Z"),
+            "2026-01-01T00:00:00Z",
+        );
+        let mut dup = evidence(
+            20,
+            "read",
+            Some("2026-11-05T05:02:02Z"),
+            "2026-11-05T05:11:33Z",
+        );
+        dup.read_events.push(DuplicateReadEvent {
+            event_id: 1,
+            timestamp: "2026-11-05T05:02:02Z".to_string(),
+            issue_number: Some("101".to_string()),
+        });
+        let (actions, warnings, can_apply) =
+            build_preview_actions(&canonical, &[dup], &HashMap::new());
         assert!(can_apply);
         assert!(warnings.iter().any(|w| w.contains("synthetic placeholder")));
-        assert!(actions.iter().any(|a| a.kind == "suppress_synthetic_read_events"));
+        assert!(actions
+            .iter()
+            .any(|a| a.kind == "suppress_synthetic_read_events"));
     }
 
     #[test]

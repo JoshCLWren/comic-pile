@@ -62,6 +62,7 @@ export const ALLOWLIST = new Map([
     'dismiss_pending',
     'identity_inbox',
     'issue_read',
+    'issue_duplicate_reconciliation',
     'legacy_dependencies',
     'metrics',
     'preferences',
