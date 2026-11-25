@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient, QueryObserver } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyEditedThreadToQueuePages,
@@ -6,6 +6,7 @@ import {
   applyRatedThreadCache,
   applyUpdatedThreadCache,
   invalidateAfterIssueEdit,
+  invalidateAfterReaderProgress,
   invalidateAfterIssueMappingChange,
   invalidateAfterQueueMovement,
   invalidateAfterResumeRecovery,
@@ -254,7 +255,7 @@ describe('targeted cache effects', () => {
 
     // Exact-count guard: every invalidation below is intentional; an
     // accidental extra key (or a dropped one) must fail this test.
-    expect(invalidateQueries).toHaveBeenCalledTimes(17)
+    expect(invalidateQueries).toHaveBeenCalledTimes(18)
     expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -415,7 +416,18 @@ describe('targeted cache effects', () => {
       },
     } satisfies Parameters<typeof applyIssueCardMutation>[1]
 
+    client.setQueryData(queryKeys.thread.detail(thread.id), { ...thread, last_rating: 4 })
+    client.setQueryData(queryKeys.thread.summary(thread.id), { ...thread, last_rating: 4 })
     await applyIssueCardMutation(client, response)
+
+    for (const key of [queryKeys.thread.detail(thread.id), queryKeys.thread.summary(thread.id)]) {
+      expect(client.getQueryData(key)).toMatchObject({
+        last_rating: null,
+        issues_remaining: 0,
+        reading_progress: '12/12',
+      })
+    }
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readerContext.all })
 
     // Direct reads go through the shared reader-progress reconciliation, so the
     // separately mounted Finished Series shelf must refresh without a reset.
@@ -429,6 +441,31 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.cblSources.previewAll() })
   })
 
+  it('restarts an initial canonical blocker request that began before the read committed (#5537)', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const key = queryKeys.dependencies.readingBoundaries([7])
+    let resolveOld!: (value: string) => void
+    const oldRequest = new Promise<string>((resolve) => { resolveOld = resolve })
+    const queryFn = vi.fn<() => Promise<string>>()
+      .mockReturnValueOnce(oldRequest)
+      .mockResolvedValue('available')
+    const observer = new QueryObserver(client, { queryKey: key, queryFn })
+    const unsubscribe = observer.subscribe(() => undefined)
+    try {
+      expect(queryFn).toHaveBeenCalledTimes(1)
+      await invalidateAfterReaderProgress(client)
+      expect(queryFn).toHaveBeenCalledTimes(2)
+      expect(client.getQueryData(key)).toBe('available')
+      resolveOld('blocked')
+      await oldRequest
+      expect(client.getQueryData(key)).toBe('available')
+    } finally {
+      resolveOld('blocked')
+      unsubscribe()
+      client.clear()
+    }
+  })
+
   it('invalidates edited issue surfaces and reconciles open views after read/progress edits', async () => {
     const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
@@ -437,7 +474,7 @@ describe('targeted cache effects', () => {
     // Exact-count guard: issue pages/creators/detail/summary plus the shared
     // reader-progress pass; dropped keys or extra invalidations fail here.
     // Issue edits do not reorder the Queue, so they invalidate (not reset) it.
-    expect(invalidateQueries).toHaveBeenCalledTimes(18)
+    expect(invalidateQueries).toHaveBeenCalledTimes(19)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.thread.issuePages(thread.id),
     })
