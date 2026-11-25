@@ -4,6 +4,7 @@ import Modal from './Modal'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListParams, IssueReadOperationResponse, IssueReadOperationUndoResponse } from '../services/api-issues'
+import { issueCardsApi } from '../services/issueCardsApi'
 import { issueDependenciesApi } from '../services/api-dependencies'
 import type { Issue, IssueListResponse } from '../types'
 
@@ -27,6 +28,10 @@ export interface IssueCorrectionDependenciesApi {
   listForThread: (threadId: number) => Promise<{ issues?: Array<{ issue_id: number; issue_number?: string; dependencies?: Array<{ source_issue_id?: number }> }> }>
 }
 
+export interface IssueCorrectionCardsApi {
+  fetchCards: (issueIds: number[]) => Promise<Array<{ issue_id: number; rating: number | null }>>
+}
+
 interface IssueCorrectionDialogProps {
   isOpen: boolean
   threadId: number
@@ -43,6 +48,7 @@ interface IssueCorrectionDialogProps {
   /** Injectable issue-tracking API; defaults to the production issues service. */
   issuesApi?: IssueCorrectionIssuesApi
   dependenciesApi?: IssueCorrectionDependenciesApi
+  cardsApi?: IssueCorrectionCardsApi
 }
 
 export default function IssueCorrectionDialog({
@@ -55,6 +61,7 @@ export default function IssueCorrectionDialog({
   onSuccess,
   issuesApi: issuesService = issuesApi,
   dependenciesApi: depsService = issueDependenciesApi,
+  cardsApi: cardsService = issueCardsApi,
 }: IssueCorrectionDialogProps) {
   const [selectedIssueNumber, setSelectedIssueNumber] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
