@@ -579,9 +579,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         setPreviewState({
           range,
           response,
-          selectedStrategy: response.default_outcome.can_commit
-            ? 'safe_default'
-            : (response.numeric_resort_outcome?.can_commit ? 'numeric_resort' : 'safe_default'),
+          selectedStrategy: 'safe_default',
         })
       } catch (err: unknown) {
         console.error('[IssueToggleList] Error previewing issues:', err)
@@ -1123,6 +1121,20 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                     {!previewState.response.default_outcome.can_commit && (
                       <div className="text-xs text-[var(--theme-danger)] mt-1" role="alert">
                         {previewState.response.default_outcome.conflict_message ?? 'This change would create a reading-graph cycle.'}
+                      </div>
+                    )}
+                    {previewState.response.default_outcome.graph.cycles.length > 0 && (
+                      <div className="text-xs text-stone-400 mt-1 space-y-1" data-testid="safe-default-cycle-path">
+                        {previewState.response.default_outcome.graph.cycles.map((cycle, idx) => (
+                          <div key={idx}>
+                            {cycle.edges.map((e, i) => (
+                              <span key={i}>
+                                {i > 0 ? ' -> ' : ''}{e.source.series_title} #{e.source.issue_number}
+                                {i === cycle.edges.length - 1 ? ` -> ${e.target.series_title} #${e.target.issue_number}` : ''}
+                              </span>
+                            ))}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
