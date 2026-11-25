@@ -29,7 +29,7 @@ interface ThreadPoolProps {
   eligibleThreadIds?: number[] | null
   issueCards?: IssueCardsResponse | null
   browserSnoozedThreadIds?: number[] | null
-  onResetDice?: () => void | Promise<void | boolean>
+  onResetDice?: () => void | Promise<boolean>
   resetDicePending?: boolean
   resetDiceError?: string
 }
@@ -60,6 +60,9 @@ export function ThreadPool({
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
+  // The scoped eligible query applies the browser-owned snooze cookie that
+  // bootstrap cannot see. Treat either source as snooze-backed emptiness so the
+  // recovery CTA is reachable when a cookie alone removed every die face.
   const hasBrowserSnoozes = (browserSnoozedThreadIds?.length ?? 0) > 0
   const hasSnoozes = snoozedTotal > 0 || hasBrowserSnoozes
   const cardByIssueId = new Map((issueCards?.items ?? []).map((card) => [card.issue_id, card]))
@@ -188,6 +191,9 @@ export function ThreadPool({
             </div>
           </div>
         ) : displayPool.length === 0 && hasSnoozes ? (
+          // Only snooze-backed emptiness reaches here: authoritative blockers
+          // (all_blocked / all_out_of_pool / all_completed / no_series) resolve in
+          // the branches above and never promise that a reset clears them.
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>
@@ -198,9 +204,6 @@ export function ThreadPool({
                 Add Comics or Reset Dice when resetting would restore candidates.
               </p>
             </div>
-            {resetDiceError && (
-              <p className="text-xs text-red-400" role="alert">{resetDiceError}</p>
-            )}
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => navigate('/queue', { state: { openCreate: true } })}
@@ -208,20 +211,27 @@ export function ThreadPool({
               >
                 Add Comics
               </button>
-              {onResetDice && (
+              {onResetDice ? (
                 <button
                   type="button"
-                  onClick={() => void onResetDice()}
+                  onClick={() => {
+                    void onResetDice()
+                  }}
                   disabled={resetDicePending}
                   data-testid="reset-dice-zero-choice"
-                  className="w-full h-11 min-h-[44px] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 transition-colors disabled:opacity-60"
+                  className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors disabled:opacity-50"
                 >
                   {resetDicePending ? 'Resetting…' : 'Reset Dice'}
                 </button>
-              )}
+              ) : null}
+              {resetDiceError ? (
+                <p className="text-xs font-bold text-[var(--theme-error)]" role="alert">
+                  {resetDiceError}
+                </p>
+              ) : null}
               <button
                 onClick={() => navigate('/queue')}
-                className="w-full h-11 min-h-[44px] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-stone-400 hover:bg-white/10 transition-colors"
+                className="w-full h-11 min-h-[44px] bg-transparent hover:bg-white/5 border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-stone-300 transition-colors"
               >
                 Go to Queue
               </button>

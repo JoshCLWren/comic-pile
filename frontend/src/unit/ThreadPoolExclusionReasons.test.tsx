@@ -127,4 +127,20 @@ describe('Retired Roll exclusion details (#4441)', () => {
     expect(button).toHaveTextContent('Resetting…')
   })
 
+  it('keeps an authoritative blocker copy when browser snoozes are also present', () => {
+    mount({
+      pool: [eligible],
+      eligibleThreadIds: [],
+      emptyPoolReason: 'all_blocked',
+      snoozedThreads: [],
+      snoozedCount: 0,
+      browserSnoozedThreadIds: [1],
+      onResetDice: vi.fn(),
+    })
+
+    expect(screen.getByText('Series are waiting on earlier issues')).toBeInTheDocument()
+    expect(screen.queryByText('Every series is snoozed')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reset-dice-zero-choice')).not.toBeInTheDocument()
+  })
+
 })
