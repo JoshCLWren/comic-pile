@@ -634,7 +634,7 @@ export async function invalidateComicVineIssueIntelligence(
 }
 
 /**
- * Drop provider details for every issue whose mapping was removed, then refetch.
+ * Drop provider details for an issue whose mapping was removed, then refetch.
  * Clearing first prevents stale cover/creator data from surviving a failed
  * post-removal refresh.
  */

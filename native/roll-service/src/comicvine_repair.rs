@@ -20,6 +20,7 @@ use std::{sync::Arc, time::Duration};
 const HOST: &str = "comicvine.gamespot.com";
 const MAX_BODY: usize = 2_000_000;
 const BATCH_LIMIT: usize = 8;
+const RECONCILE_SCAN_LIMIT: i64 = 200;
 const PROVIDER_TIMEOUT: Duration = Duration::from_secs(5);
 // Shared with comicvine_issue.rs READ_SQL: complete rows stay fresh 30 days;
 // a deep response with empty credits is rechecked after 7 days. The two
@@ -44,6 +45,30 @@ WITH candidate AS (
 SELECT c.id, c.external_identity_id, c.attempts, e.external_id,
        e.provider, e.entity_type, e.metadata_json::text
 FROM claimed c LEFT JOIN external_identities e ON e.id=c.external_identity_id
+"#;
+const RECONCILE_ORPHANED: &str = r#"
+SELECT e.id, e.metadata_json::text
+FROM external_identities e
+WHERE e.provider = 'comicvine'
+  AND e.entity_type = 'issue'
+  AND EXISTS (
+    SELECT 1 FROM issue_external_identity_mappings m
+    WHERE m.external_identity_id = e.id
+      AND m.status = 'confirmed'
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM comicvine_metadata_refresh_requests r
+    WHERE r.external_identity_id = e.id
+  )
+ORDER BY e.updated_at, e.id
+LIMIT $1
+"#;
+const RECONCILE_INSERT: &str = r#"
+INSERT INTO comicvine_metadata_refresh_requests
+  (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at)
+SELECT v, 'pending', 0, now(), now(), now()
+FROM unnest($1::int[]) AS v
+ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING
 "#;
 const SETTLE: &str = r#"
 UPDATE comicvine_metadata_refresh_requests
@@ -1149,6 +1174,40 @@ fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
     }
 }
 
+/// Discover confirmed ComicVine identities that never received a refresh row.
+/// The per-issue read and operator backfill already repair one identity at a
+/// time; the scheduled drain must also reconcile the durable backlog so an
+/// unopened issue cannot remain empty forever. The scan and insert are bounded,
+/// set-based, and safe when concurrent drains select the same identities.
+async fn reconcile_orphaned_refresh_requests(state: &AppState) -> Result<(), ApiError> {
+    let connection = db::checkout(state).await?;
+    let rows = connection
+        .query(RECONCILE_ORPHANED, &[&RECONCILE_SCAN_LIMIT])
+        .await
+        .map_err(db::query_error)?;
+    let now = chrono::Utc::now();
+    let missing: Vec<i32> = rows
+        .iter()
+        .filter_map(|row| {
+            let id: i32 = row.get(0);
+            let metadata = row
+                .get::<_, Option<String>>(1)
+                .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+                .unwrap_or(Value::Null);
+            needs_provider_fetch(&metadata, now).then_some(id)
+        })
+        .take(BATCH_LIMIT)
+        .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    connection
+        .execute(RECONCILE_INSERT, &[&missing])
+        .await
+        .map_err(db::query_error)?;
+    Ok(())
+}
+
 /// CRON_SECRET authenticated, awaited Rust repair batch. No detached task or silent success.
 pub async fn drain(
     State(state): State<Arc<AppState>>,
@@ -1174,6 +1233,7 @@ async fn drain_authorized(
         provider_configured: key.is_some(),
         ..Default::default()
     };
+    reconcile_orphaned_refresh_requests(&state).await?;
     for index in 0..BATCH_LIMIT {
         let Some(job) = claim(state).await? else {
             break;
@@ -2749,6 +2809,111 @@ mod tests {
             .await
             .expect_err("403 must be unavailable");
         assert!(matches!(err, ProviderFailure::Unavailable));
+    }
+
+    /// #5695: the executing drain must discover confirmed identities whose
+    /// metadata is empty and whose refresh row was never created. This is the
+    /// same durable ledger used by map/remap, not a second pipeline.
+    #[tokio::test]
+    async fn drain_discovers_confirmed_identities_missing_refresh_rows() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        let user_id: i32 = connection
+            .query_one(
+                "INSERT INTO users (username) VALUES ('orphan-owner') RETURNING id",
+                &[],
+            )
+            .await
+            .expect("seed user")
+            .get(0);
+        let thread_id: i32 = connection
+            .query_one(
+                "INSERT INTO threads \
+                 (title, format, issues_remaining, total_issues, queue_position, status, \
+                  user_id, last_rating, reading_progress) \
+                 VALUES ('Orphan repair', 'Comic', 2, 2, 7, 'active', $1, 4.5, \
+                         'in_progress') RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .expect("seed thread")
+            .get(0);
+        let orphan = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "1",
+            "4000-30001",
+            &json!({}),
+        )
+        .await;
+        let fresh_updated = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let fresh_metadata =
+            normalized_metadata(&deep_provider_result(30002, &fresh_updated), 30002)
+                .expect("fresh metadata")
+                .0;
+        let fresh = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "2",
+            "4000-30002",
+            &fresh_metadata,
+        )
+        .await;
+        drop(Object::take(connection));
+        queue_deep_provider_result(&state, 30001, "2026-11-01 17:33:53");
+
+        let report = drain_for_test(&state).await;
+        assert_eq!(report.claimed, 1);
+        assert_eq!(report.completed, 1);
+        assert_eq!(report.deferred, 0);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let request = connection
+            .query_one(
+                "SELECT state, attempts FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&orphan],
+            )
+            .await
+            .expect("reconciled request");
+        assert_eq!(request.get::<_, String>(0), "completed");
+        assert_eq!(request.get::<_, i32>(1), 1);
+        let fresh_requests: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&fresh],
+            )
+            .await
+            .expect("fresh request count")
+            .get(0);
+        assert_eq!(fresh_requests, 0, "fresh metadata must not be enqueued");
+
+        let thread = connection
+            .query_one(
+                "SELECT queue_position, last_rating, reading_progress FROM threads WHERE id = $1",
+                &[&thread_id],
+            )
+            .await
+            .expect("preserved thread");
+        assert_eq!(thread.get::<_, i32>(0), 7);
+        assert_eq!(thread.get::<_, Option<f64>>(1), Some(4.5));
+        assert_eq!(
+            thread.get::<_, Option<String>>(2).as_deref(),
+            Some("in_progress")
+        );
+        let unread: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issues WHERE thread_id = $1 AND status = 'unread'",
+                &[&thread_id],
+            )
+            .await
+            .expect("preserved issues")
+            .get(0);
+        assert_eq!(unread, 2);
     }
 
     /// #5592: worker fetches a singular issue and persists creator credits.
