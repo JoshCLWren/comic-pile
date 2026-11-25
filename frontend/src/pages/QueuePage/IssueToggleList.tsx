@@ -112,6 +112,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isReorderMode, setIsReorderMode] = useState(false)
   const [deleteDialogIssue, setDeleteDialogIssue] = useState<Issue | null>(null)
+  const [previewState, setPreviewState] = useState<{
+    range: string
+    response: import('../../services/api-issues').IssueEditPreviewResponse
+    selectedStrategy: 'safe_default' | 'numeric_resort'
+  } | null>(null)
+  const [isPreviewing, setIsPreviewing] = useState(false)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
@@ -292,7 +298,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
         return
       case 'create':
-        await issuesService.create(threadId, mutation.issueRange)
+        await issuesService.create(
+          threadId,
+          mutation.issueRange,
+          mutation.strategy ? { strategy: mutation.strategy } : undefined,
+        )
         return
     }
   }, [issuesService, threadId])
@@ -558,10 +568,20 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     }
     setAddError(null)
     if (deferred) {
-      // Draft mode: queue the create; it flushes on dialog Save.
-      // The range input clears immediately for the next entry.
-      enqueueIssueMutation({ type: 'create', issueRange: range })
-      setAddRange('')
+      setIsPreviewing(true)
+      try {
+        const response = await issuesService.previewCreate(threadId, range)
+        setPreviewState({
+          range,
+          response,
+          selectedStrategy: response.default_outcome.can_commit ? 'safe_default' : (response.numeric_resort_outcome?.can_commit ? 'numeric_resort' : 'safe_default'),
+        })
+      } catch (err: unknown) {
+        console.error('[IssueToggleList] Error previewing issues:', err)
+        setAddError(getApiErrorDetail(err))
+      } finally {
+        setIsPreviewing(false)
+      }
       return
     }
     setIsAdding(true)
