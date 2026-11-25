@@ -1954,8 +1954,16 @@ mod tests {
             order(&["33", "34", "35"], &["2"]),
             Some(strings(&["2", "33", "34", "35"]))
         );
-        // All-numeric threads repair earlier out-of-order appends.
-        assert_eq!(order(&["3", "1"], &["2"]), Some(strings(&["1", "2", "3"])));
+        // Non-monotonic all-numeric order is reader-authored, never corruption
+        // to repair as a side effect of adding another issue.
+        assert_eq!(order(&["3", "1"], &["2"]), None);
+        assert_eq!(
+            order(
+                &["129", "140", "141", "142", "130", "131", "143"],
+                &["101"],
+            ),
+            None
+        );
         // Irregular incoming labels fall back to append.
         assert_eq!(order(&["1"], &["Annual 1"]), None);
         assert_eq!(order(&["1"], &["0"]), None);
