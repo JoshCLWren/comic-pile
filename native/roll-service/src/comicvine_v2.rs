@@ -1678,57 +1678,32 @@ pub async fn refresh_metadata(
         // Manual recovery: reopen any non-actively-leased repair row so a stuck
         // pending/deferred/failed/completed/no_credits identity can be retried
         // without remapping (#5695). Running rows with a live lease are left to
-        // the worker that owns them.
-        tx.batch_execute("SAVEPOINT comicvine_hydration_enqueue")
-            .await
-            .map_err(db::query_error)?;
-        let reopen = tx
-            .execute(
-                "UPDATE comicvine_metadata_refresh_requests \
-                 SET state = 'pending', attempts = 0, next_attempt_at = now(), \
-                     lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
-                     updated_at = now() \
-                 WHERE external_identity_id = $1 \
-                   AND NOT (state = 'running' AND lease_expires_at > now())",
-                &[&identity_id],
-            )
-            .await;
-        let reopen_ok = match reopen {
-            Ok(_) => true,
-            Err(e) => {
-                tracing::warn!(
-                    identity_id,
-                    error_kind = crate::error_kind(&e),
-                    "comicvine refresh reopen failed; refresh request kept best-effort"
-                );
-                false
-            }
-        };
-        let enqueue_ok = if reopen_ok {
-            // Ensure a row exists when none was present. The update above covers
-            // existing rows; this insert covers the missing-row case.
-            tx.execute(
-                "INSERT INTO comicvine_metadata_refresh_requests \
-                    (external_identity_id, state, attempts, next_attempt_at, \
-                     lease_expires_at, last_error, completed_at, created_at, updated_at) \
-                 VALUES ($1, 'pending', 0, now(), NULL, NULL, NULL, now(), now()) \
-                 ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
-                &[&identity_id],
-            )
-            .await
-            .is_ok()
-        } else {
-            false
-        };
-        if reopen_ok && enqueue_ok {
-            tx.batch_execute("RELEASE SAVEPOINT comicvine_hydration_enqueue")
-                .await
-                .map_err(db::query_error)?;
-        } else {
-            tx.batch_execute("ROLLBACK TO SAVEPOINT comicvine_hydration_enqueue")
-                .await
-                .map_err(db::query_error)?;
-        }
+        // the worker that owns them. Persistence failures fail the request: a
+        // successful HTTP response must never claim recovery was scheduled when
+        // no durable work was written.
+        tx.execute(
+            "UPDATE comicvine_metadata_refresh_requests \
+             SET state = 'pending', attempts = 0, next_attempt_at = now(), \
+                 lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
+                 updated_at = now() \
+             WHERE external_identity_id = $1 \
+               AND NOT (state = 'running' AND lease_expires_at > now())",
+            &[&identity_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+        // Ensure a row exists when none was present. The update above covers
+        // existing rows; this insert covers the missing-row case.
+        tx.execute(
+            "INSERT INTO comicvine_metadata_refresh_requests \
+                (external_identity_id, state, attempts, next_attempt_at, \
+                 lease_expires_at, last_error, completed_at, created_at, updated_at) \
+             VALUES ($1, 'pending', 0, now(), NULL, NULL, NULL, now(), now()) \
+             ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
+            &[&identity_id],
+        )
+        .await
+        .map_err(db::query_error)?;
     }
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(MetadataRefreshResponse {
