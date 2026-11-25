@@ -250,7 +250,8 @@ function buildIdentity(card: IssueCard | null | undefined, threadTitle: string):
  * never disabled by availability, blocked, hold, inactive, excluded, later or
  * queue membership. Opening the editor writes nothing; Save commits one direct
  * write with no die/queue effects. The mapping control (#4450) is composed
- * when `showMapping` so an unmapped issue stays readable.
+ * when `showMapping` so an unmapped issue stays readable. It remains available
+ * while the rating editor is open; mapping refreshes never replace the draft.
  */
 export function ComicIssueCard({
   issueId,
@@ -395,19 +396,6 @@ export function ComicIssueCard({
               </button>
             </>
           )}
-          {showMapping && (
-            <ComicIssueMappingAction
-              issueId={isOwned ? issueId : null}
-              threadTitle={resolvedTitle}
-              issueNumber={resolvedNumber}
-              initialIdentity={identityForMapping}
-              fetchEnabled={card != null}
-              isOwned={isOwned}
-              compact={variant === 'compact'}
-              onAddToLibrary={onAddToLibrary}
-              onMapped={() => invalidateIssueCards(queryClient)}
-            />
-          )}
         </div>
       ) : (
         <div className="mt-2 space-y-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] p-3" data-testid="comic-issue-rating-editor">
@@ -445,6 +433,22 @@ export function ComicIssueCard({
             </button>
           </div>
           <p className="text-xs text-[var(--theme-text-dim)]">Direct read only — no die or queue change.</p>
+        </div>
+      )}
+
+      {showMapping && (
+        <div className="mt-2 flex flex-wrap items-start gap-1" data-testid="comic-issue-mapping">
+          <ComicIssueMappingAction
+            issueId={isOwned ? issueId : null}
+            threadTitle={resolvedTitle}
+            issueNumber={resolvedNumber}
+            initialIdentity={identityForMapping}
+            fetchEnabled={card != null}
+            isOwned={isOwned}
+            compact={variant === 'compact'}
+            onAddToLibrary={onAddToLibrary}
+            onMapped={() => invalidateIssueCards(queryClient)}
+          />
         </div>
       )}
 

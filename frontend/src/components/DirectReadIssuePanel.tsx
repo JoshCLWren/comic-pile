@@ -4,6 +4,7 @@ import { ComicIssueCard } from './ComicIssueCard'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
 import { TagSection } from './Tags/TagSection'
 import { useIssueCards } from '../hooks/useIssueCards'
+import { useComicVineIssueIntelligence } from '../hooks/useComicVineIssueIntelligence'
 import { issuesApi } from '../services/api-issues'
 import { queryKeys } from '../query/queryKeys'
 import { getApiErrorDetail } from '../utils/apiError'
@@ -87,6 +88,11 @@ export function DirectReadIssuePanel({
   const issue = selectedIssue ?? initialIssue ?? null
   const cards = useIssueCards(issue ? [issue.id] : [], { enabled: issue != null })
   const card = cards.data?.find((item) => item.issue_id === issue?.id) ?? null
+  // ComicIdentity owns the provider-art request. Share its query here only to
+  // decide whether the action card must retain a local/No Cover placeholder
+  // when provider details are absent or fail; React Query deduplicates the read.
+  const intelligence = useComicVineIssueIntelligence(issue?.id)
+  const showLocalCover = !intelligence.isLoading && intelligence.metadata == null
   const wrongThread = issue != null && issue.thread_id !== threadId
   // A previously read issue's rating is only available in the authoritative
   // card projection. Opening Edit rating before that fetch resolves would
@@ -156,7 +162,7 @@ export function DirectReadIssuePanel({
                 issueNumber={String(issue.issue_number)}
                 status={issue.status}
                 variant="compact"
-                showCover={false}
+                showCover={showLocalCover}
               />
             )}
           </div>
