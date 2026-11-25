@@ -30,6 +30,7 @@ interface ThreadPoolProps {
   issueCards?: IssueCardsResponse | null
   onResetDice?: () => void | Promise<boolean>
   resetDicePending?: boolean
+  resetDiceError?: string
 }
 
 export function ThreadPool({

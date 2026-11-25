@@ -78,6 +78,16 @@ describe('Retired Roll exclusion details (#4441)', () => {
     expect(onResetDice).toHaveBeenCalledTimes(1)
   })
 
+  it('surfaces Reset Dice failures in snoozed-only zero-choice state', () => {
+    mount({
+      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
+      onResetDice: vi.fn(),
+      resetDiceError: 'Reset failed. Try again.',
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Reset failed. Try again.')
+  })
+
   it('retains keyboard access to eligible issue selection', () => {
     const onThreadClick = vi.fn()
     mount({ pool: [eligible], onThreadClick })
