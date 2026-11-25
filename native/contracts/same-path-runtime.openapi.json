@@ -19511,14 +19511,49 @@
       },
       "PreviewIssueItem": {
         "type": "object",
+        "description": "Per-issue human-readable context carried in the preview payload so the\nBefore/After rows can identify a specific series, its list memberships,\nidentity/rating/read state and the Queue/Roll frontier it affects (#4654).",
         "required": [
           "issue_number",
           "position",
-          "is_new"
+          "is_new",
+          "series_title",
+          "source_lists",
+          "is_read",
+          "is_mapped",
+          "has_rating",
+          "effect",
+          "is_duplicate"
         ],
         "properties": {
+          "effect": {
+            "type": "string",
+            "description": "Human-readable description of the order effect on this issue."
+          },
+          "frontier_label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human label for the Queue/Roll frontier affected by this issue, if any."
+          },
+          "has_rating": {
+            "type": "boolean",
+            "description": "Whether rating history exists for this issue."
+          },
+          "is_duplicate": {
+            "type": "boolean",
+            "description": "Whether a second physical issue with the same number exists in the series."
+          },
+          "is_mapped": {
+            "type": "boolean",
+            "description": "Whether the issue has a confirmed external identity/catalog mapping."
+          },
           "is_new": {
             "type": "boolean"
+          },
+          "is_read": {
+            "type": "boolean",
+            "description": "Whether the issue has already been read."
           },
           "issue_id": {
             "type": [
@@ -19533,6 +19568,17 @@
           "position": {
             "type": "integer",
             "format": "int32"
+          },
+          "series_title": {
+            "type": "string",
+            "description": "Title of the series (thread) this issue belongs to."
+          },
+          "source_lists": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names of every custom reading list the issue is a member of."
           }
         }
       },
