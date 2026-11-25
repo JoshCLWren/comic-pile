@@ -24,8 +24,11 @@ import { computeEntryRequirements, decodeCustomCBLError, describeCyclePath, desc
 import {
   buildWritePayload,
   checkpointTargetsFor,
+  computeSemanticPreview,
   draftEntry,
+  findMatchedEntries,
   messageFor,
+  moveEntryRelativeToEntry,
   normalizePositions,
   sameEntries,
 } from './customCBLBuilderHelpers'
@@ -420,42 +423,10 @@ export default function CustomCBLBuilder({
     () => (persisted ? computeEntryRequirements(persisted.mode ?? DEFAULT_MODE, persisted.entries) : new Map<number, number[]>()),
     [persisted],
   )
-  const semanticPreview = useMemo(() => {
-    if (!persisted || !dirty) return null
-    const oldEntries = persisted.entries
-    const oldIndexById = new Map(oldEntries.map((entry, index) => [entry.issue_id, index]))
-    const oldFirstUnread = oldEntries.find((entry) => !entry.skipped && entry.status === 'unread')
-    const newFirstUnread = entries.find((entry) => !entry.skipped && entry.status === 'unread')
-    const changed = entries.flatMap((entry, index) => {
-      const oldIndex = oldIndexById.get(entry.issue_id)
-      const oldEntry = oldIndex !== undefined ? oldEntries[oldIndex] : undefined
-      const isNew = !oldEntry
-      const moved = oldIndex !== undefined && oldIndex !== index
-      const waitChanged = JSON.stringify(requirements.get(entry.issue_id) ?? []) !== JSON.stringify(persistedRequirements.get(entry.issue_id) ?? [])
-      const gateChanged = oldEntry ? (oldEntry.gate ?? DEFAULT_GATE) !== entry.gate || Boolean(oldEntry.skipped) !== entry.skipped : false
-      if (!isNew && !moved && !waitChanged && !gateChanged) return []
-      const oldPrev = oldIndex !== undefined && oldIndex > 0 ? oldEntries[oldIndex - 1] : null
-      const newPrev = index > 0 ? entries[index - 1] : null
-      return [{
-        issueId: entry.issue_id,
-        label: `${entry.series_name} #${entry.issue_number}`,
-        isNew,
-        moved,
-        oldPosition: oldIndex !== undefined ? oldIndex + 1 : null,
-        newPosition: index + 1,
-        oldPrev: oldPrev ? `${oldPrev.series_name} #${oldPrev.issue_number}` : null,
-        newPrev: newPrev ? `${newPrev.series_name} #${newPrev.issue_number}` : null,
-        oldWait: (persistedRequirements.get(entry.issue_id) ?? []).map((id) => nameFor(id)),
-        newWait: (requirements.get(entry.issue_id) ?? []).map((id) => nameFor(id)),
-      }]
-    })
-    return {
-      changed: changed.slice(0, 20),
-      totalChanged: changed.length,
-      oldFirstUnread: oldFirstUnread ? `${oldFirstUnread.series_name} #${oldFirstUnread.issue_number}` : null,
-      newFirstUnread: newFirstUnread ? `${newFirstUnread.series_name} #${newFirstUnread.issue_number}` : null,
-    }
-  }, [dirty, entries, nameFor, persisted, persistedRequirements, requirements])
+  const semanticPreview = useMemo(
+    () => computeSemanticPreview(entries, persisted, dirty, requirements, persistedRequirements),
+    [dirty, entries, persisted, persistedRequirements, requirements],
+  )
 
   const saveErrorDetail = useMemo(
     () => (saveMutation.error ? decodeCustomCBLError(saveMutation.error) : null),
@@ -490,15 +461,7 @@ export default function CustomCBLBuilder({
     ? (saveErrorDetail.message ?? 'This Reading List changed since you loaded it. Refresh to review the latest version, then reapply your edit.')
     : null
 
-  const matchedEntries = useMemo(() => {
-    const query = entrySearch.trim().toLocaleLowerCase()
-    const queryPosition = Number(entrySearch.trim())
-    return entries.flatMap((entry, index) => {
-      const label = `${entry.series_name} #${entry.issue_number}`
-      const positionMatch = Number.isSafeInteger(queryPosition) && queryPosition === index + 1
-      return !query || positionMatch || label.toLocaleLowerCase().includes(query) ? [{ entry, index }] : []
-    })
-  }, [entries, entrySearch])
+  const matchedEntries = useMemo(() => findMatchedEntries(entries, entrySearch), [entries, entrySearch])
   const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
   const currentPage = Math.min(entryPage, pageCount - 1)
   const visibleEntries = matchedEntries.slice(currentPage * ENTRY_PAGE_SIZE, (currentPage + 1) * ENTRY_PAGE_SIZE)
@@ -675,28 +638,11 @@ export default function CustomCBLBuilder({
   }
   const moveIssueRelativeToIssue = (index: number, issueId: number, placement: 'before' | 'after') => {
     const targetPosition = Number(moveTargets[issueId])
-    if (!Number.isSafeInteger(targetPosition) || targetPosition < 1 || targetPosition > entries.length) return
-    const targetIndex = targetPosition - 1
-    if (index === targetIndex) return
-    setEntries((current) => {
-      const next = [...current]
-      const [moved] = next.splice(index, 1)
-      if (!moved) return current
-      let insertAtIndex = targetIndex
-      if (index < targetIndex) insertAtIndex = targetIndex - 1
-      if (placement === 'after') insertAtIndex += 1
-      insertAtIndex = Math.max(0, Math.min(next.length, insertAtIndex))
-      next.splice(insertAtIndex, 0, moved)
-      return normalizePositions(next)
-    })
-    const finalIndex = (() => {
-      let insertAtIndex = targetIndex
-      if (index < targetIndex) insertAtIndex = targetIndex - 1
-      if (placement === 'after') insertAtIndex += 1
-      return Math.max(0, Math.min(entries.length - 1, insertAtIndex))
-    })()
+    const result = moveEntryRelativeToEntry(entries, index, targetPosition, placement)
+    if (!result) return
+    setEntries(result.entries)
     setEntrySearch('')
-    setEntryPage(Math.floor(finalIndex / ENTRY_PAGE_SIZE))
+    setEntryPage(Math.floor(result.finalIndex / ENTRY_PAGE_SIZE))
     focusListStart()
     setExpandedEntryOptions(null)
     setMessage(null)
