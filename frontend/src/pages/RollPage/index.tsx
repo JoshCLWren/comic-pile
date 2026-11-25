@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../query/queryKeys'
@@ -13,7 +13,6 @@ import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useResetDice,
   useDismissPending,
-  useOverrideRoll,
   useRoll,
   useUnsnooze,
   useSetDie,
@@ -26,6 +25,7 @@ import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi } from '../../services/api-threads'
 import { readRollSnoozes } from '../../services/api-roll'
+import type { Thread } from '../../types'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
 import { useRollBootstrapSync } from './useRollBootstrapSync'
@@ -42,7 +42,7 @@ import { LastReadStrip } from './components/LastReadStrip'
 import { useRollLastRead } from '../../hooks/useRollLastRead'
 import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
-import { invalidateAfterUndo, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
+import { invalidateAfterUndo, invalidateDirectReadIssueSelection, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
 import { resolveRollSelectedDie } from './selectedDie'
 import { ThreadPool } from './components/ThreadPool'
 import { resolveSnoozedSeriesCovers } from './resolveSnoozedSeriesCovers'
@@ -67,6 +67,9 @@ export default function RollPage() {
   const state = useRollPageState()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  // Manual issue-tracking setup is not a random Roll offer migration.
+  // Keep its completion in the direct issue card, not the Roll rating workspace.
+  const directMigrationRef = useRef(false)
 
   const {
     data: bootstrap,
@@ -127,7 +130,6 @@ export default function RollPage() {
   const resetDiceMutation = useResetDice()
   const rollMutation = useRoll()
   const dismissPendingMutation = useDismissPending()
-  const overrideMutation = useOverrideRoll()
   const snoozeMutation = useSnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
@@ -246,15 +248,12 @@ export default function RollPage() {
     },
     refetchBootstrap,
     enterRatingView: rating.enterRatingView,
-    threadsApi,
     onSnoozeRefreshFailed: reportSnoozeRefreshFailed,
   })
 
   const modals = useRollModals({
     state,
     bootstrap,
-    overrideMutation,
-    enterRatingView: rating.enterRatingView,
     setRestoreAction,
     clearRestoreAction,
   })
@@ -569,9 +568,37 @@ export default function RollPage() {
         <RollModals
           showMigrationDialog={state.showMigrationDialog}
           threadToMigrate={state.threadToMigrate}
-          onMigrationComplete={rating.handleMigrationComplete}
-          onMigrationSkip={rating.handleMigrationSkip}
-          onMigrationClose={rating.handleMigrationClose}
+          onMigrationComplete={(thread: Thread) => {
+            if (!directMigrationRef.current) {
+              rating.handleMigrationComplete(thread)
+              return
+            }
+            directMigrationRef.current = false
+            state.setShowMigrationDialog(false)
+            state.setThreadToMigrate(null)
+            void invalidateDirectReadIssueSelection(queryClient, thread.id)
+            state.setIsDirectReadOpen(true)
+          }}
+          onMigrationSkip={() => {
+            if (!directMigrationRef.current) {
+              rating.handleMigrationSkip()
+              return
+            }
+            directMigrationRef.current = false
+            state.setShowMigrationDialog(false)
+            state.setThreadToMigrate(null)
+            state.setIsDirectReadOpen(true)
+          }}
+          onMigrationClose={() => {
+            if (!directMigrationRef.current) {
+              rating.handleMigrationClose()
+              return
+            }
+            directMigrationRef.current = false
+            state.setShowMigrationDialog(false)
+            state.setThreadToMigrate(null)
+            state.setIsDirectReadOpen(true)
+          }}
           showSimpleMigration={state.showSimpleMigration}
           activeRatingThread={state.activeRatingThread}
           onSimpleMigrationComplete={rating.handleSimpleMigrationComplete}
@@ -582,7 +609,6 @@ export default function RollPage() {
           onOverrideThreadIdChange={state.setOverrideThreadId}
           overrideErrorMessage={state.overrideErrorMessage}
           onSubmitOverride={modals.handleOverrideSubmit}
-          overridePending={overrideMutation.isPending}
           snoozedThreads={snoozedThreads}
           onCloseOverride={modals.closeOverrideModal}
           isDieModalOpen={state.isDieModalOpen}
@@ -594,6 +620,30 @@ export default function RollPage() {
           resetDiceError={resetDiceError}
           setDiePending={setDieMutation.isPending}
           isActionSheetOpen={state.isActionSheetOpen}
+          isDirectReadOpen={state.isDirectReadOpen}
+          onCloseDirectRead={() => state.setIsDirectReadOpen(false)}
+          onMigrateDirectRead={() => {
+            if (!state.selectedThread) return
+            directMigrationRef.current = true
+            // MigrationDialog reads only id/title. These other RatingThread
+            // fields are placeholders, never handed to the Roll rating flow.
+            state.setThreadToMigrate({
+              id: state.selectedThread.id,
+              title: state.selectedThread.title,
+              format: state.selectedThread.format,
+              issues_remaining: 0,
+              queue_position: 0,
+              total_issues: null,
+              reading_progress: null,
+              issue_id: state.selectedThread.issue_id ?? null,
+              issue_number: state.selectedThread.issue_number ?? null,
+              next_issue_id: null,
+              next_issue_number: null,
+              last_rolled_result: null,
+            })
+            state.setIsDirectReadOpen(false)
+            state.setShowMigrationDialog(true)
+          }}
           selectedThread={state.selectedThread}
           pendingThreadId={bootstrap.pending_thread_id}
           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}

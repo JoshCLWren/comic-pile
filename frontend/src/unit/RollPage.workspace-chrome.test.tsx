@@ -188,6 +188,17 @@ describe('Roll rating header chrome (#2712)', () => {
     expect(screen.getByRole('button', { name: 'd20' })).toBeInTheDocument()
   })
 
+  it('offers a visible Reset Dice entry without the mobile-only die selector', async () => {
+    const onOpenDieModal = vi.fn()
+    const user = userEvent.setup()
+    renderHeader({ onOpenDieModal })
+    const reset = screen.getByRole('button', { name: 'Reset Dice' })
+    expect(reset).toBeVisible()
+    expect(reset.closest('.md\\:hidden')).toBeNull()
+    await user.click(reset)
+    expect(onOpenDieModal).toHaveBeenCalledTimes(1)
+  })
+
   it('leaves the die view header chrome untouched', () => {
     const { container } = renderHeader({ isRatingView: false, onBackToQueue: vi.fn() })
 
