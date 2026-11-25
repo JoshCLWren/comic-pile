@@ -142,7 +142,7 @@ export function ReaderIssueActions({ issueId, threadId, issueNumber, isRead, ava
     <div className="mt-2 space-y-1">
       {row && <IssueTagRowChips data={row} issueNumber={issueNumber} />}
       {tags.isError && <p className="text-xs text-[var(--theme-text-muted)]">Tags unavailable.</p>}
-      <ComicIssueCard
+      <ComicIssueReadingCard
         issueId={issueId}
         card={resolvedCard}
         threadTitle={resolvedCard?.thread_title ?? seriesTitle ?? ''}
