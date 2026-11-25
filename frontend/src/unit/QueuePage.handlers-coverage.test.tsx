@@ -104,6 +104,7 @@ beforeEach(() => {
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(issuesApi.create).mockResolvedValue({ issues: [] } as never)
   vi.mocked(issuesApi.markRead).mockResolvedValue(undefined)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(issuesApi.bulkMarkRead).mockResolvedValue({} as never)
   // SAFETY: as never is used for type narrowing in mock data
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type

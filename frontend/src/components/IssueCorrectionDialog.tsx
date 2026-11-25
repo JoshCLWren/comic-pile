@@ -3,10 +3,9 @@ import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
 import { issuesApi } from '../services/api-issues'
-import type { IssueListParams, IssueReadOperationResponse } from '../services/api-issues'
+import type { IssueListParams, IssueReadOperationResponse, IssueReadOperationUndoResponse } from '../services/api-issues'
 import { issueDependenciesApi } from '../services/api-dependencies'
 import type { Issue, IssueListResponse } from '../types'
-import type { IssueReadOperationResponse, IssueReadOperationUndoResponse } from '../services/api-issues'
 
 export interface IssueCorrectionIssuesApi {
   list: (threadId: number, params?: IssueListParams) => Promise<IssueListResponse>
@@ -181,9 +180,7 @@ export default function IssueCorrectionDialog({
       let operation: IssueReadOperationResponse | null = null
       if (unreadBeforeTarget.length > 0) {
         const result = await issuesService.bulkMarkRead(unreadBeforeTarget.map((issue) => issue.id))
-        if (result && typeof result === 'object' && 'id' in result) {
-          operation = result as IssueReadOperationResponse
-        }
+        operation = result ?? null
       }
 
       if (targetIssue.status === 'read') {
@@ -217,6 +214,7 @@ export default function IssueCorrectionDialog({
       if (!targetIssue) {
         // New issue will be created; preview based on current ordering plus target insertion at end/start/after.
         // For simplicity, treat as no existing affected issues before creation except by position.
+        // SAFETY: partial placeholder issue used only for preview; never persisted.
         targetIssue = { id: -1, issue_number: targetNumber, status: 'unread' } as Issue
       }
       const targetIndex = orderedIssues.findIndex((issue) => issue.issue_number === targetNumber)
@@ -270,7 +268,8 @@ export default function IssueCorrectionDialog({
     setIsUndoing(true)
     setError(null)
     try {
-      const svc = issuesService as IssueCorrectionIssuesApi & { undoReadOperation?: (id: number) => Promise<unknown> }
+      // SAFETY: narrow injected API to optional undo capability; production issuesApi provides it.
+      const svc = issuesService as IssueCorrectionIssuesApi & { undoReadOperation?: (id: number) => Promise<IssueReadOperationUndoResponse | void> }
       if (svc.undoReadOperation) {
         await svc.undoReadOperation(lastOperation.id)
       } else {
