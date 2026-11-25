@@ -567,5 +567,18 @@ async fn julix_4232_omitted_in_thread_issues_classified_intentional_or_repaired(
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{eligible_after:?}");
-    assert_eq!(eligible_after["issue_ids"], json!([tail_issue]));
+
+    // The observed global Roll pool is separate from the strict-list frontier:
+    // the intentionally omitted Thrilling #4 remains eligible through its active
+    // Thread while the repaired Foundry #2 is read and the next list entry opens.
+    let eligible_after_ids: BTreeSet<i64> = eligible_after["issue_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_i64)
+        .collect();
+    assert_eq!(
+        eligible_after_ids,
+        BTreeSet::from([i64::from(thrilling_4_omitted), i64::from(tail_issue)])
+    );
 }
