@@ -55,6 +55,7 @@ vi.mock('../services/api-issues', () => ({
   issuesApi: {
     list: vi.fn(),
     create: vi.fn(),
+    previewCreate: vi.fn(),
     markRead: vi.fn(),
     markUnread: vi.fn(),
     delete: vi.fn(),
@@ -95,6 +96,7 @@ const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedThreadsApiGet = vi.mocked(threadsApi.get)
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
 const mockedIssuesApiCreate = vi.mocked(issuesApi.create)
+const mockedIssuesApiPreviewCreate = vi.mocked(issuesApi.previewCreate)
 const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
 
@@ -137,6 +139,15 @@ beforeEach(() => {
     next_page_token: null,
     total_count: 0,
     page_size: 100,
+  } as never)
+  mockedIssuesApiPreviewCreate.mockReset()
+  mockedIssuesApiPreviewCreate.mockResolvedValue({
+    thread_id: 1, thread_title: 'Saga', requested_strategy: 'safe_default',
+    default_outcome: { strategy: 'safe_default', can_commit: true, preserves_existing_relative_order: true,
+      before: [{issue_id:1, issue_number:'1', position:1, is_new:false}],
+      after: [{issue_id:1, issue_number:'1', position:1, is_new:false},{issue_id:null, issue_number:'7-8', position:2, is_new:true}],
+      added_issue_numbers: ['7','8'], graph: { status: 'ok', cycles: [] }, conflict_message: null },
+    numeric_resort_outcome: null,
   } as never)
   mockedConnectedThreads.mockReset()
   mockedConnectedThreads.mockResolvedValue({ thread_id: 1, connected_threads: [] })
@@ -223,6 +234,8 @@ describe('Thread detail Edit Series discard confirmation (#4356)', () => {
     const addInput = await screen.findByTestId('issue-add-input')
     await user.type(addInput, '7-8')
     await user.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    await user.click(screen.getByTestId('confirm-preview-add'))
     expect(await screen.findByTestId('pending-creates')).toHaveTextContent('7-8')
     expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
 
