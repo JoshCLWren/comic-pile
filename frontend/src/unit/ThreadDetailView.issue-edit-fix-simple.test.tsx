@@ -237,11 +237,11 @@ describe('ThreadDetailView Edit dialog rejects invalid issue entries (#3586)', (
     const { user, addInput } = await openEditDialog()
     await user.type(addInput, value)
     await user.click(screen.getByTestId('issue-add-button'))
-    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
-    await user.click(screen.getByTestId('confirm-preview-add'))
 
+    expect(screen.queryByTestId('edit-series-preview-modal')).not.toBeInTheDocument()
     expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
     expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
+    expect(mockedIssuesApiPreviewCreate).not.toHaveBeenCalled()
     expect(screen.getByTestId('issue-add-validation-error')).toBeInTheDocument()
   })
 
@@ -263,11 +263,11 @@ describe('ThreadDetailView Edit dialog rejects invalid issue entries (#3586)', (
     const { user, addInput } = await openEditDialog()
     await user.type(addInput, ',')
     await user.click(screen.getByTestId('issue-add-button'))
-    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
-    await user.click(screen.getByTestId('confirm-preview-add'))
 
+    expect(screen.queryByTestId('edit-series-preview-modal')).not.toBeInTheDocument()
     expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
     expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
+    expect(mockedIssuesApiPreviewCreate).not.toHaveBeenCalled()
     expect(screen.getByTestId('issue-add-validation-error')).toBeInTheDocument()
   })
 })
