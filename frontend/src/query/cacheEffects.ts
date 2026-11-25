@@ -634,7 +634,7 @@ export async function invalidateComicVineIssueIntelligence(
 }
 
 /**
- * Drop provider details for an issue whose mapping was removed, then refetch.
+ * Drop provider details for every issue whose mapping was removed, then refetch.
  * Clearing first prevents stale cover/creator data from surviving a failed
  * post-removal refresh.
  */
@@ -644,6 +644,19 @@ export async function clearComicVineIssueIntelligence(
 ): Promise<void> {
   client.setQueryData(queryKeys.comicVine.issueIntelligence(issueId), null)
   await invalidateComicVineIssueIntelligence(client, issueId)
+}
+
+/**
+ * Drop identity-bound provider details before refetching committed ComicVine
+ * confirmations/replacements. Keeping the previous identity's cache visible
+ * during the refetch would show the wrong creators (and other metadata) for an
+ * unchanged canonical Issue id.
+ */
+export async function clearComicVineIssueIntelligenceMany(
+  client: QueryClient,
+  issueIds: readonly number[],
+): Promise<void> {
+  await Promise.all(issueIds.map((issueId) => clearComicVineIssueIntelligence(client, issueId)))
 }
 
 /**
