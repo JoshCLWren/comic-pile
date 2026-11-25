@@ -1804,6 +1804,100 @@ async fn bulk_read_undo_preserves_an_aba_sequence_after_the_operation() {
 }
 
 #[tokio::test]
+async fn bulk_read_undo_preserves_later_direct_ratings_and_explicit_saves() {
+    let (state, token, csrf, user_id, _guard) = setup_user("irs-4655-rate").await;
+    let conn = state.pool.get().await.unwrap();
+    let (_thread_id, issues) = series(
+        &conn,
+        user_id,
+        "Later saves",
+        1,
+        "active",
+        &[("1", "unread"), ("2", "unread"), ("3", "unread")],
+    )
+    .await;
+
+    let (status, body) = send(
+        &state,
+        post(
+            "/api/v2/issue-read-markers",
+            &token,
+            &csrf,
+            Some(json!({"issue_ids": issues})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let operation_id = body["id"].as_i64().unwrap();
+
+    // Issue 1 receives a real later rating while already read; issue 2 gets
+    // an explicit direct save with unchanged status. Issue 3 is untouched.
+    for (issue_id, payload) in [
+        (
+            issues[0],
+            json!({
+                "status": "read",
+                "rating": 4.5,
+                "idempotency_key": "bulk-undo-later-rating",
+                "source": "direct"
+            }),
+        ),
+        (
+            issues[1],
+            json!({
+                "status": "read",
+                "idempotency_key": "bulk-undo-later-save",
+                "source": "direct"
+            }),
+        ),
+    ] {
+        let (status, body) = send(
+            &state,
+            authed(
+                "PATCH",
+                &format!("/api/v2/issues/{issue_id}"),
+                &token,
+                &csrf,
+                Some(payload),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body:?}");
+    }
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            &format!("/api/v2/issue-read-operations/{operation_id}/undo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["undone_issue_ids"], json!([issues[2]]));
+    assert_eq!(body["skipped_issue_ids"], json!([issues[0], issues[1]]));
+    assert_eq!(issue_state(&conn, issues[0]).await, ("read".into(), true));
+    assert_eq!(issue_state(&conn, issues[1]).await, ("read".into(), true));
+    assert_eq!(
+        issue_state(&conn, issues[2]).await,
+        ("unread".into(), false)
+    );
+    let rating: f64 = conn
+        .query_one(
+            "SELECT rating FROM events WHERE user_id=$1 AND issue_id=$2
+             AND type='rate' ORDER BY id DESC LIMIT 1",
+            &[&user_id, &issues[0]],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(rating, 4.5);
+}
+
+#[tokio::test]
 async fn bulk_unread_undo_restores_the_recorded_read_timestamp() {
     // #4655 review R2: undo must restore the persisted previous_read_at rather
     // than substituting NOW() for an issue that was already read before the
