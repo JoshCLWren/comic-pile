@@ -12,7 +12,7 @@ pnpm run audit:ui
 
 This is the self-contained acceptance command. It:
 
-1. starts an isolated Docker Compose audit stack (PostgreSQL, an unused Redis compatibility service, the native Rust migration/service, built frontend, and nginx; no Python application runtime);
+1. starts an isolated Docker Compose audit stack (PostgreSQL, an unused Redis compatibility service, the native Rust migration/service, and nginx; no Python application runtime);
 2. waits for the API at the canonical local E2E/audit address `http://127.0.0.1:8002`;
 3. builds the frontend;
 4. runs the rendered audit in Chromium with one worker;

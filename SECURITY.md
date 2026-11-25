@@ -30,7 +30,7 @@ See `.env.example`, `native/roll-service/src/config.rs`, and `docs/DEPLOYMENT.md
 
 The built SPA's response headers are configured in `vercel.json`: Content Security Policy, HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, Referrer Policy, and Permissions Policy. These headers belong to the Vercel static-route contract; do not assume a function response inherits them.
 
-The native API adds its runtime marker and returns JSON errors without credentials, SQL, reset tokens, provider secrets, or raw upstream payloads. Authentication, CSRF, ownership checks, bounded parsing, and sanitized logging are enforced in Rust.
+Recorded gap: native API responses do not currently emit that static CSP/HSTS header set. The native boundary adds its runtime marker and returns JSON errors without credentials, SQL, reset tokens, provider secrets, or raw upstream payloads. Authentication, CSRF, ownership checks, bounded parsing, and sanitized logging are enforced in Rust.
 
 ## Rate limiting and lockout
 

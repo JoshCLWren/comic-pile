@@ -16,7 +16,7 @@ The runner reads `MIGRATE_DATABASE_URL`, falling back to `DATABASE_URL`, and str
 - `V3` and later migrations are Rust-only and always execute on an adopted Alembic database.
 - Never edit an applied migration. Append `V<n>__description.sql` and let refinery embed it at build time.
 
-The runner can adopt a supported Alembic-managed database by recording V1/V2 as already applied without executing them, using the existing `alembic_version` guards. Empty or unmanaged databases are refused unless they follow the runner's supported initialization path. A session advisory lock serializes concurrent migration runs.
+The runner adopts supported Alembic-managed databases by recording V1/V2 as already applied without executing them, guarded by `alembic_version`. The historical heads `c44050000002` and `i5378deferred01` adopt V1 and run V2; `m54i537800001` adopts both. Any other revision, or a non-empty schema without `alembic_version`, is refused. An empty database is initialized by running all migrations and stamping the historical Alembic head. A session advisory lock serializes concurrent migration runs.
 
 CI applies the committed Rust migrations to disposable PostgreSQL databases. There is no Alembic parity build, `make roll-test-schema` target, or Python migration runtime.
 

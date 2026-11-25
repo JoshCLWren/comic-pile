@@ -4,7 +4,7 @@ Maintained browser coverage lives here as TypeScript Playwright `*.spec.ts` file
 
 ## Setup
 
-Follow the root README to install prerequisites, start PostgreSQL, apply migrations, and run `make dev` (Vite on `:5173`, native Rust API on `:8010`). Export the native environment variables documented in the README; the standalone service does not load `.env` itself.
+Follow the root README to install prerequisites, start PostgreSQL, apply migrations, and run `make dev` (Vite on `:5173`, native Rust API on `:8010`). Export the native environment variables documented in the README; the standalone service does not load `.env` itself. Install the maintained browser target once with `pnpm exec playwright install chromium`; `make setup` does not install browser binaries.
 
 Build before Playwright, then run one focused spec:
 
