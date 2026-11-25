@@ -521,6 +521,16 @@ describe('CustomCBLBuilder', () => {
       })
     })
   })
+  it('explains that an active hold milestone blocks every later entry', async () => {
+    mocks.get.mockResolvedValue({
+      ...existingList,
+      entries: [{ ...existingList.entries[0], gate: 'hold' }, existingList.entries[1]],
+    })
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('Every later entry stays blocked until this milestone is read.')).toBeInTheDocument()
+  })
   it('requires explicit confirmation before persisting changed waits', async () => {
     const predecessorChange = {
       issue_id: 30001,
