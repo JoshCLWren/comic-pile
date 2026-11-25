@@ -22,7 +22,7 @@ export function cblBrowseResultState({
   isFetching,
   hasCatalogError,
 }: CblBrowseResultStateInput) {
-  const settledBrowsePage = isPlaceholderData ? null : browsePage
+  const settledBrowsePage = isPlaceholderData || isFetching ? null : browsePage
   const firstShown =
     settledBrowsePage && settledBrowsePage.items.length > 0
       ? (settledBrowsePage.page - 1) * settledBrowsePage.page_size + 1
