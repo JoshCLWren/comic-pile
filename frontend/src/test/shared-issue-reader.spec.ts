@@ -117,52 +117,54 @@ test('mixed-number provider mapping preserves the authored row across cancel and
     const request = route.request()
     const path = new URL(request.url()).pathname
     const method = request.method()
-    let body: unknown = {}
     let status = 200
-    if (path === '/api/v2/auth/me') {
-      body = { id: 1, username: 'reader', email: 'reader@example.test', preferences: { theme: 'classic' } }
-    } else if (path === '/api/v2/auth/csrf') {
-      body = { csrf_token: 'test-csrf' }
-    } else if (path === '/api/v2/continuity-plans/12/reader') {
-      body = view
-    } else if (path.includes('/tags/effective/thread/')) {
-      body = { thread_id: 8, issues: [] }
-    } else if (path.includes('/tags/effective/plan/')) {
-      body = { target_type: 'ContinuityPlan', target_id: 12, direct_tags: [], effective_tags: [] }
-    } else if (path === '/api/v2/issues/cards') {
-      body = { items: [card] }
-    } else if (path === '/api/v2/comicvine/search/series') {
-      body = { query: '', results: [], total_available: 0, offset: 0, limit: 10, has_more: false, next_offset: null }
-    } else if (path === '/api/v2/comicvine/resolve') {
-      body = { input: 'synthetic', kind: 'issue', validation_error: null, issue: providerIssue, volume: null, issues: [] }
-    } else if (path === '/api/v2/comicvine/issues/75/identity' && method === 'GET') {
-      reloads += 1
-      if (reloads === 1) {
-        status = 503
-        body = { detail: 'Identity temporarily unavailable' }
-      } else {
-        body = card.has_confirmed_identity
+    // The mock payload keeps its inferred union: an explicit `unknown` body
+    // would discard the response evidence the anti-slop rule preserves.
+    const body = (() => {
+      if (path === '/api/v2/auth/me') {
+        return { id: 1, username: 'reader', email: 'reader@example.test', preferences: { theme: 'classic' } }
+      } else if (path === '/api/v2/auth/csrf') {
+        return { csrf_token: 'test-csrf' }
+      } else if (path === '/api/v2/continuity-plans/12/reader') {
+        return view
+      } else if (path.includes('/tags/effective/thread/')) {
+        return { thread_id: 8, issues: [] }
+      } else if (path.includes('/tags/effective/plan/')) {
+        return { target_type: 'ContinuityPlan', target_id: 12, direct_tags: [], effective_tags: [] }
+      } else if (path === '/api/v2/issues/cards') {
+        return { items: [card] }
+      } else if (path === '/api/v2/comicvine/search/series') {
+        return { query: '', results: [], total_available: 0, offset: 0, limit: 10, has_more: false, next_offset: null }
+      } else if (path === '/api/v2/comicvine/resolve') {
+        return { input: 'synthetic', kind: 'issue', validation_error: null, issue: providerIssue, volume: null, issues: [] }
+      } else if (path === '/api/v2/comicvine/issues/75/identity' && method === 'GET') {
+        reloads += 1
+        if (reloads === 1) {
+          status = 503
+          return { detail: 'Identity temporarily unavailable' }
+        }
+        return card.has_confirmed_identity
           ? { ...identity, identity_version: 9, has_confirmed_identity: true, comicvine_issue_id: '8100', provider_issue_number: '100' }
           : identity
-      }
-    } else if (path === '/api/v2/comicvine/issues/75/identity:confirm' && method === 'POST') {
-      writes.push(request.postDataJSON())
-      if (writes.length === 1) {
-        status = 409
-        body = { detail: 'Identity changed; reload before retrying' }
-      } else {
+      } else if (path === '/api/v2/comicvine/issues/75/identity:confirm' && method === 'POST') {
+        writes.push(request.postDataJSON())
+        if (writes.length === 1) {
+          status = 409
+          return { detail: 'Identity changed; reload before retrying' }
+        }
         card.identity_version = 9
         card.mapping_state = 'confirmed'
         card.has_confirmed_identity = true
         card.provider_issue_number = '100'
         card.comicvine_issue_id = '8100'
-        body = { ...identity, identity_version: 9, has_confirmed_identity: true, comicvine_issue_id: '8100', provider_issue_number: '100' }
+        return { ...identity, identity_version: 9, has_confirmed_identity: true, comicvine_issue_id: '8100', provider_issue_number: '100' }
+      } else if (path === '/api/v1/catalog/series-mappings/preview' || path === '/api/v2/catalog/series-mappings/preview') {
+        return { preview_token: null, scope: { status: 'available', scope_key: 'synthetic', origin_issue_id: 75, series_label: 'Synthetic arc', basis: 'confirmed' }, provider_series: null, counts: { already_confirmed: 1, safe_exact_match: 0, needs_review_ambiguous: 0, needs_review_conflict: 0, unresolved: 0, excluded_special: 0 }, rows: [], issued_at: 1, expires_at: null }
+      } else if (method !== 'GET') {
+        unexpectedWrites.push(`${method} ${path}`)
       }
-    } else if (path === '/api/v1/catalog/series-mappings/preview' || path === '/api/v2/catalog/series-mappings/preview') {
-      body = { preview_token: null, scope: { status: 'available', scope_key: 'synthetic', origin_issue_id: 75, series_label: 'Synthetic arc', basis: 'confirmed' }, provider_series: null, counts: { already_confirmed: 1, safe_exact_match: 0, needs_review_ambiguous: 0, needs_review_conflict: 0, unresolved: 0, excluded_special: 0 }, rows: [], issued_at: 1, expires_at: null }
-    } else if (method !== 'GET') {
-      unexpectedWrites.push(`${method} ${path}`)
-    }
+      return {}
+    })()
     await route.fulfill({ status, json: body })
   })
   await page.addInitScript(() => localStorage.setItem('auth_token', 'test-access-token'))
