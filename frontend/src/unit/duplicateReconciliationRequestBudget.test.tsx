@@ -5,7 +5,7 @@
  * each preview/apply/undo action issues exactly one request. No duplicate
  * in-flight or retry calls are allowed.
  */
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
