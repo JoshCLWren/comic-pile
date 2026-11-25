@@ -203,11 +203,33 @@ export interface IssueIdentityResponse {
   issue_id: number
   thread_id: number
   thread_title: string
+  /** Reader-authored story/series label; never rewritten by provider mapping. */
+  issue_number?: string
+  /** Alternate overall-series label for the same physical owned issue. */
+  overall_issue_number?: string | null
+  /** Optimistic version for alias/provider-identity edits. */
+  identity_version?: number
+  /** Actual issue number inside the confirmed provider volume. */
+  provider_issue_number?: string | null
   has_confirmed_identity: boolean
   comicvine_issue_id: string | null
   confirmed_mappings: IssueIdentityMapping[]
   candidate_mappings: IssueIdentityMapping[]
   has_unresolved: boolean
+}
+
+export interface IssueIdentityEdit {
+  overallIssueNumber?: string
+  expectedVersion?: number
+}
+
+function identityEditFields(edit: IssueIdentityEdit = {}) {
+  return {
+    ...(edit.overallIssueNumber !== undefined
+      ? { overall_issue_number: edit.overallIssueNumber }
+      : {}),
+    ...(edit.expectedVersion !== undefined ? { expected_version: edit.expectedVersion } : {}),
+  }
 }
 
 export interface MetadataRefreshResponse {
