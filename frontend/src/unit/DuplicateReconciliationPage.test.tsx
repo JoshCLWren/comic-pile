@@ -167,7 +167,12 @@ describe('DuplicateReconciliationPage', () => {
       group({
         evidence: [
           evidence({ is_synthetic_placeholder_read: true, read_at: '2026-01-01T00:00:00Z' }),
-          evidence({ issue_id: 11, merged_into_issue_id: 10, comicvine_issue_id: null }),
+          evidence({
+            issue_id: 11,
+            issue_number: 'Annual 1',
+            merged_into_issue_id: 10,
+            comicvine_issue_id: null,
+          }),
         ],
       }),
     )
@@ -177,7 +182,7 @@ describe('DuplicateReconciliationPage', () => {
     expect(screen.getByText('—')).toBeInTheDocument()
     expect(screen.getAllByText(/^Canonical$/)).toHaveLength(1)
     expect(screen.getAllByText(/^Duplicate$/)).toHaveLength(1)
-    expect(screen.getAllByText(/^Related$/)).toHaveLength(0)
+    expect(screen.queryAllByText(/^Related$/)).toHaveLength(0)
     expect(screen.getByText('Invalid synthetic placeholder read (read_at before created_at)')).toBeInTheDocument()
     expect(screen.getByText('Merged into issue 10')).toBeInTheDocument()
     expect(screen.getAllByText('Ratings:')).toHaveLength(2)
@@ -195,8 +200,9 @@ describe('DuplicateReconciliationPage', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Duplicate: #1 (10)' }))
     expect(screen.getByRole('checkbox', { name: 'Duplicate: #1 (10)' })).not.toBeChecked()
 
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Duplicate: #Annual 1 (11)' }))
-    expect(screen.getByRole('checkbox', { name: 'Duplicate: #Annual 1 (11)' })).toBeChecked()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Duplicate: #1 (10)' }))
+    expect(screen.getByRole('checkbox', { name: 'Duplicate: #1 (10)' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Duplicate: #Annual 1 (11)' })).toBeDisabled()
   })
 
   it('previews canonical, aliases, actions, warnings and Queue/Roll changes', async () => {
