@@ -48,6 +48,7 @@ pub enum BlockerKind {
     Hold,
     AfterPrevious,
     Prerequisite,
+    ReadingCycle,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -217,6 +218,7 @@ fn blocker_kind_from_str(kind: &str) -> BlockerKind {
         "strict_order" => BlockerKind::StrictOrder,
         "hold" => BlockerKind::Hold,
         "after_previous" => BlockerKind::AfterPrevious,
+        "reading_cycle" => BlockerKind::ReadingCycle,
         _ => BlockerKind::Prerequisite,
     }
 }
@@ -328,11 +330,16 @@ fn blocker_reason(
 ) -> String {
     let label = gate_label(snapshot, labels, &gate.blocker);
     if gate.described_issue_ids.is_empty() {
-        format!("Also gated by {label}.")
-    } else {
-        let waiting = issue_names(labels, &gate.described_issue_ids);
-        format!("{label}: read {waiting} first")
+        if gate.blocker.kind == "reading_cycle" {
+            return "Blocked by a dependency cycle.".to_string();
+        }
+        return format!("Also gated by {label}.");
     }
+    let waiting = issue_names(labels, &gate.described_issue_ids);
+    if gate.blocker.kind == "reading_cycle" {
+        return format!("Blocked by a dependency cycle involving {waiting}.");
+    }
+    format!("{label}: read {waiting} first")
 }
 
 fn gate_label(
@@ -341,18 +348,20 @@ fn gate_label(
     blocker: &crate::reading_constraints::Blocker,
 ) -> String {
     if blocker.kind == "prerequisite" {
-        prerequisite_origin_label(blocker.origin.as_deref())
-    } else {
-        let list_name = list_name(snapshot, labels, blocker.list_id);
-        format!(
-            "{} in {list_name}",
-            KIND_TEXT
-                .iter()
-                .find(|(k, _)| *k == blocker.kind)
-                .map(|(_, v)| *v)
-                .unwrap_or(&blocker.kind)
-        )
+        return prerequisite_origin_label(blocker.origin.as_deref());
     }
+    if blocker.kind == "reading_cycle" {
+        return "Dependency cycle".to_string();
+    }
+    let list_name = list_name(snapshot, labels, blocker.list_id);
+    format!(
+        "{} in {list_name}",
+        KIND_TEXT
+            .iter()
+            .find(|(k, _)| *k == blocker.kind)
+            .map(|(_, v)| *v)
+            .unwrap_or(&blocker.kind)
+    )
 }
 
 fn project_blocker(
