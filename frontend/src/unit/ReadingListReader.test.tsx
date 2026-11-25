@@ -13,7 +13,10 @@ import { queryKeys } from '../query/queryKeys'
 
 vi.mock('../services/api-custom-cbl', () => ({ customCBLApi: { getReader: vi.fn() } }))
 vi.mock('../services/api-issues', () => ({ issuesApi: { markRead: vi.fn(), markUnread: vi.fn() } }))
-vi.mock('../services/api-tags', () => ({ tagsApi: { threadIssuesEffective: vi.fn().mockResolvedValue({ issues: [] }) } }))
+vi.mock('../services/api-tags', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-tags')>()
+  return { ...actual, tagsApi: { threadIssuesEffective: vi.fn().mockResolvedValue({ issues: [] }) } }
+})
 
 const view: ReaderView = {
   list_id: 2, name: 'Julix', mode: 'strict', execution_mode: 'option_e', entries: [
