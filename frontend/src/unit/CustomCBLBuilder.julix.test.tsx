@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
+import { queryKeys } from '../query/queryKeys'
 import { issueCardsApi } from '../services/issueCardsApi'
 
 const mocks = vi.hoisted(() => ({
@@ -156,6 +157,35 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     const undoPayload = mocks.update.mock.calls[1][1]
     expect(undoPayload.issue_ids).toHaveLength(466)
     expect(undoPayload.issue_ids[0]).toBe(50000)
+  })
+
+  it('retains the draft revision after a background refetch and refreshes explicitly after a stale write', async () => {
+    const user = userEvent.setup()
+    const { client } = renderBuilder()
+    await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    await user.selectOptions(await screen.findByLabelText('Custom CBL'), '2')
+    await screen.findAllByTestId('reading-list-entry')
+
+    const name = screen.getByLabelText('Name', { exact: true })
+    await user.clear(name)
+    await user.type(name, 'Local draft')
+    const newer = { ...julixList, name: 'Remote edit', updated_at: '2026-11-20T00:10:00Z' }
+    mocks.get.mockResolvedValue(newer)
+    act(() => {
+      client.setQueryData(queryKeys.customCBLs.detail(2), newer)
+    })
+    expect(name).toHaveValue('Local draft')
+    mocks.update.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { data: { detail: { code: 'reading_list_stale_write', message: 'Reading list changed' } } },
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1))
+    expect(mocks.update.mock.calls[0][1].expected_updated_at).toBe(julixList.updated_at)
+    await user.click(await screen.findByRole('button', { name: 'Refresh latest list' }))
+    await waitFor(() => expect(screen.getByLabelText('Name', { exact: true })).toHaveValue('Remote edit'))
+    expect(screen.getByRole('button', { name: 'Save custom CBL' })).toBeDisabled()
   })
 
   it('supports keyboard insertion and move controls', async () => {
