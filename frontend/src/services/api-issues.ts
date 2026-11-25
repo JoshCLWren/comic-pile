@@ -46,6 +46,19 @@ export interface IssuePreviewItem {
   issue_number: string
   position: number
   is_new: boolean
+  /** Human-readable series title so two issues sharing a number stay distinct. */
+  series_title: string
+  /** Names of the source reading lists this issue belongs to. */
+  source_lists: string[]
+  is_read: boolean
+  is_mapped: boolean
+  has_rating: boolean
+  /** Affected Queue/Roll frontier label, e.g. the current unread issue. */
+  frontier_label: string | null
+  /** Human-readable description of this row's order effect. */
+  effect: string
+  /** Whether a second physical issue with the same number exists. */
+  is_duplicate: boolean
 }
 
 export interface IssueEditPreviewOutcome {

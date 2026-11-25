@@ -6838,13 +6838,34 @@ export interface components {
          * @enum {string}
          */
         PotentialDuplicateMatchType: "same_comicvine_volume" | "similar_title";
+        /**
+         * @description Per-issue human-readable context carried in the preview payload so the
+         *     Before/After rows can identify a specific series, its list memberships,
+         *     identity/rating/read state and the Queue/Roll frontier it affects (#4654).
+         */
         PreviewIssueItem: {
+            /** @description Human-readable description of the order effect on this issue. */
+            effect: string;
+            /** @description Human label for the Queue/Roll frontier affected by this issue, if any. */
+            frontier_label?: string | null;
+            /** @description Whether rating history exists for this issue. */
+            has_rating: boolean;
+            /** @description Whether a second physical issue with the same number exists in the series. */
+            is_duplicate: boolean;
+            /** @description Whether the issue has a confirmed external identity/catalog mapping. */
+            is_mapped: boolean;
             is_new: boolean;
+            /** @description Whether the issue has already been read. */
+            is_read: boolean;
             /** Format: int32 */
             issue_id?: number | null;
             issue_number: string;
             /** Format: int32 */
             position: number;
+            /** @description Title of the series (thread) this issue belongs to. */
+            series_title: string;
+            /** @description Names of every custom reading list the issue is a member of. */
+            source_lists: string[];
         };
         PreviewIssuesRequest: {
             /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */

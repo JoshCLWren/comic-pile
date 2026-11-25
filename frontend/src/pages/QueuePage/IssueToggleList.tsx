@@ -11,7 +11,7 @@ import {
 import type { DragEvent } from 'react'
 import type { Issue, IssueDependenciesResponse, IssueListResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
-import type { IssueListParams } from '../../services/api-issues'
+import type { IssueListParams, IssuePreviewItem } from '../../services/api-issues'
 import { issueDependenciesApi } from '../../services/api-dependencies'
 import type { ThreadIssueDependenciesResponse } from '../../services/api-dependencies'
 import { getApiErrorDetail } from '../../utils/apiError'
