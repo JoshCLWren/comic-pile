@@ -1,9 +1,18 @@
 name: ComicVine Metadata Repair Drain
 # GitHub Actions provides a free cadence that Vercel Hobby cron cannot.
 # Only main may call the production worker; never run secret-bearing PR code.
+#
+# Backoff (#4748): when the queue is empty the drain returns claimed=0 and the
+# next wake is the sparse fallback cron (4 DB-touching invocations/day, down
+# from 96). Newly enqueued repairs fire a repository_dispatch wake signal so
+# pickup stays within minutes; the fallback cron bounds pickup at <= 6 hours
+# if dispatch is unavailable. Manual dispatch is preserved for operator use.
 on:
   schedule:
-    - cron: '7,22,37,52 * * * *'
+    - cron: '17 3,9,15,21 * * * *'
+  repository_dispatch:
+    types:
+      - comicvine-metadata-repair-enqueued
   workflow_dispatch:
 
 permissions:
@@ -47,4 +56,4 @@ jobs:
             echo "::error::ComicVine worker response was invalid or COMICVINE_API_KEY is missing in Vercel production."
             exit 1
           fi
-          jq -r '"ComicVine bounded drain: claimed=\(.claimed), completed=\(.completed), no_credits=\(.no_credits), failed=\(.failed), deferred=\(.deferred)"' "$response" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '"ComicVine bounded drain: claimed=\(.claimed), completed=\(.completed), no_credits=\(.no_credits), failed=\(.failed), deferred=\(.deferred), queue_empty=\(.queue_empty)"' "$response" >> "$GITHUB_STEP_SUMMARY"
