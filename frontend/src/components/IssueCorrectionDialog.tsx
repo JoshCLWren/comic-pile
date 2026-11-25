@@ -29,7 +29,7 @@ export interface IssueCorrectionDependenciesApi {
 }
 
 export interface IssueCorrectionCardsApi {
-  fetchCards: (issueIds: number[]) => Promise<Array<{ issue_id: number; rating: number | null }>>
+  fetchCards: (issueIds: number[]) => Promise<Array<{ issue_id: number; rating?: number | null }>>
 }
 
 interface IssueCorrectionDialogProps {
@@ -288,7 +288,9 @@ export default function IssueCorrectionDialog({
       if (unreadBeforeTarget.length > 0) {
         try {
           const cards = await cardsService.fetchCards(unreadBeforeTarget.map((issue) => issue.id))
-          affectedRatings = Object.fromEntries(cards.map((card) => [card.issue_id, card.rating]))
+          affectedRatings = Object.fromEntries(
+            cards.map((card) => [card.issue_id, card.rating ?? null]),
+          )
         } catch {
           // Best-effort preview: ratings are explanatory, not authorization.
         }
