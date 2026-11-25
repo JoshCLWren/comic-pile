@@ -30,8 +30,7 @@ export function cblBrowseResultState({
   const lastShown = settledBrowsePage
     ? (settledBrowsePage.page - 1) * settledBrowsePage.page_size + settledBrowsePage.items.length
     : 0
-  const resultCountPending =
-    !hasCatalogError && (isPending || (isPlaceholderData && isFetching))
+  const resultCountPending = !hasCatalogError && (isPending || isFetching)
   // Folder pages paginate only their direct sources, while each child folder
   // already carries its recursive total. The applicable folder collection is
   // therefore direct sources plus all child-folder sources, not just this
