@@ -80,9 +80,12 @@ export default function QueuePage() {
     searchQuery,
   )
   const authoritativeActiveCount = activeCount ?? activeThreads.length
-  // True while the Queue list is still fetching; the list uses it to tell
-  // "still fetching" apart from a settled zero-match (#3912).
-  const queueListLoading = useQueueListLoading()
+  // Only the current search/sort request owns the list's pending presentation;
+  // an older request must not mask a newer settled zero-result state (#3614).
+  const queueListLoading = useQueueListLoading(
+    queryKeys.queue.list({ search: searchQuery, sort: sortBy, pageSize: QUEUE_PAGE_SIZE }),
+  )
+  const isListError = isError && !queueLoader.isFetchNextPageError
 
   const actions = useQueueThreadActions({})
 
