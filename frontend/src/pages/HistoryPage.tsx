@@ -8,6 +8,7 @@ import { formatDate, formatTime } from '../utils/dateFormat'
 import { issuesApi } from '../services/api-issues'
 import { queryClient } from '../query/queryClient'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../query/cacheEffects'
+import { useBulkReadOperations } from '../hooks/useBulkReadOperations'
 
 /**
  * Shared recovery action for the bounded-loading and load-failure states.
@@ -116,6 +117,11 @@ export default function HistoryPage() {
   } = useActivity()
   const [restoringThreadId, setRestoringThreadId] = useState<number | null>(null)
   const [restoreMessage, setRestoreMessage] = useState<string | null>(null)
+  const {
+    operations: bulkReadOperations,
+    message: bulkUndoMessage,
+    undo: undoBulkRead,
+  } = useBulkReadOperations(issuesApi)
   // One bounded batch projection for the visible page of exact owned issues;
   // never one request per rendered row.
   const visibleIssueIds = useMemo(
@@ -202,8 +208,40 @@ export default function HistoryPage() {
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
           <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
           {restoreMessage && <p className="mt-2 text-sm text-stone-400">{restoreMessage}</p>}
+          {bulkUndoMessage && (
+            <p className="mt-2 text-sm text-stone-400" role="status">{bulkUndoMessage}</p>
+          )}
         </div>
       </header>
+
+      {bulkReadOperations.length > 0 && (
+        <section
+          className="surface-panel rounded-lg border border-[var(--theme-border)] p-3 md:p-4 space-y-2"
+          data-testid="bulk-read-operations"
+          aria-label="Reviewable bulk reads"
+        >
+          <h2 className="text-sm font-black uppercase tracking-wider text-[var(--theme-text-primary)]">
+            Reviewable bulk reads
+          </h2>
+          <ul className="divide-y divide-[var(--theme-border)]">
+            {bulkReadOperations.map(({ threadId, operation }) => (
+              <li key={operation.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
+                <span className="text-xs text-[var(--theme-text-muted)]">
+                  Operation #{operation.id} · {operation.items.length} issue
+                  {operation.items.length === 1 ? '' : 's'} · series {threadId}
+                </span>
+                <button
+                  type="button"
+                  className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-primary)] underline disabled:opacity-50"
+                  onClick={() => void undoBulkRead(threadId, operation.id)}
+                >
+                  Undo
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div
         id="activity-list"
