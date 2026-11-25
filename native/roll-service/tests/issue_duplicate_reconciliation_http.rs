@@ -170,7 +170,7 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     let canonical: i32 = conn
         .query_one(
             "INSERT INTO issues (thread_id, issue_number, position, status, read_at, created_at) \
-             VALUES ($1, '3', 0, 'read', NOW() - interval '1 hour', NOW() - interval '2 days') \
+             VALUES ($1, '3', 0, 'read', '2026-11-05T05:47:59Z', '2026-01-01T00:00:00Z') \
              RETURNING id",
             &[&canonical_thread],
         )
@@ -181,7 +181,7 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     let duplicate: i32 = conn
         .query_one(
             "INSERT INTO issues (thread_id, issue_number, position, status, read_at, created_at) \
-             VALUES ($1, '100', 0, 'read', NOW() - interval '1 hour', NOW()) RETURNING id",
+             VALUES ($1, '100', 0, 'read', '2026-11-05T05:02:02Z', '2026-11-05T05:11:33Z') RETURNING id",
             &[&duplicate_thread],
         )
         .await
@@ -222,7 +222,7 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     let canonical_rating_event: i32 = conn
         .query_one(
             "INSERT INTO events (type, timestamp, user_id, issue_id, rating) \
-             VALUES ('rate', NOW() - interval '1 day', $1, $2, 4.0) RETURNING id",
+             VALUES ('rate', '2026-11-05T05:47:59Z', $1, $2, 4.5) RETURNING id",
             &[&ctx.user_id, &canonical],
         )
         .await
@@ -231,7 +231,7 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     let duplicate_rating_event: i32 = conn
         .query_one(
             "INSERT INTO events (type, timestamp, user_id, issue_id, rating) \
-             VALUES ('rate', NOW() - interval '30 minutes', $1, $2, 4.0) RETURNING id",
+             VALUES ('rate', '2026-11-05T06:00:00Z', $1, $2, 4.0) RETURNING id",
             &[&ctx.user_id, &duplicate],
         )
         .await
