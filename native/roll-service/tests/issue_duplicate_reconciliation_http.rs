@@ -668,7 +668,7 @@ async fn seed_pair(
     let canonical: i32 = conn
         .query_one(
             "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
-             VALUES ($1, '3', 0, 'unread', $2::timestamptz) RETURNING id",
+             VALUES ($1, '3', 0, 'unread', $2::text::timestamptz) RETURNING id",
             &[&canonical_thread, &canonical_created],
         )
         .await
@@ -677,7 +677,7 @@ async fn seed_pair(
     let duplicate: i32 = conn
         .query_one(
             "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
-             VALUES ($1, '100', 0, 'unread', $2::timestamptz) RETURNING id",
+             VALUES ($1, '100', 0, 'unread', $2::text::timestamptz) RETURNING id",
             &[&duplicate_thread, &duplicate_created],
         )
         .await
